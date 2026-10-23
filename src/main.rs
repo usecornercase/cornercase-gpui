@@ -7,6 +7,7 @@ mod cli;
 mod dialogs;
 mod keys;
 mod model;
+mod notify;
 mod panels;
 mod render;
 mod sidebar;

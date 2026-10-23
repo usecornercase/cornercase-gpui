@@ -14,13 +14,14 @@ use std::time::Duration;
 use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{
-    AnyView, App, ClickEvent, ClipboardItem, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
+    AnyView, App, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
     KeyDownEvent, ParentElement, Pixels, Point, Render, SharedString, StatefulInteractiveElement as _, Styled, Window,
     div, prelude::FluentBuilder as _, px,
 };
 
 use crate::cli::{self, Queue, Stream};
 use crate::model::{Applied, Frame, Grid, Project, Session, Workspace};
+use crate::notify::{self, Notifier};
 use crate::panels::PanelKind;
 use crate::render::Metrics;
 use crate::store::{Store, ToastKind};
@@ -90,6 +91,10 @@ pub struct Root {
     /// Panels built so far, kept so each keeps its state while closed.
     pub(crate) panels: HashMap<PanelKind, AnyView>,
     had_overlay: bool,
+    /// Agent notices, host events and the app state of the status bar.
+    notifier: Entity<Notifier>,
+    /// The window's title as last set.
+    title: String,
 }
 
 impl Focusable for Root {
@@ -108,6 +113,8 @@ impl Root {
             let _ = errors.unbounded_send(Msg::Error(e));
         });
         let store = Store::init(queue.clone(), cx);
+        let notifier = cx.new(|cx| Notifier::new(store.clone(), window, cx));
+        cx.observe(&notifier, |_, _, cx| cx.notify()).detach();
         cx.spawn(async move |this, cx| {
             while let Some(msg) = rx.next().await {
                 if this.update(cx, |this, cx| this.handle(msg, cx)).is_err() {
@@ -175,6 +182,8 @@ impl Root {
             visible: true,
             panels: HashMap::new(),
             had_overlay: false,
+            notifier,
+            title: String::new(),
         };
         // For checking a panel by eye: CORNERCASE_GPUI_OPEN=changes opens it at start.
         if let Ok(name) = std::env::var("CORNERCASE_GPUI_OPEN")
@@ -564,12 +573,12 @@ impl Root {
     }
 
     fn render_status(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let (dot, conn) = match &self.conn {
-            Conn::Starting => (colours::working(), "connecting".to_string()),
-            Conn::Connected => (colours::done(), "connected".to_string()),
-            Conn::Lost(_) => (colours::failed(), "disconnected".to_string()),
-        };
         let version = self.session.as_ref().map(|s| format!("cornercase {}", s.version)).unwrap_or_default();
+        let (dot, conn, why) = match &self.conn {
+            Conn::Starting => (colours::working(), "connecting…".to_string(), None),
+            Conn::Connected => (colours::done(), version, None),
+            Conn::Lost(why) => (colours::failed(), "disconnected".to_string(), Some(why.clone())),
+        };
         let pane = self.active_pane().and_then(|id| self.session.as_ref()?.pane(id).cloned());
         let middle = pane
             .map(|p| {
@@ -578,6 +587,7 @@ impl Root {
             })
             .unwrap_or_default();
         let size_text = self.size.map(|(c, r)| format!("{c}×{r}")).unwrap_or_default();
+        let items = self.notifier.read(cx).status_items(&self.notifier);
         let store = self.store.read(cx);
         let dock = store.dock;
         let docks = [PanelKind::Changes, PanelKind::Files, PanelKind::Todo].map(|kind| {
@@ -585,23 +595,34 @@ impl Root {
             ui::segment(SharedString::from(format!("dock-{}", kind.title())), kind.title(), dock == Some(kind))
                 .on_click(move |_: &ClickEvent, _, cx| store.update(cx, |s, cx| s.toggle_dock(kind, cx)))
         });
+        let separator = || div().w(px(1.)).h(px(12.)).flex_none().bg(colours::border());
         div()
             .h(px(26.))
             .flex_none()
             .flex()
             .items_center()
-            .gap(px(12.))
+            .gap(px(10.))
             .px(px(10.))
             .bg(colours::sidebar())
             .border_t_1()
             .border_color(colours::border())
             .text_size(px(11.))
             .text_color(colours::faint())
-            .child(div().flex().items_center().gap(px(6.)).child(div().size(px(7.)).rounded_full().bg(dot)).child(conn))
-            .child(version)
+            .child(
+                div()
+                    .id("conn")
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(div().size(px(7.)).rounded_full().bg(dot))
+                    .child(conn)
+                    .when_some(why, |d, why| d.tooltip(notify::tip(why))),
+            )
             .child(div().flex_1().overflow_hidden().whitespace_nowrap().text_ellipsis().text_color(colours::muted()).child(middle))
-            .child(size_text)
-            .child(div().flex().gap(px(2.)).children(docks))
+            .when(!items.is_empty(), |d| d.child(div().flex_none().flex().items_center().gap(px(2.)).children(items)).child(separator()))
+            .child(div().flex_none().child(size_text))
+            .child(div().flex().flex_none().gap(px(2.)).children(docks))
     }
 }
 
@@ -629,6 +650,12 @@ impl Render for Root {
             let s = self.store.read(cx);
             (s.dock, s.sheet, s.dialog.clone())
         };
+        let title = self.session.as_ref().map_or_else(|| "cornercase".to_string(), notify::window_title);
+        if title != self.title {
+            window.set_window_title(&title);
+            self.title = title;
+        }
+        let flashing = self.notifier.read(cx).flashing();
         let dock_el = dock.map(|kind| self.render_dock(kind, window, cx));
         let sheet_el = sheet.map(|kind| self.render_sheet(kind, window, cx));
         let dialog_el = dialog.map(|view| {
@@ -660,7 +687,26 @@ impl Render for Root {
                             .flex()
                             .flex_row()
                             .overflow_hidden()
-                            .child(self.render_terminal(window, cx))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .h_full()
+                                    .flex()
+                                    .relative()
+                                    .overflow_hidden()
+                                    .child(self.render_terminal(window, cx))
+                                    // A bell in the shown tab: a short flash of the terminal's edge.
+                                    .when(flashing, |d| {
+                                        d.child(
+                                            div()
+                                                .absolute()
+                                                .inset_0()
+                                                .border_2()
+                                                .border_color(colours::working())
+                                                .bg(gpui::rgba(0xe0af_6812)),
+                                        )
+                                    }),
+                            )
                             .children(dock_el),
                     )
                     .child(self.render_status(cx)),
