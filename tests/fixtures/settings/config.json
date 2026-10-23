@@ -1,0 +1,35 @@
+{
+  "revision": 7, "path": "/home/me/.config/cornercase/config.json",
+  "settings": [
+    {"key":"worktrees_dir","page":"Worktrees","section":"","label":"worktrees folder","type":"text",
+     "value":"~/wt","default":"~/.cornercase/worktrees","shown":"~/wt","note":"n","field":"worktrees folder",
+     "dangerous":false,"restart":false},
+    {"key":"fetch_minutes","page":"Worktrees","section":"","label":"fetch","type":"number","value":5,"default":5,
+     "shown":"5 min","note":""},
+    {"key":"jira_site","page":"Issues","section":"Jira","label":"Jira site","type":"text","value":"","default":""},
+    {"key":"issue_tabs","page":"Issues","section":"Sources shown","label":"sources","type":"list",
+     "value":["all","github"],"default":["all","github","linear"],
+     "choices":[{"value":"all"},{"value":"github"},{"value":"linear"}]},
+    {"key":"agent","page":"Agents","section":"Agent","label":"default agent","type":"choice","value":"auto",
+     "choices":[{"value":"auto","note":"ask"},{"value":"claude","note":"claude"}]},
+    {"key":"agents.claude.mode","page":"Agents","section":"How each agent starts","type":"choice",
+     "value":"default","choices":[{"value":"default"},{"value":"skip permissions (dangerous)","dangerous":true}]},
+    {"key":"agents.claude.extra","page":"Agents","section":"How each agent starts","type":"text","value":""},
+    {"key":"agents.amp.extra","page":"Agents","section":"How each agent starts","type":"text","value":"--x"},
+    {"key":"counts","page":"UI","section":"","type":"switch","value":true,"default":true,"shown":"[x] shown"},
+    {"key":"remote","page":"Remote","section":"Browser","type":"switch","value":false,"shown":"[ ] off"},
+    {"key":"future","page":"Later","section":"","type":"colour","value":"red"}
+  ],
+  "connections": [
+    {"key":"linear","kind":"tracker","page":"Issues","section":"Accounts","label":"Linear API key",
+     "state":"connected","account":"me@example.com","from":"saved","removable":true},
+    {"key":"jira","kind":"tracker","page":"Issues","section":"Jira","label":"Jira API token","state":"missing"},
+    {"key":"browsers","kind":"browsers","page":"Remote","section":"Browser","count":2,"state":"connected"},
+    {"key":"telegram","kind":"bot","page":"Remote","section":"Telegram","state":"refused","from":"env",
+     "env":"TELEGRAM_TOKEN"}
+  ],
+  "projects": [
+    {"folder":"/code/shop","key":"","project":4,"repository":true,"setup":"npm ci","teardown":""},
+    {"folder":"/code/gone","key":"","repository":false,"setup":"","teardown":"rm -rf x"}
+  ]
+}
