@@ -4,6 +4,7 @@
 
 mod app;
 mod cli;
+mod context_menu;
 mod dialogs;
 mod keys;
 mod model;

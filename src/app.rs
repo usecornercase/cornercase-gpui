@@ -80,7 +80,8 @@ pub struct Root {
     pub(crate) scroll_rest: f32,
     pub(crate) marked: String,
     pub(crate) conn: Conn,
-    pub(crate) confirm_close: Option<u64>,
+    /// The sidebar's, tabs' and panes' own state: the open menu, a rename, the filter.
+    pub(crate) side: crate::sidebar::SideState,
     /// Whether to ask for patches: cornercase 0.12.189 refuses `surface --view --patches` (its
     /// feature check sends the view along, usecornercase/cornercase-terminal#461), so a refusal
     /// falls back to complete frames.
@@ -169,7 +170,7 @@ impl Root {
             scroll_rest: 0.,
             marked: String::new(),
             conn: Conn::Starting,
-            confirm_close: None,
+            side: Default::default(),
             patches: true,
             report_visibility: true,
             visible: true,
