@@ -66,6 +66,12 @@ check), #467 (reveal a search match), #468/#469 (plugin install preview, service
 
 ## Development
 
-`docs/AGENT-BRIEF.md` describes the architecture (`Store`, panels, widgets) and the rules;
-`docs/cornercase-cli.txt` is every command's help. `CORNERCASE_GPUI_OPEN=<panel>` opens a panel at
-start.
+The rules for every change are in [AGENTS.md](AGENTS.md) (also loaded by Claude Code through `CLAUDE.md`), the design decisions and their reasons in [`design/`](design/), indexed by [DESIGN.md](DESIGN.md). `docs/cornercase-cli.txt` is every cornercase command's help. Before a change is done:
+
+```sh
+cargo fmt
+cargo clippy --all-targets --all-features --locked -- -D warnings
+cargo test --locked
+cargo-machete              # cargo install cargo-machete
+npx -y jscpd@4.3.0         # copy-paste detector
+```

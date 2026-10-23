@@ -20,16 +20,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, AnyView, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, Focusable as _, FontStyle, FontWeight, Hsla,
-    HighlightStyle, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, ObjectFit, ParentElement as _,
-    Pixels, Point, Render, ScrollStrategy, SharedString, StatefulInteractiveElement as _, Styled as _, StyledImage as _,
-    StyledText, Subscription, Task, UniformListScrollHandle, Window, anchored, deferred, div, img,
-    prelude::FluentBuilder as _, px, uniform_list,
+    AnyElement, AnyView, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, Focusable as _, FontStyle,
+    FontWeight, HighlightStyle, Hsla, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, ObjectFit,
+    ParentElement as _, Pixels, Point, Render, ScrollStrategy, SharedString, StatefulInteractiveElement as _,
+    Styled as _, StyledImage as _, StyledText, Subscription, Task, UniformListScrollHandle, Window, anchored, deferred,
+    div, img, prelude::FluentBuilder as _, px, uniform_list,
 };
 use grep_matcher::Matcher as _;
 use grep_regex::RegexMatcher;
 
-use crate::app::FONT_FAMILY;
+use crate::theme::FONT_FAMILY;
 use crate::panels::PanelKind;
 use crate::store::{Store, ToastKind};
 use crate::theme::{ANSI, colours, hsla};
@@ -139,7 +139,7 @@ struct Menu {
     line: Option<usize>,
 }
 
-pub struct FilesPanel {
+pub(crate) struct FilesPanel {
     store: Entity<Store>,
     /// The shown workspace.
     current: Option<u64>,
@@ -158,7 +158,7 @@ pub struct FilesPanel {
 }
 
 impl FilesPanel {
-    pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         let query = cx.new(|cx| TextField::new("Search files…", cx));
         let subscriptions = vec![
@@ -169,7 +169,7 @@ impl FilesPanel {
                     this.query_changed(text, cx);
                 }
                 TextFieldEvent::Submit => this.enter(cx),
-                TextFieldEvent::Cancel => field.update(cx, |f, cx| f.clear(cx)),
+                TextFieldEvent::Cancel => field.update(cx, TextField::clear),
             }),
         ];
         let tick = cx.spawn(async move |this, cx| {
@@ -177,7 +177,7 @@ impl FilesPanel {
             loop {
                 cx.background_executor().timer(CHECK_EVERY).await;
                 n = n.wrapping_add(1);
-                if this.update(cx, |this, cx| this.tick(n % LIST_EVERY == 0, cx)).is_err() {
+                if this.update(cx, |this, cx| this.tick(n.is_multiple_of(LIST_EVERY), cx)).is_err() {
                     break;
                 }
             }
@@ -301,10 +301,13 @@ impl FilesPanel {
         let Some(place) = self.places.get(&id) else { return };
         let root = place.root.clone();
         let job = cx.background_spawn(async move {
-            folders.into_iter().map(|rel| {
-                let listing = tree::list(&root, &rel);
-                (rel, listing)
-            }).collect::<Vec<_>>()
+            folders
+                .into_iter()
+                .map(|rel| {
+                    let listing = tree::list(&root, &rel);
+                    (rel, listing)
+                })
+                .collect::<Vec<_>>()
         });
         cx.spawn(async move |this, cx| {
             let listed = job.await;
@@ -368,7 +371,14 @@ impl FilesPanel {
     // The viewer.
 
     /// Opens a file of the workspace (relative path) in the viewer, at a 0-based line.
-    fn open_file(&mut self, rel: PathBuf, line: Option<usize>, lit: Option<RegexMatcher>, from_search: bool, cx: &mut Context<Self>) {
+    fn open_file(
+        &mut self,
+        rel: PathBuf,
+        line: Option<usize>,
+        lit: Option<RegexMatcher>,
+        from_search: bool,
+        cx: &mut Context<Self>,
+    ) {
         let Some(id) = self.current else { return };
         let Some(place) = self.places.get_mut(&id) else { return };
         let path = place.root.join(&rel);
@@ -405,8 +415,12 @@ impl FilesPanel {
                 Content::Text(text) => Some(text.lines.clone()),
                 _ => None,
             };
-            let language = lines.as_ref().and_then(|l| highlight::language(&path, l.first().map_or("", String::as_str)));
-            let apply = |this: &mut Self, content: Option<Content>, spans: Option<Arc<Vec<Vec<highlight::Span>>>>, cx: &mut Context<Self>| {
+            let language =
+                lines.as_ref().and_then(|l| highlight::language(&path, l.first().map_or("", String::as_str)));
+            let apply = |this: &mut Self,
+                         content: Option<Content>,
+                         spans: Option<Arc<Vec<Vec<highlight::Span>>>>,
+                         cx: &mut Context<Self>| {
                 let Some(viewer) = this.places.get_mut(&id).and_then(|p| p.viewer.as_mut()) else { return };
                 if viewer.path != path {
                     return;
@@ -599,7 +613,9 @@ impl FilesPanel {
             }
             Results::Text(text) => {
                 let target = match self.search.rows.get(ix) {
-                    Some(TextRow::File(f)) => text.files.get(*f).map(|f| (f.path.clone(), f.lines.first().map(|l| l.line))),
+                    Some(TextRow::File(f)) => {
+                        text.files.get(*f).map(|f| (f.path.clone(), f.lines.first().map(|l| l.line)))
+                    }
                     Some(TextRow::Line(f, l)) => {
                         text.files.get(*f).and_then(|f| f.lines.get(*l).map(|l| (f.path.clone(), Some(l.line))))
                     }
@@ -623,7 +639,15 @@ impl FilesPanel {
         cx.notify();
     }
 
-    fn open_with(&mut self, opener: Opener, launch: Launch, path: PathBuf, line: Option<usize>, dir: bool, cx: &mut Context<Self>) {
+    fn open_with(
+        &mut self,
+        opener: Opener,
+        launch: Launch,
+        path: PathBuf,
+        line: Option<usize>,
+        dir: bool,
+        cx: &mut Context<Self>,
+    ) {
         self.menu = None;
         cx.notify();
         let job = cx.background_spawn(async move {
@@ -635,7 +659,9 @@ impl FilesPanel {
         let store = self.store.clone();
         cx.spawn(async move |_, cx| {
             if let Err(e) = job.await {
-                let _ = store.update(cx, |s, cx| s.toast(format!("could not open in {}: {e}", opener.label()), ToastKind::Error, cx));
+                let _ = store.update(cx, |s, cx| {
+                    s.toast(format!("could not open in {}: {e}", opener.label()), ToastKind::Error, cx)
+                });
             }
         })
         .detach();
@@ -713,29 +739,34 @@ impl FilesPanel {
                     .pt(px(6.))
                     .pb(px(4.))
                     .child(ui::dim(root_label).min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis())
-                    .child(
-                        div()
-                            .flex()
-                            .flex_none()
-                            .gap(px(4.))
-                            .items_center()
-                            .when(any_open, |d| {
-                                d.child(
-                                    ui::icon_button("files-collapse", "⊟")
-                                        .text_size(px(12.))
-                                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.collapse_all(cx))),
-                                )
-                            }),
-                    ),
+                    .child(div().flex().flex_none().gap(px(4.)).items_center().when(any_open, |d| {
+                        d.child(
+                            ui::icon_button("files-collapse", "⊟")
+                                .text_size(px(12.))
+                                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.collapse_all(cx))),
+                        )
+                    })),
             )
             .when(loading, |d| d.child(ui::note("Reading…")))
             .when(!loading && count == 0, |d| d.child(ui::note("Empty folder")))
-            .when(truncated, |d| d.child(ui::dim(format!("Some folders hold more than {} entries; the rest are not listed", tree::MAX_ENTRIES)).px(px(12.))))
+            .when(truncated, |d| {
+                d.child(
+                    ui::dim(format!(
+                        "Some folders hold more than {} entries; the rest are not listed",
+                        tree::MAX_ENTRIES
+                    ))
+                    .px(px(12.)),
+                )
+            })
             .child(
                 div().flex_1().min_h_0().px(px(6.)).pb(px(6.)).child(
-                    uniform_list("files-tree", count, cx.processor(|this, range: Range<usize>, _window, cx| this.tree_items(range, cx)))
-                        .size_full()
-                        .track_scroll(self.tree_scroll.clone()),
+                    uniform_list(
+                        "files-tree",
+                        count,
+                        cx.processor(|this, range: Range<usize>, _window, cx| this.tree_items(range, cx)),
+                    )
+                    .size_full()
+                    .track_scroll(self.tree_scroll.clone()),
                 ),
             )
             .into_any_element()
@@ -784,7 +815,7 @@ impl FilesPanel {
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(move |this, e: &MouseDownEvent, _, cx| {
-                            this.show_menu(e.position, menu_path.clone(), dir, None, cx)
+                            this.show_menu(e.position, menu_path.clone(), dir, None, cx);
                         }),
                     )
                     .into_any_element()
@@ -815,7 +846,11 @@ impl FilesPanel {
                     } else if text.capped {
                         format!("The first {matches} matches, in {files} files")
                     } else {
-                        format!("{matches} {} in {files} {}", plural(matches, "match", "matches"), plural(files, "file", "files"))
+                        format!(
+                            "{matches} {} in {files} {}",
+                            plural(matches, "match", "matches"),
+                            plural(files, "file", "files")
+                        )
                     },
                 )
             }
@@ -829,16 +864,24 @@ impl FilesPanel {
             .child(div().flex_none().px(px(12.)).pt(px(6.)).pb(px(4.)).child(ui::dim(summary)))
             .child(
                 div().flex_1().min_h_0().px(px(6.)).pb(px(6.)).child(
-                    uniform_list("files-results", count, cx.processor(|this, range: Range<usize>, _window, cx| this.result_items(range, cx)))
-                        .size_full()
-                        .track_scroll(self.results_scroll.clone()),
+                    uniform_list(
+                        "files-results",
+                        count,
+                        cx.processor(|this, range: Range<usize>, _window, cx| this.result_items(range, cx)),
+                    )
+                    .size_full()
+                    .track_scroll(self.results_scroll.clone()),
                 ),
             )
             .into_any_element()
     }
 
     fn result_items(&mut self, range: Range<usize>, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let lit = HighlightStyle { color: Some(colours::accent().into()), font_weight: Some(FontWeight::BOLD), ..Default::default() };
+        let lit = HighlightStyle {
+            color: Some(colours::accent().into()),
+            font_weight: Some(FontWeight::BOLD),
+            ..Default::default()
+        };
         let mut items = Vec::new();
         for ix in range {
             let open = cx.listener(move |this, _: &ClickEvent, _, cx| this.open_result(ix, cx));
@@ -848,12 +891,20 @@ impl FilesPanel {
                     let Some(hit) = hits.get(ix) else { continue };
                     let split = hit.path.rfind('/').map_or(0, |i| i + 1);
                     let (folder, name) = hit.path.split_at(split);
-                    let name_lit: Vec<_> = clip(&hit.lit, split..hit.path.len()).into_iter().map(|r| (r, lit)).collect();
+                    let name_lit: Vec<_> =
+                        clip(&hit.lit, split..hit.path.len()).into_iter().map(|r| (r, lit)).collect();
                     let folder_lit: Vec<_> = clip(&hit.lit, 0..split).into_iter().map(|r| (r, lit)).collect();
                     let rel = PathBuf::from(&hit.path);
                     result_row(("files-name", ix))
                         .child(file_icon(name, false, false))
-                        .child(div().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(StyledText::new(name.to_string()).with_highlights(name_lit)))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .text_ellipsis()
+                                .child(StyledText::new(name.to_string()).with_highlights(name_lit)),
+                        )
                         .child(
                             div()
                                 .flex_1()
@@ -863,12 +914,17 @@ impl FilesPanel {
                                 .text_ellipsis()
                                 .text_size(px(11.))
                                 .text_color(colours::faint())
-                                .child(StyledText::new(folder.trim_end_matches('/').to_string()).with_highlights(folder_lit)),
+                                .child(
+                                    StyledText::new(folder.trim_end_matches('/').to_string())
+                                        .with_highlights(folder_lit),
+                                ),
                         )
                         .on_click(open)
                         .on_mouse_down(
                             MouseButton::Right,
-                            cx.listener(move |this, e: &MouseDownEvent, _, cx| this.show_menu(e.position, rel.clone(), false, None, cx)),
+                            cx.listener(move |this, e: &MouseDownEvent, _, cx| {
+                                this.show_menu(e.position, rel.clone(), false, None, cx)
+                            }),
                         )
                         .into_any_element()
                 }
@@ -894,7 +950,9 @@ impl FilesPanel {
                             .on_click(open)
                             .on_mouse_down(
                                 MouseButton::Right,
-                                cx.listener(move |this, e: &MouseDownEvent, _, cx| this.show_menu(e.position, rel.clone(), false, None, cx)),
+                                cx.listener(move |this, e: &MouseDownEvent, _, cx| {
+                                    this.show_menu(e.position, rel.clone(), false, None, cx)
+                                }),
                             )
                             .into_any_element()
                     }
@@ -910,7 +968,9 @@ impl FilesPanel {
                             .pl(px(28.))
                             .font_family(FONT_FAMILY)
                             .text_size(px(CODE_SIZE))
-                            .child(div().w(px(38.)).flex_none().text_color(colours::faint()).child(hit.line.to_string()))
+                            .child(
+                                div().w(px(38.)).flex_none().text_color(colours::faint()).child(hit.line.to_string()),
+                            )
                             .child(
                                 div()
                                     .flex_1()
@@ -934,7 +994,10 @@ impl FilesPanel {
 
     fn render_viewer(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let Some(viewer) = self.place().and_then(|p| p.viewer.as_ref()) else { return div().into_any_element() };
-        let name = viewer.rel.file_name().map_or_else(|| viewer.rel.display().to_string(), |n| n.to_string_lossy().into_owned());
+        let name = viewer
+            .rel
+            .file_name()
+            .map_or_else(|| viewer.rel.display().to_string(), |n| n.to_string_lossy().into_owned());
         let folder = viewer.rel.parent().map(|p| p.display().to_string()).unwrap_or_default();
         let back = if viewer.from_search { "‹ Results" } else { "‹ Files" };
         let size = viewer.stamp.map(|s| disk::human_size(s.len));
@@ -971,7 +1034,10 @@ impl FilesPanel {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(ui::button("files-back", back).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close_file(cx))))
+                    .child(
+                        ui::button("files-back", back)
+                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close_file(cx))),
+                    )
                     .child(file_icon(&name, false, false))
                     .child(div().flex_none().font_weight(FontWeight::SEMIBOLD).child(name.clone()))
                     .child(
@@ -990,7 +1056,15 @@ impl FilesPanel {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .child(div().flex_1().min_w_0().overflow_hidden().whitespace_nowrap().text_ellipsis().child(ui::dim(info.join("  ·  "))))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis()
+                            .child(ui::dim(info.join("  ·  "))),
+                    )
                     .child(ui::button("files-open-in", "Open in…").on_click(cx.listener({
                         let rel = rel.clone();
                         move |this, e: &ClickEvent, _, cx| this.show_menu(e.position(), rel.clone(), false, line, cx)
@@ -1004,11 +1078,15 @@ impl FilesPanel {
             None => ui::note("Reading…").into_any_element(),
             Some(Content::Text(text)) => {
                 let count = text.lines.len();
-                uniform_list("files-code", count, cx.processor(|this, range: Range<usize>, _window, cx| this.code_items(range, cx)))
-                    .size_full()
-                    .py(px(4.))
-                    .track_scroll(self.code_scroll.clone())
-                    .into_any_element()
+                uniform_list(
+                    "files-code",
+                    count,
+                    cx.processor(|this, range: Range<usize>, _window, cx| this.code_items(range, cx)),
+                )
+                .size_full()
+                .py(px(4.))
+                .track_scroll(self.code_scroll.clone())
+                .into_any_element()
             }
             Some(Content::Image(image)) => div()
                 .id("files-image")
@@ -1019,13 +1097,17 @@ impl FilesPanel {
                 .justify_center()
                 .child(img(image.clone()).max_w_full().max_h_full().object_fit(ObjectFit::ScaleDown))
                 .into_any_element(),
-            Some(Content::Binary) => centered_note("Binary file", "Open it in another app to see it.").into_any_element(),
+            Some(Content::Binary) => {
+                centered_note("Binary file", "Open it in another app to see it.").into_any_element()
+            }
             Some(Content::TooLarge) => centered_note(
                 "Too large to show",
                 format!("Files over {} are not read here.", disk::human_size(disk::MAX_BYTES)),
             )
             .into_any_element(),
-            Some(Content::NotRegular) => centered_note("Not a regular file", "Devices, sockets and pipes are not read.").into_any_element(),
+            Some(Content::NotRegular) => {
+                centered_note("Not a regular file", "Devices, sockets and pipes are not read.").into_any_element()
+            }
             Some(Content::Gone(e)) => centered_note("Cannot read this file", e.clone()).into_any_element(),
         };
         div()
@@ -1109,7 +1191,7 @@ impl FilesPanel {
             entries.push(
                 menu_entry(("files-menu-open", i), label)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.open_with(opener, launch.clone(), path.clone(), line, dir, cx)
+                        this.open_with(opener, launch.clone(), path.clone(), line, dir, cx);
                     }))
                     .into_any_element(),
             );
@@ -1182,7 +1264,7 @@ impl Render for FilesPanel {
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
     cx.new(|cx| FilesPanel::new(window, cx)).into()
 }
 
@@ -1222,11 +1304,16 @@ fn matches(matcher: &RegexMatcher, line: &str) -> Vec<Range<usize>> {
 
 /// Puts a background on `lit` over syntax styles, splitting them where they cross, so the runs
 /// stay sorted and apart as `StyledText` wants them.
-fn overlay(styles: Vec<(Range<usize>, HighlightStyle)>, lit: Vec<Range<usize>>, bg: Hsla) -> Vec<(Range<usize>, HighlightStyle)> {
+fn overlay(
+    styles: Vec<(Range<usize>, HighlightStyle)>,
+    lit: Vec<Range<usize>>,
+    bg: Hsla,
+) -> Vec<(Range<usize>, HighlightStyle)> {
     if lit.is_empty() {
         return styles;
     }
-    let mut cuts: Vec<usize> = styles.iter().flat_map(|(r, _)| [r.start, r.end]).chain(lit.iter().flat_map(|r| [r.start, r.end])).collect();
+    let mut cuts: Vec<usize> =
+        styles.iter().flat_map(|(r, _)| [r.start, r.end]).chain(lit.iter().flat_map(|r| [r.start, r.end])).collect();
     cuts.sort_unstable();
     cuts.dedup();
     let mut out: Vec<(Range<usize>, HighlightStyle)> = Vec::new();
@@ -1253,9 +1340,11 @@ fn kind_style(kind: Kind) -> HighlightStyle {
         Kind::String => HighlightStyle { color: colour(2), ..Default::default() },
         Kind::Number => HighlightStyle { color: colour(3), ..Default::default() },
         Kind::Tag => HighlightStyle { color: colour(1), ..Default::default() },
-        Kind::Comment => {
-            HighlightStyle { color: Some(colours::faint().into()), font_style: Some(FontStyle::Italic), ..Default::default() }
-        }
+        Kind::Comment => HighlightStyle {
+            color: Some(colours::faint().into()),
+            font_style: Some(FontStyle::Italic),
+            ..Default::default()
+        },
     }
 }
 

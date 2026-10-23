@@ -7,13 +7,13 @@ use std::ops::Range;
 
 use gpui::{
     Bounds, Context, ElementInputHandler, EntityInputHandler, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, ScrollWheelEvent,
-    Styled, UTF16Selection, Window, canvas, div, point, prelude::FluentBuilder as _,
-    px, size,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, ScrollWheelEvent, Styled,
+    UTF16Selection, Window, canvas, div, point, prelude::FluentBuilder as _, px, size,
 };
 use serde_json::json;
 
-use crate::app::{Conn, Drag, FONT_FAMILY, Msg, PADDING, Root};
+use crate::app::{Conn, Drag, Msg, PADDING, Root};
+use crate::theme::FONT_FAMILY;
 use crate::context_menu::{Entry, act, danger, item, submenu};
 use crate::dialogs;
 use crate::keys;
@@ -24,7 +24,7 @@ use crate::sidebar::cmd;
 use crate::theme::colours;
 
 /// A right press on a pane, kept until the release decides between its menu and a move.
-pub struct PanePress {
+pub(crate) struct PanePress {
     pub pane: u64,
     /// The press's cell in the pane, for passing the right click on to the program.
     pub cell: (u16, u16),
@@ -32,7 +32,7 @@ pub struct PanePress {
 
 /// Where a pane dropped at a cell of `target` goes, as `move-pane --place` says it: the middle
 /// third both ways swaps the two, elsewhere the nearest edge takes that side.
-pub fn pane_place(target: Area, x: u16, y: u16) -> &'static str {
+pub(crate) fn pane_place(target: Area, x: u16, y: u16) -> &'static str {
     let fx = (f32::from(x.saturating_sub(target.x)) + 0.5) / f32::from(target.cols.max(1));
     let fy = (f32::from(y.saturating_sub(target.y)) + 0.5) / f32::from(target.rows.max(1));
     let middle = |f: f32| (1. / 3. ..=2. / 3.).contains(&f);
@@ -57,7 +57,7 @@ fn class(cell: &str) -> u8 {
 
 /// The columns of the word under `x` in a line of cells: a run of the same class. The empty cell
 /// after a wide character belongs to it.
-pub fn word_at(cells: &[&str], x: usize) -> (usize, usize) {
+pub(crate) fn word_at(cells: &[&str], x: usize) -> (usize, usize) {
     if x >= cells.len() {
         return (x, x);
     }
@@ -97,7 +97,14 @@ impl Root {
     }
 
     /// ⌘ shortcuts; true when taken.
-    pub(crate) fn shortcut(&mut self, key: &str, shift: bool, terminal: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn shortcut(
+        &mut self,
+        key: &str,
+        shift: bool,
+        terminal: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let store = self.store.clone();
         let panel = |kind: PanelKind, cx: &mut Context<Self>| store.update(cx, |s, cx| s.open(kind, cx));
         let dock = |kind: PanelKind, cx: &mut Context<Self>| self.store.update(cx, |s, cx| s.toggle_dock(kind, cx));
@@ -215,20 +222,40 @@ impl Root {
         let others: Vec<u64> = self
             .session
             .as_ref()
-            .and_then(|s| s.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).find(|t| t.panes.iter().any(|p| p.id == pane)))
+            .and_then(|s| {
+                s.projects
+                    .iter()
+                    .flat_map(|p| &p.workspaces)
+                    .flat_map(|w| &w.tabs)
+                    .find(|t| t.panes.iter().any(|p| p.id == pane))
+            })
             .map(|t| t.panes.iter().map(|p| p.id).filter(|&id| id != pane).collect())
             .unwrap_or_default();
         if !others.is_empty() {
             let targets = others
                 .into_iter()
                 .map(|target| {
-                    let places = [("Swap with it", "swap"), ("Left of it", "left"), ("Right of it", "right"), ("Above it", "above"), ("Below it", "below")];
+                    let places = [
+                        ("Swap with it", "swap"),
+                        ("Left of it", "left"),
+                        ("Right of it", "right"),
+                        ("Above it", "above"),
+                        ("Below it", "below"),
+                    ];
                     submenu(
                         label(target),
                         places
                             .into_iter()
                             .map(|(text, place)| {
-                                let args = cmd(&["move-pane", "--pane", &p, "--target", &target.to_string(), "--place", place]);
+                                let args = cmd(&[
+                                    "move-pane",
+                                    "--pane",
+                                    &p,
+                                    "--target",
+                                    &target.to_string(),
+                                    "--place",
+                                    place,
+                                ]);
                                 item(text, move |this, _, _| this.queue.cmd(args.clone()))
                             })
                             .collect(),
@@ -251,7 +278,8 @@ impl Root {
             entries.extend(self.agent_menu(pane).into_iter().skip(1));
         }
         entries.push(Entry::Separator);
-        let what = info.as_ref().and_then(|i| i.agent.clone().or(i.program.clone())).unwrap_or_else(|| "its shell".into());
+        let what =
+            info.as_ref().and_then(|i| i.agent.clone().or(i.program.clone())).unwrap_or_else(|| "its shell".into());
         entries.push(danger("Close pane", move |this, window, cx| {
             let args = cmd(&["close", "--pane", &pane.to_string()]);
             if agent {
@@ -279,7 +307,15 @@ impl Root {
         match target {
             Some(t) if t.pane != press.pane => {
                 let place = pane_place(t.rect, x as u16, y as u16);
-                let args = cmd(&["move-pane", "--pane", &press.pane.to_string(), "--target", &t.pane.to_string(), "--place", place]);
+                let args = cmd(&[
+                    "move-pane",
+                    "--pane",
+                    &press.pane.to_string(),
+                    "--target",
+                    &t.pane.to_string(),
+                    "--place",
+                    place,
+                ]);
                 self.queue.cmd(args);
             }
             Some(_) => {
@@ -346,7 +382,8 @@ impl Root {
                 self.queue.cmd(args);
                 return;
             }
-            self.drag = Some(Drag::Divider { tab: self.grid.tab, path: d.path.clone(), down: d.dir == "down", area: d.area });
+            self.drag =
+                Some(Drag::Divider { tab: self.grid.tab, path: d.path.clone(), down: d.dir == "down", area: d.area });
             return;
         }
         let Some(pane) = self.grid.pane_at(x, y).cloned() else { return };
@@ -495,13 +532,14 @@ impl Root {
     }
 
     /// ⌘-click: a hyperlink the program printed, else a path cornercase recognises.
-    pub(crate) fn open_link(&mut self, pane: &crate::model::PaneGrid, x: u16, y: u16, cx: &mut Context<Self>) {
+    pub(crate) fn open_link(&mut self, pane: &PaneGrid, x: u16, y: u16, cx: &mut Context<Self>) {
         if let Some(link) = pane.cell(x, y).and_then(|(_, run)| run.link.clone()) {
             cx.open_url(&link);
             return;
         }
         let tx = self.tx.clone();
-        let args = ["link", "--pane", &pane.pane.to_string(), "--cell", &format!("{x},{y}"), "--json"].map(String::from);
+        let args =
+            ["link", "--pane", &pane.pane.to_string(), "--cell", &format!("{x},{y}"), "--json"].map(String::from);
         self.queue.cmd_then(args.to_vec(), move |r| {
             let path = r.ok().and_then(|out| {
                 let v: serde_json::Value = serde_json::from_str(&out).ok()?;
@@ -517,7 +555,6 @@ impl Root {
             }
         });
     }
-
 
     pub(crate) fn render_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         if self.metrics.is_none() {
@@ -593,7 +630,6 @@ impl Root {
             .on_mouse_up(MouseButton::Right, cx.listener(Self::on_mouse_up))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
     }
-
 }
 
 // The platform's input method types text here: composed accents, ⌥ characters, emoji.
@@ -608,7 +644,12 @@ impl EntityInputHandler for Root {
         None
     }
 
-    fn selected_text_range(&mut self, _ignore: bool, _window: &mut Window, _cx: &mut Context<Self>) -> Option<UTF16Selection> {
+    fn selected_text_range(
+        &mut self,
+        _ignore: bool,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<UTF16Selection> {
         let at = self.marked.encode_utf16().count();
         Some(UTF16Selection { range: at..at, reversed: false })
     }

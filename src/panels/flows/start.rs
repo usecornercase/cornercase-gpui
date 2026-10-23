@@ -81,7 +81,7 @@ fn field(placeholder: &str, cx: &mut Context<StartFlow>, window: &mut Window) ->
 }
 
 fn close(cx: &mut App) {
-    Store::get(cx).update(cx, |s, cx| s.close_dialog(cx));
+    Store::get(cx).update(cx, Store::close_dialog);
 }
 
 impl StartFlow {
@@ -234,7 +234,7 @@ impl Render for StartFlow {
                                     .gap(px(6.))
                                     .items_center()
                                     .child(div().text_size(px(13.)).child(flow.name.clone()))
-                                    .children(flow.tags().into_iter().map(|t| ui::dim(t)))
+                                    .children(flow.tags().into_iter().map(ui::dim))
                                     .child(div().flex_1())
                                     .child(ui::dim(format!("{} agents", flow.agents()))),
                             )

@@ -9,9 +9,10 @@ pub(crate) mod order;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable, FontWeight, InteractiveElement,
-    IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, ParentElement, PathPromptOptions, Pixels, Point, Render,
-    Rgba, SharedString, Stateful, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable, FontWeight,
+    InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, ParentElement, PathPromptOptions,
+    Pixels, Point, Render, Rgba, SharedString, Stateful, StatefulInteractiveElement, Styled, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use crate::app::{Root, SIDEBAR_WIDTH, TITLEBAR_HEIGHT, tilde};
@@ -27,7 +28,7 @@ use order::Place;
 
 /// A row of the sidebar or the tab bar, by id: what a menu, a rename or a drag acts on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Target {
+pub(crate) enum Target {
     Group(u64),
     Project(u64),
     Workspace(u64),
@@ -35,14 +36,14 @@ pub enum Target {
 }
 
 impl Target {
-    pub fn id(self) -> u64 {
+    pub(crate) fn id(self) -> u64 {
         match self {
             Target::Group(id) | Target::Project(id) | Target::Workspace(id) | Target::Tab(id) => id,
         }
     }
 
     /// The flag commands name it with: `--group`, `--project`…
-    pub fn flag(self) -> &'static str {
+    pub(crate) fn flag(self) -> &'static str {
         match self {
             Target::Group(_) => "--group",
             Target::Project(_) => "--project",
@@ -58,13 +59,13 @@ impl Target {
 
 /// What a row carries while it is dragged.
 #[derive(Clone)]
-pub struct Dragged {
+pub(crate) struct Dragged {
     pub target: Target,
     pub label: SharedString,
 }
 
 /// The pill that follows the pointer while a row is dragged.
-pub struct DragPreview(SharedString);
+pub(crate) struct DragPreview(SharedString);
 
 impl Render for DragPreview {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -89,7 +90,7 @@ pub(crate) fn draggable(el: Stateful<Div>, target: Target, label: impl Into<Shar
 }
 
 /// A small text box shown on hover.
-pub struct Tip(SharedString);
+pub(crate) struct Tip(SharedString);
 
 impl Render for Tip {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -113,7 +114,7 @@ pub(crate) fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut Ap
 }
 
 /// A row being renamed: its text field, in place of its name.
-pub struct Rename {
+pub(crate) struct Rename {
     pub target: Target,
     pub field: Entity<TextField>,
     initial: String,
@@ -121,7 +122,7 @@ pub struct Rename {
 
 /// The sidebar's, the tabs' and the panes' own state, kept on `Root`.
 #[derive(Default)]
-pub struct SideState {
+pub(crate) struct SideState {
     pub menu: Option<Menu>,
     pub rename: Option<Rename>,
     pub filter: Option<Entity<TextField>>,
@@ -131,7 +132,7 @@ pub struct SideState {
 }
 
 /// The tag of a pull request: `#485✓`, its colour, and whether it is crossed out (closed).
-pub fn pull_tag(pr: &PullRequest) -> (String, Rgba, bool) {
+pub(crate) fn pull_tag(pr: &PullRequest) -> (String, Rgba, bool) {
     let number = format!("#{}", pr.number);
     match pr.state.as_str() {
         "merged" => (number, forms::palette_colour(99), false),
@@ -194,7 +195,7 @@ fn hover_button(id: SharedString, group: SharedString, glyph: &'static str, slot
         .justify_center()
         .bg(colours::hover())
         .invisible()
-        .group_hover(group, |s| s.visible())
+        .group_hover(group, Styled::visible)
 }
 
 impl Root {
@@ -204,7 +205,7 @@ impl Root {
     pub(crate) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let filter = self.filter_field(cx);
         let query = self.side.query.clone();
-        let shown = self.session.as_ref().map(|s| s.shown()).unwrap_or_default();
+        let shown = self.session.as_ref().map(super::model::Session::shown).unwrap_or_default();
         let mut list = div().flex().flex_col().gap(px(1.)).px(px(8.));
         if let Some(session) = &self.session {
             let sections = order::sections(session);
@@ -268,7 +269,7 @@ impl Root {
                         cx.listener(|this, e: &MouseDownEvent, window, cx| {
                             cx.stop_propagation();
                             let entries = vec![
-                                item("Open project…", |this, window, cx| this.open_project(window, cx)),
+                                item("Open project…", Root::open_project),
                                 item("New group…", |_, window, cx| forms::new_group(None, window, cx)),
                             ];
                             this.open_menu(e.position, entries, window, cx);
@@ -299,12 +300,14 @@ impl Root {
                             .child(div().text_color(colours::faint()).child("⌕"))
                             .child(div().flex_1().child(filter.clone()))
                             .when(filtering, |d| {
-                                d.child(ui::icon_button("filter-clear", "✕").on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                                    if let Some(f) = &this.side.filter {
-                                        f.update(cx, |f, cx| f.clear(cx));
-                                    }
-                                    window.focus(&this.focus);
-                                })))
+                                d.child(ui::icon_button("filter-clear", "✕").on_click(cx.listener(
+                                    move |this, _: &ClickEvent, window, cx| {
+                                        if let Some(f) = &this.side.filter {
+                                            f.update(cx, TextField::clear);
+                                        }
+                                        window.focus(&this.focus);
+                                    },
+                                )))
                             }),
                     ),
             )
@@ -316,9 +319,14 @@ impl Root {
                     .flex_col()
                     .overflow_y_scroll()
                     .child(list)
-                    .when(filtering && self.session.as_ref().is_some_and(|s| !s.projects.iter().any(|p| order::shows_project(p, &query))), |d| {
-                        d.child(ui::note("Nothing matches."))
-                    })
+                    .when(
+                        filtering
+                            && self
+                                .session
+                                .as_ref()
+                                .is_some_and(|s| !s.projects.iter().any(|p| order::shows_project(p, &query))),
+                        |d| d.child(ui::note("Nothing matches.")),
+                    )
                     .child(end),
             )
             .child(
@@ -341,10 +349,9 @@ impl Root {
                     .flex()
                     .gap(px(6.))
                     .p(px(10.))
-                    .child(
-                        button("new-workspace", "+ Workspace", colours::muted())
-                            .on_click(cx.listener(|_, _: &ClickEvent, window, cx| dialogs::new_workspace(None, window, cx))),
-                    )
+                    .child(button("new-workspace", "+ Workspace", colours::muted()).on_click(
+                        cx.listener(|_, _: &ClickEvent, window, cx| dialogs::new_workspace(None, window, cx)),
+                    ))
                     .child(
                         button("start-agent", "▶ Agent", colours::accent())
                             .on_click(cx.listener(|_, _: &ClickEvent, window, cx| dialogs::start_agent(window, cx))),
@@ -364,12 +371,14 @@ impl Root {
                 this.side.query = field.read(cx).text();
                 cx.notify();
             }
-            TextFieldEvent::Cancel => field.update(cx, |f, cx| f.clear(cx)),
+            TextFieldEvent::Cancel => field.update(cx, TextField::clear),
             TextFieldEvent::Submit => {
                 // Enter goes to the first workspace the filter shows.
                 let query = this.side.query.clone();
                 let first = this.session.as_ref().and_then(|s| {
-                    s.projects.iter().find_map(|p| p.workspaces.iter().find(|w| order::shows_workspace(p, w, &query)).map(|w| w.id))
+                    s.projects
+                        .iter()
+                        .find_map(|p| p.workspaces.iter().find(|w| order::shows_workspace(p, w, &query)).map(|w| w.id))
                 });
                 if let Some(id) = first {
                     this.focus_item("workspace", id);
@@ -391,17 +400,26 @@ impl Root {
     /// The text field of a row being renamed, boxed, in place of its name.
     fn rename_box(&self, target: Target) -> Option<AnyElement> {
         let rename = self.side.rename.as_ref().filter(|r| r.target == target)?;
-        Some(div().flex_1().min_w(px(0.)).child(ui::input_box(rename.field.clone(), true).py(px(1.))).into_any_element())
+        Some(
+            div().flex_1().min_w(px(0.)).child(ui::input_box(rename.field.clone(), true).py(px(1.))).into_any_element(),
+        )
     }
 
     /// The drag-and-drop rules of a row: what may land on it and the line that shows where.
-    fn drop_target(&self, el: Stateful<Div>, target: Target, siblings: Rc<Vec<u64>>, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn drop_target(
+        &self,
+        el: Stateful<Div>,
+        target: Target,
+        siblings: Rc<Vec<u64>>,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         el.drag_over::<Dragged>(move |s, d, _, _| {
             let into_group = matches!((d.target, target), (Target::Project(_), Target::Group(_)));
             if into_group {
                 return s.bg(colours::selected());
             }
-            let accepted = d.target.same_kind(target) || matches!((d.target, target), (Target::Group(_), Target::Project(_)));
+            let accepted =
+                d.target.same_kind(target) || matches!((d.target, target), (Target::Group(_), Target::Project(_)));
             if !accepted || d.target == target {
                 return s;
             }
@@ -414,7 +432,14 @@ impl Root {
         .on_drop(cx.listener(move |this, d: &Dragged, _, _| this.drop_on(d.target, target)))
     }
 
-    fn render_group(&self, group: &Group, count: usize, shown: Shown, groups: Rc<Vec<u64>>, cx: &mut Context<Self>) -> AnyElement {
+    fn render_group(
+        &self,
+        group: &Group,
+        count: usize,
+        shown: Shown,
+        groups: Rc<Vec<u64>>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let id = group.id;
         let gid = SharedString::from(format!("group-{id}"));
         let colour = forms::palette_colour(group.colour.unwrap_or(4));
@@ -441,7 +466,9 @@ impl Root {
             .cursor_pointer()
             .hover(|s| s.bg(colours::hover()))
             .when(collapsed && holds_shown, |d| d.bg(colours::selected()))
-            .child(div().w(px(14.)).flex_none().text_color(colour).child(group.icon.clone().unwrap_or_else(|| "●".into())))
+            .child(
+                div().w(px(14.)).flex_none().text_color(colour).child(group.icon.clone().unwrap_or_else(|| "●".into())),
+            )
             .child(match self.rename_box(Target::Group(id)) {
                 Some(field) => field,
                 None => div()
@@ -466,7 +493,9 @@ impl Root {
             ))
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |this, e: &MouseDownEvent, window, cx| this.open_target_menu(Target::Group(id), e.position, window, cx)),
+                cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                    this.open_target_menu(Target::Group(id), e.position, window, cx)
+                }),
             )
             .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
                 if e.click_count() == 2 {
@@ -479,7 +508,14 @@ impl Root {
         self.drop_target(row, Target::Group(id), groups, cx).into_any_element()
     }
 
-    fn render_project(&self, project: &Project, shown: Shown, query: &str, siblings: Rc<Vec<u64>>, cx: &mut Context<Self>) -> AnyElement {
+    fn render_project(
+        &self,
+        project: &Project,
+        shown: Shown,
+        query: &str,
+        siblings: Rc<Vec<u64>>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let id = project.id;
         let is_shown = shown.project == Some(id);
         let filtering = !query.trim().is_empty();
@@ -518,13 +554,15 @@ impl Root {
                     .child(project.name.clone())
                     .into_any_element(),
             })
-            .when(collapsed, |d| d.child(ui::dim(format!("{}", project.workspaces.len()))).child(badge(project.loudest())))
-            .child(hover_button(SharedString::from(format!("project-add-{id}")), gid.clone(), "+", 1).on_click(cx.listener(
-                move |_, _: &ClickEvent, window, cx| {
+            .when(collapsed, |d| {
+                d.child(ui::dim(format!("{}", project.workspaces.len()))).child(badge(project.loudest()))
+            })
+            .child(hover_button(SharedString::from(format!("project-add-{id}")), gid.clone(), "+", 1).on_click(
+                cx.listener(move |_, _: &ClickEvent, window, cx| {
                     cx.stop_propagation();
                     dialogs::new_workspace(Some(id), window, cx);
-                },
-            )))
+                }),
+            ))
             .child(hover_button(SharedString::from(format!("project-menu-{id}")), gid, "⋯", 0).on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, e: &MouseDownEvent, window, cx| {
@@ -534,7 +572,9 @@ impl Root {
             ))
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |this, e: &MouseDownEvent, window, cx| this.open_target_menu(Target::Project(id), e.position, window, cx)),
+                cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                    this.open_target_menu(Target::Project(id), e.position, window, cx)
+                }),
             )
             .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
                 if e.click_count() == 2 {
@@ -556,7 +596,14 @@ impl Root {
         col.into_any_element()
     }
 
-    fn render_workspace(&self, ws: &Workspace, shown: Shown, filtering: bool, siblings: Rc<Vec<u64>>, cx: &mut Context<Self>) -> AnyElement {
+    fn render_workspace(
+        &self,
+        ws: &Workspace,
+        shown: Shown,
+        filtering: bool,
+        siblings: Rc<Vec<u64>>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let wid = ws.id;
         let selected = shown.workspace == Some(wid);
         let rows = ws.agent_rows();
@@ -597,9 +644,9 @@ impl Root {
                 .flex_none()
                 .text_size(px(11.))
                 .text_color(colour)
-                .when(crossed, |d| d.line_through())
+                .when(crossed, Styled::line_through)
                 .cursor_pointer()
-                .hover(move |s| s.underline())
+                .hover(Styled::underline)
                 .child(text)
                 .tooltip(tip(pull_tip(&pr)))
                 .on_click(move |_: &ClickEvent, _, cx| {
@@ -630,14 +677,20 @@ impl Root {
             .cursor_pointer()
             .when(selected, |d| d.bg(colours::selected()))
             .hover(|s| s.bg(colours::hover()))
-            .when(selected, |d| d.child(div().absolute().left_0().top(px(4.)).bottom(px(4.)).w(px(2.)).rounded_full().bg(colours::accent())))
+            .when(selected, |d| {
+                d.child(
+                    div().absolute().left_0().top(px(4.)).bottom(px(4.)).w(px(2.)).rounded_full().bg(colours::accent()),
+                )
+            })
             .child(if rows.is_empty() {
                 div().id(SharedString::from(format!("ws-fold-{wid}"))).w(px(14.)).flex_none()
             } else {
-                chevron(SharedString::from(format!("ws-fold-{wid}")), !collapsed).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.set_folded(Target::Workspace(wid), !collapsed);
-                }))
+                chevron(SharedString::from(format!("ws-fold-{wid}")), !collapsed).on_click(cx.listener(
+                    move |this, _: &ClickEvent, _, cx| {
+                        cx.stop_propagation();
+                        this.set_folded(Target::Workspace(wid), !collapsed);
+                    },
+                ))
             })
             .child(
                 div()
@@ -664,7 +717,13 @@ impl Root {
                             })
                             .children(pr)
                             .when(ws.behind > 0, |d| {
-                                d.child(div().flex_none().text_size(px(11.)).text_color(colours::muted()).child(format!("↓{}", ws.behind)))
+                                d.child(
+                                    div()
+                                        .flex_none()
+                                        .text_size(px(11.))
+                                        .text_color(colours::muted())
+                                        .child(format!("↓{}", ws.behind)),
+                                )
                             })
                             .when(rows.is_empty() || collapsed, |d| d.child(badge(ws.loudest()))),
                     )
@@ -689,7 +748,9 @@ impl Root {
             ))
             .on_mouse_down(
                 MouseButton::Right,
-                cx.listener(move |this, e: &MouseDownEvent, window, cx| this.open_target_menu(Target::Workspace(wid), e.position, window, cx)),
+                cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                    this.open_target_menu(Target::Workspace(wid), e.position, window, cx)
+                }),
             )
             .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
                 if e.click_count() == 2 {
@@ -748,13 +809,13 @@ impl Root {
             .when(selected, |d| d.bg(colours::selected()))
             .hover(|s| s.bg(colours::hover()))
             .child(if row.children > 0 {
-                chevron(SharedString::from(format!("agent-fold-{id}")), !folded)
-                    .w(px(10.))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                chevron(SharedString::from(format!("agent-fold-{id}")), !folded).w(px(10.)).on_click(cx.listener(
+                    move |this, _: &ClickEvent, _, cx| {
                         cx.stop_propagation();
                         let verb = if folded { "expand" } else { "collapse" };
                         this.queue.cmd(cmd(&[verb, "--pane", &id.to_string()]));
-                    }))
+                    },
+                ))
             } else {
                 div().id(SharedString::from(format!("agent-fold-{id}"))).w(px(10.)).flex_none()
             })
@@ -820,11 +881,16 @@ impl Root {
         let workspaces = || projects.iter().flat_map(|p| &p.workspaces);
         match target {
             Target::Group(id) => session.groups.iter().find(|g| g.id == id).map(|g| g.name.clone()),
-            Target::Project(id) => projects.iter().find(|p| p.id == id).map(|p| p.custom_name.clone().unwrap_or(p.name.clone())),
-            Target::Workspace(id) => workspaces().find(|w| w.id == id).map(|w| w.custom_name.clone().unwrap_or(w.name.clone())),
-            Target::Tab(id) => {
-                workspaces().flat_map(|w| &w.tabs).find(|t| t.id == id).map(|t| t.custom_name.clone().unwrap_or(t.name.clone()))
+            Target::Project(id) => {
+                projects.iter().find(|p| p.id == id).map(|p| p.custom_name.clone().unwrap_or(p.name.clone()))
             }
+            Target::Workspace(id) => {
+                workspaces().find(|w| w.id == id).map(|w| w.custom_name.clone().unwrap_or(w.name.clone()))
+            }
+            Target::Tab(id) => workspaces()
+                .flat_map(|w| &w.tabs)
+                .find(|t| t.id == id)
+                .map(|t| t.custom_name.clone().unwrap_or(t.name.clone())),
         }
     }
 
@@ -872,9 +938,12 @@ impl Root {
         let group_ids: Vec<u64> = session.groups.iter().map(|g| g.id).collect();
         let group_of = |project: u64| session.projects.iter().find(|p| p.id == project).and_then(|p| p.group);
         let args: Option<Vec<String>> = match (dragged, target) {
-            (Target::Project(p), Target::Group(g)) => Some(cmd(&["move", "--project", &p.to_string(), "--into", &g.to_string()])),
+            (Target::Project(p), Target::Group(g)) => {
+                Some(cmd(&["move", "--project", &p.to_string(), "--into", &g.to_string()]))
+            }
             (Target::Project(p), Target::Project(q)) => {
-                let siblings = sections.iter().find(|(_, ids)| ids.contains(&q)).map(|(_, ids)| ids.clone()).unwrap_or_default();
+                let siblings =
+                    sections.iter().find(|(_, ids)| ids.contains(&q)).map(|(_, ids)| ids.clone()).unwrap_or_default();
                 order::drop_place(&siblings, p, q).map(|place| match place {
                     Place::Before(id) => cmd(&["move", "--project", &p.to_string(), "--before", &id.to_string()]),
                     Place::End => match group_of(q).filter(|g| group_ids.contains(g)) {
@@ -883,7 +952,7 @@ impl Root {
                     },
                 })
             }
-            (Target::Group(a), Target::Group(_)) | (Target::Group(a), Target::Project(_)) => {
+            (Target::Group(a), Target::Group(_) | Target::Project(_)) => {
                 let b = match target {
                     Target::Project(q) => group_of(q).filter(|g| group_ids.contains(g)),
                     other => Some(other.id()),
@@ -929,7 +998,13 @@ impl Root {
     // -----------------------------------------------------------------------------------------
     // Menus.
 
-    pub(crate) fn open_target_menu(&mut self, target: Target, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn open_target_menu(
+        &mut self,
+        target: Target,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let entries = self.menu_for(target);
         self.open_menu(at, entries, window, cx);
     }
@@ -938,7 +1013,8 @@ impl Root {
         let Some(session) = &self.session else { return Vec::new() };
         let id = target.id();
         let ids = id.to_string();
-        let rename = |label: &str| item(label.to_string(), move |this, window, cx| this.start_rename(target, window, cx));
+        let rename =
+            |label: &str| item(label.to_string(), move |this, window, cx| this.start_rename(target, window, cx));
         let fold = |collapsed: bool| {
             item(if collapsed { "Expand" } else { "Collapse" }, move |this, _, _| this.set_folded(target, !collapsed))
         };
@@ -950,7 +1026,8 @@ impl Root {
         let copy_path = |path: String| {
             item("Copy path", move |this, _, cx| {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(path.clone()));
-                this.store.update(cx, |s, cx| s.toast(format!("Copied {}", tilde(&path)), crate::store::ToastKind::Info, cx));
+                this.store
+                    .update(cx, |s, cx| s.toast(format!("Copied {}", tilde(&path)), crate::store::ToastKind::Info, cx));
             })
         };
         match target {
@@ -963,10 +1040,14 @@ impl Root {
                     item("Add project…", move |this, window, cx| this.open_project_into(Some(id), window, cx)),
                     Entry::Separator,
                     rename("Rename group"),
-                    item("Icon and colour…", move |_, window, cx| forms::group_style(id, style_name.clone(), window, cx)),
+                    item("Icon and colour…", move |_, window, cx| {
+                        forms::group_style(id, style_name.clone(), window, cx)
+                    }),
                     fold(collapsed),
                     Entry::Separator,
-                    danger("Delete group…", move |_, window, cx| forms::delete_group(id, name.clone(), count, window, cx)),
+                    danger("Delete group…", move |_, window, cx| {
+                        forms::delete_group(id, name.clone(), count, window, cx)
+                    }),
                 ]
             }
             Target::Project(_) => {
@@ -1013,7 +1094,7 @@ impl Root {
                             false,
                             window,
                             cx,
-                        )
+                        );
                     }),
                 ]
             }
@@ -1041,7 +1122,8 @@ impl Root {
                             item("Open in browser", move |_, _, cx| cx.open_url(&url)),
                             item("Copy link", move |this, _, cx| {
                                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy.clone()));
-                                this.store.update(cx, |s, cx| s.toast("Copied the link", crate::store::ToastKind::Info, cx));
+                                this.store
+                                    .update(cx, |s, cx| s.toast("Copied the link", crate::store::ToastKind::Info, cx));
                             }),
                         ],
                     ));
@@ -1052,7 +1134,9 @@ impl Root {
                 entries.extend([Entry::Separator, finder(path.clone()), copy_path(path), Entry::Separator]);
                 if worktree {
                     let n = name.clone();
-                    entries.push(danger("Remove worktree…", move |_, window, cx| forms::remove_worktree(id, n.clone(), window, cx)));
+                    entries.push(danger("Remove worktree…", move |_, window, cx| {
+                        forms::remove_worktree(id, n.clone(), window, cx)
+                    }));
                 }
                 if !ws.tabs.is_empty() || !worktree {
                     let label = if worktree { "Close its tabs…" } else { "Close workspace…" };
@@ -1070,7 +1154,7 @@ impl Root {
                             false,
                             window,
                             cx,
-                        )
+                        );
                     }));
                 }
                 entries
@@ -1092,7 +1176,12 @@ impl Root {
         let has_children = self
             .session
             .as_ref()
-            .and_then(|s| s.projects.iter().flat_map(|p| &p.workspaces).find_map(|w| w.agent_rows().into_iter().find(|r| r.pane.id == pane)))
+            .and_then(|s| {
+                s.projects
+                    .iter()
+                    .flat_map(|p| &p.workspaces)
+                    .find_map(|w| w.agent_rows().into_iter().find(|r| r.pane.id == pane))
+            })
             .is_some_and(|r| r.children > 0);
         if has_children {
             let verb = if info.collapsed { "expand" } else { "collapse" };
@@ -1135,7 +1224,13 @@ impl Root {
                         crate::store::run_json(cx, args, move |this: &mut Root, result, cx| match result {
                             Ok(v) => {
                                 if let Some(project) = v.get("project").and_then(serde_json::Value::as_u64) {
-                                    this.queue.cmd(cmd(&["move", "--project", &project.to_string(), "--into", &group.to_string()]));
+                                    this.queue.cmd(cmd(&[
+                                        "move",
+                                        "--project",
+                                        &project.to_string(),
+                                        "--into",
+                                        &group.to_string(),
+                                    ]));
                                     this.set_folded(Target::Group(group), false);
                                 }
                             }

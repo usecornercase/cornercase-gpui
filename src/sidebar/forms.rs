@@ -16,7 +16,7 @@ use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
 
 fn close(cx: &mut App) {
-    Store::get(cx).update(cx, |s, cx| s.close_dialog(cx));
+    Store::get(cx).update(cx, Store::close_dialog);
 }
 
 fn show(view: gpui::AnyView, focus: FocusHandle, window: &mut Window, cx: &mut App) {
@@ -25,7 +25,7 @@ fn show(view: gpui::AnyView, focus: FocusHandle, window: &mut Window, cx: &mut A
 }
 
 /// A palette index as a colour, for group icons.
-pub fn palette_colour(index: u8) -> gpui::Rgba {
+pub(super) fn palette_colour(index: u8) -> gpui::Rgba {
     let [r, g, b] = crate::theme::palette(index);
     gpui::rgb((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b))
 }
@@ -57,12 +57,12 @@ fn warning(text: impl Into<SharedString>) -> gpui::Div {
 // ---------------------------------------------------------------------------------------------
 
 /// `cornercase group new NAME`, then optionally moves a project into it.
-pub struct NewGroup {
+pub(super) struct NewGroup {
     name: Entity<TextField>,
     project: Option<u64>,
 }
 
-pub fn new_group(project: Option<u64>, window: &mut Window, cx: &mut App) {
+pub(super) fn new_group(project: Option<u64>, window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| {
         let name = cx.new(|cx| TextField::new("work", cx));
         cx.subscribe_in(&name, window, |this: &mut NewGroup, _, event, _, cx| match event {
@@ -92,9 +92,11 @@ impl NewGroup {
                         let a = args(&["move", "--project", &project.to_string(), "--into", &group.to_string()]);
                         store.read(cx).cmd(a);
                     }
-                    store.update(cx, |s, cx| s.close_dialog(cx));
+                    store.update(cx, Store::close_dialog);
                 }
-                Ok(None) => store.update(cx, |s, cx| s.toast("cornercase group new printed no id", store::ToastKind::Error, cx)),
+                Ok(None) => {
+                    store.update(cx, |s, cx| s.toast("cornercase group new printed no id", store::ToastKind::Error, cx))
+                }
                 Err(e) => store.update(cx, |s, cx| s.toast(e.to_string(), store::ToastKind::Error, cx)),
             }
         });
@@ -117,7 +119,8 @@ impl Render for NewGroup {
                 .gap(px(8.))
                 .child(ui::button("cancel", "Cancel").on_click(|_: &ClickEvent, _, cx| close(cx)))
                 .child(
-                    ui::primary_button("create", "Create").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
+                    ui::primary_button("create", "Create")
+                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
                 ),
         )
     }
@@ -126,14 +129,14 @@ impl Render for NewGroup {
 // ---------------------------------------------------------------------------------------------
 
 /// A group's icon and colour: `group style ID --json` lists the choices, a click applies at once.
-pub struct GroupStyle {
+pub(super) struct GroupStyle {
     group: u64,
     name: String,
     check: Check,
     focus: FocusHandle,
 }
 
-pub fn group_style(group: u64, name: String, window: &mut Window, cx: &mut App) {
+pub(super) fn group_style(group: u64, name: String, window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| {
         store::run_json(cx, args(&["group", "style", &group.to_string(), "--json"]), |this: &mut GroupStyle, r, cx| {
             this.check = Check::from(r);
@@ -170,10 +173,22 @@ impl Render for GroupStyle {
             Check::Ready(v) => {
                 let icon = v.get("icon").and_then(Value::as_str).unwrap_or_default().to_string();
                 let colour = v.get("colour").and_then(Value::as_u64).unwrap_or(4) as u8;
-                let icons: Vec<String> =
-                    v.get("icons").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).map(String::from).collect();
-                let colours_: Vec<u8> =
-                    v.get("colours").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_u64).map(|c| c as u8).collect();
+                let icons: Vec<String> = v
+                    .get("icons")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .map(String::from)
+                    .collect();
+                let colours_: Vec<u8> = v
+                    .get("colours")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_u64)
+                    .map(|c| c as u8)
+                    .collect();
                 div()
                     .flex()
                     .flex_col()
@@ -188,26 +203,28 @@ impl Render for GroupStyle {
                     )
                     .child(ui::field(
                         "Icon",
-                        div().flex().flex_wrap().gap(px(4.)).children(icons.into_iter().enumerate().map(|(i, glyph)| {
-                            let selected = glyph == icon;
-                            div()
-                                .id(SharedString::from(format!("icon-{i}")))
-                                .size(px(28.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .rounded(px(5.))
-                                .border_1()
-                                .border_color(if selected { colours::accent() } else { colours::border() })
-                                .when(selected, |d| d.bg(colours::selected()))
-                                .text_color(palette_colour(colour))
-                                .cursor_pointer()
-                                .hover(|s| s.bg(colours::hover()))
-                                .child(glyph.clone())
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                    this.set("icon", Value::String(glyph.clone()), cx)
-                                }))
-                        })),
+                        div().flex().flex_wrap().gap(px(4.)).children(icons.into_iter().enumerate().map(
+                            |(i, glyph)| {
+                                let selected = glyph == icon;
+                                div()
+                                    .id(SharedString::from(format!("icon-{i}")))
+                                    .size(px(28.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(px(5.))
+                                    .border_1()
+                                    .border_color(if selected { colours::accent() } else { colours::border() })
+                                    .when(selected, |d| d.bg(colours::selected()))
+                                    .text_color(palette_colour(colour))
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(colours::hover()))
+                                    .child(glyph.clone())
+                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                        this.set("icon", Value::String(glyph.clone()), cx);
+                                    }))
+                            },
+                        )),
                     ))
                     .child(ui::field(
                         "Colour",
@@ -221,7 +238,9 @@ impl Render for GroupStyle {
                                 .border_color(if selected { colours::text() } else { colours::panel() })
                                 .bg(palette_colour(c))
                                 .cursor_pointer()
-                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set("colour", Value::from(c), cx)))
+                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    this.set("colour", Value::from(c), cx)
+                                }))
                         })),
                     ))
             }
@@ -244,14 +263,14 @@ impl Render for GroupStyle {
 // ---------------------------------------------------------------------------------------------
 
 /// Deleting a group that holds projects: keep them (ungrouped) or close them too.
-pub struct DeleteGroup {
+pub(super) struct DeleteGroup {
     group: u64,
     name: String,
     projects: usize,
     focus: FocusHandle,
 }
 
-pub fn delete_group(group: u64, name: String, projects: usize, window: &mut Window, cx: &mut App) {
+pub(super) fn delete_group(group: u64, name: String, projects: usize, window: &mut Window, cx: &mut App) {
     if projects == 0 {
         crate::dialogs::confirm(
             format!("Delete the group {name}?"),
@@ -319,7 +338,7 @@ impl Render for DeleteGroup {
 
 /// Removing a worktree: what `close --workspace ID --remove-worktree --check --json` says would
 /// be lost (changes not committed, a lock, a flow's role worktrees, the teardown), then the removal.
-pub struct RemoveWorktree {
+pub(super) struct RemoveWorktree {
     workspace: u64,
     name: String,
     check: Check,
@@ -328,7 +347,7 @@ pub struct RemoveWorktree {
     focus: FocusHandle,
 }
 
-pub fn remove_worktree(workspace: u64, name: String, window: &mut Window, cx: &mut App) {
+pub(super) fn remove_worktree(workspace: u64, name: String, window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| {
         let a = args(&["close", "--workspace", &workspace.to_string(), "--remove-worktree", "--check", "--json"]);
         store::run_json(cx, a, |this: &mut RemoveWorktree, r, cx| {
@@ -404,12 +423,12 @@ impl Render for RemoveWorktree {
                         line("No changes left uncommitted.")
                     });
                 if changed {
-                    body = body.child(
-                        ui::checkbox("force", self.force, "Delete them anyway").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    body = body.child(ui::checkbox("force", self.force, "Delete them anyway").on_click(cx.listener(
+                        |this, _: &ClickEvent, _, cx| {
                             this.force = !this.force;
                             cx.notify();
-                        })),
-                    );
+                        },
+                    )));
                 }
                 if let Some(lock) = lock {
                     let reason = lock.get("reason").and_then(Value::as_str).unwrap_or("no reason given");
@@ -419,15 +438,19 @@ impl Render for RemoveWorktree {
                         None => "",
                     };
                     body = body.child(warning(format!("Locked: {reason}{running}."))).child(
-                        ui::checkbox("unlock", self.unlock, "Unlock it first").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.unlock = !this.unlock;
-                            cx.notify();
-                        })),
+                        ui::checkbox("unlock", self.unlock, "Unlock it first").on_click(cx.listener(
+                            |this, _: &ClickEvent, _, cx| {
+                                this.unlock = !this.unlock;
+                                cx.notify();
+                            },
+                        )),
                     );
                 }
                 if !roles.is_empty() {
                     body = body.child(line("The worktrees of its flow's roles go with it:")).children(
-                        roles.into_iter().map(|r| div().pl(px(12.)).text_color(colours::muted()).child(format!("• {r}"))),
+                        roles
+                            .into_iter()
+                            .map(|r| div().pl(px(12.)).text_color(colours::muted()).child(format!("• {r}"))),
                     );
                 }
                 if teardown {
@@ -464,13 +487,13 @@ impl Render for RemoveWorktree {
 
 /// Closing an agent: its tab and the tabs of the agents it started in that workspace, as
 /// `close --agent --pane ID --check --json` lists them. Nothing on disk goes.
-pub struct CloseAgent {
+pub(super) struct CloseAgent {
     pane: u64,
     check: Check,
     focus: FocusHandle,
 }
 
-pub fn close_agent(pane: u64, window: &mut Window, cx: &mut App) {
+pub(crate) fn close_agent(pane: u64, window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| {
         let a = args(&["close", "--agent", "--pane", &pane.to_string(), "--check", "--json"]);
         store::run_json(cx, a, |this: &mut CloseAgent, r, cx| {
@@ -501,7 +524,12 @@ fn pane_label(p: &Value, cx: &App) -> String {
     let tab = p.get("tab").and_then(Value::as_u64);
     let store = Store::get(cx);
     let name = store.read(cx).session.as_ref().and_then(|s| {
-        s.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).find(|t| Some(t.id) == tab).map(|t| t.name.clone())
+        s.projects
+            .iter()
+            .flat_map(|p| &p.workspaces)
+            .flat_map(|w| &w.tabs)
+            .find(|t| Some(t.id) == tab)
+            .map(|t| t.name.clone())
     });
     match name {
         Some(name) => format!("{agent} in “{name}”"),
@@ -526,14 +554,18 @@ impl Render for CloseAgent {
                     if tabs == 1 { "" } else { "s" }
                 )));
                 if !stops.is_empty() {
-                    body = body
-                        .child(line("Stops:"))
-                        .children(stops.into_iter().map(|s| div().pl(px(12.)).text_color(colours::text()).child(format!("• {s}"))));
+                    body = body.child(line("Stops:")).children(
+                        stops
+                            .into_iter()
+                            .map(|s| div().pl(px(12.)).text_color(colours::text()).child(format!("• {s}"))),
+                    );
                 }
                 if !keeps.is_empty() {
-                    body = body
-                        .child(line("Keeps running elsewhere:"))
-                        .children(keeps.into_iter().map(|s| div().pl(px(12.)).text_color(colours::muted()).child(format!("• {s}"))));
+                    body = body.child(line("Keeps running elsewhere:")).children(
+                        keeps
+                            .into_iter()
+                            .map(|s| div().pl(px(12.)).text_color(colours::muted()).child(format!("• {s}"))),
+                    );
                 }
                 if let Some(w) = v.get("warning").and_then(Value::as_str) {
                     body = body.child(warning(w.to_string()));

@@ -15,12 +15,14 @@ mod sidebar;
 mod store;
 mod tabs;
 mod terminal;
+#[cfg(test)]
+mod test_util;
 mod theme;
 mod ui;
 
 use gpui::{
-    App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, WindowBounds, WindowOptions, actions,
-    point, px, size,
+    App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, WindowBounds, WindowOptions,
+    actions, point, px, size,
 };
 
 actions!(cornercase_gpui, [Quit]);

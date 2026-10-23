@@ -8,19 +8,28 @@ use super::wire::{FileInfo, FileStatus, Gap, Hunk, LineKind, Segment};
 
 /// One row of the diff list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Row {
+pub(super) enum Row {
     /// The unchanged lines before hunk `hunk` (from 0), not read yet: a button that reads them.
-    Gap { hunk: usize, lines: u32 },
+    Gap {
+        hunk: usize,
+        lines: u32,
+    },
     /// One of those lines, once read.
-    GapLine { hunk: usize, line: usize },
+    GapLine {
+        hunk: usize,
+        line: usize,
+    },
     /// A hunk's `@@ … @@` header and its actions.
     Hunk(usize),
-    Line { hunk: usize, line: usize },
+    Line {
+        hunk: usize,
+        line: usize,
+    },
 }
 
 /// The rows of a patch, with the gaps that were read shown in full. Only gaps between two hunks
 /// can be read, as in the TUI: `changes gap` has none above the first or below the last.
-pub fn rows(hunks: &[Hunk], gaps: &HashMap<usize, Gap>) -> Vec<Row> {
+pub(super) fn rows(hunks: &[Hunk], gaps: &HashMap<usize, Gap>) -> Vec<Row> {
     let mut rows = Vec::new();
     for (i, hunk) in hunks.iter().enumerate() {
         let before = gap_before(hunks, i);
@@ -45,7 +54,7 @@ fn new_end(hunk: &Hunk) -> u32 {
 }
 
 /// How many unchanged lines sit between hunk `i` and the one before it (or the top of the file).
-pub fn gap_before(hunks: &[Hunk], i: usize) -> u32 {
+pub(super) fn gap_before(hunks: &[Hunk], i: usize) -> u32 {
     let Some(hunk) = hunks.get(i) else { return 0 };
     if hunk.new_start == 0 {
         return 0;
@@ -55,9 +64,14 @@ pub fn gap_before(hunks: &[Hunk], i: usize) -> u32 {
 }
 
 /// The `@@ -a,b +c,d @@ context` header of a hunk.
-pub fn header(hunk: &Hunk) -> String {
-    let mut text =
-        format!("@@ -{},{} +{},{} @@", hunk.old_start, count(hunk, LineKind::Added), hunk.new_start, count(hunk, LineKind::Removed));
+pub(super) fn header(hunk: &Hunk) -> String {
+    let mut text = format!(
+        "@@ -{},{} +{},{} @@",
+        hunk.old_start,
+        count(hunk, LineKind::Added),
+        hunk.new_start,
+        count(hunk, LineKind::Removed)
+    );
     if !hunk.context.is_empty() {
         text.push(' ');
         text.push_str(&hunk.context);
@@ -66,7 +80,7 @@ pub fn header(hunk: &Hunk) -> String {
 }
 
 /// The hunk as a patch, as the TUI's hunk copy gives it.
-pub fn patch(hunk: &Hunk) -> String {
+pub(super) fn patch(hunk: &Hunk) -> String {
     let mut text = header(hunk);
     for line in &hunk.lines {
         text.push('\n');
@@ -82,7 +96,7 @@ pub fn patch(hunk: &Hunk) -> String {
 }
 
 /// The new side's lines the hunk changed: its added lines, or the line where lines were removed.
-pub fn changed(hunk: &Hunk) -> (u32, u32) {
+pub(super) fn changed(hunk: &Hunk) -> (u32, u32) {
     let added: Vec<u32> = hunk.lines.iter().filter(|l| l.kind == LineKind::Added).filter_map(|l| l.new).collect();
     if let (Some(first), Some(last)) = (added.first(), added.last()) {
         return (*first, *last);
@@ -98,13 +112,13 @@ pub fn changed(hunk: &Hunk) -> (u32, u32) {
 }
 
 /// `path:a-b ` (or `path:a `), what an agent reads as lines of the file as it is now.
-pub fn reference(path: &str, (first, last): (u32, u32)) -> String {
+pub(super) fn reference(path: &str, (first, last): (u32, u32)) -> String {
     if first == last { format!("{path}:{first} ") } else { format!("{path}:{first}-{last} ") }
 }
 
 /// The line typed into a new tab to open the file in the user's editor at a line, as the TUI's
 /// hunk `open` runs it.
-pub fn editor_command(path: &str, line: u32) -> String {
+pub(super) fn editor_command(path: &str, line: u32) -> String {
     format!("${{VISUAL:-${{EDITOR:-vi}}}} +{line} {}", shell_quote(path))
 }
 
@@ -113,11 +127,13 @@ fn shell_quote(text: &str) -> String {
 }
 
 /// What the discard confirmation asks, as cornercase's own words for each kind of change.
-pub fn discard_question(file: &FileInfo) -> String {
+pub(super) fn discard_question(file: &FileInfo) -> String {
     let path = &file.path;
     match (file.status, file.old_path.as_deref()) {
         (FileStatus::Untracked, _) => format!("Delete {path}? It is not in git, so this cannot be undone."),
-        (FileStatus::Added, _) => format!("Discard the changes to {path}? It is new, so it is deleted. This cannot be undone."),
+        (FileStatus::Added, _) => {
+            format!("Discard the changes to {path}? It is new, so it is deleted. This cannot be undone.")
+        }
         (FileStatus::Renamed, Some(old)) => format!(
             "Discard the changes to {old} → {path}? {old} comes back as it was in the last commit and {path} is deleted. \
              This cannot be undone."
@@ -129,7 +145,7 @@ pub fn discard_question(file: &FileInfo) -> String {
 /// A piece of a line drawn in one style: a byte range of the text, the patch's style index and
 /// whether it is a word that changed.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Run {
+pub(super) struct Run {
     pub range: Range<usize>,
     pub style: usize,
     pub emphasis: bool,
@@ -138,7 +154,7 @@ pub struct Run {
 /// Splits a line into runs: the highlighting's segments (style 0 where there is none), cut again
 /// where the emphasised words (character indices) start and end. The runs cover the text, in
 /// order and without overlapping; segments that do not add up to the text are ignored.
-pub fn runs(text: &str, syntax: Option<&[Segment]>, emphasis: &[[usize; 2]]) -> Vec<Run> {
+pub(super) fn runs(text: &str, syntax: Option<&[Segment]>, emphasis: &[[usize; 2]]) -> Vec<Run> {
     let mut styled: Vec<(Range<usize>, usize)> = Vec::new();
     let mut at = 0;
     for seg in syntax.unwrap_or_default() {
@@ -191,14 +207,22 @@ mod tests {
 
     fn sample() -> Vec<Hunk> {
         vec![
-            hunk(3, 3, vec![
-                line(LineKind::Context, Some(3), Some(3), "a"),
-                line(LineKind::Removed, Some(4), None, "b"),
-                line(LineKind::Added, None, Some(4), "B"),
-                line(LineKind::Added, None, Some(5), "C"),
-                line(LineKind::Context, Some(5), Some(6), "d"),
-            ]),
-            hunk(10, 11, vec![line(LineKind::Context, Some(10), Some(11), "x"), line(LineKind::Removed, Some(11), None, "y")]),
+            hunk(
+                3,
+                3,
+                vec![
+                    line(LineKind::Context, Some(3), Some(3), "a"),
+                    line(LineKind::Removed, Some(4), None, "b"),
+                    line(LineKind::Added, None, Some(4), "B"),
+                    line(LineKind::Added, None, Some(5), "C"),
+                    line(LineKind::Context, Some(5), Some(6), "d"),
+                ],
+            ),
+            hunk(
+                10,
+                11,
+                vec![line(LineKind::Context, Some(10), Some(11), "x"), line(LineKind::Removed, Some(11), None, "y")],
+            ),
         ]
     }
 
@@ -225,7 +249,10 @@ mod tests {
         let gap_line = |n| GapLine { old: n, new: n, text: "u".into(), syntax: None };
         gaps.insert(1, Gap { lines: vec![gap_line(7), gap_line(8)], ..Gap::default() });
         let rows_read = rows(&hunks, &gaps);
-        assert_eq!(&rows_read[6..9], &[Row::GapLine { hunk: 1, line: 0 }, Row::GapLine { hunk: 1, line: 1 }, Row::Hunk(1)]);
+        assert_eq!(
+            &rows_read[6..9],
+            &[Row::GapLine { hunk: 1, line: 0 }, Row::GapLine { hunk: 1, line: 1 }, Row::Hunk(1)]
+        );
     }
 
     #[test]
@@ -263,7 +290,10 @@ mod tests {
         assert!(discard_question(&file(FileStatus::Untracked, None)).starts_with("Delete new.rs?"));
         assert!(discard_question(&file(FileStatus::Added, None)).contains("It is new, so it is deleted"));
         assert!(discard_question(&file(FileStatus::Renamed, Some("old.rs"))).contains("old.rs → new.rs"));
-        assert_eq!(discard_question(&file(FileStatus::Modified, None)), "Discard the changes to new.rs? This cannot be undone.");
+        assert_eq!(
+            discard_question(&file(FileStatus::Modified, None)),
+            "Discard the changes to new.rs? This cannot be undone."
+        );
     }
 
     fn seg(style: usize, text: &str) -> Segment {

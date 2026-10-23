@@ -14,44 +14,63 @@ use crate::app::Root;
 use crate::theme::colours;
 
 /// What an entry does, run on the window once the menu has closed.
-pub type Action = Rc<dyn Fn(&mut Root, &mut Window, &mut Context<Root>)>;
+pub(crate) type Action = Rc<dyn Fn(&mut Root, &mut Window, &mut Context<Root>)>;
 
 #[derive(Clone)]
-pub enum Entry {
-    Item { label: SharedString, action: Action, danger: bool },
+pub(crate) enum Entry {
+    Item {
+        label: SharedString,
+        action: Action,
+        danger: bool,
+    },
     /// Grey text that does nothing: why something is missing.
     Note(SharedString),
-    Submenu { label: SharedString, entries: Vec<Entry> },
+    Submenu {
+        label: SharedString,
+        entries: Vec<Entry>,
+    },
     Separator,
 }
 
 /// An entry that runs `action`.
-pub fn item(label: impl Into<SharedString>, action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static) -> Entry {
+pub(crate) fn item(
+    label: impl Into<SharedString>,
+    action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
+) -> Entry {
     Entry::Item { label: label.into(), action: Rc::new(action), danger: false }
 }
 
 /// An entry for something that stops or removes things, in red.
-pub fn danger(label: impl Into<SharedString>, action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static) -> Entry {
+pub(crate) fn danger(
+    label: impl Into<SharedString>,
+    action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
+) -> Entry {
     Entry::Item { label: label.into(), action: Rc::new(action), danger: true }
 }
 
 /// An entry that runs a command in our view (`Root::act`).
-pub fn act(label: impl Into<SharedString>, args: Vec<String>) -> Entry {
+pub(crate) fn act(label: impl Into<SharedString>, args: Vec<String>) -> Entry {
     item(label, move |root, _, _| root.act(args.clone()))
 }
 
-pub fn submenu(label: impl Into<SharedString>, entries: Vec<Entry>) -> Entry {
+pub(crate) fn submenu(label: impl Into<SharedString>, entries: Vec<Entry>) -> Entry {
     Entry::Submenu { label: label.into(), entries }
 }
 
-pub struct Menu {
+pub(crate) struct Menu {
     pub at: Point<Pixels>,
     pub entries: Vec<Entry>,
     pub focus: FocusHandle,
 }
 
 impl Root {
-    pub(crate) fn open_menu(&mut self, at: Point<Pixels>, entries: Vec<Entry>, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn open_menu(
+        &mut self,
+        at: Point<Pixels>,
+        entries: Vec<Entry>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Separators at either end or twice in a row come from optional entries left out.
         let mut clean: Vec<Entry> = Vec::new();
         for entry in entries {

@@ -7,17 +7,17 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// The most entries one folder lists.
-pub const MAX_ENTRIES: usize = 10_000;
+pub(super) const MAX_ENTRIES: usize = 10_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Entry {
+pub(super) struct Entry {
     pub name: String,
     pub dir: bool,
 }
 
 /// One folder's entries: folders first, then files, by name ignoring case.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Listing {
+pub(super) struct Listing {
     pub entries: Vec<Entry>,
     /// More than `MAX_ENTRIES` were there.
     pub truncated: bool,
@@ -25,7 +25,7 @@ pub struct Listing {
 
 /// Lists `root/rel` one level deep. `.git` is never listed; hidden files are (the panel hides
 /// them when asked).
-pub fn list(root: &Path, rel: &Path) -> std::io::Result<Listing> {
+pub(super) fn list(root: &Path, rel: &Path) -> std::io::Result<Listing> {
     let dir = root.join(rel);
     // Fail like `read_dir` would for a folder that is gone, rather than listing nothing.
     std::fs::metadata(&dir)?;
@@ -58,13 +58,13 @@ pub fn list(root: &Path, rel: &Path) -> std::io::Result<Listing> {
     Ok(listing)
 }
 
-pub fn sort(entries: &mut [Entry]) {
+pub(super) fn sort(entries: &mut [Entry]) {
     entries.sort_by(|a, b| b.dir.cmp(&a.dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
 }
 
 /// A row of the flattened tree.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Row {
+pub(super) struct Row {
     /// Relative to the workspace's folder.
     pub path: PathBuf,
     pub name: String,
@@ -75,7 +75,7 @@ pub struct Row {
 }
 
 /// The rows to draw: the root's entries, and under each open folder its own, when listed.
-pub fn rows(listings: &HashMap<PathBuf, Listing>, expanded: &HashSet<PathBuf>, show_hidden: bool) -> Vec<Row> {
+pub(super) fn rows(listings: &HashMap<PathBuf, Listing>, expanded: &HashSet<PathBuf>, show_hidden: bool) -> Vec<Row> {
     let mut rows = Vec::new();
     push_rows(&mut rows, listings, expanded, show_hidden, Path::new(""), 0);
     rows
@@ -104,7 +104,7 @@ fn push_rows(
 }
 
 /// The folders to list again: the root and every open folder whose parents are open too.
-pub fn shown_folders(expanded: &HashSet<PathBuf>) -> Vec<PathBuf> {
+pub(super) fn shown_folders(expanded: &HashSet<PathBuf>) -> Vec<PathBuf> {
     let mut folders = vec![PathBuf::new()];
     folders.extend(
         expanded
@@ -117,7 +117,7 @@ pub fn shown_folders(expanded: &HashSet<PathBuf>) -> Vec<PathBuf> {
 }
 
 /// Opens every folder above `rel`, so a file opened from a search shows in the tree.
-pub fn reveal(expanded: &mut HashSet<PathBuf>, rel: &Path) -> Vec<PathBuf> {
+pub(super) fn reveal(expanded: &mut HashSet<PathBuf>, rel: &Path) -> Vec<PathBuf> {
     let mut opened = Vec::new();
     for parent in rel.ancestors().skip(1) {
         if parent.as_os_str().is_empty() {
@@ -173,11 +173,22 @@ mod tests {
     fn flattens_open_folders_and_hides_dotfiles() {
         let mut listings = HashMap::new();
         let entry = |name: &str, dir| Entry { name: name.into(), dir };
-        listings.insert(PathBuf::new(), Listing { entries: vec![entry("src", true), entry(".env", false), entry("a", false)], truncated: false });
-        listings.insert(PathBuf::from("src"), Listing { entries: vec![entry("lib", true), entry("main.rs", false)], truncated: false });
+        listings.insert(
+            PathBuf::new(),
+            Listing { entries: vec![entry("src", true), entry(".env", false), entry("a", false)], truncated: false },
+        );
+        listings.insert(
+            PathBuf::from("src"),
+            Listing { entries: vec![entry("lib", true), entry("main.rs", false)], truncated: false },
+        );
         let mut expanded = HashSet::new();
-        let paths = |rows: Vec<Row>| rows.into_iter().map(|r| (r.path.to_string_lossy().into_owned(), r.depth)).collect::<Vec<_>>();
-        assert_eq!(paths(rows(&listings, &expanded, true)), vec![("src".into(), 0), (".env".into(), 0), ("a".into(), 0)]);
+        let paths = |rows: Vec<Row>| {
+            rows.into_iter().map(|r| (r.path.to_string_lossy().into_owned(), r.depth)).collect::<Vec<_>>()
+        };
+        assert_eq!(
+            paths(rows(&listings, &expanded, true)),
+            vec![("src".into(), 0), (".env".into(), 0), ("a".into(), 0)]
+        );
         expanded.insert(PathBuf::from("src"));
         // `src/lib` is open but not listed yet: it shows open, with nothing under it.
         expanded.insert(PathBuf::from("src/lib"));

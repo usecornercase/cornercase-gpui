@@ -12,9 +12,10 @@ use std::time::Duration;
 
 use anyhow::bail;
 use gpui::{
-    AnyElement, AnyView, AppContext as _, ClickEvent, ClipboardItem, Context, Div, FontWeight, Hsla, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription,
-    Task, Window, div, prelude::FluentBuilder as _, px, relative,
+    AnyElement, AnyView, AppContext as _, ClickEvent, ClipboardItem, Context, Div, FontWeight, Hsla,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, Rgba, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, prelude::FluentBuilder as _, px,
+    relative,
 };
 
 use self::data::{Counts, Limit, Plan, Plans, Severity, Stats, WEEKS, WINDOWS};
@@ -37,7 +38,8 @@ enum Page {
 }
 
 impl Page {
-    const ALL: [(Page, &'static str); 3] = [(Page::Limits, "Limits"), (Page::Stats, "Stats"), (Page::Agents, "By agent")];
+    const ALL: [(Page, &'static str); 3] =
+        [(Page::Limits, "Limits"), (Page::Stats, "Stats"), (Page::Agents, "By agent")];
 }
 
 /// One command's answer as the sheet keeps it: the last value, whether a new one is coming, and
@@ -70,7 +72,7 @@ impl<T> Load<T> {
     }
 }
 
-pub struct UsagePanel {
+pub(crate) struct UsagePanel {
     page: Page,
     /// The window the By agent page shows, an index in `WINDOWS`.
     window: usize,
@@ -85,7 +87,7 @@ pub struct UsagePanel {
 }
 
 impl UsagePanel {
-    pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         let subscription = cx.observe(&store, |this, store, cx| {
             let open = store.read(cx).sheet == Some(PanelKind::Usage);
@@ -227,8 +229,8 @@ impl UsagePanel {
         } else {
             at.map(|at| data::updated(data::now() - at)).unwrap_or_default()
         };
-        let can_share =
-            self.page != Page::Limits && self.stats.value.as_ref().is_some_and(|s| !s.empty() || s.merged_pull_requests.is_some());
+        let can_share = self.page != Page::Limits
+            && self.stats.value.as_ref().is_some_and(|s| !s.empty() || s.merged_pull_requests.is_some());
         div()
             .flex()
             .items_center()
@@ -333,9 +335,11 @@ impl UsagePanel {
             .flex()
             .flex_col()
             .gap(px(14.))
-            .child(div().flex().items_center().gap(px(10.)).child(ui::segments(windows)).child(div().flex_1()).child(
-                ui::dim(format!("{} with work in this window", plural(agents.len() as u64, "agent", "agents"))),
-            ))
+            .child(
+                div().flex().items_center().gap(px(10.)).child(ui::segments(windows)).child(div().flex_1()).child(
+                    ui::dim(format!("{} with work in this window", plural(agents.len() as u64, "agent", "agents"))),
+                ),
+            )
             .child(if agents.is_empty() {
                 card().child(ui::note("No agent worked in this window.")).into_any_element()
             } else {
@@ -375,7 +379,7 @@ impl Render for UsagePanel {
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
     cx.new(|cx| UsagePanel::new(window, cx)).into()
 }
 
@@ -434,7 +438,8 @@ fn failure(title: &'static str, error: &str, cx: &mut Context<UsagePanel>) -> Di
         .child(div().text_size(px(12.)).text_color(colours::muted()).child(error.to_string()))
         .child(
             div().child(
-                ui::button("usage-retry", "Try again").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.refresh(true, cx))),
+                ui::button("usage-retry", "Try again")
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.refresh(true, cx))),
             ),
         )
 }
@@ -448,7 +453,9 @@ fn bar(fraction: f32, colour: impl Into<Hsla>, height: f32) -> Div {
         .rounded(px(height / 2.))
         .bg(colours::border())
         .overflow_hidden()
-        .when(fraction > 0., |d| d.child(div().h_full().min_w(px(height)).w(relative(fraction)).rounded(px(height / 2.)).bg(colour.into())))
+        .when(fraction > 0., |d| {
+            d.child(div().h_full().min_w(px(height)).w(relative(fraction)).rounded(px(height / 2.)).bg(colour.into()))
+        })
 }
 
 fn plural(n: u64, one: &str, many: &str) -> String {
@@ -484,19 +491,24 @@ fn plan_card(i: usize, plan: &Plan, fresh: bool, now: i64) -> impl IntoElement +
                 .child(ui::dim(status)),
         )
         .when_some(plan.error.as_ref(), |d, e| d.child(error_line(format!("usage unavailable: {e}"))))
-        .when(codex_bug, |d| d.child(ui::dim(format!("a cornercase bug with this Codex version · needs {CODEX_ISSUE}"))))
+        .when(codex_bug, |d| {
+            d.child(ui::dim(format!("a cornercase bug with this Codex version · needs {CODEX_ISSUE}")))
+        })
         .when(!plan.limits.is_empty(), |d| {
             d.child(div().flex().flex_col().gap(px(14.)).children(plan.limits.iter().map(|l| limit_row(l, now))))
         })
         .when_some(plan.notice.as_ref(), |d, n| d.child(div().text_color(colours::muted()).child(n.clone())))
-        .when(plan.limited == Some(false) && plan.notice.is_none(), |d| d.child(div().text_color(colours::muted()).child("no plan limits")))
+        .when(plan.limited == Some(false) && plan.notice.is_none(), |d| {
+            d.child(div().text_color(colours::muted()).child("no plan limits"))
+        })
         .when_some(plan.extra.as_ref(), |d, e| d.child(ui::dim(e.clone())))
         .when(plan.unasked() && !fresh, |d| d.child(ui::dim("not asked yet")))
 }
 
 fn limit_row(limit: &Limit, now: i64) -> impl IntoElement + use<> {
     let colour = severity_colour(limit.severity());
-    let resets = limit.resets_at.as_deref().and_then(data::parse_utc).map(|at| data::until(at - now)).unwrap_or_default();
+    let resets =
+        limit.resets_at.as_deref().and_then(data::parse_utc).map(|at| data::until(at - now)).unwrap_or_default();
     div()
         .flex()
         .flex_col()
@@ -548,7 +560,9 @@ fn hero(stats: &Stats, days: u64) -> impl IntoElement + use<> {
                     .flex()
                     .flex_col()
                     .gap(px(4.))
-                    .child(div().text_size(px(18.)).text_color(colours::muted()).child("No agent worked in the last 24 h"))
+                    .child(
+                        div().text_size(px(18.)).text_color(colours::muted()).child("No agent worked in the last 24 h"),
+                    )
                     .child(ui::dim("the parallel factor shows once agents have been busy for a minute")),
             )
             .child(side);
@@ -617,7 +631,8 @@ fn stat_pill(label: &'static str, value: String) -> Div {
 
 /// The TUI's table: nine counters (ten with merged pull requests) in three windows.
 fn table(stats: &Stats) -> impl IntoElement + use<> {
-    let column = |text: SharedString, colour: Rgba| div().w(px(78.)).flex().justify_end().text_color(colour).child(text);
+    let column =
+        |text: SharedString, colour: Rgba| div().w(px(78.)).flex().justify_end().text_color(colour).child(text);
     let header = div()
         .flex()
         .px(px(8.))
@@ -645,23 +660,18 @@ fn table(stats: &Stats) -> impl IntoElement + use<> {
             a.error.as_ref().map(|e| format!("{} ({who}): {e}", a.provider))
         })
         .collect();
-    card()
-        .flex()
-        .flex_col()
-        .child(header)
-        .children(rows)
-        .when(!merged_errors.is_empty(), |d| {
-            d.child(
-                div()
-                    .pt(px(8.))
-                    .px(px(8.))
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.))
-                    .child(ui::dim("merged PRs marked + are a lower bound, some accounts could not be asked:"))
-                    .children(merged_errors.into_iter().map(ui::dim)),
-            )
-        })
+    card().flex().flex_col().child(header).children(rows).when(!merged_errors.is_empty(), |d| {
+        d.child(
+            div()
+                .pt(px(8.))
+                .px(px(8.))
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .child(ui::dim("merged PRs marked + are a lower bound, some accounts could not be asked:"))
+                .children(merged_errors.into_iter().map(ui::dim)),
+        )
+    })
 }
 
 /// A heatmap level's colour: the line colour for none, then the TUI's blues, darkest first.
@@ -681,14 +691,13 @@ fn heatmap(stats: &Stats, days: u64) -> impl IntoElement + use<> {
     const GAP: f32 = 3.;
     let levels = stats.levels();
     let level = |i: usize| levels.get(i).copied().unwrap_or(0);
-    let columns = (0..WEEKS).map(|c| {
-        let week = WEEKS - 1 - c;
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(GAP))
-            .children((0..7).map(|r| div().size(px(CELL)).rounded(px(3.)).bg(level_colour(level(week * 7 + 6 - r)))))
-    });
+    let columns =
+        (0..WEEKS).map(|c| {
+            let week = WEEKS - 1 - c;
+            div().flex().flex_col().gap(px(GAP)).children(
+                (0..7).map(|r| div().size(px(CELL)).rounded(px(3.)).bg(level_colour(level(week * 7 + 6 - r)))),
+            )
+        });
     let legend = div()
         .flex()
         .items_center()
@@ -703,7 +712,9 @@ fn heatmap(stats: &Stats, days: u64) -> impl IntoElement + use<> {
         .flex()
         .flex_col()
         .gap(px(10.))
-        .child(div().flex().items_center().child(heading("agent time, last 26 weeks")).child(div().flex_1()).child(legend))
+        .child(
+            div().flex().items_center().child(heading("agent time, last 26 weeks")).child(div().flex_1()).child(legend),
+        )
         .child(div().flex().gap(px(GAP)).children(columns))
         .child(ui::dim(format!("one block per 24 h, the newest bottom right · {}", data::counting(days))))
 }

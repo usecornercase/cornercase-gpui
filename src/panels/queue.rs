@@ -27,7 +27,7 @@ const UNDO_ISSUE: &str = "usecornercase/cornercase-terminal#463";
 /// Where a queued entry starts, as the server recorded it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Place {
+pub(crate) struct Place {
     pub project: String,
     pub workspace: Option<String>,
     pub workspace_name: Option<String>,
@@ -39,7 +39,7 @@ pub struct Place {
 /// leniently: a field a newer server adds or drops never hides the entry.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Entry {
+pub(crate) struct Entry {
     pub id: u64,
     /// UTC seconds.
     pub at: i64,
@@ -59,13 +59,13 @@ pub struct Entry {
 
 impl Entry {
     /// Pending, failed and missed entries can be edited and started now.
-    pub fn runnable(&self) -> bool {
+    pub(crate) fn runnable(&self) -> bool {
         matches!(self.state.as_str(), "pending" | "failed" | "missed")
     }
 }
 
 /// The entries in `status --app`, in the server's order (chronological, ties by id).
-pub fn entries(app: Option<&Value>) -> Vec<Entry> {
+pub(crate) fn entries(app: Option<&Value>) -> Vec<Entry> {
     app.and_then(|app| app.get("queue"))
         .and_then(Value::as_array)
         .map(|queue| queue.iter().filter_map(|e| Entry::deserialize(e).ok()).filter(|e| e.id != 0).collect())
@@ -78,7 +78,7 @@ fn folder_name(path: &str) -> String {
 }
 
 /// `project › workspace`, as the TUI names an entry's place.
-pub fn place_label(place: &Place, session: Option<&Session>) -> String {
+pub(crate) fn place_label(place: &Place, session: Option<&Session>) -> String {
     let project = session
         .and_then(|s| s.projects.iter().find(|p| p.path == place.project))
         .map_or_else(|| folder_name(&place.project), |p| p.name.clone());
@@ -91,11 +91,15 @@ pub fn place_label(place: &Place, session: Option<&Session>) -> String {
 }
 
 /// An entry's state as the row says it, and whether a started entry's pane is still there.
-pub fn status_label(entry: &Entry, boot: Option<&str>, session: Option<&Session>) -> String {
+pub(crate) fn status_label(entry: &Entry, boot: Option<&str>, session: Option<&Session>) -> String {
     match entry.state.as_str() {
         "starting" => "starting…".into(),
         "started" => match entry.pane {
-            Some(pane) if boot.is_some() && entry.server.as_deref() == boot && session.and_then(|s| s.pane(pane)).is_some() => {
+            Some(pane)
+                if boot.is_some()
+                    && entry.server.as_deref() == boot
+                    && session.and_then(|s| s.pane(pane)).is_some() =>
+            {
                 format!("started · pane {pane}")
             }
             _ => "started · pane closed".into(),
@@ -122,7 +126,7 @@ fn status_colour(state: &str) -> Rgba {
 
 /// A local date and time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Civil {
+pub(crate) struct Civil {
     pub year: i32,
     pub month: u32,
     pub day: u32,
@@ -133,21 +137,21 @@ pub struct Civil {
 }
 
 impl Civil {
-    pub fn date(&self) -> String {
+    pub(crate) fn date(&self) -> String {
         format!("{:04}-{:02}-{:02}", self.year, self.month, self.day)
     }
 
-    pub fn clock(&self) -> String {
+    pub(crate) fn clock(&self) -> String {
         format!("{:02}:{:02}", self.hour, self.minute)
     }
 }
 
 /// UTC seconds as this machine's local time.
-pub fn local(at: i64) -> Option<Civil> {
+pub(crate) fn local(at: i64) -> Option<Civil> {
     let t = libc::time_t::try_from(at).ok()?;
     // SAFETY: `localtime_r` only writes the `tm` it is given, which lives on this stack frame.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    let ok = unsafe { !libc::localtime_r(&t, &mut tm).is_null() };
+    let ok = unsafe { !libc::localtime_r(&raw const t, &raw mut tm).is_null() };
     ok.then(|| Civil {
         year: tm.tm_year + 1900,
         month: u32::try_from(tm.tm_mon + 1).unwrap_or(1),
@@ -158,7 +162,7 @@ pub fn local(at: i64) -> Option<Civil> {
     })
 }
 
-pub fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(0))
 }
 
@@ -175,7 +179,7 @@ fn days(year: i32, month: u32, day: u32) -> i64 {
 
 /// When an entry runs, read from today: `today 14:30`, `tomorrow 09:00`, `Mon 09:00` within a
 /// week, the date otherwise.
-pub fn when_label(at: Civil, today: Civil) -> String {
+pub(crate) fn when_label(at: Civil, today: Civil) -> String {
     const WEEKDAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     let clock = at.clock();
     match days(at.year, at.month, at.day) - days(today.year, today.month, today.day) {
@@ -188,7 +192,7 @@ pub fn when_label(at: Civil, today: Civil) -> String {
 }
 
 /// How far an instant is from now: `in 2h 5m`, `3d 4h ago`, `now`.
-pub fn relative(at: i64, now: i64) -> String {
+pub(crate) fn relative(at: i64, now: i64) -> String {
     let delta = at - now;
     let s = delta.unsigned_abs();
     if s < 60 {
@@ -210,7 +214,7 @@ pub fn relative(at: i64, now: i64) -> String {
 
 /// The kind of time, as the TUI's form asks it first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum When {
+pub(crate) enum When {
     /// Editing: the entry's time stays.
     Keep,
     At,
@@ -239,7 +243,7 @@ impl When {
 
 /// Where a new entry starts.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Target {
+pub(crate) enum Target {
     /// Editing: the entry's place stays.
     Keep,
     /// A new tab in this workspace.
@@ -249,7 +253,7 @@ pub enum Target {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Draft {
+pub(crate) struct Draft {
     /// The entry being edited; a new one otherwise.
     pub edit: Option<u64>,
     /// An issue (URL or key) rather than a prompt.
@@ -273,7 +277,7 @@ pub struct Draft {
 impl Draft {
     /// The text `--at` takes, the same the CLI documents (`14:30`, `tomorrow 9:00`,
     /// `2026-10-20 09:00`, `in 2h`, `claude reset`); `None` keeps the entry's time.
-    pub fn at(&self) -> Result<Option<String>, String> {
+    pub(crate) fn at(&self) -> Result<Option<String>, String> {
         let clock = self.clock.trim();
         let need_clock = || if clock.is_empty() { Err("choose a time, such as 14:30".to_string()) } else { Ok(()) };
         Ok(Some(match self.when {
@@ -307,7 +311,7 @@ impl Draft {
     }
 
     /// `queue add …` or `queue edit ID …`, with `--json` so the answer can be read.
-    pub fn args(&self) -> Result<Vec<String>, String> {
+    pub(crate) fn args(&self) -> Result<Vec<String>, String> {
         let mut a = match self.edit {
             Some(id) => args(&["queue", "edit", &id.to_string()]),
             None => args(&["queue", "add"]),
@@ -360,7 +364,7 @@ impl Draft {
 }
 
 /// The agents the settings offer (`config --json`, setting `agent`) and the default one.
-pub fn agent_choices(config: &Value) -> (Vec<String>, String) {
+pub(crate) fn agent_choices(config: &Value) -> (Vec<String>, String) {
     let setting = setting(config, "agent");
     let choices = setting.map(choice_values).unwrap_or_default();
     let default = setting.and_then(|s| s.get("value")).and_then(Value::as_str).unwrap_or("auto").to_string();
@@ -368,7 +372,7 @@ pub fn agent_choices(config: &Value) -> (Vec<String>, String) {
 }
 
 /// An agent's modes (`agents.NAME.mode`), and the one chosen in the settings.
-pub fn mode_choices(config: &Value, agent: &str) -> (Vec<String>, Option<String>) {
+pub(crate) fn mode_choices(config: &Value, agent: &str) -> (Vec<String>, Option<String>) {
     let setting = setting(config, &format!("agents.{agent}.mode"));
     let choices = setting.map(choice_values).unwrap_or_default();
     let chosen = setting.and_then(|s| s.get("value")).and_then(Value::as_str).map(str::to_string);
@@ -419,7 +423,7 @@ struct Form {
     _subscriptions: Vec<Subscription>,
 }
 
-pub struct QueuePanel {
+pub(crate) struct QueuePanel {
     filter: Entity<TextField>,
     form: Option<Form>,
     /// `config --json`, read when the form first opens, for the agents and their modes.
@@ -428,12 +432,12 @@ pub struct QueuePanel {
 }
 
 impl QueuePanel {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let filter = cx.new(|cx| TextField::new("Filter by label, prompt, agent or place", cx));
         let subscriptions = vec![
             cx.observe(&Store::get(cx), |_, _, cx| cx.notify()),
             cx.subscribe_in(&filter, window, |_, field, event, _, cx| match event {
-                TextFieldEvent::Cancel => field.update(cx, |f, cx| f.clear(cx)),
+                TextFieldEvent::Cancel => field.update(cx, TextField::clear),
                 _ => cx.notify(),
             }),
         ];
@@ -661,11 +665,11 @@ impl QueuePanel {
         if entry.runnable() {
             let edit_entry = entry.clone();
             buttons = buttons
-                .child(
-                    ui::button(("queue-edit", id), "Edit").on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                        this.open_form(Some(&edit_entry), window, cx)
-                    })),
-                )
+                .child(ui::button(("queue-edit", id), "Edit").on_click(cx.listener(
+                    move |this, _: &ClickEvent, window, cx| {
+                        this.open_form(Some(&edit_entry), window, cx);
+                    },
+                )))
                 .child(
                     ui::primary_button(("queue-run", id), "Start now")
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.run_now(id, cx))),
@@ -673,12 +677,13 @@ impl QueuePanel {
         }
         let pane = entry.pane.filter(|_| status.starts_with("started · pane ") && !status.ends_with("closed"));
         if let Some(pane) = pane {
-            buttons = buttons.child(ui::primary_button(("queue-open", id), "Open").on_click(move |_: &ClickEvent, _, cx| {
-                Store::get(cx).update(cx, |s, cx| {
-                    s.focus("pane", pane);
-                    s.close_sheet(cx);
-                })
-            }));
+            buttons =
+                buttons.child(ui::primary_button(("queue-open", id), "Open").on_click(move |_: &ClickEvent, _, cx| {
+                    Store::get(cx).update(cx, |s, cx| {
+                        s.focus("pane", pane);
+                        s.close_sheet(cx);
+                    });
+                }));
         }
         if entry.state != "starting" {
             let removed = entry.clone();
@@ -726,7 +731,9 @@ impl QueuePanel {
                             .gap(px(6.))
                             .text_size(px(11.))
                             .child(div().flex_none().text_color(status_colour(&entry.state)).child(status))
-                            .child(div().text_color(colours::faint()).truncate().child(format!("· {}", meta.join(" · ")))),
+                            .child(
+                                div().text_color(colours::faint()).truncate().child(format!("· {}", meta.join(" · "))),
+                            ),
                     ),
             )
             .child(buttons)
@@ -749,9 +756,15 @@ impl QueuePanel {
         let body: AnyElement = if form.issue {
             let mut sources = vec![seg("q-src-auto", "auto", form.source.is_none(), cx, |f| f.source = None)];
             for source in SOURCES {
-                sources.push(seg(SharedString::from(format!("q-src-{source}")), source, form.source.as_deref() == Some(source), cx, move |f| {
-                    f.source = Some(source.to_string())
-                }));
+                sources.push(seg(
+                    SharedString::from(format!("q-src-{source}")),
+                    source,
+                    form.source.as_deref() == Some(source),
+                    cx,
+                    move |f| {
+                        f.source = Some(source.to_string());
+                    },
+                ));
             }
             div()
                 .flex()
@@ -773,7 +786,9 @@ impl QueuePanel {
             kinds.push(seg(("q-when", kind as usize), kind.label(), form.when == kind, cx, move |f| f.when = kind));
         }
         let values: Option<AnyElement> = match form.when {
-            When::At | When::Tomorrow => Some(div().w(px(110.)).child(boxed(&form.clock, window, cx)).into_any_element()),
+            When::At | When::Tomorrow => {
+                Some(div().w(px(110.)).child(boxed(&form.clock, window, cx)).into_any_element())
+            }
             When::On => Some(
                 div()
                     .flex()
@@ -810,13 +825,15 @@ impl QueuePanel {
             place = place.child(choice_row(vec![
                 seg("q-place-keep", "unchanged", form.workspace.is_none(), cx, |f| f.workspace = None),
                 seg("q-place-change", "somewhere else", form.workspace.is_some(), cx, |f| {
-                    f.workspace = Some(None)
+                    f.workspace = Some(None);
                 }),
             ]));
         }
         if form.workspace.is_some() {
-            let projects: Vec<(u64, String)> =
-                session.as_ref().map(|s| s.projects.iter().map(|p| (p.id, p.name.clone())).collect()).unwrap_or_default();
+            let projects: Vec<(u64, String)> = session
+                .as_ref()
+                .map(|s| s.projects.iter().map(|p| (p.id, p.name.clone())).collect())
+                .unwrap_or_default();
             place = place.child(wrap_row(
                 projects
                     .into_iter()
@@ -838,12 +855,12 @@ impl QueuePanel {
                     .into_iter()
                     .map(|(id, name)| {
                         seg(("q-ws", id as usize), name, form.workspace == Some(Some(id)), cx, move |f| {
-                            f.workspace = Some(Some(id))
+                            f.workspace = Some(Some(id));
                         })
                     })
                     .collect();
                 choices.push(seg("q-ws-new", "+ new worktree", form.workspace == Some(None), cx, |f| {
-                    f.workspace = Some(None)
+                    f.workspace = Some(None);
                 }));
                 place = place.child(ui::field("A new tab in", wrap_row(choices)));
                 if form.workspace == Some(None) {
@@ -883,9 +900,15 @@ impl QueuePanel {
             for mode in modes {
                 let value = mode.clone();
                 let label = if Some(&mode) == chosen.as_ref() { format!("{mode} ✓") } else { mode.clone() };
-                segs.push(seg(SharedString::from(format!("q-mode-{mode}")), label, form.mode.as_ref() == Some(&mode), cx, move |f| {
-                    f.mode = Some(value.clone())
-                }));
+                segs.push(seg(
+                    SharedString::from(format!("q-mode-{mode}")),
+                    label,
+                    form.mode.as_ref() == Some(&mode),
+                    cx,
+                    move |f| {
+                        f.mode = Some(value.clone());
+                    },
+                ));
             }
             ui::field("Mode", wrap_row(segs))
         });
@@ -894,7 +917,10 @@ impl QueuePanel {
             .flex()
             .justify_end()
             .gap(px(8.))
-            .child(ui::button("q-cancel", "Cancel").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close_form(cx))))
+            .child(
+                ui::button("q-cancel", "Cancel")
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close_form(cx))),
+            )
             .child(
                 ui::primary_button(
                     "q-save",
@@ -927,12 +953,20 @@ impl QueuePanel {
                 .child(ui::field("Where", place))
                 .child(ui::field(
                     "Agent",
-                    if self.config.is_some() { wrap_row(agent_segs).into_any_element() } else { ui::dim("Loading…").into_any_element() },
+                    if self.config.is_some() {
+                        wrap_row(agent_segs).into_any_element()
+                    } else {
+                        ui::dim("Loading…").into_any_element()
+                    },
                 ))
                 .children(mode_row)
                 .child(ui::field("Name", boxed(&form.name, window, cx)))
-                .child(ui::dim("Queued agents accept the folder's trust prompt, and the prompt is submitted by itself."))
-                .when_some(form.error.clone(), |d, e| d.child(div().text_size(px(12.)).text_color(colours::failed()).child(e)))
+                .child(ui::dim(
+                    "Queued agents accept the folder's trust prompt, and the prompt is submitted by itself.",
+                ))
+                .when_some(form.error.clone(), |d, e| {
+                    d.child(div().text_size(px(12.)).text_color(colours::failed()).child(e))
+                })
                 .child(buttons)
                 .into_any_element(),
         )
@@ -1084,7 +1118,7 @@ impl Render for QueuePanel {
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut App) -> AnyView {
     cx.new(|cx| QueuePanel::new(window, cx)).into()
 }
 
@@ -1185,9 +1219,10 @@ mod tests {
     #[test]
     fn builds_queue_add() {
         let d = draft();
-        assert_eq!(d.args().map(|a| a.join(" ")), Ok(
-            "queue add --at in 2h --prompt review the login fix --workspace 7 --json".to_string()
-        ));
+        assert_eq!(
+            d.args().map(|a| a.join(" ")),
+            Ok("queue add --at in 2h --prompt review the login fix --workspace 7 --json".to_string())
+        );
         let d = Draft {
             issue: true,
             text: "ENG-42".into(),
@@ -1201,12 +1236,16 @@ mod tests {
             name: Some("night run".into()),
             ..draft()
         };
-        assert_eq!(d.args().map(|a| a.join(" ")), Ok(
-            "queue add --at 2026-10-24 9:00 --issue ENG-42 --source linear --project 3 --worktree feat/x \
+        assert_eq!(
+            d.args().map(|a| a.join(" ")),
+            Ok("queue add --at 2026-10-24 9:00 --issue ENG-42 --source linear --project 3 --worktree feat/x \
              --agent codex --mode plan --name night run --json"
-                .to_string()
-        ));
-        assert_eq!(Draft { when: When::Tomorrow, clock: "9:30".into(), ..draft() }.at(), Ok(Some("tomorrow 9:30".into())));
+                .to_string())
+        );
+        assert_eq!(
+            Draft { when: When::Tomorrow, clock: "9:30".into(), ..draft() }.at(),
+            Ok(Some("tomorrow 9:30".into()))
+        );
         assert_eq!(Draft { when: When::ClaudeReset, ..draft() }.at(), Ok(Some("claude reset".into())));
     }
 
@@ -1220,12 +1259,14 @@ mod tests {
 
     #[test]
     fn an_edit_sends_only_what_changed() {
-        let d = Draft { edit: Some(4), text: String::new(), when: When::Keep, target: Target::Keep, name: None, ..draft() };
+        let d =
+            Draft { edit: Some(4), text: String::new(), when: When::Keep, target: Target::Keep, name: None, ..draft() };
         assert_eq!(d.args().map(|a| a.join(" ")), Ok("queue edit 4 --json".to_string()));
         let d = Draft { edit: Some(4), when: When::At, clock: "14:30".into(), target: Target::Keep, ..draft() };
-        assert_eq!(d.args().map(|a| a.join(" ")), Ok(
-            "queue edit 4 --at 14:30 --prompt review the login fix --json".to_string()
-        ));
+        assert_eq!(
+            d.args().map(|a| a.join(" ")),
+            Ok("queue edit 4 --at 14:30 --prompt review the login fix --json".to_string())
+        );
     }
 
     #[test]

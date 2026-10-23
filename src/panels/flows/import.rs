@@ -65,7 +65,7 @@ fn field(placeholder: &str, cx: &mut Context<ImportFlow>, window: &mut Window) -
 }
 
 fn close(cx: &mut App) {
-    Store::get(cx).update(cx, |s, cx| s.close_dialog(cx));
+    Store::get(cx).update(cx, Store::close_dialog);
 }
 
 /// `flow import` arguments after the source.

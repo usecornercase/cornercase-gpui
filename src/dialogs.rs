@@ -3,7 +3,7 @@
 
 use gpui::{
     App, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, StatefulInteractiveElement as _, SharedString, Styled as _, Window, div, px,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 use crate::store::{Store, args};
@@ -11,7 +11,7 @@ use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
 
 /// The frame every dialog is drawn in.
-pub fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> gpui::Div {
+pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> gpui::Div {
     div()
         .w(px(460.))
         .p(px(18.))
@@ -29,7 +29,7 @@ pub fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: im
 }
 
 fn close(cx: &mut App) {
-    Store::get(cx).update(cx, |s, cx| s.close_dialog(cx));
+    Store::get(cx).update(cx, Store::close_dialog);
 }
 
 /// Makes a field, subscribes the dialog to its enter and escape, and returns it.
@@ -51,7 +51,7 @@ fn text_field<T: 'static>(
 
 // ---------------------------------------------------------------------------------------------
 
-pub struct NewWorkspace {
+pub(crate) struct NewWorkspace {
     project: u64,
     project_name: String,
     name: Entity<TextField>,
@@ -60,7 +60,7 @@ pub struct NewWorkspace {
 
 /// `cornercase new-workspace NAME --project ID [--worktree] --focus`, in a project (the shown one
 /// without one).
-pub fn new_workspace(project: Option<u64>, window: &mut Window, cx: &mut App) {
+pub(crate) fn new_workspace(project: Option<u64>, window: &mut Window, cx: &mut App) {
     let store = Store::get(cx);
     let s = store.read(cx);
     let Some(session) = &s.session else { return };
@@ -104,12 +104,11 @@ impl Render for NewWorkspace {
                 .gap(px(10.))
                 .child(ui::field("Branch or name", ui::input_box(self.name.clone(), focused)))
                 .child(
-                    ui::checkbox("worktree", self.worktree, "Check the branch out in a git worktree of its own").on_click(
-                        cx.listener(|this, _: &ClickEvent, _, cx| {
+                    ui::checkbox("worktree", self.worktree, "Check the branch out in a git worktree of its own")
+                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                             this.worktree = !this.worktree;
                             cx.notify();
-                        }),
-                    ),
+                        })),
                 ),
             div()
                 .flex()
@@ -125,14 +124,14 @@ impl Render for NewWorkspace {
 
 // ---------------------------------------------------------------------------------------------
 
-pub struct StartAgent {
+pub(crate) struct StartAgent {
     agent: Entity<TextField>,
     prompt: Entity<TextField>,
     worktree: Entity<TextField>,
 }
 
 /// `cornercase start [AGENT] --focus [--prompt TEXT] [--worktree BRANCH]` in the shown workspace.
-pub fn start_agent(window: &mut Window, cx: &mut App) {
+pub(crate) fn start_agent(window: &mut Window, cx: &mut App) {
     let store = Store::get(cx);
     if store.read(cx).view_id.is_none() {
         return;
@@ -204,7 +203,7 @@ impl Render for StartAgent {
 
 /// Asks before running a command that cannot be undone. `command` goes through `Store::act`
 /// (with the view) when `with_view`, else `Store::cmd`.
-pub struct Confirm {
+pub(crate) struct Confirm {
     title: String,
     message: String,
     confirm: String,
@@ -213,7 +212,7 @@ pub struct Confirm {
     focus: FocusHandle,
 }
 
-pub fn confirm(
+pub(crate) fn confirm(
     title: impl Into<String>,
     message: impl Into<String>,
     confirm: impl Into<String>,
@@ -239,7 +238,11 @@ impl Confirm {
     fn run(&mut self, cx: &mut Context<Self>) {
         let (command, with_view) = (self.command.clone(), self.with_view);
         Store::get(cx).update(cx, |s, cx| {
-            if with_view { s.act(command) } else { s.cmd(command) }
+            if with_view {
+                s.act(command)
+            } else {
+                s.cmd(command)
+            }
             s.close_dialog(cx);
         });
     }

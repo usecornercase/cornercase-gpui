@@ -2,22 +2,22 @@
 //! window (issues, usage, settings…). Each lives in its own module and builds its own view; the
 //! root view hosts them and keeps each one alive once opened, so it keeps its state.
 
-pub mod changes;
-pub mod files;
-pub mod todo;
-pub mod queue;
-pub mod issues;
-pub mod usage;
-pub mod settings;
-pub mod accounts;
-pub mod flows;
-pub mod search;
-pub mod plugins;
+pub(crate) mod accounts;
+pub(crate) mod changes;
+pub(crate) mod files;
+pub(crate) mod flows;
+pub(crate) mod issues;
+pub(crate) mod plugins;
+pub(crate) mod queue;
+pub(crate) mod search;
+pub(crate) mod settings;
+pub(crate) mod todo;
+pub(crate) mod usage;
 
 use gpui::{AnyView, Window};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PanelKind {
+pub(crate) enum PanelKind {
     Changes,
     Files,
     Todo,
@@ -32,9 +32,21 @@ pub enum PanelKind {
 }
 
 impl PanelKind {
-    pub const ALL: [PanelKind; 11] = [PanelKind::Changes, PanelKind::Files, PanelKind::Todo, PanelKind::Queue, PanelKind::Issues, PanelKind::Usage, PanelKind::Settings, PanelKind::Accounts, PanelKind::Flows, PanelKind::Search, PanelKind::Plugins];
+    pub(crate) const ALL: [PanelKind; 11] = [
+        PanelKind::Changes,
+        PanelKind::Files,
+        PanelKind::Todo,
+        PanelKind::Queue,
+        PanelKind::Issues,
+        PanelKind::Usage,
+        PanelKind::Settings,
+        PanelKind::Accounts,
+        PanelKind::Flows,
+        PanelKind::Search,
+        PanelKind::Plugins,
+    ];
 
-    pub fn title(self) -> &'static str {
+    pub(crate) fn title(self) -> &'static str {
         match self {
             Self::Changes => "Changes",
             Self::Files => "Files",
@@ -51,11 +63,11 @@ impl PanelKind {
     }
 
     /// Docked beside the terminal, rather than a sheet over the window.
-    pub fn docked(self) -> bool {
+    pub(crate) fn docked(self) -> bool {
         matches!(self, Self::Changes | Self::Files | Self::Todo)
     }
 
-    pub fn build(self, window: &mut Window, cx: &mut gpui::App) -> AnyView {
+    pub(crate) fn build(self, window: &mut Window, cx: &mut gpui::App) -> AnyView {
         match self {
             Self::Changes => changes::build(window, cx),
             Self::Files => files::build(window, cx),

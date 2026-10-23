@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Listing {
+pub(crate) struct Listing {
     pub flows: Vec<FlowInfo>,
     pub broken: Vec<Broken>,
     /// The deleted built-ins, with their flow.
@@ -21,7 +21,7 @@ pub struct Listing {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct FlowInfo {
+pub(crate) struct FlowInfo {
     pub name: String,
     /// `built-in`, `user` (yours) or `project`.
     pub origin: String,
@@ -38,7 +38,7 @@ pub struct FlowInfo {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Broken {
+pub(crate) struct Broken {
     pub path: String,
     pub error: String,
 }
@@ -46,7 +46,7 @@ pub struct Broken {
 /// The flow as the contract writes it (`FlowSpec`): `back.to` counts stages from 1.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct FlowSpec {
+pub(crate) struct FlowSpec {
     pub name: String,
     pub description: String,
     pub notes: String,
@@ -59,7 +59,7 @@ pub struct FlowSpec {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct RoleSpec {
+pub(crate) struct RoleSpec {
     pub name: String,
     pub agent: String,
     pub model: Option<String>,
@@ -74,14 +74,14 @@ pub struct RoleSpec {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct StageSpec {
+pub(crate) struct StageSpec {
     pub roles: Vec<String>,
     pub back: Option<BackSpec>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct BackSpec {
+pub(crate) struct BackSpec {
     /// The stage it goes back to, counted from 1.
     pub to: usize,
     pub when: String,
@@ -90,21 +90,21 @@ pub struct BackSpec {
 
 impl FlowInfo {
     /// What tells two listed flows apart: a project's flow may share a name with yours.
-    pub fn key(&self) -> String {
+    pub(crate) fn key(&self) -> String {
         format!("{}\u{1f}{}\u{1f}{}", self.origin, self.name, self.path.as_deref().unwrap_or_default())
     }
 
     /// The orchestrator and every role.
-    pub fn agents(&self) -> usize {
+    pub(crate) fn agents(&self) -> usize {
         self.flow.roles.len() + 1
     }
 
-    pub fn can_start(&self) -> bool {
+    pub(crate) fn can_start(&self) -> bool {
         self.problems.is_empty()
     }
 
     /// The muted tags the TUI's lists show: only the uncommon cases.
-    pub fn tags(&self) -> Vec<&'static str> {
+    pub(crate) fn tags(&self) -> Vec<&'static str> {
         let mut tags = Vec::new();
         if self.default {
             tags.push("default");
@@ -121,7 +121,7 @@ impl FlowInfo {
 
 impl FlowSpec {
     /// A role of the plan by name, the orchestrator included.
-    pub fn role(&self, name: &str) -> Option<&RoleSpec> {
+    pub(crate) fn role(&self, name: &str) -> Option<&RoleSpec> {
         if name == self.orchestrator.name || name == "orchestrator" {
             return Some(&self.orchestrator);
         }
@@ -129,11 +129,11 @@ impl FlowSpec {
     }
 
     /// The colour slot of a role: its place among the roles (the orchestrator has none).
-    pub fn colour_index(&self, name: &str) -> Option<usize> {
+    pub(crate) fn colour_index(&self, name: &str) -> Option<usize> {
         self.roles.iter().position(|r| r.name == name)
     }
 
-    pub fn end_label(&self) -> &'static str {
+    pub(crate) fn end_label(&self) -> &'static str {
         match self.end.as_str() {
             "commits" => "leave the commits",
             _ => "open a pull request",
@@ -141,7 +141,7 @@ impl FlowSpec {
     }
 }
 
-pub fn parse_listing(text: &str) -> anyhow::Result<Listing> {
+pub(crate) fn parse_listing(text: &str) -> anyhow::Result<Listing> {
     Ok(serde_json::from_str(text)?)
 }
 
@@ -150,14 +150,14 @@ pub fn parse_listing(text: &str) -> anyhow::Result<Listing> {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Runs {
+pub(crate) struct Runs {
     pub revision: u64,
     pub runs: Vec<Run>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Run {
+pub(crate) struct Run {
     pub run: u64,
     pub project: u64,
     pub workspace: u64,
@@ -183,7 +183,7 @@ pub struct Run {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Member {
+pub(crate) struct Member {
     pub role: String,
     pub pane: Option<u64>,
     pub tab: Option<u64>,
@@ -197,7 +197,7 @@ pub struct Member {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Step {
+pub(crate) struct Step {
     pub edge: Option<Edge>,
     pub from: Option<String>,
     pub to: String,
@@ -207,7 +207,7 @@ pub struct Step {
 /// A step along the plan. Stages count from 0 here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
-pub enum Edge {
+pub(crate) enum Edge {
     /// From `stage` into the next one.
     Forward { stage: usize },
     /// A round of `stage`'s loop.
@@ -217,20 +217,20 @@ pub enum Edge {
 }
 
 impl Run {
-    pub fn closed(&self) -> bool {
+    pub(crate) fn closed(&self) -> bool {
         self.state.as_deref() == Some("closed")
     }
 
-    pub fn orchestrator(&self) -> Option<&Member> {
+    pub(crate) fn orchestrator(&self) -> Option<&Member> {
         self.roles.first()
     }
 
-    pub fn member(&self, role: &str) -> Option<&Member> {
+    pub(crate) fn member(&self, role: &str) -> Option<&Member> {
         self.roles.iter().find(|m| m.role == role)
     }
 
     /// Where it stands, in a few words: `stage 2 of 3 · findings 1/2`, as `flow runs` prints it.
-    pub fn summary(&self) -> String {
+    pub(crate) fn summary(&self) -> String {
         let mut out = match self.stage {
             Some(stage) => format!("stage {} of {}", stage + 1, self.flow.stages.len()),
             None => "not started".to_string(),
@@ -244,7 +244,7 @@ impl Run {
     }
 
     /// The loudest state among the members, to badge the run in a list.
-    pub fn loudest(&self) -> Option<&str> {
+    pub(crate) fn loudest(&self) -> Option<&str> {
         self.roles
             .iter()
             .filter(|m| !m.closed)
@@ -253,12 +253,12 @@ impl Run {
     }
 
     /// The task's first line.
-    pub fn headline(&self) -> &str {
+    pub(crate) fn headline(&self) -> &str {
         self.task.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or_default()
     }
 }
 
-pub fn parse_runs(line: &str) -> anyhow::Result<Runs> {
+pub(crate) fn parse_runs(line: &str) -> anyhow::Result<Runs> {
     Ok(serde_json::from_str(line)?)
 }
 
@@ -267,7 +267,7 @@ pub fn parse_runs(line: &str) -> anyhow::Result<Runs> {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Message {
+pub(crate) struct Message {
     pub run: u64,
     pub workspace: u64,
     /// Counted from 1 for the run.
@@ -284,7 +284,7 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn verb(&self) -> &str {
+    pub(crate) fn verb(&self) -> &str {
         match self.kind.as_str() {
             "send" => "sent",
             "keys" => "pressed keys",
@@ -297,13 +297,13 @@ impl Message {
 
 /// One line of the messages stream.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Frame {
+pub(crate) enum Frame {
     Message(Message),
     /// The command fell behind and the server dropped this many: read again to catch up.
     Dropped(u64),
 }
 
-pub fn parse_frame(line: &str) -> anyhow::Result<Frame> {
+pub(crate) fn parse_frame(line: &str) -> anyhow::Result<Frame> {
     let value: serde_json::Value = serde_json::from_str(line)?;
     if value.get("event").and_then(serde_json::Value::as_str) == Some("dropped") {
         return Ok(Frame::Dropped(value.get("count").and_then(serde_json::Value::as_u64).unwrap_or_default()));
@@ -316,7 +316,7 @@ pub fn parse_frame(line: &str) -> anyhow::Result<Frame> {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Files {
+pub(crate) struct Files {
     pub dir: String,
     pub files: Vec<RunFile>,
     pub more: bool,
@@ -324,21 +324,21 @@ pub struct Files {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct RunFile {
+pub(crate) struct RunFile {
     pub name: String,
     pub path: String,
     pub bytes: u64,
     pub modified: Option<String>,
 }
 
-pub fn parse_files(text: &str) -> anyhow::Result<Files> {
+pub(crate) fn parse_files(text: &str) -> anyhow::Result<Files> {
     Ok(serde_json::from_str(text)?)
 }
 
 /// `flow run --json`: the new run's workspace.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Started {
+pub(crate) struct Started {
     pub run: u64,
     pub workspace: u64,
     pub branch: String,
@@ -349,12 +349,12 @@ pub struct Started {
 // Pure rules.
 
 /// Names compare trimmed and ignoring case, as cornercase's `store::same_name` does.
-pub fn same_name(a: &str, b: &str) -> bool {
+pub(crate) fn same_name(a: &str, b: &str) -> bool {
     a.trim().to_lowercase() == b.trim().to_lowercase()
 }
 
 /// `Quick` becomes `Quick 2` (then 3…) when the name is taken, built-ins counted.
-pub fn unique_name(base: &str, taken: &[&str]) -> String {
+pub(crate) fn unique_name(base: &str, taken: &[&str]) -> String {
     let base = base.trim();
     let free = |name: &str| !taken.iter().any(|t| same_name(t, name));
     if free(base) {
@@ -365,7 +365,7 @@ pub fn unique_name(base: &str, taken: &[&str]) -> String {
 
 /// The names in list order with the one at `index` moved by `delta`, once each (the order
 /// command refuses a name twice; yours and a project's flow of one name share a place).
-pub fn moved(names: &[String], index: usize, delta: isize) -> Option<Vec<String>> {
+pub(crate) fn moved(names: &[String], index: usize, delta: isize) -> Option<Vec<String>> {
     let mut unique: Vec<String> = Vec::new();
     for name in names {
         if !unique.iter().any(|n| same_name(n, name)) {
@@ -381,7 +381,7 @@ pub fn moved(names: &[String], index: usize, delta: isize) -> Option<Vec<String>
 }
 
 /// Seconds since the epoch of a UTC time as cornercase writes it (`2026-10-18T09:21:00.000Z`).
-pub fn epoch(time: &str) -> Option<i64> {
+pub(crate) fn epoch(time: &str) -> Option<i64> {
     let (date, rest) = time.split_once('T')?;
     let mut d = date.splitn(3, '-').map(|p| p.parse::<i64>().ok());
     let (y, m, day) = (d.next()??, d.next()??, d.next()??);
@@ -404,7 +404,7 @@ pub fn epoch(time: &str) -> Option<i64> {
 }
 
 /// How long ago, shortly: `now`, `12s`, `4m`, `2h`, `3d`.
-pub fn ago(time: &str, now: i64) -> String {
+pub(crate) fn ago(time: &str, now: i64) -> String {
     let Some(then) = epoch(time) else { return String::new() };
     let secs = (now - then).max(0);
     match secs {
@@ -416,7 +416,7 @@ pub fn ago(time: &str, now: i64) -> String {
     }
 }
 
-pub fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| i64::try_from(d.as_secs()).unwrap_or_default())
@@ -424,7 +424,7 @@ pub fn now() -> i64 {
 }
 
 /// A size for people: `512 B`, `3.4 KB`, `1.2 MB`.
-pub fn size(bytes: u64) -> String {
+pub(crate) fn size(bytes: u64) -> String {
     match bytes {
         0..1000 => format!("{bytes} B"),
         1000..1_000_000 => format!("{:.1} KB", bytes as f64 / 1000.),
@@ -436,8 +436,8 @@ pub fn size(bytes: u64) -> String {
 mod tests {
     use super::*;
 
-    const RUNS: &str = include_str!("fixtures/runs.json");
-    const LIST: &str = include_str!("fixtures/list.json");
+    const RUNS: &str = crate::test_util::fixture!("flows/runs.json");
+    const LIST: &str = crate::test_util::fixture!("flows/list.json");
 
     #[test]
     fn reads_a_run_snapshot() {

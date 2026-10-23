@@ -36,7 +36,9 @@ impl Root {
                 let gid = SharedString::from(format!("tab-{id}"));
                 let tab_clone = tab.clone();
                 let name = match self.side.rename.as_ref().filter(|r| r.target == Target::Tab(id)) {
-                    Some(r) => div().w(px(140.)).child(ui::input_box(r.field.clone(), true).py(px(0.))).into_any_element(),
+                    Some(r) => {
+                        div().w(px(140.)).child(ui::input_box(r.field.clone(), true).py(px(0.))).into_any_element()
+                    }
                     None => div().whitespace_nowrap().child(tab.name.clone()).into_any_element(),
                 };
                 let el = div()
@@ -56,7 +58,9 @@ impl Root {
                     .when(!selected, |d| d.text_color(colours::muted()).hover(|s| s.bg(colours::hover())))
                     .child(badge(tab.loudest()))
                     .child(name)
-                    .when(others > 0, |d| d.child(div().text_size(px(11.)).text_color(colours::faint()).child(format!("+{others}"))))
+                    .when(others > 0, |d| {
+                        d.child(div().text_size(px(11.)).text_color(colours::faint()).child(format!("+{others}")))
+                    })
                     .when_some(detail, |d, text| {
                         d.child(div().text_size(px(11.)).text_color(colours::faint()).whitespace_nowrap().child(text))
                     })
@@ -67,7 +71,7 @@ impl Root {
                             .rounded(px(4.))
                             .text_size(px(11.))
                             .text_color(colours::faint())
-                            .when(!selected, |d| d.invisible().group_hover(gid.clone(), |s| s.visible()))
+                            .when(!selected, |d| d.invisible().group_hover(gid.clone(), Styled::visible))
                             .hover(|s| s.bg(colours::selected()).text_color(colours::failed()))
                             .child("✕")
                             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
@@ -78,7 +82,7 @@ impl Root {
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(move |this, e: &MouseDownEvent, window, cx| {
-                            this.open_target_menu(Target::Tab(id), e.position, window, cx)
+                            this.open_target_menu(Target::Tab(id), e.position, window, cx);
                         }),
                     )
                     .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
@@ -112,7 +116,9 @@ impl Root {
                 }),
             )
             // A tab dropped here goes last.
-            .drag_over::<Dragged>(|s, d, _, _| if matches!(d.target, Target::Tab(_)) { s.border_color(colours::accent()) } else { s })
+            .drag_over::<Dragged>(|s, d, _, _| {
+                if matches!(d.target, Target::Tab(_)) { s.border_color(colours::accent()) } else { s }
+            })
             .on_drop(cx.listener(|this, d: &Dragged, _, _| {
                 if let Target::Tab(id) = d.target {
                     this.queue.cmd(cmd(&["move", "--tab", &id.to_string(), "--last"]));
@@ -128,9 +134,16 @@ impl Root {
             .bg(colours::sidebar())
             .border_b_1()
             .border_color(colours::border())
-            .child(div().flex().items_end().h_full().gap(px(4.)).overflow_hidden().child(tabs).child(
-                div().pb(px(5.)).child(new_tab),
-            ))
+            .child(
+                div()
+                    .flex()
+                    .items_end()
+                    .h_full()
+                    .gap(px(4.))
+                    .overflow_hidden()
+                    .child(tabs)
+                    .child(div().pb(px(5.)).child(new_tab)),
+            )
             .child(
                 div()
                     .flex()

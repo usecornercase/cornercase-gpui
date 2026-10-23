@@ -10,7 +10,7 @@ use crate::theme::{Painter, colours};
 
 /// The terminal font and the size of one cell.
 #[derive(Clone)]
-pub struct Metrics {
+pub(crate) struct Metrics {
     pub family: SharedString,
     pub font_size: Pixels,
     pub cell_width: Pixels,
@@ -18,12 +18,12 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub fn measure(family: &str, font_size: f32, window: &Window) -> Self {
+    pub(crate) fn measure(family: &str, font_size: f32, window: &Window) -> Self {
         let font_size = px(font_size);
         let base = font(SharedString::from(family.to_string()));
         let text = window.text_system();
         let id = text.resolve_font(&base);
-        let cell_width = text.advance(id, font_size, 'M').map(|s| s.width).unwrap_or(font_size * 0.6);
+        let cell_width = text.advance(id, font_size, 'M').map_or(font_size * 0.6, |s| s.width);
         Self {
             family: SharedString::from(family.to_string()),
             font_size,
@@ -44,7 +44,7 @@ impl Metrics {
     }
 
     /// The cell under a point, relative to the surface's origin; may be outside the surface.
-    pub fn cell_at(&self, origin: Point<Pixels>, position: Point<Pixels>) -> (i32, i32) {
+    pub(crate) fn cell_at(&self, origin: Point<Pixels>, position: Point<Pixels>) -> (i32, i32) {
         let dx = f32::from(position.x - origin.x) / f32::from(self.cell_width);
         let dy = f32::from(position.y - origin.y) / f32::from(self.line_height);
         (dx.floor() as i32, dy.floor() as i32)
@@ -52,7 +52,7 @@ impl Metrics {
 }
 
 /// Paints the grid with its top-left cell at `origin`.
-pub fn paint(
+pub(crate) fn paint(
     grid: &Grid,
     origin: Point<Pixels>,
     metrics: &Metrics,
@@ -146,7 +146,9 @@ fn paint_pane(
                         window.paint_quad(fill(cb, colour));
                         cursor_cell = Some(c.x as usize);
                     }
-                    (CursorShape::Bar, true) => window.paint_quad(fill(Bounds::new(cb.origin, size(px(2.), lh)), colour)),
+                    (CursorShape::Bar, true) => {
+                        window.paint_quad(fill(Bounds::new(cb.origin, size(px(2.), lh)), colour))
+                    }
                     (CursorShape::Underline, true) => window.paint_quad(fill(
                         Bounds::new(point(cb.origin.x, cb.origin.y + lh - px(2.)), size(cw, px(2.))),
                         colour,
@@ -172,7 +174,12 @@ fn paint_pane(
                 if wide || text.chars().count() > 1 {
                     seg.flush(top_left, y, metrics, window, cx);
                     let runs = [text_run(text.len(), f, fg)];
-                    let shaped = window.text_system().shape_line(SharedString::from(text.to_string()), metrics.font_size, &runs, None);
+                    let shaped = window.text_system().shape_line(
+                        SharedString::from(text.to_string()),
+                        metrics.font_size,
+                        &runs,
+                        None,
+                    );
                     let _ = shaped.paint(point(top_left.x + cw * i as f32, y), lh, window, cx);
                     continue;
                 }

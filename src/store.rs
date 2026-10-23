@@ -11,11 +11,11 @@ use crate::cli::{self, Queue, Stream};
 use crate::model::Session;
 use crate::panels::PanelKind;
 
-pub struct Store {
+pub(crate) struct Store {
     pub session: Option<Session>,
     pub view_id: Option<u64>,
     pub queue: Queue,
-    /// What `cornercase status --app` prints: todos, queue, away, update, keep_awake, tour…
+    /// What `cornercase status --app` prints: todos, queue, away, update, `keep_awake`, tour…
     pub app: Option<Value>,
     /// The panel docked on the right of the terminal, if any.
     pub dock: Option<PanelKind>,
@@ -29,7 +29,7 @@ pub struct Store {
 }
 
 #[derive(Clone)]
-pub struct Toast {
+pub(crate) struct Toast {
     pub id: u64,
     pub text: String,
     pub kind: ToastKind,
@@ -39,7 +39,7 @@ pub struct Toast {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ToastKind {
+pub(crate) enum ToastKind {
     Info,
     Error,
     NeedsYou,
@@ -47,7 +47,7 @@ pub enum ToastKind {
 }
 
 impl Toast {
-    pub fn expired(&self) -> bool {
+    pub(crate) fn expired(&self) -> bool {
         let ttl = match self.kind {
             ToastKind::Info => 4,
             ToastKind::Error => 8,
@@ -61,7 +61,7 @@ struct GlobalStore(Entity<Store>);
 impl Global for GlobalStore {}
 
 impl Store {
-    pub fn init(queue: Queue, cx: &mut App) -> Entity<Store> {
+    pub(crate) fn init(queue: Queue, cx: &mut App) -> Entity<Store> {
         let store = cx.new(|_| Store {
             session: None,
             view_id: None,
@@ -79,12 +79,12 @@ impl Store {
     }
 
     /// The store, from anywhere.
-    pub fn get(cx: &App) -> Entity<Store> {
+    pub(crate) fn get(cx: &App) -> Entity<Store> {
         cx.global::<GlobalStore>().0.clone()
     }
 
     /// Starts following `cornercase status --app --follow` (again after a reconnect).
-    pub fn follow_app(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn follow_app(&mut self, cx: &mut Context<Self>) {
         self._app_stream = follow(cx, args(&["status", "--app", "--follow"]), |this, line, cx| {
             if let Ok(value) = serde_json::from_str::<Value>(&line) {
                 this.app = Some(value);
@@ -94,7 +94,7 @@ impl Store {
     }
 
     /// Adds `--view ID` to a command that takes one, so it acts in our view, not the window.
-    pub fn with_view(&self, mut args: Vec<String>) -> Vec<String> {
+    pub(crate) fn with_view(&self, mut args: Vec<String>) -> Vec<String> {
         if let Some(id) = self.view_id {
             args.push("--view".into());
             args.push(id.to_string());
@@ -103,24 +103,24 @@ impl Store {
     }
 
     /// Runs a command in our view through the ordered queue; failures become toasts.
-    pub fn act(&self, args: Vec<String>) {
+    pub(crate) fn act(&self, args: Vec<String>) {
         self.queue.cmd(self.with_view(args));
     }
 
     /// Runs a command that takes no view through the ordered queue; failures become toasts.
-    pub fn cmd(&self, args: Vec<String>) {
+    pub(crate) fn cmd(&self, args: Vec<String>) {
         self.queue.cmd(args);
     }
 
-    pub fn focus(&self, kind: &str, id: u64) {
+    pub(crate) fn focus(&self, kind: &str, id: u64) {
         self.act(args(&["focus", &format!("--{kind}"), &id.to_string()]));
     }
 
-    pub fn toast(&mut self, text: impl Into<String>, kind: ToastKind, cx: &mut Context<Self>) {
+    pub(crate) fn toast(&mut self, text: impl Into<String>, kind: ToastKind, cx: &mut Context<Self>) {
         self.toast_with(text, kind, None, cx);
     }
 
-    pub fn toast_with(
+    pub(crate) fn toast_with(
         &mut self,
         text: impl Into<String>,
         kind: ToastKind,
@@ -144,23 +144,23 @@ impl Store {
         cx.notify();
     }
 
-    pub fn dismiss_toast(&mut self, id: u64, cx: &mut Context<Self>) {
+    pub(crate) fn dismiss_toast(&mut self, id: u64, cx: &mut Context<Self>) {
         self.toasts.retain(|t| t.id != id);
         cx.notify();
     }
 
-    pub fn toggle_dock(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_dock(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
         self.dock = if self.dock == Some(kind) { None } else { Some(kind) };
         cx.notify();
     }
 
-    pub fn open_sheet(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
+    pub(crate) fn open_sheet(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
         self.sheet = Some(kind);
         cx.notify();
     }
 
     /// Opens a panel where it belongs: docked or as a sheet.
-    pub fn open(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
+    pub(crate) fn open(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
         if kind.docked() {
             self.dock = Some(kind);
             cx.notify();
@@ -169,31 +169,31 @@ impl Store {
         }
     }
 
-    pub fn close_sheet(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn close_sheet(&mut self, cx: &mut Context<Self>) {
         self.sheet = None;
         cx.notify();
     }
 
-    pub fn show_dialog(&mut self, view: AnyView, cx: &mut Context<Self>) {
+    pub(crate) fn show_dialog(&mut self, view: AnyView, cx: &mut Context<Self>) {
         self.dialog = Some(view);
         cx.notify();
     }
 
-    pub fn close_dialog(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn close_dialog(&mut self, cx: &mut Context<Self>) {
         self.dialog = None;
         cx.notify();
     }
 }
 
 /// `["a", "b"]` as the owned arguments the helpers take.
-pub fn args(parts: &[&str]) -> Vec<String> {
+pub(crate) fn args(parts: &[&str]) -> Vec<String> {
     parts.iter().map(|s| (*s).to_string()).collect()
 }
 
 /// Runs a cornercase command off the main thread, then hands its standard output (or the error)
 /// to `then` on the entity. For commands whose answer the UI needs; fire-and-forget actions go
 /// through `Store::act` or `Store::cmd`, which keep their order.
-pub fn run<T: 'static>(
+pub(crate) fn run<T: 'static>(
     cx: &mut Context<T>,
     args: Vec<String>,
     then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
@@ -207,7 +207,7 @@ pub fn run<T: 'static>(
 }
 
 /// Like `run`, with the output read as JSON (commands given `--json`).
-pub fn run_json<T: 'static>(
+pub(crate) fn run_json<T: 'static>(
     cx: &mut Context<T>,
     args: Vec<String>,
     then: impl FnOnce(&mut T, anyhow::Result<Value>, &mut Context<T>) + 'static,
@@ -221,7 +221,7 @@ pub fn run_json<T: 'static>(
 /// Follows a command that prints one line per change (`changes --follow`, `events --json`…):
 /// `on_line` runs on the entity for each line. Keep the returned stream: dropping it stops the
 /// command. When it ends, `on_line` gets nothing more; call `follow` again to resume.
-pub fn follow<T: 'static>(
+pub(crate) fn follow<T: 'static>(
     cx: &mut Context<T>,
     args: Vec<String>,
     on_line: impl Fn(&mut T, String, &mut Context<T>) + 'static,
@@ -230,7 +230,7 @@ pub fn follow<T: 'static>(
 }
 
 /// `follow`, with `on_end` called once the command stops, with what it wrote on stderr.
-pub fn follow_until<T: 'static>(
+pub(crate) fn follow_until<T: 'static>(
     cx: &mut Context<T>,
     args: Vec<String>,
     on_line: impl Fn(&mut T, String, &mut Context<T>) + 'static,

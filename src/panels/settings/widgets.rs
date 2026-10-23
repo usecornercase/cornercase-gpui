@@ -7,7 +7,7 @@ use crate::theme::colours;
 use crate::ui;
 
 /// The column of pages on the left of a sheet.
-pub fn nav() -> Div {
+pub(crate) fn nav() -> Div {
     div()
         .w(px(180.))
         .h_full()
@@ -21,7 +21,7 @@ pub fn nav() -> Div {
         .border_color(colours::border())
 }
 
-pub fn nav_item(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> Stateful<Div> {
+pub(crate) fn nav_item(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> Stateful<Div> {
     ui::row(id, selected)
         .py(px(5.))
         .text_color(if selected { colours::text() } else { colours::muted() })
@@ -29,12 +29,12 @@ pub fn nav_item(id: impl Into<ElementId>, label: impl Into<SharedString>, select
 }
 
 /// The scrolling page beside the navigation.
-pub fn page(id: impl Into<ElementId>) -> Stateful<Div> {
+pub(crate) fn page(id: impl Into<ElementId>) -> Stateful<Div> {
     div().id(id).flex_1().h_full().overflow_y_scroll().px(px(22.)).pt(px(14.)).pb(px(28.))
 }
 
 /// A page's title and what it is about.
-pub fn heading(title: impl Into<SharedString>, about: impl Into<SharedString>) -> Div {
+pub(crate) fn heading(title: impl Into<SharedString>, about: impl Into<SharedString>) -> Div {
     div()
         .flex()
         .flex_col()
@@ -45,12 +45,19 @@ pub fn heading(title: impl Into<SharedString>, about: impl Into<SharedString>) -
 }
 
 /// Rows grouped in a rounded box.
-pub fn card() -> Div {
-    div().flex().flex_col().px(px(14.)).rounded(px(8.)).bg(colours::terminal()).border_1().border_color(colours::border())
+pub(crate) fn card() -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .px(px(14.))
+        .rounded(px(8.))
+        .bg(colours::terminal())
+        .border_1()
+        .border_color(colours::border())
 }
 
 /// One row of a card: what it is on the left (label and note), its control on the right.
-pub fn row(first: bool, label: impl IntoElement, control: impl IntoElement) -> Div {
+pub(crate) fn row(first: bool, label: impl IntoElement, control: impl IntoElement) -> Div {
     div()
         .flex()
         .items_center()
@@ -62,7 +69,7 @@ pub fn row(first: bool, label: impl IntoElement, control: impl IntoElement) -> D
 }
 
 /// A row's label over its note.
-pub fn label(text: impl Into<SharedString>, note: impl Into<SharedString>) -> Div {
+pub(crate) fn label(text: impl Into<SharedString>, note: impl Into<SharedString>) -> Div {
     let note: SharedString = note.into();
     div()
         .flex()
@@ -73,7 +80,7 @@ pub fn label(text: impl Into<SharedString>, note: impl Into<SharedString>) -> Di
 }
 
 /// `worktrees folder` → `Worktrees folder`.
-pub fn capitalised(text: &str) -> String {
+pub(crate) fn capitalised(text: &str) -> String {
     let mut chars = text.chars();
     match chars.next() {
         Some(first) => first.to_uppercase().chain(chars).collect(),
@@ -82,7 +89,7 @@ pub fn capitalised(text: &str) -> String {
 }
 
 /// An on/off switch. Add `.on_click(...)`.
-pub fn switch(id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
+pub(crate) fn switch(id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
     div()
         .id(id)
         .w(px(30.))
@@ -94,17 +101,17 @@ pub fn switch(id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
         .rounded(px(9.))
         .cursor_pointer()
         .bg(if on { colours::accent() } else { colours::selected() })
-        .when(on, |d| d.justify_end())
+        .when(on, Styled::justify_end)
         .child(div().size(px(13.)).rounded(px(7.)).bg(if on { colours::terminal() } else { colours::muted() }))
 }
 
 /// Red text under a row: why a change was refused.
-pub fn error(text: impl Into<SharedString>) -> Div {
+pub(crate) fn error(text: impl Into<SharedString>) -> Div {
     div().pb(px(8.)).text_size(px(12.)).text_color(colours::failed()).child(text.into())
 }
 
 /// A question under a row with its two buttons, for what cannot be undone.
-pub fn confirm(question: impl Into<SharedString>, cancel: Stateful<Div>, go: Stateful<Div>) -> Div {
+pub(crate) fn confirm(question: impl Into<SharedString>, cancel: Stateful<Div>, go: Stateful<Div>) -> Div {
     div()
         .flex()
         .items_center()
@@ -122,7 +129,7 @@ pub fn confirm(question: impl Into<SharedString>, cancel: Stateful<Div>, go: Sta
 }
 
 /// A muted line that says what cornercase does not offer yet, and the issue that asks for it.
-pub fn missing(text: impl Into<SharedString>, issue: u32) -> Div {
+pub(crate) fn missing(text: impl Into<SharedString>, issue: u32) -> Div {
     div()
         .text_size(px(12.))
         .text_color(colours::muted())

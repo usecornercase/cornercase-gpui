@@ -7,9 +7,9 @@ use std::ops::Range;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use gpui::{
-    AnyElement, AnyView, AppContext as _, ClickEvent, Context, Entity, Focusable as _, FontWeight, HighlightStyle, InteractiveElement as _,
-    IntoElement, KeyDownEvent, ParentElement as _, Render, Rgba, ScrollHandle, SharedString, StatefulInteractiveElement as _,
-    Styled as _, StyledText, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, AnyView, AppContext as _, ClickEvent, Context, Entity, Focusable as _, FontWeight, HighlightStyle,
+    InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, Render, Rgba, ScrollHandle, SharedString,
+    StatefulInteractiveElement as _, Styled as _, StyledText, Window, div, prelude::FluentBuilder as _, px,
 };
 use serde::Deserialize;
 
@@ -31,7 +31,7 @@ enum Mode {
     Sessions,
 }
 
-pub struct SearchPanel {
+pub(crate) struct SearchPanel {
     field: Entity<TextField>,
     mode: Mode,
     /// The highlighted result: a name, or a match in sessions.
@@ -56,7 +56,7 @@ struct Sessions {
 }
 
 impl SearchPanel {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let field = cx.new(|cx| TextField::new("Search…", cx));
         cx.subscribe_in(&field, window, |this, _, event, window, cx| match event {
             TextFieldEvent::Changed => this.changed(cx),
@@ -74,18 +74,25 @@ impl SearchPanel {
         })
         .detach();
         window.focus(&field.read(cx).focus_handle(cx));
-        Self { field, mode: Mode::Names, selected: 0, scroll: ScrollHandle::new(), open: true, sessions: Sessions::default() }
+        Self {
+            field,
+            mode: Mode::Names,
+            selected: 0,
+            scroll: ScrollHandle::new(),
+            open: true,
+            sessions: Sessions::default(),
+        }
     }
 
     /// A fresh search, as each opening of the sheet starts.
     fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.field.update(cx, |f, cx| f.clear(cx));
+        self.field.update(cx, TextField::clear);
         self.set_mode(Mode::Names, cx);
         window.focus(&self.field.read(cx).focus_handle(cx));
     }
 
     fn close(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        Store::get(cx).update(cx, |s, cx| s.close_sheet(cx));
+        Store::get(cx).update(cx, Store::close_sheet);
     }
 
     fn query(&self, cx: &Context<Self>) -> String {
@@ -213,7 +220,9 @@ impl SearchPanel {
         cx.stop_propagation();
         let row = match self.mode {
             Mode::Names => self.selected,
-            Mode::Sessions => self.sessions.found.as_ref().map_or(0, |f| row_of_match(&by_pane(&f.matches), self.selected)),
+            Mode::Sessions => {
+                self.sessions.found.as_ref().map_or(0, |f| row_of_match(&by_pane(&f.matches), self.selected))
+            }
         };
         self.scroll.scroll_to_item(row);
         cx.notify();
@@ -344,15 +353,15 @@ impl SearchPanel {
                 0 => (format!("Nothing is called “{query}”"), None),
                 n => (format!("{n} result{}", if n == 1 { "" } else { "s" }), None),
             },
-            Mode::Sessions if query.is_empty() => (
-                "Type to find what agents were told and answered, and what every pane printed".into(),
-                None,
-            ),
+            Mode::Sessions if query.is_empty() => {
+                ("Type to find what agents were told and answered, and what every pane printed".into(), None)
+            }
             Mode::Sessions => {
                 if let Some(error) = &self.sessions.error {
                     return (error.clone(), None);
                 }
-                let note = "Opens the pane; scrolling to the match needs usecornercase/cornercase-terminal#467".to_string();
+                let note =
+                    "Opens the pane; scrolling to the match needs usecornercase/cornercase-terminal#467".to_string();
                 match &self.sessions.found {
                     _ if self.sessions.searching => ("Searching…".into(), None),
                     Some(found) if found.matches.is_empty() => (format!("Nobody said “{query}”"), None),
@@ -471,23 +480,21 @@ impl Render for SearchPanel {
                     .py(px(8.))
                     .border_t_1()
                     .border_color(colours::border())
-                    .children(
-                        [("↑↓", "move"), ("↵", "go there"), ("⇥", "names or sessions"), ("esc", "close")].map(
-                            |(key, what)| {
-                                div()
-                                    .flex()
-                                    .gap(px(5.))
-                                    .text_size(px(11.))
-                                    .child(div().text_color(colours::muted()).child(key))
-                                    .child(div().text_color(colours::faint()).child(what))
-                            },
-                        ),
-                    ),
+                    .children([("↑↓", "move"), ("↵", "go there"), ("⇥", "names or sessions"), ("esc", "close")].map(
+                        |(key, what)| {
+                            div()
+                                .flex()
+                                .gap(px(5.))
+                                .text_size(px(11.))
+                                .child(div().text_color(colours::muted()).child(key))
+                                .child(div().text_color(colours::faint()).child(what))
+                        },
+                    )),
             )
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
     cx.new(|cx| SearchPanel::new(window, cx)).into()
 }
 
@@ -549,7 +556,11 @@ fn source_chip(source: &str) -> gpui::Div {
 
 /// Text with the given byte ranges in the accent colour, bold.
 fn highlighted(text: impl Into<SharedString>, ranges: Vec<Range<usize>>) -> StyledText {
-    let style = HighlightStyle { color: Some(colours::accent().into()), font_weight: Some(FontWeight::BOLD), ..Default::default() };
+    let style = HighlightStyle {
+        color: Some(colours::accent().into()),
+        font_weight: Some(FontWeight::BOLD),
+        ..Default::default()
+    };
     StyledText::new(text).with_highlights(ranges.into_iter().map(|r| (r, style)))
 }
 
@@ -567,7 +578,10 @@ enum Kind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Goto {
     /// A group, and the first project in it to show.
-    Group { id: u64, first: Option<u64> },
+    Group {
+        id: u64,
+        first: Option<u64>,
+    },
     Project(u64),
     Workspace(u64),
     Tab(u64),
@@ -615,7 +629,11 @@ fn candidates(session: &Session) -> Vec<Candidate> {
                 name: g.name.clone(),
                 context: format!("{} project{}", projects.len(), if projects.len() == 1 { "" } else { "s" }),
                 keys: vec![g.name.clone()],
-                status: projects.iter().filter_map(|p| p.loudest()).max_by_key(|s| crate::model::status_rank(Some(s))).map(String::from),
+                status: projects
+                    .iter()
+                    .filter_map(|p| p.loudest())
+                    .max_by_key(|s| crate::model::status_rank(Some(s)))
+                    .map(String::from),
             }
         })
         .collect();
@@ -669,9 +687,12 @@ fn rank(candidates: Vec<Candidate>, query: &str) -> Vec<Ranked> {
         .into_iter()
         .enumerate()
         .filter_map(|(order, candidate)| {
-            let best = candidate.keys.iter().enumerate().filter_map(|(i, key)| key_rank(key, query).map(|r| (r, i))).min_by_key(
-                |((rank, _), i)| (*rank, *i),
-            )?;
+            let best = candidate
+                .keys
+                .iter()
+                .enumerate()
+                .filter_map(|(i, key)| key_rank(key, query).map(|r| (r, i)))
+                .min_by_key(|((rank, _), i)| (*rank, *i))?;
             let ((rank, ranges), key) = best;
             // Highlight on the name only when the name itself matched (the first key); a
             // worktree's `⎇ ` prefix shifts it.
@@ -697,7 +718,8 @@ fn key_rank(key: &str, query: &str) -> Option<(u8, Vec<Range<usize>>)> {
     }
     let chars: Vec<char> = hay.iter().map(|(_, c)| *c).collect();
     let span = |start: usize, len: usize| hay[start].0.start..hay[start + len - 1].0.end;
-    let starts: Vec<usize> = (0..=chars.len() - needle.len()).filter(|&i| chars[i..i + needle.len()] == needle[..]).collect();
+    let starts: Vec<usize> =
+        (0..=chars.len() - needle.len()).filter(|&i| chars[i..i + needle.len()] == needle[..]).collect();
     if let Some(&first) = starts.first() {
         let rank = if first == 0 && chars.len() == needle.len() {
             0

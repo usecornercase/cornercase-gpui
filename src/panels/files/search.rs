@@ -13,17 +13,17 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
 /// The most paths the index holds.
-pub const MAX_INDEX: usize = 200_000;
+pub(super) const MAX_INDEX: usize = 200_000;
 /// The most file name results.
-pub const MAX_NAMES: usize = 200;
+pub(super) const MAX_NAMES: usize = 200;
 /// The most text matches.
-pub const MAX_MATCHES: usize = 1_000;
+pub(super) const MAX_MATCHES: usize = 1_000;
 /// A matched line is cut to this many characters.
 const MAX_LINE: usize = 400;
 
 /// Every file under `root` the tree would list (hidden included, ignored and `.git` not), as
 /// relative paths with `/`, sorted.
-pub fn index(root: &Path, cancel: &AtomicBool) -> Vec<String> {
+pub(super) fn index(root: &Path, cancel: &AtomicBool) -> Vec<String> {
     let walk = ignore::WalkBuilder::new(root)
         .hidden(false)
         .require_git(false)
@@ -47,7 +47,7 @@ pub fn index(root: &Path, cancel: &AtomicBool) -> Vec<String> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NameHit {
+pub(super) struct NameHit {
     pub path: String,
     /// Byte ranges of `path` that matched, for lighting.
     pub lit: Vec<Range<usize>>,
@@ -55,7 +55,7 @@ pub struct NameHit {
 
 /// The best `MAX_NAMES` paths for a fuzzy query, smart case; on a tie the shorter file name,
 /// then the shorter path, so the file a query names comes first.
-pub fn names(paths: &[String], query: &str) -> Vec<NameHit> {
+pub(super) fn names(paths: &[String], query: &str) -> Vec<NameHit> {
     let query = query.trim();
     if query.is_empty() {
         return Vec::new();
@@ -103,7 +103,7 @@ fn char_ranges(text: &str, indices: &[u32]) -> Vec<Range<usize>> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LineHit {
+pub(super) struct LineHit {
     /// 1-based.
     pub line: u64,
     /// The line without its indent, cut to `MAX_LINE` characters around the first match.
@@ -112,13 +112,13 @@ pub struct LineHit {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FileHits {
+pub(super) struct FileHits {
     pub path: String,
     pub lines: Vec<LineHit>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TextResults {
+pub(super) struct TextResults {
     /// By path.
     pub files: Vec<FileHits>,
     /// A match was left out past `MAX_MATCHES`.
@@ -126,13 +126,13 @@ pub struct TextResults {
 }
 
 impl TextResults {
-    pub fn count(&self) -> usize {
+    pub(super) fn count(&self) -> usize {
         self.files.iter().map(|f| f.lines.len()).sum()
     }
 }
 
 /// The query as a literal with smart case; `None` for a blank one.
-pub fn matcher(query: &str) -> Option<RegexMatcher> {
+pub(super) fn matcher(query: &str) -> Option<RegexMatcher> {
     let query = query.trim();
     if query.is_empty() {
         return None;
@@ -141,11 +141,11 @@ pub fn matcher(query: &str) -> Option<RegexMatcher> {
 }
 
 /// Searches the text of the indexed files on up to 8 threads; `cancel` stops it early.
-pub fn text(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool) -> TextResults {
+pub(super) fn text(root: &Path, paths: &[String], query: &str, cancel: &AtomicBool) -> TextResults {
     let Some(matcher) = matcher(query) else { return TextResults::default() };
     let slots = AtomicUsize::new(0);
     let capped = AtomicBool::new(false);
-    let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).min(8);
+    let threads = std::thread::available_parallelism().map_or(4, std::num::NonZero::get).min(8);
     let chunk = paths.len().div_ceil(threads).max(1);
     let mut files: Vec<FileHits> = std::thread::scope(|scope| {
         let workers: Vec<_> = paths
@@ -257,14 +257,11 @@ mod tests {
 
     #[test]
     fn names_prefer_the_named_file() {
-        let paths: Vec<String> = [
-            "src/relay/workspace-session-handler.ts",
-            "src/renderer/src/lib/workspace-session.ts",
-            "docs/other.md",
-        ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+        let paths: Vec<String> =
+            ["src/relay/workspace-session-handler.ts", "src/renderer/src/lib/workspace-session.ts", "docs/other.md"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
         let hits = names(&paths, "workspace-session");
         assert_eq!(hits.len(), 2);
         assert_eq!(hits[0].path, "src/renderer/src/lib/workspace-session.ts");

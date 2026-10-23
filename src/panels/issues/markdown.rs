@@ -1,11 +1,11 @@
 //! A small Markdown reader for issue bodies and comments: enough to read them as formatted text
 //! (headings, paragraphs, lists, task boxes, quotes, code, tables, rules, emphasis, inline code
-//! and links), not a full CommonMark parser. Unknown syntax stays as its text.
+//! and links), not a full `CommonMark` parser. Unknown syntax stays as its text.
 
 use std::ops::Range;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mark {
+pub(super) enum Mark {
     Bold,
     Italic,
     Code,
@@ -15,14 +15,14 @@ pub enum Mark {
 
 /// A line of text with its marks and the links in it (byte ranges into `text`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Inline {
+pub(super) struct Inline {
     pub text: String,
     pub marks: Vec<(Range<usize>, Mark)>,
     pub links: Vec<(Range<usize>, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Block {
+pub(super) enum Block {
     Heading(u8, Inline),
     Paragraph(Inline),
     /// A list item: its depth (0 for the outer list), its marker (`•`, `3.`, `☐`, `☑`) and text.
@@ -34,7 +34,7 @@ pub enum Block {
     Rule,
 }
 
-pub fn parse(source: &str) -> Vec<Block> {
+pub(super) fn parse(source: &str) -> Vec<Block> {
     let source = strip_comments(&source.replace("\r\n", "\n"));
     let mut blocks = Vec::new();
     let mut paragraph: Vec<&str> = Vec::new();
@@ -158,12 +158,11 @@ fn strip_comments(text: &str) -> String {
     let mut rest = text;
     while let Some(start) = rest.find("<!--") {
         out.push_str(&rest[..start]);
-        match rest[start..].find("-->") {
-            Some(end) => rest = &rest[start + end + 3..],
-            None => {
-                rest = "";
-                break;
-            }
+        if let Some(end) = rest[start..].find("-->") {
+            rest = &rest[start + end + 3..]
+        } else {
+            rest = "";
+            break;
         }
     }
     out.push_str(rest);
@@ -184,8 +183,7 @@ fn heading(line: &str) -> Option<(u8, &str)> {
 
 fn is_rule(line: &str) -> bool {
     let compact: String = line.chars().filter(|c| !c.is_whitespace()).collect();
-    compact.len() >= 3
-        && ['-', '*', '_'].into_iter().any(|m| compact.chars().all(|c| c == m))
+    compact.len() >= 3 && ['-', '*', '_'].into_iter().any(|m| compact.chars().all(|c| c == m))
 }
 
 fn item(line: &str) -> Option<(String, &str)> {
@@ -214,7 +212,7 @@ fn cells(row: &str) -> Vec<String> {
 }
 
 /// Reads emphasis, inline code, links, images and a few HTML bits out of a line.
-pub fn inline(source: &str) -> Inline {
+pub(super) fn inline(source: &str) -> Inline {
     let mut out = Inline::default();
     let chars: Vec<char> = source.chars().collect();
     let mut i = 0;
@@ -224,7 +222,7 @@ pub fn inline(source: &str) -> Inline {
     while i < chars.len() {
         let c = chars[i];
         // Escapes.
-        if c == '\\' && chars.get(i + 1).is_some_and(|n| n.is_ascii_punctuation()) {
+        if c == '\\' && chars.get(i + 1).is_some_and(char::is_ascii_punctuation) {
             out.text.push(chars[i + 1]);
             i += 2;
             continue;
@@ -282,7 +280,10 @@ pub fn inline(source: &str) -> Inline {
             }
         }
         if (starts(i, "https://") || starts(i, "http://")) && (i == 0 || !chars[i - 1].is_alphanumeric()) {
-            let end = chars[i..].iter().position(|c| c.is_whitespace() || *c == ')' || *c == '>').map_or(chars.len(), |e| i + e);
+            let end = chars[i..]
+                .iter()
+                .position(|c| c.is_whitespace() || *c == ')' || *c == '>')
+                .map_or(chars.len(), |e| i + e);
             let mut url: String = chars[i..end].iter().collect();
             while url.ends_with(['.', ',', ';', ':']) {
                 url.pop();
@@ -338,7 +339,7 @@ pub fn inline(source: &str) -> Inline {
 impl Inline {
     /// The marks as sorted, non-overlapping ranges, each with every mark that covers it (what
     /// a text's runs need: nested emphasis and a bold link overlap).
-    pub fn runs(&self) -> Vec<(Range<usize>, Vec<Mark>)> {
+    pub(super) fn runs(&self) -> Vec<(Range<usize>, Vec<Mark>)> {
         let mut cuts: Vec<usize> = self.marks.iter().flat_map(|(r, _)| [r.start, r.end]).collect();
         cuts.sort_unstable();
         cuts.dedup();
@@ -438,7 +439,10 @@ mod tests {
 
     #[test]
     fn setext_heading() {
-        assert_eq!(parse("Title\n=====\nbody"), vec![Block::Heading(1, inline("Title")), Block::Paragraph(inline("body"))]);
+        assert_eq!(
+            parse("Title\n=====\nbody"),
+            vec![Block::Heading(1, inline("Title")), Block::Paragraph(inline("body"))]
+        );
     }
 
     #[test]

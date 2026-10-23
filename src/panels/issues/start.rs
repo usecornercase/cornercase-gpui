@@ -3,9 +3,9 @@
 //! (`start --issue`) or later (`queue add --issue`, at a time the TUI's schedule form offers).
 
 use gpui::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div,
-    prelude::FluentBuilder as _, px,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Entity, Focusable as _, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, WeakEntity,
+    Window, div, prelude::FluentBuilder as _, px,
 };
 
 use super::IssuesPanel;
@@ -15,7 +15,7 @@ use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
 
-pub struct Setup {
+pub(super) struct Setup {
     pub issue: Issue,
     pub sources: Sources,
     /// The issue belongs to the project's repository (GitHub, GitLab): no place to choose.
@@ -26,7 +26,7 @@ pub struct Setup {
     pub panel: WeakEntity<IssuesPanel>,
 }
 
-pub struct StartForm {
+pub(super) struct StartForm {
     issue: Issue,
     agents: Agents,
     places: Vec<Place>,
@@ -46,7 +46,7 @@ pub struct StartForm {
     panel: WeakEntity<IssuesPanel>,
 }
 
-pub fn open(setup: Setup, window: &mut Window, cx: &mut Context<IssuesPanel>) {
+pub(super) fn open(setup: Setup, window: &mut Window, cx: &mut Context<IssuesPanel>) {
     let Setup { issue, sources, repository, agents, schedule, project_name, panel } = setup;
     let (places, choose_place, place) = if repository {
         // The project's own repository: a worktree when it is a repository root, else a tab.
@@ -116,7 +116,7 @@ pub fn open(setup: Setup, window: &mut Window, cx: &mut Context<IssuesPanel>) {
 }
 
 fn close(cx: &mut App) {
-    Store::get(cx).update(cx, |s, cx| s.close_dialog(cx));
+    Store::get(cx).update(cx, Store::close_dialog);
 }
 
 impl StartForm {
@@ -180,7 +180,14 @@ impl StartForm {
         }
     }
 
-    fn chips(&self, id: &'static str, choices: &[Choice], selected: &str, cx: &mut Context<Self>, pick: fn(&mut Self, String, &mut Context<Self>)) -> AnyElement {
+    fn chips(
+        &self,
+        id: &'static str,
+        choices: &[Choice],
+        selected: &str,
+        cx: &mut Context<Self>,
+        pick: fn(&mut Self, String, &mut Context<Self>),
+    ) -> AnyElement {
         div()
             .flex()
             .flex_wrap()
@@ -256,13 +263,11 @@ impl Render for StartForm {
             ));
         }
         let agents = self.agents.agents.clone();
-        let agent_list = if agents.is_empty() {
-            vec![Choice { value: self.agent.clone(), ..Default::default() }]
-        } else {
-            agents
-        };
+        let agent_list =
+            if agents.is_empty() { vec![Choice { value: self.agent.clone(), ..Default::default() }] } else { agents };
         let selected_agent = self.agent.clone();
-        body = body.child(ui::field("Agent", self.chips("agent", &agent_list, &selected_agent, cx, |this, value, cx| this.set_agent(value, cx))));
+        body =
+            body.child(ui::field("Agent", self.chips("agent", &agent_list, &selected_agent, cx, StartForm::set_agent)));
         if let Some((_, modes)) = self.agents.modes.get(&self.agent).cloned() {
             let mode = self.mode.clone().unwrap_or_default();
             body = body.child(ui::field(
@@ -280,7 +285,9 @@ impl Render for StartForm {
                     .flex()
                     .gap(px(10.))
                     .child(div().flex_1().child(ui::field("Model", boxed(&self.model, window, cx))))
-                    .when(effort, |d| d.child(div().flex_1().child(ui::field("Effort", boxed(&self.effort, window, cx))))),
+                    .when(effort, |d| {
+                        d.child(div().flex_1().child(ui::field("Effort", boxed(&self.effort, window, cx))))
+                    }),
             );
         }
         if self.choose_place {
@@ -289,7 +296,8 @@ impl Render for StartForm {
                 .iter()
                 .enumerate()
                 .map(|(i, place)| {
-                    let label = format!("{}{}", place.label, if place.worktree { " · new worktree" } else { " · new tab" });
+                    let label =
+                        format!("{}{}", place.label, if place.worktree { " · new worktree" } else { " · new tab" });
                     let is = self.place == Some(i);
                     ui::segment(("place", i), label, is)
                         .border_1()
@@ -320,7 +328,10 @@ impl Render for StartForm {
                     .flex()
                     .gap(px(10.))
                     .child(div().flex_1().child(ui::field("Branch", boxed(&self.branch, window, cx))))
-                    .child(div().flex_1().child(ui::field(if schedule { "Name" } else { "Workspace name" }, boxed(&self.name, window, cx)))),
+                    .child(div().flex_1().child(ui::field(
+                        if schedule { "Name" } else { "Workspace name" },
+                        boxed(&self.name, window, cx),
+                    ))),
             );
         } else if schedule {
             body = body.child(ui::field("Name", boxed(&self.name, window, cx)));
@@ -341,7 +352,10 @@ impl Render for StartForm {
                 .flex()
                 .gap(px(8.))
                 .child(ui::button("start-cancel", "Cancel").on_click(|_: &ClickEvent, _, cx| close(cx)))
-                .child(ui::primary_button("start-go", label).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))),
+                .child(
+                    ui::primary_button("start-go", label)
+                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
+                ),
         )
         .w(px(580.))
     }

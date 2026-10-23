@@ -9,7 +9,7 @@ use crate::store::args;
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Described {
+pub(super) struct Described {
     pub revision: u64,
     pub path: String,
     pub problem: Option<String>,
@@ -21,7 +21,7 @@ pub struct Described {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Kind {
+pub(super) enum Kind {
     Switch,
     Number,
     #[default]
@@ -35,7 +35,7 @@ pub enum Kind {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Choice {
+pub(super) struct Choice {
     pub value: String,
     pub note: String,
     pub dangerous: bool,
@@ -43,7 +43,7 @@ pub struct Choice {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Setting {
+pub(super) struct Setting {
     pub key: String,
     pub page: String,
     pub section: String,
@@ -63,7 +63,7 @@ pub struct Setting {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum ConnectionKind {
+pub(super) enum ConnectionKind {
     #[default]
     Tracker,
     Browsers,
@@ -75,7 +75,7 @@ pub enum ConnectionKind {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum State {
+pub(super) enum State {
     #[default]
     Missing,
     Connected,
@@ -86,7 +86,7 @@ pub enum State {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Connection {
+pub(super) struct Connection {
     pub key: String,
     pub kind: ConnectionKind,
     pub page: String,
@@ -106,7 +106,7 @@ pub struct Connection {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct ProjectEntry {
+pub(super) struct ProjectEntry {
     pub folder: String,
     pub key: String,
     pub project: Option<u64>,
@@ -118,7 +118,7 @@ pub struct ProjectEntry {
 /// What `config export --json` answers.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Exported {
+pub(super) struct Exported {
     pub text: String,
     pub settings: usize,
     pub repositories: usize,
@@ -126,17 +126,17 @@ pub struct Exported {
     pub warnings: Vec<String>,
 }
 
-pub fn parse(text: &str) -> anyhow::Result<Described> {
+pub(super) fn parse(text: &str) -> anyhow::Result<Described> {
     Ok(serde_json::from_str(text)?)
 }
 
-pub fn parse_export(text: &str) -> anyhow::Result<Exported> {
+pub(super) fn parse_export(text: &str) -> anyhow::Result<Exported> {
     Ok(serde_json::from_str(text)?)
 }
 
 /// A JSON value as the text `config set` takes: `true`/`false`, a number, a comma-separated list,
 /// or the text itself.
-pub fn value_text(value: &Value) -> String {
+pub(super) fn value_text(value: &Value) -> String {
     match value {
         Value::Null => String::new(),
         Value::String(s) => s.clone(),
@@ -146,20 +146,20 @@ pub fn value_text(value: &Value) -> String {
 }
 
 impl Setting {
-    pub fn text(&self) -> String {
+    pub(super) fn text(&self) -> String {
         value_text(&self.value)
     }
 
-    pub fn is_default(&self) -> bool {
+    pub(super) fn is_default(&self) -> bool {
         self.value == self.default
     }
 
-    pub fn on(&self) -> bool {
+    pub(super) fn on(&self) -> bool {
         self.value.as_bool().unwrap_or(false)
     }
 
     /// A list setting's items, in their order.
-    pub fn items(&self) -> Vec<String> {
+    pub(super) fn items(&self) -> Vec<String> {
         match &self.value {
             Value::Array(items) => items.iter().map(value_text).collect(),
             _ => Vec::new(),
@@ -167,31 +167,31 @@ impl Setting {
     }
 
     /// What a switch's state reads as (`shown`, `dimmed`, `every hour`), without the `[x]`.
-    pub fn switch_text(&self) -> &str {
+    pub(super) fn switch_text(&self) -> &str {
         self.shown.trim_start_matches("[x]").trim_start_matches("[ ]").trim()
     }
 
-    pub fn edited_as_text(&self) -> bool {
+    pub(super) fn edited_as_text(&self) -> bool {
         matches!(self.kind, Kind::Text | Kind::Number | Kind::Key | Kind::Other)
     }
 
     /// The choices fit in a row of segments: a few short ones, none dangerous.
-    pub fn as_segments(&self) -> bool {
+    pub(super) fn as_segments(&self) -> bool {
         self.choices.len() <= 4 && self.choices.iter().all(|c| c.value.chars().count() <= 18 && !c.dangerous)
     }
 
-    pub fn choice(&self, value: &str) -> Option<&Choice> {
+    pub(super) fn choice(&self, value: &str) -> Option<&Choice> {
         self.choices.iter().find(|c| c.value == value)
     }
 }
 
 /// `config set KEY VALUE`, safe for values that start with `-` (agent arguments).
-pub fn set_args(key: &str, value: &str) -> Vec<String> {
+pub(super) fn set_args(key: &str, value: &str) -> Vec<String> {
     args(&["config", "set", "--json", "--", key, value])
 }
 
 /// `config project`: a project's setup or teardown, by id when it is open, else by folder.
-pub fn project_args(entry: &ProjectEntry, which: Script, text: &str) -> Vec<String> {
+pub(super) fn project_args(entry: &ProjectEntry, which: Script, text: &str) -> Vec<String> {
     let mut a = args(&["config", "project", "--json"]);
     if let Some(id) = entry.project {
         a.push("--project".into());
@@ -206,7 +206,7 @@ pub fn project_args(entry: &ProjectEntry, which: Script, text: &str) -> Vec<Stri
 }
 
 /// A failed command's message without the `cornercase config: error:` around it.
-pub fn clean_error(error: &anyhow::Error) -> String {
+pub(super) fn clean_error(error: &anyhow::Error) -> String {
     let text = error.to_string();
     let text = match text.split_once(": ") {
         Some((head, rest)) if head.starts_with("cornercase ") => rest.to_string(),
@@ -217,20 +217,20 @@ pub fn clean_error(error: &anyhow::Error) -> String {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Script {
+pub(super) enum Script {
     Setup,
     Teardown,
 }
 
 impl Script {
-    pub fn name(self) -> &'static str {
+    pub(super) fn name(self) -> &'static str {
         match self {
             Self::Setup => "setup",
             Self::Teardown => "teardown",
         }
     }
 
-    pub fn of(self, entry: &ProjectEntry) -> &str {
+    pub(super) fn of(self, entry: &ProjectEntry) -> &str {
         match self {
             Self::Setup => &entry.setup,
             Self::Teardown => &entry.teardown,
@@ -239,7 +239,7 @@ impl Script {
 }
 
 /// A whole number, as `fetch_minutes` takes.
-pub fn is_number(text: &str) -> bool {
+pub(super) fn is_number(text: &str) -> bool {
     !text.trim().is_empty() && text.trim().chars().all(|c| c.is_ascii_digit())
 }
 
@@ -247,7 +247,7 @@ pub fn is_number(text: &str) -> bool {
 // Lists (`issue_tabs`): which items are in, in which order.
 
 /// Adds an item at the end, or removes it.
-pub fn list_toggle(items: &[String], item: &str) -> Vec<String> {
+pub(super) fn list_toggle(items: &[String], item: &str) -> Vec<String> {
     if items.iter().any(|i| i == item) {
         items.iter().filter(|i| *i != item).cloned().collect()
     } else {
@@ -258,7 +258,7 @@ pub fn list_toggle(items: &[String], item: &str) -> Vec<String> {
 }
 
 /// Moves the item at `index` one place left (`-1`) or right (`1`); out of range leaves it.
-pub fn list_move(items: &[String], index: usize, by: isize) -> Vec<String> {
+pub(super) fn list_move(items: &[String], index: usize, by: isize) -> Vec<String> {
     let mut out = items.to_vec();
     let Some(to) = index.checked_add_signed(by) else { return out };
     if index < out.len() && to < out.len() {
@@ -271,7 +271,7 @@ pub fn list_move(items: &[String], index: usize, by: isize) -> Vec<String> {
 // Connections.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tone {
+pub(super) enum Tone {
     Good,
     Bad,
     Quiet,
@@ -279,17 +279,17 @@ pub enum Tone {
 
 impl Connection {
     /// The token comes from an environment variable, which wins over a saved one.
-    pub fn from_env(&self) -> bool {
+    pub(super) fn from_env(&self) -> bool {
         self.from.as_deref() == Some("env")
     }
 
     /// Takes a token typed into the sheet.
-    pub fn takes_secret(&self) -> bool {
+    pub(super) fn takes_secret(&self) -> bool {
         matches!(self.kind, ConnectionKind::Tracker | ConnectionKind::Bot) && !self.from_env()
     }
 
     /// What its state reads as, and how it is coloured.
-    pub fn status(&self) -> (String, Tone) {
+    pub(super) fn status(&self) -> (String, Tone) {
         if self.kind == ConnectionKind::Browsers {
             return match self.count.unwrap_or(0) {
                 0 => ("none paired".into(), Tone::Quiet),
@@ -318,28 +318,32 @@ impl Connection {
 // Pages and sections.
 
 /// The sheet's own pages after the settings' ones.
-pub const PROJECTS: &str = "Projects";
-pub const SHARE: &str = "Share";
+pub(super) const PROJECTS: &str = "Projects";
+pub(super) const SHARE: &str = "Share";
 
 /// The order of the TUI's tabs; pages it does not know go after them.
 const ORDER: [&str; 5] = ["Worktrees", "Agents", "Issues", "UI", "Remote"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Item {
+pub(super) enum Item {
     Setting(usize),
     Connection(usize),
     /// An agent's mode and extra arguments (`agents.<kind>.mode`, `agents.<kind>.extra`), on one row.
-    Agent { kind: String, mode: Option<usize>, extra: Option<usize> },
+    Agent {
+        kind: String,
+        mode: Option<usize>,
+        extra: Option<usize>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Section {
+pub(super) struct Section {
     pub title: String,
     pub items: Vec<Item>,
 }
 
 /// The settings' pages, in the TUI's order.
-pub fn pages(described: &Described) -> Vec<String> {
+pub(super) fn pages(described: &Described) -> Vec<String> {
     let mut found: Vec<String> = Vec::new();
     let all = described.settings.iter().map(|s| &s.page).chain(described.connections.iter().map(|c| &c.page));
     for page in all {
@@ -354,7 +358,7 @@ pub fn pages(described: &Described) -> Vec<String> {
 
 /// A page's sections, in the order they first appear (connections first, as the TUI lists the
 /// trackers' accounts before the sources), each connection after its section's settings.
-pub fn sections(described: &Described, page: &str) -> Vec<Section> {
+pub(super) fn sections(described: &Described, page: &str) -> Vec<Section> {
     let mut sections: Vec<Section> = Vec::new();
     let mut titles: Vec<&str> = Vec::new();
     let connections = described.connections.iter().filter(|c| c.page == page).map(|c| c.section.as_str());
@@ -378,14 +382,13 @@ pub fn sections(described: &Described, page: &str) -> Vec<Section> {
                         Item::Agent { kind: k, mode, extra } if k == kind => Some((mode, extra)),
                         _ => None,
                     });
-                    let (mode, extra) = match slot {
-                        Some(slot) => slot,
-                        None => {
-                            items.push(Item::Agent { kind: kind.to_string(), mode: None, extra: None });
-                            match items.last_mut() {
-                                Some(Item::Agent { mode, extra, .. }) => (mode, extra),
-                                _ => continue,
-                            }
+                    let (mode, extra) = if let Some(slot) = slot {
+                        slot
+                    } else {
+                        items.push(Item::Agent { kind: kind.to_string(), mode: None, extra: None });
+                        match items.last_mut() {
+                            Some(Item::Agent { mode, extra, .. }) => (mode, extra),
+                            _ => continue,
                         }
                     };
                     if part == "mode" {
@@ -488,35 +491,23 @@ mod tests {
 
     #[test]
     fn set_passes_values_that_look_like_options() {
-        assert_eq!(set_args("agents.amp.extra", "--model x"), [
-            "config",
-            "set",
-            "--json",
-            "--",
-            "agents.amp.extra",
-            "--model x"
-        ]);
+        assert_eq!(
+            set_args("agents.amp.extra", "--model x"),
+            ["config", "set", "--json", "--", "agents.amp.extra", "--model x"]
+        );
     }
 
     #[test]
     fn project_commands_name_the_project_or_its_folder() {
         let d = parse(SAMPLE).unwrap();
-        assert_eq!(project_args(&d.projects[0], Script::Setup, "-x"), [
-            "config",
-            "project",
-            "--json",
-            "--project",
-            "4",
-            "--setup=-x"
-        ]);
-        assert_eq!(project_args(&d.projects[1], Script::Teardown, ""), [
-            "config",
-            "project",
-            "--json",
-            "--teardown=",
-            "--",
-            "/code/gone"
-        ]);
+        assert_eq!(
+            project_args(&d.projects[0], Script::Setup, "-x"),
+            ["config", "project", "--json", "--project", "4", "--setup=-x"]
+        );
+        assert_eq!(
+            project_args(&d.projects[1], Script::Teardown, ""),
+            ["config", "project", "--json", "--teardown=", "--", "/code/gone"]
+        );
     }
 
     #[test]
@@ -534,10 +525,13 @@ mod tests {
         assert_eq!(issues[1].items, [Item::Setting(2), Item::Connection(1)]);
 
         let agents = sections(&d, "Agents");
-        assert_eq!(agents[1].items, [
-            Item::Agent { kind: "claude".into(), mode: Some(5), extra: Some(6) },
-            Item::Agent { kind: "amp".into(), mode: None, extra: Some(7) },
-        ]);
+        assert_eq!(
+            agents[1].items,
+            [
+                Item::Agent { kind: "claude".into(), mode: Some(5), extra: Some(6) },
+                Item::Agent { kind: "amp".into(), mode: None, extra: Some(7) },
+            ]
+        );
 
         let remote = sections(&d, "Remote");
         assert_eq!(remote[0].items, [Item::Setting(9), Item::Connection(2)]);

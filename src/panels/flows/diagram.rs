@@ -18,14 +18,14 @@ use crate::ui;
 /// The roles' colours: the group presets without red (failed) and orange (waiting).
 const ROLE_COLOURS: [u32; 6] = [0x7aa2f7, 0xbb9af7, 0x7dcfff, 0x9ece6a, 0x73daca, 0xe0af68];
 
-pub fn role_colour(flow: &FlowSpec, role: &str) -> Rgba {
+pub(super) fn role_colour(flow: &FlowSpec, role: &str) -> Rgba {
     match flow.colour_index(role) {
         Some(i) => rgb(ROLE_COLOURS[i % ROLE_COLOURS.len()]),
         None => colours::text(),
     }
 }
 
-pub fn diagram(flow: &FlowSpec, run: Option<&Run>) -> Div {
+pub(super) fn diagram(flow: &FlowSpec, run: Option<&Run>) -> Div {
     let mut body = div().flex().flex_col().gap(px(2.)).child(
         div()
             .flex()

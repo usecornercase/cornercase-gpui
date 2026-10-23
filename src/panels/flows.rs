@@ -10,7 +10,7 @@
 mod actions;
 mod diagram;
 mod import;
-pub mod model;
+pub(crate) mod model;
 mod start;
 
 use std::collections::HashSet;
@@ -56,7 +56,7 @@ struct Feed {
     _stream: Option<Stream>,
 }
 
-pub struct FlowsPanel {
+pub(crate) struct FlowsPanel {
     /// The project whose flows are listed too (the shown one when last read).
     project: Option<u64>,
     listing: Option<Listing>,
@@ -75,7 +75,7 @@ pub struct FlowsPanel {
 }
 
 impl FlowsPanel {
-    pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         cx.observe(&store, |_, _, cx| cx.notify()).detach();
         let mut this = Self {
@@ -166,7 +166,7 @@ impl FlowsPanel {
                 // The server restarted or went away: follow again shortly.
                 cx.spawn(async move |this, cx| {
                     cx.background_executor().timer(POLL).await;
-                    let _ = this.update(cx, |this, cx| this.follow_runs(cx));
+                    let _ = this.update(cx, FlowsPanel::follow_runs);
                 })
                 .detach();
             },
@@ -333,11 +333,10 @@ impl FlowsPanel {
         for run in &self.runs {
             let id = run.run;
             let selected = self.selected == Some(Selected::Run(id));
-            let place = session
-                .as_ref()
-                .and_then(|s| s.workspace(run.workspace))
-                .map(|(p, w)| format!("{} › {}", p.name, w.branch.clone().unwrap_or_else(|| w.name.clone())))
-                .unwrap_or_else(|| format!("workspace {}", run.workspace));
+            let place = session.as_ref().and_then(|s| s.workspace(run.workspace)).map_or_else(
+                || format!("workspace {}", run.workspace),
+                |(p, w)| format!("{} › {}", p.name, w.branch.clone().unwrap_or_else(|| w.name.clone())),
+            );
             let state = if run.closed() {
                 "closed".to_string()
             } else if run.ended {
@@ -373,7 +372,7 @@ impl FlowsPanel {
         list = list.child(ui::section("Flows"));
         match (&self.listing, &self.list_error) {
             (_, Some(err)) => {
-                list = list.child(div().px(px(8.)).text_size(px(11.)).text_color(colours::failed()).child(err.clone()))
+                list = list.child(div().px(px(8.)).text_size(px(11.)).text_color(colours::failed()).child(err.clone()));
             }
             (None, None) => list = list.child(ui::dim("Reading the flows…").px(px(8.))),
             _ => {}
@@ -421,7 +420,7 @@ impl FlowsPanel {
                 list = list.child(
                     ui::row(("hidden", i), selected)
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                            this.select(Selected::Hidden(name.clone()), cx)
+                            this.select(Selected::Hidden(name.clone()), cx);
                         }))
                         .child(div().flex_1().text_size(px(13.)).text_color(colours::muted()).child(flow.name.clone())),
                 );
@@ -435,7 +434,7 @@ impl FlowsPanel {
                 list = list.child(
                     ui::row(("broken", i), selected)
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                            this.select(Selected::Broken(path.clone()), cx)
+                            this.select(Selected::Broken(path.clone()), cx);
                         }))
                         .child(
                             div()
@@ -526,7 +525,7 @@ impl FlowsPanel {
             return buttons
                 .child(ui::primary_button("run-reopen", "Reopen agents").on_click(cx.listener(
                     move |this, _: &ClickEvent, _, cx| {
-                        this.run_cmd(args(&["agents", "reopen", "--workspace", &workspace.to_string()]), "Reopening the team", cx)
+                        this.run_cmd(args(&["agents", "reopen", "--workspace", &workspace.to_string()]), "Reopening the team", cx);
                     },
                 )))
                 .child(ui::danger_button("run-forget", "Forget").on_click(cx.listener(
@@ -538,7 +537,7 @@ impl FlowsPanel {
                             args(&["agents", "forget", "--workspace", &workspace.to_string(), "--yes"]),
                             window,
                             cx,
-                        )
+                        );
                     },
                 )));
         }
@@ -551,7 +550,7 @@ impl FlowsPanel {
                     Store::get(cx).update(cx, |s, cx| {
                         s.focus("pane", pane);
                         s.close_sheet(cx);
-                    })
+                    });
                 }))
                 .child(ui::danger_button("run-stop", "Stop").on_click(cx.listener(
                     move |this, _: &ClickEvent, window, cx| {
@@ -562,7 +561,7 @@ impl FlowsPanel {
                             args(&["close", "--agent", "--pane", &pane.to_string()]),
                             window,
                             cx,
-                        )
+                        );
                     },
                 )));
         }
@@ -624,7 +623,7 @@ impl FlowsPanel {
                     Store::get(cx).update(cx, |s, cx| {
                         s.focus("pane", pane);
                         s.close_sheet(cx);
-                    })
+                    });
                 });
             } else {
                 row = row.cursor_default();
@@ -909,7 +908,7 @@ impl FlowsPanel {
                                 args(&["flow", "delete", "--path", &delete]),
                                 window,
                                 cx,
-                            )
+                            );
                         },
                     ))),
             )
@@ -975,8 +974,8 @@ impl Render for FlowsPanel {
                             .border_color(colours::border())
                             .child(ui::primary_button("flows-start", "Start a flow…").on_click(cx.listener(
                                 |this, _: &ClickEvent, window, cx| {
-                                    let name = this.selected_flow().map(|f| f.key());
-                                    this.open_start(name, window, cx)
+                                    let name = this.selected_flow().map(FlowInfo::key);
+                                    this.open_start(name, window, cx);
                                 },
                             )))
                             .child(ui::button("flows-import", "Import…").on_click(
@@ -1006,6 +1005,6 @@ impl Render for FlowsPanel {
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
     cx.new(|cx| FlowsPanel::new(window, cx)).into()
 }

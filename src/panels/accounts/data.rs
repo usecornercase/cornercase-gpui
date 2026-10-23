@@ -9,7 +9,7 @@ use crate::store::args;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct AccountsInfo {
+pub(super) struct AccountsInfo {
     pub providers: Vec<Provider>,
     pub profiles: Vec<Profile>,
     /// The active profile, `""` for none.
@@ -22,7 +22,7 @@ pub struct AccountsInfo {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Provider {
+pub(super) struct Provider {
     pub provider: String,
     pub title: String,
     pub env: String,
@@ -37,7 +37,7 @@ pub struct Provider {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Account {
+pub(super) struct Account {
     pub name: String,
     pub path: String,
     /// Shared settings that stopped being links.
@@ -48,7 +48,7 @@ pub struct Account {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum LoginState {
+pub(super) enum LoginState {
     SignedIn,
     SignedOut,
     Failed,
@@ -59,7 +59,7 @@ pub enum LoginState {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Login {
+pub(super) struct Login {
     pub state: LoginState,
     pub email: Option<String>,
     pub plan: Option<String>,
@@ -67,7 +67,7 @@ pub struct Login {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Profile {
+pub(super) struct Profile {
     pub name: String,
     /// Agent → account folder; an agent left out uses its own login.
     pub accounts: BTreeMap<String, String>,
@@ -76,19 +76,19 @@ pub struct Profile {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Ids {
+pub(super) struct Ids {
     pub workspace: Option<u64>,
     pub tab: Option<u64>,
     pub pane: Option<u64>,
 }
 
-pub fn parse(text: &str) -> anyhow::Result<AccountsInfo> {
+pub(super) fn parse(text: &str) -> anyhow::Result<AccountsInfo> {
     Ok(serde_json::from_str(text)?)
 }
 
 impl Login {
     /// As cornercase words it: `signed in as a@b.c (max)`.
-    pub fn text(&self) -> String {
+    pub(super) fn text(&self) -> String {
         match (self.state, &self.email, &self.plan) {
             (LoginState::SignedIn, Some(email), Some(plan)) => format!("signed in as {email} ({plan})"),
             (LoginState::SignedIn, Some(email), None) => format!("signed in as {email}"),
@@ -103,12 +103,12 @@ impl Login {
 
 impl Provider {
     /// What the agent's own login is called.
-    pub fn system_name(&self) -> &str {
+    pub(super) fn system_name(&self) -> &str {
         if self.system_label.is_empty() { "System" } else { &self.system_label }
     }
 
     /// An account's name as the window shows it: its label, else its folder.
-    pub fn name_of<'a>(&'a self, account: &'a str) -> &'a str {
+    pub(super) fn name_of<'a>(&'a self, account: &'a str) -> &'a str {
         if account.is_empty() {
             return self.system_name();
         }
@@ -120,7 +120,7 @@ impl Provider {
 }
 
 /// Letters, digits, `.`, `_` and `-`, at most 32, never `.` or `..`, as `account add` takes.
-pub fn valid_name(name: &str) -> bool {
+pub(super) fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 32
         && name != "."
@@ -130,17 +130,14 @@ pub fn valid_name(name: &str) -> bool {
 
 /// The agents of a profile, each with the account it uses (`""` its own login), in the providers'
 /// order.
-pub fn profile_accounts<'a>(profile: &'a Profile, providers: &'a [Provider]) -> Vec<(&'a Provider, &'a str)> {
-    providers
-        .iter()
-        .map(|p| (p, profile.accounts.get(&p.provider).map(String::as_str).unwrap_or("")))
-        .collect()
+pub(super) fn profile_accounts<'a>(profile: &'a Profile, providers: &'a [Provider]) -> Vec<(&'a Provider, &'a str)> {
+    providers.iter().map(|p| (p, profile.accounts.get(&p.provider).map_or("", String::as_str))).collect()
 }
 
 // ---------------------------------------------------------------------------------------------
 // Commands. Names go after `--`, so one that starts with `-` is never read as an option.
 
-pub fn add_args(provider: &str, name: &str, login_in: Option<u64>) -> Vec<String> {
+pub(super) fn add_args(provider: &str, name: &str, login_in: Option<u64>) -> Vec<String> {
     let mut a = args(&["account", "add", "--json"]);
     if let Some(workspace) = login_in {
         a.extend(args(&["--login", "--workspace", &workspace.to_string()]));
@@ -149,12 +146,12 @@ pub fn add_args(provider: &str, name: &str, login_in: Option<u64>) -> Vec<String
     a
 }
 
-pub fn remove_args(provider: &str, name: &str) -> Vec<String> {
+pub(super) fn remove_args(provider: &str, name: &str) -> Vec<String> {
     args(&["account", "remove", "--yes", "--", provider, name])
 }
 
 /// `account use`: an account, or the agent's own login for `""`.
-pub fn use_args(provider: &str, account: &str) -> Vec<String> {
+pub(super) fn use_args(provider: &str, account: &str) -> Vec<String> {
     if account.is_empty() {
         args(&["account", "use", "--system", "--json", "--", provider])
     } else {
@@ -163,7 +160,7 @@ pub fn use_args(provider: &str, account: &str) -> Vec<String> {
 }
 
 /// `account rename`: `""` for the own login; an empty label drops the name.
-pub fn rename_args(provider: &str, account: &str, label: &str) -> Vec<String> {
+pub(super) fn rename_args(provider: &str, account: &str, label: &str) -> Vec<String> {
     let mut a = args(&["account", "rename", "--json"]);
     if account.is_empty() {
         a.push("--system".into());
@@ -182,12 +179,12 @@ pub fn rename_args(provider: &str, account: &str, label: &str) -> Vec<String> {
     a
 }
 
-pub fn profile_new_args(name: &str) -> Vec<String> {
+pub(super) fn profile_new_args(name: &str) -> Vec<String> {
     args(&["profile", "new", "--", name])
 }
 
 /// `profile set NAME --provider AGENT [--account ACCOUNT]`: `""` the agent's own login.
-pub fn profile_set_args(name: &str, provider: &str, account: &str) -> Vec<String> {
+pub(super) fn profile_set_args(name: &str, provider: &str, account: &str) -> Vec<String> {
     let mut a = args(&["profile", "set", &format!("--provider={provider}")]);
     if !account.is_empty() {
         a.push(format!("--account={account}"));
@@ -196,16 +193,16 @@ pub fn profile_set_args(name: &str, provider: &str, account: &str) -> Vec<String
     a
 }
 
-pub fn profile_rename_args(name: &str, new: &str) -> Vec<String> {
+pub(super) fn profile_rename_args(name: &str, new: &str) -> Vec<String> {
     args(&["profile", "set", &format!("--rename={new}"), "--", name])
 }
 
 /// `profile use NAME`, or `--system` for none.
-pub fn profile_use_args(name: &str) -> Vec<String> {
+pub(super) fn profile_use_args(name: &str) -> Vec<String> {
     if name.is_empty() { args(&["profile", "use", "--system"]) } else { args(&["profile", "use", "--", name]) }
 }
 
-pub fn profile_delete_args(name: &str) -> Vec<String> {
+pub(super) fn profile_delete_args(name: &str) -> Vec<String> {
     args(&["profile", "delete", "--", name])
 }
 
@@ -264,8 +261,10 @@ mod tests {
     #[test]
     fn profiles_list_every_agent() {
         let info = parse(SAMPLE).unwrap();
-        let pairs: Vec<(&str, &str)> =
-            profile_accounts(&info.profiles[0], &info.providers).into_iter().map(|(p, a)| (p.provider.as_str(), a)).collect();
+        let pairs: Vec<(&str, &str)> = profile_accounts(&info.profiles[0], &info.providers)
+            .into_iter()
+            .map(|(p, a)| (p.provider.as_str(), a))
+            .collect();
         assert_eq!(pairs, [("claude", "work"), ("codex", "")]);
     }
 
@@ -282,29 +281,24 @@ mod tests {
     #[test]
     fn commands_keep_names_apart_from_options() {
         assert_eq!(add_args("claude", "work", None), ["account", "add", "--json", "--", "claude", "work"]);
-        assert_eq!(add_args("claude", "work", Some(9)), [
-            "account",
-            "add",
-            "--json",
-            "--login",
-            "--workspace",
-            "9",
-            "--",
-            "claude",
-            "work"
-        ]);
+        assert_eq!(
+            add_args("claude", "work", Some(9)),
+            ["account", "add", "--json", "--login", "--workspace", "9", "--", "claude", "work"]
+        );
         assert_eq!(use_args("codex", ""), ["account", "use", "--system", "--json", "--", "codex"]);
-        assert_eq!(rename_args("claude", "", "Mine"), ["account", "rename", "--json", "--system", "--", "claude", "Mine"]);
-        assert_eq!(rename_args("claude", "work", ""), ["account", "rename", "--json", "--clear", "--", "claude", "work"]);
+        assert_eq!(
+            rename_args("claude", "", "Mine"),
+            ["account", "rename", "--json", "--system", "--", "claude", "Mine"]
+        );
+        assert_eq!(
+            rename_args("claude", "work", ""),
+            ["account", "rename", "--json", "--clear", "--", "claude", "work"]
+        );
         assert_eq!(profile_set_args("Work", "claude", ""), ["profile", "set", "--provider=claude", "--", "Work"]);
-        assert_eq!(profile_set_args("Work", "claude", "home"), [
-            "profile",
-            "set",
-            "--provider=claude",
-            "--account=home",
-            "--",
-            "Work"
-        ]);
+        assert_eq!(
+            profile_set_args("Work", "claude", "home"),
+            ["profile", "set", "--provider=claude", "--account=home", "--", "Work"]
+        );
         assert_eq!(profile_use_args(""), ["profile", "use", "--system"]);
     }
 }

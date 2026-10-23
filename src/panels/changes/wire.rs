@@ -8,7 +8,7 @@ use crate::model::Style;
 /// What the panel compares; `changes --mode`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Mode {
+pub(super) enum Mode {
     #[default]
     Uncommitted,
     Commits,
@@ -16,7 +16,7 @@ pub enum Mode {
 }
 
 impl Mode {
-    pub fn name(self) -> &'static str {
+    pub(super) fn name(self) -> &'static str {
         match self {
             Self::Uncommitted => "uncommitted",
             Self::Commits => "commits",
@@ -25,14 +25,14 @@ impl Mode {
     }
 
     /// Whether the files can be staged or discarded: only changes not committed yet can.
-    pub fn uncommitted(self) -> bool {
+    pub(super) fn uncommitted(self) -> bool {
         self == Self::Uncommitted
     }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum State {
+pub(super) enum State {
     #[default]
     Loading,
     Ready,
@@ -42,7 +42,7 @@ pub enum State {
 /// How much of a file is in git's index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Staging {
+pub(super) enum Staging {
     No,
     Partly,
     Yes,
@@ -50,7 +50,7 @@ pub enum Staging {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum FileStatus {
+pub(super) enum FileStatus {
     #[default]
     Modified,
     Added,
@@ -64,7 +64,7 @@ pub enum FileStatus {
 
 impl FileStatus {
     /// The letter the panel shows before the path.
-    pub fn letter(self) -> &'static str {
+    pub(super) fn letter(self) -> &'static str {
         match self {
             Self::Modified => "M",
             Self::Added => "A",
@@ -79,7 +79,7 @@ impl FileStatus {
 /// Why a file's lines are hidden at first: a lockfile, a binary file, or too many lines.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum FoldClass {
+pub(super) enum FoldClass {
     #[default]
     Open,
     Lockfile,
@@ -91,7 +91,7 @@ pub enum FoldClass {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct FileInfo {
+pub(super) struct FileInfo {
     pub path: String,
     pub old_path: Option<String>,
     pub status: FileStatus,
@@ -107,7 +107,7 @@ pub struct FileInfo {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct WorkspaceChanges {
+pub(super) struct WorkspaceChanges {
     pub project: u64,
     pub workspace: u64,
     /// The branch Commits and All compare with, when one was chosen or found.
@@ -120,7 +120,7 @@ pub struct WorkspaceChanges {
 /// One line of `changes list --json` / `--follow`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Summary {
+pub(super) struct Summary {
     pub revision: u64,
     pub scope: String,
     pub mode: Mode,
@@ -131,7 +131,7 @@ pub struct Summary {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum LineKind {
+pub(super) enum LineKind {
     #[default]
     Context,
     Removed,
@@ -141,14 +141,14 @@ pub enum LineKind {
 /// A run of highlighted text: an index into the patch's `styles`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Segment {
+pub(super) struct Segment {
     pub style: usize,
     pub text: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Line {
+pub(super) struct Line {
     pub kind: LineKind,
     pub old: Option<u32>,
     pub new: Option<u32>,
@@ -160,7 +160,7 @@ pub struct Line {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Hunk {
+pub(super) struct Hunk {
     pub old_start: u32,
     pub new_start: u32,
     pub context: String,
@@ -170,7 +170,7 @@ pub struct Hunk {
 /// `changes file PATH --json`.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Patch {
+pub(super) struct Patch {
     pub workspace: u64,
     pub mode: Mode,
     #[serde(flatten)]
@@ -181,7 +181,7 @@ pub struct Patch {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct GapLine {
+pub(super) struct GapLine {
     pub old: u32,
     pub new: u32,
     pub text: String,
@@ -191,7 +191,7 @@ pub struct GapLine {
 /// `changes gap PATH --hunk N --json`: the unchanged lines before hunk N (from 1).
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Gap {
+pub(super) struct Gap {
     pub workspace: u64,
     pub path: String,
     pub hunk: usize,
@@ -202,14 +202,14 @@ pub struct Gap {
 /// `changes base --json`: the branches Commits and All can compare with.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Base {
+pub(super) struct Base {
     pub workspace: u64,
     pub base: Option<String>,
     pub default: Option<String>,
     pub branches: Vec<String>,
 }
 
-pub fn summary(line: &str) -> serde_json::Result<Summary> {
+pub(super) fn summary(line: &str) -> serde_json::Result<Summary> {
     serde_json::from_str(line)
 }
 

@@ -7,11 +7,11 @@ use gpui::{
 };
 
 use super::markdown::{Block, Inline, Mark};
-use crate::app::FONT_FAMILY;
+use crate::theme::FONT_FAMILY;
 use crate::theme::colours;
 
 /// The blocks of `source`, one element each; `id` keeps their link ids apart from other texts'.
-pub fn markdown(id: &str, source: &str) -> Vec<AnyElement> {
+pub(super) fn markdown(id: &str, source: &str) -> Vec<AnyElement> {
     super::markdown::parse(source)
         .into_iter()
         .enumerate()
@@ -20,7 +20,7 @@ pub fn markdown(id: &str, source: &str) -> Vec<AnyElement> {
 }
 
 /// The source as it is, in the terminal's font.
-pub fn raw(source: &str) -> AnyElement {
+pub(super) fn raw(source: &str) -> AnyElement {
     code_box(source.to_string())
 }
 
@@ -106,19 +106,14 @@ fn table(rows: Vec<Vec<String>>) -> AnyElement {
                 .when(r == 0, |d| d.font_weight(FontWeight::SEMIBOLD).bg(colours::sidebar()))
                 .when(r > 0, |d| d.border_t_1().border_color(colours::border()))
                 .children((0..columns).map(|c| {
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .px(px(8.))
-                        .py(px(3.))
-                        .child(row.get(c).cloned().unwrap_or_default())
+                    div().flex_1().min_w_0().px(px(8.)).py(px(3.)).child(row.get(c).cloned().unwrap_or_default())
                 }))
         }))
         .into_any_element()
 }
 
 /// A line of text with its emphasis, code and links; a click on a link opens it.
-pub fn inline(id: impl Into<ElementId>, text: Inline) -> AnyElement {
+pub(super) fn inline(id: impl Into<ElementId>, text: Inline) -> AnyElement {
     let highlights: Vec<_> = text.runs().into_iter().map(|(range, marks)| (range, style(&marks))).collect();
     let styled = StyledText::new(text.text.clone()).with_highlights(highlights);
     if text.links.is_empty() {

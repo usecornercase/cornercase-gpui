@@ -9,10 +9,10 @@ use std::sync::OnceLock;
 use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet};
 
 /// Sources larger than this stay plain: syntect's pure-Rust regexes are slow on big files.
-pub const MAX_BYTES: usize = 1024 * 1024;
+pub(super) const MAX_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
+pub(super) enum Kind {
     Keyword,
     Function,
     Type,
@@ -23,7 +23,7 @@ pub enum Kind {
 }
 
 /// A coloured byte range of a drawn line.
-pub type Span = (Range<usize>, Kind);
+pub(super) type Span = (Range<usize>, Kind);
 
 fn syntaxes() -> &'static SyntaxSet {
     static SET: OnceLock<SyntaxSet> = OnceLock::new();
@@ -102,13 +102,13 @@ fn syntax_for(path: &Path, first_line: &str) -> Option<&'static SyntaxReference>
 }
 
 /// The name of the language a file is coloured as, for the header.
-pub fn language(path: &Path, first_line: &str) -> Option<&'static str> {
+pub(super) fn language(path: &Path, first_line: &str) -> Option<&'static str> {
     syntax_for(path, first_line).map(|s| s.name.as_str())
 }
 
 /// Colours each drawn line, or `None` when the file has no grammar or is too large. Lines are
 /// parsed one after another, so the state carries across them (block comments, strings).
-pub fn highlight(path: &Path, lines: &[String]) -> Option<Vec<Vec<Span>>> {
+pub(super) fn highlight(path: &Path, lines: &[String]) -> Option<Vec<Vec<Span>>> {
     let bytes: usize = lines.iter().map(|l| l.len() + 1).sum();
     if bytes > MAX_BYTES {
         return None;

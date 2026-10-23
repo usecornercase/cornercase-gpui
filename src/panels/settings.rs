@@ -11,8 +11,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use gpui::{
-    AnyElement, AnyView, ClipboardItem, Context, Entity, Focusable as _, IntoElement, Render, SharedString, Window, div, prelude::*,
-    px,
+    AnyElement, AnyView, ClipboardItem, Context, Entity, Focusable as _, IntoElement, Render, SharedString, Window,
+    div, prelude::*, px,
 };
 
 use self::data::{Connection, ConnectionKind, Described, Item, Kind, ProjectEntry, Script, Setting, Tone};
@@ -46,7 +46,7 @@ enum Pending {
     Clear(String, Script),
 }
 
-pub struct SettingsPanel {
+pub(crate) struct SettingsPanel {
     described: Option<Described>,
     load_error: Option<String>,
     loading: bool,
@@ -66,7 +66,7 @@ pub struct SettingsPanel {
 }
 
 impl SettingsPanel {
-    pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         cx.observe(&store, |this, store, cx| this.store_changed(&store, cx)).detach();
         let mut this = Self {
@@ -157,19 +157,16 @@ impl SettingsPanel {
     /// Makes the field for a role if it has none, and gives it the saved value unless it is being
     /// edited.
     fn sync(&mut self, role: Role, value: &str, placeholder: &str, cx: &mut Context<Self>) {
-        match self.fields.get_mut(&role) {
-            Some(field) => {
-                let edited = field.entity.read(cx).text() != field.base;
-                if !edited && field.base != value {
-                    field.entity.update(cx, |f, cx| f.set_text(value.to_string(), cx));
-                }
-                field.base = value.to_string();
+        if let Some(field) = self.fields.get_mut(&role) {
+            let edited = field.entity.read(cx).text() != field.base;
+            if !edited && field.base != value {
+                field.entity.update(cx, |f, cx| f.set_text(value.to_string(), cx));
             }
-            None => {
-                let entity = self.field(role.clone(), placeholder.to_string(), false, cx);
-                entity.update(cx, |f, cx| f.set_text(value.to_string(), cx));
-                self.fields.insert(role, Field { entity, base: value.to_string() });
-            }
+            field.base = value.to_string();
+        } else {
+            let entity = self.field(role.clone(), placeholder.to_string(), false, cx);
+            entity.update(cx, |f, cx| f.set_text(value.to_string(), cx));
+            self.fields.insert(role, Field { entity, base: value.to_string() });
         }
     }
 
@@ -248,7 +245,7 @@ impl SettingsPanel {
         if token.is_empty() {
             return;
         }
-        field.entity.update(cx, |f, cx| f.clear(cx));
+        field.entity.update(cx, TextField::clear);
         self.run(role, args(&["config", "secret", "--json", "--", &key]), Some(token), cx);
     }
 
@@ -309,12 +306,11 @@ impl SettingsPanel {
                         exported.repositories,
                         if exported.repositories == 1 { "repository" } else { "repositories" }
                     );
-                    let text = match &to {
-                        Some(path) => format!("Wrote {what} to {}", path.display()),
-                        None => {
-                            cx.write_to_clipboard(ClipboardItem::new_string(std::mem::take(&mut exported.text)));
-                            format!("Copied {what}")
-                        }
+                    let text = if let Some(path) = &to {
+                        format!("Wrote {what} to {}", path.display())
+                    } else {
+                        cx.write_to_clipboard(ClipboardItem::new_string(std::mem::take(&mut exported.text)));
+                        format!("Copied {what}")
                     };
                     exported.text.clear();
                     this.exported = Some(exported);
@@ -327,7 +323,7 @@ impl SettingsPanel {
     }
 
     fn export_to_file(&mut self, cx: &mut Context<Self>) {
-        let home = std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("/"));
+        let home = std::env::var("HOME").map_or_else(|_| PathBuf::from("/"), PathBuf::from);
         let rx = cx.prompt_for_new_path(&home, Some("cornercase-setup.toml"));
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(path))) = rx.await {
@@ -354,14 +350,17 @@ impl SettingsPanel {
         widgets::nav()
             .children(pages.into_iter().enumerate().map(|(i, page)| {
                 let selected = page == self.page;
-                let item = widgets::nav_item(SharedString::from(format!("settings-page-{page}")), page.clone(), selected)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.page = page.clone();
-                        this.open_choice = None;
-                        this.pending = None;
-                        cx.notify();
-                    }));
-                div().when(i == settings_pages, |d| d.mt(px(8.)).pt(px(8.)).border_t_1().border_color(colours::border())).child(item)
+                let item =
+                    widgets::nav_item(SharedString::from(format!("settings-page-{page}")), page.clone(), selected)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.page = page.clone();
+                            this.open_choice = None;
+                            this.pending = None;
+                            cx.notify();
+                        }));
+                div()
+                    .when(i == settings_pages, |d| d.mt(px(8.)).pt(px(8.)).border_t_1().border_color(colours::border()))
+                    .child(item)
             }))
             .child(div().flex_1())
             .child(ui::dim(path).px(px(8.)))
@@ -410,7 +409,14 @@ impl SettingsPanel {
         }
     }
 
-    fn render_item(&self, d: &Described, item: &Item, first: bool, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    fn render_item(
+        &self,
+        d: &Described,
+        item: &Item,
+        first: bool,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         match item {
             Item::Setting(i) => self.render_setting(&d.settings[*i], first, window, cx),
             Item::Connection(i) => self.render_connection(&d.connections[*i], first, window, cx),
@@ -455,7 +461,9 @@ impl SettingsPanel {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(div().text_size(px(12.)).text_color(colours::muted()).child(setting.switch_text().to_string()))
+                    .child(
+                        div().text_size(px(12.)).text_color(colours::muted()).child(setting.switch_text().to_string()),
+                    )
                     .child(
                         widgets::switch(SharedString::from(format!("switch-{key}")), on)
                             .on_click(cx.listener(move |this, _, _, cx| this.save(key.clone(), (!on).to_string(), cx))),
@@ -496,7 +504,13 @@ impl SettingsPanel {
     }
 
     /// A text field with Save and Revert while it is edited.
-    fn render_text(&self, role: &Role, width: f32, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_text(
+        &self,
+        role: &Role,
+        width: f32,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let Some(field) = self.fields.get(role) else { return div() };
         let focused = field.entity.read(cx).focus_handle(cx).is_focused(window);
         let edited = self.edited(role, cx);
@@ -537,12 +551,16 @@ impl SettingsPanel {
         let key = setting.key.clone();
         let open = self.open_choice.as_deref() == Some(key.as_str());
         let colour = if setting.dangerous { colours::failed() } else { colours::text() };
-        ui::button_coloured(SharedString::from(format!("pick-{key}")), format!("{}  {}", setting.text(), if open { "▴" } else { "▾" }), colour)
-            .when(open, |d| d.border_color(colours::accent()))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.open_choice = if this.open_choice.as_deref() == Some(key.as_str()) { None } else { Some(key.clone()) };
-                cx.notify();
-            }))
+        ui::button_coloured(
+            SharedString::from(format!("pick-{key}")),
+            format!("{}  {}", setting.text(), if open { "▴" } else { "▾" }),
+            colour,
+        )
+        .when(open, |d| d.border_color(colours::accent()))
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.open_choice = if this.open_choice.as_deref() == Some(key.as_str()) { None } else { Some(key.clone()) };
+            cx.notify();
+        }))
     }
 
     /// The open choice's list, under its row.
@@ -555,7 +573,11 @@ impl SettingsPanel {
             let (key, value) = (setting.key.clone(), choice.value.clone());
             let selected = choice.value == current;
             ui::row(SharedString::from(format!("option-{key}-{value}")), selected)
-                .child(div().w(px(14.)).flex_none().text_color(colours::accent()).child(if selected { "✓" } else { "" }))
+                .child(div().w(px(14.)).flex_none().text_color(colours::accent()).child(if selected {
+                    "✓"
+                } else {
+                    ""
+                }))
                 .child(
                     div()
                         .w(px(220.))
@@ -622,9 +644,9 @@ impl SettingsPanel {
                     .items_center()
                     .child(
                         ui::icon_button(SharedString::from(format!("left-{key}-{item}")), "‹")
-                            .when(i == 0, |d| d.invisible())
+                            .when(i == 0, Styled::invisible)
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.save(k1.clone(), data::list_move(&list1, i, -1).join(","), cx)
+                                this.save(k1.clone(), data::list_move(&list1, i, -1).join(","), cx);
                             })),
                     )
                     .child(chip(format!("item-{key}-{item}"), format!("{item} ✕"), true).on_click(cx.listener(
@@ -632,9 +654,9 @@ impl SettingsPanel {
                     )))
                     .child(
                         ui::icon_button(SharedString::from(format!("right-{key}-{item}")), "›")
-                            .when(i + 1 == items.len(), |d| d.invisible())
+                            .when(i + 1 == items.len(), Styled::invisible)
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.save(k3.clone(), data::list_move(&list3, i, 1).join(","), cx)
+                                this.save(k3.clone(), data::list_move(&list3, i, 1).join(","), cx);
                             })),
                     ),
             );
@@ -700,9 +722,13 @@ impl SettingsPanel {
             .flex()
             .flex_col()
             .gap(px(2.))
-            .child(div().flex().gap(px(8.)).child(widgets::capitalised(&c.label)).child(
-                div().text_size(px(12.)).text_color(colour).child(status),
-            ))
+            .child(
+                div()
+                    .flex()
+                    .gap(px(8.))
+                    .child(widgets::capitalised(&c.label))
+                    .child(div().text_size(px(12.)).text_color(colour).child(status)),
+            )
             .when(!note.is_empty(), |d| d.child(div().text_size(px(11.5)).text_color(colours::faint()).child(note)))
             .when(c.kind == ConnectionKind::Chat && c.state != data::State::Connected, |d| {
                 d.child(
@@ -724,25 +750,27 @@ impl SettingsPanel {
                 let focused = field.entity.read(cx).focus_handle(cx).is_focused(window);
                 let has_text = !field.entity.read(cx).text().trim().is_empty();
                 let k = key.clone();
-                control = control.child(ui::input_box(field.entity.clone(), focused).w(px(240.)).overflow_hidden()).when(has_text, |d| {
-                    d.child(
-                        ui::primary_button(
-                            SharedString::from(format!("connect-{key}")),
-                            if c.state == data::State::Missing { "Connect" } else { "Replace" },
+                control = control
+                    .child(ui::input_box(field.entity.clone(), focused).w(px(240.)).overflow_hidden())
+                    .when(has_text, |d| {
+                        d.child(
+                            ui::primary_button(
+                                SharedString::from(format!("connect-{key}")),
+                                if c.state == data::State::Missing { "Connect" } else { "Replace" },
+                            )
+                            .on_click(cx.listener(move |this, _, _, cx| this.connect(k.clone(), cx))),
                         )
-                        .on_click(cx.listener(move |this, _, _, cx| this.connect(k.clone(), cx))),
-                    )
-                });
+                    });
             }
             if c.removable {
                 let k = key.clone();
                 let what = if c.kind == ConnectionKind::Browsers { "Forget" } else { "Remove" };
-                control = control.child(ui::button(SharedString::from(format!("remove-{key}")), what).on_click(cx.listener(
-                    move |this, _, _, cx| {
+                control = control.child(ui::button(SharedString::from(format!("remove-{key}")), what).on_click(
+                    cx.listener(move |this, _, _, cx| {
                         this.pending = Some(Pending::Remove(k.clone()));
                         cx.notify();
-                    },
-                )));
+                    }),
+                ));
             }
         }
         let confirm = (self.pending == Some(Pending::Remove(key.clone()))).then(|| {
@@ -757,7 +785,8 @@ impl SettingsPanel {
                     this.pending = None;
                     cx.notify();
                 })),
-                ui::danger_button("pending-go", "Remove").on_click(cx.listener(move |this, _, _, cx| this.remove(k.clone(), cx))),
+                ui::danger_button("pending-go", "Remove")
+                    .on_click(cx.listener(move |this, _, _, cx| this.remove(k.clone(), cx))),
             )
         });
         div()
@@ -801,7 +830,13 @@ impl SettingsPanel {
         page
     }
 
-    fn render_script(&self, project: &ProjectEntry, script: Script, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    fn render_script(
+        &self,
+        project: &ProjectEntry,
+        script: Script,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let role = Role::Script(project.folder.clone(), script);
         let text = script.of(project);
         let label = widgets::label(
@@ -825,7 +860,7 @@ impl SettingsPanel {
                         .py(px(5.))
                         .rounded(px(5.))
                         .bg(colours::panel())
-                        .font_family(crate::app::FONT_FAMILY)
+                        .font_family(crate::theme::FONT_FAMILY)
                         .text_size(px(12.))
                         .children(text.lines().map(|l| div().child(l.to_string()))),
                 )
@@ -847,8 +882,9 @@ impl SettingsPanel {
                     this.pending = None;
                     cx.notify();
                 })),
-                ui::danger_button("pending-go", "Clear")
-                    .on_click(cx.listener(move |this, _, _, cx| this.save_script(folder.clone(), script, String::new(), cx))),
+                ui::danger_button("pending-go", "Clear").on_click(
+                    cx.listener(move |this, _, _, cx| this.save_script(folder.clone(), script, String::new(), cx)),
+                ),
             )
         });
         div()
@@ -960,6 +996,6 @@ impl Render for SettingsPanel {
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
     cx.new(|cx| SettingsPanel::new(window, cx)).into()
 }

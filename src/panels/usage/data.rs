@@ -10,13 +10,13 @@ use serde::Deserialize;
 /// `cornercase usage --json`: one entry per agent (and per account, with agent accounts).
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Plans {
+pub(super) struct Plans {
     pub agents: Vec<Plan>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Plan {
+pub(super) struct Plan {
     pub agent: String,
     pub title: String,
     pub loading: bool,
@@ -39,7 +39,7 @@ pub struct Plan {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Limit {
+pub(super) struct Limit {
     pub label: String,
     pub kind: String,
     pub scope: Option<String>,
@@ -49,7 +49,7 @@ pub struct Limit {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Severity {
+pub(super) enum Severity {
     Normal,
     Warning,
     Critical,
@@ -58,7 +58,7 @@ pub enum Severity {
 impl Limit {
     /// The server's severity, or one from the percentage (75 and 90, as cornercase) when it
     /// sends a name this client does not know.
-    pub fn severity(&self) -> Severity {
+    pub(super) fn severity(&self) -> Severity {
         match self.severity.as_deref() {
             Some("normal") => Severity::Normal,
             Some("warning") => Severity::Warning,
@@ -70,14 +70,14 @@ impl Limit {
     }
 
     /// The share used, from 0 to 1, for the bar.
-    pub fn fraction(&self) -> f32 {
+    pub(super) fn fraction(&self) -> f32 {
         (self.percent / 100.).clamp(0., 1.) as f32
     }
 }
 
 impl Plan {
     /// The section's title as the TUI writes it: `● Claude Code · work · team plan`.
-    pub fn heading(&self) -> String {
+    pub(super) fn heading(&self) -> String {
         let mut text = if self.active { format!("● {}", self.title) } else { self.title.clone() };
         if let Some(account) = self.label.as_deref().or(self.account.as_deref()) {
             text.push_str(" · ");
@@ -90,7 +90,7 @@ impl Plan {
     }
 
     /// `loading…`, `updated 2m ago`, or nothing before the first answer.
-    pub fn status(&self, now: i64) -> String {
+    pub(super) fn status(&self, now: i64) -> String {
         if self.loading {
             return "loading…".into();
         }
@@ -101,7 +101,7 @@ impl Plan {
     }
 
     /// Nothing read, nothing to say: the probe has not run.
-    pub fn unasked(&self) -> bool {
+    pub(super) fn unasked(&self) -> bool {
         !self.loading && self.read_at.is_none() && self.error.is_none() && self.notice.is_none()
     }
 }
@@ -109,7 +109,7 @@ impl Plan {
 /// `cornercase stats --json`.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Stats {
+pub(super) struct Stats {
     /// When counting began, UTC.
     pub since: Option<String>,
     /// `24h`, `7d` and `total`.
@@ -121,7 +121,7 @@ pub struct Stats {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Window {
+pub(super) struct Window {
     #[serde(flatten)]
     pub counts: Counts,
     pub busy_seconds: f64,
@@ -131,7 +131,7 @@ pub struct Window {
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
-pub struct Counts {
+pub(super) struct Counts {
     pub agents: u64,
     pub prompts: u64,
     pub turns: u64,
@@ -142,7 +142,7 @@ pub struct Counts {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Tokens {
+pub(super) struct Tokens {
     #[serde(rename = "in")]
     pub input: u64,
     pub out: u64,
@@ -152,26 +152,26 @@ pub struct Tokens {
 
 impl Tokens {
     /// `tokens in` as the TUI counts them: uncached input plus cache writes.
-    pub fn sent(&self) -> u64 {
+    pub(super) fn sent(&self) -> u64 {
         self.input.saturating_add(self.cache_write)
     }
 }
 
 impl Counts {
-    pub fn is_empty(&self) -> bool {
+    pub(super) fn is_empty(&self) -> bool {
         *self == Counts::default()
     }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Block {
+pub(super) struct Block {
     pub agent_seconds: f64,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Merged {
+pub(super) struct Merged {
     #[serde(rename = "24h")]
     pub day: u64,
     #[serde(rename = "7d")]
@@ -184,7 +184,7 @@ pub struct Merged {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct MergedAccount {
+pub(super) struct MergedAccount {
     pub provider: String,
     pub host: String,
     pub login: Option<String>,
@@ -192,10 +192,10 @@ pub struct MergedAccount {
 }
 
 /// The three windows, in the order the table shows them, with their headings.
-pub const WINDOWS: [(&str, &str); 3] = [("24h", "24 h"), ("7d", "7 days"), ("total", "total")];
+pub(super) const WINDOWS: [(&str, &str); 3] = [("24h", "24 h"), ("7d", "7 days"), ("total", "total")];
 
 /// Weeks of heatmap blocks, seven to a column.
-pub const WEEKS: usize = 26;
+pub(super) const WEEKS: usize = 26;
 
 /// The agents cornercase counts, in its order, with their names.
 const AGENTS: [(&str, &str); 7] = [
@@ -209,7 +209,7 @@ const AGENTS: [(&str, &str); 7] = [
 ];
 
 /// An agent's name for people, from its key in `by_agent`.
-pub fn agent_title(key: &str) -> String {
+pub(super) fn agent_title(key: &str) -> String {
     AGENTS.iter().find(|(k, _)| *k == key).map_or_else(|| key.to_string(), |(_, title)| (*title).to_string())
 }
 
@@ -219,25 +219,26 @@ fn agent_rank(key: &str) -> usize {
 }
 
 impl Stats {
-    pub fn window(&self, key: &str) -> Window {
+    pub(super) fn window(&self, key: &str) -> Window {
         self.windows.get(key).cloned().unwrap_or_default()
     }
 
     /// Nothing counted yet, ever.
-    pub fn empty(&self) -> bool {
+    pub(super) fn empty(&self) -> bool {
         let total = self.window("total");
         total.counts.is_empty() && total.busy_seconds == 0. && total.most_at_once == 0
     }
 
     /// `1.0× in parallel in the last 24 h`: the factor, the agent time and the busy time, or
     /// `None` below a minute of busy time.
-    pub fn parallel(&self) -> Option<(f64, f64, f64)> {
+    pub(super) fn parallel(&self) -> Option<(f64, f64, f64)> {
         let w = self.window("24h");
-        (w.busy_seconds >= 60.).then(|| (w.counts.agent_seconds / w.busy_seconds, w.counts.agent_seconds, w.busy_seconds))
+        (w.busy_seconds >= 60.)
+            .then(|| (w.counts.agent_seconds / w.busy_seconds, w.counts.agent_seconds, w.busy_seconds))
     }
 
     /// The table's rows: a label and its value in each window, as the TUI shows them.
-    pub fn rows(&self) -> Vec<(&'static str, [String; 3])> {
+    pub(super) fn rows(&self) -> Vec<(&'static str, [String; 3])> {
         let w = WINDOWS.map(|(key, _)| self.window(key));
         let row = |f: &dyn Fn(&Window) -> String| [f(&w[0]), f(&w[1]), f(&w[2])];
         let mut rows = vec![
@@ -259,12 +260,15 @@ impl Stats {
     }
 
     /// Whole days since counting began.
-    pub fn days(&self, now: i64) -> u64 {
-        self.since.as_deref().and_then(parse_utc).map_or(0, |since| u64::try_from((now - since).max(0) / 86_400).unwrap_or(0))
+    pub(super) fn days(&self, now: i64) -> u64 {
+        self.since
+            .as_deref()
+            .and_then(parse_utc)
+            .map_or(0, |since| u64::try_from((now - since).max(0) / 86_400).unwrap_or(0))
     }
 
     /// The agents that did something in a window, in cornercase's order.
-    pub fn agents(&self, key: &str) -> Vec<(String, Counts)> {
+    pub(super) fn agents(&self, key: &str) -> Vec<(String, Counts)> {
         let mut list: Vec<(String, Counts)> =
             self.window(key).by_agent.into_iter().filter(|(_, c)| !c.is_empty()).collect();
         list.sort_by(|a, b| agent_rank(&a.0).cmp(&agent_rank(&b.0)).then_with(|| a.0.cmp(&b.0)));
@@ -273,7 +277,7 @@ impl Stats {
 
     /// Each heatmap block's level, newest first: 0 for no agent time, else 1 to 4 by the
     /// nearest-rank quartiles of the positive blocks shown, ties sharing their level.
-    pub fn levels(&self) -> Vec<u8> {
+    pub(super) fn levels(&self) -> Vec<u8> {
         let shown = WEEKS * 7;
         let seconds = |i: usize| self.blocks.get(i).map_or(0., |b| b.agent_seconds);
         let mut positive: Vec<f64> = (0..shown).map(seconds).filter(|n| *n > 0.).collect();
@@ -293,12 +297,12 @@ impl Stats {
 }
 
 /// `counting for 3 days`.
-pub fn counting(days: u64) -> String {
+pub(super) fn counting(days: u64) -> String {
     format!("counting for {days} day{}", if days == 1 { "" } else { "s" })
 }
 
 /// Minutes, or hours and minutes: `24m`, `2h`, `3h 05m`.
-pub fn duration(secs: f64) -> String {
+pub(super) fn duration(secs: f64) -> String {
     let minutes = (secs.max(0.) / 60.) as u64;
     let (h, m) = (minutes / 60, minutes % 60);
     if h == 0 {
@@ -321,7 +325,7 @@ fn abbreviated(n: u64, units: &[(u64, &str)]) -> String {
 }
 
 /// Counts stay whole below 10000, then `12.3k`, `4.5M`.
-pub fn count(n: u64) -> String {
+pub(super) fn count(n: u64) -> String {
     if n < 10_000 {
         n.to_string()
     } else if n < 1_000_000 {
@@ -332,12 +336,12 @@ pub fn count(n: u64) -> String {
 }
 
 /// Tokens in k, M or B.
-pub fn tokens(n: u64) -> String {
+pub(super) fn tokens(n: u64) -> String {
     abbreviated(n, &[(1_000_000_000, "B"), (1_000_000, "M"), (1_000, "k")])
 }
 
 /// `resets in 2h 13m`, `resets in 3d 4h`.
-pub fn until(secs: i64) -> String {
+pub(super) fn until(secs: i64) -> String {
     let minutes = (secs.max(0) + 59) / 60;
     let (days, hours, minutes) = (minutes / 1_440, minutes / 60 % 24, minutes % 60);
     if days > 0 {
@@ -350,7 +354,7 @@ pub fn until(secs: i64) -> String {
 }
 
 /// `updated just now`, `updated 5m ago`, `updated 2h ago`.
-pub fn updated(secs: i64) -> String {
+pub(super) fn updated(secs: i64) -> String {
     let minutes = secs.max(0) / 60;
     let (hours, days) = (minutes / 60, minutes / 1_440);
     if minutes == 0 {
@@ -365,7 +369,7 @@ pub fn updated(secs: i64) -> String {
 }
 
 /// Unix seconds from cornercase's UTC stamps (`2026-10-23T22:30:00.000Z`).
-pub fn parse_utc(text: &str) -> Option<i64> {
+pub(super) fn parse_utc(text: &str) -> Option<i64> {
     let text = text.strip_suffix('Z')?;
     let (date, time) = text.split_once('T')?;
     let mut date = date.splitn(3, '-').map(str::parse::<i64>);
@@ -390,7 +394,7 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 }
 
 /// Now, in Unix seconds.
-pub fn now() -> i64 {
+pub(super) fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
@@ -437,10 +441,12 @@ mod tests {
 
     #[test]
     fn parses_partial_usage() {
-        let plans: Plans = serde_json::from_str(r#"{"agents": [{"agent": "claude", "title": "Claude Code", "loading": true}]}"#)
-            .expect("parses");
+        let plans: Plans =
+            serde_json::from_str(r#"{"agents": [{"agent": "claude", "title": "Claude Code", "loading": true}]}"#)
+                .expect("parses");
         assert_eq!(plans.agents[0].status(0), "loading…");
-        let plans: Plans = serde_json::from_str(r#"{"agents": [{"agent": "codex", "title": "Codex"}]}"#).expect("parses");
+        let plans: Plans =
+            serde_json::from_str(r#"{"agents": [{"agent": "codex", "title": "Codex"}]}"#).expect("parses");
         assert!(plans.agents[0].unasked());
     }
 

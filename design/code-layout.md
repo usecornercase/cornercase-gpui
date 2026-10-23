@@ -1,0 +1,16 @@
+# Code layout
+
+Code: `src/`, `tests/layers.rs`, `Cargo.toml`, `clippy.toml`
+
+These rules come from cornercase-terminal (`../cornercase-terminal/design/code-layout.md`), which learned them on a 17,000-line `app.rs`; this repository adopted them in October 2026, at about 25,000 lines.
+
+- **No comments**: a comment repeats the code or goes stale beside it. What the code cannot say (why a choice was made, what was rejected, what waits upstream) goes in the area's file in `design/`, where a reviewer reads it with the other decisions of the area. `tests/layers.rs` lexes every source (strings and char literals apart) and fails on `//` or `/* */`.
+- **The window is five files**: gpui lets any module write `impl Root`, but `Root`'s fields are then `pub(crate)` for everyone. `impl Root` stays in `app.rs`, `terminal.rs`, `sidebar.rs`, `tabs.rs` and `context_menu.rs` (and their folders), and only they import `crate::app`. Panels and widgets reach shared state through `Store`, so a panel can be read, tested and changed without the window. `FONT_FAMILY` moved from `app.rs` to `theme.rs` for this.
+- **One module per panel**: a panel's file draws it; its folder holds its model, parsing and commands (`data.rs`, `model.rs`, `wire.rs`), which are plain Rust and tested without a window.
+- **At most 1,000 lines per file**, tests included: a file that big holds more than one concern, and branches working on unrelated features keep meeting there.
+- **Tests in a file of their own** (`foo/tests.rs`): they stay child modules, so they see private items, and the production file reads without them.
+- **Fixtures through `test_util::fixture!`**: a relative `include_str!` breaks when a test moves to `foo/tests.rs`; the macro resolves from `CARGO_MANIFEST_DIR`.
+- **Small functions**: `clippy.toml` sets `too-many-lines-threshold = 40`, `too-many-arguments-threshold = 5`, `excessive-nesting-threshold = 4` and `cognitive-complexity-threshold = 10`, the values cornercase-terminal uses. As clippy counts them (1.99.0): a body's lines without blank ones; `self` as an argument; every block as a level of nesting, the `impl` and the function's body included, so 4 leaves two levels inside a method (`if`, `for`, a `match` arm's `{ }`, a closure's body) and three in a free function. `cognitive_complexity` is in `nursery`, so `[lints.clippy]` turns it on. In gpui, a `render` method is a tree of builders; the limits turn it into named parts (`header`, `rows`, `row`, `footer`), each a function returning `impl IntoElement`. When adopted, about 360 functions were over a limit; all were split in one change.
+- **`unreachable_pub`**: the crate is a binary, so `pub` says nothing more than `pub(crate)`, and the lint keeps it out. With `pub(crate)`, `dead_code` still reports what nothing uses.
+- **`tests/layers.rs`** checks the line limit, comments, inline test modules, who uses `crate::app`, who implements `Root` and how fixtures are read, on every `cargo test`. Each check has a list of exceptions that only shrinks: an entry that no longer applies fails until it is removed, and nothing is added.
+- **jscpd sees every file**: `.jscpd.json` sets `maxLines` and `maxSize` far above any file, since jscpd skips files over 1,000 lines or 100 KB by default.

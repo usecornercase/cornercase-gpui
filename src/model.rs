@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Session {
+pub(crate) struct Session {
     pub boot: String,
     pub revision: u64,
     pub version: String,
@@ -24,13 +24,13 @@ pub struct Session {
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 #[serde(default)]
-pub struct ConfigInfo {
+pub(crate) struct ConfigInfo {
     pub revision: u64,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Group {
+pub(crate) struct Group {
     pub id: u64,
     pub name: String,
     pub collapsed: bool,
@@ -40,7 +40,7 @@ pub struct Group {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Project {
+pub(crate) struct Project {
     pub id: u64,
     pub name: String,
     pub path: String,
@@ -54,7 +54,7 @@ pub struct Project {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Workspace {
+pub(crate) struct Workspace {
     pub id: u64,
     pub name: String,
     pub path: String,
@@ -77,7 +77,7 @@ pub struct Workspace {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct PullRequest {
+pub(crate) struct PullRequest {
     pub number: u64,
     pub title: String,
     pub url: String,
@@ -92,7 +92,7 @@ pub struct PullRequest {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Changes {
+pub(crate) struct Changes {
     pub added: u64,
     pub removed: u64,
     pub files: u64,
@@ -101,7 +101,7 @@ pub struct Changes {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Tab {
+pub(crate) struct Tab {
     pub id: u64,
     pub name: String,
     pub status: Option<String>,
@@ -112,7 +112,7 @@ pub struct Tab {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct PaneInfo {
+pub(crate) struct PaneInfo {
     pub id: u64,
     pub path: String,
     pub program: Option<String>,
@@ -136,7 +136,7 @@ pub struct PaneInfo {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct ViewInfo {
+pub(crate) struct ViewInfo {
     pub id: u64,
     pub projection: u64,
     pub active: bool,
@@ -148,7 +148,7 @@ pub struct ViewInfo {
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 #[serde(default)]
-pub struct Shown {
+pub(crate) struct Shown {
     pub project: Option<u64>,
     pub workspace: Option<u64>,
     pub tab: Option<u64>,
@@ -156,17 +156,15 @@ pub struct Shown {
 }
 
 impl Session {
-    pub fn shown(&self) -> Shown {
+    pub(crate) fn shown(&self) -> Shown {
         self.view.as_ref().map(|v| v.shown).unwrap_or_default()
     }
 
-    pub fn workspace(&self, id: u64) -> Option<(&Project, &Workspace)> {
-        self.projects
-            .iter()
-            .find_map(|p| p.workspaces.iter().find(|w| w.id == id).map(|w| (p, w)))
+    pub(crate) fn workspace(&self, id: u64) -> Option<(&Project, &Workspace)> {
+        self.projects.iter().find_map(|p| p.workspaces.iter().find(|w| w.id == id).map(|w| (p, w)))
     }
 
-    pub fn pane(&self, id: u64) -> Option<&PaneInfo> {
+    pub(crate) fn pane(&self, id: u64) -> Option<&PaneInfo> {
         self.projects
             .iter()
             .flat_map(|p| &p.workspaces)
@@ -177,7 +175,7 @@ impl Session {
 }
 
 /// How much an agent's state asks for attention, to show the loudest one of a tab or workspace.
-pub fn status_rank(status: Option<&str>) -> u8 {
+pub(crate) fn status_rank(status: Option<&str>) -> u8 {
     match status {
         Some("waiting") => 5,
         Some("failed") => 4,
@@ -189,26 +187,26 @@ pub fn status_rank(status: Option<&str>) -> u8 {
 }
 
 impl Tab {
-    pub fn loudest(&self) -> Option<&str> {
+    pub(crate) fn loudest(&self) -> Option<&str> {
         let tab = self.status.as_deref();
         let panes = self.panes.iter().filter_map(|p| p.status.as_deref());
         std::iter::once(tab).flatten().chain(panes).max_by_key(|s| status_rank(Some(s)))
     }
 
-    pub fn agent_pane(&self) -> Option<&PaneInfo> {
+    pub(crate) fn agent_pane(&self) -> Option<&PaneInfo> {
         self.panes.iter().find(|p| p.agent.is_some())
     }
 }
 
 impl Workspace {
-    pub fn loudest(&self) -> Option<&str> {
+    pub(crate) fn loudest(&self) -> Option<&str> {
         self.tabs.iter().filter_map(Tab::loudest).max_by_key(|s| status_rank(Some(s)))
     }
 }
 
 /// An agent's pane as the sidebar lists it under its workspace: in a tree of who started whom.
 #[derive(Debug, Clone, Copy)]
-pub struct AgentRow<'a> {
+pub(crate) struct AgentRow<'a> {
     pub pane: &'a PaneInfo,
     pub tab: u64,
     pub depth: usize,
@@ -219,7 +217,7 @@ pub struct AgentRow<'a> {
 impl Workspace {
     /// Its agents in tab order, each followed by the agents it started (a parent outside the
     /// workspace counts as none), leaving out those under a folded agent.
-    pub fn agent_rows(&self) -> Vec<AgentRow<'_>> {
+    pub(crate) fn agent_rows(&self) -> Vec<AgentRow<'_>> {
         let agents: Vec<(u64, &PaneInfo)> = self
             .tabs
             .iter()
@@ -249,7 +247,7 @@ impl Workspace {
 }
 
 impl Project {
-    pub fn loudest(&self) -> Option<&str> {
+    pub(crate) fn loudest(&self) -> Option<&str> {
         self.workspaces.iter().filter_map(Workspace::loudest).max_by_key(|s| status_rank(Some(s)))
     }
 }
@@ -259,14 +257,14 @@ impl Project {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Colour {
+pub(crate) enum Colour {
     Index(u8),
     Rgb([u8; 3]),
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Style {
+pub(crate) struct Style {
     pub fg: Option<Colour>,
     pub bg: Option<Colour>,
     pub bold: bool,
@@ -284,7 +282,7 @@ pub struct Style {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum UnderlineKind {
+pub(crate) enum UnderlineKind {
     Double,
     Curly,
     Dotted,
@@ -292,13 +290,13 @@ pub enum UnderlineKind {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Hyperlink {
+pub(crate) struct Hyperlink {
     pub uri: String,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Area {
+pub(crate) struct Area {
     pub x: u16,
     pub y: u16,
     pub cols: u16,
@@ -306,21 +304,21 @@ pub struct Area {
 }
 
 impl Area {
-    pub fn contains(&self, x: u16, y: u16) -> bool {
+    pub(crate) fn contains(&self, x: u16, y: u16) -> bool {
         x >= self.x && y >= self.y && x < self.x + self.cols && y < self.y + self.rows
     }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Size {
+pub(crate) struct Size {
     pub cols: u16,
     pub rows: u16,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Divider {
+pub(crate) struct Divider {
     pub dir: String,
     pub path: Vec<bool>,
     pub area: Area,
@@ -329,7 +327,7 @@ pub struct Divider {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CursorShape {
+pub(crate) enum CursorShape {
     #[default]
     Block,
     Bar,
@@ -339,7 +337,7 @@ pub enum CursorShape {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Cursor {
+pub(crate) struct Cursor {
     pub x: u16,
     pub y: u16,
     pub shape: CursorShape,
@@ -348,7 +346,7 @@ pub struct Cursor {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MouseMode {
+pub(crate) enum MouseMode {
     #[default]
     None,
     Press,
@@ -359,7 +357,7 @@ pub enum MouseMode {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Modes {
+pub(crate) struct Modes {
     pub mouse: MouseMode,
     pub alternate_screen: bool,
     pub alternate_scroll: bool,
@@ -371,7 +369,7 @@ pub struct Modes {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Scroll {
+pub(crate) struct Scroll {
     pub total: u64,
     pub offset: u64,
     pub rows: u64,
@@ -379,7 +377,7 @@ pub struct Scroll {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Colours {
+pub(crate) struct Colours {
     pub fg: Option<[u8; 3]>,
     pub bg: Option<[u8; 3]>,
     pub cursor: Option<[u8; 3]>,
@@ -388,7 +386,7 @@ pub struct Colours {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct WireRun {
+pub(crate) struct WireRun {
     pub style: usize,
     pub hyperlink: Option<usize>,
     pub cells: Vec<String>,
@@ -396,20 +394,20 @@ pub struct WireRun {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
-pub enum WireLines {
+pub(crate) enum WireLines {
     All(Vec<Vec<WireRun>>),
     Changed(HashMap<String, Vec<WireRun>>),
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
-pub struct Copy {
+pub(crate) struct Copy {
     pub from: u16,
     pub to: u16,
     pub count: u16,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct WirePane {
+pub(crate) struct WirePane {
     pub pane: u64,
     #[serde(default)]
     pub active: Option<bool>,
@@ -433,7 +431,7 @@ pub struct WirePane {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Frame {
+pub(crate) struct Frame {
     pub boot: String,
     pub revision: u64,
     pub surface: u64,
@@ -452,16 +450,16 @@ pub struct Frame {
 // The grid the client keeps: styles and links resolved, so patches with their own tables apply.
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Run {
+pub(crate) struct Run {
     pub style: Style,
     pub link: Option<Arc<str>>,
     pub cells: Vec<String>,
 }
 
-pub type Line = Vec<Run>;
+pub(crate) type Line = Vec<Run>;
 
 #[derive(Debug, Clone, Default)]
-pub struct PaneGrid {
+pub(crate) struct PaneGrid {
     pub pane: u64,
     pub active: bool,
     pub rect: Area,
@@ -475,7 +473,7 @@ pub struct PaneGrid {
 
 impl PaneGrid {
     /// The cell at a column and row of the pane's terminal: its text, style and link.
-    pub fn cell(&self, x: u16, y: u16) -> Option<(&str, &Run)> {
+    pub(crate) fn cell(&self, x: u16, y: u16) -> Option<(&str, &Run)> {
         let line = self.lines.get(y as usize)?;
         let mut col = 0usize;
         for run in line {
@@ -489,7 +487,7 @@ impl PaneGrid {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct Grid {
+pub(crate) struct Grid {
     pub boot: String,
     pub surface: u64,
     pub revision: u64,
@@ -500,7 +498,7 @@ pub struct Grid {
     pub panes: Vec<PaneGrid>,
 }
 
-pub enum Applied {
+pub(crate) enum Applied {
     Ok,
     /// A patch whose base we do not hold: ask for a complete frame (`cornercase redraw`).
     NeedRedraw,
@@ -517,20 +515,20 @@ fn resolve(runs: Vec<WireRun>, styles: &[Style], links: &[Arc<str>]) -> Line {
 }
 
 impl Grid {
-    pub fn active_pane(&self) -> Option<&PaneGrid> {
+    pub(crate) fn active_pane(&self) -> Option<&PaneGrid> {
         self.panes.iter().find(|p| p.active).or(self.panes.first())
     }
 
-    pub fn pane(&self, id: u64) -> Option<&PaneGrid> {
+    pub(crate) fn pane(&self, id: u64) -> Option<&PaneGrid> {
         self.panes.iter().find(|p| p.pane == id)
     }
 
     /// The pane under a cell of the surface.
-    pub fn pane_at(&self, x: u16, y: u16) -> Option<&PaneGrid> {
+    pub(crate) fn pane_at(&self, x: u16, y: u16) -> Option<&PaneGrid> {
         self.panes.iter().find(|p| p.rect.contains(x, y))
     }
 
-    pub fn apply(&mut self, frame: Frame) -> Applied {
+    pub(crate) fn apply(&mut self, frame: Frame) -> Applied {
         let styles = frame.styles;
         let links: Vec<Arc<str>> = frame.hyperlinks.into_iter().map(|h| Arc::from(h.uri)).collect();
         match frame.base {
@@ -640,7 +638,8 @@ mod tests {
 
     #[test]
     fn agents_form_a_tree_and_folds_hide_children() {
-        let pane = |id: u64, parent: Option<u64>| PaneInfo { id, agent: Some("claude".into()), parent, ..Default::default() };
+        let pane =
+            |id: u64, parent: Option<u64>| PaneInfo { id, agent: Some("claude".into()), parent, ..Default::default() };
         let shell = PaneInfo { id: 9, ..Default::default() };
         let ws = Workspace {
             tabs: vec![
@@ -663,7 +662,7 @@ mod tests {
 
     #[test]
     fn reads_the_fixture_frame() {
-        let text = include_str!("../tests/frame.json");
+        let text = crate::test_util::fixture!("frame.json");
         let frame: Frame = serde_json::from_str(text).unwrap();
         let mut grid = Grid::default();
         assert!(matches!(grid.apply(frame), Applied::Ok));

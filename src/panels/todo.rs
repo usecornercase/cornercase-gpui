@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use gpui::{
     AnyView, App, AppContext as _, ClickEvent, Context, Entity, Focusable as _, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window,
-    div, prelude::FluentBuilder as _, px,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -23,7 +23,7 @@ const UNDO_FOR: Duration = Duration::from_secs(6);
 
 /// An item of the list, as `status --app` and `todo list --json` print it.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct Item {
+pub(crate) struct Item {
     pub id: u64,
     pub text: String,
     #[serde(default)]
@@ -31,7 +31,7 @@ pub struct Item {
 }
 
 /// The items in `status --app`'s `todos`, in the server's order. Malformed items are skipped.
-pub fn items(app: Option<&Value>) -> Vec<Item> {
+pub(crate) fn items(app: Option<&Value>) -> Vec<Item> {
     app.and_then(|app| app.get("todos"))
         .and_then(Value::as_array)
         .map(|todos| todos.iter().filter_map(|t| Item::deserialize(t).ok()).collect())
@@ -39,13 +39,13 @@ pub fn items(app: Option<&Value>) -> Vec<Item> {
 }
 
 /// The `undo` number `todo rm --json` and `todo clear-done --json` answer, if anything was removed.
-pub fn undo_number(answer: &Value) -> Option<u64> {
+pub(crate) fn undo_number(answer: &Value) -> Option<u64> {
     answer.get("undo").and_then(Value::as_u64)
 }
 
 /// The `todo move` arguments that take an item one step up or down among its kind (pending or
 /// done), or `None` when it is already at that end.
-pub fn step(items: &[Item], id: u64, up: bool) -> Option<Vec<String>> {
+pub(crate) fn step(items: &[Item], id: u64, up: bool) -> Option<Vec<String>> {
     let item = items.iter().find(|i| i.id == id)?;
     let kind: Vec<&Item> = items.iter().filter(|i| i.done == item.done).collect();
     let at = kind.iter().position(|i| i.id == id)?;
@@ -65,7 +65,7 @@ pub fn step(items: &[Item], id: u64, up: bool) -> Option<Vec<String>> {
 /// The `todo move` arguments for dropping `dragged` on `target`: dropped on an item above it, it
 /// goes before that item; on one below, after it, as lists usually reorder. The server keeps an
 /// item among its kind. `None` when nothing would move.
-pub fn drop_on(items: &[Item], dragged: u64, target: u64) -> Option<Vec<String>> {
+pub(crate) fn drop_on(items: &[Item], dragged: u64, target: u64) -> Option<Vec<String>> {
     let from = items.iter().position(|i| i.id == dragged)?;
     let to = items.iter().position(|i| i.id == target)?;
     let id = dragged.to_string();
@@ -83,7 +83,7 @@ pub fn drop_on(items: &[Item], dragged: u64, target: u64) -> Option<Vec<String>>
 
 /// A pane running an agent that an item can be sent to.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Target {
+pub(crate) struct Target {
     pub pane: u64,
     pub status: Option<String>,
     pub label: String,
@@ -92,7 +92,7 @@ pub struct Target {
 /// Every agent pane, in the sidebar's order, labelled as the TUI's send menu labels them:
 /// `project › workspace · agent`, the workspace only when the project has several; labels that
 /// would read the same get the tab's name, then the pane's id.
-pub fn targets(session: &Session) -> Vec<Target> {
+pub(crate) fn targets(session: &Session) -> Vec<Target> {
     let mut found: Vec<(Target, String)> = Vec::new();
     for project in &session.projects {
         let several = project.workspaces.len() > 1;
@@ -128,7 +128,7 @@ pub fn targets(session: &Session) -> Vec<Target> {
 }
 
 /// What a confirmed `todo send --json` answer says, for the toast.
-pub fn sent_message(answer: &Value, target: &str) -> (String, ToastKind) {
+pub(crate) fn sent_message(answer: &Value, target: &str) -> (String, ToastKind) {
     if answer.get("unconfirmed").and_then(Value::as_bool) == Some(true) {
         return (format!("sent to {target}, not confirmed: stays to do"), ToastKind::Info);
     }
@@ -176,7 +176,7 @@ struct Undo {
     what: String,
 }
 
-pub struct TodoPanel {
+pub(crate) struct TodoPanel {
     new_item: Entity<TextField>,
     editing: Option<Editing>,
     /// The item whose agent list is open.
@@ -186,14 +186,14 @@ pub struct TodoPanel {
 }
 
 impl TodoPanel {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let new_item = cx.new(|cx| TextField::new("New TODO", cx));
         let subscriptions = vec![
             cx.observe(&Store::get(cx), |_, _, cx| cx.notify()),
             cx.subscribe_in(&new_item, window, |this, field, event, window, cx| match event {
                 TextFieldEvent::Submit => this.add(window, cx),
                 TextFieldEvent::Cancel => {
-                    field.update(cx, |f, cx| f.clear(cx));
+                    field.update(cx, TextField::clear);
                     window.blur();
                 }
                 TextFieldEvent::Changed => cx.notify(),
@@ -212,7 +212,7 @@ impl TodoPanel {
         if text.is_empty() {
             return;
         }
-        self.new_item.update(cx, |f, cx| f.clear(cx));
+        self.new_item.update(cx, TextField::clear);
         // `--` so an item starting with a dash is text, not an option.
         self.cmd(args(&["todo", "add", "--", &text]), cx);
     }
@@ -312,12 +312,18 @@ impl TodoPanel {
     // -----------------------------------------------------------------------------------------
     // Drawing.
 
-    fn render_item(&self, item: &Item, items: &[Item], window: &mut Window, cx: &mut Context<Self>) -> gpui::AnyElement {
+    fn render_item(
+        &self,
+        item: &Item,
+        items: &[Item],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
         let id = item.id;
         let group = SharedString::from(format!("todo-{id}"));
         let editing = self.editing.as_ref().filter(|e| e.id == id);
         let first = items.iter().filter(|i| i.done == item.done).map(|i| i.id).next() == Some(id);
-        let last = items.iter().filter(|i| i.done == item.done).map(|i| i.id).last() == Some(id);
+        let last = items.iter().filter(|i| i.done == item.done).map(|i| i.id).next_back() == Some(id);
 
         let check = {
             let item = item.clone();
@@ -334,25 +340,22 @@ impl TodoPanel {
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle(&item, cx)))
         };
 
-        let text: gpui::AnyElement = match editing {
-            Some(editing) => {
-                let focused = editing.field.read(cx).focus_handle(cx).is_focused(window);
-                div().flex_1().min_w(px(0.)).child(ui::input_box(editing.field.clone(), focused)).into_any_element()
-            }
-            None => {
-                let item_for_click = item.clone();
-                div()
-                    .id(("todo-text", id))
-                    .flex_1()
-                    .min_w(px(0.))
-                    .cursor_text()
-                    .when(item.done, |d| d.text_color(colours::faint()).line_through())
-                    .child(item.text.clone())
-                    .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                        this.start_edit(&item_for_click, window, cx)
-                    }))
-                    .into_any_element()
-            }
+        let text: gpui::AnyElement = if let Some(editing) = editing {
+            let focused = editing.field.read(cx).focus_handle(cx).is_focused(window);
+            div().flex_1().min_w(px(0.)).child(ui::input_box(editing.field.clone(), focused)).into_any_element()
+        } else {
+            let item_for_click = item.clone();
+            div()
+                .id(("todo-text", id))
+                .flex_1()
+                .min_w(px(0.))
+                .cursor_text()
+                .when(item.done, |d| d.text_color(colours::faint()).line_through())
+                .child(item.text.clone())
+                .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                    this.start_edit(&item_for_click, window, cx);
+                }))
+                .into_any_element()
         };
 
         // The buttons show on hover; their column is always there so the text never reflows.
@@ -376,9 +379,13 @@ impl TodoPanel {
         }
         let up = step(items, id, true);
         let down = step(items, id, false);
-        buttons = buttons
-            .child(arrow(("todo-up", id), "↑", up, first, cx))
-            .child(arrow(("todo-down", id), "↓", down, last, cx));
+        buttons = buttons.child(arrow(("todo-up", id), "↑", up, first, cx)).child(arrow(
+            ("todo-down", id),
+            "↓",
+            down,
+            last,
+            cx,
+        ));
         let what = item.text.clone();
         buttons = buttons.child(ui::icon_button(("todo-rm", id), "✕").on_click(cx.listener(
             move |this, _: &ClickEvent, _, cx| {
@@ -521,7 +528,8 @@ impl Render for TodoPanel {
             .when(done > 0, |d| {
                 d.child(ui::button("todo-clear-done", "Clear done").on_click(cx.listener(
                     move |this, _: &ClickEvent, _, cx| {
-                        let what = if done == 1 { "Cleared 1 done item".into() } else { format!("Cleared {done} done items") };
+                        let what =
+                            if done == 1 { "Cleared 1 done item".into() } else { format!("Cleared {done} done items") };
                         this.remove(args(&["todo", "clear-done", "--json"]), what, cx);
                     },
                 )))
@@ -600,7 +608,7 @@ impl Render for TodoPanel {
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut App) -> AnyView {
     cx.new(|cx| TodoPanel::new(window, cx)).into()
 }
 
@@ -627,11 +635,10 @@ mod tests {
         ], "queue": [] });
         assert_eq!(
             items(Some(&app)),
-            vec![Item { id: 3, text: "review the login fix".into(), done: false }, Item {
-                id: 1,
-                text: "ship".into(),
-                done: true
-            }]
+            vec![
+                Item { id: 3, text: "review the login fix".into(), done: false },
+                Item { id: 1, text: "ship".into(), done: true }
+            ]
         );
         assert!(items(Some(&json!({}))).is_empty());
         assert!(items(None).is_empty());
@@ -710,13 +717,16 @@ mod tests {
             ..Default::default()
         };
         let labels: Vec<(u64, String)> = targets(&session).into_iter().map(|t| (t.pane, t.label)).collect();
-        assert_eq!(labels, vec![
-            (1, "web-shop › default · claude".to_string()),
-            (3, "web-shop › feat/x · codex (a)".to_string()),
-            (4, "web-shop › feat/x · codex (b) (pane 4)".to_string()),
-            (5, "web-shop › feat/x · codex (b) (pane 5)".to_string()),
-            (6, "api · claude".to_string()),
-        ]);
+        assert_eq!(
+            labels,
+            vec![
+                (1, "web-shop › default · claude".to_string()),
+                (3, "web-shop › feat/x · codex (a)".to_string()),
+                (4, "web-shop › feat/x · codex (b) (pane 4)".to_string()),
+                (5, "web-shop › feat/x · codex (b) (pane 5)".to_string()),
+                (6, "api · claude".to_string()),
+            ]
+        );
     }
 
     #[test]

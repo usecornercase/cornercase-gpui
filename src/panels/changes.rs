@@ -12,12 +12,12 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClickEvent, ClipboardItem, Context, FontStyle, FontWeight,
-    HighlightStyle, Hsla, InteractiveElement as _, IntoElement, ListAlignment, ListOffset, ListState, ParentElement as _,
-    Render, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _, StyledText, WeakEntity, Window, div, list,
-    prelude::FluentBuilder as _, px, relative,
+    HighlightStyle, Hsla, InteractiveElement as _, IntoElement, ListAlignment, ListOffset, ListState,
+    ParentElement as _, Render, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _, StyledText,
+    WeakEntity, Window, div, list, prelude::FluentBuilder as _, px, relative,
 };
 
-use crate::app::FONT_FAMILY;
+use crate::theme::FONT_FAMILY;
 use crate::cli::Stream;
 use crate::dialogs;
 use crate::model::{Colours, Session};
@@ -89,7 +89,7 @@ struct Open {
     generation: u64,
 }
 
-pub struct ChangesPanel {
+pub(crate) struct ChangesPanel {
     scope: Scope,
     /// The mode project scope comes back to from Every project.
     project_mode: Mode,
@@ -109,7 +109,7 @@ pub struct ChangesPanel {
 }
 
 impl ChangesPanel {
-    pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         cx.observe(&store, |this: &mut Self, _, cx| this.sync(cx)).detach();
         let mut panel = Self {
@@ -173,7 +173,9 @@ impl ChangesPanel {
         };
         let mut a = args(&["changes", "list", "--follow"]);
         match follow.workspace {
-            Some(w) => a.extend(["--workspace", &w.to_string(), "--mode", follow.scope.mode().name()].map(String::from)),
+            Some(w) => {
+                a.extend(["--workspace", &w.to_string(), "--mode", follow.scope.mode().name()].map(String::from))
+            }
             // Every project is only ever uncommitted, and takes no mode.
             None => a.push("--every".into()),
         }
@@ -295,7 +297,13 @@ impl ChangesPanel {
         cx.notify();
     }
 
-    fn set_data(&mut self, selected: Selected, patch: Patch, gaps: HashMap<usize, (Gap, Vec<Look>)>, keep_scroll: bool) {
+    fn set_data(
+        &mut self,
+        selected: Selected,
+        patch: Patch,
+        gaps: HashMap<usize, (Gap, Vec<Look>)>,
+        keep_scroll: bool,
+    ) {
         let looks = looks(&patch.styles);
         let gap_lines: HashMap<usize, Gap> = gaps.iter().map(|(k, (g, _))| (*k, g.clone())).collect();
         let rows = diff::rows(&patch.hunks, &gap_lines);
@@ -406,7 +414,8 @@ impl ChangesPanel {
 
     fn discard(workspace: u64, file: &FileInfo, window: &mut Window, cx: &mut App) {
         let deletes = matches!(file.status, FileStatus::Untracked | FileStatus::Added);
-        let (title, button) = if deletes { ("Delete the file?", "Delete") } else { ("Discard the changes?", "Discard") };
+        let (title, button) =
+            if deletes { ("Delete the file?", "Delete") } else { ("Discard the changes?", "Discard") };
         dialogs::confirm(
             title,
             format!(
@@ -441,18 +450,17 @@ impl ChangesPanel {
     fn ask_agent(workspace: u64, reference: String, cx: &mut App) {
         let store = Store::get(cx);
         let pane = store.read(cx).session.as_ref().and_then(|s| agent_pane(s, workspace));
-        match pane {
-            Some((pane, agent)) => store.update(cx, |s, cx| {
+        if let Some((pane, agent)) = pane {
+            store.update(cx, |s, cx| {
                 s.cmd(args(&["send", "--pane", &pane.to_string(), &reference]));
                 s.focus("pane", pane);
                 s.toast(format!("Sent {} to {agent}", reference.trim_end()), ToastKind::Info, cx);
-            }),
-            None => {
-                cx.write_to_clipboard(ClipboardItem::new_string(reference.clone()));
-                store.update(cx, |s, cx| {
-                    s.toast(format!("No agent in this workspace: copied {}", reference.trim_end()), ToastKind::Info, cx)
-                });
-            }
+            })
+        } else {
+            cx.write_to_clipboard(ClipboardItem::new_string(reference.clone()));
+            store.update(cx, |s, cx| {
+                s.toast(format!("No agent in this workspace: copied {}", reference.trim_end()), ToastKind::Info, cx);
+            });
         }
     }
 
@@ -566,7 +574,15 @@ impl ChangesPanel {
                 ui::row(SharedString::from(format!("base-{i}")), false)
                     .py(px(3.))
                     .child(chosen_dot(chosen))
-                    .child(div().flex_1().min_w(px(0.)).truncate().font_family(FONT_FAMILY).text_size(px(12.)).child(branch.clone()))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .truncate()
+                            .font_family(FONT_FAMILY)
+                            .text_size(px(12.))
+                            .child(branch.clone()),
+                    )
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.choose_base(Some(name.clone()), cx))),
             );
         }
@@ -606,7 +622,9 @@ impl ChangesPanel {
                 .p(px(24.))
                 .child(div().text_color(colour).child(title))
                 .when_some(detail, |d, text| {
-                    d.child(div().max_w(px(320.)).text_center().text_size(px(11.)).text_color(colours::faint()).child(text))
+                    d.child(
+                        div().max_w(px(320.)).text_center().text_size(px(11.)).text_color(colours::faint()).child(text),
+                    )
                 })
                 .into_any_element()
         };
@@ -614,7 +632,11 @@ impl ChangesPanel {
             return Some(centred("Connecting…".into(), None, colours::muted()));
         }
         if self.follow.is_none() {
-            return Some(centred("No workspace shown".into(), Some("Open a project to see its changes.".into()), colours::muted()));
+            return Some(centred(
+                "No workspace shown".into(),
+                Some("Open a project to see its changes.".into()),
+                colours::muted(),
+            ));
         }
         if let Some(err) = &self.ended {
             return Some(centred("The changes are not available".into(), Some(err.clone()), colours::failed()));
@@ -634,8 +656,12 @@ impl ChangesPanel {
             _ if summary.workspaces.iter().all(|w| w.files.is_empty()) => {
                 let (title, detail) = match self.scope {
                     Scope::Every => ("No changes in any project", None),
-                    Scope::Project(Mode::Uncommitted) => ("No uncommitted changes", Some("The working tree matches HEAD.")),
-                    Scope::Project(Mode::Commits) => ("No commits on this branch", Some("Nothing was committed since the base.")),
+                    Scope::Project(Mode::Uncommitted) => {
+                        ("No uncommitted changes", Some("The working tree matches HEAD."))
+                    }
+                    Scope::Project(Mode::Commits) => {
+                        ("No commits on this branch", Some("Nothing was committed since the base."))
+                    }
                     Scope::Project(Mode::All) => ("No changes since the base", None),
                 };
                 Some(centred(format!("✓ {title}"), detail.map(Into::into), colours::muted()))
@@ -644,7 +670,13 @@ impl ChangesPanel {
         }
     }
 
-    fn render_file(&self, workspace: u64, file: &FileInfo, mode: Mode, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_file(
+        &self,
+        workspace: u64,
+        file: &FileInfo,
+        mode: Mode,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let selected = self.selected.as_ref().is_some_and(|s| s.workspace == workspace && s.path == file.path);
         let id = SharedString::from(format!("file-{workspace}-{}", file.path));
         let (dir, name) = split_path(&file.path);
@@ -694,12 +726,14 @@ impl ChangesPanel {
                             .text_color(if muted { colours::muted() } else { colours::text() })
                             .child(name),
                     )
-                    .child(div().flex_1().min_w(px(0.)).truncate().text_size(px(11.)).text_color(colours::faint()).child(
-                        match &file.old_path {
-                            Some(old) => format!("{old} →"),
-                            None => dir,
-                        },
-                    )),
+                    .child(
+                        div().flex_1().min_w(px(0.)).truncate().text_size(px(11.)).text_color(colours::faint()).child(
+                            match &file.old_path {
+                                Some(old) => format!("{old} →"),
+                                None => dir,
+                            },
+                        ),
+                    ),
             )
             .when_some(tag, |d, tag| d.child(tag_badge(tag)))
             .child(counts(file.added, file.removed))
@@ -727,41 +761,39 @@ impl ChangesPanel {
             .or_else(|| self.open.data.as_ref().map(|d| d.patch.file.clone()))
             .unwrap_or_else(|| FileInfo { path: selected.path.clone(), ..FileInfo::default() });
         let workspace = selected.workspace;
-        let first_line = self
-            .open
-            .data
-            .as_ref()
-            .and_then(|d| d.patch.hunks.first())
-            .map_or(1, |h| diff::changed(h).0);
+        let first_line = self.open.data.as_ref().and_then(|d| d.patch.hunks.first()).map_or(1, |h| diff::changed(h).0);
         let (viewed_path, open_path) = (file.path.clone(), file.path.clone());
         let (stage_file, discard_file) = (file.clone(), file.clone());
         let can_open = file.status != FileStatus::Deleted;
-        let actions = div()
-            .flex()
-            .flex_wrap()
-            .gap(px(6.))
-            .child(
-                ui::button("open-viewed", if file.viewed { "✓ Viewed" } else { "Mark viewed" })
-                    .when(file.viewed, |b| b.text_color(colours::done()))
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_viewed(workspace, &viewed_path, cx))),
-            )
-            .when(selected.mode.uncommitted(), |d| {
-                let staged = file.staged == Some(Staging::Yes);
-                d.child(
-                    ui::button("open-stage", if staged { "− Unstage" } else { "+ Stage" })
-                        .on_click(move |_: &ClickEvent, _, cx| Self::toggle_staged(workspace, &stage_file, cx)),
-                )
+        let actions =
+            div()
+                .flex()
+                .flex_wrap()
+                .gap(px(6.))
                 .child(
-                    ui::button_coloured("open-discard", "↺ Discard", colours::failed())
-                        .on_click(move |_: &ClickEvent, window, cx| Self::discard(workspace, &discard_file, window, cx)),
+                    ui::button("open-viewed", if file.viewed { "✓ Viewed" } else { "Mark viewed" })
+                        .when(file.viewed, |b| b.text_color(colours::done()))
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.toggle_viewed(workspace, &viewed_path, cx)
+                        })),
                 )
-            })
-            .when(can_open, |d| {
-                d.child(
-                    ui::button("open-editor", "Open in editor")
-                        .on_click(move |_: &ClickEvent, _, cx| Self::open_in_editor(workspace, &open_path, first_line, cx)),
-                )
-            });
+                .when(selected.mode.uncommitted(), |d| {
+                    let staged = file.staged == Some(Staging::Yes);
+                    d.child(
+                        ui::button("open-stage", if staged { "− Unstage" } else { "+ Stage" })
+                            .on_click(move |_: &ClickEvent, _, cx| Self::toggle_staged(workspace, &stage_file, cx)),
+                    )
+                    .child(
+                        ui::button_coloured("open-discard", "↺ Discard", colours::failed()).on_click(
+                            move |_: &ClickEvent, window, cx| Self::discard(workspace, &discard_file, window, cx),
+                        ),
+                    )
+                })
+                .when(can_open, |d| {
+                    d.child(ui::button("open-editor", "Open in editor").on_click(move |_: &ClickEvent, _, cx| {
+                        Self::open_in_editor(workspace, &open_path, first_line, cx)
+                    }))
+                });
         let (dir, name) = split_path(&file.path);
         let header = div()
             .flex_none()
@@ -787,13 +819,17 @@ impl ChangesPanel {
                             .text_color(status_colour(file.status))
                             .child(file.status.letter()),
                     )
-                    .child(div().flex_none().max_w(relative(0.6)).truncate().font_weight(FontWeight::SEMIBOLD).child(name))
-                    .child(div().flex_1().min_w(px(0.)).truncate().text_size(px(11.)).text_color(colours::faint()).child(
-                        match &file.old_path {
-                            Some(old) => format!("from {old}"),
-                            None => dir,
-                        },
-                    ))
+                    .child(
+                        div().flex_none().max_w(relative(0.6)).truncate().font_weight(FontWeight::SEMIBOLD).child(name),
+                    )
+                    .child(
+                        div().flex_1().min_w(px(0.)).truncate().text_size(px(11.)).text_color(colours::faint()).child(
+                            match &file.old_path {
+                                Some(old) => format!("from {old}"),
+                                None => dir,
+                            },
+                        ),
+                    )
                     .when(self.open.loading && self.open.data.is_some(), |d| d.child(ui::dim("updating…")))
                     .child(counts(file.added, file.removed))
                     .child(
@@ -829,9 +865,7 @@ impl ChangesPanel {
             return ui::note(text).into_any_element();
         }
         let panel = cx.entity().downgrade();
-        list(self.diff_list.clone(), move |ix, _window, _cx| diff_row(&data, ix, &panel))
-            .size_full()
-            .into_any_element()
+        list(self.diff_list.clone(), move |ix, _window, _cx| diff_row(&data, ix, &panel)).size_full().into_any_element()
     }
 
     fn render_footer(&self) -> impl IntoElement + use<> {
@@ -858,7 +892,9 @@ impl ChangesPanel {
             .text_size(px(11.))
             .text_color(colours::faint())
             .child(if files > 0 { format!("{viewed} of {files} viewed") } else { String::new() })
-            .child(div().flex().items_center().gap(px(5.)).child(div().size(px(6.)).rounded_full().bg(dot)).child(state))
+            .child(
+                div().flex().items_center().gap(px(5.)).child(div().size(px(6.)).rounded_full().bg(dot)).child(state),
+            )
     }
 }
 
@@ -884,7 +920,7 @@ impl Render for ChangesPanel {
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut App) -> AnyView {
     cx.new(|cx| ChangesPanel::new(window, cx)).into()
 }
 
@@ -978,11 +1014,11 @@ fn hunk_header(data: &DiffData, i: usize) -> AnyElement {
         .when(!deleted, |d| {
             let path = path.clone();
             d.child(action("hunk-open", "Open").on_click(move |_: &ClickEvent, _, cx| {
-                ChangesPanel::open_in_editor(workspace, &path, changed.0, cx)
+                ChangesPanel::open_in_editor(workspace, &path, changed.0, cx);
             }))
         })
         .child(action("hunk-ask", "Ask agent").on_click(move |_: &ClickEvent, _, cx| {
-            ChangesPanel::ask_agent(workspace, reference.clone(), cx)
+            ChangesPanel::ask_agent(workspace, reference.clone(), cx);
         }))
         .child(action("hunk-copy", "Copy").on_click(move |_: &ClickEvent, _, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(patch_text.clone()));
@@ -1036,7 +1072,8 @@ fn code_line(
         })
         .collect();
     let body: SharedString = if text.is_empty() { " ".into() } else { text.to_string().into() };
-    let styled = if text.is_empty() { StyledText::new(body) } else { StyledText::new(body).with_highlights(highlights) };
+    let styled =
+        if text.is_empty() { StyledText::new(body) } else { StyledText::new(body).with_highlights(highlights) };
     div()
         .w_full()
         .flex()
@@ -1048,11 +1085,7 @@ fn code_line(
         .child(number(old))
         .child(number(new))
         .child(
-            div()
-                .w(px(14.))
-                .flex_none()
-                .text_color(tint.map_or(colours::faint(), Into::into))
-                .child(sign.to_string()),
+            div().w(px(14.)).flex_none().text_color(tint.map_or(colours::faint(), Into::into)).child(sign.to_string()),
         )
         .child(div().flex_1().min_w(px(0.)).pr(px(8.)).text_color(colours::text()).child(styled))
         .into_any_element()
@@ -1066,7 +1099,12 @@ fn find<'a>(summary: &'a Summary, workspace: u64, path: &str) -> Option<&'a File
 }
 
 fn find_mut<'a>(summary: &'a mut Summary, workspace: u64, path: &str) -> Option<&'a mut FileInfo> {
-    summary.workspaces.iter_mut().filter(|w| w.workspace == workspace).flat_map(|w| &mut w.files).find(|f| f.path == path)
+    summary
+        .workspaces
+        .iter_mut()
+        .filter(|w| w.workspace == workspace)
+        .flat_map(|w| &mut w.files)
+        .find(|f| f.path == path)
 }
 
 /// The workspace's agent pane, the shown tab's first: what ` ask agent ` pastes into.
@@ -1080,10 +1118,7 @@ fn agent_pane(session: &Session, workspace: u64) -> Option<(u64, String)> {
 fn looks(styles: &[crate::model::Style]) -> Vec<Look> {
     let colours = Colours::default();
     let painter = Painter { colours: &colours };
-    styles
-        .iter()
-        .map(|style| Look { fg: painter.resolve(style).0, bold: style.bold, italic: style.italic })
-        .collect()
+    styles.iter().map(|style| Look { fg: painter.resolve(style).0, bold: style.bold, italic: style.italic }).collect()
 }
 
 fn toast(text: impl Into<String>, kind: ToastKind, cx: &mut App) {
@@ -1184,11 +1219,18 @@ fn viewed_box(workspace: u64, path: &str, viewed: bool) -> gpui::Stateful<gpui::
 
 /// A workspace's header in Every project: its project (and workspace when the project has
 /// several) with its totals.
-fn group_header(session: Option<&Session>, project: u64, workspace: u64, files: usize, added: usize, removed: usize) -> impl IntoElement {
-    let label = session
-        .and_then(|s| s.workspace(workspace))
-        .map(|(p, w)| if p.workspaces.len() > 1 { format!("{} › {}", p.name, w.name) } else { p.name.clone() })
-        .unwrap_or_else(|| format!("project {project}"));
+fn group_header(
+    session: Option<&Session>,
+    project: u64,
+    workspace: u64,
+    files: usize,
+    added: usize,
+    removed: usize,
+) -> impl IntoElement {
+    let label = session.and_then(|s| s.workspace(workspace)).map_or_else(
+        || format!("project {project}"),
+        |(p, w)| if p.workspaces.len() > 1 { format!("{} › {}", p.name, w.name) } else { p.name.clone() },
+    );
     div()
         .flex()
         .items_center()
@@ -1196,7 +1238,16 @@ fn group_header(session: Option<&Session>, project: u64, workspace: u64, files: 
         .px(px(8.))
         .pt(px(10.))
         .pb(px(4.))
-        .child(div().flex_1().min_w(px(0.)).truncate().text_size(px(11.)).font_weight(FontWeight::SEMIBOLD).text_color(colours::muted()).child(label))
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.))
+                .truncate()
+                .text_size(px(11.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(colours::muted())
+                .child(label),
+        )
         .child(div().text_size(px(11.)).text_color(colours::faint()).child(plural(files, "file")))
         .child(counts(added, removed))
 }

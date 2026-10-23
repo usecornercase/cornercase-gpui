@@ -5,7 +5,7 @@ use crate::model::{Project, Session, Workspace};
 
 /// Where a row dropped on a sibling goes, as `move` says it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Place {
+pub(crate) enum Place {
     /// `--before ID`.
     Before(u64),
     /// The end of its list: `--last`, or for a project `--into GROUP` / `--ungroup`.
@@ -14,7 +14,7 @@ pub enum Place {
 
 /// A row dropped on `target`, one of `siblings` in their order: it takes the target's place,
 /// so it goes after the target when it came from above (as the TUI's drag does), else before.
-pub fn drop_place(siblings: &[u64], dragged: u64, target: u64) -> Option<Place> {
+pub(crate) fn drop_place(siblings: &[u64], dragged: u64, target: u64) -> Option<Place> {
     if dragged == target {
         return None;
     }
@@ -28,14 +28,14 @@ pub fn drop_place(siblings: &[u64], dragged: u64, target: u64) -> Option<Place> 
 }
 
 /// Whether a drop on `target` lands below it, for the line drawn while dragging.
-pub fn lands_after(siblings: &[u64], dragged: u64, target: u64) -> bool {
+pub(crate) fn lands_after(siblings: &[u64], dragged: u64, target: u64) -> bool {
     let pos = |id| siblings.iter().position(|&x| x == id);
     matches!((pos(dragged), pos(target)), (Some(a), Some(b)) if a < b)
 }
 
 /// The sidebar's order: projects without a group first, then each group with its projects.
 /// Groups without projects are listed too, so projects can be dragged into them.
-pub fn sections(session: &Session) -> Vec<(Option<u64>, Vec<u64>)> {
+pub(crate) fn sections(session: &Session) -> Vec<(Option<u64>, Vec<u64>)> {
     let loose: Vec<u64> = session
         .projects
         .iter()
@@ -51,18 +51,18 @@ pub fn sections(session: &Session) -> Vec<(Option<u64>, Vec<u64>)> {
 }
 
 /// The quick filter: every word of the query, ignoring case, somewhere in the text.
-pub fn matches(text: &str, query: &str) -> bool {
+pub(crate) fn matches(text: &str, query: &str) -> bool {
     let text = text.to_lowercase();
     query.split_whitespace().all(|word| text.contains(&word.to_lowercase()))
 }
 
 /// A project matches by its name or folder.
-pub fn project_matches(project: &Project, query: &str) -> bool {
+pub(crate) fn project_matches(project: &Project, query: &str) -> bool {
     matches(&format!("{} {}", project.name, project.path), query)
 }
 
 /// A workspace matches by its name, branch, pull request number, tabs or agents.
-pub fn workspace_matches(ws: &Workspace, query: &str) -> bool {
+pub(crate) fn workspace_matches(ws: &Workspace, query: &str) -> bool {
     let mut text = format!("{} {}", ws.name, ws.branch.as_deref().unwrap_or_default());
     if let Some(pr) = &ws.pull_request {
         text.push_str(&format!(" #{} {}", pr.number, pr.title));
@@ -81,12 +81,12 @@ pub fn workspace_matches(ws: &Workspace, query: &str) -> bool {
 }
 
 /// Whether the filter shows a workspace: its project matches (all of them show), or it does.
-pub fn shows_workspace(project: &Project, ws: &Workspace, query: &str) -> bool {
+pub(crate) fn shows_workspace(project: &Project, ws: &Workspace, query: &str) -> bool {
     query.trim().is_empty() || project_matches(project, query) || workspace_matches(ws, query)
 }
 
 /// Whether the filter shows a project: it matches, or one of its workspaces does.
-pub fn shows_project(project: &Project, query: &str) -> bool {
+pub(crate) fn shows_project(project: &Project, query: &str) -> bool {
     query.trim().is_empty() || project.workspaces.iter().any(|w| shows_workspace(project, w, query))
 }
 

@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Opener {
+pub(super) enum Opener {
     Finder,
     VsCode,
     Cursor,
@@ -16,7 +16,7 @@ pub enum Opener {
 }
 
 impl Opener {
-    pub fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         match self {
             Self::Finder => "Finder",
             Self::VsCode => "VS Code",
@@ -41,7 +41,7 @@ impl Opener {
 
 /// How an opener is run.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Launch {
+pub(super) enum Launch {
     /// `open` itself (Finder, default app).
     Open,
     /// The editor's command, which takes `FILE:LINE`.
@@ -52,10 +52,8 @@ pub enum Launch {
 
 /// The openers this computer has, in a fixed order: `path_env` is `$PATH`, `apps` the
 /// Applications folders.
-pub fn find(path_env: &str, apps: &[PathBuf]) -> Vec<(Opener, Launch)> {
-    let on_path = |name: &str| {
-        std::env::split_paths(path_env).map(|dir| dir.join(name)).find(|p| is_executable(p))
-    };
+pub(super) fn find(path_env: &str, apps: &[PathBuf]) -> Vec<(Opener, Launch)> {
+    let on_path = |name: &str| std::env::split_paths(path_env).map(|dir| dir.join(name)).find(|p| is_executable(p));
     let mut found = Vec::new();
     let has_open = on_path("open").is_some() || Path::new("/usr/bin/open").exists();
     if has_open {
@@ -76,7 +74,7 @@ pub fn find(path_env: &str, apps: &[PathBuf]) -> Vec<(Opener, Launch)> {
 }
 
 /// The openers of this computer.
-pub fn detect() -> Vec<(Opener, Launch)> {
+pub(super) fn detect() -> Vec<(Opener, Launch)> {
     let mut apps = vec![PathBuf::from("/Applications")];
     if let Some(home) = std::env::var_os("HOME") {
         apps.push(PathBuf::from(home).join("Applications"));
@@ -95,7 +93,13 @@ const BUNDLES: &[&str] = &["app", "xcodeproj", "xcworkspace", "framework", "bund
 /// The command line for opening `path` (absolute) with an opener, at a 1-based line for an
 /// editor; `None` when the opener does not take this path (the default app for a folder or a
 /// program).
-pub fn argv(opener: Opener, launch: &Launch, path: &Path, line: Option<usize>, dir: bool) -> Option<Vec<String>> {
+pub(super) fn argv(
+    opener: Opener,
+    launch: &Launch,
+    path: &Path,
+    line: Option<usize>,
+    dir: bool,
+) -> Option<Vec<String>> {
     let path_s = path.to_string_lossy().into_owned();
     let open = || "open".to_string();
     Some(match (opener, launch) {
@@ -126,7 +130,7 @@ pub fn argv(opener: Opener, launch: &Launch, path: &Path, line: Option<usize>, d
 }
 
 /// Runs a command line and waits for it; an error names what failed.
-pub fn run(argv: &[String]) -> Result<(), String> {
+pub(super) fn run(argv: &[String]) -> Result<(), String> {
     let (program, args) = argv.split_first().ok_or("nothing to run")?;
     let status = std::process::Command::new(program)
         .args(args)
@@ -183,15 +187,30 @@ mod tests {
     fn argv_per_opener() {
         let file = Path::new("/w/src/main.rs");
         let code = Launch::Command(PathBuf::from("/bin/code"));
-        assert_eq!(argv(Opener::VsCode, &code, file, Some(12), false).unwrap(), vec!["/bin/code", "-g", "/w/src/main.rs:12"]);
+        assert_eq!(
+            argv(Opener::VsCode, &code, file, Some(12), false).unwrap(),
+            vec!["/bin/code", "-g", "/w/src/main.rs:12"]
+        );
         assert_eq!(argv(Opener::VsCode, &code, Path::new("/w"), Some(3), true).unwrap(), vec!["/bin/code", "/w"]);
         let zed = Launch::Command(PathBuf::from("/bin/zed"));
         assert_eq!(argv(Opener::Zed, &zed, file, Some(2), false).unwrap(), vec!["/bin/zed", "/w/src/main.rs:2"]);
         let bundle = Launch::Bundle(PathBuf::from("/Applications/Zed.app"));
-        assert_eq!(argv(Opener::Zed, &bundle, file, Some(2), false).unwrap(), vec!["open", "-a", "/Applications/Zed.app", "/w/src/main.rs"]);
-        assert_eq!(argv(Opener::Finder, &Launch::Open, file, None, false).unwrap(), vec!["open", "-R", "/w/src/main.rs"]);
-        assert_eq!(argv(Opener::Finder, &Launch::Open, Path::new("/w/src"), None, true).unwrap(), vec!["open", "/w/src"]);
-        assert_eq!(argv(Opener::Finder, &Launch::Open, Path::new("/w/X.app"), None, true).unwrap(), vec!["open", "-R", "/w/X.app"]);
+        assert_eq!(
+            argv(Opener::Zed, &bundle, file, Some(2), false).unwrap(),
+            vec!["open", "-a", "/Applications/Zed.app", "/w/src/main.rs"]
+        );
+        assert_eq!(
+            argv(Opener::Finder, &Launch::Open, file, None, false).unwrap(),
+            vec!["open", "-R", "/w/src/main.rs"]
+        );
+        assert_eq!(
+            argv(Opener::Finder, &Launch::Open, Path::new("/w/src"), None, true).unwrap(),
+            vec!["open", "/w/src"]
+        );
+        assert_eq!(
+            argv(Opener::Finder, &Launch::Open, Path::new("/w/X.app"), None, true).unwrap(),
+            vec!["open", "-R", "/w/X.app"]
+        );
         assert!(argv(Opener::DefaultApp, &Launch::Open, Path::new("/w"), None, true).is_none());
     }
 

@@ -46,7 +46,8 @@ fn sources() {
 
 #[test]
 fn missing_repository() {
-    let info = SourceInfo { name: "GitLab".into(), missing: vec!["token".into(), "repository".into()], ..Default::default() };
+    let info =
+        SourceInfo { name: "GitLab".into(), missing: vec!["token".into(), "repository".into()], ..Default::default() };
     assert_eq!(info.missing_line(), "this project's folder is not a GitLab repository");
     let one = SourceInfo { missing: vec!["token".into()], ..Default::default() };
     assert_eq!(one.missing_line(), "needs a token");
@@ -171,16 +172,45 @@ fn start_arguments() {
     assert_eq!(
         plan.start_args(),
         [
-            "start", "claude", "--issue", "#456", "--source", "github", "--project", "4", "--mode", "plan", "--model",
-            "opus", "--workspace-name", "Popups", "--json"
+            "start",
+            "claude",
+            "--issue",
+            "#456",
+            "--source",
+            "github",
+            "--project",
+            "4",
+            "--mode",
+            "plan",
+            "--model",
+            "opus",
+            "--workspace-name",
+            "Popups",
+            "--json"
         ]
     );
     // The queue names the worktree's branch itself only when told.
     assert_eq!(
         plan.queue_args("in 2h"),
         [
-            "queue", "add", "--at", "in 2h", "--issue", "#456", "--source", "github", "--agent", "claude", "--mode",
-            "plan", "--project", "4", "--worktree", "issue-456-popups", "--name", "Popups"
+            "queue",
+            "add",
+            "--at",
+            "in 2h",
+            "--issue",
+            "#456",
+            "--source",
+            "github",
+            "--agent",
+            "claude",
+            "--mode",
+            "plan",
+            "--project",
+            "4",
+            "--worktree",
+            "issue-456-popups",
+            "--name",
+            "Popups"
         ]
     );
     let tab = StartPlan {
@@ -193,15 +223,34 @@ fn start_arguments() {
     assert_eq!(
         tab.start_args(),
         [
-            "start", "codex", "--issue", "ENG-42", "--source", "linear", "--workspace", "12", "--effort", "high",
+            "start",
+            "codex",
+            "--issue",
+            "ENG-42",
+            "--source",
+            "linear",
+            "--workspace",
+            "12",
+            "--effort",
+            "high",
             "--json"
         ]
     );
     assert_eq!(
         tab.queue_args("claude reset"),
         [
-            "queue", "add", "--at", "claude reset", "--issue", "ENG-42", "--source", "linear", "--agent", "codex",
-            "--workspace", "12"
+            "queue",
+            "add",
+            "--at",
+            "claude reset",
+            "--issue",
+            "ENG-42",
+            "--source",
+            "linear",
+            "--agent",
+            "codex",
+            "--workspace",
+            "12"
         ]
     );
 }

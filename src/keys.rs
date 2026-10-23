@@ -8,8 +8,32 @@ use gpui::Keystroke;
 use serde_json::{Value, json};
 
 const NAMED: &[&str] = &[
-    "enter", "escape", "tab", "backspace", "up", "down", "left", "right", "home", "end", "pageup", "pagedown",
-    "delete", "insert", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
+    "enter",
+    "escape",
+    "tab",
+    "backspace",
+    "up",
+    "down",
+    "left",
+    "right",
+    "home",
+    "end",
+    "pageup",
+    "pagedown",
+    "delete",
+    "insert",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11",
+    "f12",
 ];
 
 fn mods(keystroke: &Keystroke) -> Vec<&'static str> {
@@ -28,7 +52,7 @@ fn mods(keystroke: &Keystroke) -> Vec<&'static str> {
 }
 
 /// The event for a key, or `None` when it is text for the input method to type.
-pub fn key_event(keystroke: &Keystroke) -> Option<Value> {
+pub(crate) fn key_event(keystroke: &Keystroke) -> Option<Value> {
     let key = keystroke.key.as_str();
     let m = keystroke.modifiers;
     let named = NAMED.contains(&key);

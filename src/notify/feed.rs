@@ -12,7 +12,7 @@ use crate::store::ToastKind;
 /// and those of a newer server read as `Other`.
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(tag = "event", rename_all = "lowercase")]
-pub enum Event {
+pub(crate) enum Event {
     Notice(Notice),
     Clipboard {
         text: String,
@@ -37,7 +37,7 @@ fn one() -> u64 {
 
 /// An agent that needs you, failed or finished, as the window's toast says it.
 #[derive(Debug, Deserialize, PartialEq, Clone)]
-pub struct Notice {
+pub(crate) struct Notice {
     /// For `cornercase go TOKEN`.
     pub token: String,
     #[serde(default)]
@@ -56,7 +56,7 @@ pub struct Notice {
 }
 
 impl Notice {
-    pub fn toast_kind(&self) -> ToastKind {
+    pub(crate) fn toast_kind(&self) -> ToastKind {
         match self.status.as_deref() {
             Some("done") => ToastKind::Done,
             _ => ToastKind::NeedsYou,
@@ -64,7 +64,7 @@ impl Notice {
     }
 
     /// The desktop notification's title.
-    pub fn headline(&self) -> String {
+    pub(crate) fn headline(&self) -> String {
         let agent = self.agent.as_deref().unwrap_or("an agent");
         match self.status.as_deref() {
             Some("done") => format!("{agent} finished"),
@@ -74,7 +74,7 @@ impl Notice {
     }
 }
 
-pub fn parse_event(line: &str) -> Option<Event> {
+pub(super) fn parse_event(line: &str) -> Option<Event> {
     serde_json::from_str(line.trim()).ok()
 }
 
@@ -82,7 +82,7 @@ pub fn parse_event(line: &str) -> Option<Event> {
 
 /// The parts of `status --app` the status bar shows.
 #[derive(Debug, Default, Deserialize, PartialEq)]
-pub struct AppState {
+pub(crate) struct AppState {
     #[serde(default)]
     pub boot: Option<String>,
     #[serde(default)]
@@ -98,7 +98,7 @@ pub struct AppState {
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
-pub struct Away {
+pub(crate) struct Away {
     pub platform: String,
     #[serde(default)]
     pub ready: bool,
@@ -107,7 +107,7 @@ pub struct Away {
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq, Clone)]
-pub struct Update {
+pub(crate) struct Update {
     #[serde(default)]
     pub release: Option<Release>,
     #[serde(default)]
@@ -125,7 +125,7 @@ pub struct Update {
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq, Clone)]
-pub struct Release {
+pub(crate) struct Release {
     pub version: String,
     /// Every changelog section after the running version, newest first.
     #[serde(default)]
@@ -133,7 +133,7 @@ pub struct Release {
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq, Clone)]
-pub struct Notes {
+pub(crate) struct Notes {
     pub version: String,
     #[serde(default)]
     pub text: String,
@@ -142,7 +142,7 @@ pub struct Notes {
 /// How this cornercase updates: it replaces its own binary (`replace`), or a command to run
 /// (`command`, Homebrew and folders it cannot write).
 #[derive(Debug, Default, Deserialize, PartialEq, Clone)]
-pub struct Install {
+pub(crate) struct Install {
     #[serde(default)]
     pub method: String,
     #[serde(default)]
@@ -152,7 +152,7 @@ pub struct Install {
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
-pub struct KeepAwake {
+pub(crate) struct KeepAwake {
     #[serde(default)]
     pub held: bool,
     #[serde(default)]
@@ -162,28 +162,28 @@ pub struct KeepAwake {
 }
 
 impl AppState {
-    pub fn from_value(value: &Value) -> Self {
+    pub(crate) fn from_value(value: &Value) -> Self {
         serde_json::from_value(value.clone()).unwrap_or_default()
     }
 
     /// The release out there, when there is one and it is not installed yet.
-    pub fn release(&self) -> Option<&Release> {
+    pub(crate) fn release(&self) -> Option<&Release> {
         self.update.as_ref().and_then(|u| u.release.as_ref())
     }
 
     /// Whether a bot is paired, so away can be turned on.
-    pub fn away_ready(&self) -> bool {
+    pub(crate) fn away_ready(&self) -> bool {
         self.away.iter().any(|a| a.ready)
     }
 
     /// The platforms away is on for.
-    pub fn away_on(&self) -> Vec<&str> {
+    pub(crate) fn away_on(&self) -> Vec<&str> {
         self.away.iter().filter(|a| a.away).map(|a| a.platform.as_str()).collect()
     }
 }
 
 /// A platform's name as people write it.
-pub fn platform_name(platform: &str) -> String {
+pub(super) fn platform_name(platform: &str) -> String {
     match platform {
         "telegram" => "Telegram".into(),
         "discord" => "Discord".into(),
@@ -195,7 +195,7 @@ pub fn platform_name(platform: &str) -> String {
 
 /// How the user asked to be told (`config --json`'s settings).
 #[derive(Debug, PartialEq)]
-pub struct Prefs {
+pub(crate) struct Prefs {
     /// `desktop_notifications` is not `off`.
     pub desktop: bool,
     /// `sound_waiting`, `sound_done`: a file of the user's, empty for the built-in sound.
@@ -210,7 +210,7 @@ impl Default for Prefs {
 }
 
 impl Prefs {
-    pub fn from_config(config: &Value) -> Self {
+    pub(crate) fn from_config(config: &Value) -> Self {
         let mut prefs = Prefs::default();
         let Some(settings) = config.get("settings").and_then(Value::as_array) else { return prefs };
         for setting in settings {
@@ -227,7 +227,7 @@ impl Prefs {
 
     /// The file to play for a cue: the user's own when it is a readable file (absolute or `~/`,
     /// as cornercase accepts them), else a macOS system sound, one for each cue.
-    pub fn sound_file(&self, cue: &str, home: &str) -> String {
+    pub(crate) fn sound_file(&self, cue: &str, home: &str) -> String {
         let own = if cue == "finished" { &self.sound_done } else { &self.sound_waiting };
         let own = match own.strip_prefix("~/") {
             Some(rest) if !home.is_empty() => format!("{home}/{rest}"),
@@ -240,7 +240,7 @@ impl Prefs {
     }
 }
 
-pub fn system_sound(cue: &str) -> &'static str {
+pub(super) fn system_sound(cue: &str) -> &'static str {
     if cue == "finished" { "/System/Library/Sounds/Glass.aiff" } else { "/System/Library/Sounds/Ping.aiff" }
 }
 
@@ -250,13 +250,13 @@ mod tests {
 
     fn fixture(name: &str) -> Event {
         let text = match name {
-            "notice" => include_str!("../../tests/fixtures/events/notice.json"),
-            "notice-sound" => include_str!("../../tests/fixtures/events/notice-sound.json"),
-            "clipboard" => include_str!("../../tests/fixtures/events/clipboard.json"),
-            "bell" => include_str!("../../tests/fixtures/events/bell.json"),
-            "status" => include_str!("../../tests/fixtures/events/status.json"),
-            "dropped" => include_str!("../../tests/fixtures/events/dropped.json"),
-            "opened" => include_str!("../../tests/fixtures/events/opened-accounts.json"),
+            "notice" => crate::test_util::fixture!("events/notice.json"),
+            "notice-sound" => crate::test_util::fixture!("events/notice-sound.json"),
+            "clipboard" => crate::test_util::fixture!("events/clipboard.json"),
+            "bell" => crate::test_util::fixture!("events/bell.json"),
+            "status" => crate::test_util::fixture!("events/status.json"),
+            "dropped" => crate::test_util::fixture!("events/dropped.json"),
+            "opened" => crate::test_util::fixture!("events/opened-accounts.json"),
             _ => unreachable!(),
         };
         parse_event(text).expect("a fixture parses")
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn reads_the_app_state() {
         let value: Value =
-            serde_json::from_str(include_str!("../../tests/fixtures/app/snapshot.json")).expect("fixture");
+            serde_json::from_str(crate::test_util::fixture!("app/snapshot.json")).expect("fixture");
         let app = AppState::from_value(&value);
         assert_eq!(app.revision, 4);
         assert_eq!(app.boot.as_deref(), Some("4242-1760600000"));

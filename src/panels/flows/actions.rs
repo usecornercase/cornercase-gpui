@@ -230,7 +230,7 @@ impl FlowsPanel {
             let name = flow.name.clone();
             return row.child(ui::primary_button("flow-unhide", "Restore").on_click(cx.listener(
                 move |this, _: &ClickEvent, _, cx| {
-                    this.run_cmd(args(&["flow", "restore", &name]), &format!("Restored {name}"), cx)
+                    this.run_cmd(args(&["flow", "restore", &name]), &format!("Restored {name}"), cx);
                 },
             )));
         }
@@ -281,7 +281,7 @@ impl FlowsPanel {
                         args(&["flow", "restore", &n]),
                         window,
                         cx,
-                    )
+                    );
                 },
             )));
         }
@@ -303,7 +303,7 @@ impl FlowsPanel {
         };
         row = row.child(ui::danger_button("flow-delete", "Delete").on_click(cx.listener(
             move |this, _: &ClickEvent, window, cx| {
-                this.ask(&format!("Delete {name}?"), message.clone(), "Delete", command.clone(), window, cx)
+                this.ask(&format!("Delete {name}?"), message.clone(), "Delete", command.clone(), window, cx);
             },
         )));
         div().flex().flex_col().child(row).child(
@@ -334,7 +334,7 @@ impl Ask {
 }
 
 fn close(cx: &mut App) {
-    Store::get(cx).update(cx, |s, cx| s.close_dialog(cx));
+    Store::get(cx).update(cx, Store::close_dialog);
 }
 
 impl Render for Ask {

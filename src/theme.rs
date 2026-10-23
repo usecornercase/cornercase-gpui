@@ -6,10 +6,12 @@ use serde_json::json;
 
 use crate::model::{Colour, Colours, Style};
 
+pub(crate) const FONT_FAMILY: &str = "Menlo";
+
 /// Tokyo Night, the dark theme cornercase's own fixtures use.
-pub const FOREGROUND: [u8; 3] = [192, 202, 245];
-pub const BACKGROUND: [u8; 3] = [26, 27, 38];
-pub const ANSI: [[u8; 3]; 16] = [
+pub(crate) const FOREGROUND: [u8; 3] = [192, 202, 245];
+pub(crate) const BACKGROUND: [u8; 3] = [26, 27, 38];
+pub(crate) const ANSI: [[u8; 3]; 16] = [
     [21, 22, 30],
     [247, 118, 142],
     [158, 206, 106],
@@ -29,54 +31,54 @@ pub const ANSI: [[u8; 3]; 16] = [
 ];
 
 /// The chrome's colours.
-pub mod colours {
-    use super::*;
-    pub fn sidebar() -> Rgba {
+pub(crate) mod colours {
+    use super::{Rgba, rgb};
+    pub(crate) fn sidebar() -> Rgba {
         rgb(0x16161e)
     }
-    pub fn panel() -> Rgba {
+    pub(crate) fn panel() -> Rgba {
         rgb(0x1f2335)
     }
-    pub fn terminal() -> Rgba {
+    pub(crate) fn terminal() -> Rgba {
         rgb(0x1a1b26)
     }
-    pub fn border() -> Rgba {
+    pub(crate) fn border() -> Rgba {
         rgb(0x292e42)
     }
-    pub fn hover() -> Rgba {
+    pub(crate) fn hover() -> Rgba {
         rgb(0x292e42)
     }
-    pub fn selected() -> Rgba {
+    pub(crate) fn selected() -> Rgba {
         rgb(0x2f3549)
     }
-    pub fn text() -> Rgba {
+    pub(crate) fn text() -> Rgba {
         rgb(0xc0caf5)
     }
-    pub fn muted() -> Rgba {
+    pub(crate) fn muted() -> Rgba {
         rgb(0x737aa2)
     }
-    pub fn faint() -> Rgba {
+    pub(crate) fn faint() -> Rgba {
         rgb(0x565f89)
     }
-    pub fn accent() -> Rgba {
+    pub(crate) fn accent() -> Rgba {
         rgb(0x7aa2f7)
     }
-    pub fn working() -> Rgba {
+    pub(crate) fn working() -> Rgba {
         rgb(0xe0af68)
     }
-    pub fn waiting() -> Rgba {
+    pub(crate) fn waiting() -> Rgba {
         rgb(0xff9e64)
     }
-    pub fn done() -> Rgba {
+    pub(crate) fn done() -> Rgba {
         rgb(0x9ece6a)
     }
-    pub fn failed() -> Rgba {
+    pub(crate) fn failed() -> Rgba {
         rgb(0xf7768e)
     }
 }
 
 /// The icon and colour of an agent's state, as the TUI's sidebar shows them.
-pub fn status_badge(status: Option<&str>) -> Option<(&'static str, Rgba)> {
+pub(crate) fn status_badge(status: Option<&str>) -> Option<(&'static str, Rgba)> {
     match status? {
         "working" => Some(("◐", colours::working())),
         "waiting" => Some(("!", colours::waiting())),
@@ -89,7 +91,7 @@ pub fn status_badge(status: Option<&str>) -> Option<(&'static str, Rgba)> {
 }
 
 /// The xterm 256-colour palette entry for an index, from the 16 ANSI colours above.
-pub fn palette(index: u8) -> [u8; 3] {
+pub(crate) fn palette(index: u8) -> [u8; 3] {
     match index {
         0..=15 => ANSI[index as usize],
         16..=231 => {
@@ -105,26 +107,26 @@ pub fn palette(index: u8) -> [u8; 3] {
 }
 
 /// What `cornercase theme -` reads.
-pub fn theme_json() -> String {
+pub(crate) fn theme_json() -> String {
     let palette: Vec<[u8; 3]> = (0..=255u8).map(palette).collect();
     json!({ "foreground": FOREGROUND, "background": BACKGROUND, "palette": palette }).to_string()
 }
 
-pub fn hsla([r, g, b]: [u8; 3]) -> Hsla {
+pub(crate) fn hsla([r, g, b]: [u8; 3]) -> Hsla {
     Rgba { r: f32::from(r) / 255., g: f32::from(g) / 255., b: f32::from(b) / 255., a: 1. }.into()
 }
 
 /// Resolves colours the way a pane's program left them: its own overrides first.
-pub struct Painter<'a> {
+pub(crate) struct Painter<'a> {
     pub colours: &'a Colours,
 }
 
 impl Painter<'_> {
-    pub fn default_fg(&self) -> [u8; 3] {
+    pub(crate) fn default_fg(&self) -> [u8; 3] {
         self.colours.fg.unwrap_or(FOREGROUND)
     }
 
-    pub fn default_bg(&self) -> [u8; 3] {
+    pub(crate) fn default_bg(&self) -> [u8; 3] {
         self.colours.bg.unwrap_or(BACKGROUND)
     }
 
@@ -137,7 +139,7 @@ impl Painter<'_> {
 
     /// The foreground and background a cell of this style is drawn with, and whether its
     /// background differs from the pane's.
-    pub fn resolve(&self, style: &Style) -> (Hsla, Hsla, bool) {
+    pub(crate) fn resolve(&self, style: &Style) -> (Hsla, Hsla, bool) {
         let mut fg = style.fg.map_or(self.default_fg(), |c| self.colour(c));
         let mut bg = style.bg.map_or(self.default_bg(), |c| self.colour(c));
         let mut custom_bg = style.bg.is_some();
@@ -155,11 +157,11 @@ impl Painter<'_> {
         (fg, hsla(bg), custom_bg)
     }
 
-    pub fn underline_colour(&self, style: &Style) -> Option<Hsla> {
+    pub(crate) fn underline_colour(&self, style: &Style) -> Option<Hsla> {
         style.underline_colour.map(|c| hsla(self.colour(c)))
     }
 
-    pub fn cursor(&self) -> Hsla {
+    pub(crate) fn cursor(&self) -> Hsla {
         hsla(self.colours.cursor.unwrap_or(self.default_fg()))
     }
 }

@@ -23,7 +23,7 @@ use crate::ui::{self, TextField, TextFieldEvent};
 /// How many lines of a plugin's log the sheet shows.
 const LOG_LINES: &str = "60";
 
-pub struct PluginsPanel {
+pub(crate) struct PluginsPanel {
     plugins: Option<Vec<Plugin>>,
     /// Why `plugin list` failed, if it did.
     error: Option<String>,
@@ -38,8 +38,9 @@ pub struct PluginsPanel {
 }
 
 impl PluginsPanel {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let source = cx.new(|cx| TextField::new("owner/repo[/folder][@ref], an https:// git address or a git folder", cx));
+    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let source =
+            cx.new(|cx| TextField::new("owner/repo[/folder][@ref], an https:// git address or a git folder", cx));
         cx.subscribe_in(&source, window, |this, _, event, _, cx| match event {
             TextFieldEvent::Submit => this.install(cx),
             TextFieldEvent::Changed | TextFieldEvent::Cancel => cx.notify(),
@@ -119,7 +120,8 @@ impl PluginsPanel {
         // Turning one on is the explicit step: say plainly what that means first.
         let asks = plugin.manifest.as_ref().map(Manifest::asks).unwrap_or_default();
         let runs = plugin.manifest.as_ref().map(Manifest::runs).unwrap_or_default();
-        let mut message = format!("{} runs as you and can do anything you can, including typing into every terminal.", plugin.name());
+        let mut message =
+            format!("{} runs as you and can do anything you can, including typing into every terminal.", plugin.name());
         message.push_str(&format!(" It {asks}; that is shown, not enforced."));
         if !runs.is_empty() {
             message.push_str(&format!(" It runs {}.", runs.join(", ")));
@@ -178,7 +180,7 @@ impl PluginsPanel {
         if source.is_empty() {
             return;
         }
-        self.source.update(cx, |f, cx| f.clear(cx));
+        self.source.update(cx, TextField::clear);
         in_a_tab(&["plugin", "install", &source], "install plugin", cx);
     }
 
@@ -198,16 +200,17 @@ impl PluginsPanel {
 
     fn read_log(&mut self, id: String, cx: &mut Context<Self>) {
         store::run(cx, args(&["plugin", "logs", &id, "-n", LOG_LINES]), move |this, result, cx| {
-            if this.logs.contains_key(&id) {
+            if let std::collections::hash_map::Entry::Occupied(mut e) = this.logs.entry(id) {
                 let text = result.unwrap_or_else(|e| e.to_string());
-                this.logs.insert(id, if text.trim().is_empty() { "nothing yet".into() } else { text });
+                e.insert(if text.trim().is_empty() { "nothing yet".into() } else { text });
                 cx.notify();
             }
         });
     }
 
     fn run_action(&mut self, action: &Action, cx: &mut Context<Self>) {
-        let shown = Store::get(cx).read(cx).session.as_ref().map(|s| s.shown()).unwrap_or_default();
+        let shown =
+            Store::get(cx).read(cx).session.as_ref().map(super::super::model::Session::shown).unwrap_or_default();
         let Some(target) = target(&action.contexts, shown) else { return };
         let key = format!("{}/{}", action.plugin, action.action);
         let mut command = args(&["plugin", "run", &action.plugin, &action.action, "--json"]);
@@ -306,7 +309,7 @@ impl PluginsPanel {
                             let key = format!("{}/{}", action.plugin, action.action);
                             let running = self.busy.contains(&key);
                             let popup = action.placement == "popup";
-                            let shown = Store::get(cx).read(cx).session.as_ref().map(|s| s.shown()).unwrap_or_default();
+                            let shown = Store::get(cx).read(cx).session.as_ref().map(super::super::model::Session::shown).unwrap_or_default();
                             let runnable = !popup && !running && target(&action.contexts, shown).is_some();
                             let label = if running { format!("{} …", action.title) } else { format!("▶ {}", action.title) };
                             ui::button(SharedString::from(format!("action-{key}")), label)
@@ -423,14 +426,15 @@ impl Render for PluginsPanel {
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut App) -> AnyView {
     cx.new(|cx| PluginsPanel::new(window, cx)).into()
 }
 
 /// Runs `cornercase WORDS…` in a new tab of the shown workspace, where it can show what it does
 /// and ask, and closes the sheet so the tab shows.
 fn in_a_tab(words: &[&str], name: &str, cx: &mut App) {
-    let line = std::iter::once("cornercase").chain(words.iter().copied()).map(shell_quote).collect::<Vec<_>>().join(" ");
+    let line =
+        std::iter::once("cornercase").chain(words.iter().copied()).map(shell_quote).collect::<Vec<_>>().join(" ");
     Store::get(cx).update(cx, |s, cx| {
         s.act(args(&["new-tab", "--focus", "--name", name, "--", &line]));
         s.close_sheet(cx);
@@ -482,7 +486,14 @@ fn ask(
     cx: &mut App,
     on_yes: impl Fn(&mut App) + 'static,
 ) {
-    let view = cx.new(|cx| Ask { title, message, button: button.into(), danger, on_yes: Box::new(on_yes), focus: cx.focus_handle() });
+    let view = cx.new(|cx| Ask {
+        title,
+        message,
+        button: button.into(),
+        danger,
+        on_yes: Box::new(on_yes),
+        focus: cx.focus_handle(),
+    });
     let focus = view.read(cx).focus.clone();
     Store::get(cx).update(cx, |s, cx| s.show_dialog(view.into(), cx));
     window.focus(&focus);
@@ -490,20 +501,24 @@ fn ask(
 
 impl Ask {
     fn yes(&mut self, cx: &mut Context<Self>) {
-        Store::get(cx).update(cx, |s, cx| s.close_dialog(cx));
+        Store::get(cx).update(cx, Store::close_dialog);
         (self.on_yes)(cx);
     }
 }
 
 impl Render for Ask {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let close = |_: &ClickEvent, _: &mut Window, cx: &mut App| Store::get(cx).update(cx, |s, cx| s.close_dialog(cx));
-        let button = if self.danger { ui::danger_button("yes", self.button.clone()) } else { ui::primary_button("yes", self.button.clone()) };
+        let close = |_: &ClickEvent, _: &mut Window, cx: &mut App| Store::get(cx).update(cx, Store::close_dialog);
+        let button = if self.danger {
+            ui::danger_button("yes", self.button.clone())
+        } else {
+            ui::primary_button("yes", self.button.clone())
+        };
         div()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| match e.keystroke.key.as_str() {
                 "enter" => this.yes(cx),
-                "escape" => Store::get(cx).update(cx, |s, cx| s.close_dialog(cx)),
+                "escape" => Store::get(cx).update(cx, Store::close_dialog),
                 _ => {}
             }))
             .child(dialogs::frame(
@@ -599,7 +614,11 @@ struct Manifest {
 impl Manifest {
     /// What it asks for, as `plugin list` says it.
     fn asks(&self) -> String {
-        if self.permissions.is_empty() { "asks for nothing".into() } else { format!("asks for {}", self.permissions.join(", ")) }
+        if self.permissions.is_empty() {
+            "asks for nothing".into()
+        } else {
+            format!("asks for {}", self.permissions.join(", "))
+        }
     }
 
     /// What it runs: `2 actions`, `1 hook`, `1 service`, `1 window process`.
@@ -702,7 +721,8 @@ mod tests {
         .unwrap();
         assert_eq!(actions.revision, 2);
         assert_eq!(actions.actions[0].placement, "popup");
-        let ok: Ran = serde_json::from_str(r#"{"plugin": "p", "error": null, "ms": 380, "ended": "exited", "code": 0}"#).unwrap();
+        let ok: Ran =
+            serde_json::from_str(r#"{"plugin": "p", "error": null, "ms": 380, "ended": "exited", "code": 0}"#).unwrap();
         let (text, kind) = ok.say("say hello");
         assert_eq!(text, "say hello: done in 380 ms");
         assert!(kind == ToastKind::Info);

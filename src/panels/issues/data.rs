@@ -12,7 +12,7 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum SourceState {
+pub(super) enum SourceState {
     Connected,
     Missing,
     Failing,
@@ -24,7 +24,7 @@ pub enum SourceState {
 /// A filter on people: `me`, `anyone` or someone from `issue people`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Who {
+pub(super) enum Who {
     #[default]
     Anyone,
     Me,
@@ -37,7 +37,7 @@ pub enum Who {
 
 impl Who {
     /// What `--assignee` / `--author` take: the id for trackers that have one, else the handle.
-    pub fn arg(&self) -> String {
+    pub(super) fn arg(&self) -> String {
         match self {
             Self::Anyone => "anyone".into(),
             Self::Me => "me".into(),
@@ -45,7 +45,7 @@ impl Who {
         }
     }
 
-    pub fn label(&self) -> String {
+    pub(super) fn label(&self) -> String {
         match self {
             Self::Anyone => "anyone".into(),
             Self::Me => "me".into(),
@@ -54,14 +54,14 @@ impl Who {
     }
 
     /// Whether the filter names one tracker's person (and so needs `--source`).
-    pub fn is_person(&self) -> bool {
+    pub(super) fn is_person(&self) -> bool {
         matches!(self, Self::Person { .. })
     }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct SourceInfo {
+pub(super) struct SourceInfo {
     pub source: String,
     pub name: String,
     /// Shown as a tab (settings → Issues → sources shown).
@@ -81,12 +81,12 @@ pub struct SourceInfo {
 }
 
 impl SourceInfo {
-    pub fn connected(&self) -> bool {
+    pub(super) fn connected(&self) -> bool {
         matches!(self.state, SourceState::Connected | SourceState::Failing)
     }
 
     /// Where the connection comes from and as whom: "as @me, through gh".
-    pub fn account_line(&self) -> String {
+    pub(super) fn account_line(&self) -> String {
         let mut parts = Vec::new();
         if let Some(account) = self.account.as_deref().filter(|a| !a.is_empty()) {
             parts.push(format!("as {account}"));
@@ -102,7 +102,7 @@ impl SourceInfo {
     }
 
     /// What it lacks, in words: "needs a token", "needs a site, an email and a token".
-    pub fn missing_line(&self) -> String {
+    pub(super) fn missing_line(&self) -> String {
         if self.missing.iter().any(|m| m == "repository") {
             return format!("this project's folder is not a {} repository", self.name);
         }
@@ -122,7 +122,7 @@ impl SourceInfo {
     }
 
     /// How to connect it from a shell, for the empty state.
-    pub fn connect_hint(&self) -> String {
+    pub(super) fn connect_hint(&self) -> String {
         match self.source.as_str() {
             "github" => "gh auth login".into(),
             "jira" => "cornercase config set jira_site … jira_email …, then config secret jira".into(),
@@ -136,7 +136,7 @@ impl SourceInfo {
 /// worktree (`worktree`) or a new tab in a workspace.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Place {
+pub(super) struct Place {
     pub project: u64,
     pub workspace: Option<u64>,
     pub label: String,
@@ -146,7 +146,7 @@ pub struct Place {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Sources {
+pub(super) struct Sources {
     pub project: u64,
     pub closed: bool,
     pub sources: Vec<SourceInfo>,
@@ -154,21 +154,21 @@ pub struct Sources {
 }
 
 impl Sources {
-    pub fn get(&self, source: &str) -> Option<&SourceInfo> {
+    pub(super) fn get(&self, source: &str) -> Option<&SourceInfo> {
         self.sources.iter().find(|s| s.source == source)
     }
 
     /// The tabs, in settings' order: the shown sources.
-    pub fn tabs(&self) -> Vec<&SourceInfo> {
+    pub(super) fn tabs(&self) -> Vec<&SourceInfo> {
         self.sources.iter().filter(|s| s.tab).collect()
     }
 
-    pub fn any_connected(&self) -> bool {
+    pub(super) fn any_connected(&self) -> bool {
         self.sources.iter().any(SourceInfo::connected)
     }
 
     /// The place of the project asked: a repository root makes a worktree there.
-    pub fn project_place(&self) -> Option<&Place> {
+    pub(super) fn project_place(&self) -> Option<&Place> {
         self.places.iter().find(|p| p.project == self.project && p.workspace.is_none())
     }
 }
@@ -178,7 +178,7 @@ impl Sources {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Issue {
+pub(super) struct Issue {
     pub source: String,
     pub key: String,
     pub number: u64,
@@ -196,7 +196,7 @@ pub struct Issue {
 
 impl Issue {
     /// Whether every word of `query` is in its key, title, labels or people (any case).
-    pub fn matches(&self, query: &str) -> bool {
+    pub(super) fn matches(&self, query: &str) -> bool {
         let hay = format!(
             "{} {} {} {} {} {}",
             self.key,
@@ -211,7 +211,7 @@ impl Issue {
     }
 
     /// The detail's info line without what the chips already show: the state and the labels.
-    pub fn info_extras(&self, info: &[String]) -> Vec<String> {
+    pub(super) fn info_extras(&self, info: &[String]) -> Vec<String> {
         let labels = self.labels.join(", ");
         info.iter()
             .filter(|i| !i.eq_ignore_ascii_case(&self.state) && **i != labels && !self.labels.contains(i))
@@ -220,14 +220,14 @@ impl Issue {
     }
 
     /// What identifies it across tabs.
-    pub fn id(&self) -> (String, String) {
+    pub(super) fn id(&self) -> (String, String) {
         (self.source.clone(), self.key.clone())
     }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Listed {
+pub(super) struct Listed {
     pub source: String,
     pub count: usize,
     pub cached: bool,
@@ -237,18 +237,18 @@ pub struct Listed {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Lists {
+pub(super) struct Lists {
     pub project: u64,
     pub issues: Vec<Issue>,
     pub sources: Vec<Listed>,
 }
 
 /// Trackers answer at most this many issues per list, and offer no further pages.
-pub const LIST_CAP: usize = 100;
+pub(super) const LIST_CAP: usize = 100;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct Comment {
+pub(super) struct Comment {
     pub author: String,
     pub created_at: String,
     pub body: String,
@@ -256,7 +256,7 @@ pub struct Comment {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct ReadIssue {
+pub(super) struct ReadIssue {
     pub issue: Issue,
     /// The detail's info line: state, labels, who it is assigned to, the section…
     pub info: Vec<String>,
@@ -268,18 +268,18 @@ pub struct ReadIssue {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
-pub struct Person {
+pub(super) struct Person {
     pub handle: String,
     pub name: String,
     pub id: Option<String>,
 }
 
 impl Person {
-    pub fn who(&self) -> Who {
+    pub(super) fn who(&self) -> Who {
         Who::Person { handle: self.handle.clone(), id: self.id.clone() }
     }
 
-    pub fn label(&self) -> String {
+    pub(super) fn label(&self) -> String {
         match (self.name.trim(), self.handle.trim()) {
             ("", handle) => handle.to_string(),
             (name, handle) if name == handle || handle.is_empty() => name.to_string(),
@@ -290,7 +290,7 @@ impl Person {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub struct People {
+pub(super) struct People {
     pub source: String,
     pub fields: [String; 2],
     pub cached: bool,
@@ -299,7 +299,7 @@ pub struct People {
 
 /// Reads a command's JSON answer. `issue list` prints its JSON and exits 1 when a tracker
 /// failed, so the caller hands us standard output whatever the exit status was.
-pub fn parse<T: for<'de> Deserialize<'de>>(out: &str) -> Option<T> {
+pub(super) fn parse<T: for<'de> Deserialize<'de>>(out: &str) -> Option<T> {
     serde_json::from_str(out.trim()).ok()
 }
 
@@ -308,7 +308,7 @@ pub fn parse<T: for<'de> Deserialize<'de>>(out: &str) -> Option<T> {
 
 /// Seconds since the epoch of an RFC 3339-ish time: `2026-10-22T20:13:09Z`, with fractions, or
 /// with an offset (`+02:00`, Jira's `+0200`). A bare date is midnight UTC.
-pub fn parse_time(text: &str) -> Option<i64> {
+pub(super) fn parse_time(text: &str) -> Option<i64> {
     let text = text.trim();
     let num = |s: &str| s.parse::<i64>().ok();
     let date = text.get(..10)?;
@@ -349,16 +349,13 @@ fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     era * 146_097 + doe - 719_468
 }
 
-pub fn now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or_default()
+pub(super) fn now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or_default()
 }
 
 /// "just now", "5m ago", "3h ago", "4d ago", "2mo ago", "1y ago"; the text itself when it is not
 /// a time.
-pub fn ago(text: &str, now: i64) -> String {
+pub(super) fn ago(text: &str, now: i64) -> String {
     let Some(at) = parse_time(text) else { return text.to_string() };
     let secs = (now - at).max(0);
     match secs {
@@ -372,7 +369,7 @@ pub fn ago(text: &str, now: i64) -> String {
 }
 
 /// Newest first, as the All tab orders a merged list; times that do not parse go last.
-pub fn sort_newest_first(issues: &mut [Issue]) {
+pub(super) fn sort_newest_first(issues: &mut [Issue]) {
     issues.sort_by_key(|i| std::cmp::Reverse(parse_time(&i.updated_at).unwrap_or(i64::MIN)));
 }
 
@@ -380,7 +377,7 @@ pub fn sort_newest_first(issues: &mut [Issue]) {
 // Agents, from `config --json`
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Choice {
+pub(super) struct Choice {
     pub value: String,
     pub note: String,
     pub dangerous: bool,
@@ -388,7 +385,7 @@ pub struct Choice {
 
 /// The agents `start` can run, settings' default, and each agent's modes with its chosen one.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Agents {
+pub(super) struct Agents {
     /// Settings → Agents → default agent; `auto` is "the agent in your tab, otherwise ask".
     pub default: String,
     pub agents: Vec<Choice>,
@@ -397,10 +394,10 @@ pub struct Agents {
 }
 
 /// The agents that take `--effort`, per `start --help`.
-pub const EFFORT_AGENTS: [&str; 4] = ["claude", "codex", "grok", "copilot"];
+pub(super) const EFFORT_AGENTS: [&str; 4] = ["claude", "codex", "grok", "copilot"];
 
 impl Agents {
-    pub fn from_config(config: &Value) -> Self {
+    pub(super) fn from_config(config: &Value) -> Self {
         let mut agents = Agents::default();
         let Some(settings) = config.get("settings").and_then(Value::as_array) else { return agents };
         let choices = |s: &Value| -> Vec<Choice> {
@@ -432,11 +429,11 @@ impl Agents {
     }
 
     /// The agent the form starts with: settings' default, else the first one.
-    pub fn initial(&self) -> String {
+    pub(super) fn initial(&self) -> String {
         if self.agents.iter().any(|a| a.value == self.default) {
             return self.default.clone();
         }
-        self.agents.first().map(|a| a.value.clone()).unwrap_or_else(|| "claude".into())
+        self.agents.first().map_or_else(|| "claude".into(), |a| a.value.clone())
     }
 }
 
@@ -445,7 +442,7 @@ impl Agents {
 
 /// When a scheduled start happens, as the TUI's schedule form asks it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum When {
+pub(super) enum When {
     At,
     Tomorrow,
     On,
@@ -455,9 +452,10 @@ pub enum When {
 }
 
 impl When {
-    pub const ALL: [When; 6] = [Self::At, Self::Tomorrow, Self::On, Self::In, Self::ClaudeReset, Self::CodexReset];
+    pub(super) const ALL: [When; 6] =
+        [Self::At, Self::Tomorrow, Self::On, Self::In, Self::ClaudeReset, Self::CodexReset];
 
-    pub fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         match self {
             Self::At => "at",
             Self::Tomorrow => "tomorrow at",
@@ -469,7 +467,7 @@ impl When {
     }
 
     /// The example its value field shows; `None` when it takes no value.
-    pub fn placeholder(self) -> Option<&'static str> {
+    pub(super) fn placeholder(self) -> Option<&'static str> {
         match self {
             Self::At => Some("14:30"),
             Self::Tomorrow => Some("9:00"),
@@ -480,7 +478,7 @@ impl When {
     }
 
     /// What `queue add --at` takes; `None` while a value it needs is empty.
-    pub fn at(self, value: &str) -> Option<String> {
+    pub(super) fn at(self, value: &str) -> Option<String> {
         let value = value.trim();
         let needs = |text: String| if value.is_empty() { None } else { Some(text) };
         match self {
@@ -495,7 +493,7 @@ impl When {
 
 /// What the start form decided.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct StartPlan {
+pub(super) struct StartPlan {
     pub issue: Issue,
     pub agent: String,
     /// Only when it differs from the agent's chosen mode.
@@ -512,7 +510,7 @@ impl StartPlan {
     /// `cornercase start AGENT --issue KEY --source S --project P|--workspace W …  --json`.
     /// No `--view`: with it the CLI's feature check for `--issue` fails (#461); the pane it
     /// prints is focused in our view afterwards.
-    pub fn start_args(&self) -> Vec<String> {
+    pub(super) fn start_args(&self) -> Vec<String> {
         let mut a = vec!["start".to_string(), self.agent.clone(), "--issue".into(), self.issue.key.clone()];
         a.extend(["--source".into(), self.issue.source.clone()]);
         self.place_args(&mut a);
@@ -534,7 +532,7 @@ impl StartPlan {
     /// `cornercase queue add --at AT --issue KEY --source S --agent A …`. The queue takes no
     /// model or effort, and names a worktree's branch itself only when told: a worktree place
     /// gets the issue's branch (or the one typed).
-    pub fn queue_args(&self, at: &str) -> Vec<String> {
+    pub(super) fn queue_args(&self, at: &str) -> Vec<String> {
         let mut a = vec!["queue".to_string(), "add".into(), "--at".into(), at.to_string()];
         a.extend(["--issue".into(), self.issue.key.clone(), "--source".into(), self.issue.source.clone()]);
         a.extend(["--agent".into(), self.agent.clone()]);
@@ -564,13 +562,9 @@ impl StartPlan {
 }
 
 /// The pane `start --json` answered with.
-pub fn started_pane(out: &str) -> Option<u64> {
+pub(super) fn started_pane(out: &str) -> Option<u64> {
     let value: Value = serde_json::from_str(out.trim()).ok()?;
-    value
-        .pointer("/ids/pane")
-        .or_else(|| value.get("pane"))
-        .and_then(Value::as_u64)
-        .or_else(|| value.as_u64())
+    value.pointer("/ids/pane").or_else(|| value.get("pane")).and_then(Value::as_u64).or_else(|| value.as_u64())
 }
 
 #[cfg(test)]

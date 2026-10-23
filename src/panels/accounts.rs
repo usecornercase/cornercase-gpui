@@ -35,7 +35,7 @@ enum Pending {
     Delete(String),
 }
 
-pub struct AccountsPanel {
+pub(crate) struct AccountsPanel {
     info: Option<AccountsInfo>,
     load_error: Option<String>,
     /// Why the last change was refused.
@@ -56,7 +56,7 @@ pub struct AccountsPanel {
 }
 
 impl AccountsPanel {
-    pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         cx.observe(&store, |this, store, cx| {
             let open = store.read(cx).sheet == Some(PanelKind::Accounts);
@@ -79,7 +79,7 @@ impl AccountsPanel {
         let profile_field = cx.new(|cx| TextField::new("a new profile, such as Work", cx));
         cx.subscribe(&profile_field, |this, field, event: &TextFieldEvent, cx| match event {
             TextFieldEvent::Submit => this.new_profile(cx),
-            TextFieldEvent::Cancel => field.update(cx, |f, cx| f.clear(cx)),
+            TextFieldEvent::Cancel => field.update(cx, TextField::clear),
             TextFieldEvent::Changed => cx.notify(),
         })
         .detach();
@@ -147,7 +147,7 @@ impl AccountsPanel {
                 let agent = provider.provider.clone();
                 cx.subscribe(&field, move |this, field, event: &TextFieldEvent, cx| match event {
                     TextFieldEvent::Submit => this.add(agent.clone(), cx),
-                    TextFieldEvent::Cancel => field.update(cx, |f, cx| f.clear(cx)),
+                    TextFieldEvent::Cancel => field.update(cx, TextField::clear),
                     TextFieldEvent::Changed => cx.notify(),
                 })
                 .detach();
@@ -194,7 +194,8 @@ impl AccountsPanel {
             return;
         }
         if !data::valid_name(&name) {
-            self.error = Some(format!("`{name}`: an account's name takes letters, digits, `.`, `_` and `-`, at most 32"));
+            self.error =
+                Some(format!("`{name}`: an account's name takes letters, digits, `.`, `_` and `-`, at most 32"));
             cx.notify();
             return;
         }
@@ -202,7 +203,7 @@ impl AccountsPanel {
         let workspace = Store::get(cx).read(cx).session.as_ref().and_then(|s| s.shown().workspace);
         let login = if self.no_login.contains(&provider) { None } else { workspace };
         self.change(data::add_args(&provider, &name, login), cx, move |_, answer, cx| {
-            field.update(cx, |f, cx| f.clear(cx));
+            field.update(cx, TextField::clear);
             if let Some(tab) = answer.and_then(|info| info.login).and_then(|ids| ids.tab) {
                 Store::get(cx).update(cx, |s, cx| {
                     s.focus("tab", tab);
@@ -242,7 +243,7 @@ impl AccountsPanel {
             return;
         }
         let field = self.profile_field.clone();
-        self.change(data::profile_new_args(&name), cx, move |_, _, cx| field.update(cx, |f, cx| f.clear(cx)));
+        self.change(data::profile_new_args(&name), cx, move |_, _, cx| field.update(cx, TextField::clear));
     }
 
     fn ask(&mut self, pending: Pending, cx: &mut Context<Self>) {
@@ -327,10 +328,11 @@ impl AccountsPanel {
             )
             .child(div().pl(px(20.)).flex().gap(px(8.)).children(details))
             .children(account.filter(|a| !a.unshared.is_empty()).map(|a| {
-                div().pl(px(20.)).text_size(px(11.5)).text_color(colours::waiting()).child(format!(
-                    "not shared any more (now a file of its own): {}",
-                    a.unshared.join(", ")
-                ))
+                div()
+                    .pl(px(20.))
+                    .text_size(px(11.5))
+                    .text_color(colours::waiting())
+                    .child(format!("not shared any more (now a file of its own): {}", a.unshared.join(", ")))
             }));
 
         let mut buttons = div().flex().gap(px(6.));
@@ -359,22 +361,23 @@ impl AccountsPanel {
         }
 
         let renaming = self.rename == Some(Rename::Account(agent.clone(), folder.clone()));
-        let confirm = (self.pending == Some(Pending::Remove(agent.clone(), folder.clone()))).then(|| {
-            let (agent, folder) = (agent.clone(), folder.clone());
-            widgets::confirm(
-                format!(
-                    "Remove {name} and delete its folder? Panes and profiles that use it go back to the own login. \
+        let confirm =
+            (self.pending == Some(Pending::Remove(agent.clone(), folder.clone()))).then(|| {
+                let (agent, folder) = (agent.clone(), folder.clone());
+                widgets::confirm(
+                    format!(
+                        "Remove {name} and delete its folder? Panes and profiles that use it go back to the own login. \
                      The keychain item stays: to log out first, run the agent's logout in a tab of this account."
-                ),
-                ui::button("pending-cancel", "Cancel").on_click(cx.listener(|this, _, _, cx| {
-                    this.pending = None;
-                    cx.notify();
-                })),
-                ui::danger_button("pending-go", "Remove").on_click(
-                    cx.listener(move |this, _, _, cx| this.change(data::remove_args(&agent, &folder), cx, |_, _, _| {})),
-                ),
-            )
-        });
+                    ),
+                    ui::button("pending-cancel", "Cancel").on_click(cx.listener(|this, _, _, cx| {
+                        this.pending = None;
+                        cx.notify();
+                    })),
+                    ui::danger_button("pending-go", "Remove").on_click(cx.listener(move |this, _, _, cx| {
+                        this.change(data::remove_args(&agent, &folder), cx, |_, _, _| {})
+                    })),
+                )
+            });
         div()
             .flex()
             .flex_col()
@@ -397,7 +400,10 @@ impl AccountsPanel {
                 this.rename = None;
                 cx.notify();
             })))
-            .child(ui::primary_button("rename-save", "Save").on_click(cx.listener(|this, _, _, cx| this.submit_rename(cx))))
+            .child(
+                ui::primary_button("rename-save", "Save")
+                    .on_click(cx.listener(|this, _, _, cx| this.submit_rename(cx))),
+            )
     }
 
     fn render_add(&self, provider: &Provider, window: &Window, cx: &mut Context<Self>) -> AnyElement {
@@ -435,19 +441,25 @@ impl AccountsPanel {
         .into_any_element()
     }
 
-    fn render_profiles(&self, info: &AccountsInfo, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_profiles(
+        &self,
+        info: &AccountsInfo,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let mut card = widgets::card();
         // No profile: each agent uses its default account.
         let none_active = info.profile.is_empty();
-        card = card.child(widgets::row(
-            true,
-            profile_label("No profile", none_active, "each agent starts with its default account, above"),
-            div().when(!none_active && !self.busy, |d| {
-                d.child(ui::button("profile-use-none", "Use").on_click(
-                    cx.listener(|this, _, _, cx| this.change(data::profile_use_args(""), cx, |_, _, _| {})),
-                ))
-            }),
-        ));
+        card =
+            card.child(widgets::row(
+                true,
+                profile_label("No profile", none_active, "each agent starts with its default account, above"),
+                div().when(!none_active && !self.busy, |d| {
+                    d.child(ui::button("profile-use-none", "Use").on_click(
+                        cx.listener(|this, _, _, cx| this.change(data::profile_use_args(""), cx, |_, _, _| {})),
+                    ))
+                }),
+            ));
         for profile in &info.profiles {
             card = card.child(self.render_profile(profile, &info.providers, window, cx));
         }
@@ -457,7 +469,7 @@ impl AccountsPanel {
             ui::input_box(self.profile_field.clone(), focused).w(px(240.)).overflow_hidden(),
             ui::primary_button("profile-new", "Make profile").on_click(cx.listener(|this, _, _, cx| {
                 if !this.busy {
-                    this.new_profile(cx)
+                    this.new_profile(cx);
                 }
             })),
         ));
@@ -475,21 +487,28 @@ impl AccountsPanel {
             .child(card)
     }
 
-    fn render_profile(&self, profile: &Profile, providers: &[Provider], window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    fn render_profile(
+        &self,
+        profile: &Profile,
+        providers: &[Provider],
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let name = profile.name.clone();
         let mut buttons = div().flex().gap(px(6.));
         if !self.busy {
             if !profile.active {
                 let n = name.clone();
-                buttons = buttons.child(
-                    ui::button(SharedString::from(format!("profile-use-{name}")), "Use")
-                        .on_click(cx.listener(move |this, _, _, cx| this.change(data::profile_use_args(&n), cx, |_, _, _| {}))),
-                );
+                buttons = buttons.child(ui::button(SharedString::from(format!("profile-use-{name}")), "Use").on_click(
+                    cx.listener(move |this, _, _, cx| this.change(data::profile_use_args(&n), cx, |_, _, _| {})),
+                ));
             }
             let n = name.clone();
-            buttons = buttons.child(ui::button(SharedString::from(format!("profile-rename-{name}")), "Rename").on_click(
-                cx.listener(move |this, _, window, cx| this.start_rename(Rename::Profile(n.clone()), n.clone(), window, cx)),
-            ));
+            buttons = buttons.child(
+                ui::button(SharedString::from(format!("profile-rename-{name}")), "Rename").on_click(cx.listener(
+                    move |this, _, window, cx| this.start_rename(Rename::Profile(n.clone()), n.clone(), window, cx),
+                )),
+            );
             let n = name.clone();
             buttons = buttons.child(
                 ui::button(SharedString::from(format!("profile-delete-{name}")), "Delete")
@@ -498,31 +517,36 @@ impl AccountsPanel {
         }
         // One row of choices per agent: its own login or one of its accounts.
         let rename = (self.rename == Some(Rename::Profile(name.clone()))).then(|| self.render_rename(window, cx));
-        let choices: Vec<_> = data::profile_accounts(profile, providers).into_iter().map(|(provider, chosen)| {
-            let options = std::iter::once(String::new()).chain(provider.accounts.iter().map(|a| a.name.clone()));
-            let items = options
-                .map(|folder| {
-                    let (n, agent) = (name.clone(), provider.provider.clone());
-                    ui::segment(
-                        SharedString::from(format!("profile-{name}-{agent}-{folder}")),
-                        provider.name_of(&folder).to_string(),
-                        folder == chosen,
+        let choices: Vec<_> = data::profile_accounts(profile, providers)
+            .into_iter()
+            .map(|(provider, chosen)| {
+                let options = std::iter::once(String::new()).chain(provider.accounts.iter().map(|a| a.name.clone()));
+                let items = options
+                    .map(|folder| {
+                        let (n, agent) = (name.clone(), provider.provider.clone());
+                        ui::segment(
+                            SharedString::from(format!("profile-{name}-{agent}-{folder}")),
+                            provider.name_of(&folder).to_string(),
+                            folder == chosen,
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if !this.busy {
+                                this.change(data::profile_set_args(&n, &agent, &folder), cx, |_, _, _| {});
+                            }
+                        }))
+                        .into_any_element()
+                    })
+                    .collect();
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(
+                        div().w(px(110.)).text_size(px(12.)).text_color(colours::muted()).child(provider.title.clone()),
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if !this.busy {
-                            this.change(data::profile_set_args(&n, &agent, &folder), cx, |_, _, _| {});
-                        }
-                    }))
-                    .into_any_element()
-                })
-                .collect();
-            div()
-                .flex()
-                .items_center()
-                .gap(px(10.))
-                .child(div().w(px(110.)).text_size(px(12.)).text_color(colours::muted()).child(provider.title.clone()))
-                .child(ui::segments(items))
-        }).collect();
+                    .child(ui::segments(items))
+            })
+            .collect();
         let confirm = (self.pending == Some(Pending::Delete(name.clone()))).then(|| {
             let n = name.clone();
             widgets::confirm(
@@ -531,8 +555,9 @@ impl AccountsPanel {
                     this.pending = None;
                     cx.notify();
                 })),
-                ui::danger_button("pending-go", "Delete")
-                    .on_click(cx.listener(move |this, _, _, cx| this.change(data::profile_delete_args(&n), cx, |_, _, _| {}))),
+                ui::danger_button("pending-go", "Delete").on_click(
+                    cx.listener(move |this, _, _, cx| this.change(data::profile_delete_args(&n), cx, |_, _, _| {})),
+                ),
             )
         });
         div()
@@ -623,6 +648,6 @@ impl Render for AccountsPanel {
     }
 }
 
-pub fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
     cx.new(|cx| AccountsPanel::new(window, cx)).into()
 }

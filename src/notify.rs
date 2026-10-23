@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Window, div, prelude::FluentBuilder as _, px,
+    IntoElement, ParentElement as _, Render, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
+    div, prelude::FluentBuilder as _, px,
 };
 
 use crate::cli::Stream;
@@ -24,7 +24,7 @@ use crate::model::Session;
 use crate::store::{self, Store, ToastKind, args};
 use crate::theme::colours;
 
-pub use feed::{AppState, Event, Notice, Prefs};
+pub(crate) use feed::{AppState, Event, Notice, Prefs};
 
 /// How long a bell flashes the terminal.
 const FLASH: Duration = Duration::from_millis(160);
@@ -37,7 +37,7 @@ const RETRY: Duration = Duration::from_secs(3);
 
 /// Installing an update with `cornercase update`, from this window.
 #[derive(Clone, PartialEq)]
-pub enum InstallState {
+pub(crate) enum InstallState {
     Idle,
     Running,
     /// Installed this version; the server runs the old one until it restarts.
@@ -45,7 +45,7 @@ pub enum InstallState {
     Failed(String),
 }
 
-pub struct Notifier {
+pub(crate) struct Notifier {
     store: Entity<Store>,
     events: Option<Stream>,
     /// Which `events` stream is the current one, so a replaced one ending is ignored.
@@ -68,7 +68,7 @@ pub struct Notifier {
 }
 
 impl Notifier {
-    pub fn new(store: Entity<Store>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(store: Entity<Store>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         cx.observe(&store, |this, _, cx| this.store_changed(cx)).detach();
         cx.observe_window_activation(window, |this, window, _| this.active = window.is_window_active()).detach();
         Self {
@@ -242,7 +242,7 @@ impl Notifier {
     }
 
     /// Whether the terminal shows the bell's flash now.
-    pub fn flashing(&self) -> bool {
+    pub(crate) fn flashing(&self) -> bool {
         self.flashing
     }
 
@@ -251,7 +251,7 @@ impl Notifier {
 
     /// `cornercase update`: downloads and installs the release. Without a terminal and without
     /// `--yes` it never restarts the server; the restart is asked for separately.
-    pub fn install(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn install(&mut self, cx: &mut Context<Self>) {
         if self.install == InstallState::Running {
             return;
         }
@@ -268,19 +268,18 @@ impl Notifier {
     }
 
     /// The version installed and waiting for a restart: by this window, or by another client.
-    pub fn installed_version(&self) -> Option<String> {
-        match &self.install {
-            InstallState::Done(v) => Some(v.clone()),
-            _ => {
-                let update = self.app.update.as_ref()?;
-                update.installed.then(|| update.release.as_ref().map(|r| r.version.clone())).flatten()
-            }
+    pub(crate) fn installed_version(&self) -> Option<String> {
+        if let InstallState::Done(v) = &self.install {
+            Some(v.clone())
+        } else {
+            let update = self.app.update.as_ref()?;
+            update.installed.then(|| update.release.as_ref().map(|r| r.version.clone())).flatten()
         }
     }
 
     /// `cornercase restart --yes`, or with `--when-idle` kept running until no agent works (it
     /// ends with the restart; dropping it cancels).
-    pub fn restart(&mut self, when_idle: bool, cx: &mut Context<Self>) {
+    pub(crate) fn restart(&mut self, when_idle: bool, cx: &mut Context<Self>) {
         if !when_idle {
             self.store.read(cx).cmd(args(&["restart", "--yes"]));
             return;
@@ -312,7 +311,7 @@ impl Notifier {
 
     /// The status bar's items for the update, away and keeping awake, each shown only when it
     /// has something to say.
-    pub fn status_items(&self, this: &Entity<Self>) -> Vec<AnyElement> {
+    pub(crate) fn status_items(&self, this: &Entity<Self>) -> Vec<AnyElement> {
         let mut items = Vec::new();
         let release = self.app.release();
         if self.restart.is_some() {
@@ -320,14 +319,16 @@ impl Notifier {
             items.push(
                 chip("restart-pending", "↻ restart pending", Some(colours::working()), colours::working())
                     .tooltip(tip("Restarts once no agent is in the middle of a turn. Click to cancel."))
-                    .on_click(move |_: &ClickEvent, _, cx| n.update(cx, |n, cx| n.cancel_restart(cx)))
+                    .on_click(move |_: &ClickEvent, _, cx| n.update(cx, Notifier::cancel_restart))
                     .into_any_element(),
             );
         } else if let Some(version) = self.installed_version() {
             let n = this.clone();
             items.push(
                 chip("restart", format!("↻ restart for {version}"), None, colours::accent())
-                    .tooltip(tip(format!("cornercase {version} is installed; the server runs the old one until it restarts.")))
+                    .tooltip(tip(format!(
+                        "cornercase {version} is installed; the server runs the old one until it restarts."
+                    )))
                     .on_click(move |_: &ClickEvent, window, cx| update::show_restart(n.clone(), window, cx))
                     .into_any_element(),
             );
@@ -350,7 +351,12 @@ impl Notifier {
             let ready: Vec<String> =
                 self.app.away.iter().filter(|a| a.ready).map(|a| feed::platform_name(&a.platform)).collect();
             let (dot, text, hint, command) = if on.is_empty() {
-                (None, colours::faint(), format!("Click to have agents message you on {}", ready.join(" and ")), args(&["away"]))
+                (
+                    None,
+                    colours::faint(),
+                    format!("Click to have agents message you on {}", ready.join(" and ")),
+                    args(&["away"]),
+                )
             } else {
                 let names: Vec<String> = on.iter().map(|p| feed::platform_name(p)).collect();
                 (
@@ -389,19 +395,13 @@ impl Notifier {
 }
 
 /// The window's title: the shown pane's own title (what its program set), else its tab's name.
-pub fn window_title(session: &Session) -> String {
+pub(crate) fn window_title(session: &Session) -> String {
     let shown = session.shown();
-    let tab = session
-        .projects
-        .iter()
-        .flat_map(|p| &p.workspaces)
-        .flat_map(|w| &w.tabs)
-        .find(|t| Some(t.id) == shown.tab);
+    let tab =
+        session.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).find(|t| Some(t.id) == shown.tab);
     let Some(tab) = tab else { return "cornercase".into() };
-    let pane = shown
-        .pane
-        .and_then(|id| tab.panes.iter().find(|p| p.id == id))
-        .or_else(|| tab.panes.iter().find(|p| p.active));
+    let pane =
+        shown.pane.and_then(|id| tab.panes.iter().find(|p| p.id == id)).or_else(|| tab.panes.iter().find(|p| p.active));
     let title = pane.and_then(|p| p.title.as_deref()).map(str::trim).filter(|t| !t.is_empty());
     format!("{} — cornercase", title.unwrap_or(&tab.name))
 }
@@ -409,9 +409,9 @@ pub fn window_title(session: &Session) -> String {
 /// `project › workspace › tab` for a tab.
 fn tab_place(session: &Session, tab: u64) -> Option<String> {
     session.projects.iter().find_map(|p| {
-        p.workspaces.iter().find_map(|w| {
-            w.tabs.iter().find(|t| t.id == tab).map(|t| format!("{} › {} › {}", p.name, w.name, t.name))
-        })
+        p.workspaces
+            .iter()
+            .find_map(|w| w.tabs.iter().find(|t| t.id == tab).map(|t| format!("{} › {} › {}", p.name, w.name, t.name)))
     })
 }
 
@@ -434,7 +434,7 @@ fn chip(id: &'static str, label: impl Into<SharedString>, dot: Option<Rgba>, tex
 }
 
 /// A tooltip builder for `.tooltip(..)`.
-pub fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+pub(crate) fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
     let text = text.into();
     move |_, cx| cx.new(|_| Tip(text.clone())).into()
 }
@@ -473,7 +473,8 @@ fn desktop_notification(title: &str, body: &str) {
 fn spawn_quietly(program: &'static str, a: &[String]) {
     let a = a.to_vec();
     std::thread::spawn(move || {
-        let _ = Command::new(program).args(&a).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        let _ =
+            Command::new(program).args(&a).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
     });
 }
 

@@ -15,7 +15,7 @@ use crate::theme::colours;
 use crate::ui;
 
 fn close(cx: &mut App) {
-    Store::get(cx).update(cx, |s, cx| s.close_dialog(cx));
+    Store::get(cx).update(cx, Store::close_dialog);
 }
 
 /// Shows a dialog that closes on escape.
@@ -34,12 +34,12 @@ fn on_escape(e: &KeyDownEvent, _: &mut Window, cx: &mut App) {
 
 // ---------------------------------------------------------------------------------------------
 
-pub struct UpdateDialog {
+pub(super) struct UpdateDialog {
     notifier: Entity<Notifier>,
     focus: FocusHandle,
 }
 
-pub fn show_update(notifier: Entity<Notifier>, window: &mut Window, cx: &mut App) {
+pub(super) fn show_update(notifier: Entity<Notifier>, window: &mut Window, cx: &mut App) {
     show(
         |focus, cx| {
             // The install's progress shows in the dialog.
@@ -97,14 +97,17 @@ impl Render for UpdateDialog {
 
         let status: Option<(String, gpui::Rgba)> = match &install {
             InstallState::Running => Some(("Downloading and installing…".into(), colours::muted())),
-            InstallState::Done(v) => Some((format!("cornercase {v} is installed. Restart to use it."), colours::done())),
+            InstallState::Done(v) => {
+                Some((format!("cornercase {v} is installed. Restart to use it."), colours::done()))
+            }
             InstallState::Failed(e) => Some((e.clone(), colours::failed())),
             InstallState::Idle => update.install_error.clone().map(|e| (e, colours::failed())),
         };
         let how = match &command {
             Some(cmd) => format!("This cornercase is updated with a command of its own:\n{cmd}"),
-            None => "Installing replaces the cornercase binary; the server keeps running until you restart it."
-                .to_string(),
+            None => {
+                "Installing replaces the cornercase binary; the server keeps running until you restart it.".to_string()
+            }
         };
 
         let body = div()
@@ -130,30 +133,32 @@ impl Render for UpdateDialog {
                     }))
                 }
                 (None, InstallState::Running) => d.child(ui::button("installing", "Installing…")),
-                (None, InstallState::Done(_)) => d.child(ui::danger_button("restart", "Restart…").on_click(
-                    move |_: &ClickEvent, window, cx| show_restart(notifier.clone(), window, cx),
-                )),
+                (None, InstallState::Done(_)) => d.child(
+                    ui::danger_button("restart", "Restart…")
+                        .on_click(move |_: &ClickEvent, window, cx| show_restart(notifier.clone(), window, cx)),
+                ),
                 (None, _) => d.child(
                     ui::primary_button("install", format!("Install {}", release.version))
-                        .on_click(move |_: &ClickEvent, _, cx| notifier.update(cx, |n, cx| n.install(cx))),
+                        .on_click(move |_: &ClickEvent, _, cx| notifier.update(cx, Notifier::install)),
                 ),
             });
 
-        div()
-            .track_focus(&self.focus)
-            .on_key_down(on_escape)
-            .child(frame(format!("cornercase {} is out", release.version), body, buttons))
+        div().track_focus(&self.focus).on_key_down(on_escape).child(frame(
+            format!("cornercase {} is out", release.version),
+            body,
+            buttons,
+        ))
     }
 }
 
 // ---------------------------------------------------------------------------------------------
 
-pub struct RestartDialog {
+pub(super) struct RestartDialog {
     notifier: Entity<Notifier>,
     focus: FocusHandle,
 }
 
-pub fn show_restart(notifier: Entity<Notifier>, window: &mut Window, cx: &mut App) {
+pub(super) fn show_restart(notifier: Entity<Notifier>, window: &mut Window, cx: &mut App) {
     show(|focus, _| RestartDialog { notifier, focus }, window, cx);
 }
 
