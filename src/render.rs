@@ -1,14 +1,11 @@
-//! Paints a surface frame: each pane's cells at its place, the dividers and the cursors.
-
 use gpui::{
     App, BorderStyle, Bounds, ContentMask, Font, FontStyle, FontWeight, Hsla, Pixels, Point, SharedString, TextRun,
     Window, fill, font, outline, point, px, size,
 };
 
-use crate::model::{CursorShape, Grid, PaneGrid, Run, UnderlineKind};
-use crate::theme::{Painter, colours};
+use crate::model::{Area, Cursor, CursorShape, Grid, PaneGrid, Run, UnderlineKind};
+use crate::theme::{Painter, colours, hsla};
 
-/// The terminal font and the size of one cell.
 #[derive(Clone)]
 pub(crate) struct Metrics {
     pub family: SharedString,
@@ -43,31 +40,39 @@ impl Metrics {
         f
     }
 
-    /// The cell under a point, relative to the surface's origin; may be outside the surface.
     pub(crate) fn cell_at(&self, origin: Point<Pixels>, position: Point<Pixels>) -> (i32, i32) {
         let dx = f32::from(position.x - origin.x) / f32::from(self.cell_width);
         let dy = f32::from(position.y - origin.y) / f32::from(self.line_height);
-        (dx.floor() as i32, dy.floor() as i32)
+        (floor_to_cell(dx), floor_to_cell(dy))
+    }
+
+    fn area(&self, origin: Point<Pixels>, area: Area) -> Bounds<Pixels> {
+        let (cw, lh) = (self.cell_width, self.line_height);
+        Bounds::new(
+            origin + point(cw * f32::from(area.x), lh * f32::from(area.y)),
+            size(cw * f32::from(area.cols), lh * f32::from(area.rows)),
+        )
     }
 }
 
-/// Paints the grid with its top-left cell at `origin`.
-pub(crate) fn paint(
-    grid: &Grid,
-    origin: Point<Pixels>,
-    metrics: &Metrics,
-    focused: bool,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let cw = metrics.cell_width;
-    let lh = metrics.line_height;
+#[expect(clippy::cast_possible_truncation, reason = "a pointer's offset in cells is far inside i32")]
+fn floor_to_cell(cells: f32) -> i32 {
+    cells.floor() as i32
+}
+
+fn offset(unit: Pixels, cells: usize) -> Pixels {
+    unit * f32::from(u16::try_from(cells).unwrap_or(u16::MAX))
+}
+
+pub(crate) struct Surface<'a> {
+    pub origin: Point<Pixels>,
+    pub metrics: &'a Metrics,
+    pub focused: bool,
+}
+
+pub(crate) fn paint(grid: &Grid, surface: &Surface<'_>, window: &mut Window, cx: &mut App) {
     for divider in &grid.dividers {
-        let line = divider.line;
-        let b = Bounds::new(
-            origin + point(cw * f32::from(line.x), lh * f32::from(line.y)),
-            size(cw * f32::from(line.cols), lh * f32::from(line.rows)),
-        );
+        let b = surface.metrics.area(surface.origin, divider.line);
         window.paint_quad(fill(b, colours::terminal()));
         let center = if divider.dir == "down" {
             Bounds::new(point(b.origin.x, b.origin.y + b.size.height / 2.), size(b.size.width, px(1.)))
@@ -78,119 +83,147 @@ pub(crate) fn paint(
     }
     let several = grid.panes.len() > 1;
     for pane in &grid.panes {
-        paint_pane(pane, origin, metrics, focused, several, window, cx);
+        paint_pane(pane, surface, several, window, cx);
     }
 }
 
-fn paint_pane(
-    pane: &PaneGrid,
-    origin: Point<Pixels>,
-    metrics: &Metrics,
-    focused: bool,
-    several: bool,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let cw = metrics.cell_width;
-    let lh = metrics.line_height;
-    let rect = pane.rect;
-    let top_left = origin + point(cw * f32::from(rect.x), lh * f32::from(rect.y));
-    let bounds = Bounds::new(top_left, size(cw * f32::from(rect.cols), lh * f32::from(rect.rows)));
+fn paint_pane(pane: &PaneGrid, surface: &Surface<'_>, several: bool, window: &mut Window, cx: &mut App) {
+    let bounds = surface.metrics.area(surface.origin, pane.rect);
     let painter = Painter { colours: &pane.colours };
-    let default_bg = crate::theme::hsla(painter.default_bg());
-    window.paint_quad(fill(bounds, default_bg));
-
+    let canvas = PaneCanvas {
+        metrics: surface.metrics,
+        default_bg: hsla(painter.default_bg()),
+        painter,
+        top_left: bounds.origin,
+        cursor: pane.cursor.filter(|_| pane.active || !several),
+        focused: surface.focused,
+    };
+    window.paint_quad(fill(bounds, canvas.default_bg));
     window.with_content_mask(Some(ContentMask { bounds }), |window| {
-        let rows = pane.lines.len().min(pane.size.rows as usize);
-        let cursor = pane.cursor.filter(|_| pane.active || !several);
+        let rows = pane.lines.len().min(usize::from(pane.size.rows));
         for (row, line) in pane.lines.iter().take(rows).enumerate() {
-            let y = top_left.y + lh * row as f32;
-            let cells: Vec<(&str, &Run)> =
-                line.iter().flat_map(|run| run.cells.iter().map(move |c| (c.as_str(), run))).collect();
-
-            // Backgrounds and decorations, run by run.
-            let mut col = 0usize;
-            for run in line {
-                let n = run.cells.len();
-                let x = top_left.x + cw * col as f32;
-                let width = cw * n as f32;
-                let (fg, bg, custom_bg) = painter.resolve(&run.style);
-                if custom_bg {
-                    window.paint_quad(fill(Bounds::new(point(x, y), size(width, lh)), bg));
-                }
-                let s = &run.style;
-                if s.underline {
-                    let colour = painter.underline_colour(s).unwrap_or(fg);
-                    let base = y + lh - px(2.);
-                    window.paint_quad(fill(Bounds::new(point(x, base), size(width, px(1.))), colour));
-                    if s.underline_style == Some(UnderlineKind::Double) {
-                        window.paint_quad(fill(Bounds::new(point(x, base - px(2.)), size(width, px(1.))), colour));
-                    }
-                }
-                if s.strikethrough {
-                    window.paint_quad(fill(Bounds::new(point(x, y + lh / 2.), size(width, px(1.))), fg));
-                }
-                if s.overline {
-                    window.paint_quad(fill(Bounds::new(point(x, y), size(width, px(1.))), fg));
-                }
-                col += n;
-            }
-
-            // The cursor goes under the text, which is drawn over it in the background colour.
-            let mut cursor_cell = None;
-            if let Some(c) = cursor.filter(|c| c.y as usize == row) {
-                let cb = Bounds::new(point(top_left.x + cw * f32::from(c.x), y), size(cw, lh));
-                let colour = painter.cursor();
-                match (c.shape, focused) {
-                    (CursorShape::Block, true) => {
-                        window.paint_quad(fill(cb, colour));
-                        cursor_cell = Some(c.x as usize);
-                    }
-                    (CursorShape::Bar, true) => {
-                        window.paint_quad(fill(Bounds::new(cb.origin, size(px(2.), lh)), colour))
-                    }
-                    (CursorShape::Underline, true) => window.paint_quad(fill(
-                        Bounds::new(point(cb.origin.x, cb.origin.y + lh - px(2.)), size(cw, px(2.))),
-                        colour,
-                    )),
-                    _ => window.paint_quad(outline(cb, colour, BorderStyle::Solid)),
-                }
-            }
-
-            // Text: words of single-width cells shaped together with a forced advance, so they
-            // stay on the grid whatever font a glyph falls back to; wide and composed cells alone.
-            let mut seg = Segment::default();
-            for (i, (text, run)) in cells.iter().enumerate() {
-                if text.is_empty() || *text == " " {
-                    seg.flush(top_left, y, metrics, window, cx);
-                    continue;
-                }
-                let (mut fg, _, _) = painter.resolve(&run.style);
-                if cursor_cell == Some(i) {
-                    fg = default_bg;
-                }
-                let f = metrics.font(run.style.bold, run.style.italic);
-                let wide = cells.get(i + 1).is_some_and(|(t, _)| t.is_empty());
-                if wide || text.chars().count() > 1 {
-                    seg.flush(top_left, y, metrics, window, cx);
-                    let runs = [text_run(text.len(), f, fg)];
-                    let shaped = window.text_system().shape_line(
-                        SharedString::from(text.to_string()),
-                        metrics.font_size,
-                        &runs,
-                        None,
-                    );
-                    let _ = shaped.paint(point(top_left.x + cw * i as f32, y), lh, window, cx);
-                    continue;
-                }
-                seg.push(i, text, f, fg);
-            }
-            seg.flush(top_left, y, metrics, window, cx);
+            canvas.paint_line(row, line, window, cx);
         }
     });
-
     if several && !pane.active {
         window.paint_quad(fill(bounds, Hsla { h: 0., s: 0., l: 0., a: 0.18 }));
+    }
+}
+
+struct PaneCanvas<'a> {
+    metrics: &'a Metrics,
+    painter: Painter<'a>,
+    top_left: Point<Pixels>,
+    default_bg: Hsla,
+    cursor: Option<Cursor>,
+    focused: bool,
+}
+
+struct RowAt {
+    y: Pixels,
+    cursor_cell: Option<usize>,
+}
+
+struct Glyph<'a> {
+    col: usize,
+    text: &'a str,
+    font: Font,
+    colour: Hsla,
+}
+
+fn hline(window: &mut Window, at: Point<Pixels>, width: Pixels, colour: Hsla) {
+    window.paint_quad(fill(Bounds::new(at, size(width, px(1.))), colour));
+}
+
+impl PaneCanvas<'_> {
+    fn paint_line(&self, row: usize, line: &[Run], window: &mut Window, cx: &mut App) {
+        let y = self.top_left.y + offset(self.metrics.line_height, row);
+        let mut col = 0usize;
+        for run in line {
+            let at = point(self.top_left.x + offset(self.metrics.cell_width, col), y);
+            self.paint_decorations(run, at, window);
+            col += run.cells.len();
+        }
+        let cursor_cell = self.paint_cursor(row, y, window);
+        self.paint_text(line, &RowAt { y, cursor_cell }, window, cx);
+    }
+
+    fn paint_decorations(&self, run: &Run, at: Point<Pixels>, window: &mut Window) {
+        let lh = self.metrics.line_height;
+        let width = offset(self.metrics.cell_width, run.cells.len());
+        let s = &run.style;
+        let (fg, bg, custom_bg) = self.painter.resolve(s);
+        if custom_bg {
+            window.paint_quad(fill(Bounds::new(at, size(width, lh)), bg));
+        }
+        if s.underline {
+            let colour = self.painter.underline_colour(s).unwrap_or(fg);
+            let base = point(at.x, at.y + lh - px(2.));
+            hline(window, base, width, colour);
+            if s.underline_kind == Some(UnderlineKind::Double) {
+                hline(window, point(base.x, base.y - px(2.)), width, colour);
+            }
+        }
+        if s.strikethrough {
+            hline(window, point(at.x, at.y + lh / 2.), width, fg);
+        }
+        if s.overline {
+            hline(window, at, width, fg);
+        }
+    }
+
+    fn paint_cursor(&self, row: usize, y: Pixels, window: &mut Window) -> Option<usize> {
+        let c = self.cursor.filter(|c| usize::from(c.y) == row)?;
+        let (cw, lh) = (self.metrics.cell_width, self.metrics.line_height);
+        let cb = Bounds::new(point(self.top_left.x + cw * f32::from(c.x), y), size(cw, lh));
+        let colour = self.painter.cursor();
+        match (c.shape, self.focused) {
+            (CursorShape::Block, true) => {
+                window.paint_quad(fill(cb, colour));
+                return Some(usize::from(c.x));
+            }
+            (CursorShape::Bar, true) => window.paint_quad(fill(Bounds::new(cb.origin, size(px(2.), lh)), colour)),
+            (CursorShape::Underline, true) => window
+                .paint_quad(fill(Bounds::new(point(cb.origin.x, cb.origin.y + lh - px(2.)), size(cw, px(2.))), colour)),
+            _ => window.paint_quad(outline(cb, colour, BorderStyle::Solid)),
+        }
+        None
+    }
+
+    fn paint_text(&self, line: &[Run], row: &RowAt, window: &mut Window, cx: &mut App) {
+        let cells: Vec<(&str, &Run)> =
+            line.iter().flat_map(|run| run.cells.iter().map(move |c| (c.as_str(), run))).collect();
+        let origin = point(self.top_left.x, row.y);
+        let mut segment = Segment::default();
+        for (i, (text, run)) in cells.iter().enumerate() {
+            if text.is_empty() || *text == " " {
+                segment.flush(origin, self.metrics, window, cx);
+                continue;
+            }
+            let glyph = self.glyph(i, text, run, row.cursor_cell);
+            let wide = cells.get(i + 1).is_some_and(|(t, _)| t.is_empty());
+            if wide || text.chars().count() > 1 {
+                segment.flush(origin, self.metrics, window, cx);
+                self.paint_alone(&glyph, origin, window, cx);
+                continue;
+            }
+            segment.push(glyph);
+        }
+        segment.flush(origin, self.metrics, window, cx);
+    }
+
+    fn glyph<'t>(&self, col: usize, text: &'t str, run: &Run, cursor_cell: Option<usize>) -> Glyph<'t> {
+        let (fg, _, _) = self.painter.resolve(&run.style);
+        let colour = if cursor_cell == Some(col) { self.default_bg } else { fg };
+        Glyph { col, text, font: self.metrics.font(run.style.bold, run.style.italic), colour }
+    }
+
+    fn paint_alone(&self, glyph: &Glyph<'_>, origin: Point<Pixels>, window: &mut Window, cx: &mut App) {
+        let runs = [text_run(glyph.text.len(), glyph.font.clone(), glyph.colour)];
+        let text = SharedString::from(glyph.text.to_string());
+        let shaped = window.text_system().shape_line(text, self.metrics.font_size, &runs, None);
+        let at = point(origin.x + offset(self.metrics.cell_width, glyph.col), origin.y);
+        let _ = shaped.paint(at, self.metrics.line_height, window, cx);
     }
 }
 
@@ -206,25 +239,26 @@ struct Segment {
 }
 
 impl Segment {
-    fn push(&mut self, col: usize, cell: &str, font: Font, color: Hsla) {
+    fn push(&mut self, glyph: Glyph<'_>) {
         if self.text.is_empty() {
-            self.start = col;
+            self.start = glyph.col;
         }
-        self.text.push_str(cell);
+        self.text.push_str(glyph.text);
+        let len = glyph.text.len();
         match self.runs.last_mut() {
-            Some(last) if last.font == font && last.color == color => last.len += cell.len(),
-            _ => self.runs.push(text_run(cell.len(), font, color)),
+            Some(last) if last.font == glyph.font && last.color == glyph.colour => last.len += len,
+            _ => self.runs.push(text_run(len, glyph.font, glyph.colour)),
         }
     }
 
-    fn flush(&mut self, top_left: Point<Pixels>, y: Pixels, metrics: &Metrics, window: &mut Window, cx: &mut App) {
+    fn flush(&mut self, origin: Point<Pixels>, metrics: &Metrics, window: &mut Window, cx: &mut App) {
         if self.text.is_empty() {
             return;
         }
         let text = SharedString::from(std::mem::take(&mut self.text));
         let runs = std::mem::take(&mut self.runs);
         let shaped = window.text_system().shape_line(text, metrics.font_size, &runs, Some(metrics.cell_width));
-        let x = top_left.x + metrics.cell_width * self.start as f32;
-        let _ = shaped.paint(point(x, y), metrics.line_height, window, cx);
+        let at = point(origin.x + offset(metrics.cell_width, self.start), origin.y);
+        let _ = shaped.paint(at, metrics.line_height, window, cx);
     }
 }
