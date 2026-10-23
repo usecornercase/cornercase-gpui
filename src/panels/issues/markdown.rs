@@ -1,8 +1,6 @@
-//! A small Markdown reader for issue bodies and comments: enough to read them as formatted text
-//! (headings, paragraphs, lists, task boxes, quotes, code, tables, rules, emphasis, inline code
-//! and links), not a full `CommonMark` parser. Unknown syntax stays as its text.
-
+use std::iter::Peekable;
 use std::ops::Range;
+use std::str::Lines;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Mark {
@@ -13,7 +11,6 @@ pub(super) enum Mark {
     Link,
 }
 
-/// A line of text with its marks and the links in it (byte ranges into `text`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Inline {
     pub text: String,
@@ -25,132 +22,156 @@ pub(super) struct Inline {
 pub(super) enum Block {
     Heading(u8, Inline),
     Paragraph(Inline),
-    /// A list item: its depth (0 for the outer list), its marker (`•`, `3.`, `☐`, `☑`) and text.
     Item(usize, String, Inline),
     Quote(Inline),
     Code(String),
-    /// A table's rows, cells already split.
     Table(Vec<Vec<String>>),
     Rule,
 }
 
 pub(super) fn parse(source: &str) -> Vec<Block> {
     let source = strip_comments(&source.replace("\r\n", "\n"));
-    let mut blocks = Vec::new();
-    let mut paragraph: Vec<&str> = Vec::new();
-    let mut lines = source.lines().peekable();
-    let flush = |paragraph: &mut Vec<&str>, blocks: &mut Vec<Block>| {
-        if !paragraph.is_empty() {
-            blocks.push(Block::Paragraph(inline(&paragraph.join(" "))));
-            paragraph.clear();
-        }
-    };
-    while let Some(line) = lines.next() {
+    let mut parser = Parser { lines: source.lines().peekable(), blocks: Vec::new(), paragraph: Vec::new() };
+    while let Some(line) = parser.lines.next() {
+        parser.line(line);
+    }
+    parser.flush();
+    parser.blocks
+}
+
+struct Parser<'a> {
+    lines: Peekable<Lines<'a>>,
+    blocks: Vec<Block>,
+    paragraph: Vec<&'a str>,
+}
+
+impl<'a> Parser<'a> {
+    fn line(&mut self, line: &'a str) {
         let trimmed = line.trim_start();
-        let indent = line.len() - trimmed.len();
-        // Fenced code.
-        if let Some(fence) = ["```", "~~~"].into_iter().find(|f| trimmed.starts_with(f)) {
-            flush(&mut paragraph, &mut blocks);
-            let mut code = Vec::new();
-            for next in lines.by_ref() {
-                if next.trim_start().starts_with(fence) {
-                    break;
-                }
-                code.push(next.get(indent.min(next.len() - next.trim_start().len())..).unwrap_or(next));
+        let indent = indent_of(line);
+        let taken = self.fenced(trimmed, indent)
+            || self.blank(trimmed)
+            || self.single(trimmed, indent)
+            || self.setext(trimmed, indent)
+            || self.quote(trimmed)
+            || self.table(trimmed)
+            || self.indented(line, indent)
+            || self.continuation(trimmed, indent);
+        if !taken {
+            self.paragraph.push(trimmed.trim_end());
+        }
+    }
+
+    fn flush(&mut self) {
+        if !self.paragraph.is_empty() {
+            self.blocks.push(Block::Paragraph(inline(&self.paragraph.join(" "))));
+            self.paragraph.clear();
+        }
+    }
+
+    fn push(&mut self, block: Block) -> bool {
+        self.flush();
+        self.blocks.push(block);
+        true
+    }
+
+    fn fenced(&mut self, trimmed: &str, indent: usize) -> bool {
+        let Some(fence) = ["```", "~~~"].into_iter().find(|f| trimmed.starts_with(f)) else { return false };
+        let mut code = Vec::new();
+        for next in self.lines.by_ref() {
+            if next.trim_start().starts_with(fence) {
+                break;
             }
-            blocks.push(Block::Code(code.join("\n")));
-            continue;
+            code.push(next.get(indent.min(indent_of(next))..).unwrap_or(next));
         }
-        if trimmed.is_empty() {
-            flush(&mut paragraph, &mut blocks);
-            continue;
+        self.push(Block::Code(code.join("\n")))
+    }
+
+    fn blank(&mut self, trimmed: &str) -> bool {
+        if !trimmed.is_empty() {
+            return false;
         }
+        self.flush();
+        true
+    }
+
+    fn single(&mut self, trimmed: &str, indent: usize) -> bool {
         if let Some((level, text)) = heading(trimmed) {
-            flush(&mut paragraph, &mut blocks);
-            blocks.push(Block::Heading(level, inline(text)));
-            continue;
+            return self.push(Block::Heading(level, inline(text)));
         }
         if is_rule(trimmed) {
-            flush(&mut paragraph, &mut blocks);
-            blocks.push(Block::Rule);
-            continue;
+            return self.push(Block::Rule);
         }
-        // Setext headings: a paragraph line underlined with === or ---.
-        if paragraph.len() == 1 && indent < 4 {
-            let underline = trimmed.trim_end();
-            if !underline.is_empty() && underline.chars().all(|c| c == '=') {
-                blocks.push(Block::Heading(1, inline(paragraph[0])));
-                paragraph.clear();
-                continue;
-            }
+        match item(trimmed) {
+            Some((marker, text)) => self.push(Block::Item(indent / 2, marker, inline(text))),
+            None => false,
         }
-        if let Some(rest) = trimmed.strip_prefix('>') {
-            flush(&mut paragraph, &mut blocks);
-            let mut quote = vec![rest.trim()];
-            while let Some(next) = lines.peek() {
-                match next.trim_start().strip_prefix('>') {
-                    Some(more) => {
-                        quote.push(more.trim());
-                        lines.next();
-                    }
-                    None => break,
-                }
-            }
-            let text: Vec<&str> = quote.into_iter().filter(|l| !l.is_empty()).collect();
-            blocks.push(Block::Quote(inline(&text.join(" "))));
-            continue;
-        }
-        if let Some((marker, text)) = item(trimmed) {
-            flush(&mut paragraph, &mut blocks);
-            blocks.push(Block::Item(indent / 2, marker, inline(text)));
-            continue;
-        }
-        if trimmed.starts_with('|') {
-            flush(&mut paragraph, &mut blocks);
-            let mut rows = vec![cells(trimmed)];
-            while let Some(next) = lines.peek().map(|l| l.trim()) {
-                if !next.starts_with('|') {
-                    break;
-                }
-                rows.push(cells(next));
-                lines.next();
-            }
-            rows.retain(|row| !row.iter().all(|c| !c.is_empty() && c.chars().all(|ch| matches!(ch, '-' | ':' | ' '))));
-            blocks.push(Block::Table(rows));
-            continue;
-        }
-        if indent >= 4 && paragraph.is_empty() {
-            let mut code = vec![&line[4.min(line.len())..]];
-            while let Some(next) = lines.peek() {
-                if next.len() - next.trim_start().len() < 4 && !next.trim().is_empty() {
-                    break;
-                }
-                code.push(next.get(4..).unwrap_or(""));
-                lines.next();
-            }
-            while code.last().is_some_and(|l| l.trim().is_empty()) {
-                code.pop();
-            }
-            blocks.push(Block::Code(code.join("\n")));
-            continue;
-        }
-        // A list item's continuation joins the item.
-        if indent > 0
-            && paragraph.is_empty()
-            && let Some(Block::Item(_, _, text)) = blocks.last_mut()
-        {
-            let more = inline(trimmed);
-            let offset = text.text.len() + 1;
-            text.text.push(' ');
-            text.text.push_str(&more.text);
-            text.marks.extend(more.marks.into_iter().map(|(r, m)| (r.start + offset..r.end + offset, m)));
-            text.links.extend(more.links.into_iter().map(|(r, u)| (r.start + offset..r.end + offset, u)));
-            continue;
-        }
-        paragraph.push(trimmed.trim_end());
     }
-    flush(&mut paragraph, &mut blocks);
-    blocks
+
+    fn setext(&mut self, trimmed: &str, indent: usize) -> bool {
+        let underline = trimmed.trim_end();
+        let [title] = self.paragraph[..] else { return false };
+        if indent >= 4 || underline.is_empty() || !underline.chars().all(|c| c == '=') {
+            return false;
+        }
+        self.paragraph.clear();
+        self.push(Block::Heading(1, inline(title)))
+    }
+
+    fn quote(&mut self, trimmed: &'a str) -> bool {
+        let Some(rest) = trimmed.strip_prefix('>') else { return false };
+        let mut quote = vec![rest.trim()];
+        while let Some(more) = self.lines.peek().copied().and_then(|next| next.trim_start().strip_prefix('>')) {
+            quote.push(more.trim());
+            self.lines.next();
+        }
+        let text: Vec<&str> = quote.into_iter().filter(|l| !l.is_empty()).collect();
+        self.push(Block::Quote(inline(&text.join(" "))))
+    }
+
+    fn table(&mut self, trimmed: &str) -> bool {
+        if !trimmed.starts_with('|') {
+            return false;
+        }
+        let mut rows = vec![cells(trimmed)];
+        while let Some(next) = self.lines.peek().copied().map(str::trim).filter(|l| l.starts_with('|')) {
+            rows.push(cells(next));
+            self.lines.next();
+        }
+        rows.retain(|row| !is_separator(row));
+        self.push(Block::Table(rows))
+    }
+
+    fn indented(&mut self, line: &'a str, indent: usize) -> bool {
+        if indent < 4 || !self.paragraph.is_empty() {
+            return false;
+        }
+        let mut code = vec![&line[4.min(line.len())..]];
+        while let Some(next) = self.lines.peek().copied().filter(|next| indent_of(next) >= 4 || next.trim().is_empty())
+        {
+            code.push(next.get(4..).unwrap_or(""));
+            self.lines.next();
+        }
+        while code.last().is_some_and(|l| l.trim().is_empty()) {
+            code.pop();
+        }
+        self.blocks.push(Block::Code(code.join("\n")));
+        true
+    }
+
+    fn continuation(&mut self, trimmed: &str, indent: usize) -> bool {
+        if indent == 0 || !self.paragraph.is_empty() {
+            return false;
+        }
+        let Some(Block::Item(_, _, text)) = self.blocks.last_mut() else { return false };
+        text.text.push(' ');
+        text.append(inline(trimmed), true);
+        true
+    }
+}
+
+fn indent_of(line: &str) -> usize {
+    line.len() - line.trim_start().len()
 }
 
 fn strip_comments(text: &str) -> String {
@@ -158,12 +179,11 @@ fn strip_comments(text: &str) -> String {
     let mut rest = text;
     while let Some(start) = rest.find("<!--") {
         out.push_str(&rest[..start]);
-        if let Some(end) = rest[start..].find("-->") {
-            rest = &rest[start + end + 3..]
-        } else {
+        let Some(end) = rest[start..].find("-->") else {
             rest = "";
             break;
-        }
+        };
+        rest = &rest[start + end + 3..];
     }
     out.push_str(rest);
     out
@@ -178,7 +198,7 @@ fn heading(line: &str) -> Option<(u8, &str)> {
     if !rest.is_empty() && !rest.starts_with(' ') {
         return None;
     }
-    Some((level as u8, rest.trim().trim_end_matches('#').trim_end()))
+    Some((u8::try_from(level).ok()?, rest.trim().trim_end_matches('#').trim_end()))
 }
 
 fn is_rule(line: &str) -> bool {
@@ -187,23 +207,22 @@ fn is_rule(line: &str) -> bool {
 }
 
 fn item(line: &str) -> Option<(String, &str)> {
-    let bullet = ["- ", "* ", "+ "].into_iter().find_map(|b| line.strip_prefix(b));
-    if let Some(rest) = bullet {
-        for (box_, mark) in [("[ ] ", "☐"), ("[x] ", "☑"), ("[X] ", "☑")] {
-            if let Some(text) = rest.strip_prefix(box_) {
-                return Some((mark.into(), text));
-            }
-        }
-        return Some(("•".into(), rest));
+    if let Some(rest) = ["- ", "* ", "+ "].into_iter().find_map(|b| line.strip_prefix(b)) {
+        return Some(task_box(rest).unwrap_or_else(|| ("•".into(), rest)));
     }
     let digits = line.chars().take_while(char::is_ascii_digit).count();
-    if (1..=9).contains(&digits) {
-        let after = &line[digits..];
-        if let Some(text) = after.strip_prefix(". ").or_else(|| after.strip_prefix(") ")) {
-            return Some((format!("{}.", &line[..digits]), text));
-        }
+    if !(1..=9).contains(&digits) {
+        return None;
     }
-    None
+    let after = &line[digits..];
+    let text = after.strip_prefix(". ").or_else(|| after.strip_prefix(") "))?;
+    Some((format!("{}.", &line[..digits]), text))
+}
+
+fn task_box(rest: &str) -> Option<(String, &str)> {
+    [("[ ] ", "☐"), ("[x] ", "☑"), ("[X] ", "☑")]
+        .into_iter()
+        .find_map(|(box_, mark)| rest.strip_prefix(box_).map(|text| (mark.to_string(), text)))
 }
 
 fn cells(row: &str) -> Vec<String> {
@@ -211,134 +230,190 @@ fn cells(row: &str) -> Vec<String> {
     row.split('|').map(|c| inline(c.trim()).text).collect()
 }
 
-/// Reads emphasis, inline code, links, images and a few HTML bits out of a line.
+fn is_separator(row: &[String]) -> bool {
+    row.iter().all(|c| !c.is_empty() && c.chars().all(|ch| matches!(ch, '-' | ':' | ' ')))
+}
+
 pub(super) fn inline(source: &str) -> Inline {
-    let mut out = Inline::default();
-    let chars: Vec<char> = source.chars().collect();
-    let mut i = 0;
-    // Open emphasis: (marker, byte offset in out.text).
-    let mut open: Vec<(&'static str, usize)> = Vec::new();
-    let starts = |i: usize, s: &str| s.chars().enumerate().all(|(k, c)| chars.get(i + k) == Some(&c));
-    while i < chars.len() {
-        let c = chars[i];
-        // Escapes.
-        if c == '\\' && chars.get(i + 1).is_some_and(char::is_ascii_punctuation) {
-            out.text.push(chars[i + 1]);
-            i += 2;
-            continue;
-        }
-        // Inline code.
-        if c == '`' {
-            let ticks = chars[i..].iter().take_while(|c| **c == '`').count();
-            let fence: String = "`".repeat(ticks);
-            let after: String = chars[i + ticks..].iter().collect();
-            if let Some(end) = after.find(&fence) {
-                let code = after[..end].trim();
-                let start = out.text.len();
-                out.text.push_str(code);
-                out.marks.push((start..out.text.len(), Mark::Code));
-                i += ticks + after[..end].chars().count() + ticks;
-                continue;
-            }
-        }
-        // Images and links.
-        let image = c == '!' && chars.get(i + 1) == Some(&'[');
-        if (c == '[' || image)
-            && let Some((label, url, used)) = link_at(&chars[i + usize::from(image)..])
-        {
-            let start = out.text.len();
-            if image {
-                out.text.push_str(&format!("[image{}{}]", if label.is_empty() { "" } else { ": " }, label));
-            } else {
-                let label = inline(&label);
-                out.text.push_str(&label.text);
-                out.marks.extend(label.marks.into_iter().map(|(r, m)| (r.start + start..r.end + start, m)));
-            }
-            out.marks.push((start..out.text.len(), Mark::Link));
-            out.links.push((start..out.text.len(), url));
-            i += usize::from(image) + used;
-            continue;
-        }
-        // Autolinks and bare URLs.
-        if c == '<'
-            && let Some(end) = chars[i..].iter().position(|c| *c == '>')
-        {
-            let inner: String = chars[i + 1..i + end].iter().collect();
-            if inner.starts_with("http://") || inner.starts_with("https://") {
-                push_link(&mut out, &inner, &inner);
-                i += end + 1;
-                continue;
-            }
-            // Simple HTML: <br> breaks the line, other tags vanish.
-            let tag = inner.trim_start_matches('/').split([' ', '/']).next().unwrap_or("").to_lowercase();
-            if !tag.is_empty() && tag.chars().all(|c| c.is_ascii_alphanumeric()) {
-                if tag == "br" {
-                    out.text.push(' ');
-                }
-                i += end + 1;
-                continue;
-            }
-        }
-        if (starts(i, "https://") || starts(i, "http://")) && (i == 0 || !chars[i - 1].is_alphanumeric()) {
-            let end = chars[i..]
-                .iter()
-                .position(|c| c.is_whitespace() || *c == ')' || *c == '>')
-                .map_or(chars.len(), |e| i + e);
-            let mut url: String = chars[i..end].iter().collect();
-            while url.ends_with(['.', ',', ';', ':']) {
-                url.pop();
-            }
-            let used = url.chars().count();
-            push_link(&mut out, &url, &url);
-            i += used;
-            continue;
-        }
-        // Emphasis: ** __ ~~ * and _ (not inside words, for snake_case).
-        let marker = ["**", "__", "~~", "*", "_"].into_iter().find(|m| starts(i, m));
-        if let Some(marker) = marker {
-            let len = marker.chars().count();
-            let before = i.checked_sub(1).map(|b| chars[b]);
-            let after = chars.get(i + len).copied();
-            let word = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
-            let underscore_in_word = marker.starts_with('_') && word(before) && word(after);
-            if !underscore_in_word {
-                // Closing: the opening marker, kept as text until now, goes.
-                if before.is_some_and(|c| !c.is_whitespace())
-                    && let Some(index) = open.iter().rposition(|(m, _)| *m == marker)
-                {
-                    let (_, at) = open.remove(index);
-                    out.text.replace_range(at..at + len, "");
-                    shift(&mut out, &mut open, at, len);
-                    if at < out.text.len() {
-                        let mark = match marker {
-                            "**" | "__" => Mark::Bold,
-                            "~~" => Mark::Strike,
-                            _ => Mark::Italic,
-                        };
-                        out.marks.push((at..out.text.len(), mark));
-                    }
-                    i += len;
-                    continue;
-                }
-                // Opening: kept as text in case it is never closed.
-                if after.is_some_and(|c| !c.is_whitespace()) {
-                    open.push((marker, out.text.len()));
-                    out.text.push_str(marker);
-                    i += len;
-                    continue;
-                }
-            }
-        }
-        out.text.push(c);
-        i += 1;
+    let mut reader = Reader { chars: source.chars().collect(), at: 0, out: Inline::default(), opened: Vec::new() };
+    while reader.at < reader.chars.len() {
+        reader.step();
     }
-    out.marks.sort_by_key(|(r, _)| r.start);
-    out
+    reader.out.marks.sort_by_key(|(r, _)| r.start);
+    reader.out
+}
+
+struct Reader {
+    chars: Vec<char>,
+    at: usize,
+    out: Inline,
+    opened: Vec<(&'static str, usize)>,
+}
+
+impl Reader {
+    fn step(&mut self) {
+        let taken = self.escape() || self.code() || self.link() || self.angle() || self.bare_url() || self.emphasis();
+        if !taken {
+            self.out.text.push(self.chars[self.at]);
+            self.at += 1;
+        }
+    }
+
+    fn current(&self) -> char {
+        self.chars[self.at]
+    }
+
+    fn starts(&self, text: &str) -> bool {
+        text.chars().enumerate().all(|(k, c)| self.chars.get(self.at + k) == Some(&c))
+    }
+
+    fn escape(&mut self) -> bool {
+        if self.current() != '\\' {
+            return false;
+        }
+        let Some(&next) = self.chars.get(self.at + 1).filter(|c| c.is_ascii_punctuation()) else { return false };
+        self.out.text.push(next);
+        self.at += 2;
+        true
+    }
+
+    fn code(&mut self) -> bool {
+        if self.current() != '`' {
+            return false;
+        }
+        let ticks = self.chars[self.at..].iter().take_while(|c| **c == '`').count();
+        let after: String = self.chars[self.at + ticks..].iter().collect();
+        let Some(end) = after.find(&"`".repeat(ticks)) else { return false };
+        let start = self.out.text.len();
+        self.out.text.push_str(after[..end].trim());
+        self.out.marks.push((start..self.out.text.len(), Mark::Code));
+        self.at += ticks + after[..end].chars().count() + ticks;
+        true
+    }
+
+    fn link(&mut self) -> bool {
+        let image = self.current() == '!' && self.chars.get(self.at + 1) == Some(&'[');
+        if self.current() != '[' && !image {
+            return false;
+        }
+        let Some((label, url, used)) = link_at(&self.chars[self.at + usize::from(image)..]) else { return false };
+        let start = self.out.text.len();
+        if image {
+            let alt = if label.is_empty() { "[image]".to_string() } else { format!("[image: {label}]") };
+            self.out.text.push_str(&alt);
+        } else {
+            self.out.append(inline(&label), false);
+        }
+        self.out.marks.push((start..self.out.text.len(), Mark::Link));
+        self.out.links.push((start..self.out.text.len(), url));
+        self.at += usize::from(image) + used;
+        true
+    }
+
+    fn angle(&mut self) -> bool {
+        if self.current() != '<' {
+            return false;
+        }
+        let Some(end) = self.chars[self.at..].iter().position(|c| *c == '>') else { return false };
+        let inner: String = self.chars[self.at + 1..self.at + end].iter().collect();
+        if inner.starts_with("http://") || inner.starts_with("https://") {
+            push_link(&mut self.out, &inner);
+        } else if let Some(tag) = html_tag(&inner) {
+            if tag == "br" {
+                self.out.text.push(' ');
+            }
+        } else {
+            return false;
+        }
+        self.at += end + 1;
+        true
+    }
+
+    fn bare_url(&mut self) -> bool {
+        let word_start = self.at == 0 || !self.chars[self.at - 1].is_alphanumeric();
+        if !word_start || !(self.starts("https://") || self.starts("http://")) {
+            return false;
+        }
+        let end = self.chars[self.at..]
+            .iter()
+            .position(|c| c.is_whitespace() || *c == ')' || *c == '>')
+            .map_or(self.chars.len(), |e| self.at + e);
+        let mut url: String = self.chars[self.at..end].iter().collect();
+        while url.ends_with(['.', ',', ';', ':']) {
+            url.pop();
+        }
+        self.at += url.chars().count();
+        push_link(&mut self.out, &url);
+        true
+    }
+
+    fn emphasis(&mut self) -> bool {
+        let Some(marker) = ["**", "__", "~~", "*", "_"].into_iter().find(|m| self.starts(m)) else { return false };
+        let before = self.at.checked_sub(1).map(|b| self.chars[b]);
+        let after = self.chars.get(self.at + marker.len()).copied();
+        let word = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
+        if marker.starts_with('_') && word(before) && word(after) {
+            return false;
+        }
+        self.close_marker(marker, before) || self.open_marker(marker, after)
+    }
+
+    fn close_marker(&mut self, marker: &'static str, before: Option<char>) -> bool {
+        if before.is_none_or(char::is_whitespace) {
+            return false;
+        }
+        let Some(index) = self.opened.iter().rposition(|(m, _)| *m == marker) else { return false };
+        let len = marker.len();
+        let (_, at) = self.opened.remove(index);
+        self.out.text.replace_range(at..at + len, "");
+        self.shift(at, len);
+        if at < self.out.text.len() {
+            self.out.marks.push((at..self.out.text.len(), mark_of(marker)));
+        }
+        self.at += len;
+        true
+    }
+
+    fn open_marker(&mut self, marker: &'static str, after: Option<char>) -> bool {
+        if after.is_none_or(char::is_whitespace) {
+            return false;
+        }
+        self.opened.push((marker, self.out.text.len()));
+        self.out.text.push_str(marker);
+        self.at += marker.len();
+        true
+    }
+
+    fn shift(&mut self, at: usize, len: usize) {
+        let fix = |x: &mut usize| {
+            if *x >= at + len {
+                *x -= len;
+            }
+        };
+        let marks = self.out.marks.iter_mut().map(|(range, _)| range);
+        let links = self.out.links.iter_mut().map(|(range, _)| range);
+        for range in marks.chain(links) {
+            fix(&mut range.start);
+            fix(&mut range.end);
+        }
+        self.opened.iter_mut().for_each(|(_, pos)| fix(pos));
+    }
+}
+
+fn mark_of(marker: &str) -> Mark {
+    match marker {
+        "**" | "__" => Mark::Bold,
+        "~~" => Mark::Strike,
+        _ => Mark::Italic,
+    }
+}
+
+fn html_tag(inner: &str) -> Option<String> {
+    let tag = inner.trim_start_matches('/').split([' ', '/']).next().unwrap_or("").to_lowercase();
+    (!tag.is_empty() && tag.chars().all(|c| c.is_ascii_alphanumeric())).then_some(tag)
 }
 
 impl Inline {
-    /// The marks as sorted, non-overlapping ranges, each with every mark that covers it (what
-    /// a text's runs need: nested emphasis and a bold link overlap).
     pub(super) fn runs(&self) -> Vec<(Range<usize>, Vec<Mark>)> {
         let mut cuts: Vec<usize> = self.marks.iter().flat_map(|(r, _)| [r.start, r.end]).collect();
         cuts.sort_unstable();
@@ -356,56 +431,29 @@ impl Inline {
             })
             .collect()
     }
-}
 
-/// Moves what follows a removed marker (`len` bytes at `at`) back by its length.
-fn shift(out: &mut Inline, open: &mut [(&'static str, usize)], at: usize, len: usize) {
-    let fix = |x: &mut usize| {
-        if *x >= at + len {
-            *x -= len;
+    fn append(&mut self, more: Inline, with_links: bool) {
+        let offset = self.text.len();
+        self.text.push_str(&more.text);
+        self.marks.extend(more.marks.into_iter().map(|(r, m)| (r.start + offset..r.end + offset, m)));
+        if with_links {
+            self.links.extend(more.links.into_iter().map(|(r, u)| (r.start + offset..r.end + offset, u)));
         }
-    };
-    for (range, _) in &mut out.marks {
-        fix(&mut range.start);
-        fix(&mut range.end);
-    }
-    for (range, _) in &mut out.links {
-        fix(&mut range.start);
-        fix(&mut range.end);
-    }
-    for (_, pos) in open.iter_mut() {
-        fix(pos);
     }
 }
 
-fn push_link(out: &mut Inline, text: &str, url: &str) {
+fn push_link(out: &mut Inline, url: &str) {
     let start = out.text.len();
-    out.text.push_str(text);
+    out.text.push_str(url);
     out.marks.push((start..out.text.len(), Mark::Link));
     out.links.push((start..out.text.len(), url.to_string()));
 }
 
-/// `[label](url)` at the start of `chars`: the label, the URL and how many chars it took.
 fn link_at(chars: &[char]) -> Option<(String, String, usize)> {
     if chars.first() != Some(&'[') {
         return None;
     }
-    let mut depth = 0;
-    let mut close = None;
-    for (k, c) in chars.iter().enumerate() {
-        match c {
-            '[' => depth += 1,
-            ']' => {
-                depth -= 1;
-                if depth == 0 {
-                    close = Some(k);
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-    let close = close?;
+    let close = closing_bracket(chars)?;
     if chars.get(close + 1) != Some(&'(') {
         return None;
     }
@@ -416,83 +464,18 @@ fn link_at(chars: &[char]) -> Option<(String, String, usize)> {
     Some((label, url, end + 1))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn blocks() {
-        let md = "## Problem\n\nA plugin's popup (#435) runs\na program.\n\n- one\n  more\n- [x] done\n1. first\n\n> quoted\n> text\n\n```rust\nfn main() {}\n```\n---\n| a | b |\n|---|---|\n| 1 | 2 |\n<!-- hidden -->";
-        let blocks = parse(md);
-        assert_eq!(blocks[0], Block::Heading(2, inline("Problem")));
-        assert_eq!(blocks[1], Block::Paragraph(inline("A plugin's popup (#435) runs a program.")));
-        let Block::Item(0, marker, text) = &blocks[2] else { panic!("{:?}", blocks[2]) };
-        assert_eq!((marker.as_str(), text.text.as_str()), ("•", "one more"));
-        assert!(matches!(&blocks[3], Block::Item(0, m, t) if m == "☑" && t.text == "done"));
-        assert!(matches!(&blocks[4], Block::Item(0, m, t) if m == "1." && t.text == "first"));
-        assert!(matches!(&blocks[5], Block::Quote(t) if t.text == "quoted text"));
-        assert_eq!(blocks[6], Block::Code("fn main() {}".into()));
-        assert_eq!(blocks[7], Block::Rule);
-        assert_eq!(blocks[8], Block::Table(vec![vec!["a".into(), "b".into()], vec!["1".into(), "2".into()]]));
-        assert_eq!(blocks.len(), 9);
+fn closing_bracket(chars: &[char]) -> Option<usize> {
+    let mut depth = 0;
+    for (k, c) in chars.iter().enumerate() {
+        match c {
+            '[' => depth += 1,
+            ']' if depth == 1 => return Some(k),
+            ']' => depth -= 1,
+            _ => {}
+        }
     }
-
-    #[test]
-    fn setext_heading() {
-        assert_eq!(
-            parse("Title\n=====\nbody"),
-            vec![Block::Heading(1, inline("Title")), Block::Paragraph(inline("body"))]
-        );
-    }
-
-    #[test]
-    fn emphasis_code_and_links() {
-        let line = inline("Use **bold**, *it*, `surface --view` and [the doc](https://x.dev/a) for snake_case_names");
-        assert_eq!(line.text, "Use bold, it, surface --view and the doc for snake_case_names");
-        let at = |s: &str| line.text.find(s).map(|i| i..i + s.len());
-        assert!(line.marks.contains(&(at("bold").unwrap(), Mark::Bold)));
-        assert!(line.marks.contains(&(at("it,").map(|r| r.start..r.end - 1).unwrap(), Mark::Italic)));
-        assert!(line.marks.contains(&(at("surface --view").unwrap(), Mark::Code)));
-        assert_eq!(line.links, vec![(at("the doc").unwrap(), "https://x.dev/a".to_string())]);
-        assert_eq!(line.marks.iter().filter(|(_, m)| *m == Mark::Italic).count(), 1);
-    }
-
-    #[test]
-    fn bare_urls_images_and_html() {
-        let line = inline("See https://github.com/a/b/issues/1. ![shot](https://i.png) <br>end <b>x</b>");
-        assert_eq!(line.text, "See https://github.com/a/b/issues/1. [image: shot]  end x");
-        assert_eq!(line.links[0].1, "https://github.com/a/b/issues/1");
-        assert_eq!(line.links[1].1, "https://i.png");
-    }
-
-    #[test]
-    fn unmatched_markers_stay() {
-        assert_eq!(inline("2 * 3 = 6").text, "2 * 3 = 6");
-        assert_eq!(inline("a ` b").text, "a ` b");
-        assert_eq!(inline(r"\*not\*").text, "*not*");
-        let open = inline("a *b c and **d** e");
-        assert_eq!(open.text, "a *b c and d e");
-        let d = open.text.find(" d ").map(|i| i + 1..i + 2);
-        assert_eq!(open.marks, vec![(d.unwrap_or_default(), Mark::Bold)]);
-    }
-
-    #[test]
-    fn overlapping_marks_become_runs() {
-        let line = inline("x **bold [link](https://a) more** y");
-        assert_eq!(line.text, "x bold link more y");
-        let runs = line.runs();
-        let texts: Vec<(&str, Vec<Mark>)> = runs.iter().map(|(r, m)| (&line.text[r.clone()], m.clone())).collect();
-        assert_eq!(
-            texts,
-            vec![("bold ", vec![Mark::Bold]), ("link", vec![Mark::Bold, Mark::Link]), (" more", vec![Mark::Bold])]
-        );
-    }
-
-    #[test]
-    fn multibyte_text() {
-        let line = inline("héllo **wörld** ✓");
-        assert_eq!(line.text, "héllo wörld ✓");
-        let start = line.text.find("wörld").unwrap();
-        assert_eq!(line.marks, vec![(start..start + "wörld".len(), Mark::Bold)]);
-    }
+    None
 }
+
+#[cfg(test)]
+mod tests;

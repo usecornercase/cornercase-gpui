@@ -27,11 +27,21 @@ fn sources() {
     let sources: Sources = parse(SOURCES).expect("parses");
     assert_eq!(sources.project, 4);
     assert_eq!(sources.tabs().iter().map(|s| s.source.as_str()).collect::<Vec<_>>(), ["github", "jira"]);
-    let github = sources.get("github").expect("github");
+    check_github(sources.get("github").expect("github"));
+    check_missing_and_failing(&sources);
+    assert_eq!(sources.get("future").map(|s| s.state), Some(SourceState::Other));
+    assert!(sources.any_connected());
+    assert_eq!(sources.project_place().map(|p| p.label.as_str()), Some("cornercase-gpui"));
+}
+
+fn check_github(github: &SourceInfo) {
     assert!(github.connected() && github.repository);
     assert_eq!(github.people[0], Who::Me);
     assert_eq!(github.people[1], Who::Person { handle: "MiguelHang".into(), id: None });
     assert_eq!(github.account_line(), "as zamarrowski, through gh");
+}
+
+fn check_missing_and_failing(sources: &Sources) {
     let jira = sources.get("jira").expect("jira");
     assert!(!jira.connected());
     assert_eq!(jira.missing_line(), "needs a site, an email and a token");
@@ -39,9 +49,6 @@ fn sources() {
     assert_eq!(shortcut.state, SourceState::Failing);
     assert!(shortcut.connected());
     assert_eq!(shortcut.account_line(), "token from $SHORTCUT_API_TOKEN");
-    assert_eq!(sources.get("future").map(|s| s.state), Some(SourceState::Other));
-    assert!(sources.any_connected());
-    assert_eq!(sources.project_place().map(|p| p.label.as_str()), Some("cornercase-gpui"));
 }
 
 #[test]
@@ -98,9 +105,9 @@ fn read_and_people() {
             "people": [{"handle": "ana", "id": "5b10", "name": "Ana Ruiz"}, {"handle": "bob", "id": null, "name": ""}]}"#,
     )
     .expect("parses");
-    assert_eq!(people.people[0].label(), "Ana Ruiz (ana)");
-    assert_eq!(people.people[1].label(), "bob");
-    assert_eq!(people.people[0].who().arg(), "5b10");
+    assert_eq!(people.list[0].label(), "Ana Ruiz (ana)");
+    assert_eq!(people.list[1].label(), "bob");
+    assert_eq!(people.list[0].who().arg(), "5b10");
 }
 
 #[test]
@@ -111,6 +118,10 @@ fn times() {
     assert_eq!(parse_time("2026-10-22T22:13:09.000+0200"), Some(1_792_699_989));
     assert_eq!(parse_time("2026-10-22"), Some(1_792_627_200));
     assert_eq!(parse_time("yesterday"), None);
+    check_ago();
+}
+
+fn check_ago() {
     let now = 1_792_699_989;
     assert_eq!(ago("2026-10-22T20:13:09Z", now), "just now");
     assert_eq!(ago("2026-10-22T19:13:09Z", now), "1h ago");
@@ -131,7 +142,7 @@ fn agents_from_config() {
     ]});
     let agents = Agents::from_config(&config);
     assert_eq!(agents.default, "auto");
-    assert_eq!(agents.agents.iter().map(|a| a.value.as_str()).collect::<Vec<_>>(), ["claude", "codex"]);
+    assert_eq!(agents.list.iter().map(|a| a.value.as_str()).collect::<Vec<_>>(), ["claude", "codex"]);
     assert_eq!(agents.initial(), "claude");
     let (chosen, modes) = &agents.modes["claude"];
     assert_eq!(chosen, "plan");
@@ -159,16 +170,36 @@ fn issue() -> Issue {
 
 #[test]
 fn start_arguments() {
-    let place = Place { project: 4, worktree: true, ..Default::default() };
-    let plan = StartPlan {
+    check_worktree_plan();
+    check_worktree_queue();
+    check_tab_plan();
+    check_tab_queue();
+}
+
+fn worktree_plan() -> StartPlan {
+    StartPlan {
         issue: issue(),
         agent: "claude".into(),
         mode: Some("plan".into()),
         model: Some("opus".into()),
-        place: Some(place.clone()),
+        place: Some(Place { project: 4, worktree: true, ..Default::default() }),
         workspace_name: Some("Popups".into()),
         ..Default::default()
-    };
+    }
+}
+
+fn tab_plan() -> StartPlan {
+    StartPlan {
+        issue: Issue { source: "linear".into(), key: "ENG-42".into(), ..Default::default() },
+        agent: "codex".into(),
+        effort: Some("high".into()),
+        place: Some(Place { project: 9, workspace: Some(12), ..Default::default() }),
+        ..Default::default()
+    }
+}
+
+fn check_worktree_plan() {
+    let plan = worktree_plan();
     assert_eq!(
         plan.start_args(),
         [
@@ -189,7 +220,10 @@ fn start_arguments() {
             "--json"
         ]
     );
-    // The queue names the worktree's branch itself only when told.
+}
+
+fn check_worktree_queue() {
+    let plan = worktree_plan();
     assert_eq!(
         plan.queue_args("in 2h"),
         [
@@ -213,13 +247,10 @@ fn start_arguments() {
             "Popups"
         ]
     );
-    let tab = StartPlan {
-        issue: Issue { source: "linear".into(), key: "ENG-42".into(), ..Default::default() },
-        agent: "codex".into(),
-        effort: Some("high".into()),
-        place: Some(Place { project: 9, workspace: Some(12), ..Default::default() }),
-        ..Default::default()
-    };
+}
+
+fn check_tab_plan() {
+    let tab = tab_plan();
     assert_eq!(
         tab.start_args(),
         [
@@ -236,6 +267,10 @@ fn start_arguments() {
             "--json"
         ]
     );
+}
+
+fn check_tab_queue() {
+    let tab = tab_plan();
     assert_eq!(
         tab.queue_args("claude reset"),
         [
