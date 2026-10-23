@@ -54,7 +54,15 @@ Gaps found while building this, filed upstream instead of worked around:
 #461 (`--view` breaks feature checks: no surface patches, no hidden/visible, `start --issue --view`),
 #462 (Codex limits), #463 (queue undo), #464 (config import preview), #465/#466 (flow save, import
 check), #467 (reveal a search match), #468/#469 (plugin install preview, service states),
-#470/#471 (changes digests, `gap --hunk` numbering). The UI names the issue where a feature waits.
+#470/#471 (changes digests, `gap --hunk` numbering), #472 (an exit status for partial answers). The UI names the issue where a feature waits.
+
+### To remove once these land
+
+- **#461:**
+  - `Root::patches` and its fallback to complete frames, and `report_visibility` / `Msg::NoVisibility` (`src/app.rs`).
+  - In `src/panels/issues/data.rs`, start with `--view` again instead of explicit `--project`/`--workspace` plus a focus.
+- **#472:** the runners that keep standard output on exit 1 (`src/panels/usage.rs`, `src/panels/issues.rs`, `src/panels/issues/data.rs`). Treat the new partial status as success.
+- **#462:** the "needs #462" note on the Codex card in `src/panels/usage.rs`, which is matched by the error text.
 
 ## Development
 
