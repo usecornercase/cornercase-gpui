@@ -1,0 +1,25 @@
+{
+  "builtins": ["Quick", "Arena"],
+  "flows": [
+    {"name": "Arena", "origin": "built-in", "path": null, "description": "Competing coders.", "default": false, "edited": false, "problems": [],
+     "roles": [{"role": "orchestrator", "agent": "claude", "edits": false, "effort": null, "model": null}],
+     "flow": {"name": "Arena", "description": "Competing coders.", "notes": "", "end": "pull_request",
+              "orchestrator": {"name": "orchestrator", "agent": "claude", "model": null, "effort": null, "args": [], "env": {}, "edits": false, "worktree": "shared", "prompt": "Run it."},
+              "roles": [{"name": "coder", "agent": "claude", "model": null, "effort": null, "args": [], "env": {}, "edits": true, "worktree": "own", "prompt": "Code."}],
+              "stages": [{"roles": ["coder"], "back": null}]}},
+    {"name": "Quick", "origin": "user", "path": "/c/flows/quick.toml", "description": "", "default": true, "edited": true, "problems": [],
+     "roles": [],
+     "flow": {"name": "Quick", "description": "", "notes": "", "end": "commits",
+              "orchestrator": {"name": "orchestrator", "agent": "claude", "model": "opus", "effort": null, "args": [], "env": {}, "edits": false, "worktree": "shared", "prompt": ""},
+              "roles": [{"name": "coder", "agent": "codex", "model": null, "effort": "high", "args": [], "env": {}, "edits": true, "worktree": "shared", "prompt": ""},
+                        {"name": "reviewer", "agent": "claude", "model": "sonnet", "effort": null, "args": [], "env": {}, "edits": false, "worktree": "shared", "prompt": ""}],
+              "stages": [{"roles": ["coder"], "back": null}, {"roles": ["reviewer"], "back": {"to": 1, "when": "findings", "at_most": 3}}]}},
+    {"name": "Quick", "origin": "project", "path": "/p/.cornercase/flows/quick.toml", "description": "", "default": false, "edited": false,
+     "problems": ["yours is also named Quick and runs instead"], "check": "it sets X for coder", "roles": [],
+     "flow": {"name": "Quick", "description": "", "notes": "", "end": "pull_request", "orchestrator": {}, "roles": [], "stages": []}}
+  ],
+  "hidden": [
+    {"name": "Arena", "origin": "built-in", "path": null, "description": "", "default": false, "edited": false, "problems": [], "roles": [], "flow": {}}
+  ],
+  "broken": [{"path": "/c/flows/broken.toml", "error": "line 3: expected `=`"}]
+}
