@@ -1133,6 +1133,7 @@ dependencies = [
  "anyhow",
  "futures",
  "gpui",
+ "libc",
  "serde",
  "serde_json",
  "unicode-segmentation",
