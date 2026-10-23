@@ -18,6 +18,14 @@ pub struct Session {
     pub groups: Vec<Group>,
     pub projects: Vec<Project>,
     pub view: Option<ViewInfo>,
+    /// The settings' revision, which grows with every change to them (`cornercase config`).
+    pub config: ConfigInfo,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(default)]
+pub struct ConfigInfo {
+    pub revision: u64,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
