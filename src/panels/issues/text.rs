@@ -1,16 +1,13 @@
-//! Draws the Markdown blocks of an issue's body or comment as formatted text: headings, lists,
-//! quotes, code in the terminal's font, tables, and links that open in the browser.
-
 use gpui::{
-    AnyElement, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText, IntoElement, ParentElement as _,
-    SharedString, StrikethroughStyle, Styled as _, StyledText, UnderlineStyle, div, prelude::FluentBuilder as _, px,
+    AnyElement, Div, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText, IntoElement,
+    ParentElement as _, SharedString, StrikethroughStyle, Styled as _, StyledText, UnderlineStyle, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::markdown::{Block, Inline, Mark};
 use crate::theme::FONT_FAMILY;
 use crate::theme::colours;
 
-/// The blocks of `source`, one element each; `id` keeps their link ids apart from other texts'.
 pub(super) fn markdown(id: &str, source: &str) -> Vec<AnyElement> {
     super::markdown::parse(source)
         .into_iter()
@@ -19,45 +16,15 @@ pub(super) fn markdown(id: &str, source: &str) -> Vec<AnyElement> {
         .collect()
 }
 
-/// The source as it is, in the terminal's font.
 pub(super) fn raw(source: &str) -> AnyElement {
-    code_box(source.to_string())
+    code_box(source)
 }
 
 fn block(id: SharedString, block: Block) -> AnyElement {
     match block {
-        Block::Heading(level, text) => {
-            let size = match level {
-                1 => 17.,
-                2 => 15.,
-                _ => 13.5,
-            };
-            div()
-                .pt(px(if level <= 2 { 8. } else { 4. }))
-                .text_size(px(size))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(colours::text())
-                .when(level <= 2, |d| d.pb(px(4.)).border_b_1().border_color(colours::border()))
-                .child(inline((id, 0), text))
-                .into_any_element()
-        }
+        Block::Heading(level, text) => heading(level, inline((id, 0), text)),
         Block::Paragraph(text) => div().child(inline((id, 0), text)).into_any_element(),
-        Block::Item(depth, marker, text) => {
-            let done = marker == "☑";
-            div()
-                .flex()
-                .gap(px(6.))
-                .pl(px(4. + 16. * depth as f32))
-                .child(
-                    div()
-                        .flex_none()
-                        .min_w(px(14.))
-                        .text_color(if done { colours::done() } else { colours::faint() })
-                        .child(marker),
-                )
-                .child(div().flex_1().min_w_0().child(inline((id, 0), text)))
-                .into_any_element()
-        }
+        Block::Item(depth, marker, text) => item(depth, marker, inline((id, 0), text)),
         Block::Quote(text) => div()
             .pl(px(10.))
             .border_l_2()
@@ -65,13 +32,47 @@ fn block(id: SharedString, block: Block) -> AnyElement {
             .text_color(colours::muted())
             .child(inline((id, 0), text))
             .into_any_element(),
-        Block::Code(text) => code_box(text),
+        Block::Code(text) => code_box(&text),
         Block::Table(rows) => table(rows),
         Block::Rule => div().h(px(1.)).my(px(4.)).bg(colours::border()).into_any_element(),
     }
 }
 
-fn code_box(text: String) -> AnyElement {
+fn heading(level: u8, text: AnyElement) -> AnyElement {
+    let size = match level {
+        1 => 17.,
+        2 => 15.,
+        _ => 13.5,
+    };
+    div()
+        .pt(px(if level <= 2 { 8. } else { 4. }))
+        .text_size(px(size))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(colours::text())
+        .when(level <= 2, |d| d.pb(px(4.)).border_b_1().border_color(colours::border()))
+        .child(text)
+        .into_any_element()
+}
+
+fn item(depth: usize, marker: String, text: AnyElement) -> AnyElement {
+    let done = marker == "☑";
+    let depth = f32::from(u8::try_from(depth).unwrap_or(u8::MAX));
+    div()
+        .flex()
+        .gap(px(6.))
+        .pl(px(4. + 16. * depth))
+        .child(
+            div()
+                .flex_none()
+                .min_w(px(14.))
+                .text_color(if done { colours::done() } else { colours::faint() })
+                .child(marker),
+        )
+        .child(div().flex_1().min_w_0().child(text))
+        .into_any_element()
+}
+
+fn code_box(text: &str) -> AnyElement {
     div()
         .px(px(10.))
         .py(px(8.))
@@ -83,12 +84,13 @@ fn code_box(text: String) -> AnyElement {
         .text_size(px(12.))
         .text_color(colours::text())
         .overflow_hidden()
-        .children(text.lines().map(|line| {
-            // Keep blank lines' height, and tabs readable.
-            let line = line.replace('\t', "    ");
-            div().min_h(px(16.)).child(if line.is_empty() { " ".to_string() } else { line })
-        }))
+        .children(text.lines().map(code_line))
         .into_any_element()
+}
+
+fn code_line(line: &str) -> Div {
+    let line = line.replace('\t', "    ");
+    div().min_h(px(16.)).child(if line.is_empty() { " ".to_string() } else { line })
 }
 
 fn table(rows: Vec<Vec<String>>) -> AnyElement {
@@ -112,7 +114,6 @@ fn table(rows: Vec<Vec<String>>) -> AnyElement {
         .into_any_element()
 }
 
-/// A line of text with its emphasis, code and links; a click on a link opens it.
 pub(super) fn inline(id: impl Into<ElementId>, text: Inline) -> AnyElement {
     let highlights: Vec<_> = text.runs().into_iter().map(|(range, marks)| (range, style(&marks))).collect();
     let styled = StyledText::new(text.text.clone()).with_highlights(highlights);

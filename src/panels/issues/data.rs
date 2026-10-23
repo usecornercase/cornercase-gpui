@@ -1,14 +1,7 @@
-//! What `cornercase issue sources|list|read|people --json` and `config --json` print, read into
-//! local types, and the small pure helpers the sheet draws with: search, times, the agents'
-//! choices, the schedule's time text and the arguments of `start --issue` and `queue add`.
-
 use std::collections::HashMap;
 
 use serde::Deserialize;
 use serde_json::Value;
-
-// ---------------------------------------------------------------------------------------------
-// `issue sources`
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -21,7 +14,6 @@ pub(super) enum SourceState {
     Other,
 }
 
-/// A filter on people: `me`, `anyone` or someone from `issue people`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(super) enum Who {
@@ -36,7 +28,6 @@ pub(super) enum Who {
 }
 
 impl Who {
-    /// What `--assignee` / `--author` take: the id for trackers that have one, else the handle.
     pub(super) fn arg(&self) -> String {
         match self {
             Self::Anyone => "anyone".into(),
@@ -53,7 +44,6 @@ impl Who {
         }
     }
 
-    /// Whether the filter names one tracker's person (and so needs `--source`).
     pub(super) fn is_person(&self) -> bool {
         matches!(self, Self::Person { .. })
     }
@@ -64,9 +54,7 @@ impl Who {
 pub(super) struct SourceInfo {
     pub source: String,
     pub name: String,
-    /// Shown as a tab (settings → Issues → sources shown).
     pub tab: bool,
-    /// Its issues belong to the project's repository (GitHub, GitLab).
     pub repository: bool,
     pub state: SourceState,
     pub missing: Vec<String>,
@@ -74,9 +62,7 @@ pub(super) struct SourceInfo {
     pub account: Option<String>,
     pub from: Option<String>,
     pub env: Option<String>,
-    /// The two people filters' names: assignee/author, owner/requester…
     pub fields: [String; 2],
-    /// The window's remembered filter.
     pub people: [Who; 2],
 }
 
@@ -85,7 +71,6 @@ impl SourceInfo {
         matches!(self.state, SourceState::Connected | SourceState::Failing)
     }
 
-    /// Where the connection comes from and as whom: "as @me, through gh".
     pub(super) fn account_line(&self) -> String {
         let mut parts = Vec::new();
         if let Some(account) = self.account.as_deref().filter(|a| !a.is_empty()) {
@@ -101,7 +86,6 @@ impl SourceInfo {
         parts.join(", ")
     }
 
-    /// What it lacks, in words: "needs a token", "needs a site, an email and a token".
     pub(super) fn missing_line(&self) -> String {
         if self.missing.iter().any(|m| m == "repository") {
             return format!("this project's folder is not a {} repository", self.name);
@@ -121,7 +105,6 @@ impl SourceInfo {
         }
     }
 
-    /// How to connect it from a shell, for the empty state.
     pub(super) fn connect_hint(&self) -> String {
         match self.source.as_str() {
             "github" => "gh auth login".into(),
@@ -132,8 +115,6 @@ impl SourceInfo {
     }
 }
 
-/// Somewhere work on an issue that is not tied to a repository can start: a project's new
-/// worktree (`worktree`) or a new tab in a workspace.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(super) struct Place {
@@ -149,32 +130,28 @@ pub(super) struct Place {
 pub(super) struct Sources {
     pub project: u64,
     pub closed: bool,
-    pub sources: Vec<SourceInfo>,
+    #[serde(rename = "sources")]
+    pub list: Vec<SourceInfo>,
     pub places: Vec<Place>,
 }
 
 impl Sources {
     pub(super) fn get(&self, source: &str) -> Option<&SourceInfo> {
-        self.sources.iter().find(|s| s.source == source)
+        self.list.iter().find(|s| s.source == source)
     }
 
-    /// The tabs, in settings' order: the shown sources.
     pub(super) fn tabs(&self) -> Vec<&SourceInfo> {
-        self.sources.iter().filter(|s| s.tab).collect()
+        self.list.iter().filter(|s| s.tab).collect()
     }
 
     pub(super) fn any_connected(&self) -> bool {
-        self.sources.iter().any(SourceInfo::connected)
+        self.list.iter().any(SourceInfo::connected)
     }
 
-    /// The place of the project asked: a repository root makes a worktree there.
     pub(super) fn project_place(&self) -> Option<&Place> {
         self.places.iter().find(|p| p.project == self.project && p.workspace.is_none())
     }
 }
-
-// ---------------------------------------------------------------------------------------------
-// `issue list` and `issue read`
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -190,12 +167,10 @@ pub(super) struct Issue {
     pub assignees: Vec<String>,
     pub author: String,
     pub updated_at: String,
-    /// The branch `start --issue` makes (settings' issue branch template).
     pub branch: String,
 }
 
 impl Issue {
-    /// Whether every word of `query` is in its key, title, labels or people (any case).
     pub(super) fn matches(&self, query: &str) -> bool {
         let hay = format!(
             "{} {} {} {} {} {}",
@@ -210,7 +185,6 @@ impl Issue {
         query.split_whitespace().all(|word| hay.contains(&word.to_lowercase()))
     }
 
-    /// The detail's info line without what the chips already show: the state and the labels.
     pub(super) fn info_extras(&self, info: &[String]) -> Vec<String> {
         let labels = self.labels.join(", ");
         info.iter()
@@ -219,9 +193,35 @@ impl Issue {
             .collect()
     }
 
-    /// What identifies it across tabs.
     pub(super) fn id(&self) -> (String, String) {
         (self.source.clone(), self.key.clone())
+    }
+
+    pub(super) fn info(&self, read: Option<&ReadIssue>) -> Vec<String> {
+        if let Some(read) = read.filter(|r| !r.info.is_empty()) {
+            return read.info.clone();
+        }
+        let mut info = vec![self.state.clone()];
+        if !self.assignees.is_empty() {
+            info.push(format!("assigned to {}", self.assignees.join(", ")));
+        }
+        if !self.author.is_empty() {
+            info.push(format!("opened by {}", self.author));
+        }
+        info
+    }
+
+    pub(super) fn meta(&self, source: Option<String>, now: i64) -> String {
+        let mut meta: Vec<String> = source.into_iter().collect();
+        if !self.assignees.is_empty() {
+            meta.push(format!("→ {}", self.assignees.join(", ")));
+        } else if !self.author.is_empty() {
+            meta.push(format!("by {}", self.author));
+        }
+        if !self.updated_at.is_empty() {
+            meta.push(ago(&self.updated_at, now));
+        }
+        meta.join(" · ")
     }
 }
 
@@ -243,7 +243,6 @@ pub(super) struct Lists {
     pub sources: Vec<Listed>,
 }
 
-/// Trackers answer at most this many issues per list, and offer no further pages.
 pub(super) const LIST_CAP: usize = 100;
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -254,15 +253,19 @@ pub(super) struct Comment {
     pub body: String,
 }
 
+impl Comment {
+    pub(super) fn when(&self, now: i64) -> String {
+        if self.created_at.is_empty() { String::new() } else { ago(&self.created_at, now) }
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub(super) struct ReadIssue {
     pub issue: Issue,
-    /// The detail's info line: state, labels, who it is assigned to, the section…
     pub info: Vec<String>,
     pub body: String,
     pub comments: Vec<Comment>,
-    /// What `start` would paste.
     pub prompt: String,
 }
 
@@ -294,67 +297,91 @@ pub(super) struct People {
     pub source: String,
     pub fields: [String; 2],
     pub cached: bool,
-    pub people: Vec<Person>,
+    #[serde(rename = "people")]
+    pub list: Vec<Person>,
 }
 
-/// Reads a command's JSON answer. `issue list` prints its JSON and exits 1 when a tracker
-/// failed, so the caller hands us standard output whatever the exit status was.
+impl People {
+    pub(super) fn matching(&self, query: &str) -> Vec<&Person> {
+        let query = query.to_lowercase();
+        self.list.iter().filter(|p| query.is_empty() || p.label().to_lowercase().contains(&query)).collect()
+    }
+}
+
 pub(super) fn parse<T: for<'de> Deserialize<'de>>(out: &str) -> Option<T> {
     serde_json::from_str(out.trim()).ok()
 }
 
-// ---------------------------------------------------------------------------------------------
-// Times
-
-/// Seconds since the epoch of an RFC 3339-ish time: `2026-10-22T20:13:09Z`, with fractions, or
-/// with an offset (`+02:00`, Jira's `+0200`). A bare date is midnight UTC.
 pub(super) fn parse_time(text: &str) -> Option<i64> {
     let text = text.trim();
-    let num = |s: &str| s.parse::<i64>().ok();
-    let date = text.get(..10)?;
-    let mut parts = date.split('-');
-    let (y, m, d) = (num(parts.next()?)?, num(parts.next()?)?, num(parts.next()?)?);
-    let days = days_from_civil(y, m, d);
+    let days = parse_date(text.get(..10)?)?;
     let rest = text.get(10..).unwrap_or("");
     if rest.is_empty() {
         return Some(days * 86_400);
     }
     let rest = rest.strip_prefix(['T', ' '])?;
-    let (h, mi, s) = (num(rest.get(0..2)?)?, num(rest.get(3..5)?)?, num(rest.get(6..8).unwrap_or("00"))?);
-    let mut tail = rest.get(8..).unwrap_or("");
-    if let Some(frac) = tail.strip_prefix('.') {
-        tail = frac.trim_start_matches(|c: char| c.is_ascii_digit());
-    }
-    let offset = match tail {
-        "" | "Z" | "z" => 0,
-        t if t.starts_with(['+', '-']) => {
-            let sign = if t.starts_with('-') { -1 } else { 1 };
-            let digits: String = t[1..].chars().filter(char::is_ascii_digit).collect();
-            let (oh, om) = (num(digits.get(0..2)?)?, digits.get(2..4).and_then(num).unwrap_or(0));
-            sign * (oh * 3600 + om * 60)
-        }
-        _ => return None,
-    };
-    Some(days * 86_400 + h * 3600 + mi * 60 + s - offset)
+    let clock = parse_clock(rest)?;
+    let offset = parse_offset(zone(rest))?;
+    Some(days * 86_400 + clock - offset)
 }
 
-/// Days since 1970-01-01 of a proleptic Gregorian date (Howard Hinnant's algorithm).
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let mp = (m + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
+fn number(text: &str) -> Option<i64> {
+    text.parse().ok()
+}
+
+fn parse_date(date: &str) -> Option<i64> {
+    let mut parts = date.split('-');
+    let year = number(parts.next()?)?;
+    let month = number(parts.next()?)?;
+    let day = number(parts.next()?)?;
+    Some(days_from_civil(year, month, day))
+}
+
+fn parse_clock(time: &str) -> Option<i64> {
+    let hours = number(time.get(0..2)?)?;
+    let minutes = number(time.get(3..5)?)?;
+    let seconds = number(time.get(6..8).unwrap_or("00"))?;
+    Some(hours * 3600 + minutes * 60 + seconds)
+}
+
+fn zone(time: &str) -> &str {
+    let tail = time.get(8..).unwrap_or("");
+    match tail.strip_prefix('.') {
+        Some(fraction) => fraction.trim_start_matches(|c: char| c.is_ascii_digit()),
+        None => tail,
+    }
+}
+
+fn parse_offset(zone: &str) -> Option<i64> {
+    if matches!(zone, "" | "Z" | "z") {
+        return Some(0);
+    }
+    let sign = match zone.chars().next()? {
+        '+' => 1,
+        '-' => -1,
+        _ => return None,
+    };
+    let digits: String = zone[1..].chars().filter(char::is_ascii_digit).collect();
+    let hours = number(digits.get(0..2)?)?;
+    let minutes = digits.get(2..4).and_then(number).unwrap_or(0);
+    Some(sign * (hours * 3600 + minutes * 60))
+}
+
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let year_of_era = year - era * 400;
+    let march_month = (month + 9) % 12;
+    let day_of_year = (153 * march_month + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
 }
 
 pub(super) fn now() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or_default()
+    let since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    i64::try_from(since.as_secs()).unwrap_or(i64::MAX)
 }
 
-/// "just now", "5m ago", "3h ago", "4d ago", "2mo ago", "1y ago"; the text itself when it is not
-/// a time.
 pub(super) fn ago(text: &str, now: i64) -> String {
     let Some(at) = parse_time(text) else { return text.to_string() };
     let secs = (now - at).max(0);
@@ -368,13 +395,9 @@ pub(super) fn ago(text: &str, now: i64) -> String {
     }
 }
 
-/// Newest first, as the All tab orders a merged list; times that do not parse go last.
 pub(super) fn sort_newest_first(issues: &mut [Issue]) {
     issues.sort_by_key(|i| std::cmp::Reverse(parse_time(&i.updated_at).unwrap_or(i64::MIN)));
 }
-
-// ---------------------------------------------------------------------------------------------
-// Agents, from `config --json`
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Choice {
@@ -383,17 +406,13 @@ pub(super) struct Choice {
     pub dangerous: bool,
 }
 
-/// The agents `start` can run, settings' default, and each agent's modes with its chosen one.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Agents {
-    /// Settings → Agents → default agent; `auto` is "the agent in your tab, otherwise ask".
     pub default: String,
-    pub agents: Vec<Choice>,
-    /// agent → (its chosen mode, the modes).
+    pub list: Vec<Choice>,
     pub modes: HashMap<String, (String, Vec<Choice>)>,
 }
 
-/// The agents that take `--effort`, per `start --help`.
 pub(super) const EFFORT_AGENTS: [&str; 4] = ["claude", "codex", "grok", "copilot"];
 
 impl Agents {
@@ -420,7 +439,7 @@ impl Agents {
             let value = setting.get("value").and_then(Value::as_str).unwrap_or_default().to_string();
             if key == "agent" {
                 agents.default = value;
-                agents.agents = choices(setting).into_iter().filter(|c| c.value != "auto").collect();
+                agents.list = choices(setting).into_iter().filter(|c| c.value != "auto").collect();
             } else if let Some(agent) = key.strip_prefix("agents.").and_then(|k| k.strip_suffix(".mode")) {
                 agents.modes.insert(agent.to_string(), (value, choices(setting)));
             }
@@ -428,19 +447,14 @@ impl Agents {
         agents
     }
 
-    /// The agent the form starts with: settings' default, else the first one.
     pub(super) fn initial(&self) -> String {
-        if self.agents.iter().any(|a| a.value == self.default) {
+        if self.list.iter().any(|a| a.value == self.default) {
             return self.default.clone();
         }
-        self.agents.first().map_or_else(|| "claude".into(), |a| a.value.clone())
+        self.list.first().map_or_else(|| "claude".into(), |a| a.value.clone())
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// The commands
-
-/// When a scheduled start happens, as the TUI's schedule form asks it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum When {
     At,
@@ -466,7 +480,6 @@ impl When {
         }
     }
 
-    /// The example its value field shows; `None` when it takes no value.
     pub(super) fn placeholder(self) -> Option<&'static str> {
         match self {
             Self::At => Some("14:30"),
@@ -477,7 +490,6 @@ impl When {
         }
     }
 
-    /// What `queue add --at` takes; `None` while a value it needs is empty.
     pub(super) fn at(self, value: &str) -> Option<String> {
         let value = value.trim();
         let needs = |text: String| if value.is_empty() { None } else { Some(text) };
@@ -491,25 +503,19 @@ impl When {
     }
 }
 
-/// What the start form decided.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct StartPlan {
     pub issue: Issue,
     pub agent: String,
-    /// Only when it differs from the agent's chosen mode.
     pub mode: Option<String>,
     pub model: Option<String>,
     pub effort: Option<String>,
     pub place: Option<Place>,
-    /// Only when it differs from the issue's own branch.
     pub branch: Option<String>,
     pub workspace_name: Option<String>,
 }
 
 impl StartPlan {
-    /// `cornercase start AGENT --issue KEY --source S --project P|--workspace W …  --json`.
-    /// No `--view`: with it the CLI's feature check for `--issue` fails (#461); the pane it
-    /// prints is focused in our view afterwards.
     pub(super) fn start_args(&self) -> Vec<String> {
         let mut a = vec!["start".to_string(), self.agent.clone(), "--issue".into(), self.issue.key.clone()];
         a.extend(["--source".into(), self.issue.source.clone()]);
@@ -529,9 +535,6 @@ impl StartPlan {
         a
     }
 
-    /// `cornercase queue add --at AT --issue KEY --source S --agent A …`. The queue takes no
-    /// model or effort, and names a worktree's branch itself only when told: a worktree place
-    /// gets the issue's branch (or the one typed).
     pub(super) fn queue_args(&self, at: &str) -> Vec<String> {
         let mut a = vec!["queue".to_string(), "add".into(), "--at".into(), at.to_string()];
         a.extend(["--issue".into(), self.issue.key.clone(), "--source".into(), self.issue.source.clone()]);
@@ -561,7 +564,6 @@ impl StartPlan {
     }
 }
 
-/// The pane `start --json` answered with.
 pub(super) fn started_pane(out: &str) -> Option<u64> {
     let value: Value = serde_json::from_str(out.trim()).ok()?;
     value.pointer("/ids/pane").or_else(|| value.get("pane")).and_then(Value::as_u64).or_else(|| value.as_u64())
