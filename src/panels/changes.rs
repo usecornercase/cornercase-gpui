@@ -417,15 +417,16 @@ impl ChangesPanel {
         let (title, button) =
             if deletes { ("Delete the file?", "Delete") } else { ("Discard the changes?", "Discard") };
         dialogs::confirm(
-            title,
-            format!(
-                "{}\n\nIt discards the file as it is now, even if it changed since this diff was read \
-                 (the command line cannot name the version seen: usecornercase/cornercase-terminal#470).",
-                diff::discard_question(file)
+            dialogs::Question::new(
+                title,
+                format!(
+                    "{}\n\nIt discards the file as it is now, even if it changed since this diff was read \
+                     (the command line cannot name the version seen: usecornercase/cornercase-terminal#470).",
+                    diff::discard_question(file)
+                ),
+                button,
+                args(&["changes", "discard", &file.path, "--workspace", &workspace.to_string(), "--yes"]),
             ),
-            button,
-            args(&["changes", "discard", &file.path, "--workspace", &workspace.to_string(), "--yes"]),
-            false,
             window,
             cx,
         );

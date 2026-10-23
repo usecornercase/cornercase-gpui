@@ -1,10 +1,8 @@
-//! State every part of the window shares: the session, our view, the app state that is not part
-//! of the session (`cornercase status --app --follow`), which panel, sheet and dialog are open,
-//! and the toasts. Panels read it and act through it; the root view owns the connection.
-
 use std::time::{Duration, Instant};
 
-use gpui::{AnyView, App, AppContext as _, Context, Entity, Global};
+use futures::StreamExt as _;
+use futures::channel::mpsc;
+use gpui::{AnyView, App, AppContext as _, AsyncApp, Context, Entity, Global, WeakEntity};
 use serde_json::Value;
 
 use crate::cli::{self, Queue, Stream};
@@ -15,17 +13,13 @@ pub(crate) struct Store {
     pub session: Option<Session>,
     pub view_id: Option<u64>,
     pub queue: Queue,
-    /// What `cornercase status --app` prints: todos, queue, away, update, `keep_awake`, tour…
     pub app: Option<Value>,
-    /// The panel docked on the right of the terminal, if any.
     pub dock: Option<PanelKind>,
-    /// The sheet over the window (issues, usage, settings…), if any.
     pub sheet: Option<PanelKind>,
-    /// A small dialog over everything (a form, a confirmation).
     pub dialog: Option<AnyView>,
     pub toasts: Vec<Toast>,
     next_toast: u64,
-    _app_stream: Option<Stream>,
+    app_stream: Option<Stream>,
 }
 
 #[derive(Clone)]
@@ -33,7 +27,6 @@ pub(crate) struct Toast {
     pub id: u64,
     pub text: String,
     pub kind: ToastKind,
-    /// A button: its label and the command it runs (`go TOKEN` for an agent's notice).
     pub action: Option<(String, Vec<String>)>,
     pub at: Instant,
 }
@@ -72,20 +65,18 @@ impl Store {
             dialog: None,
             toasts: Vec::new(),
             next_toast: 1,
-            _app_stream: None,
+            app_stream: None,
         });
         cx.set_global(GlobalStore(store.clone()));
         store
     }
 
-    /// The store, from anywhere.
     pub(crate) fn get(cx: &App) -> Entity<Store> {
         cx.global::<GlobalStore>().0.clone()
     }
 
-    /// Starts following `cornercase status --app --follow` (again after a reconnect).
     pub(crate) fn follow_app(&mut self, cx: &mut Context<Self>) {
-        self._app_stream = follow(cx, args(&["status", "--app", "--follow"]), |this, line, cx| {
+        self.app_stream = follow(cx, args(&["status", "--app", "--follow"]), |this, line, cx| {
             if let Ok(value) = serde_json::from_str::<Value>(&line) {
                 this.app = Some(value);
                 cx.notify();
@@ -93,7 +84,6 @@ impl Store {
         });
     }
 
-    /// Adds `--view ID` to a command that takes one, so it acts in our view, not the window.
     pub(crate) fn with_view(&self, mut args: Vec<String>) -> Vec<String> {
         if let Some(id) = self.view_id {
             args.push("--view".into());
@@ -102,12 +92,10 @@ impl Store {
         args
     }
 
-    /// Runs a command in our view through the ordered queue; failures become toasts.
     pub(crate) fn act(&self, args: Vec<String>) {
         self.queue.cmd(self.with_view(args));
     }
 
-    /// Runs a command that takes no view through the ordered queue; failures become toasts.
     pub(crate) fn cmd(&self, args: Vec<String>) {
         self.queue.cmd(args);
     }
@@ -159,7 +147,6 @@ impl Store {
         cx.notify();
     }
 
-    /// Opens a panel where it belongs: docked or as a sheet.
     pub(crate) fn open(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
         if kind.docked() {
             self.dock = Some(kind);
@@ -185,14 +172,10 @@ impl Store {
     }
 }
 
-/// `["a", "b"]` as the owned arguments the helpers take.
 pub(crate) fn args(parts: &[&str]) -> Vec<String> {
     parts.iter().map(|s| (*s).to_string()).collect()
 }
 
-/// Runs a cornercase command off the main thread, then hands its standard output (or the error)
-/// to `then` on the entity. For commands whose answer the UI needs; fire-and-forget actions go
-/// through `Store::act` or `Store::cmd`, which keep their order.
 pub(crate) fn run<T: 'static>(
     cx: &mut Context<T>,
     args: Vec<String>,
@@ -206,7 +189,6 @@ pub(crate) fn run<T: 'static>(
     .detach();
 }
 
-/// Like `run`, with the output read as JSON (commands given `--json`).
 pub(crate) fn run_json<T: 'static>(
     cx: &mut Context<T>,
     args: Vec<String>,
@@ -218,9 +200,6 @@ pub(crate) fn run_json<T: 'static>(
     });
 }
 
-/// Follows a command that prints one line per change (`changes --follow`, `events --json`…):
-/// `on_line` runs on the entity for each line. Keep the returned stream: dropping it stops the
-/// command. When it ends, `on_line` gets nothing more; call `follow` again to resume.
 pub(crate) fn follow<T: 'static>(
     cx: &mut Context<T>,
     args: Vec<String>,
@@ -229,22 +208,21 @@ pub(crate) fn follow<T: 'static>(
     follow_until(cx, args, on_line, |_, _, _| {})
 }
 
-/// `follow`, with `on_end` called once the command stops, with what it wrote on stderr.
+enum Line {
+    Text(String),
+    End(String),
+}
+
 pub(crate) fn follow_until<T: 'static>(
     cx: &mut Context<T>,
-    args: Vec<String>,
+    args: impl AsRef<[String]>,
     on_line: impl Fn(&mut T, String, &mut Context<T>) + 'static,
     on_end: impl FnOnce(&mut T, String, &mut Context<T>) + 'static,
 ) -> Option<Stream> {
-    use futures::StreamExt as _;
-    enum Line {
-        Text(String),
-        End(String),
-    }
-    let (tx, mut rx) = futures::channel::mpsc::unbounded::<Line>();
+    let (tx, rx) = mpsc::unbounded::<Line>();
     let end = tx.clone();
     let stream = cli::stream(
-        &args,
+        args.as_ref(),
         move |line| {
             let _ = tx.unbounded_send(Line::Text(line));
         },
@@ -252,34 +230,40 @@ pub(crate) fn follow_until<T: 'static>(
             let _ = end.unbounded_send(Line::End(err));
         },
     );
-    let stream = match stream {
-        Ok(stream) => stream,
+    match stream {
+        Ok(stream) => {
+            cx.spawn(async move |this, cx| deliver(this, rx, on_line, on_end, cx).await).detach();
+            Some(stream)
+        }
         Err(e) => {
             let text = e.to_string();
             cx.spawn(async move |this, cx| {
                 let _ = this.update(cx, |this, cx| on_end(this, text, cx));
             })
             .detach();
-            return None;
+            None
         }
-    };
-    cx.spawn(async move |this, cx| {
-        let mut on_end = Some(on_end);
-        while let Some(line) = rx.next().await {
-            let alive = match line {
-                Line::Text(text) => this.update(cx, |this, cx| on_line(this, text, cx)).is_ok(),
-                Line::End(err) => {
-                    if let Some(on_end) = on_end.take() {
-                        let _ = this.update(cx, |this, cx| on_end(this, err, cx));
-                    }
-                    false
+    }
+}
+
+async fn deliver<T: 'static>(
+    this: WeakEntity<T>,
+    mut rx: mpsc::UnboundedReceiver<Line>,
+    on_line: impl Fn(&mut T, String, &mut Context<T>),
+    on_end: impl FnOnce(&mut T, String, &mut Context<T>),
+    cx: &mut AsyncApp,
+) {
+    while let Some(line) = rx.next().await {
+        match line {
+            Line::Text(text) => {
+                if this.update(cx, |this, cx| on_line(this, text, cx)).is_err() {
+                    return;
                 }
-            };
-            if !alive {
-                break;
+            }
+            Line::End(err) => {
+                let _ = this.update(cx, |this, cx| on_end(this, err, cx));
+                return;
             }
         }
-    })
-    .detach();
-    Some(stream)
+    }
 }

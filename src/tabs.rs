@@ -206,11 +206,12 @@ impl Root {
                 let what = agent.agent.clone().unwrap_or_else(|| "an agent".into());
                 let state = agent.status.as_deref().map(|s| format!(" ({s})")).unwrap_or_default();
                 dialogs::confirm(
-                    format!("Close the tab {}?", tab.name),
-                    format!("It runs {what}{state}: closing the tab stops it. Its worktree and branch stay."),
-                    "Close tab",
-                    command,
-                    false,
+                    dialogs::Question::new(
+                        format!("Close the tab {}?", tab.name),
+                        format!("It runs {what}{state}: closing the tab stops it. Its worktree and branch stay."),
+                        "Close tab",
+                        command,
+                    ),
                     window,
                     cx,
                 );

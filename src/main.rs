@@ -1,7 +1,3 @@
-//! A native window for cornercase, drawn with GPUI. cornercase's server keeps owning the shells,
-//! agents and worktrees; this program is one more client of it, driven through the `cornercase`
-//! command line (`view`, `surface`, `input` and friends).
-
 mod app;
 mod cli;
 mod context_menu;

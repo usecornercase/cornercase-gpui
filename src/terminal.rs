@@ -284,11 +284,12 @@ impl Root {
             let args = cmd(&["close", "--pane", &pane.to_string()]);
             if agent {
                 dialogs::confirm(
-                    "Close this pane?",
-                    format!("It runs {what}: closing the pane stops it."),
-                    "Close pane",
-                    args,
-                    false,
+                    dialogs::Question::new(
+                        "Close this pane?",
+                        format!("It runs {what}: closing the pane stops it."),
+                        "Close pane",
+                        args,
+                    ),
                     window,
                     cx,
                 );

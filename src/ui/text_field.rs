@@ -1,11 +1,8 @@
-//! A one-line text field: typing through the input method, selection, clipboard, and events for
-//! changes, enter and escape. Adapted from GPUI's own `input` example (Apache-2.0).
-
 use std::ops::Range;
 
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, ElementId, ElementInputHandler, Entity, EntityInputHandler,
-    EventEmitter, FocusHandle, Focusable, GlobalElementId, KeyBinding, LayoutId, MouseButton, MouseDownEvent,
+    EventEmitter, FocusHandle, Focusable, GlobalElementId, Hsla, KeyBinding, LayoutId, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, ShapedLine, SharedString, Style, TextRun, UTF16Selection,
     UnderlineStyle, Window, actions, div, fill, point, prelude::*, px, relative, size,
 };
@@ -118,10 +115,6 @@ impl TextField {
         }
     }
 
-    fn show_character_palette(&mut self, _: &ShowCharacterPalette, window: &mut Window, _: &mut Context<Self>) {
-        window.show_character_palette();
-    }
-
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
             self.replace_text_in_range(None, &text.replace('\n', " "), window, cx);
@@ -217,6 +210,15 @@ impl TextField {
         self.offset_from_utf16(range_utf16.start)..self.offset_from_utf16(range_utf16.end)
     }
 
+    fn splice(&mut self, range_utf16: Option<&Range<usize>>, new_text: &str) -> Range<usize> {
+        let range = range_utf16
+            .map(|range_utf16| self.range_from_utf16(range_utf16))
+            .or(self.marked_range.clone())
+            .unwrap_or(self.selected_range.clone());
+        self.content = (self.content[0..range.start].to_owned() + new_text + &self.content[range.end..]).into();
+        range
+    }
+
     fn previous_boundary(&self, offset: usize) -> usize {
         self.content.grapheme_indices(true).rev().find_map(|(idx, _)| (idx < offset).then_some(idx)).unwrap_or(0)
     }
@@ -266,13 +268,7 @@ impl EntityInputHandler for TextField {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let range = range_utf16
-            .as_ref()
-            .map(|range_utf16| self.range_from_utf16(range_utf16))
-            .or(self.marked_range.clone())
-            .unwrap_or(self.selected_range.clone());
-
-        self.content = (self.content[0..range.start].to_owned() + new_text + &self.content[range.end..]).into();
+        let range = self.splice(range_utf16.as_ref(), new_text);
         self.selected_range = range.start + new_text.len()..range.start + new_text.len();
         self.marked_range.take();
         cx.emit(TextFieldEvent::Changed);
@@ -287,13 +283,7 @@ impl EntityInputHandler for TextField {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let range = range_utf16
-            .as_ref()
-            .map(|range_utf16| self.range_from_utf16(range_utf16))
-            .or(self.marked_range.clone())
-            .unwrap_or(self.selected_range.clone());
-
-        self.content = (self.content[0..range.start].to_owned() + new_text + &self.content[range.end..]).into();
+        let range = self.splice(range_utf16.as_ref(), new_text);
         if new_text.is_empty() {
             self.marked_range = None;
         } else {
@@ -390,18 +380,8 @@ impl Element for TextElement {
         cx: &mut App,
     ) -> Self::PrepaintState {
         let input = self.input.read(cx);
-        let content = input.content.clone();
-        let selected_range = input.selected_range.clone();
-        let cursor = input.cursor_offset();
         let style = window.text_style();
-
-        let content: SharedString = if input.masked { "•".repeat(content.chars().count()).into() } else { content };
-        let (display_text, text_color) = if content.is_empty() {
-            (input.placeholder.clone(), crate::theme::colours::faint().into())
-        } else {
-            (content, style.color)
-        };
-
+        let (display_text, text_color) = input.display_text(style.color);
         let run = TextRun {
             len: display_text.len(),
             font: style.font(),
@@ -410,50 +390,10 @@ impl Element for TextElement {
             underline: None,
             strikethrough: None,
         };
-        let runs = if let Some(marked_range) = input.marked_range.as_ref() {
-            vec![
-                TextRun { len: marked_range.start, ..run.clone() },
-                TextRun {
-                    len: marked_range.end - marked_range.start,
-                    underline: Some(UnderlineStyle { color: Some(run.color), thickness: px(1.0), wavy: false }),
-                    ..run.clone()
-                },
-                TextRun { len: display_text.len() - marked_range.end, ..run },
-            ]
-            .into_iter()
-            .filter(|run| run.len > 0)
-            .collect()
-        } else {
-            vec![run]
-        };
-
+        let runs = text_runs(run, input.marked_range.as_ref());
         let font_size = style.font_size.to_pixels(window.rem_size());
         let line = window.text_system().shape_line(display_text, font_size, &runs, None);
-
-        let cursor_pos = line.x_for_index(cursor);
-        let (selection, cursor) = if selected_range.is_empty() {
-            (
-                None,
-                Some(fill(
-                    Bounds::new(
-                        point(bounds.left() + cursor_pos, bounds.top()),
-                        size(px(2.), bounds.bottom() - bounds.top()),
-                    ),
-                    crate::theme::colours::accent(),
-                )),
-            )
-        } else {
-            (
-                Some(fill(
-                    Bounds::from_corners(
-                        point(bounds.left() + line.x_for_index(selected_range.start), bounds.top()),
-                        point(bounds.left() + line.x_for_index(selected_range.end), bounds.bottom()),
-                    ),
-                    gpui::rgba(0x7aa2f744),
-                )),
-                None,
-            )
-        };
+        let (selection, cursor) = selection_or_cursor(&line, bounds, &input.selected_range, input.cursor_offset());
         PrepaintState { line: Some(line), cursor, selection }
     }
 
@@ -472,8 +412,8 @@ impl Element for TextElement {
         if let Some(selection) = prepaint.selection.take() {
             window.paint_quad(selection);
         }
-        let line = prepaint.line.take().unwrap();
-        line.paint(bounds.origin, window.line_height(), window, cx).unwrap();
+        let Some(line) = prepaint.line.take() else { return };
+        let _ = line.paint(bounds.origin, window.line_height(), window, cx);
 
         if focus_handle.is_focused(window)
             && let Some(cursor) = prepaint.cursor.take()
@@ -486,6 +426,52 @@ impl Element for TextElement {
             input.last_bounds = Some(bounds);
         });
     }
+}
+
+impl TextField {
+    fn display_text(&self, colour: Hsla) -> (SharedString, Hsla) {
+        if self.content.is_empty() {
+            return (self.placeholder.clone(), crate::theme::colours::faint().into());
+        }
+        let shown = if self.masked { "•".repeat(self.content.chars().count()).into() } else { self.content.clone() };
+        (shown, colour)
+    }
+}
+
+fn text_runs(run: TextRun, marked: Option<&Range<usize>>) -> Vec<TextRun> {
+    let Some(marked) = marked else { return vec![run] };
+    let total = run.len;
+    vec![
+        TextRun { len: marked.start, ..run.clone() },
+        TextRun {
+            len: marked.end - marked.start,
+            underline: Some(UnderlineStyle { color: Some(run.color), thickness: px(1.0), wavy: false }),
+            ..run.clone()
+        },
+        TextRun { len: total - marked.end, ..run },
+    ]
+    .into_iter()
+    .filter(|run| run.len > 0)
+    .collect()
+}
+
+fn selection_or_cursor(
+    line: &ShapedLine,
+    bounds: Bounds<Pixels>,
+    selected: &Range<usize>,
+    cursor: usize,
+) -> (Option<PaintQuad>, Option<PaintQuad>) {
+    if selected.is_empty() {
+        let at = point(bounds.left() + line.x_for_index(cursor), bounds.top());
+        let caret =
+            fill(Bounds::new(at, size(px(2.), bounds.bottom() - bounds.top())), crate::theme::colours::accent());
+        return (None, Some(caret));
+    }
+    let area = Bounds::from_corners(
+        point(bounds.left() + line.x_for_index(selected.start), bounds.top()),
+        point(bounds.left() + line.x_for_index(selected.end), bounds.bottom()),
+    );
+    (Some(fill(area, gpui::rgba(0x7a_a2_f7_44))), None)
 }
 
 impl Render for TextField {
@@ -505,7 +491,7 @@ impl Render for TextField {
             .on_action(cx.listener(Self::select_all))
             .on_action(cx.listener(Self::home))
             .on_action(cx.listener(Self::end))
-            .on_action(cx.listener(Self::show_character_palette))
+            .on_action(|_: &ShowCharacterPalette, window, _| window.show_character_palette())
             .on_action(cx.listener(Self::paste))
             .on_action(cx.listener(Self::cut))
             .on_action(cx.listener(Self::copy))
@@ -527,7 +513,6 @@ impl Focusable for TextField {
     }
 }
 
-/// What a field tells whoever subscribes to it.
 pub(crate) enum TextFieldEvent {
     Changed,
     Submit,
@@ -536,7 +521,6 @@ pub(crate) enum TextFieldEvent {
 
 impl EventEmitter<TextFieldEvent> for TextField {}
 
-/// The field's keys; called once at start.
 pub(crate) fn bind_keys(cx: &mut App) {
     let ctx = Some("TextField");
     cx.bind_keys([
@@ -578,7 +562,6 @@ impl TextField {
         }
     }
 
-    /// Shows dots instead of the text, for secrets.
     pub(crate) fn masked(mut self) -> Self {
         self.masked = true;
         self

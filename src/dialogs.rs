@@ -1,17 +1,14 @@
-//! Small dialogs over the window: making a workspace, starting an agent, confirming something
-//! that cannot be undone. Open one with `Store::show_dialog`; any panel can.
-
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _,
+    Window, div, px,
 };
 
 use crate::store::{Store, args};
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
 
-/// The frame every dialog is drawn in.
-pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> gpui::Div {
+pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> Div {
     div()
         .w(px(460.))
         .p(px(18.))
@@ -28,11 +25,18 @@ pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, butt
         .child(div().flex().justify_end().gap(px(8.)).child(buttons))
 }
 
+pub(crate) fn cancel_and(action: Stateful<Div>) -> Div {
+    div()
+        .flex()
+        .gap(px(8.))
+        .child(ui::button("cancel", "Cancel").on_click(|_: &ClickEvent, _, cx| close(cx)))
+        .child(action)
+}
+
 fn close(cx: &mut App) {
     Store::get(cx).update(cx, Store::close_dialog);
 }
 
-/// Makes a field, subscribes the dialog to its enter and escape, and returns it.
 fn text_field<T: 'static>(
     placeholder: &str,
     cx: &mut Context<T>,
@@ -49,8 +53,6 @@ fn text_field<T: 'static>(
     field
 }
 
-// ---------------------------------------------------------------------------------------------
-
 pub(crate) struct NewWorkspace {
     project: u64,
     project_name: String,
@@ -58,8 +60,6 @@ pub(crate) struct NewWorkspace {
     worktree: bool,
 }
 
-/// `cornercase new-workspace NAME --project ID [--worktree] --focus`, in a project (the shown one
-/// without one).
 pub(crate) fn new_workspace(project: Option<u64>, window: &mut Window, cx: &mut App) {
     let store = Store::get(cx);
     let s = store.read(cx);
@@ -110,19 +110,13 @@ impl Render for NewWorkspace {
                             cx.notify();
                         })),
                 ),
-            div()
-                .flex()
-                .gap(px(8.))
-                .child(ui::button("cancel", "Cancel").on_click(|_: &ClickEvent, _, cx| close(cx)))
-                .child(
-                    ui::primary_button("create", "Create")
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
-                ),
+            cancel_and(
+                ui::primary_button("create", "Create")
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
+            ),
         )
     }
 }
-
-// ---------------------------------------------------------------------------------------------
 
 pub(crate) struct StartAgent {
     agent: Entity<TextField>,
@@ -130,7 +124,6 @@ pub(crate) struct StartAgent {
     worktree: Entity<TextField>,
 }
 
-/// `cornercase start [AGENT] --focus [--prompt TEXT] [--worktree BRANCH]` in the shown workspace.
 pub(crate) fn start_agent(window: &mut Window, cx: &mut App) {
     let store = Store::get(cx);
     if store.read(cx).view_id.is_none() {
@@ -187,48 +180,39 @@ impl Render for StartAgent {
                 .child(ui::field("Agent", boxed(&self.agent, window, cx)))
                 .child(ui::field("Prompt", boxed(&self.prompt, window, cx)))
                 .child(ui::field("Worktree", boxed(&self.worktree, window, cx))),
-            div()
-                .flex()
-                .gap(px(8.))
-                .child(ui::button("cancel", "Cancel").on_click(|_: &ClickEvent, _, cx| close(cx)))
-                .child(
-                    ui::primary_button("start", "Start")
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
-                ),
+            cancel_and(
+                ui::primary_button("start", "Start")
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
+            ),
         )
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-
-/// Asks before running a command that cannot be undone. `command` goes through `Store::act`
-/// (with the view) when `with_view`, else `Store::cmd`.
-pub(crate) struct Confirm {
+pub(crate) struct Question {
     title: String,
     message: String,
-    confirm: String,
+    button: String,
     command: Vec<String>,
-    with_view: bool,
+}
+
+impl Question {
+    pub(crate) fn new(
+        title: impl Into<String>,
+        message: impl Into<String>,
+        button: impl Into<String>,
+        command: Vec<String>,
+    ) -> Self {
+        Self { title: title.into(), message: message.into(), button: button.into(), command }
+    }
+}
+
+pub(crate) struct Confirm {
+    question: Question,
     focus: FocusHandle,
 }
 
-pub(crate) fn confirm(
-    title: impl Into<String>,
-    message: impl Into<String>,
-    confirm: impl Into<String>,
-    command: Vec<String>,
-    with_view: bool,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let view = cx.new(|cx| Confirm {
-        title: title.into(),
-        message: message.into(),
-        confirm: confirm.into(),
-        command,
-        with_view,
-        focus: cx.focus_handle(),
-    });
+pub(crate) fn confirm(question: Question, window: &mut Window, cx: &mut App) {
+    let view = cx.new(|cx| Confirm { question, focus: cx.focus_handle() });
     let focus = view.read(cx).focus.clone();
     Store::get(cx).update(cx, |s, cx| s.show_dialog(view.into(), cx));
     window.focus(&focus);
@@ -236,13 +220,9 @@ pub(crate) fn confirm(
 
 impl Confirm {
     fn run(&mut self, cx: &mut Context<Self>) {
-        let (command, with_view) = (self.command.clone(), self.with_view);
+        let command = self.question.command.clone();
         Store::get(cx).update(cx, |s, cx| {
-            if with_view {
-                s.act(command)
-            } else {
-                s.cmd(command)
-            }
+            s.cmd(command);
             s.close_dialog(cx);
         });
     }
@@ -258,16 +238,12 @@ impl Render for Confirm {
                 _ => {}
             }))
             .child(frame(
-                self.title.clone(),
-                div().text_color(colours::muted()).child(self.message.clone()),
-                div()
-                    .flex()
-                    .gap(px(8.))
-                    .child(ui::button("cancel", "Cancel").on_click(|_: &ClickEvent, _, cx| close(cx)))
-                    .child(
-                        ui::danger_button("confirm", self.confirm.clone())
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx))),
-                    ),
+                self.question.title.clone(),
+                div().text_color(colours::muted()).child(self.question.message.clone()),
+                cancel_and(
+                    ui::danger_button("confirm", self.question.button.clone())
+                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx))),
+                ),
             ))
     }
 }

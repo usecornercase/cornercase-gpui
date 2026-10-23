@@ -1,0 +1,17 @@
+# Notifications
+
+Code: `src/notify.rs`, `src/notify/`
+
+- **What cornercase tells the user outside the terminal**: agent notices (a toast with a "Go" button that runs `go TOKEN`, a macOS notification while the window is in the background, the sound the server chose), what programs ask of the host terminal (clipboard writes, bells), and the app's state in the status bar (an update to install, away on chat apps, keeping the machine awake).
+- **One `events --notices --host --json` stream per server run**: the notifier follows the run (`boot`) the view shows, and starts again when the boot changes. A new boot also resets what this window installed or was waiting to restart, since that is now running, or gone. A generation number tells the current stream from a replaced one whose end arrives late.
+- **When `events` ends** (the server stopped or refused), it is followed again after 3 s while the window is connected; the first failure with a message becomes one error toast, not one per retry.
+- **Events format 1** is parsed with serde (`notify/feed.rs`); events this client does not act on (status, opened, closed…) and those of a newer server read as `Other`, so a new event kind never breaks the stream. Tests use cornercase's own fixtures in `tests/fixtures/events/` and `tests/fixtures/app/`.
+- **Settings are read on each notice** (`config --json`), so a change in Settings counts from the next notice without a watcher: `desktop_notifications` off stops the macOS notification; `sound_waiting`/`sound_done` name the user's own files.
+- **Sounds**: `afplay` plays the user's file when it is a readable absolute path (or `~/`, as cornercase accepts them; a relative path is refused, as cornercase refuses it), else a macOS system sound per cue (`Ping` for needs-you, `Glass` for finished). Two sounds within 1 s would overlap; the second is dropped, as cornercase's own player does.
+- **macOS notifications go through `osascript`**: gpui has none for an unbundled binary. The title and body are passed as arguments to the script (`on run argv`), never spliced into it, so no text can inject AppleScript. Helpers run with no input or output and are reaped on a thread of their own.
+- **No desktop notification while the window is active**: the toast is enough.
+- **Bells**: a bell in the shown tab flashes the terminal for 160 ms; one elsewhere gives a toast saying where (`project › workspace › tab`) with a "Show" button, at most once every 30 s per pane.
+- **Clipboard writes (OSC 52)** are applied and announced with the program's name, so a program cannot fill the clipboard unseen.
+- **The window title** is the shown pane's own title (what its program set), else its tab's name.
+- **Updates** (`notify/update.rs`): the status bar offers the release `status --app` reports; its dialog shows every changelog section after the running version and installs with `cornercase update`, or shows the command to copy when cornercase cannot replace itself (Homebrew, folders it cannot write). Without a terminal and without `--yes`, `update` never restarts the server, so the restart is a second dialog: `restart --yes` at once, or `restart --when-idle --yes`, kept running until no agent is in the middle of a turn; dropping that stream cancels the restart. A version installed by another client also offers the restart.
+- **Away and keep awake** show only when they have something to say: away once a bot is paired, keep awake while held or when it cannot be held.

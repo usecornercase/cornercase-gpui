@@ -1,0 +1,9 @@
+# Widgets
+
+Code: `src/ui/`, `src/theme.rs`, `src/dialogs.rs`
+
+- **One set of building blocks** (`ui/mod.rs`) every panel uses, so the window reads as one thing: buttons (plain, primary for a form's main action, danger for what cannot be undone, icon buttons for one glyph), rows, sections, notes, fields, input boxes, checkboxes, segments and titles. They return gpui `Div`s the caller finishes with `.on_click(…)`.
+- **`TextField` is adapted from gpui 0.2.2's own `input` example (Apache-2.0)**: gpui has no text field. Text goes through macOS's input method (`EntityInputHandler`), so dead keys, ⌥ characters and composition (marked text, underlined) work. Pasted newlines become spaces, since the field holds one line. `masked()` shows dots for secrets. Enter and escape are actions in the `TextField` key context, emitted as `Submit` and `Cancel`; every edit emits `Changed`.
+- **Dialogs** (`dialogs.rs`) share `frame` and `cancel_and`. Anything that cannot be undone asks first through `confirm(Question::new(title, message, button, command), …)`, which runs the command with `Store::cmd` on enter or the danger button. No caller needed `--view` (they pass ids, and `--yes` where the command asks), so the dialog runs the command as given and takes no flag for it.
+- **The palette is Tokyo Night**, the dark theme cornercase's own fixtures use: the same 16 ANSI colours (the bright ones equal the normal ones, except bright black, and bright white is the foreground) are given to cornercase with `theme -`, with the xterm 256-colour cube and grey ramp built from them, so programs pick a look that matches what the window draws. A pane's program can override the palette, foreground, background and cursor; `Painter` applies its overrides first.
+- **`FONT_FAMILY`** lives in `theme.rs`, not `app.rs`, so panels need not import the window (`design/code-layout.md`).

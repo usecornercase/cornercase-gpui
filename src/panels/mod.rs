@@ -1,7 +1,3 @@
-//! The panels: docked beside the terminal (changes, files, TODO) or shown as a sheet over the
-//! window (issues, usage, settings…). Each lives in its own module and builds its own view; the
-//! root view hosts them and keeps each one alive once opened, so it keeps its state.
-
 pub(crate) mod accounts;
 pub(crate) mod changes;
 pub(crate) mod files;
@@ -62,7 +58,6 @@ impl PanelKind {
         }
     }
 
-    /// Docked beside the terminal, rather than a sheet over the window.
     pub(crate) fn docked(self) -> bool {
         matches!(self, Self::Changes | Self::Files | Self::Todo)
     }

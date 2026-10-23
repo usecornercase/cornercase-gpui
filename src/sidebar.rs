@@ -1087,11 +1087,12 @@ impl Root {
                     Entry::Separator,
                     danger("Close project…", move |_, window, cx| {
                         dialogs::confirm(
-                            format!("Close the project {name}?"),
-                            "Every shell in it stops, agents included. Its folder and worktrees stay on disk.",
-                            "Close project",
-                            cmd(&["close", "--project", &id.to_string()]),
-                            false,
+                            dialogs::Question::new(
+                                format!("Close the project {name}?"),
+                                "Every shell in it stops, agents included. Its folder and worktrees stay on disk.",
+                                "Close project",
+                                cmd(&["close", "--project", &id.to_string()]),
+                            ),
                             window,
                             cx,
                         );
@@ -1147,11 +1148,12 @@ impl Root {
                     };
                     entries.push(danger(label, move |_, window, cx| {
                         dialogs::confirm(
-                            format!("Close {name}?"),
-                            message,
-                            "Close",
-                            cmd(&["close", "--workspace", &id.to_string()]),
-                            false,
+                            dialogs::Question::new(
+                                format!("Close {name}?"),
+                                message,
+                                "Close",
+                                cmd(&["close", "--workspace", &id.to_string()]),
+                            ),
                             window,
                             cx,
                         );

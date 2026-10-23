@@ -273,11 +273,12 @@ pub(super) struct DeleteGroup {
 pub(super) fn delete_group(group: u64, name: String, projects: usize, window: &mut Window, cx: &mut App) {
     if projects == 0 {
         crate::dialogs::confirm(
-            format!("Delete the group {name}?"),
-            "It holds no projects.",
-            "Delete group",
-            args(&["group", "delete", &group.to_string()]),
-            false,
+            crate::dialogs::Question::new(
+                format!("Delete the group {name}?"),
+                "It holds no projects.",
+                "Delete group",
+                args(&["group", "delete", &group.to_string()]),
+            ),
             window,
             cx,
         );

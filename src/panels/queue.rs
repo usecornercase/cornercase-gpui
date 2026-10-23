@@ -630,14 +630,15 @@ impl QueuePanel {
             return;
         }
         dialogs::confirm(
-            "Remove this queue entry?",
-            format!(
-                "“{}” will not start, and its prompt and choices are gone: undoing a removal needs {UNDO_ISSUE}.",
-                entry.label
+            dialogs::Question::new(
+                "Remove this queue entry?",
+                format!(
+                    "“{}” will not start, and its prompt and choices are gone: undoing a removal needs {UNDO_ISSUE}.",
+                    entry.label
+                ),
+                "Remove",
+                command,
             ),
-            "Remove",
-            command,
-            false,
             window,
             cx,
         );

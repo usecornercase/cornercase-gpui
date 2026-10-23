@@ -1,5 +1,3 @@
-//! Small building blocks every panel uses, so the window reads as one thing.
-
 pub(crate) mod text_field;
 
 use gpui::{
@@ -11,17 +9,14 @@ pub(crate) use text_field::{TextField, TextFieldEvent};
 
 use crate::theme::{colours, status_badge};
 
-/// A bordered button. Add `.on_click(...)`.
 pub(crate) fn button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<Div> {
     button_coloured(id, label, colours::muted())
 }
 
-/// The main action of a form or panel.
 pub(crate) fn primary_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<Div> {
     button_coloured(id, label, colours::accent()).border_color(colours::accent())
 }
 
-/// A button for something that cannot be undone.
 pub(crate) fn danger_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<Div> {
     button_coloured(id, label, colours::failed()).border_color(colours::failed())
 }
@@ -43,7 +38,6 @@ pub(crate) fn button_coloured(id: impl Into<ElementId>, label: impl Into<SharedS
         .child(label.into())
 }
 
-/// A borderless button with one glyph (✕, +, ⋯).
 pub(crate) fn icon_button(id: impl Into<ElementId>, icon: impl Into<SharedString>) -> Stateful<Div> {
     div()
         .id(id)
@@ -56,7 +50,6 @@ pub(crate) fn icon_button(id: impl Into<ElementId>, icon: impl Into<SharedString
         .child(icon.into())
 }
 
-/// An agent state's icon in its colour, in a fixed-width slot.
 pub(crate) fn badge(status: Option<&str>) -> Div {
     match status_badge(status) {
         Some((icon, colour)) => div().w(px(14.)).flex_none().text_color(colour).child(icon),
@@ -64,13 +57,11 @@ pub(crate) fn badge(status: Option<&str>) -> Div {
     }
 }
 
-/// A small upper-case heading over a group of rows.
 pub(crate) fn section(title: impl Into<SharedString>) -> Div {
     let title: SharedString = title.into();
     div().pt(px(10.)).pb(px(4.)).text_size(px(11.)).text_color(colours::faint()).child(title.to_uppercase())
 }
 
-/// A hoverable, clickable row.
 pub(crate) fn row(id: impl Into<ElementId>, selected: bool) -> Stateful<Div> {
     div()
         .id(id)
@@ -85,17 +76,14 @@ pub(crate) fn row(id: impl Into<ElementId>, selected: bool) -> Stateful<Div> {
         .hover(|s| s.bg(colours::hover()))
 }
 
-/// Grey text for empty lists, loading and errors.
 pub(crate) fn note(text: impl Into<SharedString>) -> Div {
     div().p(px(12.)).text_color(colours::muted()).child(text.into())
 }
 
-/// Muted secondary text.
 pub(crate) fn dim(text: impl Into<SharedString>) -> Div {
     div().text_size(px(11.)).text_color(colours::faint()).child(text.into())
 }
 
-/// A label over a control, for forms.
 pub(crate) fn field(label: impl Into<SharedString>, control: impl IntoElement) -> Div {
     div()
         .flex()
@@ -105,7 +93,6 @@ pub(crate) fn field(label: impl Into<SharedString>, control: impl IntoElement) -
         .child(control)
 }
 
-/// The box a `TextField` sits in.
 pub(crate) fn input_box(field: impl IntoElement, focused: bool) -> Div {
     div()
         .px(px(8.))
@@ -117,7 +104,6 @@ pub(crate) fn input_box(field: impl IntoElement, focused: bool) -> Div {
         .child(field)
 }
 
-/// A checkbox with its label. Add `.on_click(...)`.
 pub(crate) fn checkbox(id: impl Into<ElementId>, checked: bool, label: impl Into<SharedString>) -> Stateful<Div> {
     div()
         .id(id)
@@ -137,8 +123,6 @@ pub(crate) fn checkbox(id: impl Into<ElementId>, checked: bool, label: impl Into
         .child(label.into())
 }
 
-/// A row of tabs (segments); the selected one is highlighted. Each gets `.on_click` from the caller
-/// through `make`.
 pub(crate) fn segments(items: Vec<AnyElement>) -> Div {
     div().flex().gap(px(2.)).p(px(2.)).rounded(px(6.)).bg(colours::sidebar()).children(items)
 }
@@ -156,7 +140,6 @@ pub(crate) fn segment(id: impl Into<ElementId>, label: impl Into<SharedString>, 
         .child(label.into())
 }
 
-/// Bold title text.
 pub(crate) fn title(text: impl Into<SharedString>) -> Div {
     div().font_weight(FontWeight::SEMIBOLD).child(text.into())
 }

@@ -1,6 +1,3 @@
-//! Colours: the terminal palette (also given to cornercase with `cornercase theme`, so programs
-//! pick a look that matches what we draw) and the chrome around it.
-
 use gpui::{Hsla, Rgba, rgb};
 use serde_json::json;
 
@@ -8,76 +5,82 @@ use crate::model::{Colour, Colours, Style};
 
 pub(crate) const FONT_FAMILY: &str = "Menlo";
 
-/// Tokyo Night, the dark theme cornercase's own fixtures use.
 pub(crate) const FOREGROUND: [u8; 3] = [192, 202, 245];
 pub(crate) const BACKGROUND: [u8; 3] = [26, 27, 38];
+const BLACK: [u8; 3] = [21, 22, 30];
+const RED: [u8; 3] = [247, 118, 142];
+const GREEN: [u8; 3] = [158, 206, 106];
+const YELLOW: [u8; 3] = [224, 175, 104];
+const BLUE: [u8; 3] = [122, 162, 247];
+const MAGENTA: [u8; 3] = [187, 154, 247];
+const CYAN: [u8; 3] = [125, 207, 255];
+const WHITE: [u8; 3] = [169, 177, 214];
+const BRIGHT_BLACK: [u8; 3] = [86, 95, 137];
 pub(crate) const ANSI: [[u8; 3]; 16] = [
-    [21, 22, 30],
-    [247, 118, 142],
-    [158, 206, 106],
-    [224, 175, 104],
-    [122, 162, 247],
-    [187, 154, 247],
-    [125, 207, 255],
-    [169, 177, 214],
-    [86, 95, 137],
-    [247, 118, 142],
-    [158, 206, 106],
-    [224, 175, 104],
-    [122, 162, 247],
-    [187, 154, 247],
-    [125, 207, 255],
-    [192, 202, 245],
+    BLACK,
+    RED,
+    GREEN,
+    YELLOW,
+    BLUE,
+    MAGENTA,
+    CYAN,
+    WHITE,
+    BRIGHT_BLACK,
+    RED,
+    GREEN,
+    YELLOW,
+    BLUE,
+    MAGENTA,
+    CYAN,
+    FOREGROUND,
 ];
 
-/// The chrome's colours.
 pub(crate) mod colours {
     use super::{Rgba, rgb};
     pub(crate) fn sidebar() -> Rgba {
-        rgb(0x16161e)
+        rgb(0x16_16_1e)
     }
     pub(crate) fn panel() -> Rgba {
-        rgb(0x1f2335)
+        rgb(0x1f_23_35)
     }
     pub(crate) fn terminal() -> Rgba {
-        rgb(0x1a1b26)
+        rgb(0x1a_1b_26)
     }
     pub(crate) fn border() -> Rgba {
-        rgb(0x292e42)
+        rgb(0x29_2e_42)
     }
     pub(crate) fn hover() -> Rgba {
-        rgb(0x292e42)
+        rgb(0x29_2e_42)
     }
     pub(crate) fn selected() -> Rgba {
-        rgb(0x2f3549)
+        rgb(0x2f_35_49)
     }
     pub(crate) fn text() -> Rgba {
-        rgb(0xc0caf5)
+        rgb(0xc0_ca_f5)
     }
     pub(crate) fn muted() -> Rgba {
-        rgb(0x737aa2)
+        rgb(0x73_7a_a2)
     }
     pub(crate) fn faint() -> Rgba {
-        rgb(0x565f89)
+        rgb(0x56_5f_89)
     }
     pub(crate) fn accent() -> Rgba {
-        rgb(0x7aa2f7)
+        rgb(0x7a_a2_f7)
     }
     pub(crate) fn working() -> Rgba {
-        rgb(0xe0af68)
+        rgb(0xe0_af_68)
     }
     pub(crate) fn waiting() -> Rgba {
-        rgb(0xff9e64)
+        rgb(0xff_9e_64_u32)
     }
     pub(crate) fn done() -> Rgba {
-        rgb(0x9ece6a)
+        rgb(0x9e_ce_6a)
     }
     pub(crate) fn failed() -> Rgba {
-        rgb(0xf7768e)
+        rgb(0xf7_76_8e)
     }
 }
 
-/// The icon and colour of an agent's state, as the TUI's sidebar shows them.
 pub(crate) fn status_badge(status: Option<&str>) -> Option<(&'static str, Rgba)> {
     match status? {
         "working" => Some(("◐", colours::working())),
@@ -90,7 +93,6 @@ pub(crate) fn status_badge(status: Option<&str>) -> Option<(&'static str, Rgba)>
     }
 }
 
-/// The xterm 256-colour palette entry for an index, from the 16 ANSI colours above.
 pub(crate) fn palette(index: u8) -> [u8; 3] {
     match index {
         0..=15 => ANSI[index as usize],
@@ -106,7 +108,6 @@ pub(crate) fn palette(index: u8) -> [u8; 3] {
     }
 }
 
-/// What `cornercase theme -` reads.
 pub(crate) fn theme_json() -> String {
     let palette: Vec<[u8; 3]> = (0..=255u8).map(palette).collect();
     json!({ "foreground": FOREGROUND, "background": BACKGROUND, "palette": palette }).to_string()
@@ -116,7 +117,6 @@ pub(crate) fn hsla([r, g, b]: [u8; 3]) -> Hsla {
     Rgba { r: f32::from(r) / 255., g: f32::from(g) / 255., b: f32::from(b) / 255., a: 1. }.into()
 }
 
-/// Resolves colours the way a pane's program left them: its own overrides first.
 pub(crate) struct Painter<'a> {
     pub colours: &'a Colours,
 }
@@ -137,8 +137,6 @@ impl Painter<'_> {
         }
     }
 
-    /// The foreground and background a cell of this style is drawn with, and whether its
-    /// background differs from the pane's.
     pub(crate) fn resolve(&self, style: &Style) -> (Hsla, Hsla, bool) {
         let mut fg = style.fg.map_or(self.default_fg(), |c| self.colour(c));
         let mut bg = style.bg.map_or(self.default_bg(), |c| self.colour(c));

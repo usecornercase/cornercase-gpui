@@ -219,9 +219,12 @@ fn files_stay_within_the_line_limit() {
 fn sources_have_no_comments() {
     let lines = |s: &Source| s.comments.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
     for source in sources().iter().filter(|s| !s.comments.is_empty()) {
-        if !COMMENTED_FILES.contains(&source.path.as_str()) {
-            panic!("comments in {} (lines {}): rationale goes in design/", source.path, lines(source));
-        }
+        assert!(
+            COMMENTED_FILES.contains(&source.path.as_str()),
+            "comments in {} (lines {}): rationale goes in design/",
+            source.path,
+            lines(source)
+        );
     }
     check("comments", COMMENTED_FILES, |s| !s.comments.is_empty());
 }

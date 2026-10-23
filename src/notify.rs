@@ -1,11 +1,3 @@
-//! What cornercase tells the user outside the terminal: agent notices (a toast with a `Go`
-//! button, a macOS notification while the window is in the background, the sound the server
-//! chose), what programs ask of the host terminal (clipboard writes, bells), and the app's state
-//! in the status bar (an update to install, away on chat apps, keeping the machine awake).
-//!
-//! It follows `cornercase events --notices --host --json` for the server run the view shows
-//! (again after a reconnect), and reads `Store.app` (`status --app --follow`) for the status bar.
-
 mod feed;
 mod update;
 
@@ -26,21 +18,15 @@ use crate::theme::colours;
 
 pub(crate) use feed::{AppState, Event, Notice, Prefs};
 
-/// How long a bell flashes the terminal.
 const FLASH: Duration = Duration::from_millis(160);
-/// A pane out of sight ringing again within this long gives no second toast.
 const BELL_TOAST_EVERY: Duration = Duration::from_secs(30);
-/// Two sounds closer than this would overlap; the second is dropped, as cornercase's own player does.
 const SOUND_EVERY: Duration = Duration::from_secs(1);
-/// After `events` ends (the server stopped or refused), wait this long before following again.
 const RETRY: Duration = Duration::from_secs(3);
 
-/// Installing an update with `cornercase update`, from this window.
 #[derive(Clone, PartialEq)]
 pub(crate) enum InstallState {
     Idle,
     Running,
-    /// Installed this version; the server runs the old one until it restarts.
     Done(String),
     Failed(String),
 }
@@ -48,22 +34,17 @@ pub(crate) enum InstallState {
 pub(crate) struct Notifier {
     store: Entity<Store>,
     events: Option<Stream>,
-    /// Which `events` stream is the current one, so a replaced one ending is ignored.
     generation: u64,
-    /// The server run (`boot`) the stream follows.
     boot: Option<String>,
     told_failure: bool,
-    /// `Store.app` read, and the boot and revision it was read at.
     pub app: AppState,
     app_key: Option<(Option<String>, u64)>,
-    /// Whether the window is the active one (no desktop notification then).
     active: bool,
     last_sound: Option<Instant>,
     bell_toasts: HashMap<u64, Instant>,
     flash: u64,
     flashing: bool,
     pub install: InstallState,
-    /// `cornercase restart --when-idle` waiting; dropping it cancels the restart.
     restart: Option<Stream>,
 }
 
@@ -89,7 +70,6 @@ impl Notifier {
         }
     }
 
-    /// Follows the server our view is on, again when it restarted, and rereads the app state.
     fn store_changed(&mut self, cx: &mut Context<Self>) {
         let s = self.store.read(cx);
         let boot = s.session.as_ref().filter(|_| s.view_id.is_some()).map(|s| s.boot.clone());
@@ -106,7 +86,6 @@ impl Notifier {
         }
         if boot.is_some() && boot != self.boot {
             if self.boot.is_some() {
-                // A new server run: what this window installed is now running, or gone.
                 self.install = InstallState::Idle;
                 self.restart = None;
                 self.bell_toasts.clear();
@@ -124,32 +103,32 @@ impl Notifier {
             cx,
             args(&["events", "--notices", "--host", "--json"]),
             |this, line, cx| this.on_line(&line, cx),
-            move |this, err, cx| this.ended(generation, err, cx),
+            move |this, err, cx| this.ended(generation, &err, cx),
         );
     }
 
-    /// `events` stopped: the server restarted or went away (the view reconnects, and a new boot
-    /// follows again), or it refused. Try again in a moment while we are connected.
-    fn ended(&mut self, generation: u64, err: String, cx: &mut Context<Self>) {
+    fn ended(&mut self, generation: u64, err: &str, cx: &mut Context<Self>) {
         if generation != self.generation {
             return;
         }
         self.events = None;
-        let err = err.trim().lines().last().unwrap_or_default().to_string();
+        let err = last_line(err);
         if !err.is_empty() && !self.told_failure {
             self.told_failure = true;
             self.store.update(cx, |s, cx| s.toast(format!("Agent notices stopped: {err}"), ToastKind::Error, cx));
         }
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(RETRY).await;
-            let _ = this.update(cx, |this, cx| {
-                let connected = this.store.read(cx).view_id.is_some();
-                if this.generation == generation && this.events.is_none() && connected {
-                    this.follow(cx);
-                }
-            });
+            let _ = this.update(cx, |this, cx| this.retry(generation, cx));
         })
         .detach();
+    }
+
+    fn retry(&mut self, generation: u64, cx: &mut Context<Self>) {
+        let connected = self.store.read(cx).view_id.is_some();
+        if self.generation == generation && self.events.is_none() && connected {
+            self.follow(cx);
+        }
     }
 
     fn on_line(&mut self, line: &str, cx: &mut Context<Self>) {
@@ -161,9 +140,6 @@ impl Notifier {
         }
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Agent notices.
-
     fn notice(&mut self, notice: Notice, cx: &mut Context<Self>) {
         let go = ("Go".to_string(), args(&["go", &notice.token]));
         self.store.update(cx, |s, cx| s.toast_with(notice.message.clone(), notice.toast_kind(), Some(go), cx));
@@ -171,8 +147,6 @@ impl Notifier {
         if notice.sound.is_none() && !desktop {
             return;
         }
-        // The settings say whether desktop notifications are off and which files to play; read
-        // them now, so a change in Settings counts from the next notice.
         store::run_json(cx, args(&["config", "--json"]), move |this, config, _| {
             let prefs = config.map(|c| Prefs::from_config(&c)).unwrap_or_default();
             if let Some(cue) = &notice.sound
@@ -188,9 +162,6 @@ impl Notifier {
         });
     }
 
-    // -----------------------------------------------------------------------------------------
-    // What programs ask of the terminal.
-
     fn clipboard(&mut self, text: String, pane: Option<u64>, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         let program = pane.and_then(|id| {
@@ -205,7 +176,6 @@ impl Notifier {
         self.store.update(cx, |s, cx| s.toast(text, ToastKind::Info, cx));
     }
 
-    /// A bell in the shown tab flashes the terminal; one elsewhere says where, once in a while.
     fn bell(&mut self, tab: Option<u64>, pane: Option<u64>, cx: &mut Context<Self>) {
         let session = self.store.read(cx).session.as_ref();
         let shown = session.and_then(|s| s.shown().tab);
@@ -231,26 +201,22 @@ impl Notifier {
         cx.notify();
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(FLASH).await;
-            let _ = this.update(cx, |this, cx| {
-                if this.flash == flash {
-                    this.flashing = false;
-                    cx.notify();
-                }
-            });
+            let _ = this.update(cx, |this, cx| this.end_flash(flash, cx));
         })
         .detach();
     }
 
-    /// Whether the terminal shows the bell's flash now.
+    fn end_flash(&mut self, flash: u64, cx: &mut Context<Self>) {
+        if self.flash == flash {
+            self.flashing = false;
+            cx.notify();
+        }
+    }
+
     pub(crate) fn flashing(&self) -> bool {
         self.flashing
     }
 
-    // -----------------------------------------------------------------------------------------
-    // Updates.
-
-    /// `cornercase update`: downloads and installs the release. Without a terminal and without
-    /// `--yes` it never restarts the server; the restart is asked for separately.
     pub(crate) fn install(&mut self, cx: &mut Context<Self>) {
         if self.install == InstallState::Running {
             return;
@@ -267,7 +233,6 @@ impl Notifier {
         });
     }
 
-    /// The version installed and waiting for a restart: by this window, or by another client.
     pub(crate) fn installed_version(&self) -> Option<String> {
         if let InstallState::Done(v) = &self.install {
             Some(v.clone())
@@ -277,8 +242,6 @@ impl Notifier {
         }
     }
 
-    /// `cornercase restart --yes`, or with `--when-idle` kept running until no agent works (it
-    /// ends with the restart; dropping it cancels).
     pub(crate) fn restart(&mut self, when_idle: bool, cx: &mut Context<Self>) {
         if !when_idle {
             self.store.read(cx).cmd(args(&["restart", "--yes"]));
@@ -290,7 +253,7 @@ impl Notifier {
             |_, _, _| {},
             |this, err, cx| {
                 this.restart = None;
-                let err = err.trim().lines().last().unwrap_or_default().to_string();
+                let err = last_line(&err);
                 if !err.is_empty() {
                     this.store.update(cx, |s, cx| s.toast(err, ToastKind::Error, cx));
                 }
@@ -306,25 +269,22 @@ impl Notifier {
         cx.notify();
     }
 
-    // -----------------------------------------------------------------------------------------
-    // The status bar.
-
-    /// The status bar's items for the update, away and keeping awake, each shown only when it
-    /// has something to say.
     pub(crate) fn status_items(&self, this: &Entity<Self>) -> Vec<AnyElement> {
-        let mut items = Vec::new();
-        let release = self.app.release();
+        [self.update_item(this), self.away_item(), self.awake_item()].into_iter().flatten().collect()
+    }
+
+    fn update_item(&self, this: &Entity<Self>) -> Option<AnyElement> {
+        let n = this.clone();
         if self.restart.is_some() {
-            let n = this.clone();
-            items.push(
+            return Some(
                 chip("restart-pending", "↻ restart pending", Some(colours::working()), colours::working())
                     .tooltip(tip("Restarts once no agent is in the middle of a turn. Click to cancel."))
                     .on_click(move |_: &ClickEvent, _, cx| n.update(cx, Notifier::cancel_restart))
                     .into_any_element(),
             );
-        } else if let Some(version) = self.installed_version() {
-            let n = this.clone();
-            items.push(
+        }
+        if let Some(version) = self.installed_version() {
+            return Some(
                 chip("restart", format!("↻ restart for {version}"), None, colours::accent())
                     .tooltip(tip(format!(
                         "cornercase {version} is installed; the server runs the old one until it restarts."
@@ -332,69 +292,74 @@ impl Notifier {
                     .on_click(move |_: &ClickEvent, window, cx| update::show_restart(n.clone(), window, cx))
                     .into_any_element(),
             );
-        } else if let Some(release) = release {
-            let n = this.clone();
-            let label = match self.install {
-                InstallState::Running => format!("↑ installing {}…", release.version),
-                _ => format!("↑ {}", release.version),
-            };
-            items.push(
-                chip("update", label, None, colours::accent())
-                    .tooltip(tip(format!("cornercase {} is out: see what changed", release.version)))
-                    .on_click(move |_: &ClickEvent, window, cx| update::show_update(n.clone(), window, cx))
-                    .into_any_element(),
-            );
         }
+        let release = self.app.release()?;
+        let label = match self.install {
+            InstallState::Running => format!("↑ installing {}…", release.version),
+            _ => format!("↑ {}", release.version),
+        };
+        Some(
+            chip("update", label, None, colours::accent())
+                .tooltip(tip(format!("cornercase {} is out: see what changed", release.version)))
+                .on_click(move |_: &ClickEvent, window, cx| update::show_update(n.clone(), window, cx))
+                .into_any_element(),
+        )
+    }
 
-        if self.app.away_ready() {
-            let on = self.app.away_on();
+    fn away_item(&self) -> Option<AnyElement> {
+        if !self.app.away_ready() {
+            return None;
+        }
+        let on = self.app.away_on();
+        let (dot, text, hint, command) = if on.is_empty() {
             let ready: Vec<String> =
                 self.app.away.iter().filter(|a| a.ready).map(|a| feed::platform_name(&a.platform)).collect();
-            let (dot, text, hint, command) = if on.is_empty() {
-                (
-                    None,
-                    colours::faint(),
-                    format!("Click to have agents message you on {}", ready.join(" and ")),
-                    args(&["away"]),
-                )
-            } else {
-                let names: Vec<String> = on.iter().map(|p| feed::platform_name(p)).collect();
-                (
-                    Some(colours::waiting()),
-                    colours::text(),
-                    format!("Agents message you on {} while you are away. Click to stop.", names.join(" and ")),
-                    args(&["away", "--off"]),
-                )
-            };
-            items.push(
-                chip("away", "away", dot, text)
-                    .tooltip(tip(hint))
-                    .on_click(move |_: &ClickEvent, _, cx| Store::get(cx).read(cx).cmd(command.clone()))
+            (
+                None,
+                colours::faint(),
+                format!("Click to have agents message you on {}", ready.join(" and ")),
+                args(&["away"]),
+            )
+        } else {
+            let names: Vec<String> = on.iter().map(|p| feed::platform_name(p)).collect();
+            (
+                Some(colours::waiting()),
+                colours::text(),
+                format!("Agents message you on {} while you are away. Click to stop.", names.join(" and ")),
+                args(&["away", "--off"]),
+            )
+        };
+        Some(
+            chip("away", "away", dot, text)
+                .tooltip(tip(hint))
+                .on_click(move |_: &ClickEvent, _, cx| Store::get(cx).read(cx).cmd(command.clone()))
+                .into_any_element(),
+        )
+    }
+
+    fn awake_item(&self) -> Option<AnyElement> {
+        let awake = self.app.keep_awake.as_ref()?;
+        if awake.held {
+            let by = awake.by.as_deref().map(|b| format!(" by {b}")).unwrap_or_default();
+            return Some(
+                chip("awake", "awake", Some(colours::done()), colours::muted())
+                    .tooltip(tip(format!("The machine is kept awake{by} while agents work")))
                     .into_any_element(),
             );
         }
-
-        if let Some(awake) = &self.app.keep_awake {
-            if awake.held {
-                let by = awake.by.as_deref().map(|b| format!(" by {b}")).unwrap_or_default();
-                items.push(
-                    chip("awake", "awake", Some(colours::done()), colours::muted())
-                        .tooltip(tip(format!("The machine is kept awake{by} while agents work")))
-                        .into_any_element(),
-                );
-            } else if let Some(why) = &awake.unavailable {
-                items.push(
-                    chip("awake", "awake ✗", None, colours::faint())
-                        .tooltip(tip(format!("Cannot keep the machine awake: {why}")))
-                        .into_any_element(),
-                );
-            }
-        }
-        items
+        let why = awake.unavailable.as_ref()?;
+        Some(
+            chip("awake", "awake ✗", None, colours::faint())
+                .tooltip(tip(format!("Cannot keep the machine awake: {why}")))
+                .into_any_element(),
+        )
     }
 }
 
-/// The window's title: the shown pane's own title (what its program set), else its tab's name.
+fn last_line(err: &str) -> String {
+    err.trim().lines().last().unwrap_or_default().to_string()
+}
+
 pub(crate) fn window_title(session: &Session) -> String {
     let shown = session.shown();
     let tab =
@@ -406,7 +371,6 @@ pub(crate) fn window_title(session: &Session) -> String {
     format!("{} — cornercase", title.unwrap_or(&tab.name))
 }
 
-/// `project › workspace › tab` for a tab.
 fn tab_place(session: &Session, tab: u64) -> Option<String> {
     session.projects.iter().find_map(|p| {
         p.workspaces
@@ -415,7 +379,6 @@ fn tab_place(session: &Session, tab: u64) -> Option<String> {
     })
 }
 
-/// A compact clickable item of the status bar, with an optional dot.
 fn chip(id: &'static str, label: impl Into<SharedString>, dot: Option<Rgba>, text: Rgba) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
@@ -433,7 +396,6 @@ fn chip(id: &'static str, label: impl Into<SharedString>, dot: Option<Rgba>, tex
         .child(label.into())
 }
 
-/// A tooltip builder for `.tooltip(..)`.
 pub(crate) fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
     let text = text.into();
     move |_, cx| cx.new(|_| Tip(text.clone())).into()
@@ -459,8 +421,6 @@ impl Render for Tip {
     }
 }
 
-/// A macOS notification. GPUI has none for an unbundled binary, so `osascript` posts it; the
-/// texts go as arguments, never inside the script.
 fn desktop_notification(title: &str, body: &str) {
     let script = ["on run argv", "display notification (item 2 of argv) with title (item 1 of argv)", "end run"];
     let mut a: Vec<String> = script.iter().flat_map(|line| ["-e".to_string(), (*line).to_string()]).collect();
@@ -469,7 +429,6 @@ fn desktop_notification(title: &str, body: &str) {
     spawn_quietly("osascript", &a);
 }
 
-/// Runs a helper program with no input or output, reaped on a thread of its own.
 fn spawn_quietly(program: &'static str, a: &[String]) {
     let a = a.to_vec();
     std::thread::spawn(move || {
@@ -479,40 +438,4 @@ fn spawn_quietly(program: &'static str, a: &[String]) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn session() -> Session {
-        serde_json::from_value(serde_json::json!({
-            "boot": "b", "revision": 1, "version": "0.12.189", "groups": [],
-            "projects": [{"id": 1, "name": "shop", "path": "/p", "workspaces": [{
-                "id": 2, "name": "main", "path": "/p", "tabs": [
-                    {"id": 3, "name": "zsh", "panes": [
-                        {"id": 4, "path": "/p", "active": true, "title": "vim notes.md"},
-                        {"id": 5, "path": "/p", "active": false, "title": null}]},
-                    {"id": 6, "name": "claude", "panes": [{"id": 7, "path": "/p", "active": true}]}
-                ]}]}],
-            "view": {"id": 9, "projection": 1, "active": true, "shown": {"project": 1, "workspace": 2, "tab": 3, "pane": 4}}
-        }))
-        .expect("a session")
-    }
-
-    #[test]
-    fn the_title_is_the_panes_or_the_tabs() {
-        let mut s = session();
-        assert_eq!(window_title(&s), "vim notes.md — cornercase");
-        s.view.as_mut().expect("view").shown.pane = Some(5);
-        assert_eq!(window_title(&s), "zsh — cornercase");
-        s.view.as_mut().expect("view").shown.tab = Some(6);
-        s.view.as_mut().expect("view").shown.pane = None;
-        assert_eq!(window_title(&s), "claude — cornercase");
-        s.view = None;
-        assert_eq!(window_title(&s), "cornercase");
-    }
-
-    #[test]
-    fn a_tab_is_placed() {
-        assert_eq!(tab_place(&session(), 6).as_deref(), Some("shop › main › claude"));
-        assert_eq!(tab_place(&session(), 60), None);
-    }
-}
+mod tests;
