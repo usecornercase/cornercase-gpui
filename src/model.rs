@@ -48,6 +48,8 @@ pub struct Project {
     pub active: bool,
     pub collapsed: bool,
     pub workspaces: Vec<Workspace>,
+    /// The name given in cornercase, if any; `name` falls back to the folder's.
+    pub custom_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -62,6 +64,39 @@ pub struct Workspace {
     pub collapsed: bool,
     pub behind: u64,
     pub tabs: Vec<Tab>,
+    pub custom_name: Option<String>,
+    /// The pull request of its branch, with its checks.
+    pub pull_request: Option<PullRequest>,
+    /// The project's setup in this workspace: `running` or `failed`.
+    pub setup: Option<String>,
+    /// What changed, as the changes panel counts it.
+    pub changes: Option<Changes>,
+    /// Agents closed with `agents close`, waiting for `agents reopen`.
+    pub closed_agents: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct PullRequest {
+    pub number: u64,
+    pub title: String,
+    pub url: String,
+    /// `open`, `draft`, `merged` or `closed`.
+    pub state: String,
+    /// The rollup of its checks: `failing`, `pending` or `passing`; none without checks.
+    pub checks: Option<String>,
+    pub failed: Vec<String>,
+    pub conflicts: bool,
+    pub base: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct Changes {
+    pub added: u64,
+    pub removed: u64,
+    pub files: u64,
+    pub mode: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -72,6 +107,7 @@ pub struct Tab {
     pub status: Option<String>,
     pub active: bool,
     pub panes: Vec<PaneInfo>,
+    pub custom_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -87,6 +123,15 @@ pub struct PaneInfo {
     pub active: bool,
     pub title: Option<String>,
     pub dialog: bool,
+    /// The agent that started this one, for the agents tree.
+    pub parent: Option<u64>,
+    /// Subagents it runs inside itself (Claude Code's tasks).
+    pub subagents: u32,
+    /// Its role in a flow run.
+    pub role: Option<String>,
+    /// Whether the agents it started are folded away.
+    pub collapsed: bool,
+    pub resuming: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -158,6 +203,48 @@ impl Tab {
 impl Workspace {
     pub fn loudest(&self) -> Option<&str> {
         self.tabs.iter().filter_map(Tab::loudest).max_by_key(|s| status_rank(Some(s)))
+    }
+}
+
+/// An agent's pane as the sidebar lists it under its workspace: in a tree of who started whom.
+#[derive(Debug, Clone, Copy)]
+pub struct AgentRow<'a> {
+    pub pane: &'a PaneInfo,
+    pub tab: u64,
+    pub depth: usize,
+    /// How many agents it started in this workspace, shown or folded away.
+    pub children: usize,
+}
+
+impl Workspace {
+    /// Its agents in tab order, each followed by the agents it started (a parent outside the
+    /// workspace counts as none), leaving out those under a folded agent.
+    pub fn agent_rows(&self) -> Vec<AgentRow<'_>> {
+        let agents: Vec<(u64, &PaneInfo)> = self
+            .tabs
+            .iter()
+            .flat_map(|t| t.panes.iter().filter(|p| p.agent.is_some()).map(move |p| (t.id, p)))
+            .collect();
+        let known = |id: Option<u64>| id.filter(|id| agents.iter().any(|(_, p)| p.id == *id));
+        let children = |id: u64| agents.iter().filter(|(_, p)| known(p.parent) == Some(id)).count();
+        let mut rows = Vec::new();
+        // Depth first, with a stack and a seen set so a cycle in the data cannot loop forever.
+        let mut seen = std::collections::HashSet::new();
+        let mut stack: Vec<(u64, &PaneInfo, usize)> =
+            agents.iter().rev().filter(|(_, p)| known(p.parent).is_none()).map(|(t, p)| (*t, *p, 0)).collect();
+        while let Some((tab, pane, depth)) = stack.pop() {
+            if !seen.insert(pane.id) {
+                continue;
+            }
+            rows.push(AgentRow { pane, tab, depth, children: children(pane.id) });
+            if pane.collapsed {
+                continue;
+            }
+            for (t, p) in agents.iter().rev().filter(|(_, p)| known(p.parent) == Some(pane.id)) {
+                stack.push((*t, p, depth + 1));
+            }
+        }
+        rows
     }
 }
 
@@ -533,6 +620,46 @@ impl Grid {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_workspace_details_from_the_session() {
+        let text = r#"{"projects":[{"id":1,"name":"shop","custom_name":"shop","workspaces":[{"id":2,"name":"feat",
+            "behind":3,"setup":"running","changes":{"added":4,"removed":1,"files":2,"mode":"uncommitted"},
+            "pull_request":{"number":485,"title":"Dark mode","url":"https://x/485","state":"open","checks":"failing",
+            "failed":["test"],"conflicts":false,"base":"main","provider":"github","stack":null},
+            "tabs":[{"id":3,"panes":[{"id":4,"agent":"claude","subagents":2,"role":"coder","parent":null}]}]}]}]}"#;
+        let session: Session = serde_json::from_str(text).unwrap();
+        let ws = &session.projects[0].workspaces[0];
+        let pr = ws.pull_request.as_ref().unwrap();
+        assert_eq!((pr.number, pr.checks.as_deref(), pr.failed.len()), (485, Some("failing"), 1));
+        assert_eq!(ws.setup.as_deref(), Some("running"));
+        assert_eq!(ws.changes.as_ref().unwrap().added, 4);
+        assert_eq!(ws.tabs[0].panes[0].subagents, 2);
+        assert_eq!(session.projects[0].custom_name.as_deref(), Some("shop"));
+    }
+
+    #[test]
+    fn agents_form_a_tree_and_folds_hide_children() {
+        let pane = |id: u64, parent: Option<u64>| PaneInfo { id, agent: Some("claude".into()), parent, ..Default::default() };
+        let shell = PaneInfo { id: 9, ..Default::default() };
+        let ws = Workspace {
+            tabs: vec![
+                Tab { id: 1, panes: vec![pane(10, None), shell], ..Default::default() },
+                Tab { id: 2, panes: vec![pane(11, Some(10))], ..Default::default() },
+                Tab { id: 3, panes: vec![pane(12, Some(11))], ..Default::default() },
+                // A parent in another workspace counts as none.
+                Tab { id: 4, panes: vec![pane(13, Some(99))], ..Default::default() },
+            ],
+            ..Default::default()
+        };
+        let rows: Vec<(u64, usize, usize)> = ws.agent_rows().iter().map(|r| (r.pane.id, r.depth, r.children)).collect();
+        assert_eq!(rows, [(10, 0, 1), (11, 1, 1), (12, 2, 0), (13, 0, 0)]);
+
+        let mut folded = ws.clone();
+        folded.tabs[1].panes[0].collapsed = true;
+        let rows: Vec<u64> = folded.agent_rows().iter().map(|r| r.pane.id).collect();
+        assert_eq!(rows, [10, 11, 13]);
+    }
 
     #[test]
     fn reads_the_fixture_frame() {

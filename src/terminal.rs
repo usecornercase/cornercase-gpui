@@ -1,4 +1,7 @@
 //! The terminal: drawing the surface, and the keys, text, mouse and wheel that go to its panes.
+//! The left button selects (a double click a word, a triple click a line, copied as the TUI
+//! does) unless the program reads the mouse; the right button is cornercase's in every pane: a
+//! click opens the pane's menu, a drag onto another pane moves it there (`move-pane`).
 
 use std::ops::Range;
 
@@ -11,12 +14,63 @@ use gpui::{
 use serde_json::json;
 
 use crate::app::{Conn, Drag, FONT_FAMILY, Msg, PADDING, Root};
+use crate::context_menu::{Entry, act, danger, item, submenu};
 use crate::dialogs;
 use crate::keys;
-use crate::model::MouseMode;
+use crate::model::{Area, MouseMode, PaneGrid};
 use crate::panels::PanelKind;
 use crate::render::{self, Metrics};
+use crate::sidebar::cmd;
 use crate::theme::colours;
+
+/// A right press on a pane, kept until the release decides between its menu and a move.
+pub struct PanePress {
+    pub pane: u64,
+    /// The press's cell in the pane, for passing the right click on to the program.
+    pub cell: (u16, u16),
+}
+
+/// Where a pane dropped at a cell of `target` goes, as `move-pane --place` says it: the middle
+/// third both ways swaps the two, elsewhere the nearest edge takes that side.
+pub fn pane_place(target: Area, x: u16, y: u16) -> &'static str {
+    let fx = (f32::from(x.saturating_sub(target.x)) + 0.5) / f32::from(target.cols.max(1));
+    let fy = (f32::from(y.saturating_sub(target.y)) + 0.5) / f32::from(target.rows.max(1));
+    let middle = |f: f32| (1. / 3. ..=2. / 3.).contains(&f);
+    if middle(fx) && middle(fy) {
+        return "swap";
+    }
+    [("left", fx), ("right", 1. - fx), ("above", fy), ("below", 1. - fy)]
+        .into_iter()
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map_or("swap", |(place, _)| place)
+}
+
+/// The class of a cell for word selection: blank, part of a word (paths and links included),
+/// or other punctuation.
+fn class(cell: &str) -> u8 {
+    match cell.chars().next() {
+        None | Some(' ') => 0,
+        Some(c) if c.is_alphanumeric() || "_-./~:@%+=#?&".contains(c) => 1,
+        Some(_) => 2,
+    }
+}
+
+/// The columns of the word under `x` in a line of cells: a run of the same class. The empty cell
+/// after a wide character belongs to it.
+pub fn word_at(cells: &[&str], x: usize) -> (usize, usize) {
+    if x >= cells.len() {
+        return (x, x);
+    }
+    let classes: Vec<u8> = cells
+        .iter()
+        .enumerate()
+        .map(|(i, c)| if c.is_empty() && i > 0 && !cells[i - 1].is_empty() { class(cells[i - 1]) } else { class(c) })
+        .collect();
+    let at = classes[x];
+    let start = (0..x).rev().take_while(|&i| classes[i] == at).last().unwrap_or(x);
+    let end = (x + 1..cells.len()).take_while(|&i| classes[i] == at).last().unwrap_or(x);
+    (start, end)
+}
 
 impl Root {
     // -----------------------------------------------------------------------------------------
@@ -57,25 +111,15 @@ impl Root {
             "f" if shift => panel(PanelKind::Search, cx),
             "c" if terminal => {
                 if let Some(pane) = self.active_pane() {
-                    let tx = self.tx.clone();
-                    let args = ["selection", "--pane", &pane.to_string(), "--copy", "--json"].map(String::from);
-                    self.queue.cmd_then(args.to_vec(), move |r| {
-                        let text = r.ok().and_then(|out| {
-                            serde_json::from_str::<serde_json::Value>(&out)
-                                .ok()
-                                .and_then(|v| v.get("text").and_then(|t| t.as_str()).map(String::from))
-                        });
-                        if let Some(text) = text.filter(|t| !t.is_empty()) {
-                            let _ = tx.unbounded_send(Msg::Copied(text));
-                        }
-                    });
+                    self.copy_selection(pane);
                 }
             }
             "v" if terminal => {
-                if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-                    self.input(json!({ "paste": text }));
+                if let Some(pane) = self.active_pane() {
+                    self.paste(pane, cx);
                 }
             }
+            "p" if !shift => self.focus_filter(window, cx),
             "t" => self.act(vec!["new-tab".into(), "--focus".into()]),
             "d" => self.split(shift),
             "o" => self.open_project(window, cx),
@@ -98,6 +142,152 @@ impl Root {
             _ => return false,
         }
         true
+    }
+
+    /// Copies a pane's selection to the clipboard, with a toast.
+    pub(crate) fn copy_selection(&self, pane: u64) {
+        let tx = self.tx.clone();
+        let args = ["selection", "--pane", &pane.to_string(), "--copy", "--json"].map(String::from);
+        self.queue.cmd_then(args.to_vec(), move |r| {
+            let text = r.ok().and_then(|out| {
+                serde_json::from_str::<serde_json::Value>(&out)
+                    .ok()
+                    .and_then(|v| v.get("text").and_then(|t| t.as_str()).map(String::from))
+            });
+            if let Some(text) = text.filter(|t| !t.is_empty()) {
+                let _ = tx.unbounded_send(Msg::Copied(text));
+            }
+        });
+    }
+
+    pub(crate) fn paste(&self, pane: u64, cx: &mut Context<Self>) {
+        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+            self.queue.input(pane, json!({ "paste": text }));
+        }
+    }
+
+    /// Selects from one cell to another of a pane, then copies it.
+    fn select(&self, pane: u64, from: (u16, u16), to: (u16, u16)) {
+        self.queue.cmd(vec![
+            "selection".into(),
+            "--pane".into(),
+            pane.to_string(),
+            "--from".into(),
+            format!("{},{}", from.0, from.1),
+            "--to".into(),
+            format!("{},{}", to.0, to.1),
+        ]);
+        self.copy_selection(pane);
+    }
+
+    /// A double click selects the word under it, a triple click the line.
+    fn select_by_clicks(&self, pane: &PaneGrid, x: u16, y: u16, clicks: usize) {
+        let cells: Vec<&str> = pane
+            .lines
+            .get(y as usize)
+            .map(|line| line.iter().flat_map(|run| run.cells.iter().map(String::as_str)).collect())
+            .unwrap_or_default();
+        if clicks >= 3 {
+            self.select(pane.pane, (0, y), (pane.size.cols.saturating_sub(1), y));
+        } else if (x as usize) < cells.len() && class(cells[x as usize]) != 0 {
+            let (start, end) = word_at(&cells, x as usize);
+            self.select(pane.pane, (start as u16, y), (end as u16, y));
+        }
+    }
+
+    /// The menu of a pane: copy and paste, splits, moving it, review marks, closing.
+    fn pane_menu(&self, pane: u64, cell: (u16, u16)) -> Vec<Entry> {
+        let p = pane.to_string();
+        let info = self.session.as_ref().and_then(|s| s.pane(pane)).cloned();
+        let mouse = self.grid.pane(pane).is_some_and(|g| g.modes.mouse != MouseMode::None);
+        let label = |id: u64| {
+            let info = self.session.as_ref().and_then(|s| s.pane(id));
+            let program = info.and_then(|i| i.agent.clone().or(i.program.clone())).unwrap_or_else(|| "shell".into());
+            format!("{program} (pane {id})")
+        };
+        let mut entries = vec![
+            item("Copy", move |this, _, _| this.copy_selection(pane)),
+            item("Paste", move |this, _, cx| this.paste(pane, cx)),
+            Entry::Separator,
+            act("Split right", cmd(&["split", "--pane", &p, "--focus"])),
+            act("Split down", cmd(&["split", "--pane", &p, "--down", "--focus"])),
+        ];
+        let others: Vec<u64> = self
+            .session
+            .as_ref()
+            .and_then(|s| s.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs).find(|t| t.panes.iter().any(|p| p.id == pane)))
+            .map(|t| t.panes.iter().map(|p| p.id).filter(|&id| id != pane).collect())
+            .unwrap_or_default();
+        if !others.is_empty() {
+            let targets = others
+                .into_iter()
+                .map(|target| {
+                    let places = [("Swap with it", "swap"), ("Left of it", "left"), ("Right of it", "right"), ("Above it", "above"), ("Below it", "below")];
+                    submenu(
+                        label(target),
+                        places
+                            .into_iter()
+                            .map(|(text, place)| {
+                                let args = cmd(&["move-pane", "--pane", &p, "--target", &target.to_string(), "--place", place]);
+                                item(text, move |this, _, _| this.queue.cmd(args.clone()))
+                            })
+                            .collect(),
+                    )
+                })
+                .collect();
+            entries.push(submenu("Move pane", targets));
+        }
+        if mouse {
+            let (x, y) = cell;
+            entries.push(item("Send the right click to the program", move |this, _, _| {
+                for kind in ["down", "up"] {
+                    this.queue.input(pane, json!({ "mouse": { "kind": kind, "button": "right", "x": x, "y": y } }));
+                }
+            }));
+        }
+        let agent = info.as_ref().is_some_and(|i| i.agent.is_some());
+        if agent {
+            entries.push(Entry::Separator);
+            entries.extend(self.agent_menu(pane).into_iter().skip(1));
+        }
+        entries.push(Entry::Separator);
+        let what = info.as_ref().and_then(|i| i.agent.clone().or(i.program.clone())).unwrap_or_else(|| "its shell".into());
+        entries.push(danger("Close pane", move |this, window, cx| {
+            let args = cmd(&["close", "--pane", &pane.to_string()]);
+            if agent {
+                dialogs::confirm(
+                    "Close this pane?",
+                    format!("It runs {what}: closing the pane stops it."),
+                    "Close pane",
+                    args,
+                    false,
+                    window,
+                    cx,
+                );
+            } else {
+                this.queue.cmd(args);
+            }
+        }));
+        entries
+    }
+
+    /// The release of a right press: on another pane it moves the pressed one there, on the
+    /// same pane it opens its menu.
+    fn pane_release(&mut self, press: PanePress, position: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((x, y)) = self.cell(position) else { return };
+        let target = (x >= 0 && y >= 0).then(|| self.grid.pane_at(x as u16, y as u16).cloned()).flatten();
+        match target {
+            Some(t) if t.pane != press.pane => {
+                let place = pane_place(t.rect, x as u16, y as u16);
+                let args = cmd(&["move-pane", "--pane", &press.pane.to_string(), "--target", &t.pane.to_string(), "--place", place]);
+                self.queue.cmd(args);
+            }
+            Some(_) => {
+                let entries = self.pane_menu(press.pane, press.cell);
+                self.open_menu(position, entries, window, cx);
+            }
+            None => {}
+        }
     }
 
     pub(crate) fn zoom(&mut self, by: f32, cx: &mut Context<Self>) {
@@ -136,23 +326,41 @@ impl Root {
     }
 
     pub(crate) fn on_mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.side.rename.is_some() {
+            self.finish_rename(false, window, cx);
+        }
         window.focus(&self.focus);
-        self.confirm_close = None;
         let Some((x, y)) = self.cell(event.position) else { return };
         if !self.has_frame || x < 0 || y < 0 {
             return;
         }
         let (x, y) = (x as u16, y as u16);
         if let Some(d) = self.grid.dividers.iter().find(|d| d.line.contains(x, y)) {
+            // A double click on a divider evens the split out, as on the TUI's borders.
+            if event.click_count == 2 {
+                let mut args = vec!["ratio".into(), "--tab".into(), self.grid.tab.to_string()];
+                for side in &d.path {
+                    args.extend(["--path".into(), if *side { "second" } else { "first" }.into()]);
+                }
+                args.push("0.5".into());
+                self.queue.cmd(args);
+                return;
+            }
             self.drag = Some(Drag::Divider { tab: self.grid.tab, path: d.path.clone(), down: d.dir == "down", area: d.area });
             return;
         }
         let Some(pane) = self.grid.pane_at(x, y).cloned() else { return };
+        let px_ = (x - pane.rect.x).min(pane.size.cols.saturating_sub(1));
+        let py = (y - pane.rect.y).min(pane.size.rows.saturating_sub(1));
+        if event.button == MouseButton::Right {
+            // The right button is cornercase's in every pane, even one whose program reads the
+            // mouse (almost none uses the right button); its menu can pass the click on.
+            self.side.pane_press = Some(PanePress { pane: pane.pane, cell: (px_, py) });
+            return;
+        }
         if !pane.active {
             self.focus_item("pane", pane.pane);
         }
-        let px_ = (x - pane.rect.x).min(pane.size.cols.saturating_sub(1));
-        let py = (y - pane.rect.y).min(pane.size.rows.saturating_sub(1));
         if event.modifiers.platform {
             self.open_link(&pane, px_, py, cx);
             return;
@@ -167,7 +375,11 @@ impl Root {
             let motion = matches!(pane.modes.mouse, MouseMode::ButtonMotion | MouseMode::AnyMotion);
             self.drag = Some(Drag::Program { pane: pane.pane, motion });
         } else if event.button == MouseButton::Left {
-            self.drag = Some(Drag::Select { pane: pane.pane, from: (px_, py), to: (px_, py) });
+            if event.click_count >= 2 {
+                self.select_by_clicks(&pane, px_, py, event.click_count);
+            } else {
+                self.drag = Some(Drag::Select { pane: pane.pane, from: (px_, py), to: (px_, py) });
+            }
         }
     }
 
@@ -219,7 +431,13 @@ impl Root {
         }
     }
 
-    pub(crate) fn on_mouse_up(&mut self, event: &MouseUpEvent, _window: &mut Window, _cx: &mut Context<Self>) {
+    pub(crate) fn on_mouse_up(&mut self, event: &MouseUpEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if event.button == MouseButton::Right {
+            if let Some(press) = self.side.pane_press.take() {
+                self.pane_release(press, event.position, window, cx);
+            }
+            return;
+        }
         match self.drag.take() {
             Some(Drag::Program { pane, .. }) => {
                 let Some((x, y)) = self.cell(event.position) else { return };
@@ -231,6 +449,8 @@ impl Root {
             Some(Drag::Select { pane, from, to }) if from == to => {
                 self.queue.cmd(vec!["selection".into(), "--pane".into(), pane.to_string(), "--clear".into()]);
             }
+            // A finished selection is copied, as the TUI does.
+            Some(Drag::Select { pane, .. }) => self.copy_selection(pane),
             _ => {}
         }
     }
@@ -406,7 +626,7 @@ impl EntityInputHandler for Root {
         _range: Option<Range<usize>>,
         text: &str,
         _window: &mut Window,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) {
         self.marked.clear();
         let text: String = text.chars().filter(|c| !c.is_control()).collect();
@@ -450,5 +670,32 @@ impl EntityInputHandler for Root {
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pane_dropped_in_the_middle_swaps_else_takes_the_nearest_edge() {
+        let rect = Area { x: 10, y: 0, cols: 30, rows: 12 };
+        assert_eq!(pane_place(rect, 25, 6), "swap");
+        assert_eq!(pane_place(rect, 11, 6), "left");
+        assert_eq!(pane_place(rect, 39, 5), "right");
+        assert_eq!(pane_place(rect, 24, 0), "above");
+        assert_eq!(pane_place(rect, 24, 11), "below");
+    }
+
+    #[test]
+    fn a_word_is_a_run_of_one_class() {
+        let text = "ls ~/src/web-shop && echo";
+        let line: Vec<&str> = text.char_indices().map(|(i, c)| &text[i..i + c.len_utf8()]).collect();
+        assert_eq!(word_at(&line, 5), (3, 16));
+        assert_eq!(word_at(&line, 0), (0, 1));
+        assert_eq!(word_at(&line, 18), (18, 19));
+        // A wide character's empty second cell is part of it.
+        assert_eq!(word_at(&["a", "中", "", "b", " "], 2), (0, 3));
+        assert_eq!(word_at(&["a"], 4), (4, 4));
     }
 }
