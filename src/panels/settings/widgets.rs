@@ -1,12 +1,8 @@
-//! The pieces the settings and accounts sheets share: the page navigation, cards of rows, a
-//! switch, and an inline confirmation.
-
 use gpui::{Div, ElementId, FontWeight, IntoElement, SharedString, Stateful, div, prelude::*, px};
 
 use crate::theme::colours;
 use crate::ui;
 
-/// The column of pages on the left of a sheet.
 pub(crate) fn nav() -> Div {
     div()
         .w(px(180.))
@@ -28,12 +24,10 @@ pub(crate) fn nav_item(id: impl Into<ElementId>, label: impl Into<SharedString>,
         .child(label.into())
 }
 
-/// The scrolling page beside the navigation.
 pub(crate) fn page(id: impl Into<ElementId>) -> Stateful<Div> {
     div().id(id).flex_1().h_full().overflow_y_scroll().px(px(22.)).pt(px(14.)).pb(px(28.))
 }
 
-/// A page's title and what it is about.
 pub(crate) fn heading(title: impl Into<SharedString>, about: impl Into<SharedString>) -> Div {
     div()
         .flex()
@@ -44,7 +38,6 @@ pub(crate) fn heading(title: impl Into<SharedString>, about: impl Into<SharedStr
         .child(div().text_size(px(12.)).text_color(colours::muted()).child(about.into()))
 }
 
-/// Rows grouped in a rounded box.
 pub(crate) fn card() -> Div {
     div()
         .flex()
@@ -56,7 +49,6 @@ pub(crate) fn card() -> Div {
         .border_color(colours::border())
 }
 
-/// One row of a card: what it is on the left (label and note), its control on the right.
 pub(crate) fn row(first: bool, label: impl IntoElement, control: impl IntoElement) -> Div {
     div()
         .flex()
@@ -68,7 +60,6 @@ pub(crate) fn row(first: bool, label: impl IntoElement, control: impl IntoElemen
         .child(div().flex_none().flex().items_center().gap(px(6.)).child(control))
 }
 
-/// A row's label over its note.
 pub(crate) fn label(text: impl Into<SharedString>, note: impl Into<SharedString>) -> Div {
     let note: SharedString = note.into();
     div()
@@ -79,7 +70,6 @@ pub(crate) fn label(text: impl Into<SharedString>, note: impl Into<SharedString>
         .when(!note.is_empty(), |d| d.child(div().text_size(px(11.5)).text_color(colours::faint()).child(note)))
 }
 
-/// `worktrees folder` → `Worktrees folder`.
 pub(crate) fn capitalised(text: &str) -> String {
     let mut chars = text.chars();
     match chars.next() {
@@ -88,7 +78,6 @@ pub(crate) fn capitalised(text: &str) -> String {
     }
 }
 
-/// An on/off switch. Add `.on_click(...)`.
 pub(crate) fn switch(id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
     div()
         .id(id)
@@ -105,12 +94,10 @@ pub(crate) fn switch(id: impl Into<ElementId>, on: bool) -> Stateful<Div> {
         .child(div().size(px(13.)).rounded(px(7.)).bg(if on { colours::terminal() } else { colours::muted() }))
 }
 
-/// Red text under a row: why a change was refused.
 pub(crate) fn error(text: impl Into<SharedString>) -> Div {
     div().pb(px(8.)).text_size(px(12.)).text_color(colours::failed()).child(text.into())
 }
 
-/// A question under a row with its two buttons, for what cannot be undone.
 pub(crate) fn confirm(question: impl Into<SharedString>, cancel: Stateful<Div>, go: Stateful<Div>) -> Div {
     div()
         .flex()
@@ -128,7 +115,6 @@ pub(crate) fn confirm(question: impl Into<SharedString>, cancel: Stateful<Div>, 
         .child(go)
 }
 
-/// A muted line that says what cornercase does not offer yet, and the issue that asks for it.
 pub(crate) fn missing(text: impl Into<SharedString>, issue: u32) -> Div {
     div()
         .text_size(px(12.))
@@ -137,13 +123,4 @@ pub(crate) fn missing(text: impl Into<SharedString>, issue: u32) -> Div {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn capitalises_the_first_letter() {
-        assert_eq!(capitalised("worktrees folder"), "Worktrees folder");
-        assert_eq!(capitalised("TODO dot"), "TODO dot");
-        assert_eq!(capitalised(""), "");
-    }
-}
+mod tests;
