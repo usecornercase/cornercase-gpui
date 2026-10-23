@@ -88,7 +88,12 @@ fn project_menu(session: &Session, id: u64) -> Vec<Entry> {
     entries.push(Entry::Separator);
     entries.push(danger("Close project…", move |_, window, cx| {
         dialogs::confirm(
-            dialogs::Question::new(format!("Close the project {name}?"), "Every shell in it stops, agents included. Its folder and worktrees stay on disk.", "Close project", cmd(&["close", "--project", &id.to_string()])),
+            dialogs::Question::new(
+                format!("Close the project {name}?"),
+                "Every shell in it stops, agents included. Its folder and worktrees stay on disk.",
+                "Close project",
+                cmd(&["close", "--project", &id.to_string()]),
+            ),
             window,
             cx,
         );
@@ -118,7 +123,12 @@ fn close_workspace_item(ws: &Workspace) -> Entry {
     };
     danger(label, move |_, window, cx| {
         dialogs::confirm(
-            dialogs::Question::new(format!("Close {name}?"), message, "Close", cmd(&["close", "--workspace", &id.to_string()])),
+            dialogs::Question::new(
+                format!("Close {name}?"),
+                message,
+                "Close",
+                cmd(&["close", "--workspace", &id.to_string()]),
+            ),
             window,
             cx,
         );

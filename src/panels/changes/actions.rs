@@ -41,7 +41,12 @@ impl ChangesPanel {
         let (title, button) =
             if deletes { ("Delete the file?", "Delete") } else { ("Discard the changes?", "Discard") };
         dialogs::confirm(
-            dialogs::Question::new(title, format!("{}\n\n{DISCARD_CAVEAT}", diff::discard_question(file)), button, args(&["changes", "discard", &file.path, "--workspace", &workspace.to_string(), "--yes"])),
+            dialogs::Question::new(
+                title,
+                format!("{}\n\n{DISCARD_CAVEAT}", diff::discard_question(file)),
+                button,
+                args(&["changes", "discard", &file.path, "--workspace", &workspace.to_string(), "--yes"]),
+            ),
             window,
             cx,
         );

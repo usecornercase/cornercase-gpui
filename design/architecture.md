@@ -5,9 +5,9 @@ Code: `src/`
 ## The window and the connection
 
 - `main.rs` starts the app, binds ⌘Q and the text fields' keys, and opens the window on `Root`.
-- `app.rs` holds `Root`, the window: the connection (the `view` and `surface` streams), the layout, and the hosts for the docked panel, sheets, dialogs and toasts. `terminal.rs` (panes, keys, mouse, selection), `sidebar.rs` (projects, workspaces, agents; `sidebar/forms.rs` its inline forms, `sidebar/order.rs` drag ordering), `tabs.rs` (the tab bar) and `context_menu.rs` hold the rest of `Root`'s methods.
+- `app.rs` holds `Root`, the window: the connection (the `view` and `surface` streams), the layout, and the hosts for the docked panel, sheets, dialogs and toasts. `terminal.rs` (keys, ⌘ shortcuts, the surface; `terminal/` holds `mouse`, `selection`, `pane_menu` and `input`), `sidebar.rs` (the sidebar's frame and filter; `sidebar/` holds `rows`, `workspace` (workspace and agent rows), `menus`, `actions`, `forms` with `forms/style` and `forms/checked`, and `order` for drag ordering), `tabs.rs` (the tab bar) and `context_menu.rs` hold the rest of `Root`'s methods.
 - `cli.rs` is everything that talks to cornercase: one-shot commands (`run`), long-running streams (`stream`, a `Stream` stops its process when dropped) and an ordered `Queue` for input. The window never speaks the socket protocol itself.
-- `model.rs` holds the serde types of `view` (the session: projects, workspaces, tabs, agents) and `surface` (frames, grids, patches), and applies patches to a grid.
+- `model.rs` holds the serde types of `view` (the session: projects, workspaces, tabs, agents); `model/surface.rs` those of `surface` (frames, patches), and `model/grid.rs` the grid they build up.
 - `render.rs` draws a grid of cells with `Metrics` measured from the font. `keys.rs` encodes gpui keystrokes for `cornercase input`. `theme.rs` holds the terminal palette (also given to cornercase with `start-server --theme`), the chrome colours (`theme::colours`, Tokyo Night) and `FONT_FAMILY`.
 - `notify.rs` follows `cornercase events` (`notify/feed.rs` parses them): agent notices as toasts with a "Go" button, macOS notifications, sounds, OSC 52 copies, the bell and the window title. `notify/update.rs` offers updates and restarts.
 
@@ -22,7 +22,7 @@ Code: `src/`
 
 ## Panels
 
-`src/panels/` has one module per panel, and `PanelKind` in `mod.rs`. A panel is a gpui entity (`impl Render`) built lazily by `build(window, cx) -> AnyView` and kept alive by `Root`, so it keeps its state while closed. Docked panels (Changes, Files, TODO) sit right of the terminal (420 px); the others are sheets over the window: the host draws the title bar and the close button, the panel draws its content and scrolls it with `.id(…).overflow_y_scroll()`. A panel's model, parsing and background work live in its folder (`data.rs`, `model.rs`), its drawing in the panel's file.
+`src/panels/` has one module per panel, and `PanelKind` in `mod.rs`. A panel is a gpui entity (`impl Render`) built lazily by `build(window, cx) -> AnyView` and kept alive by `Root`, so it keeps its state while closed. Docked panels (Changes, Files, TODO) sit right of the terminal (420 px); the others are sheets over the window: the host draws the title bar and the close button, the panel draws its content and scrolls it with `.id(…).overflow_y_scroll()`. A panel's file keeps its struct, its state changes and `render`; its folder holds the model and parsing (`data.rs`, `model.rs`, `wire.rs`), the commands it runs (`actions.rs`, `load.rs`, `follow.rs`) and the named parts of its drawing (`*_view.rs`, `list.rs`, `detail.rs`, `widgets.rs`).
 
 ## Widgets
 
