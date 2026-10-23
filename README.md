@@ -26,19 +26,38 @@ cargo run --release -- --tab 6      # or on a tab, workspace or project id (`cor
 Needs `cornercase` on the PATH (or `CORNERCASE_BIN`). It starts the server if none runs.
 `CORNERCASE_GPUI_FONT_SIZE` sets the terminal font size (Menlo, 13 by default).
 
+## What it has
+
+- **Terminal**: live panes from `surface`, splits and dividers (drag, double-click to even), selection
+  (drag, double/triple-click), ⌘C/⌘V, wheel, mouse for programs that read it, ⌘-click links and paths,
+  right-click pane menu (split, move, close agent, mark), right-drag a pane onto another to move it.
+- **Sidebar**: groups (icon, colour, fold), projects, workspaces (worktree, PR and checks, behind,
+  setup, changes), agents as a tree with status/model/context, inline rename, drag to reorder,
+  context menus, remove-worktree check, quick filter (⌘P).
+- **Tabs**: rename, reorder, close with confirmation, new shell/agent menu.
+- **Docked panels**: Changes (⌘⇧C), Files (⌘⇧E), TODO (⌘⇧L).
+- **Sheets**: Issues (⌘I), Usage (⌘U), Settings (⌘,), Accounts, Queue, Flows, Search (⌘⇧F), Plugins.
+- **App-wide**: agent notices as toasts with "Go" and macOS notifications, sounds, OSC 52 clipboard,
+  bell, window title, update/restart, away, keep awake.
+
 ## Keys
 
 Everything goes to the program in the active pane, except ⌘ shortcuts:
 ⌘C copy selection · ⌘V paste · ⌘T new tab · ⌘D / ⇧⌘D split right / down · ⌘O open project ·
-⌘N new workspace · ⌘G start an agent · ⌘1…9 tab · ⇧⌘[ / ⇧⌘] previous / next tab · ⌘+ / ⌘- / ⌘0 zoom · ⌘Q quit.
+⌘N new workspace · ⌘G start an agent · ⌘1…9 tab · ⇧⌘[ / ⇧⌘] previous / next tab · ⌘+ / ⌘- / ⌘0 zoom ·
+⌘P filter the sidebar · ⌘Q quit. Text goes through macOS's input method, so dead-key accents and ⌥
+characters (`@` on a Spanish keyboard) work.
 
-Text goes through macOS's input method, so dead-key accents and ⌥ characters (`@` on a Spanish
-keyboard) work. Mouse: click focuses a pane, drag selects (or goes to the program when it reads the
-mouse; ⇧ forces selection), wheel scrolls, ⌘-click opens links and paths, drag a divider to resize.
+## Waiting on cornercase
 
-## Known limits (cornercase 0.12.189)
+Gaps found while building this, filed upstream instead of worked around:
+#461 (`--view` breaks feature checks: no surface patches, no hidden/visible, `start --issue --view`),
+#462 (Codex limits), #463 (queue undo), #464 (config import preview), #465/#466 (flow save, import
+check), #467 (reveal a search match), #468/#469 (plugin install preview, service states),
+#470/#471 (changes digests, `gap --hunk` numbering). The UI names the issue where a feature waits.
 
-- `surface --view --patches` and `view-set --visible/--hidden` are refused by the CLI's feature check
-  (it sends the view along with `contract`). The app falls back to complete frames and stops
-  reporting visibility; patches are implemented and tested for when it is fixed.
-- No images (kitty/sixel), no changes/files/issues panels, no settings, no notifications yet.
+## Development
+
+`docs/AGENT-BRIEF.md` describes the architecture (`Store`, panels, widgets) and the rules;
+`docs/cornercase-cli.txt` is every command's help. `CORNERCASE_GPUI_OPEN=<panel>` opens a panel at
+start.
