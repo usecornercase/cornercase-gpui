@@ -1,0 +1,19 @@
+# Queue
+
+Code: `src/panels/queue.rs`, `src/panels/queue/`
+
+- **The TUI's Queue tab, for every project**: the entries come live from `status --app` (its `queue`, the same as `queue list --json`'s `entries`), in the server's order (chronological, ties by id). The panel never polls `queue list`; the app stream already carries every change.
+- **Entries are read leniently** (`#[serde(default)]`, unknown fields ignored, an entry without an id dropped): a field a newer server adds or drops never hides an entry.
+- **States** are the server's: `pending`, `starting`, `started`, `failed`, `missed`. Pending, failed and missed entries can be edited and started now (`runnable`); a starting one cannot be removed until it settles.
+- **"started · pane N" only while that pane exists**: an entry records the server token (`boot` in `status --app`) its pane belongs to. A pane id from another server run, or one the session no longer has, reads "pane closed" and offers no Open button, since pane ids are reused across restarts.
+- **Places read as the TUI names them**: `project › branch`, else `project › workspace name`, else the worktree folder; a project the session no longer has falls back to its folder name.
+- **Local time comes from `localtime_r`** (libc), so the panel needs no time-zone crate and agrees with the machine's zone. The `unsafe` is sound because `localtime_r` writes only the zeroed `tm` it is given, on the caller's stack. Day differences use Howard Hinnant's days-from-civil algorithm (`time::days`), which the search panel reuses for RFC 3339 times.
+- **When a row runs reads from today** (`today 14:30`, `tomorrow`, `yesterday`, a weekday within the week, the date otherwise) plus a relative time (`in 2h 5m`, `3d 4h ago`). A 30-second timer redraws the panel so relative times move on by themselves.
+- **The form builds `queue add` or `queue edit ID`** with `--json`, so the answer can be read and an error shown under the form (with the `cornercase queue: ` prefix removed). `--at` takes the texts the CLI documents (`14:30`, `tomorrow 9:00`, `2026-10-24 09:00`, `in 2h`, `claude reset`, `codex reset`). The entry starts from `--issue` (a URL or key) or `--prompt`; an issue may name its tracker (`--source`) for an ambiguous key or a self-hosted URL.
+- **An edit sends only what changed**: the time stays unless another kind is chosen ("unchanged"), the place stays unless "somewhere else" is chosen, the agent stays unless one is picked, and the prompt and name are sent only when their text differs from the entry's.
+- **A new entry starts where the window is**: the shown project and workspace, filled in once the session says where that is (it may arrive after the form opens). Choosing a project without a workspace means a new worktree on a branch, made when missing.
+- **Agents and modes come from `config --json`** (setting `agent` and `agents.NAME.mode`), read once when the form first opens; `auto` has no modes. The mode chosen in the settings is marked with ✓.
+- **An entry that started or went away meanwhile closes its edit form**, since the server would refuse the edit.
+- **Removing cannot be undone yet** (#463 upstream), so removing a pending entry asks through `dialogs::confirm` and the list says so. Removing a started entry only clears history (its agent keeps running), so it asks nothing; "Clear started" removes them one `queue remove` each until the command line has a `clear-started` (#463).
+- **Queued agents accept the folder's trust prompt and submit the prompt by themselves**: that is cornercase's behaviour for unattended starts, and the form says it.
+- **`open_pane` and `toast_outcome` live here and are shared** with the search and TODO panels (focus a pane and close the sheet; toast a command's result), so the three panels do not repeat them.
