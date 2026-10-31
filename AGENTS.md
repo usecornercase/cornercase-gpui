@@ -30,7 +30,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 - **No workarounds** (`design/upstream-gaps.md`). When cornercase does not expose something a feature needs (no command, no field, a bug, a missing `--json`, a stream that does not exist), do not scrape text output, read cornercase's private files or reimplement server logic. Open an issue in `usecornercase/cornercase-terminal` and make the UI say plainly what is missing (a muted "needs usecornercase/cornercase-terminal#123"). The exceptions, by design, are the Files panel (#345 upstream), which reads the disk itself, and the Browser panel, which runs Chrome and its ssh tunnels itself (`design/browser.md`).
 - Use `--json` output wherever a command has it; parse it with local serde types or `serde_json::Value`.
-- A workaround kept until an upstream fix lands is listed in the README's "To remove once these land", with the files it lives in.
+- A workaround kept until an upstream fix lands is listed under "To remove once these land" in `design/upstream-gaps.md`, with the files it lives in.
 - **Code or assets taken from another project keep their licence**: only from licences compatible with MIT and Apache-2.0 (this project's, `LICENSE-MIT` and `LICENSE-APACHE`), with the licence file beside them or at the root (`LICENSE-GPUI` for the text field, `assets/icons/LICENSE`, `assets/file-icons/LICENSE`) and a line under the README's License.
 
 ## Code conventions

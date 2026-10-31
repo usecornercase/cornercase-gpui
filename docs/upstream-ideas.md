@@ -2,7 +2,7 @@
 
 Things that would make UIs on top of cornercase easier, found while building cornercase-gpui (2026-10-29, cornercase 0.12.225).
 
-## Found by the orchestrator
+## From the Processes, Ports and Worktrees sheets
 
 1. **`processes --follow` and `ports --follow`**
    - Problem: the Processes and Ports dialogs refresh every 2 s while open. An external client has to spawn `processes --json` (which itself waits `--interval`) and `ports --json` in a loop: a new process every 2 s, plus the CLI's startup cost.
