@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in the window does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the same thing goes wrong in cornercase's own window or from the `cornercase` command line, it is a bug in cornercase: please report it to [cornercase-terminal](https://github.com/usecornercase/cornercase-terminal/issues/new/choose) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Changes panel (⌘⇧C) on a workspace with uncommitted changes
+        2. Click a file
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: The output of `git rev-parse --short HEAD` in your checkout.
+    validations:
+      required: true
+  - type: input
+    id: cornercase
+    attributes:
+      label: cornercase version
+      description: The output of `cornercase --version`, and on the other machine too if you use `--remote`.
+      placeholder: cornercase 0.12.234
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      placeholder: macOS 26.1, Apple M3
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Logs
+      description: What the terminal you started the window from printed, and the relevant lines of `cornercase logs -n 50`, if any. Check that they contain no tokens or private paths.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots or a recording, the program running in the pane, whether the window shows another machine (`--remote`)…

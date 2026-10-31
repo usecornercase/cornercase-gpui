@@ -2,6 +2,13 @@
 name = "cornercase-gpui"
 version = "0.1.0"
 edition = "2024"
+description = "A native macOS window for cornercase, drawn with GPUI"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/usecornercase/cornercase-gpui"
+homepage = "https://github.com/usecornercase/cornercase-gpui"
+readme = "README.md"
+keywords = ["terminal", "gpui", "macos", "worktree", "agents"]
+categories = ["development-tools"]
 
 [dependencies]
 anyhow = "1.0.104"

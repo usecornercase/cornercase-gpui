@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/usecornercase/cornercase-gpui/security/advisories/new
+    about: Please report vulnerabilities privately, not as public issues.
+  - name: A bug or an idea for cornercase itself
+    url: https://github.com/usecornercase/cornercase-terminal/issues/new/choose
+    about: The server, the command line and cornercase's own window live in cornercase-terminal.
+  - name: Questions and ideas
+    url: https://discord.gg/aYqCa4xC4R
+    about: Ask on cornercase's Discord.

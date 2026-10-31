@@ -1,6 +1,9 @@
 # cornercase-gpui
 
-A native macOS window for [cornercase](../cornercase-terminal), drawn with GPUI. It is only a UI:
+[![CI](https://github.com/usecornercase/cornercase-gpui/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/usecornercase/cornercase-gpui/actions/workflows/ci.yml?query=branch%3Amain)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
+
+A native macOS window for [cornercase](https://github.com/usecornercase/cornercase-terminal), drawn with GPUI. It is only a UI:
 cornercase's server keeps owning the shells, agents and worktrees, and this app drives it through
 the `cornercase` command line, the contract cornercase documents for programs that draw it. The Browser panel
 is the one part that runs programs of its own: a headless Chrome it draws, and ssh tunnels to another machine's
@@ -26,14 +29,20 @@ dev servers (`design/browser.md`).
 
 ## Run
 
+It needs macOS with the Xcode Command Line Tools (`xcode-select --install`), [rustup](https://rustup.rs), which
+installs the pinned Rust version by itself, and [cornercase](https://usecornercase.dev/docs/installation/) 0.12.234
+or newer on the PATH (or `CORNERCASE_BIN`). There are no prebuilt releases yet: build it from a checkout.
+
 ```sh
+git clone https://github.com/usecornercase/cornercase-gpui && cd cornercase-gpui
 cargo run --release                 # opens on what cornercase's window shows
 cargo run --release -- --tab 6      # or on a tab, workspace or project id (`cornercase status`)
 cargo run --release -- --remote devbox                   # or on the server of another machine, over ssh
 cargo run --release -- --remote me@10.0.0.5 --remote-command '~/bin/cornercase'
+cargo install --locked --path .     # or install it as cornercase-gpui in ~/.cargo/bin
 ```
 
-Needs `cornercase` 0.12.234 or newer on the PATH (or `CORNERCASE_BIN`). It starts the server if none runs.
+It starts the server if none runs.
 With `--remote`, it runs `cornercase` on that machine through your own `ssh` (config, keys, agent and jump hosts apply), as
 `cornercase remote` does, and starts the server there; it never asks for a password, so use a key or an agent.
 `CORNERCASE_GPUI_FONT_SIZE` sets the terminal font size (Menlo, 13 by default), and `CORNERCASE_GPUI_OPACITY`
@@ -126,18 +135,19 @@ to it, and ⌘W closes it. Dropping files on a pane pastes their paths (on anoth
 
 ## Waiting on cornercase
 
-Gaps found while building this are filed upstream instead of worked around, and the UI names the issue where a
-feature waits. Every one filed so far has landed (#456, #461–#472, #475–#480) except #549. Two limits wait on
+Gaps found while building this are filed in [cornercase-terminal](https://github.com/usecornercase/cornercase-terminal/issues)
+instead of worked around, and the UI names the issue where a feature waits. Every one filed so far has landed
+(#456, #461–#472, #475–#480) except [#549](https://github.com/usecornercase/cornercase-terminal/issues/549). Two limits wait on
 commands cornercase does not have yet, and the UI says so: removing the worktrees of closed projects and the
 leftovers git no longer knows, and installing, turning on or off and reading the logs of plugins on another machine.
 
 ### To remove once these land
 
-- **#549:** showing a fold before the session confirms it (`src/sidebar/folds.rs`, `Folds` in `SideState` and `Msg::Folded` in `src/app.rs`); `set_folded` goes back to queueing the command alone.
+- **[#549](https://github.com/usecornercase/cornercase-terminal/issues/549):** showing a fold before the session confirms it (`src/sidebar/folds.rs`, `Folds` in `SideState` and `Msg::Folded` in `src/app.rs`); `set_folded` goes back to queueing the command alone.
 
-## Development
+## Contributing
 
-The rules for every change are in [AGENTS.md](AGENTS.md) (also loaded by Claude Code through `CLAUDE.md`), the design decisions and their reasons in [`design/`](design/), indexed by [DESIGN.md](DESIGN.md). `docs/cornercase-cli.txt` is every cornercase command's help. Before a change is done:
+See [CONTRIBUTING.md](CONTRIBUTING.md). Questions and ideas are welcome on [cornercase's Discord](https://discord.gg/aYqCa4xC4R); report a vulnerability privately, as [SECURITY.md](SECURITY.md) says. The rules for every change are in [AGENTS.md](AGENTS.md) (also loaded by Claude Code through `CLAUDE.md`), the design decisions and their reasons in [`design/`](design/), indexed by [DESIGN.md](DESIGN.md). `docs/cornercase-cli.txt` is every cornercase command's help. Before a change is done:
 
 ```sh
 cargo fmt
@@ -146,3 +156,20 @@ cargo test --locked
 cargo-machete              # cargo install cargo-machete
 npx -y jscpd@4.3.0         # copy-paste detector
 ```
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+Some parts come from other projects and keep their licences:
+
+- The text field (`src/ui/text_field.rs`) is adapted from gpui 0.2.2's `examples/input.rs`, copyright Zed Industries, under Apache-2.0 ([LICENSE-GPUI](LICENSE-GPUI)).
+- The icons in `assets/icons/` are [Lucide](https://lucide.dev)'s, under ISC ([assets/icons/LICENSE](assets/icons/LICENSE)), with thinner strokes and two of them filled; the `status-*` icons are this project's own.
+- The file-type icons in `assets/file-icons/` are glyphs of [Seti UI](https://github.com/jesseweed/seti-ui) and [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts), under MIT ([assets/file-icons/LICENSE](assets/file-icons/LICENSE)).
