@@ -36,7 +36,7 @@ reviews:
         (scraping text output, reading cornercase's own files, reimplementing server logic) instead of an upstream issue the UI names.
         Flag `unwrap()` outside tests, `std::sync::Mutex` instead of `parking_lot::Mutex`, a command whose failure does not become a toast,
         `impl Root` or `crate::app` outside the window's files, and key bindings other than ⌘ shortcuts in `src/keymap.rs`.
-        If it adds, removes or changes a feature or a ⌘ shortcut, check that README.md (What it has, Keys) is updated too.
+        If it adds, removes or changes a feature or a ⌘ shortcut, check that README.md (Features, Keys) is updated too.
     - path: "{tests/**/*.rs,src/**/tests.rs,src/**/tests/**/*.rs}"
       instructions: |
         Tests never run the real `cornercase`, open a window or sleep: logic is tested in plain functions, with fixtures from tests/fixtures/ read by `test_util::fixture!`.
