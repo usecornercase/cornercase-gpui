@@ -1,0 +1,43 @@
+{
+  "type": "error",
+  "args": [
+    {
+      "type": "string",
+      "value": "an error"
+    },
+    {
+      "type": "object",
+      "subtype": "error",
+      "className": "Error",
+      "description": "Error: inner boom\n    at http://localhost:8783/errors.html:8:27",
+      "preview": {
+        "type": "object",
+        "subtype": "error",
+        "description": "Error: inner boom\n    at http://localhost:8783/errors.html:8:27",
+        "overflow": false,
+        "properties": [
+          {
+            "name": "stack",
+            "type": "string",
+            "value": "Error: inner boom\n    at http://localhost:8783/errors.html:8:27"
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "value": "inner boom"
+          }
+        ]
+      }
+    }
+  ],
+  "stackTrace": {
+    "callFrames": [
+      {
+        "functionName": "",
+        "url": "http://localhost:8783/errors.html",
+        "lineNumber": 7,
+        "columnNumber": 8
+      }
+    ]
+  }
+}

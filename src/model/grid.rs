@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::surface::{
-    Area, Colours, Copy, Cursor, Divider, Frame, Hyperlink, Modes, Scroll, Size, Style, WireLines, WirePane, WireRun,
+    Area, Colours, Copy, Cursor, Frame, Hyperlink, Modes, Node, PopupLabel, Scroll, Size, Style, WireLines, WirePane,
+    WireRun,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,7 +36,8 @@ pub(crate) struct Grid {
     pub tab: u64,
     pub cols: u16,
     pub rows: u16,
-    pub dividers: Vec<Divider>,
+    pub layout: Option<Node>,
+    pub popup: Option<PopupLabel>,
     pub panes: Vec<PaneGrid>,
 }
 
@@ -157,10 +159,6 @@ impl Grid {
         self.panes.iter().find(|p| p.pane == id)
     }
 
-    pub(crate) fn pane_at(&self, x: u16, y: u16) -> Option<&PaneGrid> {
-        self.panes.iter().find(|p| p.rect.contains(x, y))
-    }
-
     pub(crate) fn apply(&mut self, mut frame: Frame) -> Applied {
         let tables = Tables::new(std::mem::take(&mut frame.styles), std::mem::take(&mut frame.hyperlinks));
         match frame.base {
@@ -179,7 +177,8 @@ impl Grid {
         self.tab = frame.tab;
         self.cols = frame.cols;
         self.rows = frame.rows;
-        self.dividers = frame.dividers;
+        self.layout = frame.layout;
+        self.popup = frame.popup;
         self.panes = frame.panes.into_iter().map(|p| PaneGrid::from_wire(p, tables)).collect();
     }
 

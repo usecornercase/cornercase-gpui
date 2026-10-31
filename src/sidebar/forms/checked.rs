@@ -7,7 +7,7 @@ use serde_json::Value;
 use super::{Check, Checked, bullet, buttons, keyed, line, load_check, show, warning};
 use crate::app::tilde;
 use crate::dialogs::frame;
-use crate::store::{Store, args};
+use crate::store::{Busy, Store, args};
 use crate::theme::colours;
 use crate::ui;
 
@@ -97,8 +97,9 @@ impl RemoveWorktree {
         if self.unlock {
             a.push("--unlock".into());
         }
+        let (workspace, name) = (self.workspace, self.name.clone());
         Store::get(cx).update(cx, |s, cx| {
-            s.cmd(a);
+            s.remove_worktree(workspace, &name, a, cx);
             s.close_dialog(cx);
         });
     }
@@ -153,7 +154,7 @@ impl Focusable for RemoveWorktree {
 impl Render for RemoveWorktree {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let body = match &self.check {
-            Check::Loading => div().child(ui::dim("Checking what removing it would lose…")),
+            Check::Loading => div().child(ui::busy("checking", "Checking what removing it would lose…")),
             Check::Failed(e) => div().child(warning(e.clone())),
             Check::Ready(v) => self.report(WorktreeCheck::of(v), cx),
         };
@@ -184,11 +185,12 @@ pub(crate) fn close_agent(pane: u64, window: &mut Window, cx: &mut App) {
 
 impl CloseAgent {
     fn run(&mut self, cx: &mut Context<Self>) {
-        if !matches!(self.check, Check::Ready(_)) {
-            return;
-        }
+        let Check::Ready(v) = &self.check else { return };
+        let agent = v.get("agent").and_then(Value::as_str).unwrap_or("the agent");
+        let busy = Busy::new(format!("close-agent:{}", self.pane), format!("Closing {agent}…"));
+        let command = args(&["close", "--agent", "--pane", &self.pane.to_string()]);
         Store::get(cx).update(cx, |s, cx| {
-            s.cmd(args(&["close", "--agent", "--pane", &self.pane.to_string()]));
+            s.run_aside(busy, command, cx);
             s.close_dialog(cx);
         });
     }
@@ -253,7 +255,9 @@ impl Focusable for CloseAgent {
 impl Render for CloseAgent {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (title, body) = match &self.check {
-            Check::Loading => ("Close agent?".to_string(), div().child(ui::dim("Checking what would stop…"))),
+            Check::Loading => {
+                ("Close agent?".to_string(), div().child(ui::busy("checking", "Checking what would stop…")))
+            }
             Check::Failed(e) => ("Close agent?".to_string(), div().child(warning(e.clone()))),
             Check::Ready(v) => close_report(v, cx),
         };

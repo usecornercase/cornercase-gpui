@@ -4,11 +4,9 @@ use gpui::{
 };
 
 use super::data::{self, Limit, Plan, Severity};
-use super::widgets::{bar, card, error_line};
+use super::widgets::{card, error_line};
 use crate::theme::colours;
 use crate::ui;
-
-const CODEX_ISSUE: &str = "usecornercase/cornercase-terminal#462";
 
 fn severity_colour(severity: Severity) -> Rgba {
     match severity {
@@ -16,10 +14,6 @@ fn severity_colour(severity: Severity) -> Rgba {
         Severity::Warning => colours::waiting(),
         Severity::Critical => colours::failed(),
     }
-}
-
-fn codex_bug(plan: &Plan) -> bool {
-    plan.agent == "codex" && plan.error.as_deref().is_some_and(|e| e.contains("expected unit"))
 }
 
 pub(super) fn plan_card(i: usize, plan: &Plan, fresh: bool, now: i64) -> impl IntoElement + use<> {
@@ -39,9 +33,6 @@ pub(super) fn plan_card(i: usize, plan: &Plan, fresh: bool, now: i64) -> impl In
                 .child(ui::dim(status)),
         )
         .when_some(plan.error.as_ref(), |d, e| d.child(error_line(format!("usage unavailable: {e}"))))
-        .when(codex_bug(plan), |d| {
-            d.child(ui::dim(format!("a cornercase bug with this Codex version · needs {CODEX_ISSUE}")))
-        })
         .when(!plan.limits.is_empty(), |d| d.child(limits(plan, now)))
         .when_some(plan.notice.as_ref(), |d, n| d.child(div().text_color(colours::muted()).child(n.clone())))
         .when(plan.limited == Some(false) && plan.notice.is_none(), |d| {
@@ -81,5 +72,5 @@ fn limit_row(limit: &Limit, now: i64) -> impl IntoElement + use<> {
                         .child(format!("{:.0}%", limit.percent)),
                 ),
         )
-        .child(bar(limit.fraction(), colour, 6.))
+        .child(ui::bar(limit.fraction(), colour, 6.))
 }

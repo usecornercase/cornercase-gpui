@@ -135,3 +135,35 @@ fn runs_ignore_highlighting_that_does_not_match() {
     assert_eq!(r, vec![Run { range: 0..3, style: 0, emphasis: false }]);
     assert_eq!(runs("", None, &[]), Vec::new());
 }
+
+fn read_patch() -> crate::panels::changes::wire::Patch {
+    serde_json::from_str(crate::test_util::fixture!("changes/file.json")).expect("the patch parses")
+}
+
+fn read_gap() -> Gap {
+    serde_json::from_str(crate::test_util::fixture!("changes/gap.json")).expect("the gap parses")
+}
+
+#[test]
+fn the_first_hunk_has_no_gap_to_read() {
+    let hunks = read_patch().hunks;
+    let first_gap = rows(&hunks, &HashMap::new()).into_iter().find(|r| matches!(r, Row::Gap { .. }));
+    assert_eq!(first_gap, Some(Row::Gap { hunk: 1, lines: 20 }));
+}
+
+#[test]
+fn a_gap_is_asked_for_by_the_hunk_after_it_counted_from_zero() {
+    let (hunks, gap) = (read_patch().hunks, read_gap());
+    assert_eq!(gap.hunk, 1);
+    assert_eq!(gap_before(&hunks, gap.hunk), u32::try_from(gap.lines.len()).expect("fits"));
+    let read = rows(&hunks, &HashMap::from([(gap.hunk, gap)]));
+    let at = read.iter().position(|r| *r == Row::Hunk(1)).expect("the second hunk is shown");
+    assert_eq!(read[at - 20], Row::GapLine { hunk: 1, line: 0 });
+}
+
+#[test]
+fn the_diff_and_the_list_name_the_same_version() {
+    let listed =
+        crate::panels::changes::wire::summary(crate::test_util::fixture!("changes/list.json")).expect("parses");
+    assert_eq!(read_patch().file.digest, listed.workspaces[0].files[0].digest);
+}

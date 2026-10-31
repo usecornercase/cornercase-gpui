@@ -6,13 +6,17 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 
-use crate::app::{Root, TITLEBAR_HEIGHT};
+use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
 use crate::context_menu::{Entry, act, danger, item};
 use crate::dialogs;
+use crate::keymap::{Command, with_keys};
 use crate::model::Tab;
-use crate::sidebar::{Dragged, Target, cmd, draggable, order};
-use crate::theme::colours;
-use crate::ui::{self, badge, button_coloured as button};
+use crate::sidebar::{Dragged, Target, cmd, draggable, order, tip};
+use crate::store::Busy;
+use crate::theme::{colours, radius};
+use crate::ui::{self, Icon, badge};
+
+const TAB_HEIGHT: f32 = 28.;
 
 fn faint(text: String) -> Div {
     div().text_size(px(11.)).text_color(colours::faint()).child(text)
@@ -40,9 +44,13 @@ fn close_button(tab: &Tab, group: SharedString, selected: bool, cx: &mut Context
     let tab = tab.clone();
     div()
         .id(SharedString::from(format!("tab-close-{}", tab.id)))
-        .px(px(4.))
-        .rounded(px(4.))
-        .text_size(px(11.))
+        .size(px(16.))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(radius::CHIP))
+        .text_size(px(10.))
         .text_color(colours::faint())
         .when(!selected, |d| d.invisible().group_hover(group, Styled::visible))
         .hover(|s| s.bg(colours::selected()).text_color(colours::failed()))
@@ -54,7 +62,8 @@ fn close_button(tab: &Tab, group: SharedString, selected: bool, cx: &mut Context
 }
 
 fn new_tab_button(cx: &mut Context<Root>) -> impl IntoElement + use<> {
-    button("new-tab", "+", colours::muted())
+    ui::tool_button("new-tab", Icon::Plus, TAB_HEIGHT, false)
+        .tooltip(tip(with_keys("New tab", Command::NewTab)))
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(|this, e: &MouseDownEvent, window, cx| {
@@ -64,7 +73,7 @@ fn new_tab_button(cx: &mut Context<Root>) -> impl IntoElement + use<> {
         )
         .drag_over::<Dragged>(
             |s, d, _, _| {
-                if matches!(d.target, Target::Tab(_)) { s.border_color(colours::accent()) } else { s }
+                if matches!(d.target, Target::Tab(_)) { s.bg(colours::accent_soft()) } else { s }
             },
         )
         .on_drop(cx.listener(|this, d: &Dragged, _, _| {
@@ -77,14 +86,16 @@ fn new_tab_button(cx: &mut Context<Root>) -> impl IntoElement + use<> {
 fn split_buttons(cx: &mut Context<Root>) -> impl IntoElement + use<> {
     div()
         .flex()
-        .gap(px(4.))
-        .pb(px(5.))
+        .flex_none()
+        .gap(px(2.))
         .child(
-            button("split-right", "Split →", colours::muted())
+            ui::tool_button("split-right", Icon::SplitRight, TAB_HEIGHT, false)
+                .tooltip(tip(with_keys("Split right", Command::SplitRight)))
                 .on_click(cx.listener(|this, _: &ClickEvent, _, _| this.split(false))),
         )
         .child(
-            button("split-down", "Split ↓", colours::muted())
+            ui::tool_button("split-down", Icon::SplitDown, TAB_HEIGHT, false)
+                .tooltip(tip(with_keys("Split down", Command::SplitDown)))
                 .on_click(cx.listener(|this, _: &ClickEvent, _, _| this.split(true))),
         )
 }
@@ -119,27 +130,28 @@ impl Root {
             .h(px(TITLEBAR_HEIGHT))
             .flex_none()
             .flex()
-            .items_end()
+            .items_center()
             .justify_between()
-            .px(px(8.))
-            .bg(colours::sidebar())
-            .border_b_1()
-            .border_color(colours::border())
+            .gap(px(8.))
+            .pr(px(GAP))
             .child(
                 div()
                     .flex()
-                    .items_end()
-                    .h_full()
-                    .gap(px(4.))
+                    .items_center()
+                    .min_w_0()
+                    .gap(px(6.))
                     .overflow_hidden()
                     .child(self.tab_strip(cx))
-                    .child(div().pb(px(5.)).child(new_tab_button(cx))),
+                    .when(!self.side.look.current.tabs_in_sidebar, |d| d.child(new_tab_button(cx))),
             )
             .child(split_buttons(cx))
     }
 
     fn tab_strip(&self, cx: &mut Context<Self>) -> Div {
-        let strip = div().flex().items_end().gap(px(2.)).h_full().overflow_hidden();
+        let strip = div().flex().items_center().min_w_0().gap(px(4.)).overflow_hidden();
+        if self.side.look.current.tabs_in_sidebar {
+            return strip;
+        }
         let Some((_, ws)) = self.shown_workspace() else { return strip };
         let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab);
         let siblings: Rc<Vec<u64>> = Rc::new(ws.tabs.iter().map(|t| t.id).collect());
@@ -172,18 +184,22 @@ impl Root {
             .id(group.clone())
             .group(group.clone())
             .flex()
+            .flex_none()
             .items_center()
             .gap(px(6.))
-            .h(px(30.))
-            .px(px(10.))
-            .rounded_t(px(6.))
-            .border_l_2()
-            .border_r_2()
+            .h(px(TAB_HEIGHT))
+            .pl(px(10.))
+            .pr(px(6.))
+            .relative()
+            .rounded(px(radius::CONTROL))
+            .border_1()
             .border_color(gpui::transparent_black())
             .cursor_pointer()
-            .when(selected, |d| d.bg(colours::terminal()).text_color(colours::text()))
-            .when(!selected, |d| d.text_color(colours::muted()).hover(|s| s.bg(colours::hover())))
-            .child(badge(tab.loudest()))
+            .when(selected, |d| d.bg(colours::selected()).border_color(colours::border()).text_color(colours::text()))
+            .when(!selected, |d| {
+                d.text_color(colours::muted()).hover(|s| s.bg(colours::hover()).text_color(colours::soft()))
+            })
+            .children(tab.loudest().map(|status| badge(Some(status))))
             .child(self.tab_name(tab))
             .when(others > 0, |d| d.child(faint(format!("+{others}"))))
             .when_some(tab_detail(tab), |d, text| d.child(faint(text).whitespace_nowrap()))
@@ -231,7 +247,8 @@ impl Root {
                 format!("It runs {what}{state}: closing the tab stops it. Its worktree and branch stay."),
                 "Close tab",
                 command,
-            ),
+            )
+            .busy(Busy::new(format!("close-tab:{}", tab.id), format!("Closing {}…", tab.name))),
             window,
             cx,
         );

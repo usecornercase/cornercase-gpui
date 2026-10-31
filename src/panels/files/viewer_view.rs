@@ -3,27 +3,18 @@ use std::path::PathBuf;
 
 use gpui::{
     AnyElement, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
-    Pixels, StatefulInteractiveElement as _, Styled as _, StyledImage as _, StyledText, div, img,
-    prelude::FluentBuilder as _, px, uniform_list,
+    StatefulInteractiveElement as _, Styled as _, StyledImage as _, div, img, px, relative, uniform_list,
 };
 
-use crate::theme::{FONT_FAMILY, colours};
+use crate::theme::{colours, radius};
 use crate::ui;
 
 use super::disk::{self, Content};
 use super::style::{
-    Styles, centered_note, ellipsis, faint_small, file_icon, kind_style, lit_background, matches, overlay, plural,
-    small_f32,
+    CodeRow, Styles, centered_note, code_row, faint_small, file_icon, image_label, lit_background, matches,
+    number_width, overlay, plural, span_styles,
 };
-use super::{CODE_SIZE, FilesPanel, Target, Viewer};
-
-struct CodeRow {
-    ix: usize,
-    shown: String,
-    styles: Styles,
-    selected: bool,
-    width: Pixels,
-}
+use super::{FilesPanel, Target, Viewer};
 
 struct Heading {
     name: String,
@@ -47,7 +38,7 @@ fn content_info(viewer: &Viewer) -> Vec<String> {
             info.extend(viewer.selected.map(|line| format!("line {}", line + 1)));
         }
         Some(Content::Image(image)) => {
-            info.push(format!("{:?} image", image.format).to_uppercase().replace(" IMAGE", " image"));
+            info.push(image_label(image.format));
             info.extend(size);
         }
         Some(_) => info.extend(size),
@@ -76,7 +67,7 @@ fn other_body(content: &Content) -> AnyElement {
             .flex()
             .items_center()
             .justify_center()
-            .child(img(image.clone()).max_w_full().max_h_full().object_fit(ObjectFit::ScaleDown))
+            .child(img(image.clone()).max_w_full().max_h_full().object_fit(ObjectFit::ScaleDown).id("files-picture"))
             .into_any_element(),
         Content::Binary => centered_note("Binary file", "Open it in another app to see it.").into_any_element(),
         Content::TooLarge => centered_note(
@@ -92,11 +83,6 @@ fn other_body(content: &Content) -> AnyElement {
     }
 }
 
-fn number_width(lines: usize) -> Pixels {
-    let digits = lines.to_string().len().max(3);
-    px(small_f32(digits) * 7.3 + 16.)
-}
-
 impl FilesPanel {
     fn viewer_title(heading: &Heading, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         div()
@@ -108,8 +94,15 @@ impl FilesPanel {
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close_file(cx))),
             )
             .child(file_icon(&heading.name, false, false))
-            .child(div().flex_none().font_weight(FontWeight::SEMIBOLD).child(heading.name.clone()))
-            .child(faint_small().child(heading.folder.clone()))
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .max_w(relative(0.6))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(ui::one_line(heading.name.clone())),
+            )
+            .child(faint_small(ui::one_line(heading.folder.clone())))
     }
 
     fn viewer_actions(heading: &Heading, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -119,7 +112,7 @@ impl FilesPanel {
             .flex()
             .items_center()
             .gap(px(6.))
-            .child(ellipsis().flex_1().child(ui::dim(heading.info.clone())))
+            .child(ui::dim(ui::one_line(heading.info.clone())).flex_1())
             .child(ui::button("files-open-in", "Open in…").on_click(
                 cx.listener(move |this, e: &ClickEvent, _, cx| this.show_menu(e.position(), target.clone(), cx)),
             ))
@@ -134,9 +127,9 @@ impl FilesPanel {
             .flex_none()
             .flex()
             .flex_col()
-            .gap(px(6.))
-            .px(px(10.))
-            .py(px(8.))
+            .gap(px(8.))
+            .px(px(12.))
+            .py(px(10.))
             .border_b_1()
             .border_color(colours::border())
             .child(Self::viewer_title(heading, cx))
@@ -145,7 +138,7 @@ impl FilesPanel {
 
     fn viewer_body(&self, content: Option<&Content>, cx: &mut Context<Self>) -> AnyElement {
         match content {
-            None => ui::note("Reading…").into_any_element(),
+            None => ui::loading("Reading…").into_any_element(),
             Some(Content::Text(text)) => uniform_list(
                 "files-code",
                 text.lines.len(),
@@ -169,17 +162,12 @@ impl FilesPanel {
             .flex()
             .flex_col()
             .child(Self::viewer_header(&heading, cx))
-            .child(div().flex_1().min_h_0().bg(colours::terminal()).child(body))
+            .child(div().flex_1().min_h_0().rounded_b(px(radius::CARD - 1.)).bg(colours::terminal()).child(body))
             .into_any_element()
     }
 
     fn line_styles(viewer: &Viewer, ix: usize, line: &str) -> Styles {
-        let styles: Styles = viewer
-            .spans
-            .as_ref()
-            .and_then(|s| s.get(ix))
-            .map(|spans| spans.iter().map(|(r, k)| (r.clone(), kind_style(*k))).collect())
-            .unwrap_or_default();
+        let styles = span_styles(viewer.spans.as_ref(), ix);
         match &viewer.lit {
             Some(matcher) => overlay(styles, &matches(matcher, line), lit_background(0.3)),
             None => styles,
@@ -193,13 +181,8 @@ impl FilesPanel {
         range
             .filter_map(|ix| text.lines.get(ix).map(|line| (ix, line)))
             .map(|(ix, line)| {
-                let row = CodeRow {
-                    ix,
-                    shown: if line.is_empty() { " ".to_string() } else { line.clone() },
-                    styles: Self::line_styles(viewer, ix, line),
-                    selected: viewer.selected == Some(ix),
-                    width,
-                };
+                let row =
+                    CodeRow::new(ix, line, Self::line_styles(viewer, ix, line), viewer.selected == Some(ix), width);
                 Self::code_line(row, cx)
             })
             .collect()
@@ -207,34 +190,9 @@ impl FilesPanel {
 
     fn code_line(row: CodeRow, cx: &mut Context<Self>) -> AnyElement {
         let ix = row.ix;
-        div()
+        code_row(row)
             .id(("files-line", ix))
-            .flex()
-            .h(px(18.))
-            .font_family(FONT_FAMILY)
-            .text_size(px(CODE_SIZE))
-            .items_center()
-            .whitespace_nowrap()
-            .when(row.selected, |d| d.bg(colours::selected()))
             .hover(|s| s.bg(colours::panel()))
-            .child(
-                div()
-                    .w(row.width)
-                    .flex_none()
-                    .pr(px(10.))
-                    .text_right()
-                    .text_color(if row.selected { colours::accent() } else { colours::faint() })
-                    .child((ix + 1).to_string()),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .pr(px(8.))
-                    .child(StyledText::new(row.shown).with_highlights(row.styles)),
-            )
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.select_line(ix, cx)))
             .into_any_element()
     }

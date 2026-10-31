@@ -1,0 +1,23 @@
+{
+  "exceptionDetails": {
+    "exceptionId": 3,
+    "text": "Uncaught",
+    "lineNumber": 12,
+    "columnNumber": 19,
+    "url": "http://localhost:8783/errors.html",
+    "stackTrace": {
+      "callFrames": [
+        {
+          "functionName": "",
+          "url": "http://localhost:8783/errors.html",
+          "lineNumber": 12,
+          "columnNumber": 19
+        }
+      ]
+    },
+    "exception": {
+      "type": "string",
+      "value": "a string"
+    }
+  }
+}

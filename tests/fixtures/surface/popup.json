@@ -1,0 +1,38 @@
+{
+  "boot": "48211-1760695200123456789",
+  "session": 7,
+  "revision": 5,
+  "surface": 4,
+  "tab": 0,
+  "cols": 60,
+  "rows": 10,
+  "layout": null,
+  "popup": {"pane": 40, "plugin": "acme.notes", "action": "browse"},
+  "styles": [{}, {"fg": {"index": 4}, "bold": true}],
+  "hyperlinks": [],
+  "panes": [
+    {
+      "pane": 40,
+      "active": true,
+      "rect": {"x": 0, "y": 0, "cols": 60, "rows": 10},
+      "size": {"cols": 60, "rows": 10},
+      "cursor": {"x": 2, "y": 0, "shape": "block", "blinking": false},
+      "modes": {
+        "mouse": "press_release",
+        "mouse_encoding": "sgr",
+        "alternate_screen": true,
+        "alternate_scroll": true,
+        "bracketed_paste": true,
+        "application_cursor": true,
+        "focus_events": false,
+        "kitty_keyboard": 0
+      },
+      "scroll": {"total": 10, "offset": 0, "rows": 10},
+      "lines": [
+        [{"style": 0, "cells": [">", " "]}],
+        [{"style": 1, "cells": ["n", "o", "t", "e", "s"]}],
+        [{"style": 0, "cells": ["t", "o", "d", "o"]}]
+      ]
+    }
+  ]
+}

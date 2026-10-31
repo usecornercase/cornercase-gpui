@@ -171,6 +171,56 @@ impl Setting {
     pub(super) fn choice(&self, value: &str) -> Option<&Choice> {
         self.choices.iter().find(|c| c.value == value)
     }
+
+    pub(super) fn risky_now(&self) -> bool {
+        self.choice(&self.text()).is_some_and(|c| c.dangerous)
+    }
+
+    pub(super) fn unit(&self) -> Option<String> {
+        if self.kind != Kind::Number {
+            return None;
+        }
+        let unit = self.shown.strip_prefix(&self.text())?.strip_prefix(' ')?.trim();
+        (!unit.is_empty()).then(|| unit.to_string())
+    }
+
+    pub(super) fn hint(&self) -> Option<&str> {
+        hint_of(self.field.as_deref(), &self.label, &self.note)
+    }
+}
+
+fn hint_of<'a>(field: Option<&'a str>, label: &str, note: &str) -> Option<&'a str> {
+    let field = field?.trim();
+    let same = |other: &str| field.eq_ignore_ascii_case(other.trim());
+    (!field.is_empty() && !same(label) && !same(note)).then_some(field)
+}
+
+pub(super) fn placeholder(setting: &Setting) -> String {
+    match (setting.text().is_empty(), setting.shown.is_empty()) {
+        (true, true) => "none".to_string(),
+        (true, false) => setting.shown.clone(),
+        (false, _) => setting.label.clone(),
+    }
+}
+
+pub(super) fn default_shown(setting: &Setting) -> String {
+    match &setting.default {
+        Value::Bool(on) => if *on { "on" } else { "off" }.to_string(),
+        other => match value_text(other) {
+            text if text.is_empty() => "empty".to_string(),
+            text => spoken(&text),
+        },
+    }
+}
+
+pub(super) fn spoken(value: &str) -> String {
+    value.replace('_', " ")
+}
+
+pub(super) fn sources(setting: &Setting) -> Vec<(String, bool)> {
+    let shown = setting.items();
+    let hidden = setting.choices.iter().filter(|c| !shown.contains(&c.value)).map(|c| (c.value.clone(), false));
+    shown.iter().map(|s| (s.clone(), true)).chain(hidden).collect()
 }
 
 pub(super) fn set_args(key: &str, value: &str) -> Vec<String> {
@@ -189,16 +239,6 @@ pub(super) fn project_args(entry: &ProjectEntry, which: Script, text: &str) -> V
         a.push(entry.folder.clone());
     }
     a
-}
-
-pub(super) fn clean_error(error: &anyhow::Error) -> String {
-    let text = error.to_string();
-    let text = match text.split_once(": ") {
-        Some((head, rest)) if head.starts_with("cornercase ") => rest.to_string(),
-        _ => text,
-    };
-    let text = text.strip_prefix("Error: ").or_else(|| text.strip_prefix("error: ")).unwrap_or(&text);
-    text.trim().to_string()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -254,6 +294,10 @@ pub(super) enum Tone {
 }
 
 impl Connection {
+    pub(super) fn hint(&self) -> Option<&str> {
+        hint_of(self.field.as_deref(), &self.label, &self.note)
+    }
+
     pub(super) fn token_from_env(&self) -> bool {
         self.from.as_deref() == Some("env")
     }
@@ -285,6 +329,26 @@ impl Connection {
             State::Other => ("unknown".into(), Tone::Quiet),
         }
     }
+}
+
+pub(super) fn about(page: &str) -> &'static str {
+    match page {
+        "Worktrees" => "Where worktrees go, how issue branches are named, and fetching.",
+        "Agents" => "The agent that starts by default, and how each one starts.",
+        "Issues" => "The trackers issues come from, their accounts and filters.",
+        "UI" => "How the sidebar, tabs and notifications look and sound.",
+        "Remote" => "Reaching this computer's cornercase from a phone or a browser.",
+        PROJECTS => "Setup and teardown: the commands a repository runs in a new worktree, and before removing it.",
+        SHARE => {
+            "Export your setup for a colleague, or import theirs: agents, issues, worktrees, the interface \
+                  and each repository's commands."
+        }
+        _ => "",
+    }
+}
+
+pub(super) fn alerts(described: &Described, page: &str) -> bool {
+    described.connections.iter().any(|c| c.page == page && c.state == State::Refused)
 }
 
 pub(super) const PROJECTS: &str = "Projects";
@@ -323,6 +387,16 @@ pub(super) fn sections(described: &Described, page: &str) -> Vec<Section> {
         .into_iter()
         .map(|title| Section { title: title.to_string(), items: section_items(described, page, title) })
         .collect()
+}
+
+pub(super) fn caption(described: &Described, section: &Section) -> String {
+    let repeats = |label: &str| label.eq_ignore_ascii_case(&section.title);
+    let alone = match section.items.as_slice() {
+        [Item::Setting(i)] => repeats(&described.settings[*i].label),
+        [Item::Connection(i)] => repeats(&described.connections[*i].label),
+        _ => false,
+    };
+    if alone { String::new() } else { section.title.clone() }
 }
 
 fn section_titles<'d>(described: &'d Described, page: &str) -> Vec<&'d str> {
@@ -368,6 +442,64 @@ fn agent_part(key: &str) -> Option<(&str, &str)> {
     let rest = key.strip_prefix("agents.")?;
     let (kind, part) = rest.rsplit_once('.')?;
     matches!(part, "mode" | "extra").then_some((kind, part))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Found {
+    pub page: String,
+    pub section: Section,
+}
+
+pub(super) fn search(described: &Described, query: &str) -> Vec<Found> {
+    let words = words(query);
+    if words.is_empty() {
+        return Vec::new();
+    }
+    let mut found = Vec::new();
+    for page in pages(described) {
+        for mut section in sections(described, &page) {
+            section.items.retain(|item| words.iter().all(|w| haystack(described, item).contains(w.as_str())));
+            if !section.items.is_empty() {
+                found.push(Found { page: page.clone(), section });
+            }
+        }
+    }
+    found
+}
+
+pub(super) fn pages_matching(pages: &[String], query: &str) -> Vec<String> {
+    let words = words(query);
+    let text = |page: &str| format!("{page} {}", about(page)).to_lowercase();
+    let matching = |page: &&String| !words.is_empty() && words.iter().all(|w| text(page).contains(w.as_str()));
+    pages.iter().filter(matching).cloned().collect()
+}
+
+pub(super) fn count(found: &[Found], page: &str) -> usize {
+    found.iter().filter(|f| f.page == page).map(|f| f.section.items.len()).sum()
+}
+
+fn words(query: &str) -> Vec<String> {
+    query.split_whitespace().map(str::to_lowercase).collect()
+}
+
+fn haystack(d: &Described, item: &Item) -> String {
+    let text = match item {
+        Item::Setting(i) => setting_text(&d.settings[*i]),
+        Item::Connection(i) => {
+            let c = &d.connections[*i];
+            [c.label.as_str(), &c.note, &c.key, &c.section, c.field.as_deref().unwrap_or_default()].join(" ")
+        }
+        Item::Agent { kind, mode, extra } => {
+            let parts = [mode, extra].into_iter().flatten().map(|i| setting_text(&d.settings[*i]));
+            format!("{kind} mode extra arguments {}", parts.collect::<Vec<_>>().join(" "))
+        }
+    };
+    text.to_lowercase()
+}
+
+fn setting_text(s: &Setting) -> String {
+    let fixed = [s.label.as_str(), &s.note, &s.key, &s.section, s.field.as_deref().unwrap_or_default()];
+    fixed.into_iter().chain(s.choices.iter().map(|c| c.value.as_str())).collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]

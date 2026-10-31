@@ -1,0 +1,65 @@
+{
+  "capped": false,
+  "files": [
+    {
+      "lines": [
+        {
+          "number": 1,
+          "ranges": [
+            [
+              0,
+              5
+            ]
+          ],
+          "text": "hello world"
+        },
+        {
+          "number": 2,
+          "ranges": [
+            [
+              7,
+              12
+            ]
+          ],
+          "text": "second hello line"
+        }
+      ],
+      "path": "docs/notes.md"
+    },
+    {
+      "lines": [
+        {
+          "number": 1,
+          "ranges": [
+            [
+              4,
+              9
+            ]
+          ],
+          "text": "ñññ hello"
+        }
+      ],
+      "path": "docs/uni.md"
+    },
+    {
+      "lines": [
+        {
+          "number": 2,
+          "ranges": [
+            [
+              10,
+              15
+            ]
+          ],
+          "text": "println!(\"hello\");"
+        }
+      ],
+      "path": "src/main.rs"
+    }
+  ],
+  "matches": 4,
+  "mode": "text",
+  "names": [],
+  "query": "hello",
+  "workspace": 38
+}

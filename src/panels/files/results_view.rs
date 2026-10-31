@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use gpui::{
     AnyElement, ClickEvent, Context, Div, FontWeight, HighlightStyle, InteractiveElement as _, IntoElement,
-    MouseButton, MouseDownEvent, ParentElement as _, Stateful, StatefulInteractiveElement as _, Styled as _,
-    StyledText, div, px, uniform_list,
+    MouseButton, MouseDownEvent, ParentElement as _, Stateful, StatefulInteractiveElement as _, Styled as _, div, px,
+    uniform_list,
 };
 
 use crate::theme::{FONT_FAMILY, colours};
@@ -13,7 +13,7 @@ use crate::ui;
 use super::style::{clip, ellipsis, faint_small, file_icon, lit_background, plural, result_row};
 use super::{CODE_SIZE, FilesPanel, Results, Target, TextRow, search};
 
-fn names_summary(hits: &[search::NameHit]) -> String {
+pub(super) fn names_summary(hits: &[search::NameHit]) -> String {
     match hits.len() {
         0 => "No file names match".to_string(),
         n if n >= search::MAX_NAMES => format!("The best {n} files"),
@@ -54,12 +54,7 @@ fn line_hit_row(ix: usize, hit: &search::LineHit) -> Stateful<Div> {
         .font_family(FONT_FAMILY)
         .text_size(px(CODE_SIZE))
         .child(div().w(px(38.)).flex_none().text_color(colours::faint()).child(hit.line.to_string()))
-        .child(
-            ellipsis()
-                .flex_1()
-                .text_color(colours::muted())
-                .child(StyledText::new(hit.text.clone()).with_highlights(spans)),
-        )
+        .child(ellipsis(ui::one_line(hit.text.clone()).highlights(spans)).flex_1().text_color(colours::muted()))
 }
 
 fn file_hit_row(ix: usize, file: &search::FileHits) -> Stateful<Div> {
@@ -67,29 +62,29 @@ fn file_hit_row(ix: usize, file: &search::FileHits) -> Stateful<Div> {
     result_row(("files-hit-file", ix))
         .mt(px(if ix == 0 { 0. } else { 6. }))
         .child(file_icon(&name, false, false))
-        .child(ellipsis().flex_1().font_weight(FontWeight::MEDIUM).child(file.path.clone()))
+        .child(ellipsis(ui::one_line(file.path.clone())).flex_1().font_weight(FontWeight::MEDIUM))
         .child(ui::dim(file.lines.len().to_string()).flex_none())
 }
 
-fn name_hit_row(ix: usize, hit: &search::NameHit) -> Stateful<Div> {
+pub(super) fn name_hit(row: Stateful<Div>, hit: &search::NameHit) -> Stateful<Div> {
     let split = hit.path.rfind('/').map_or(0, |i| i + 1);
     let (folder, name) = hit.path.split_at(split);
     let name_lit = lit_parts(&hit.lit, split..hit.path.len());
     let folder_lit = lit_parts(&hit.lit, 0..split);
-    result_row(("files-name", ix))
-        .child(file_icon(name, false, false))
-        .child(ellipsis().child(StyledText::new(name.to_string()).with_highlights(name_lit)))
-        .child(
-            faint_small()
-                .flex_1()
-                .child(StyledText::new(folder.trim_end_matches('/').to_string()).with_highlights(folder_lit)),
-        )
+    row.child(file_icon(name, false, false))
+        .child(ellipsis(ui::one_line(name.to_string()).highlights(name_lit)))
+        .child(faint_small(ui::one_line(folder.trim_end_matches('/').to_string()).highlights(folder_lit)).flex_1())
+}
+
+fn name_hit_row(ix: usize, hit: &search::NameHit) -> Stateful<Div> {
+    name_hit(result_row(("files-name", ix)), hit)
 }
 
 impl FilesPanel {
     fn results_summary(&self) -> (usize, String) {
         let (count, summary) = match &self.search.results {
             Results::None => (0, String::new()),
+            Results::Failed(e) => (0, format!("Cannot search: {e}")),
             Results::Names(hits) => (hits.len(), names_summary(hits)),
             Results::Text(text) => (self.search.rows.len(), text_summary(text)),
         };
@@ -103,7 +98,11 @@ impl FilesPanel {
             .min_h_0()
             .flex()
             .flex_col()
-            .child(div().flex_none().px(px(12.)).pt(px(6.)).pb(px(4.)).child(ui::dim(summary)))
+            .child(div().flex_none().px(px(12.)).pt(px(6.)).pb(px(4.)).child(if self.search.running.is_some() {
+                ui::busy("files-searching", summary).text_size(px(11.))
+            } else {
+                ui::dim(summary)
+            }))
             .child(
                 div().flex_1().min_h_0().px(px(6.)).pb(px(6.)).child(
                     uniform_list(
@@ -124,7 +123,7 @@ impl FilesPanel {
 
     fn result_item(&self, ix: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
         let row = match &self.search.results {
-            Results::None => return None,
+            Results::None | Results::Failed(_) => return None,
             Results::Names(hits) => {
                 let hit = hits.get(ix)?;
                 Self::with_menu(name_hit_row(ix, hit), PathBuf::from(&hit.path), cx)

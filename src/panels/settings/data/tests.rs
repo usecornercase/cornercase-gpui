@@ -104,15 +104,6 @@ fn connections_say_their_state() {
 }
 
 #[test]
-fn errors_lose_the_command_name() {
-    let e = anyhow::anyhow!("cornercase config: error: `fetch_minutes` takes a whole number");
-    assert_eq!(clean_error(&e), "`fetch_minutes` takes a whole number");
-    let e = anyhow::anyhow!("cornercase config: Error: the token was refused");
-    assert_eq!(clean_error(&e), "the token was refused");
-    assert_eq!(clean_error(&anyhow::anyhow!("could not run")), "could not run");
-}
-
-#[test]
 fn numbers_are_whole() {
     assert!(is_number("10"));
     assert!(is_number(" 0 "));
@@ -128,4 +119,106 @@ fn exports_parse() {
     assert_eq!(e.settings, 49);
     assert_eq!(e.left_out, ["jira_email"]);
     assert_eq!(e.warnings, Vec::<String>::new());
+}
+
+#[test]
+fn a_number_keeps_the_unit_cornercase_shows_after_it() {
+    let d = sample();
+    assert_eq!(d.settings[1].unit(), Some("min".to_string()));
+    let off = Setting { value: serde_json::json!(0), shown: "off".into(), ..d.settings[1].clone() };
+    assert_eq!(off.unit(), None);
+    assert_eq!(d.settings[0].unit(), None);
+}
+
+#[test]
+fn a_field_hint_shows_only_when_it_says_more_than_the_label() {
+    let d = sample();
+    assert_eq!(d.settings[0].hint(), None);
+    let branch = Setting { field: Some("branch, with {key} {slug}".into()), ..d.settings[0].clone() };
+    assert_eq!(branch.hint(), Some("branch, with {key} {slug}"));
+    let same_as_note = Setting { field: Some("n".into()), ..d.settings[0].clone() };
+    assert_eq!(same_as_note.hint(), None);
+}
+
+#[test]
+fn sources_list_the_shown_ones_in_order_then_the_hidden() {
+    let d = sample();
+    assert_eq!(
+        sources(&d.settings[3]),
+        [("all".to_string(), true), ("github".to_string(), true), ("linear".to_string(), false)]
+    );
+}
+
+#[test]
+fn a_dangerous_choice_in_use_is_risky() {
+    let d = sample();
+    assert!(!d.settings[5].risky_now());
+    let skipping = Setting { value: serde_json::json!("skip permissions (dangerous)"), ..d.settings[5].clone() };
+    assert!(skipping.risky_now());
+    assert_eq!(spoken("projects_on_top"), "projects on top");
+}
+
+#[test]
+fn a_refused_token_marks_its_page() {
+    let d = sample();
+    assert!(alerts(&d, "Remote"));
+    assert!(!alerts(&d, "Issues"));
+}
+
+#[test]
+fn search_finds_settings_by_label_key_section_and_choice() {
+    let d = sample();
+    let pages_of = |query: &str| -> Vec<String> { search(&d, query).iter().map(|f| f.page.clone()).collect() };
+    assert_eq!(pages_of("JIRA"), ["Issues"]);
+    assert_eq!(search(&d, "jira")[0].section.items, [Item::Setting(2), Item::Connection(1)]);
+    assert_eq!(pages_of("fetch_minutes"), ["Worktrees"]);
+    assert_eq!(pages_of("claude"), ["Agents", "Agents"]);
+    assert_eq!(search(&d, "   "), Vec::<Found>::new());
+    assert_eq!(search(&d, "nothing like this"), Vec::<Found>::new());
+}
+
+#[test]
+fn every_word_of_the_search_must_match() {
+    let d = sample();
+    let found = search(&d, "claude extra");
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].section.items, [Item::Agent { kind: "claude".into(), mode: Some(5), extra: Some(6) }]);
+    assert_eq!(count(&found, "Agents"), 1);
+    assert_eq!(count(&found, "UI"), 0);
+}
+
+#[test]
+fn pages_match_by_name_or_what_they_hold() {
+    let pages: Vec<String> = ["Worktrees", "Projects", "Share"].map(String::from).to_vec();
+    assert_eq!(pages_matching(&pages, "teardown"), ["Projects"]);
+    assert_eq!(pages_matching(&pages, "export"), ["Share"]);
+    assert_eq!(pages_matching(&pages, ""), Vec::<String>::new());
+}
+
+#[test]
+fn an_empty_field_reads_as_what_empty_means() {
+    let d = sample();
+    assert_eq!(placeholder(&d.settings[6]), "none");
+    let per_tracker = Setting { shown: "per tracker".into(), ..d.settings[6].clone() };
+    assert_eq!(placeholder(&per_tracker), "per tracker");
+    assert_eq!(placeholder(&d.settings[0]), "worktrees folder");
+}
+
+#[test]
+fn a_default_reads_as_the_sheet_shows_it() {
+    let d = sample();
+    assert_eq!(default_shown(&d.settings[0]), "~/.cornercase/worktrees");
+    assert_eq!(default_shown(&d.settings[8]), "on");
+    assert_eq!(default_shown(&d.settings[6]), "empty");
+    let layout = Setting { default: serde_json::json!("projects_on_top"), ..d.settings[4].clone() };
+    assert_eq!(default_shown(&layout), "projects on top");
+}
+
+#[test]
+fn a_section_holding_one_setting_of_its_name_has_no_caption() {
+    let d = sample();
+    let sources = Section { title: "Sources".into(), items: vec![Item::Setting(3)] };
+    assert_eq!(caption(&d, &sources), "");
+    let jira = &sections(&d, "Issues")[1];
+    assert_eq!(caption(&d, jira), "Jira");
 }

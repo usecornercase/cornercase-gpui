@@ -1,0 +1,108 @@
+{
+  "cornercase": {
+    "cpu": 1.6,
+    "memory": 40584176,
+    "pid": 28257,
+    "processes": [
+      {
+        "args": [
+          "/opt/homebrew/bin/cornercase",
+          "server"
+        ],
+        "cpu": 1.6,
+        "memory": 31212168,
+        "name": "cornercase",
+        "parent": null,
+        "pid": 28257,
+        "started": 1793303771289686
+      }
+    ]
+  },
+  "interval": 200,
+  "panes": [
+    {
+      "agent": null,
+      "cpu": 0.0,
+      "foreground": null,
+      "memory": 2081152,
+      "pane": 23,
+      "pid": 51561,
+      "processes": [
+        {
+          "args": [
+            "/bin/zsh"
+          ],
+          "cpu": 0.0,
+          "memory": 2081152,
+          "name": "zsh",
+          "parent": null,
+          "pid": 51561,
+          "started": 1793304498870831
+        }
+      ],
+      "program": "zsh",
+      "project": 21,
+      "tab": 24,
+      "workspace": 22
+    },
+    {
+      "agent": null,
+      "cpu": 12.5,
+      "foreground": 52064,
+      "memory": 18023216,
+      "pane": 28,
+      "pid": 52019,
+      "processes": [
+        {
+          "args": [
+            "/bin/zsh"
+          ],
+          "cpu": 0.0,
+          "memory": 2244992,
+          "name": "zsh",
+          "parent": null,
+          "pid": 52019,
+          "started": 1793304505496754
+        },
+        {
+          "args": [
+            "/usr/bin/python3",
+            "-m",
+            "http.server",
+            "0",
+            "--bind",
+            "127.0.0.1"
+          ],
+          "cpu": 0.0,
+          "memory": 15778224,
+          "name": "Python",
+          "parent": 52019,
+          "pid": 52064,
+          "started": 1793304505811280
+        },
+        {
+          "args": [
+            "node",
+            "server.js"
+          ],
+          "cpu": null,
+          "memory": null,
+          "name": "node",
+          "parent": 52064,
+          "pid": 52100,
+          "started": null
+        }
+      ],
+      "program": "Python",
+      "project": 21,
+      "tab": 29,
+      "workspace": 22
+    }
+  ],
+  "total": {
+    "cpu": 14.1,
+    "memory": 60688544,
+    "panes": 2,
+    "processes": 4
+  }
+}

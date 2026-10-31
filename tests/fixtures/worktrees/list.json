@@ -1,0 +1,109 @@
+{
+  "worktrees": [
+    {
+      "branch": "feat/merged",
+      "changed": 0,
+      "error": null,
+      "kind": "linked",
+      "last_changed": "2026-10-29T20:08:15.000Z",
+      "lock": null,
+      "merged": false,
+      "no_commits": true,
+      "other_tabs": [],
+      "outside": [],
+      "path": "/Users/me/.cornercase/worktrees/ccwt/feat-merged",
+      "project": 21,
+      "project_name": "ccwt",
+      "removing": false,
+      "repository": "/Users/me/code/ccwt",
+      "risks": [],
+      "run_role": false,
+      "running": [],
+      "safe": true,
+      "size": {
+        "builds": [],
+        "builds_bytes": 0,
+        "bytes": 8192,
+        "nested": [],
+        "path": "/Users/me/.cornercase/worktrees/ccwt/feat-merged"
+      },
+      "size_error": null,
+      "unpushed": 0,
+      "upstream_gone": false,
+      "workspace": 25
+    },
+    {
+      "branch": "feat/try",
+      "changed": 1,
+      "error": null,
+      "kind": "linked",
+      "last_changed": "2026-10-29T20:08:25.492Z",
+      "lock": null,
+      "merged": false,
+      "no_commits": false,
+      "other_tabs": [
+        "cornercase",
+        "zsh"
+      ],
+      "outside": [],
+      "path": "/Users/me/.cornercase/worktrees/ccwt/feat-try",
+      "project": 21,
+      "project_name": "ccwt",
+      "removing": false,
+      "repository": "/Users/me/code/ccwt",
+      "risks": [
+        "1 file changed",
+        "1 commit not pushed",
+        "Python running in it; they stop",
+        "cornercase, zsh in other cornercase tabs"
+      ],
+      "run_role": false,
+      "running": [
+        "Python"
+      ],
+      "safe": false,
+      "size": {
+        "builds": [
+          {
+            "bytes": 303104,
+            "path": "node_modules"
+          }
+        ],
+        "builds_bytes": 303104,
+        "bytes": 315392,
+        "nested": [],
+        "path": "/Users/me/.cornercase/worktrees/ccwt/feat-try"
+      },
+      "size_error": null,
+      "unpushed": 1,
+      "upstream_gone": false,
+      "workspace": 22
+    },
+    {
+      "branch": "old/thing",
+      "changed": null,
+      "error": null,
+      "kind": "prunable",
+      "last_changed": null,
+      "lock": null,
+      "merged": false,
+      "no_commits": false,
+      "other_tabs": [],
+      "outside": [],
+      "path": "/Users/me/.cornercase/worktrees/shop/old-thing",
+      "project": null,
+      "project_name": "shop",
+      "removing": false,
+      "repository": "/Users/me/code/shop",
+      "risks": [],
+      "run_role": false,
+      "running": [],
+      "safe": true,
+      "size": null,
+      "size_error": "the folder is gone",
+      "unpushed": 0,
+      "upstream_gone": false,
+      "workspace": null
+    }
+  ]
+}

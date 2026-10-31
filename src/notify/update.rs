@@ -1,14 +1,14 @@
 use gpui::{
     App, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, FocusHandle, InteractiveElement as _,
-    IntoElement, KeyDownEvent, ParentElement as _, Render, Rgba, StatefulInteractiveElement as _, Styled as _, Window,
-    div, prelude::FluentBuilder as _, px,
+    IntoElement, ParentElement as _, Render, Rgba, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::feed::{Notes, Release, Update};
 use super::{InstallState, Notifier};
 use crate::dialogs::frame;
 use crate::store::{Store, ToastKind};
-use crate::theme::colours;
+use crate::theme::{colours, radius};
 use crate::ui;
 
 fn close(cx: &mut App) {
@@ -20,12 +20,6 @@ fn show<V: Render>(make: impl FnOnce(FocusHandle, &mut Context<V>) -> V, window:
     let view = cx.new(|cx| make(focus.clone(), cx));
     Store::get(cx).update(cx, |s, cx| s.show_dialog(view.into(), cx));
     window.focus(&focus);
-}
-
-fn on_escape(e: &KeyDownEvent, _: &mut Window, cx: &mut App) {
-    if e.keystroke.key == "escape" {
-        close(cx);
-    }
 }
 
 pub(super) struct UpdateDialog {
@@ -50,7 +44,7 @@ impl Render for UpdateDialog {
         let update = n.app.update.clone().unwrap_or_default();
         let running = n.app.version.clone().unwrap_or_default();
         let install = n.install.clone();
-        let dialog = div().track_focus(&self.focus).on_key_down(on_escape);
+        let dialog = div().track_focus(&self.focus);
         let Some(release) = update.release.clone() else {
             return dialog.child(frame(
                 "No update",
@@ -81,8 +75,8 @@ fn release_notes(release: &Release) -> impl IntoElement + use<> {
         .flex()
         .flex_col()
         .gap(px(10.))
-        .p(px(10.))
-        .rounded(px(6.))
+        .p(px(12.))
+        .rounded(px(radius::CONTROL))
         .bg(colours::terminal())
         .border_1()
         .border_color(colours::border())
@@ -133,7 +127,7 @@ fn update_buttons(
             cx.write_to_clipboard(ClipboardItem::new_string(cmd.clone()));
             Store::get(cx).update(cx, |s, cx| s.toast("Copied", ToastKind::Info, cx));
         }),
-        (None, InstallState::Running) => ui::button("installing", "Installing…"),
+        (None, InstallState::Running) => ui::busy_button("installing", "Installing…", ui::Tone::Primary),
         (None, InstallState::Done(_)) => ui::danger_button("restart", "Restart…")
             .on_click(move |_: &ClickEvent, window, cx| show_restart(notifier.clone(), window, cx)),
         (None, _) => ui::primary_button("install", format!("Install {version}"))
@@ -159,7 +153,7 @@ impl Render for RestartDialog {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let version = self.notifier.read(cx).installed_version().unwrap_or_else(|| "the new version".into());
         let (now, idle) = (self.notifier.clone(), self.notifier.clone());
-        div().track_focus(&self.focus).on_key_down(on_escape).child(frame(
+        div().track_focus(&self.focus).child(frame(
             format!("Restart cornercase on {version}?"),
             div()
                 .flex()

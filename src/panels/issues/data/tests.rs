@@ -217,6 +217,7 @@ fn check_worktree_plan() {
             "opus",
             "--workspace-name",
             "Popups",
+            "--focus",
             "--json"
         ]
     );
@@ -264,6 +265,7 @@ fn check_tab_plan() {
             "12",
             "--effort",
             "high",
+            "--focus",
             "--json"
         ]
     );
@@ -291,16 +293,48 @@ fn check_tab_queue() {
 }
 
 #[test]
-fn started_panes() {
-    assert_eq!(started_pane(r#"{"ids": {"pane": 31, "tab": 9}}"#), Some(31));
-    assert_eq!(started_pane(r#"{"pane": 7}"#), Some(7));
-    assert_eq!(started_pane("12\n"), Some(12));
-    assert_eq!(started_pane("nope"), None);
-}
-
-#[test]
 fn info_without_chips() {
     let issue = Issue { state: "open".into(), labels: vec!["bug".into(), "ui".into()], ..Default::default() };
     let info: Vec<String> = ["open", "bug, ui", "assigned to @a", "opened by @b"].map(String::from).into();
     assert_eq!(issue.info_extras(&info), ["assigned to @a", "opened by @b"]);
+}
+
+#[test]
+fn the_count_says_how_many_issues_the_search_leaves() {
+    assert_eq!(count_line(20, 20, false), "20 open issues");
+    assert_eq!(count_line(1, 1, false), "1 open issue");
+    assert_eq!(count_line(3, 20, false), "3 of 20 open issues");
+    assert_eq!(count_line(7, 7, true), "7 issues");
+    assert_eq!(count_line(0, 1, true), "0 of 1 issue");
+}
+
+#[test]
+fn a_state_label_names_open_and_closed_and_keeps_a_tracker_state() {
+    let open = Issue { state: "open".into(), ..Default::default() };
+    let closed = Issue { state: "closed".into(), closed: true, ..Default::default() };
+    let unnamed = Issue { closed: true, ..Default::default() };
+    let linear = Issue { state: "In Progress".into(), ..Default::default() };
+    assert_eq!(
+        [&open, &closed, &unnamed, &linear].map(Issue::state_label),
+        ["Open", "Closed", "Closed", "In Progress"]
+    );
+    assert_eq!([&open, &closed, &unnamed, &linear].map(Issue::state_note), [None, None, None, Some("In Progress")]);
+}
+
+#[test]
+fn a_tracker_status_says_how_it_connects_or_what_it_needs() {
+    let sources: Sources = parse(SOURCES).expect("parses");
+    let line = |source: &str| sources.get(source).expect(source).status_line();
+    assert_eq!(line("github"), "Connected as zamarrowski, through gh");
+    assert_eq!(line("jira"), "Needs a site, an email and a token");
+    assert_eq!(line("shortcut"), "Token rejected");
+    assert_eq!(line("future"), "Not connected");
+}
+
+#[test]
+fn a_person_shows_the_name_and_a_different_handle() {
+    let person = |name: &str, handle: &str| Person { name: name.into(), handle: handle.into(), id: None };
+    assert_eq!(person("Ana Ruiz", "ana").display(), ("Ana Ruiz".into(), Some("ana".into())));
+    assert_eq!(person("bob", "bob").display(), ("bob".into(), None));
+    assert_eq!(person("", "carla").display(), ("carla".into(), None));
 }

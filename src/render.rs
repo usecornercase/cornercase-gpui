@@ -1,10 +1,21 @@
+#[cfg(test)]
+mod fixtures;
+mod ghost;
+pub(crate) mod layout;
+pub(crate) mod moving;
+pub(crate) mod popup;
+
 use gpui::{
-    App, BorderStyle, Bounds, ContentMask, Font, FontStyle, FontWeight, Hsla, Pixels, Point, SharedString, TextRun,
-    Window, fill, font, outline, point, px, size,
+    App, BorderStyle, Bounds, ContentMask, Font, FontStyle, FontWeight, Hsla, Pixels, Point, Rgba, SharedString,
+    TextRun, Window, fill, font, outline, point, px, quad, size, transparent_black,
 };
 
-use crate::model::{Area, Cursor, CursorShape, Grid, PaneGrid, Run, UnderlineKind};
-use crate::theme::{Painter, colours, hsla};
+use crate::model::link::Hovered;
+use crate::model::{Cursor, CursorShape, Grid, PaneGrid, Run, UnderlineKind};
+use crate::theme::{INACTIVE, Painter, colours, faded, hsla, radius};
+pub(crate) use ghost::paint_ghost;
+use layout::{Card, Layout, PADDING};
+use moving::{Look, Stage, shrunk};
 
 #[derive(Clone)]
 pub(crate) struct Metrics {
@@ -40,24 +51,18 @@ impl Metrics {
         f
     }
 
-    pub(crate) fn cell_at(&self, origin: Point<Pixels>, position: Point<Pixels>) -> (i32, i32) {
-        let dx = f32::from(position.x - origin.x) / f32::from(self.cell_width);
-        let dy = f32::from(position.y - origin.y) / f32::from(self.line_height);
-        (floor_to_cell(dx), floor_to_cell(dy))
+    pub(crate) fn cell(&self) -> (f32, f32) {
+        (f32::from(self.cell_width), f32::from(self.line_height))
     }
 
-    fn area(&self, origin: Point<Pixels>, area: Area) -> Bounds<Pixels> {
-        let (cw, lh) = (self.cell_width, self.line_height);
-        Bounds::new(
-            origin + point(cw * f32::from(area.x), lh * f32::from(area.y)),
-            size(cw * f32::from(area.cols), lh * f32::from(area.rows)),
-        )
+    pub(crate) fn scaled(&self, by: f32) -> Self {
+        Self {
+            family: self.family.clone(),
+            font_size: self.font_size * by,
+            cell_width: self.cell_width * by,
+            line_height: self.line_height * by,
+        }
     }
-}
-
-#[expect(clippy::cast_possible_truncation, reason = "a pointer's offset in cells is far inside i32")]
-fn floor_to_cell(cells: f32) -> i32 {
-    cells.floor() as i32
 }
 
 fn offset(unit: Pixels, cells: usize) -> Pixels {
@@ -65,49 +70,69 @@ fn offset(unit: Pixels, cells: usize) -> Pixels {
 }
 
 pub(crate) struct Surface<'a> {
-    pub origin: Point<Pixels>,
+    pub layout: &'a Layout,
     pub metrics: &'a Metrics,
     pub focused: bool,
+    pub stage: &'a Stage,
+}
+
+pub(crate) fn card(bounds: Bounds<Pixels>, colour: impl Into<Hsla>, edge: Rgba, window: &mut Window) {
+    let corner = px(radius::CARD);
+    window.paint_quad(fill(bounds, colour.into()).corner_radii(corner));
+    window.paint_quad(quad(bounds, corner, transparent_black(), px(1.), edge, BorderStyle::Solid));
+}
+
+pub(crate) fn paint_link(layout: &Layout, hovered: &Hovered, window: &mut Window) {
+    let (row, start, end) = (hovered.link.row, hovered.link.start, hovered.link.end);
+    let Some(span) = layout.span(hovered.pane, row, (start, end)) else { return };
+    window.paint_quad(fill(span, faded(colours::accent().into(), 0.14)).corner_radii(px(3.)));
+    let base = point(span.origin.x, span.origin.y + span.size.height - px(1.5));
+    window.paint_quad(fill(Bounds::new(base, size(span.size.width, px(1.5))), colours::accent()));
 }
 
 pub(crate) fn paint(grid: &Grid, surface: &Surface<'_>, window: &mut Window, cx: &mut App) {
-    for divider in &grid.dividers {
-        let b = surface.metrics.area(surface.origin, divider.line);
-        window.paint_quad(fill(b, colours::terminal()));
-        let center = if divider.dir == "down" {
-            Bounds::new(point(b.origin.x, b.origin.y + b.size.height / 2.), size(b.size.width, px(1.)))
-        } else {
-            Bounds::new(point(b.origin.x + b.size.width / 2., b.origin.y), size(px(1.), b.size.height))
-        };
-        window.paint_quad(fill(center, colours::border()));
+    for card in &surface.layout.cards {
+        if let Some(pane) = grid.pane(card.pane) {
+            paint_pane(pane, card, surface, window, cx);
+        }
     }
-    let several = grid.panes.len() > 1;
-    for pane in &grid.panes {
-        paint_pane(pane, surface, several, window, cx);
+    ghost::paint_marks(surface.stage, surface.layout, window);
+}
+
+fn pane_card(bounds: Bounds<Pixels>, (fill_colour, edge): (Hsla, Rgba), look: Look, window: &mut Window) {
+    let corner = px(radius::CARD);
+    window.paint_quad(fill(bounds, faded(fill_colour, 1. - 0.6 * look.hollow)).corner_radii(corner));
+    let solid = faded(edge.into(), look.shown * (1. - look.hollow));
+    window.paint_quad(quad(bounds, corner, transparent_black(), px(1.), solid, BorderStyle::Solid));
+    if look.hollow > 0. {
+        let dashed = faded(colours::accent().into(), 0.8 * look.hollow);
+        window.paint_quad(quad(bounds, corner, transparent_black(), px(1.5), dashed, BorderStyle::Dashed));
     }
 }
 
-fn paint_pane(pane: &PaneGrid, surface: &Surface<'_>, several: bool, window: &mut Window, cx: &mut App) {
-    let bounds = surface.metrics.area(surface.origin, pane.rect);
+fn paint_pane(pane: &PaneGrid, card: &Card, surface: &Surface<'_>, window: &mut Window, cx: &mut App) {
+    let (at, look) = surface.stage.shown(card);
+    let several = surface.layout.cards.len() > 1;
     let painter = Painter { colours: &pane.colours };
+    let edge = if several && pane.active { colours::edge() } else { colours::border() };
+    let fade = if several && !pane.active { INACTIVE } else { 1. } * look.shown;
+    let fill_colour = painter.pane_fill().unwrap_or_else(|| colours::pane().into());
+    pane_card(at.bounds, (faded(fill_colour, fade), edge), look, window);
+    let (cw, lh) = (surface.metrics.cell_width, surface.metrics.line_height);
+    let mut cells = Bounds::new(at.cells, size(cw * f32::from(at.rect.cols), lh * f32::from(at.rect.rows)));
+    if at.bounds != card.bounds {
+        cells = cells.intersect(&shrunk(at.bounds, PADDING));
+    }
     let canvas = PaneCanvas {
         metrics: surface.metrics,
         default_bg: hsla(painter.default_bg()),
         painter,
-        top_left: bounds.origin,
+        top_left: at.cells,
         cursor: pane.cursor.filter(|_| pane.active || !several),
         focused: surface.focused,
+        fade: fade * (1. - 0.8 * look.hollow),
     };
-    window.paint_quad(fill(bounds, canvas.default_bg));
-    window.with_content_mask(Some(ContentMask { bounds }), |window| {
-        let rows = pane.lines.len().min(usize::from(pane.size.rows));
-        for (row, line) in pane.lines.iter().take(rows).enumerate() {
-            canvas.paint_line(row, line, window, cx);
-        }
-    });
-    if several && !pane.active {
-        window.paint_quad(fill(bounds, Hsla { h: 0., s: 0., l: 0., a: 0.18 }));
-    }
+    window.with_content_mask(Some(ContentMask { bounds: cells }), |window| canvas.paint_rows(pane, window, cx));
 }
 
 struct PaneCanvas<'a> {
@@ -117,6 +142,7 @@ struct PaneCanvas<'a> {
     default_bg: Hsla,
     cursor: Option<Cursor>,
     focused: bool,
+    fade: f32,
 }
 
 struct RowAt {
@@ -135,7 +161,20 @@ fn hline(window: &mut Window, at: Point<Pixels>, width: Pixels, colour: Hsla) {
     window.paint_quad(fill(Bounds::new(at, size(width, px(1.))), colour));
 }
 
-impl PaneCanvas<'_> {
+impl<'a> PaneCanvas<'a> {
+    fn plain(pane: &'a PaneGrid, metrics: &'a Metrics, top_left: Point<Pixels>, fade: f32) -> Self {
+        let painter = Painter { colours: &pane.colours };
+        let default_bg = hsla(painter.default_bg());
+        Self { metrics, painter, top_left, default_bg, cursor: None, focused: false, fade }
+    }
+
+    fn paint_rows(&self, pane: &PaneGrid, window: &mut Window, cx: &mut App) {
+        let rows = pane.lines.len().min(usize::from(pane.size.rows));
+        for (row, line) in pane.lines.iter().take(rows).enumerate() {
+            self.paint_line(row, line, window, cx);
+        }
+    }
+
     fn paint_line(&self, row: usize, line: &[Run], window: &mut Window, cx: &mut App) {
         let y = self.top_left.y + offset(self.metrics.line_height, row);
         let mut col = 0usize;
@@ -153,11 +192,12 @@ impl PaneCanvas<'_> {
         let width = offset(self.metrics.cell_width, run.cells.len());
         let s = &run.style;
         let (fg, bg, custom_bg) = self.painter.resolve(s);
-        if custom_bg {
-            window.paint_quad(fill(Bounds::new(at, size(width, lh)), bg));
+        let fg = faded(fg, self.fade);
+        if let Some(bg) = self.painter.cell_fill(bg, custom_bg) {
+            window.paint_quad(fill(Bounds::new(at, size(width, lh)), faded(bg, self.fade)));
         }
         if s.underline {
-            let colour = self.painter.underline_colour(s).unwrap_or(fg);
+            let colour = self.painter.underline_colour(s).map_or(fg, |c| faded(c, self.fade));
             let base = point(at.x, at.y + lh - px(2.));
             hline(window, base, width, colour);
             if s.underline_kind == Some(UnderlineKind::Double) {
@@ -176,7 +216,7 @@ impl PaneCanvas<'_> {
         let c = self.cursor.filter(|c| usize::from(c.y) == row)?;
         let (cw, lh) = (self.metrics.cell_width, self.metrics.line_height);
         let cb = Bounds::new(point(self.top_left.x + cw * f32::from(c.x), y), size(cw, lh));
-        let colour = self.painter.cursor();
+        let colour = faded(self.painter.cursor(), self.fade);
         match (c.shape, self.focused) {
             (CursorShape::Block, true) => {
                 window.paint_quad(fill(cb, colour));
@@ -214,7 +254,7 @@ impl PaneCanvas<'_> {
 
     fn glyph<'t>(&self, col: usize, text: &'t str, run: &Run, cursor_cell: Option<usize>) -> Glyph<'t> {
         let (fg, _, _) = self.painter.resolve(&run.style);
-        let colour = if cursor_cell == Some(col) { self.default_bg } else { fg };
+        let colour = faded(if cursor_cell == Some(col) { self.default_bg } else { fg }, self.fade);
         Glyph { col, text, font: self.metrics.font(run.style.bold, run.style.italic), colour }
     }
 

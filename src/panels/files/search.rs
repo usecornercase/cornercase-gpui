@@ -13,7 +13,7 @@ pub(super) const MAX_NAMES: usize = 200;
 pub(super) const MAX_MATCHES: usize = 1_000;
 const MAX_LINE: usize = 400;
 
-pub(super) fn index(root: &Path, cancel: &AtomicBool) -> Vec<String> {
+pub(super) fn index(root: &Path, cancel: &AtomicBool) -> Option<Vec<String>> {
     let walk = ignore::WalkBuilder::new(root)
         .hidden(false)
         .require_git(false)
@@ -22,7 +22,10 @@ pub(super) fn index(root: &Path, cancel: &AtomicBool) -> Vec<String> {
         .build();
     let mut paths = Vec::new();
     for entry in walk.flatten() {
-        if paths.len() >= MAX_INDEX || cancel.load(Ordering::Relaxed) {
+        if cancel.load(Ordering::Relaxed) {
+            return None;
+        }
+        if paths.len() >= MAX_INDEX {
             break;
         }
         if !entry.file_type().is_some_and(|t| t.is_file()) {
@@ -33,13 +36,32 @@ pub(super) fn index(root: &Path, cancel: &AtomicBool) -> Vec<String> {
         }
     }
     paths.sort();
-    paths
+    Some(paths)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct NameHit {
     pub path: String,
     pub lit: Vec<Range<usize>>,
+}
+
+struct Ranked<'a> {
+    score: u32,
+    named: bool,
+    name: usize,
+    path: &'a String,
+}
+
+impl Ranked<'_> {
+    fn order(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .score
+            .cmp(&self.score)
+            .then(other.named.cmp(&self.named))
+            .then(self.name.cmp(&other.name))
+            .then(self.path.len().cmp(&other.path.len()))
+            .then(self.path.cmp(other.path))
+    }
 }
 
 pub(super) fn names(paths: &[String], query: &str) -> Vec<NameHit> {
@@ -50,19 +72,20 @@ pub(super) fn names(paths: &[String], query: &str) -> Vec<NameHit> {
     let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
     let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
     let mut buf = Vec::new();
-    let mut scored: Vec<(u32, usize, &String)> = paths
+    let mut scored: Vec<Ranked> = paths
         .iter()
         .filter_map(|path| {
             let score = pattern.score(Utf32Str::new(path, &mut buf), &mut matcher)?;
-            let name = path.rsplit('/').next().map_or(path.len(), str::len);
-            Some((score, name, path))
+            let name = path.rsplit('/').next().unwrap_or(path);
+            let named = pattern.score(Utf32Str::new(name, &mut buf), &mut matcher).is_some();
+            Some(Ranked { score, named, name: name.len(), path })
         })
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.len().cmp(&b.2.len())).then(a.2.cmp(b.2)));
+    scored.sort_by(Ranked::order);
     scored.truncate(MAX_NAMES);
     scored
         .into_iter()
-        .map(|(_, _, path)| {
+        .map(|Ranked { path, .. }| {
             let mut indices = Vec::new();
             pattern.indices(Utf32Str::new(path, &mut buf), &mut matcher, &mut indices);
             indices.sort_unstable();
@@ -72,7 +95,7 @@ pub(super) fn names(paths: &[String], query: &str) -> Vec<NameHit> {
         .collect()
 }
 
-fn char_ranges(text: &str, indices: &[u32]) -> Vec<Range<usize>> {
+pub(super) fn char_ranges(text: &str, indices: &[u32]) -> Vec<Range<usize>> {
     let mut ranges: Vec<Range<usize>> = Vec::new();
     let mut wanted = indices.iter().peekable();
     for (i, (at, ch)) in text.char_indices().enumerate() {

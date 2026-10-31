@@ -5,29 +5,50 @@ use std::time::Instant;
 
 use gpui::{AppContext as _, Context, ScrollStrategy};
 
+use super::source::Source;
 use super::viewer::OpenAt;
-use super::{FilesPanel, INDEX_FRESH, Mode, Results, TextRow, search};
+use super::{FilesPanel, INDEX_FRESH, Mode, Results, TextRow, search, served};
 
-struct Job {
-    root: PathBuf,
-    index: Option<Arc<Vec<String>>>,
-    query: String,
-    mode: Mode,
-    cancel: Arc<AtomicBool>,
+pub(super) struct Job {
+    pub(super) root: PathBuf,
+    pub(super) source: Source,
+    pub(super) index: Option<Arc<Vec<String>>>,
+    pub(super) query: String,
+    pub(super) mode: Mode,
+    pub(super) cancel: Arc<AtomicBool>,
 }
 
-struct Answer {
-    root: PathBuf,
-    paths: Arc<Vec<String>>,
-    fresh: bool,
+pub(super) struct Answer {
+    pub(super) root: PathBuf,
+    pub(super) paths: Arc<Vec<String>>,
+    pub(super) fresh: bool,
     query: String,
-    results: Results,
+    pub(super) results: Results,
+}
+
+impl Job {
+    pub(super) fn spawn<T: 'static>(
+        self,
+        cx: &mut Context<T>,
+        then: impl FnOnce(&mut T, Answer, &mut Context<T>) + 'static,
+    ) {
+        let task = cx.background_spawn(async move { answer(self) });
+        cx.spawn(async move |this, cx| {
+            let answer = task.await;
+            let _ = this.update(cx, |this, cx| then(this, answer, cx));
+        })
+        .detach();
+    }
 }
 
 fn answer(job: Job) -> Answer {
+    if let Source::Server(workspace) = job.source {
+        let results = served::search(workspace, &job.query, job.mode);
+        return Answer { root: job.root, paths: Arc::default(), fresh: false, query: job.query, results };
+    }
     let (paths, fresh) = match job.index {
         Some(paths) => (paths, false),
-        None => (Arc::new(search::index(&job.root, &job.cancel)), true),
+        None => search::index(&job.root, &job.cancel).map_or_else(|| (Arc::default(), false), |p| (Arc::new(p), true)),
     };
     let results = match job.mode {
         Mode::Names => Results::Names(search::names(&paths, &job.query)),
@@ -75,12 +96,18 @@ impl FilesPanel {
         }
     }
 
-    fn fresh_index(&self, root: &Path) -> Option<Arc<Vec<String>>> {
+    pub(super) fn fresh_index(&self, root: &Path) -> Option<Arc<Vec<String>>> {
         self.search
             .index
             .as_ref()
             .filter(|(r, _, at)| r.as_path() == root && at.elapsed() < INDEX_FRESH)
             .map(|(_, paths, _)| paths.clone())
+    }
+
+    pub(super) fn keep_index(&mut self, root: PathBuf, paths: Arc<Vec<String>>) {
+        if self.place().is_some_and(|p| p.root == root) {
+            self.search.index = Some((root, paths, Instant::now()));
+        }
     }
 
     pub(super) fn run_search(&mut self, cx: &mut Context<Self>) {
@@ -89,7 +116,7 @@ impl FilesPanel {
         }
         self.search.generation += 1;
         let query = self.place().map(|p| p.query.trim().to_string()).unwrap_or_default();
-        let Some(root) = self.place().map(|p| p.root.clone()) else { return };
+        let Some((root, source)) = self.place().map(|p| (p.root.clone(), p.source.clone())) else { return };
         if query.is_empty() {
             self.search.clear();
             cx.notify();
@@ -98,19 +125,14 @@ impl FilesPanel {
         let generation = self.search.generation;
         let cancel = Arc::new(AtomicBool::new(false));
         self.search.running = Some(cancel.clone());
-        let job = Job { index: self.fresh_index(&root), root, query, mode: self.search.mode, cancel };
-        let task = cx.background_spawn(async move { answer(job) });
-        cx.spawn(async move |this, cx| {
-            let answer = task.await;
-            let _ = this.update(cx, |this, cx| this.answered(generation, answer, cx));
-        })
-        .detach();
+        let job = Job { index: self.fresh_index(&root), root, source, query, mode: self.search.mode, cancel };
+        job.spawn(cx, move |this, answer, cx| this.answered(generation, answer, cx));
         cx.notify();
     }
 
     fn answered(&mut self, generation: u64, answer: Answer, cx: &mut Context<Self>) {
-        if answer.fresh && self.place().is_some_and(|p| p.root == answer.root) {
-            self.search.index = Some((answer.root, answer.paths, Instant::now()));
+        if answer.fresh {
+            self.keep_index(answer.root, answer.paths);
         }
         if self.search.generation != generation {
             return;
@@ -139,7 +161,7 @@ impl FilesPanel {
 
     pub(super) fn open_result(&mut self, ix: usize, cx: &mut Context<Self>) {
         let (rel, at) = match &self.search.results {
-            Results::None => return,
+            Results::None | Results::Failed(_) => return,
             Results::Names(hits) => {
                 let Some(hit) = hits.get(ix) else { return };
                 (PathBuf::from(&hit.path), OpenAt { from_search: true, ..OpenAt::default() })

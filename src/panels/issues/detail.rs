@@ -1,45 +1,62 @@
+use std::rc::Rc;
+
 use gpui::{
-    AnyElement, App, ClickEvent, ClipboardItem, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Div, FontWeight, IntoElement, ParentElement as _, StatefulInteractiveElement as _,
+    Styled as _, WeakEntity, div, list, prelude::FluentBuilder as _, px,
 };
 
-use super::data::{self, Comment, Issue, ReadIssue, SourceInfo};
-use super::{BodyView, IssuesPanel, error_note, label_chip, state_chip, text};
-use crate::panels::PanelKind;
-use crate::store::{Store, ToastKind};
+use super::data::{self, Comment, Issue};
+use super::page::{Item, Page, Read};
+use super::{BodyView, IssuesPanel, blank, card, copy_text, error_note, label_chip, state_icon, text};
+use crate::notify::tip;
 use crate::theme::{FONT_FAMILY, colours};
-use crate::ui;
+use crate::ui::{self, Icon, Tone, glass};
+
+struct Detail {
+    page: Rc<Page>,
+    view: BodyView,
+    panel: WeakEntity<IssuesPanel>,
+    now: i64,
+}
 
 impl IssuesPanel {
     pub(super) fn render_detail(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(issue) = self.selected.clone() else {
-            return div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(ui::note("Choose an issue to read it and start work on it."))
-                .into_any_element();
+            return blank("Choose an issue to read it and start work on it.").size_full().into_any_element();
         };
         let read = self.reads.get(&issue.id());
-        let info = issue.info(read.and_then(|r| r.as_ref().ok()));
+        let info = issue.info(read.and_then(|r| r.as_ref().ok()).map(|page| &page.read));
         div()
-            .id("issue-detail")
             .size_full()
-            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .child(self.detail_header(&issue, &info, cx))
+            .child(self.detail_text(read, cx))
+            .into_any_element()
+    }
+
+    fn detail_header(&self, issue: &Issue, info: &[String], cx: &mut Context<Self>) -> Div {
+        div()
+            .flex_none()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .px(px(20.))
+            .pt(px(16.))
+            .pb(px(14.))
+            .border_b_1()
+            .border_color(colours::border())
+            .child(self.detail_heading(issue))
             .child(
                 div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(10.))
-                    .p(px(18.))
-                    .child(self.detail_heading(&issue))
-                    .child(div().text_size(px(18.)).font_weight(FontWeight::SEMIBOLD).child(issue.title.clone()))
-                    .child(info_line(&issue, &info))
-                    .child(self.detail_buttons(&issue.url, cx))
-                    .child(self.detail_body(read)),
+                    .text_size(px(18.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .line_clamp(3)
+                    .text_ellipsis()
+                    .child(issue.title.clone()),
             )
-            .into_any_element()
+            .child(info_line(issue, info))
+            .child(detail_actions(&issue.url, cx))
     }
 
     fn detail_heading(&self, issue: &Issue) -> Div {
@@ -48,203 +65,200 @@ impl IssuesPanel {
             .items_center()
             .gap(px(8.))
             .text_size(px(12.))
+            .child(state_pill(issue))
             .child(div().font_family(FONT_FAMILY).text_color(colours::accent()).child(issue.key.clone()))
-            .child(div().text_color(colours::faint()).child(self.source_name(&issue.source)))
-            .children((!issue.state.is_empty()).then(|| state_chip(&issue.state, issue.closed)))
+            .child(div().text_color(colours::faint()).child("·"))
+            .child(div().text_color(colours::muted()).child(self.source_name(&issue.source)))
     }
 
-    fn detail_buttons(&self, url: &str, cx: &mut Context<Self>) -> Div {
-        let (open, copy) = (url.to_string(), url.to_string());
-        div()
-            .flex()
-            .flex_wrap()
-            .gap(px(6.))
-            .pb(px(6.))
-            .border_b_1()
-            .border_color(colours::border())
-            .child(
-                ui::primary_button("issue-start", "Start…")
-                    .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_start(false, window, cx))),
-            )
-            .child(
-                ui::button("issue-schedule", "Schedule…")
-                    .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_start(true, window, cx))),
-            )
-            .when(!url.is_empty(), |d| {
-                d.child(
-                    ui::button("issue-open", "Open in browser")
-                        .on_click(move |_: &ClickEvent, _, cx| cx.open_url(&open)),
-                )
-                .child(ui::button("issue-copy", "Copy URL").on_click(move |_: &ClickEvent, _, cx| copy_url(&copy, cx)))
-            })
-            .child(div().flex_1())
-            .child(self.view_switch(cx))
-    }
-
-    fn view_switch(&self, cx: &mut Context<Self>) -> Div {
-        let raw = self.body_view == BodyView::Markdown;
-        ui::segments(vec![
-            ui::segment("issue-rendered", "Rendered", !raw)
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.set_body_view(BodyView::Rendered, cx)))
-                .into_any_element(),
-            ui::segment("issue-raw", "Markdown", raw)
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.set_body_view(BodyView::Markdown, cx)))
-                .into_any_element(),
-        ])
-    }
-
-    fn detail_body(&self, read: Option<&Result<ReadIssue, String>>) -> Div {
-        let body = div().flex().flex_col().gap(px(8.)).text_size(px(13.)).text_color(colours::text());
+    fn detail_text(&self, read: Option<&Read>, cx: &mut Context<Self>) -> AnyElement {
+        let (view, panel) = (self.body_view, cx.entity().downgrade());
         match read {
-            None => body.child(ui::note("Reading the issue…").p_0()),
-            Some(Err(e)) => body.child(error_note(e.clone())),
-            Some(Ok(read)) => body.children(self.description(&read.body)).children(self.comments(&read.comments)),
+            Some(Ok(page)) => Detail { page: page.clone(), view, panel, now: data::now() }.render(),
+            Some(Err(e)) => unread(view, &panel, error_note(e.clone())),
+            None => unread(view, &panel, ui::loading("Reading the issue…").p_0()),
         }
     }
+}
 
-    fn formatted(&self, id: &str, source: &str) -> Vec<AnyElement> {
-        match self.body_view {
-            BodyView::Markdown => vec![text::raw(source)],
-            BodyView::Rendered => text::markdown(id, source),
-        }
+impl Detail {
+    fn render(self) -> AnyElement {
+        let state = self.page.list(self.view);
+        list(state, move |index, _, _| self.item(index)).flex_1().into_any_element()
     }
 
-    fn description(&self, body: &str) -> Vec<AnyElement> {
-        if body.trim().is_empty() {
-            return vec![ui::dim("No description.").into_any_element()];
-        }
-        self.formatted("body", body)
-    }
-
-    fn comments(&self, comments: &[Comment]) -> Vec<AnyElement> {
-        if comments.is_empty() {
-            return Vec::new();
-        }
-        let now = data::now();
-        let heading = ui::section(format!("Comments · {}", comments.len())).into_any_element();
-        let each = comments.iter().enumerate().map(|(i, comment)| self.comment(i, comment, now));
-        std::iter::once(heading).chain(each).collect()
-    }
-
-    fn comment(&self, index: usize, comment: &Comment, now: i64) -> AnyElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(6.))
-            .p(px(10.))
-            .rounded(px(6.))
-            .bg(colours::sidebar())
-            .border_1()
-            .border_color(colours::border())
-            .child(
-                div()
-                    .flex()
-                    .gap(px(6.))
-                    .text_size(px(12.))
-                    .child(div().font_weight(FontWeight::SEMIBOLD).child(comment.author.clone()))
-                    .child(div().text_color(colours::faint()).child(comment.when(now))),
-            )
-            .children(self.formatted(&format!("comment-{index}"), &comment.body))
-            .into_any_element()
-    }
-
-    pub(super) fn render_connect(&self, only: Option<&SourceInfo>, cx: &mut Context<Self>) -> AnyElement {
-        let sources: Vec<SourceInfo> = match only {
-            Some(source) => vec![source.clone()],
-            None => self.sources.as_ref().map(|s| s.list.clone()).unwrap_or_default(),
+    fn item(&self, index: usize) -> AnyElement {
+        let items = self.page.items(self.view);
+        let Some(&item) = items.get(index) else { return nothing() };
+        let top = match index {
+            0 => 14.,
+            1 => 10.,
+            _ => 8.,
         };
-        let (heading, how) = connect_text(only);
         div()
-            .size_full()
-            .flex()
-            .justify_center()
-            .pt(px(40.))
-            .child(
-                div()
-                    .w(px(720.))
-                    .flex()
-                    .flex_col()
-                    .gap(px(10.))
-                    .child(div().text_size(px(17.)).font_weight(FontWeight::SEMIBOLD).child(heading))
-                    .child(div().text_color(colours::muted()).child(how))
-                    .child(div().flex().flex_col().text_size(px(12.5)).children(sources.iter().map(connect_row)))
-                    .child(connect_buttons(cx)),
-            )
+            .w_full()
+            .px(px(20.))
+            .pt(px(top))
+            .when(index + 1 == items.len(), |d| d.pb(px(24.)))
+            .text_size(px(13.))
+            .text_color(colours::text())
+            .child(self.content(item))
             .into_any_element()
     }
+
+    fn content(&self, item: Item) -> AnyElement {
+        let page = &self.page;
+        match item {
+            Item::Heading => body_heading(self.view, &self.panel).into_any_element(),
+            Item::Empty => ui::dim("No description.").text_size(px(12.)).into_any_element(),
+            Item::Block(i) => page.body.get(i).map_or_else(nothing, |b| text::block(format!("body-{i}").into(), b)),
+            Item::Source => text::raw(&page.read.body),
+            Item::Comments => ui::section(format!("Comments · {}", page.read.comments.len())).into_any_element(),
+            Item::Comment(i) => self.comment(i),
+        }
+    }
+
+    fn comment(&self, index: usize) -> AnyElement {
+        let (Some(comment), Some(blocks)) = (self.page.read.comments.get(index), self.page.comments.get(index)) else {
+            return nothing();
+        };
+        let body = match self.view {
+            BodyView::Rendered => text::blocks(&format!("comment-{index}"), blocks),
+            BodyView::Markdown => vec![text::raw(&comment.body)],
+        };
+        card().child(byline(comment, self.now)).children(body).into_any_element()
+    }
+}
+
+fn nothing() -> AnyElement {
+    div().into_any_element()
+}
+
+fn unread(view: BodyView, panel: &WeakEntity<IssuesPanel>, note: Div) -> AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(10.))
+        .px(px(20.))
+        .pt(px(14.))
+        .child(body_heading(view, panel))
+        .child(note)
+        .into_any_element()
+}
+
+fn body_heading(view: BodyView, panel: &WeakEntity<IssuesPanel>) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap(px(8.))
+        .child(ui::section("Description").p_0())
+        .child(view_switch(view, panel))
+}
+
+fn view_switch(view: BodyView, panel: &WeakEntity<IssuesPanel>) -> Div {
+    ui::segments(vec![
+        view_segment(BodyView::Rendered, view, panel.clone()),
+        view_segment(BodyView::Markdown, view, panel.clone()),
+    ])
+}
+
+fn view_segment(view: BodyView, shown: BodyView, panel: WeakEntity<IssuesPanel>) -> AnyElement {
+    let (id, label) = match view {
+        BodyView::Rendered => ("issue-rendered", "Rendered"),
+        BodyView::Markdown => ("issue-raw", "Markdown"),
+    };
+    ui::segment(id, label, view == shown)
+        .on_click(move |_: &ClickEvent, _, cx| {
+            let _ = panel.update(cx, |this, cx| this.set_body_view(view, cx));
+        })
+        .into_any_element()
+}
+
+fn state_pill(issue: &Issue) -> Div {
+    let colour = if issue.closed { colours::muted() } else { colours::done() };
+    div()
+        .flex()
+        .items_center()
+        .gap(px(5.))
+        .px(px(8.))
+        .py(px(2.))
+        .rounded_full()
+        .bg(glass::tint(colour, 0.14))
+        .text_size(px(11.5))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(colour)
+        .child(state_icon(issue, 12.).text_color(colour))
+        .child(issue.state_label())
 }
 
 fn info_line(issue: &Issue, info: &[String]) -> Div {
+    let mut parts = issue.info_extras(info);
+    if !issue.updated_at.is_empty() {
+        parts.push(format!("updated {}", data::ago(&issue.updated_at, data::now())));
+    }
     div()
         .flex()
         .flex_wrap()
-        .gap(px(6.))
         .items_center()
-        .children(issue.info_extras(info).into_iter().map(|i| ui::dim(i).text_size(px(12.))))
+        .gap(px(6.))
+        .text_size(px(12.))
+        .text_color(colours::muted())
+        .child(parts.join(" · "))
         .children(issue.labels.iter().cloned().map(label_chip))
 }
 
-fn copy_url(url: &str, cx: &mut App) {
-    cx.write_to_clipboard(ClipboardItem::new_string(url.to_string()));
-    Store::get(cx).update(cx, |s, cx| s.toast("Copied the issue's URL", ToastKind::Info, cx));
+fn detail_actions(url: &str, cx: &mut Context<IssuesPanel>) -> Div {
+    let (open, copy) = (url.to_string(), url.to_string());
+    div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .gap(px(6.))
+        .child(
+            ui::icon_text_button("issue-start", Icon::Play, "Start…", Tone::Primary)
+                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_start(false, window, cx))),
+        )
+        .child(
+            ui::icon_text_button("issue-schedule", Icon::Queue, "Schedule…", Tone::Plain)
+                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_start(true, window, cx))),
+        )
+        .child(div().flex_1())
+        .when(!url.is_empty(), |d| {
+            d.child(
+                ui::tool_button("issue-open", Icon::External, 28., false)
+                    .tooltip(tip("Open in the browser"))
+                    .on_click(move |_: &ClickEvent, _, cx| cx.open_url(&open)),
+            )
+            .child(
+                ui::tool_button("issue-copy", Icon::Copy, 28., false)
+                    .tooltip(tip("Copy the issue's link"))
+                    .on_click(move |_: &ClickEvent, _, cx| copy_text(copy.clone(), "the issue's link", cx)),
+            )
+        })
 }
 
-fn connect_text(only: Option<&SourceInfo>) -> (String, String) {
-    match only {
-        Some(source) if source.source == "github" => (
-            format!("{} is not connected", source.name),
-            "GitHub goes through the gh command line in the project's folder: sign in with gh, or open a \
-             project whose repository is on GitHub."
-                .to_string(),
-        ),
-        Some(source) => (
-            format!("{} is not connected", source.name),
-            format!(
-                "Connect it in Settings → Issues → {}, or from a shell. Its token is checked and kept by \
-                 cornercase, never by this window.",
-                source.name
-            ),
-        ),
-        None => (
-            "No issue tracker is connected".to_string(),
-            "Connect GitHub with the gh command line, and the other trackers with a token in Settings → \
-             Issues. Tokens are checked and kept by cornercase, never by this window."
-                .to_string(),
-        ),
-    }
-}
-
-fn connect_row(source: &SourceInfo) -> Div {
+fn byline(comment: &Comment, now: i64) -> Div {
+    let initial: String = comment.author.chars().next().map(|c| c.to_uppercase().collect()).unwrap_or_default();
     div()
         .flex()
         .items_center()
-        .gap(px(10.))
-        .py(px(5.))
-        .border_b_1()
-        .border_color(colours::border())
-        .child(div().w(px(80.)).flex_none().font_weight(FontWeight::SEMIBOLD).child(source.name.clone()))
-        .child(div().w(px(260.)).flex_none().text_color(colours::muted()).child(source.missing_line()))
+        .gap(px(8.))
+        .text_size(px(12.))
         .child(
             div()
-                .flex_1()
-                .min_w_0()
-                .font_family(FONT_FAMILY)
-                .text_size(px(11.))
-                .text_color(colours::faint())
-                .child(source.connect_hint()),
+                .size(px(20.))
+                .flex_none()
+                .rounded_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(glass::tint(colours::brand(), 0.35))
+                .text_size(px(10.))
+                .font_weight(FontWeight::BOLD)
+                .text_color(colours::on_brand())
+                .child(initial),
         )
-}
-
-fn connect_buttons(cx: &mut Context<IssuesPanel>) -> Div {
-    div()
-        .flex()
-        .gap(px(8.))
-        .pt(px(6.))
-        .child(ui::primary_button("issues-settings", "Open Settings").on_click(|_: &ClickEvent, _, cx| {
-            Store::get(cx).update(cx, |s, cx| s.open(PanelKind::Settings, cx));
-        }))
-        .child(
-            ui::button("issues-check", "Check again")
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.refresh(cx))),
-        )
+        .child(div().font_weight(FontWeight::SEMIBOLD).child(comment.author.clone()))
+        .child(div().text_color(colours::faint()).child(comment.when(now)))
 }

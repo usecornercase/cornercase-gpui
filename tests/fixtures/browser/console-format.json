@@ -1,0 +1,56 @@
+{
+  "type": "log",
+  "args": [
+    {
+      "type": "string",
+      "value": "hello %s, you are %d"
+    },
+    {
+      "type": "string",
+      "value": "world"
+    },
+    {
+      "type": "number",
+      "value": 42,
+      "description": "42"
+    },
+    {
+      "type": "object",
+      "className": "Object",
+      "description": "Object",
+      "preview": {
+        "type": "object",
+        "description": "Object",
+        "overflow": false,
+        "properties": [
+          {
+            "name": "a",
+            "type": "number",
+            "value": "1"
+          },
+          {
+            "name": "b",
+            "type": "string",
+            "value": "two"
+          },
+          {
+            "name": "c",
+            "type": "object",
+            "value": "Array(3)",
+            "subtype": "array"
+          }
+        ]
+      }
+    }
+  ],
+  "stackTrace": {
+    "callFrames": [
+      {
+        "functionName": "",
+        "url": "http://localhost:8783/errors.html",
+        "lineNumber": 4,
+        "columnNumber": 8
+      }
+    ]
+  }
+}

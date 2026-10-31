@@ -10,8 +10,8 @@ The Usage sheet shows what agents did in cornercase (`cornercase stats --json`: 
 - **Limits are read cached first** (`usage --cached --json`) so the last answers show at once while the probes run; if the fresh answer arrives first, it wins and the cached one is dropped.
 - **Ages and reset times are relative**, so the sheet redraws every 20 s while it shows.
 - **The card link is made locally** by `stats --share`: nothing is uploaded.
-- **Stopgap for #472**: `cornercase usage` exits 1 when an agent could not be asked, after printing everything, so the panel's runner (`run_json`) keeps standard output and parses it, failing only when the command exits with an error and prints nothing. Once #472 lands, treat the new partial status as success and drop the special case (listed in the README's "To remove once these land").
-- **Stopgap for #462**: on older Codex versions the probe fails with an error containing "expected unit"; the Codex card then says it is a cornercase bug and names usecornercase/cornercase-terminal#462. It is matched by the error text because no field says it; remove it when #462 lands.
+- **A partial answer is an answer**: `cornercase usage` exits 3 when it printed every plan but some agent could not be asked (#472 upstream), each failure in its plan's `error`. The panel runs it through `store::run_partial` (`cli::run_partial`), which takes exit 0 and 3 as success and any other status as an error from standard error.
+- **A probe's error is shown as cornercase words it**, with no note of our own: the Codex limits bug that once needed one is fixed upstream (#462, checked with cornercase 0.12.225).
 
 ## Numbers as the TUI prints them
 
@@ -23,3 +23,4 @@ The Usage sheet shows what agents did in cornercase (`cornercase stats --json`: 
 - **Agents keep cornercase's order** (Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Copilot), unknown ones last by name; idle agents are left out. cornercase keeps no totals per project or model, so the panel shows none.
 - **The heatmap** shows the last 26 weeks, one block per rolling 24 hours, seven to a column, newest bottom right. A block's level is 0 without agent time, else 1 to 4 by the nearest-rank quartiles of the positive blocks shown, ties sharing their level. The levels use the TUI's blues (palette 24, 26, 33, 75); agents' colours come from the terminal palette.
 - **Fractions for bars are `f32`** from `f64` seconds and percentages: the precision lost is far below a pixel.
+- **Refresh and Copy card link read `Refreshing…` and `Copying…`** with a spinner while they run, and the cards waiting for their first answer show one.

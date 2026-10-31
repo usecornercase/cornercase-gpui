@@ -1,0 +1,42 @@
+{
+  "boot": "28257-1793303771316290000",
+  "error": null,
+  "mode": "uncommitted",
+  "revision": 2,
+  "scope": "project",
+  "state": "ready",
+  "stream": 6,
+  "workspaces": [
+    {
+      "added": 3,
+      "base": null,
+      "files": [
+        {
+          "added": 2,
+          "digest": "d5dccd1bdadf10a2",
+          "fold": "open",
+          "old_path": null,
+          "path": "a.txt",
+          "removed": 2,
+          "staged": "no",
+          "status": "modified",
+          "viewed": false
+        },
+        {
+          "added": 1,
+          "digest": "41043f2d29a13472",
+          "fold": "open",
+          "old_path": null,
+          "path": "c.txt",
+          "removed": 0,
+          "staged": "no",
+          "status": "untracked",
+          "viewed": false
+        }
+      ],
+      "project": 44,
+      "removed": 2,
+      "workspace": 43
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "ports": [
+    {
+      "addresses": ["*"],
+      "agent": "claude",
+      "args": ["node", "/repo/node_modules/.bin/vite", "--port", "8000"],
+      "pane": 31,
+      "pid": 61022,
+      "port": 8000,
+      "program": "node",
+      "project": 21,
+      "url": "http://localhost:8000",
+      "via": "agent",
+      "workspace": 22
+    },
+    {
+      "addresses": ["192.168.1.20"],
+      "agent": null,
+      "args": ["postgres", "-D", "/repo/.pg"],
+      "pane": null,
+      "pid": 61100,
+      "port": 5433,
+      "program": "postgres",
+      "project": 21,
+      "url": null,
+      "via": "cwd",
+      "workspace": 22
+    },
+    {
+      "addresses": ["127.0.0.1"],
+      "agent": null,
+      "args": ["/usr/bin/python3", "-m", "http.server", "3000", "--bind", "127.0.0.1"],
+      "pane": 28,
+      "pid": 52064,
+      "port": 3000,
+      "program": "Python",
+      "project": 21,
+      "url": "http://localhost:3000",
+      "via": "pane",
+      "workspace": 22
+    },
+    {
+      "addresses": ["::1"],
+      "agent": null,
+      "args": ["/usr/bin/python3", "-m", "http.server", "3000", "--bind", "::1"],
+      "pane": 28,
+      "pid": 52070,
+      "port": 3000,
+      "program": "Python",
+      "project": 21,
+      "url": "http://localhost:3000",
+      "via": "pane",
+      "workspace": 22
+    }
+  ]
+}

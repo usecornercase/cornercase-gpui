@@ -9,6 +9,7 @@ These rules apply to every contributor and coding agent, in `src/` and `tests/`.
 ```sh
 cargo run --release                         # opens on what cornercase's window shows
 cargo run --release -- --tab 6              # or on a tab, workspace or project id (`cornercase status`)
+cargo run --release -- --remote devbox      # or on the server of another machine, over ssh (design/remote.md)
 cargo test --locked                         # unit tests + tests/layers.rs
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo fmt
@@ -18,6 +19,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 - **Running needs `cornercase` on the `PATH`** (or `CORNERCASE_BIN`); the app starts its server if none runs. `docs/cornercase-cli.txt` holds every command's help; `cornercase <cmd> --help` is the source of truth. The cornercase sources are in `../cornercase-terminal` (read its `design/` and `src/` to understand behaviour; never edit it from here).
 - **The toolchain is pinned** in `rust-toolchain.toml` (version and components), so a new Rust release cannot bring new lints by surprise. Bump it by hand: change the version, then fix what clippy reports.
+- **Dependencies are optimised even in debug builds** (`[profile.dev.package."*"]` in `Cargo.toml`); this crate is not, so it still rebuilds fast. Unoptimised, gpui lays the window out too slowly to scroll smoothly: a flow's page drew at about 45 fps in a debug build, and at about 120 fps with this, as in release (2026-10-31). A clean build compiles every dependency optimised (about 2 minutes here).
 - **Before calling a task done, run fmt, clippy, tests, `cargo-machete` and jscpd, and fix what fails.** If one cannot pass, say so.
 - `jscpd` fails above 1 % duplication (50-token clones) in `src/` and `tests/`. It is a ratchet: extract the shared code, do not raise the threshold. `cargo-machete` is a text search; a false positive goes in `[package.metadata.cargo-machete] ignored`.
 - **Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)**: `<type>: <summary>`, the summary in the imperative and in lower case, such as `feat: show the queue's next start`. Types: `feat` (a feature users see), `fix`, `docs`, `test`, `refactor`, `perf`, `ci`, `build`, `chore`; a breaking change adds `!`.
@@ -25,7 +27,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 ## Ground rules
 
-- **No workarounds** (`design/upstream-gaps.md`). When cornercase does not expose something a feature needs (no command, no field, a bug, a missing `--json`, a stream that does not exist), do not scrape text output, read cornercase's private files or reimplement server logic. Open an issue in `usecornercase/cornercase-terminal` and make the UI say plainly what is missing (a muted "needs usecornercase/cornercase-terminal#123"). The one exception, by design (#345 upstream), is the Files panel, which reads the disk itself.
+- **No workarounds** (`design/upstream-gaps.md`). When cornercase does not expose something a feature needs (no command, no field, a bug, a missing `--json`, a stream that does not exist), do not scrape text output, read cornercase's private files or reimplement server logic. Open an issue in `usecornercase/cornercase-terminal` and make the UI say plainly what is missing (a muted "needs usecornercase/cornercase-terminal#123"). The exceptions, by design, are the Files panel (#345 upstream), which reads the disk itself, and the Browser panel, which runs Chrome and its ssh tunnels itself (`design/browser.md`).
 - Use `--json` output wherever a command has it; parse it with local serde types or `serde_json::Value`.
 - A workaround kept until an upstream fix lands is listed in the README's "To remove once these land", with the files it lives in.
 
@@ -46,10 +48,11 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 ## Interaction
 
-- **Every key goes to the program in the active pane, except ⌘ shortcuts**, which live in one place, `terminal.rs::shortcut`, and are listed in the README's Keys. Text goes through macOS's input method, so dead keys and ⌥ characters (`@` on a Spanish keyboard) reach the program: never bind `⌥` or `Ctrl` combinations. The terminal takes keys only while its own focus handle is focused, so text fields and focused panels get theirs.
-- Anything that cannot be undone asks first, through `dialogs::confirm`.
-- At most one sheet and one dialog are open; a docked panel (Changes, Files, TODO) sits right of the terminal and keeps its state while closed.
+- **Every key goes to the program in the active pane, except ⌘ shortcuts**, which live in one table, `keymap.rs` (run by `terminal.rs::shortcut`; the app menu's system keys, ⌘Q ⌘H ⌘M ⌃⌘F, are actions in `main.rs`), and are listed in the README's Keys and the ⌘/ dialog. Text goes through macOS's input method, so dead keys and ⌥ characters (`@` on a Spanish keyboard) reach the program: never bind `⌥` or `Ctrl` combinations. The terminal takes keys only while its own focus handle is focused, so text fields and focused panels get theirs.
+- Anything that cannot be undone asks first, through `dialogs::confirm`. Escape is handled once, in `Root` (`design/terminal.md`): a dialog or panel does not close itself on it.
+- At most one sheet and one dialog are open; a docked panel (Changes, Files, TODO, Browser) sits right of the terminal and keeps its state while closed.
 - A command's error becomes a toast (`Store::act`, `Store::cmd` and `store::run` do it); never fail silently.
+- **Anything that can take a moment shows that it runs**: run it as a job (`store::run_busy`, `Store::act_busy`, `Store::run_aside`), which the status bar names, and turn the control that started it into `ui::busy_button` (or show `ui::busy`, `ui::loading`) until it answers. A command that only waits runs beside the queue, never in it (`design/connection.md`, `design/widgets.md`).
 
 ## Architecture
 
@@ -64,8 +67,8 @@ What each file of `src/` holds, `Store` and its helpers, panels and widgets are 
 
 ### Manual check
 
-- Run the app on a throwaway tab: `./target/debug/cornercase-gpui --tab <id> & echo $!`, and stop only that pid. `CORNERCASE_GPUI_OPEN=<panel>` opens a panel at start; `CORNERCASE_GPUI_FONT_SIZE` sets the terminal's font size.
-- Screenshot it: `osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is <pid>) to true'`, then `screencapture -x <file>.png`.
+- Run the app on a throwaway tab: `./target/debug/cornercase-gpui --tab <id> & echo $!`, and stop only that pid, with `kill`: quitting runs `theme --clear`, which also takes back the colours the user's own window gave the terminals. `CORNERCASE_GPUI_OPEN=<panel>` opens a panel at start; `CORNERCASE_GPUI_FONT_SIZE` sets the terminal's font size.
+- Screenshot it: `screencapture -x -o -l <window id> <file>.png`, the window id from `CGWindowListCopyWindowInfo` for that pid; it needs no focus. Never focus or type through System Events (`first process whose unix id is <pid>`): it finds the process by name, so with another cornercase-gpui open (often the user's own) it raises and types into that one. Focus by pid with the accessibility API (`kAXFrontmostAttribute`) and post keys with `CGEvent.postToPid`.
 - Never act on real data: create a throwaway project (`cornercase open /tmp/…`) to try closing, discarding or removing, and clean it up.
 
 ## Instruction files

@@ -1,15 +1,14 @@
-use gpui::{App, ClipboardItem, Context, Window};
+use gpui::{App, ClipboardItem, Context, WeakEntity, Window};
 
 use crate::dialogs;
 use crate::model::Session;
-use crate::store::{Store, ToastKind, args};
+use crate::store::{self, Busy, Store, ToastKind, args};
 
 use super::pieces::{find_mut, toast};
-use super::wire::{FileInfo, FileStatus, Staging};
+use super::wire::{FileInfo, FileStatus, Mode, Staging};
 use super::{ChangesPanel, diff};
 
-const DISCARD_CAVEAT: &str = "It discards the file as it is now, even if it changed since this diff was read \
-     (the command line cannot name the version seen: usecornercase/cornercase-terminal#470).";
+const UNCHANGED_ONLY: &str = "Only the version shown is discarded: if the file changed since, it is left alone.";
 
 fn agent_pane(session: &Session, workspace: u64) -> Option<(u64, String)> {
     let (_, ws) = session.workspace(workspace)?;
@@ -18,38 +17,89 @@ fn agent_pane(session: &Session, workspace: u64) -> Option<(u64, String)> {
     tabs.iter().flat_map(|t| &t.panes).find_map(|p| Some((p.id, p.agent.clone()?)))
 }
 
-impl ChangesPanel {
-    pub(super) fn toggle_viewed(&mut self, workspace: u64, path: &str, cx: &mut Context<Self>) {
-        let mode = self.scope.mode();
-        let Some(file) = self.summary.as_mut().and_then(|s| find_mut(s, workspace, path)) else { return };
-        let mut a = args(&["changes", "viewed", path, "--workspace", &workspace.to_string(), "--mode", mode.name()]);
-        if file.viewed {
-            a.push("--clear".into());
+fn file_args(verb: &str, workspace: u64, path: &str) -> Vec<String> {
+    args(&["changes", verb, path, "--workspace", &workspace.to_string()])
+}
+
+fn with_digest(mut a: Vec<String>, digest: &str) -> Vec<String> {
+    if !digest.is_empty() {
+        a.extend(args(&["--digest", digest]));
+    }
+    a
+}
+
+pub(super) fn viewed_command(workspace: u64, file: &FileInfo, mode: Mode) -> Vec<String> {
+    let mut a = file_args("viewed", workspace, &file.path);
+    if file.viewed {
+        a.extend(args(&["--mode", mode.name(), "--clear"]));
+        return a;
+    }
+    if file.digest.is_empty() {
+        a.extend(args(&["--mode", mode.name()]));
+        return a;
+    }
+    with_digest(a, &file.digest)
+}
+
+pub(super) fn stage_command(workspace: u64, file: &FileInfo) -> Vec<String> {
+    let verb = if file.staged == Some(Staging::Yes) { "unstage" } else { "stage" };
+    with_digest(file_args(verb, workspace, &file.path), &file.digest)
+}
+
+pub(super) fn discard_command(workspace: u64, file: &FileInfo) -> Vec<String> {
+    let mut a = with_digest(file_args("discard", workspace, &file.path), &file.digest);
+    a.push("--yes".into());
+    a
+}
+
+pub(super) fn file_busy(workspace: u64, path: &str) -> String {
+    format!("changes-file:{workspace}:{path}")
+}
+
+fn file_name(file: &FileInfo) -> &str {
+    file.path.rsplit('/').next().unwrap_or(&file.path)
+}
+
+fn on_refusal(panel: WeakEntity<ChangesPanel>) -> impl FnOnce(anyhow::Result<String>, &mut App) + 'static {
+    move |result, cx| {
+        if let Err(error) = result {
+            let _ = panel.update(cx, |this, cx| this.refused(&error, cx));
         }
-        file.viewed = !file.viewed;
-        Store::get(cx).read(cx).cmd(a);
+    }
+}
+
+impl ChangesPanel {
+    pub(super) fn toggle_viewed(&mut self, workspace: u64, file: &FileInfo, cx: &mut Context<Self>) {
+        let command = viewed_command(workspace, file, self.scope.mode());
+        let Some(listed) = self.summary.as_mut().and_then(|s| find_mut(s, workspace, &file.path)) else { return };
+        listed.viewed = !file.viewed;
+        store::queued(cx, command, on_refusal(cx.weak_entity()));
         cx.notify();
     }
 
-    pub(super) fn toggle_staged(workspace: u64, file: &FileInfo, cx: &mut App) {
-        let verb = if file.staged == Some(Staging::Yes) { "unstage" } else { "stage" };
-        Store::get(cx).read(cx).cmd(args(&["changes", verb, &file.path, "--workspace", &workspace.to_string()]));
+    pub(super) fn toggle_staged(workspace: u64, file: &FileInfo, cx: &mut Context<Self>) {
+        let doing = if file.staged == Some(Staging::Yes) { "Unstaging" } else { "Staging" };
+        let busy = Busy::new(file_busy(workspace, &file.path), format!("{doing} {}…", file_name(file)));
+        let refused = on_refusal(cx.weak_entity());
+        store::queued_busy(cx, busy, stage_command(workspace, file), refused);
     }
 
-    pub(super) fn discard(workspace: u64, file: &FileInfo, window: &mut Window, cx: &mut App) {
+    pub(super) fn discard(workspace: u64, file: &FileInfo, window: &mut Window, cx: &mut Context<Self>) {
         let deletes = matches!(file.status, FileStatus::Untracked | FileStatus::Added);
         let (title, button) =
             if deletes { ("Delete the file?", "Delete") } else { ("Discard the changes?", "Discard") };
-        dialogs::confirm(
-            dialogs::Question::new(
-                title,
-                format!("{}\n\n{DISCARD_CAVEAT}", diff::discard_question(file)),
-                button,
-                args(&["changes", "discard", &file.path, "--workspace", &workspace.to_string(), "--yes"]),
-            ),
-            window,
-            cx,
-        );
+        let command = discard_command(workspace, file);
+        let message = format!("{}\n\n{UNCHANGED_ONLY}", diff::discard_question(file));
+        let doing = if deletes { "Deleting" } else { "Discarding the changes of" };
+        let busy = Busy::new(file_busy(workspace, &file.path), format!("{doing} {}…", file_name(file)));
+        let question =
+            dialogs::Question::new(title, message, button, command).on_reply(on_refusal(cx.weak_entity())).busy(busy);
+        dialogs::confirm(question, window, cx);
+    }
+
+    fn refused(&mut self, error: &anyhow::Error, cx: &mut Context<Self>) {
+        toast(error.to_string(), ToastKind::Error, cx);
+        self.reread(cx);
     }
 
     pub(super) fn open_in_editor(workspace: u64, path: &str, line: u32, cx: &mut App) {
@@ -79,3 +129,6 @@ impl ChangesPanel {
         });
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,27 +1,39 @@
+mod connect;
 mod data;
 mod detail;
 mod list;
 mod load;
 mod markdown;
+mod page;
+mod picker;
 mod start;
 mod text;
+mod toolbar;
 
 use std::collections::{HashMap, HashSet};
-use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, Context, Div, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, KeyDownEvent, ParentElement as _, Render, Styled as _, Subscription, Window, div, px,
+    AnyElement, AnyView, App, AppContext as _, ClipboardItem, Context, Div, Entity, Focusable as _,
+    InteractiveElement as _, IntoElement, KeyDownEvent, ListAlignment, MouseButton, MouseDownEvent, ParentElement as _,
+    Render, SharedString, Styled as _, Subscription, Svg, Window, div, px,
 };
 
-use crate::cli;
 use crate::panels::PanelKind;
-use crate::store::{Store, ToastKind};
-use crate::theme::colours;
-use crate::ui::{self, TextField, TextFieldEvent};
+use crate::store::{self, Busy, Store, ToastKind};
+use crate::theme::{colours, radius};
+use crate::ui::split::{self, Edge, Split};
+use crate::ui::{self, Icon, TextField, TextFieldEvent, glass};
 
-use data::{Agents, Issue, Listed, ReadIssue, SourceInfo, SourceState, Sources, StartPlan, Who};
+use data::{Agents, Issue, Listed, SourceState, Sources, StartPlan, Who};
+use list::Rows;
+use page::Read;
+
+const LIST: Split = Split::new(400., 260., 800.);
+const DETAIL_KEEP: f32 = 320.;
+const OVERDRAW: f32 = 400.;
+
+struct ListGrip;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Tab {
@@ -80,7 +92,7 @@ pub(crate) struct IssuesPanel {
     people: HashMap<Tab, [Who; 2]>,
     lists: HashMap<ListKey, ListState>,
     selected: Option<Issue>,
-    reads: HashMap<IssueId, Result<ReadIssue, String>>,
+    reads: HashMap<IssueId, Read>,
     reading: HashSet<IssueId>,
     body_view: BodyView,
     search: Entity<TextField>,
@@ -90,12 +102,14 @@ pub(crate) struct IssuesPanel {
     agents: Option<Agents>,
     was_open: bool,
     following: Option<Following>,
+    list_width: Split,
+    rows: Rows,
     _subscriptions: Vec<Subscription>,
 }
 
 impl IssuesPanel {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let search = cx.new(|cx| TextField::new("Search the list: words of the title, key, labels or people", cx));
+        let search = cx.new(|cx| TextField::new("Filter by title, key, label or person", cx).clears_on_escape());
         let picker_search = cx.new(|cx| TextField::new("Find someone", cx));
         let subscriptions = Self::subscriptions(&search, &picker_search, window, cx);
         let mut panel = Self {
@@ -118,6 +132,8 @@ impl IssuesPanel {
             agents: None,
             was_open: true,
             following: None,
+            list_width: LIST,
+            rows: Rows::new(),
             _subscriptions: subscriptions,
         };
         panel.refresh(cx);
@@ -134,12 +150,13 @@ impl IssuesPanel {
         let store = Store::get(cx);
         vec![
             cx.subscribe_in(search, window, |this, _, event, window, cx| match event {
-                TextFieldEvent::Changed => cx.notify(),
+                TextFieldEvent::Changed => this.search_changed(cx),
+                TextFieldEvent::Cancel => cx.notify(),
                 TextFieldEvent::Submit => this.open_start(false, window, cx),
-                TextFieldEvent::Cancel => Store::get(cx).update(cx, Store::close_sheet),
             }),
             cx.subscribe_in(picker_search, window, |this, _, event, _, cx| match event {
-                TextFieldEvent::Changed | TextFieldEvent::Submit => cx.notify(),
+                TextFieldEvent::Changed => cx.notify(),
+                TextFieldEvent::Submit => this.pick_first(cx),
                 TextFieldEvent::Cancel => this.close_picker(cx),
             }),
             cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)),
@@ -152,12 +169,22 @@ impl IssuesPanel {
             (s.sheet == Some(PanelKind::Issues), shown_project(s))
         };
         if open && (!self.was_open || project != self.project) {
-            self.project = project;
-            self.refresh(cx);
+            self.show_project(project, cx);
             window.focus(&self.search.read(cx).focus_handle(cx));
+        }
+        if !open {
+            self.close_picker(cx);
         }
         self.was_open = open;
         self.follow_start(store.read(cx));
+    }
+
+    fn show_project(&mut self, project: Option<u64>, cx: &mut Context<Self>) {
+        if project != self.project {
+            self.selected = None;
+        }
+        self.project = project;
+        self.refresh(cx);
     }
 
     fn set_tab(&mut self, tab: Tab, cx: &mut Context<Self>) {
@@ -192,30 +219,66 @@ impl IssuesPanel {
         {
             self.load_list(true, cx);
         }
+        self.scroll_list_to_top();
         cx.notify();
+    }
+
+    fn search_changed(&mut self, cx: &mut Context<Self>) {
+        self.scroll_list_to_top();
+        cx.notify();
+    }
+
+    fn clear_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.search.update(cx, TextField::clear);
+        window.focus(&self.search.read(cx).focus_handle(cx));
+    }
+
+    fn scroll_list_to_top(&self) {
+        self.rows.to_top();
+    }
+
+    fn sync_rows(&mut self, cx: &Context<Self>) {
+        let capped = self.current().is_some_and(|s| s.issues.len() >= data::LIST_CAP);
+        let shown = self.shown(cx);
+        self.rows.sync(shown, capped, self.list_width.size());
     }
 
     fn toggle_picker(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.picker = if self.picker == Some(index) { None } else { Some(index) };
-        if self.picker.is_some() {
+        if self.picker.is_some()
+            && let Some(source) = self.tab.source()
+        {
             self.picker_search.update(cx, TextField::clear);
             window.focus(&self.picker_search.read(cx).focus_handle(cx));
-            if let Some(source) = self.tab.source() {
-                self.load_people(source.to_string(), cx);
-            }
+            self.load_people(source.to_string(), cx);
         }
         cx.notify();
     }
 
     fn close_picker(&mut self, cx: &mut Context<Self>) {
-        self.picker = None;
-        cx.notify();
+        if self.picker.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    fn pick_first(&mut self, cx: &mut Context<Self>) {
+        let (Some(index), Some(source)) = (self.picker, self.tab.source()) else { return };
+        let query = self.picker_search.read(cx).text();
+        let Some(Ok(people)) = self.people_lists.get(source) else { return };
+        let first = people.matching(&query).first().map(|p| p.who()).filter(|_| !query.trim().is_empty());
+        if let Some(who) = first {
+            self.set_who(index, who, cx);
+        }
     }
 
     fn on_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         match event.keystroke.key.as_str() {
             "down" => self.move_selection(true, cx),
             "up" => self.move_selection(false, cx),
+            "escape" if self.picker.is_some() => {
+                self.close_picker(cx);
+                cx.stop_propagation();
+            }
             _ => {}
         }
     }
@@ -229,6 +292,7 @@ impl IssuesPanel {
             Some(at) => at.saturating_sub(1),
             None => 0,
         };
+        self.rows.reveal(next);
         self.select(shown[next].clone(), cx);
     }
 
@@ -248,11 +312,13 @@ impl IssuesPanel {
             let known = tab_ids(store.read(cx), project);
             self.following = Some(Following { project, known, since: Instant::now() });
         }
-        store.update(cx, |s, cx| {
-            s.toast(format!("Starting {agent} on {key}…"), ToastKind::Info, cx);
+        let busy = Busy::new(format!("issue-start:{key}"), format!("Starting {agent} on {key}…"));
+        let (command, job) = store.update(cx, |s, cx| {
             s.close_sheet(cx);
+            (s.with_view(plan.start_args()), s.start_job(busy, cx))
         });
-        run_lenient(cx, plan.start_args(), move |this, out, cx| {
+        ask(cx, command, move |this, out, cx| {
+            Store::get(cx).update(cx, |s, cx| s.end_job(job, cx));
             this.following = None;
             started(&out, &agent, &key, cx);
         });
@@ -273,7 +339,7 @@ impl IssuesPanel {
 
     fn schedule(plan: &StartPlan, at: String, cx: &mut Context<Self>) {
         let key = plan.issue.key.clone();
-        run_lenient(cx, plan.queue_args(&at), move |_, out, cx| {
+        ask(cx, plan.queue_args(&at), move |_, out, cx| {
             let (text, kind) = match out {
                 Ok(id) => (format!("{key} is scheduled for {at} (queue entry {})", id.trim()), ToastKind::Done),
                 Err(e) => (format!("Could not schedule {key}: {e}"), ToastKind::Error),
@@ -284,7 +350,7 @@ impl IssuesPanel {
 
     fn content(&self, window: &Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
         if self.project.is_none() {
-            return vec![ui::note("Waiting for cornercase to show a project…").into_any_element()];
+            return vec![ui::loading("Waiting for cornercase to show a project…").into_any_element()];
         }
         let Some(sources) = &self.sources else {
             return vec![self.sources_note().into_any_element()];
@@ -294,10 +360,10 @@ impl IssuesPanel {
         }
         let tab_source = self.tab.source().and_then(|s| self.source(s)).cloned();
         if let Some(source) = tab_source.as_ref().filter(|s| !s.connected()) {
-            return vec![self.header(cx).into_any_element(), self.render_connect(Some(source), cx)];
+            return vec![self.toolbar(cx).into_any_element(), self.render_connect(Some(source), cx)];
         }
         vec![
-            self.header_with_filters(tab_source.as_ref(), window, cx).into_any_element(),
+            self.toolbar_with_filters(tab_source.as_ref(), window, cx).into_any_element(),
             self.panes(cx).into_any_element(),
         ]
     }
@@ -305,41 +371,21 @@ impl IssuesPanel {
     fn sources_note(&self) -> Div {
         match &self.sources_error {
             Some(e) => error_note(e.clone()).m(px(16.)),
-            None => ui::note("Asking cornercase which trackers are connected…"),
+            None => ui::loading("Asking cornercase which trackers are connected…"),
         }
     }
 
-    fn header(&self, cx: &mut Context<Self>) -> Div {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(10.))
-            .px(px(16.))
-            .pt(px(12.))
-            .pb(px(10.))
-            .border_b_1()
-            .border_color(colours::border())
-            .child(self.render_tabs(cx))
-    }
-
-    fn header_with_filters(&self, source: Option<&SourceInfo>, window: &Window, cx: &mut Context<Self>) -> Div {
-        let account = source.map(SourceInfo::account_line).filter(|a| !a.is_empty());
-        let failing = source.filter(|s| s.state == SourceState::Failing).and_then(|s| s.reason.clone());
-        self.header(cx)
-            .child(self.render_filters(window, cx))
-            .children(self.picker.map(|index| self.render_picker(index, window, cx)))
-            .children(failing.map(error_note))
-            .children(account.map(ui::dim))
-    }
-
     fn panes(&self, cx: &mut Context<Self>) -> Div {
+        let width = self.list_width.size();
         div()
             .flex_1()
             .min_h_0()
+            .relative()
             .flex()
+            .on_drag_move(split::follow::<_, ListGrip>(Edge::Right, DETAIL_KEEP, list_width, cx))
             .child(
                 div()
-                    .w(px(400.))
+                    .w(px(width))
                     .flex_none()
                     .h_full()
                     .border_r_1()
@@ -347,16 +393,23 @@ impl IssuesPanel {
                     .child(self.render_list(cx)),
             )
             .child(div().flex_1().min_w_0().h_full().child(self.render_detail(cx)))
+            .child(split::handle("issues-split", ListGrip, (Edge::Right, width), list_width, cx))
     }
+}
+
+fn list_width(panel: &mut IssuesPanel) -> &mut Split {
+    &mut panel.list_width
 }
 
 impl Render for IssuesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_rows(cx);
         div()
             .size_full()
             .flex()
             .flex_col()
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| this.on_key(event, cx)))
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, _: &MouseDownEvent, _, cx| this.close_picker(cx)))
             .children(self.content(window, cx))
     }
 }
@@ -365,16 +418,16 @@ pub(crate) fn build(window: &mut Window, cx: &mut App) -> AnyView {
     cx.new(|cx| IssuesPanel::new(window, cx)).into()
 }
 
+fn virtual_list(count: usize) -> gpui::ListState {
+    gpui::ListState::new(count, ListAlignment::Top, px(OVERDRAW))
+}
+
 fn started(out: &Result<String, String>, agent: &str, key: &str, cx: &mut App) {
-    Store::get(cx).update(cx, |s, cx| match out.as_deref().map(data::started_pane) {
-        Ok(pane) => {
-            if let Some(pane) = pane {
-                s.focus("pane", pane);
-            }
-            s.toast(format!("{agent} is working on {key}"), ToastKind::Done, cx);
-        }
-        Err(e) => s.toast(format!("Could not start {key}: {e}"), ToastKind::Error, cx),
-    });
+    let (text, kind) = match out {
+        Ok(_) => (format!("{agent} is working on {key}"), ToastKind::Done),
+        Err(e) => (format!("Could not start {key}: {e}"), ToastKind::Error),
+    };
+    Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
 }
 
 fn shown_project(store: &Store) -> Option<u64> {
@@ -404,27 +457,12 @@ fn shown_project_name(cx: &App) -> String {
         .unwrap_or_default()
 }
 
-fn run_lenient(
+fn ask(
     cx: &mut Context<IssuesPanel>,
     args: Vec<String>,
     then: impl FnOnce(&mut IssuesPanel, Result<String, String>, &mut Context<IssuesPanel>) + 'static,
 ) {
-    let task = cx.background_spawn(async move {
-        let out =
-            cli::command(&args).stdin(Stdio::null()).output().map_err(|e| format!("could not run cornercase: {e}"))?;
-        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
-        if out.status.success() || stdout.trim_start().starts_with('{') {
-            return Ok(stdout);
-        }
-        let err = String::from_utf8_lossy(&out.stderr);
-        let err = err.trim().trim_start_matches("Error: ");
-        Err(if err.is_empty() { "cornercase failed".to_string() } else { err.to_string() })
-    });
-    cx.spawn(async move |this, cx| {
-        let result = task.await;
-        let _ = this.update(cx, |this, cx| then(this, result, cx));
-    })
-    .detach();
+    store::run_partial(cx, args, move |this, out, cx| then(this, out.map_err(|e| e.to_string()), cx));
 }
 
 fn first_line(text: &str) -> String {
@@ -432,27 +470,69 @@ fn first_line(text: &str) -> String {
     line.trim().to_string()
 }
 
-fn capitalise(text: &str) -> String {
-    let mut chars = text.chars();
-    chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default()
+fn copy_text(text: String, what: &str, cx: &mut App) {
+    cx.write_to_clipboard(ClipboardItem::new_string(text));
+    Store::get(cx).update(cx, |s, cx| s.toast(format!("Copied {what}"), ToastKind::Info, cx));
 }
 
 fn error_note(text: String) -> Div {
     div()
-        .px(px(10.))
-        .py(px(6.))
-        .rounded(px(5.))
+        .px(px(12.))
+        .py(px(8.))
+        .rounded(px(radius::CONTROL))
         .text_size(px(12.))
         .text_color(colours::failed())
-        .bg(gpui::rgba(0xf776_8e14))
+        .bg(glass::tint(colours::failed(), 0.08))
         .child(text)
+}
+
+fn card() -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .p(px(12.))
+        .rounded(px(radius::CARD))
+        .bg(colours::panel())
+        .border_1()
+        .border_color(colours::border())
+}
+
+fn blank(text: impl Into<SharedString>) -> Div {
+    div()
+        .flex_1()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap(px(10.))
+        .p(px(24.))
+        .child(ui::icon(Icon::Issues, 26.).text_color(colours::faint()))
+        .child(div().max_w(px(280.)).text_center().text_size(px(12.5)).text_color(colours::muted()).child(text.into()))
+}
+
+fn state_icon(issue: &Issue, size: f32) -> Svg {
+    if issue.closed {
+        ui::icon(Icon::Closed, size).text_color(colours::faint())
+    } else {
+        ui::icon(Icon::Issues, size).text_color(colours::done())
+    }
+}
+
+fn state_dot(state: SourceState) -> Div {
+    let dot = div().size(px(6.)).flex_none().rounded_full();
+    match state {
+        SourceState::Connected => dot.bg(colours::done()),
+        SourceState::Failing => dot.bg(colours::failed()),
+        _ => dot.border_1().border_color(colours::faint()),
+    }
 }
 
 fn chip(text: String, colour: gpui::Rgba, border: gpui::Rgba) -> Div {
     div()
         .flex_none()
-        .px(px(6.))
-        .rounded(px(9.))
+        .px(px(7.))
+        .rounded(px(radius::CHIP))
         .text_size(px(10.5))
         .text_color(colour)
         .border_1()
@@ -465,6 +545,6 @@ fn label_chip(label: String) -> Div {
 }
 
 fn state_chip(state: &str, closed: bool) -> Div {
-    let colour = if closed { colours::faint() } else { colours::done() };
-    chip(state.to_string(), colour, colour)
+    let colour = if closed { colours::faint() } else { colours::accent() };
+    chip(state.to_string(), colour, glass::tint(colour, 0.45))
 }

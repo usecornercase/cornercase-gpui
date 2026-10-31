@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use gpui::{Context, ListOffset, px};
 
-use crate::store::{self, Store, ToastKind, args};
+use crate::store::{self, Busy, Store, ToastKind, args};
 
 use super::pieces::{find, looks, parse, toast};
 use super::wire::{Base, Gap, Patch};
@@ -14,6 +14,10 @@ fn file_command(verb: &str, selected: &Selected, extra: &[String]) -> Vec<String
     a.extend(extra.iter().cloned());
     a.extend(args(&["--workspace", &selected.workspace.to_string(), "--mode", selected.mode.name(), "--json"]));
     a
+}
+
+pub(super) fn switching_base(workspace: u64) -> String {
+    format!("changes-base:{workspace}")
 }
 
 impl ChangesPanel {
@@ -37,16 +41,19 @@ impl ChangesPanel {
         self.selected = selected;
         self.open = Open { generation: self.open.generation + 1, ..Open::default() };
         self.diff_list.reset(0);
-        if let Some(selected) = &self.selected {
-            let digest = self
-                .summary
-                .as_ref()
-                .and_then(|s| find(s, selected.workspace, &selected.path))
-                .map(|f| f.digest.clone())
-                .unwrap_or_default();
-            self.load_patch(digest, cx);
-        }
+        self.reread(cx);
         cx.notify();
+    }
+
+    pub(super) fn reread(&mut self, cx: &mut Context<Self>) {
+        let Some(selected) = &self.selected else { return };
+        let digest = self
+            .summary
+            .as_ref()
+            .and_then(|s| find(s, selected.workspace, &selected.path))
+            .map(|f| f.digest.clone())
+            .unwrap_or_default();
+        self.load_patch(digest, cx);
     }
 
     pub(super) fn load_patch(&mut self, digest: String, cx: &mut Context<Self>) {
@@ -143,11 +150,15 @@ impl ChangesPanel {
         self.base_open = false;
         let Some(workspace) = self.follow.and_then(|f| f.workspace) else { return };
         let mut a = args(&["changes", "base", "--workspace", &workspace.to_string()]);
+        let label = branch
+            .as_ref()
+            .map_or_else(|| "Going back to the default base…".into(), |b| format!("Comparing with {b}…"));
         a.push(branch.unwrap_or_else(|| "--default".into()));
         if let Some(base) = &mut self.base {
             base.chosen = None;
         }
-        Store::get(cx).read(cx).cmd(a);
+        let busy = Busy::new(switching_base(workspace), label);
+        Store::get(cx).update(cx, |s, cx| s.run_aside(busy, a, cx));
         cx.notify();
     }
 }

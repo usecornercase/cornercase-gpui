@@ -1,10 +1,14 @@
-mod disk;
+pub(crate) mod disk;
+mod finder;
 mod highlight;
 mod menu;
 mod open;
+mod peek;
 mod querying;
 mod results_view;
 mod search;
+mod served;
+mod source;
 mod style;
 mod tree;
 mod tree_view;
@@ -25,13 +29,18 @@ use gpui::{
 };
 use grep_regex::RegexMatcher;
 
+use crate::cli;
 use crate::panels::PanelKind;
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
 
 use disk::Content;
+pub(crate) use finder::{find_file, is_finder};
 use open::{Launch, Opener};
+pub(crate) use peek::{Anchor, Peek};
+use source::Source;
+pub(crate) use viewer::open_link;
 
 const CHECK_EVERY: Duration = Duration::from_secs(1);
 const LIST_EVERY: u32 = 2;
@@ -48,6 +57,7 @@ enum Mode {
 
 struct Place {
     root: PathBuf,
+    source: Source,
     listings: HashMap<PathBuf, tree::Listing>,
     error: Option<String>,
     expanded: HashSet<PathBuf>,
@@ -58,9 +68,10 @@ struct Place {
 }
 
 impl Place {
-    fn new(root: PathBuf) -> Self {
+    fn new(root: PathBuf, source: Source) -> Self {
         Self {
             root,
+            source,
             listings: HashMap::new(),
             error: None,
             expanded: HashSet::new(),
@@ -90,6 +101,7 @@ enum Results {
     None,
     Names(Vec<search::NameHit>),
     Text(search::TextResults),
+    Failed(String),
 }
 
 #[derive(Clone, Copy)]
@@ -145,6 +157,7 @@ struct Menu {
 
 pub(crate) struct FilesPanel {
     store: Entity<Store>,
+    remote: bool,
     current: Option<u64>,
     places: HashMap<u64, Place>,
     query: Entity<TextField>,
@@ -190,22 +203,26 @@ fn query_event(this: &mut FilesPanel, field: &Entity<TextField>, event: &TextFie
             this.query_changed(text, cx);
         }
         TextFieldEvent::Submit => this.enter(cx),
-        TextFieldEvent::Cancel => field.update(cx, TextField::clear),
+        TextFieldEvent::Cancel => {}
     }
 }
 
 impl FilesPanel {
     pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
-        let query = cx.new(|cx| TextField::new("Search files…", cx));
+        let query = cx.new(|cx| TextField::new("Search files…", cx).clears_on_escape());
         let subscriptions = vec![
             cx.observe(&store, |this, _, cx| this.follow_workspace(cx)),
             cx.subscribe(&query, |this, field, event: &TextFieldEvent, cx| query_event(this, &field, event, cx)),
         ];
         let tick = ticker(cx);
-        detect_openers(cx);
+        let remote = cli::host().is_some();
+        if !remote {
+            detect_openers(cx);
+        }
         let mut panel = Self {
             store,
+            remote,
             current: None,
             places: HashMap::new(),
             query,
@@ -248,27 +265,15 @@ impl FilesPanel {
             .into_any_element()
     }
 
-    fn hidden_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        ui::segments(vec![
-            ui::segment("files-hidden", "Hidden", self.show_hidden)
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.show_hidden = !this.show_hidden;
-                    cx.notify();
-                }))
-                .into_any_element(),
-        ])
-    }
-
     fn render_bar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let focused = self.query.read(cx).focus_handle(cx).is_focused(window);
-        let searching = !self.query.read(cx).text().trim().is_empty();
         div()
             .flex_none()
             .flex()
             .items_center()
-            .gap(px(6.))
-            .px(px(10.))
-            .py(px(8.))
+            .gap(px(8.))
+            .px(px(12.))
+            .py(px(10.))
             .border_b_1()
             .border_color(colours::border())
             .child(div().flex_1().min_w_0().child(ui::input_box(self.query.clone(), focused)))
@@ -276,7 +281,6 @@ impl FilesPanel {
                 self.mode_segment("files-mode-names", "Name", Mode::Names, cx),
                 self.mode_segment("files-mode-text", "Text", Mode::Text, cx),
             ]))
-            .when(!searching, |d| d.child(self.hidden_toggle(cx)))
     }
 }
 

@@ -1,30 +1,51 @@
 mod actions;
+mod cards;
+mod checked;
 mod diagram;
 mod dialog;
+mod draft;
+mod editor;
+mod editor_view;
 mod flow_page;
+mod graph;
+mod hero;
 mod import;
 mod list;
+mod messages;
 pub(crate) mod model;
+mod run_list;
 mod run_page;
 mod start;
 mod widgets;
+mod wires;
 
+use std::cell::Cell;
 use std::collections::HashSet;
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, AnyView, AppContext as _, AsyncApp, Context, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, StatefulInteractiveElement as _, Styled as _, Task, WeakEntity, Window, div, px,
+    AnyElement, AnyView, AppContext as _, AsyncApp, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task, WeakEntity, Window,
+    div, px,
 };
 
+use self::diagram::Played;
 use self::model::{Files, FlowInfo, Frame, Listing, Message, Run};
+use self::run_list::RunList;
 use crate::cli::Stream;
 use crate::panels::PanelKind;
 use crate::store::{self, Store, args};
 use crate::ui;
+use crate::ui::split::{self, Edge, Split};
 
 const POLL: Duration = Duration::from_secs(3);
 const KEPT: usize = 256;
+const LIST: Split = Split::new(330., 240., 700.);
+const DETAIL_KEEP: f32 = 320.;
+const BOARD: f32 = 680.;
+
+struct ListGrip;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Selected {
@@ -55,6 +76,11 @@ pub(crate) struct FlowsPanel {
     files: Option<Result<Files, String>>,
     expanded: HashSet<u64>,
     prompt: Option<String>,
+    list_width: Split,
+    board: Rc<Cell<f32>>,
+    played: Played,
+    run_list: RunList,
+    editor: Option<Entity<editor::FlowEditor>>,
 }
 
 impl FlowsPanel {
@@ -74,6 +100,11 @@ impl FlowsPanel {
             files: None,
             expanded: HashSet::new(),
             prompt: None,
+            list_width: LIST,
+            board: Rc::new(Cell::new(BOARD)),
+            played: Played::default(),
+            run_list: RunList::new(),
+            editor: None,
         };
         this.follow_runs(cx);
         this.refresh(cx);
@@ -294,7 +325,7 @@ impl FlowsPanel {
 
     fn detail(&self, cx: &Context<Self>) -> AnyElement {
         match &self.selected {
-            Some(Selected::Run(_)) => self.run_detail(cx),
+            Some(Selected::Run(_)) => ui::note("This run is over.").into_any_element(),
             Some(Selected::Flow(_)) => self.flow_detail(false, cx),
             Some(Selected::Hidden(_)) => self.flow_detail(true, cx),
             Some(Selected::Broken(path)) => self.broken_page(path, cx).into_any_element(),
@@ -302,25 +333,24 @@ impl FlowsPanel {
         }
     }
 
-    fn run_detail(&self, cx: &Context<Self>) -> AnyElement {
-        let Some(run) = self.selected_run() else { return ui::note("This run is over.").into_any_element() };
-        self.run_page(run, cx).into_any_element()
-    }
-
     fn flow_detail(&self, hidden: bool, cx: &Context<Self>) -> AnyElement {
         let Some(flow) = self.selected_flow() else { return ui::note("This flow is gone.").into_any_element() };
         self.flow_page(flow, hidden, cx).into_any_element()
     }
 
-    fn detail_pane(&self, cx: &Context<Self>) -> impl IntoElement + use<> {
+    fn detail_pane(&self, cx: &Context<Self>) -> AnyElement {
+        if self.selected_run().is_some() {
+            return div().flex_1().min_w_0().h_full().child(self.render_run(cx)).into_any_element();
+        }
         div()
-            .id("flows-detail")
+            .id(SharedString::from(format!("flows-detail-{:?}", self.selected)))
             .flex_1()
             .min_w_0()
             .h_full()
             .overflow_y_scroll()
-            .p(px(18.))
-            .child(div().w_full().child(self.detail(cx)))
+            .p(px(20.))
+            .child(div().w_full().pb(px(12.)).child(self.detail(cx)))
+            .into_any_element()
     }
 }
 
@@ -362,8 +392,24 @@ async fn wait_for_run(this: WeakEntity<FlowsPanel>, workspace: u64, cx: &mut Asy
 
 impl Render for FlowsPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().flex().child(self.sidebar(cx)).child(self.detail_pane(cx))
+        if let Some(editor) = &self.editor {
+            return div().size_full().child(editor.clone());
+        }
+        self.sync_run_list();
+        let width = self.list_width.size();
+        div()
+            .size_full()
+            .relative()
+            .flex()
+            .on_drag_move(split::follow::<_, ListGrip>(Edge::Right, DETAIL_KEEP, list_width, cx))
+            .child(self.sidebar(width, cx))
+            .child(self.detail_pane(cx))
+            .child(split::handle("flows-split", ListGrip, (Edge::Right, width), list_width, cx))
     }
+}
+
+fn list_width(panel: &mut FlowsPanel) -> &mut Split {
+    &mut panel.list_width
 }
 
 pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {

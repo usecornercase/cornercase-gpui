@@ -1,10 +1,13 @@
-use gpui::{AppContext as _, Context, Focusable as _, PathPromptOptions, Window};
+use gpui::{App, AppContext as _, Context, Focusable as _, PathPromptOptions, Window};
 use serde_json::Value;
 
 use super::order::{self, Place};
-use super::{Rename, Target, cmd};
-use crate::app::Root;
+use super::{Fold, Rename, Target, cmd};
+use crate::app::{Msg, Root};
+use crate::cli;
+use crate::dialogs::{self, PathQuestion};
 use crate::model::Session;
+use crate::store::Busy;
 use crate::ui::{TextField, TextFieldEvent};
 
 pub(super) fn into_group(project: u64, group: u64) -> Vec<String> {
@@ -23,13 +26,18 @@ pub(super) fn place_args(dragged: Target, place: Place) -> Vec<String> {
     }
 }
 
+fn opening(path: &str) -> Busy {
+    let name = std::path::Path::new(path).file_name().map_or_else(|| path.into(), |n| n.to_string_lossy());
+    Busy::new(format!("open:{path}"), format!("Opening {name}…"))
+}
+
 fn existing_group_of(session: &Session, project: u64) -> Option<u64> {
     let group = session.projects.iter().find(|p| p.id == project).and_then(|p| p.group)?;
     session.groups.iter().any(|g| g.id == group).then_some(group)
 }
 
 fn project_drop(session: &Session, project: u64, target: u64) -> Option<Vec<String>> {
-    let sections = order::sections(session);
+    let sections = session.sections();
     let siblings = sections.into_iter().find(|(_, ids)| ids.contains(&target)).map(|(_, ids)| ids).unwrap_or_default();
     order::drop_place(&siblings, project, target).map(|place| match place {
         Place::Before(_) => place_args(Target::Project(project), place),
@@ -97,9 +105,19 @@ fn rename_placeholder(target: Target) -> &'static str {
 }
 
 impl Root {
-    pub(crate) fn set_folded(&mut self, target: Target, collapsed: bool) {
-        let verb = if collapsed { "collapse" } else { "expand" };
-        self.queue.cmd(cmd(&[verb, target.flag(), &target.id().to_string()]));
+    pub(crate) fn set_folded(&mut self, fold: Fold, collapsed: bool) {
+        self.side.folds.set(fold, collapsed, self.session.as_mut());
+        let tx = self.tx.clone();
+        self.queue.cmd_then(fold.args(collapsed), move |result| {
+            let _ = tx.unbounded_send(Msg::Folded(fold, collapsed, result.err().map(|e| e.to_string())));
+        });
+    }
+
+    pub(crate) fn fold_answered(&mut self, fold: Fold, collapsed: bool, error: Option<&str>, cx: &mut Context<Self>) {
+        self.side.folds.answered(fold, collapsed, error.is_none(), self.session.as_mut());
+        if let Some(error) = error {
+            self.say(error, cx);
+        }
     }
 
     fn current_name(&self, target: Target) -> Option<String> {
@@ -158,11 +176,15 @@ impl Root {
     }
 
     #[expect(clippy::unused_self, reason = "a menu item's action and ⌘O call it as a method of the window")]
-    pub(crate) fn open_project(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        Self::open_project_into(None, cx);
+    pub(crate) fn open_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        Self::open_project_into(None, window, cx);
     }
 
-    pub(super) fn open_project_into(group: Option<u64>, cx: &mut Context<Self>) {
+    pub(super) fn open_project_into(group: Option<u64>, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(host) = cli::host() {
+            Self::open_remote_project(&host, group, window, cx);
+            return;
+        }
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
@@ -178,16 +200,30 @@ impl Root {
         .detach();
     }
 
+    fn open_remote_project(host: &str, group: Option<u64>, window: &mut Window, cx: &mut Context<Self>) {
+        let button = if group.is_some() { "Add" } else { "Open" };
+        let question = PathQuestion { title: format!("{button} a project on {host}"), button };
+        let root = cx.entity();
+        let then = move |path: String, _: &mut Window, cx: &mut App| {
+            root.update(cx, |this, cx| this.open_folder(path, group, cx));
+        };
+        dialogs::ask_path(question, then, window, cx);
+    }
+
     fn open_folder(&mut self, path: String, group: Option<u64>, cx: &mut Context<Self>) {
+        let busy = opening(&path);
         let Some(group) = group else {
-            self.act(vec!["open".into(), path, "--focus".into()]);
+            self.store.update(cx, |s, cx| s.act_busy(busy, vec!["open".into(), path, "--focus".into()], cx));
             return;
         };
         let mut args = vec!["open".into(), path, "--focus".into(), "--json".into()];
         if let Some(view) = self.view_id {
             args.extend(["--view".into(), view.to_string()]);
         }
-        crate::store::run_json(cx, args, move |this: &mut Root, result, cx| this.opened_into(result, group, cx));
+        crate::store::run_busy(cx, busy, args, move |this: &mut Root, result, cx| {
+            let value = result.and_then(|out| serde_json::from_str::<Value>(&out).map_err(Into::into));
+            this.opened_into(value, group, cx);
+        });
     }
 
     fn opened_into(&mut self, result: anyhow::Result<Value>, group: u64, cx: &mut Context<Self>) {
@@ -195,9 +231,9 @@ impl Root {
             Ok(v) => {
                 let Some(project) = v.get("project").and_then(Value::as_u64) else { return };
                 self.queue.cmd(into_group(project, group));
-                self.set_folded(Target::Group(group), false);
+                self.set_folded(Fold::Group(group), false);
             }
-            Err(e) => self.say(e.to_string(), cx),
+            Err(e) => self.say(&e.to_string(), cx),
         }
     }
 }

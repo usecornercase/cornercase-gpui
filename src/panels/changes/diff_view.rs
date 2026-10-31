@@ -8,7 +8,8 @@ use gpui::{
 };
 
 use crate::store::ToastKind;
-use crate::theme::{FONT_FAMILY, colours};
+use crate::theme::{FONT_FAMILY, colours, radius};
+use crate::ui;
 
 use super::pieces::{plural, toast};
 use super::wire::{FileStatus, Hunk, LineKind, Segment};
@@ -105,7 +106,7 @@ fn hunk_action(id: &'static str, i: usize, label: &'static str) -> gpui::Statefu
     div()
         .id((id, i))
         .px(px(6.))
-        .rounded(px(4.))
+        .rounded(px(radius::CHIP))
         .text_size(px(11.))
         .text_color(colours::muted())
         .cursor_pointer()
@@ -117,11 +118,10 @@ fn hunk_title(hunk: &Hunk) -> impl IntoElement + use<> {
     div()
         .flex_1()
         .min_w(px(0.))
-        .truncate()
         .font_family(FONT_FAMILY)
         .text_size(px(11.))
         .text_color(colours::accent())
-        .child(diff::header(hunk))
+        .child(ui::one_line(diff::header(hunk)))
 }
 
 fn copy_hunk(patch_text: &str, cx: &mut App) {

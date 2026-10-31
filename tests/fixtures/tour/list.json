@@ -1,0 +1,263 @@
+{
+  "state": {
+    "active": {
+      "card": false,
+      "index": 1,
+      "step": "add",
+      "tour": "todo"
+    },
+    "offered": true,
+    "progress": [
+      {
+        "done": [
+          "projects",
+          "workspaces"
+        ],
+        "finished": false,
+        "tour": "core"
+      },
+      {
+        "done": [
+          "open"
+        ],
+        "finished": false,
+        "tour": "todo"
+      },
+      {
+        "done": [],
+        "finished": true,
+        "tour": "issues"
+      }
+    ]
+  },
+  "tours": [
+    {
+      "docs": "https://usecornercase.dev/docs/first-steps/",
+      "id": "core",
+      "steps": [
+        {
+          "done": {
+            "kind": "project-opened"
+          },
+          "id": "projects",
+          "offer": null,
+          "show": null,
+          "target": "new-project",
+          "text": "A project is a folder you work in. Open one with + New, then open project. If cornercase started in a folder, that folder is already your first project.",
+          "title": "Projects"
+        },
+        {
+          "done": {
+            "kind": "workspace-made"
+          },
+          "id": "workspaces",
+          "offer": null,
+          "show": null,
+          "target": "workspaces",
+          "text": "A workspace is a line of work. In a git repository each one can get its own worktree, so several agents change code side by side without touching each other's files. Make one with + New, then new workspace. Outside a repository the default workspace is all you need.",
+          "title": "Workspaces"
+        },
+        {
+          "done": {
+            "kind": "tab-opened"
+          },
+          "id": "tabs",
+          "offer": null,
+          "show": null,
+          "target": "tabs",
+          "text": "Each tab runs shells. Open one with + Tab, or right-click a pane for its menu: split it, or close it. Drag a border to resize.",
+          "title": "Tabs and panes"
+        },
+        {
+          "done": {
+            "kind": "prompt-confirmed"
+          },
+          "id": "prompt",
+          "offer": "prompt",
+          "show": null,
+          "target": "pane",
+          "text": "Start an agent in this workspace with a first prompt. Edit the idea below, then start it. If the agent asks whether to trust the folder, that answer is yours.",
+          "title": "Your first prompt"
+        },
+        {
+          "done": {
+            "kind": "next"
+          },
+          "id": "status",
+          "offer": "agents-section",
+          "show": null,
+          "target": "agents",
+          "text": "A tab shows what its agent does: \u25d0 working, ! needs you, \u2713 finished, \u25cb idle, \u25cf marked for review. The agents section lists every agent in every project; a click jumps to the one that needs you.",
+          "title": "Agents and their status"
+        },
+        {
+          "done": {
+            "kind": "next"
+          },
+          "id": "settings",
+          "offer": null,
+          "show": {
+            "kind": "settings",
+            "page": "agents"
+          },
+          "target": "settings",
+          "text": "In Settings, under More: the default agent and its mode, resuming agents after a restart, desktop notifications and sound, the working icon and the icon bar. Nothing changes until you change it.",
+          "title": "Essential settings"
+        },
+        {
+          "done": {
+            "kind": "next"
+          },
+          "id": "next",
+          "offer": null,
+          "show": {
+            "kind": "help-menu"
+          },
+          "target": "help",
+          "text": "Help, at the bottom of the sidebar, opens this tour again, a catalogue of short tours for the rest of cornercase, and the docs.",
+          "title": "Where to go next"
+        }
+      ],
+      "title": "Get started"
+    },
+    {
+      "docs": "https://usecornercase.dev/docs/guides/issues-and-agents/",
+      "id": "issues",
+      "steps": [
+        {
+          "done": {
+            "dialog": "issues",
+            "kind": "opened"
+          },
+          "id": "open",
+          "offer": null,
+          "show": null,
+          "target": "issues",
+          "text": "Issues lists the issues of GitHub, GitLab, Linear, Jira and more. Open it.",
+          "title": "Issues"
+        },
+        {
+          "done": {
+            "kind": "next"
+          },
+          "id": "start",
+          "offer": null,
+          "show": {
+            "kind": "issues"
+          },
+          "target": "issues",
+          "text": "Pick an issue and press start: cornercase makes a worktree on its branch and starts an agent with the issue as its prompt.",
+          "title": "Start an agent on one"
+        },
+        {
+          "done": {
+            "kind": "next"
+          },
+          "id": "schedule",
+          "offer": null,
+          "show": {
+            "kind": "issues"
+          },
+          "target": "issues",
+          "text": "Schedule puts the issue in the queue, to start at a time you choose.",
+          "title": "Later"
+        }
+      ],
+      "title": "Issues to agents"
+    },
+    {
+      "docs": "https://usecornercase.dev/docs/guides/changes/",
+      "id": "changes",
+      "steps": [
+        {
+          "done": {
+            "kind": "panel",
+            "panel": "changes"
+          },
+          "id": "open",
+          "offer": null,
+          "show": null,
+          "target": "changes",
+          "text": "Changes shows the diff of this workspace. Open it.",
+          "title": "Changes"
+        },
+        {
+          "done": {
+            "kind": "next"
+          },
+          "id": "ask",
+          "offer": null,
+          "show": {
+            "kind": "panel",
+            "panel": "changes"
+          },
+          "target": "changes",
+          "text": "Hover a hunk: ask agent pastes its place into the workspace's agent, so you can say what to fix.",
+          "title": "Ask the agent"
+        },
+        {
+          "done": {
+            "kind": "next"
+          },
+          "id": "viewed",
+          "offer": null,
+          "show": {
+            "kind": "panel",
+            "panel": "changes"
+          },
+          "target": "changes",
+          "text": "Mark a file viewed to fold it; it opens again when it changes. Commits and All compare against a branch.",
+          "title": "Viewed"
+        }
+      ],
+      "title": "Reviewing changes"
+    },
+    {
+      "docs": "https://usecornercase.dev/docs/guides/todo/",
+      "id": "todo",
+      "steps": [
+        {
+          "done": {
+            "kind": "panel",
+            "panel": "todo"
+          },
+          "id": "open",
+          "offer": null,
+          "show": null,
+          "target": "todo",
+          "text": "TODO keeps a list of what is next. Open it.",
+          "title": "TODO"
+        },
+        {
+          "done": {
+            "kind": "todo-added"
+          },
+          "id": "add",
+          "offer": null,
+          "show": {
+            "kind": "panel",
+            "panel": "todo"
+          },
+          "target": "todo",
+          "text": "Click + New TODO and type one.",
+          "title": "Add an item"
+        },
+        {
+          "done": {
+            "kind": "next"
+          },
+          "id": "send",
+          "offer": null,
+          "show": {
+            "kind": "panel",
+            "panel": "todo"
+          },
+          "target": "todo",
+          "text": "The \u25b8 of an item sends its text to an agent as a prompt, and checks it off once the agent takes it.",
+          "title": "Send it to an agent"
+        }
+      ],
+      "title": "TODO"
+    }
+  ]
+}

@@ -7,6 +7,98 @@ use crate::model::Session;
 
 pub(super) const SOURCES: [&str; 7] = ["github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"];
 
+const MISSED: &str =
+    "It was due while cornercase was stopped or the Mac slept. Start it now, or edit it for another time.";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum State {
+    Pending,
+    Starting,
+    Started,
+    Failed,
+    Missed,
+    Other,
+}
+
+impl State {
+    pub(super) fn of(entry: &Entry) -> Self {
+        match entry.state.as_str() {
+            "pending" => Self::Pending,
+            "starting" => Self::Starting,
+            "started" => Self::Started,
+            "failed" => Self::Failed,
+            "missed" => Self::Missed,
+            _ => Self::Other,
+        }
+    }
+
+    pub(super) fn group(self) -> Group {
+        match self {
+            Self::Failed | Self::Missed => Group::Unstarted,
+            Self::Pending | Self::Starting => Group::Scheduled,
+            Self::Started => Group::Started,
+            Self::Other => Group::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Group {
+    Unstarted,
+    Scheduled,
+    Started,
+    Other,
+}
+
+impl Group {
+    const ALL: [Group; 4] = [Group::Unstarted, Group::Scheduled, Group::Started, Group::Other];
+
+    pub(super) fn title(self) -> &'static str {
+        match self {
+            Self::Unstarted => "Did not start",
+            Self::Scheduled => "Scheduled",
+            Self::Started => "Started",
+            Self::Other => "Other",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Body {
+    Loading,
+    Empty,
+    NoMatch,
+    List,
+}
+
+impl Body {
+    pub(super) fn of(loaded: bool, entries: usize, shown: usize) -> Self {
+        match (loaded, entries, shown) {
+            (false, ..) => Self::Loading,
+            (true, 0, _) => Self::Empty,
+            (true, _, 0) => Self::NoMatch,
+            _ => Self::List,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Click {
+    Edit,
+    Open(u64),
+    Nothing,
+}
+
+impl Click {
+    pub(super) fn of(entry: &Entry, pane: Option<u64>, busy: bool) -> Self {
+        match pane {
+            Some(pane) => Self::Open(pane),
+            None if entry.runnable() && !busy => Self::Edit,
+            None => Self::Nothing,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(crate) struct Place {
@@ -89,25 +181,47 @@ pub(crate) fn place_label(place: &Place, session: Option<&Session>) -> String {
     }
 }
 
-pub(crate) fn status_label(entry: &Entry, boot: Option<&str>, session: Option<&Session>) -> String {
-    match entry.state.as_str() {
-        "starting" => "starting…".into(),
-        "started" => match entry.pane {
-            Some(pane)
-                if boot.is_some()
-                    && entry.server.as_deref() == boot
-                    && session.and_then(|s| s.pane(pane)).is_some() =>
-            {
-                format!("started · pane {pane}")
-            }
-            _ => "started · pane closed".into(),
-        },
-        "failed" => match &entry.reason {
-            Some(reason) => format!("failed · {reason}"),
-            None => "failed".into(),
-        },
-        other => other.to_string(),
+pub(super) fn sections<'a>(
+    entries: &'a [Entry],
+    filter: &str,
+    session: Option<&Session>,
+) -> Vec<(Group, Vec<&'a Entry>)> {
+    let shown: Vec<&Entry> = entries.iter().filter(|e| e.matches(filter, session)).collect();
+    Group::ALL
+        .into_iter()
+        .map(|group| (group, shown.iter().copied().filter(|e| State::of(e).group() == group).collect::<Vec<_>>()))
+        .filter(|(group, list)| !list.is_empty() || (*group == Group::Scheduled && filter.is_empty()))
+        .collect()
+}
+
+pub(crate) fn live_pane(entry: &Entry, boot: Option<&str>, session: Option<&Session>) -> Option<u64> {
+    let pane = entry.pane.filter(|_| State::of(entry) == State::Started)?;
+    let this_run = boot.is_some() && entry.server.as_deref() == boot;
+    (this_run && session.and_then(|s| s.pane(pane)).is_some()).then_some(pane)
+}
+
+pub(crate) fn status_label(entry: &Entry, pane: Option<u64>) -> String {
+    match State::of(entry) {
+        State::Pending => "Pending".into(),
+        State::Starting => "Starting…".into(),
+        State::Started => pane.map_or_else(|| "Started · pane closed".into(), |pane| format!("Started · pane {pane}")),
+        State::Failed => "Failed".into(),
+        State::Missed => "Missed".into(),
+        State::Other => entry.state.clone(),
     }
+}
+
+pub(super) fn notice(entry: &Entry) -> Option<String> {
+    match State::of(entry) {
+        State::Failed => entry.reason.as_deref().map(str::trim).filter(|r| !r.is_empty()).map(sentence),
+        State::Missed => Some(MISSED.into()),
+        _ => None,
+    }
+}
+
+pub(super) fn sentence(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
 pub(crate) fn agent_choices(config: &Value) -> (Vec<String>, String) {

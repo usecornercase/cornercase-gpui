@@ -1,0 +1,18 @@
+{
+  "capped": false,
+  "files": [],
+  "matches": 1,
+  "mode": "names",
+  "names": [
+    {
+      "indices": [
+        5,
+        6,
+        7
+      ],
+      "path": "docs/uni.md"
+    }
+  ],
+  "query": "uni",
+  "workspace": 38
+}

@@ -1,0 +1,34 @@
+{
+  "plugins": [
+    {
+      "enabled": true,
+      "error": null,
+      "id": "acme.notes",
+      "label": "Notes 1.3.0",
+      "log": "/Users/me/.local/state/cornercase/plugins/acme.notes/plugin.log",
+      "manifest": {"id": "acme.notes", "name": "Notes", "version": "1.3.0"},
+      "note": "Notes beside each workspace.",
+      "services": [
+        {"id": "sync", "pid": 4242, "restart_in": null, "state": "running"},
+        {"id": "index", "pid": null, "restart_in": 3, "state": "stopped"},
+        {"id": "watch", "pid": null, "restart_in": null, "state": "starting"}
+      ],
+      "source": {"kind": "git", "repo": "acme/notes"},
+      "state": "on"
+    },
+    {
+      "enabled": false,
+      "error": null,
+      "id": "gpui.test",
+      "label": "GPUI test 0.1.0",
+      "log": "/x/plugin.log",
+      "manifest": null,
+      "note": "asks for nothing · runs as you",
+      "services": [],
+      "source": {"kind": "link", "path": "/code/test"},
+      "state": "off"
+    }
+  ],
+  "problem": "plugins.json cannot be read: expected value at line 1 column 1",
+  "revision": 7
+}

@@ -59,7 +59,7 @@ impl Fields {
         cx: &mut Context<QueuePanel>,
     ) -> Entity<TextField> {
         let field = cx.new(|cx| {
-            let mut field = TextField::new(placeholder.to_string(), cx);
+            let mut field = TextField::new(placeholder.to_string(), cx).wraps();
             if !text.is_empty() {
                 field.set_text(text.to_string(), cx);
             }

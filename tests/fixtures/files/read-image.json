@@ -1,0 +1,19 @@
+{
+  "boot": "28257-1793303771316290000",
+  "bytes": 69,
+  "file": "/private/tmp/ccfiles/tiny.png",
+  "image": {
+    "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+    "format": "PNG",
+    "height": 1,
+    "width": 1
+  },
+  "kind": "image",
+  "language": null,
+  "modified": "2026-10-29T20:21:03.961Z",
+  "path": "tiny.png",
+  "revision": 1,
+  "stream": null,
+  "text": null,
+  "workspace": 38
+}

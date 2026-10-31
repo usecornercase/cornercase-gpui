@@ -4,9 +4,11 @@ use gpui::{
 };
 
 use crate::model::Session;
-use crate::theme::colours;
+use crate::store::Store;
+use crate::theme::{colours, radius};
 use crate::ui;
 
+use super::actions::file_busy;
 use super::pieces::{counts, faint_detail, plural, split_path, status_letter};
 use super::wire::{FileInfo, FoldClass, Mode, Staging, State, Summary, WorkspaceChanges};
 use super::{ChangesPanel, Scope, Selected};
@@ -27,8 +29,19 @@ fn centred(title: String, detail: Option<String>, colour: Rgba) -> AnyElement {
         .into_any_element()
 }
 
+fn centred_busy(id: &'static str, text: &'static str) -> AnyElement {
+    div()
+        .size_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .p(px(24.))
+        .child(ui::busy(id, text).text_size(px(13.)))
+        .into_any_element()
+}
+
 fn reading() -> AnyElement {
-    centred("Reading changes…".into(), None, colours::muted())
+    centred_busy("changes-reading", "Reading changes…")
 }
 
 fn nothing_changed(scope: Scope) -> AnyElement {
@@ -67,8 +80,8 @@ fn fold_tag(fold: FoldClass) -> Option<&'static str> {
 fn tag_badge(text: &'static str) -> impl IntoElement {
     div()
         .flex_none()
-        .px(px(4.))
-        .rounded(px(3.))
+        .px(px(5.))
+        .rounded(px(radius::CHIP))
         .border_1()
         .border_color(colours::border())
         .text_size(px(10.))
@@ -90,7 +103,7 @@ fn stage_button(group: &SharedString, staged: Option<Staging>) -> gpui::Stateful
         .flex_none()
         .flex()
         .justify_center()
-        .rounded(px(4.))
+        .rounded(px(radius::CHIP))
         .text_size(px(12.))
         .text_color(colour)
         .cursor_pointer()
@@ -102,16 +115,16 @@ fn stage_button(group: &SharedString, staged: Option<Staging>) -> gpui::Stateful
 fn viewed_box(workspace: u64, path: &str, viewed: bool) -> gpui::Stateful<gpui::Div> {
     div()
         .id(SharedString::from(format!("viewed-{workspace}-{path}")))
-        .size(px(14.))
+        .size(px(15.))
         .flex_none()
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(3.))
+        .rounded(px(radius::CHIP))
         .border_1()
         .text_size(px(10.))
         .cursor_pointer()
-        .when(viewed, |d| d.bg(colours::done()).border_color(colours::done()).text_color(colours::sidebar()).child("✓"))
+        .when(viewed, |d| d.bg(colours::done()).border_color(colours::done()).text_color(colours::ink()).child("✓"))
         .when(!viewed, |d| d.border_color(colours::faint()).hover(|s| s.border_color(colours::text())))
 }
 
@@ -132,10 +145,10 @@ fn file_name(file: &FileInfo) -> impl IntoElement + use<> {
         .child(
             div()
                 .flex_none()
+                .flex()
                 .max_w(relative(0.7))
-                .truncate()
                 .text_color(if muted { colours::muted() } else { colours::text() })
-                .child(name),
+                .child(ui::one_line(name)),
         )
         .child(faint_detail(detail))
 }
@@ -156,11 +169,10 @@ fn group_header(session: Option<&Session>, ws: &WorkspaceChanges) -> impl IntoEl
             div()
                 .flex_1()
                 .min_w(px(0.))
-                .truncate()
                 .text_size(px(11.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(colours::muted())
-                .child(label),
+                .child(ui::one_line(label)),
         )
         .child(div().text_size(px(11.)).text_color(colours::faint()).child(plural(ws.files.len(), "file")))
         .child(counts(ws.added, ws.removed))
@@ -181,13 +193,13 @@ impl ChangesPanel {
             }
             rows.extend(ws.files.iter().map(|file| self.render_file(ws.workspace, file, mode, cx).into_any_element()));
         }
-        let col = div().flex().flex_col().gap(px(1.)).p(px(6.)).children(rows);
+        let col = div().flex().flex_col().gap(px(2.)).p(px(8.)).children(rows);
         div().id("changes-files").size_full().overflow_y_scroll().child(col).into_any_element()
     }
 
     fn state_note(&self, session: Option<&Session>) -> Option<AnyElement> {
         if session.is_none() {
-            return Some(centred("Connecting…".into(), None, colours::muted()));
+            return Some(centred_busy("changes-connecting", "Connecting…"));
         }
         if self.follow.is_none() {
             let detail = Some("Open a project to see its changes.".into());
@@ -214,13 +226,13 @@ impl ChangesPanel {
         ui::row(id, selected)
             .group(group.clone())
             .gap(px(6.))
-            .py(px(3.))
+            .py(px(5.))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_selected(&pick, cx)))
             .child(status_letter(file.status).w(px(12.)).flex_none())
             .child(file_name(file))
             .when_some(fold_tag(file.fold), |d, tag| d.child(tag_badge(tag)))
             .child(counts(file.added, file.removed))
-            .when(mode.uncommitted(), |d| d.child(Self::row_stage_button(&group, workspace, file)))
+            .when(mode.uncommitted(), |d| d.child(Self::row_stage_button(&group, workspace, file, cx)))
             .child(Self::row_viewed_box(workspace, file, cx))
     }
 
@@ -229,19 +241,31 @@ impl ChangesPanel {
         self.select((!same).then(|| pick.clone()), cx);
     }
 
-    fn row_stage_button(group: &SharedString, workspace: u64, file: &FileInfo) -> impl IntoElement + use<> {
+    fn row_stage_button(group: &SharedString, workspace: u64, file: &FileInfo, cx: &Context<Self>) -> AnyElement {
+        if Store::get(cx).read(cx).busy(&file_busy(workspace, &file.path)) {
+            let id = SharedString::from(format!("staging-{group}"));
+            return div()
+                .w(px(18.))
+                .flex_none()
+                .flex()
+                .justify_center()
+                .child(ui::spinner(id, 11., colours::muted()))
+                .into_any_element();
+        }
         let stage_file = file.clone();
-        stage_button(group, file.staged).on_click(move |_: &ClickEvent, _, cx| {
-            cx.stop_propagation();
-            Self::toggle_staged(workspace, &stage_file, cx);
-        })
+        stage_button(group, file.staged)
+            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+                cx.stop_propagation();
+                Self::toggle_staged(workspace, &stage_file, cx);
+            }))
+            .into_any_element()
     }
 
     fn row_viewed_box(workspace: u64, file: &FileInfo, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let path = file.path.clone();
+        let viewed_file = file.clone();
         viewed_box(workspace, &file.path, file.viewed).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
             cx.stop_propagation();
-            this.toggle_viewed(workspace, &path, cx);
+            this.toggle_viewed(workspace, &viewed_file, cx);
         }))
     }
 }

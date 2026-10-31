@@ -1,0 +1,12 @@
+{
+  "requestId": "21101.2",
+  "loaderId": "27E34FB478E55966DC090360BA7556FA",
+  "type": "Fetch",
+  "response": {
+    "url": "http://localhost:8783/missing.json",
+    "status": 404,
+    "statusText": "File not found",
+    "connectionReused": true
+  },
+  "frameId": "8B2DC1AEEFDBA28B02E3D316EDD9ECD6"
+}

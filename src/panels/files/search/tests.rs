@@ -19,7 +19,15 @@ fn index_skips_ignored_and_git() {
     std::fs::write(root.join("src/a.rs"), "x").expect("the temporary files are writable");
     std::fs::write(root.join("README"), "x").expect("the temporary files are writable");
     let paths = index(&root, &AtomicBool::new(false));
-    assert_eq!(paths, vec![".gitignore", "README", "src/a.rs"]);
+    assert_eq!(paths.expect("the walk ends"), vec![".gitignore", "README", "src/a.rs"]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_cancelled_walk_gives_no_index() {
+    let root = temp("cancelled");
+    std::fs::write(root.join("a.rs"), "x").expect("the temporary files are writable");
+    assert_eq!(index(&root, &AtomicBool::new(true)), None);
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -36,6 +44,20 @@ fn names_prefer_the_named_file() {
     let lit: String = hits[0].lit.iter().map(|r| &hits[0].path[r.clone()]).collect();
     assert_eq!(lit, "workspace-session");
     assert_eq!(names(&paths, "  "), Vec::new());
+}
+
+#[test]
+fn names_prefer_a_file_whose_own_name_matches_to_files_in_a_folder_of_that_name() {
+    let paths: Vec<String> =
+        ["src/panels/files/finder/view.rs", "src/panels/files/finder/tests.rs", "src/panels/files/finder.rs"]
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+    let hits: Vec<String> = names(&paths, "finder").into_iter().map(|h| h.path).collect();
+    assert_eq!(
+        hits,
+        ["src/panels/files/finder.rs", "src/panels/files/finder/view.rs", "src/panels/files/finder/tests.rs"]
+    );
 }
 
 #[test]

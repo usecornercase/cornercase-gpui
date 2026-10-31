@@ -107,3 +107,63 @@ fn reads_times() {
     assert_eq!(ago("bad", at), "");
     assert_eq!((size(512), size(3400)), ("512 B".to_string(), "3.4 KB".to_string()));
 }
+
+#[test]
+fn a_role_shows_the_initials_of_its_first_two_words() {
+    assert_eq!(initials("coder A"), "CA");
+    assert_eq!(initials("second  reviewer here"), "SR");
+    assert_eq!(initials("judge"), "J");
+    assert_eq!(initials("  "), "?");
+}
+
+#[test]
+fn a_plan_is_outlined_by_its_stages_and_loops() {
+    let runs = parse_runs(RUNS).expect("runs");
+    let flow = &runs.runs[0].flow;
+    assert_eq!((flow.loops(), flow.outline().as_str()), (1, "2 stages · 1 loop"));
+    let single = FlowSpec { stages: vec![StageSpec::default()], ..FlowSpec::default() };
+    assert_eq!(single.outline(), "1 stage");
+    assert!(!flow.ends_in_commits());
+}
+
+#[test]
+fn a_run_passes_the_stages_before_the_active_one() {
+    let mut run = parse_runs(RUNS).expect("runs").runs.remove(0);
+    run.ended = false;
+    run.stage = Some(1);
+    assert_eq!(
+        (run.progress(0), run.progress(1), run.progress(2)),
+        (Progress::Passed, Progress::Active, Progress::Ahead)
+    );
+    run.stage = None;
+    assert_eq!(run.progress(0), Progress::Ahead);
+    run.ended = true;
+    assert_eq!(run.progress(1), Progress::Passed);
+}
+
+#[test]
+fn a_loop_past_its_rounds_is_over_its_limit() {
+    let mut run = parse_runs(RUNS).expect("runs").runs.remove(0);
+    assert!(!run.over_limit(1));
+    run.rounds = vec![0, 3];
+    assert!(run.over_limit(1) && !run.over_limit(0) && !run.over_limit(5));
+}
+
+#[test]
+fn the_orchestrator_is_known_by_its_name_or_its_role() {
+    let runs = parse_runs(RUNS).expect("runs");
+    let flow = &runs.runs[0].flow;
+    assert!(flow.is_lead("orchestrator"));
+    assert!(!flow.is_lead("coder"));
+    let renamed = FlowSpec { orchestrator: RoleSpec { name: "lead".into(), ..RoleSpec::default() }, ..flow.clone() };
+    assert!(renamed.is_lead("lead") && renamed.is_lead("orchestrator"));
+}
+
+#[test]
+fn a_loop_label_says_its_limit_or_its_rounds_long_or_short() {
+    let back = BackSpec { to: 1, when: "findings".into(), at_most: 3 };
+    assert_eq!(back.label(None, false), "findings · at most 3");
+    assert_eq!(back.label(None, true), "findings ≤ 3");
+    assert_eq!(back.label(Some(1), false), "findings · 1/3");
+    assert_eq!(back.label(Some(4), true), "findings 4/3");
+}

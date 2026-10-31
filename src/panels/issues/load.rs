@@ -1,7 +1,7 @@
 use gpui::Context;
 
 use super::data::{self, Agents, Issue, Lists, People, ReadIssue, SourceInfo, Sources, Who};
-use super::{IssuesPanel, ListKey, ListState, Tab, first_line, run_lenient};
+use super::{IssuesPanel, ListKey, ListState, Tab, ask, first_line, page};
 use crate::store::args;
 
 impl IssuesPanel {
@@ -9,16 +9,18 @@ impl IssuesPanel {
         let Some(project) = self.project else { return };
         self.loading_sources = true;
         self.lists.clear();
-        self.reads.clear();
+        let selected = self.selected.clone();
+        self.reads.retain(|id, _| selected.as_ref().is_some_and(|s| s.id() == *id));
         self.people_lists.clear();
+        if let Some(issue) = &selected {
+            self.read(issue, cx);
+        }
         let first = self.sources.as_ref().is_none_or(|s| s.project != project);
-        run_lenient(
-            cx,
-            args(&["issue", "sources", "--json", "--project", &project.to_string()]),
-            move |this, out, cx| this.sources_answered(project, first, out, cx),
-        );
+        ask(cx, args(&["issue", "sources", "--json", "--project", &project.to_string()]), move |this, out, cx| {
+            this.sources_answered(project, first, out, cx);
+        });
         if self.agents.is_none() {
-            run_lenient(cx, args(&["config", "--json"]), Self::config_answered);
+            ask(cx, args(&["config", "--json"]), Self::config_answered);
         }
         cx.notify();
     }
@@ -66,6 +68,13 @@ impl IssuesPanel {
         self.people.get(tab).cloned().unwrap_or_default()
     }
 
+    pub(super) fn fields(&self) -> [String; 2] {
+        match self.tab.source().and_then(|s| self.source(s)) {
+            Some(source) => source.fields.clone(),
+            None => ["assignee".to_string(), "author".to_string()],
+        }
+    }
+
     pub(super) fn list_key(&self) -> Option<ListKey> {
         let people = self.who(&self.tab);
         Some(ListKey {
@@ -107,7 +116,7 @@ impl IssuesPanel {
         }
         self.lists.entry(key.clone()).or_default().loading = true;
         let command = self.list_args(&key, cached);
-        run_lenient(cx, command, move |this, out, cx| this.list_answered(&key, cached, out, cx));
+        ask(cx, command, move |this, out, cx| this.list_answered(&key, cached, out, cx));
         cx.notify();
     }
 
@@ -147,8 +156,13 @@ impl IssuesPanel {
 
     pub(super) fn select(&mut self, issue: Issue, cx: &mut Context<Self>) {
         let id = issue.id();
-        if !self.reads.contains_key(&id) && !self.reading.contains(&id) {
+        if !self.reads.contains_key(&id) {
             self.read(&issue, cx);
+        }
+        if self.selected.as_ref().is_none_or(|s| s.id() != id)
+            && let Some(Ok(page)) = self.reads.get(&id)
+        {
+            page.to_top();
         }
         self.selected = Some(issue);
         cx.notify();
@@ -157,7 +171,9 @@ impl IssuesPanel {
     fn read(&mut self, issue: &Issue, cx: &mut Context<Self>) {
         let Some(project) = self.project else { return };
         let id = issue.id();
-        self.reading.insert(id.clone());
+        if !self.reading.insert(id.clone()) {
+            return;
+        }
         let command = args(&[
             "issue",
             "read",
@@ -168,10 +184,10 @@ impl IssuesPanel {
             "--project",
             &project.to_string(),
         ]);
-        run_lenient(cx, command, move |this, out, cx| {
+        ask(cx, command, move |this, out, cx| {
             this.reading.remove(&id);
             let read = out.and_then(|out| data::parse::<ReadIssue>(&out).ok_or_else(|| first_line(&out)));
-            this.reads.insert(id, read);
+            page::take(&mut this.reads, id, read);
             cx.notify();
         });
     }
@@ -182,7 +198,7 @@ impl IssuesPanel {
             return;
         }
         let command = args(&["issue", "people", &source, "--json", "--project", &project.to_string()]);
-        run_lenient(cx, command, move |this, out, cx| {
+        ask(cx, command, move |this, out, cx| {
             let people = out.and_then(|out| data::parse::<People>(&out).ok_or_else(|| first_line(&out)));
             this.people_lists.insert(source, people);
             cx.notify();

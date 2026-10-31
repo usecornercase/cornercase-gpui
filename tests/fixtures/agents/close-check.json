@@ -1,0 +1,21 @@
+{
+  "agents": [
+    {
+      "agent": "claude",
+      "pane": 3,
+      "resumes": true,
+      "role": null,
+      "status": "working",
+      "tab": 4
+    }
+  ],
+  "closed": false,
+  "closed_agents": 0,
+  "project": 1,
+  "run": null,
+  "stops": [],
+  "tabs": [
+    4
+  ],
+  "workspace": 2
+}

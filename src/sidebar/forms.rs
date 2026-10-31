@@ -1,3 +1,4 @@
+mod agents;
 mod checked;
 mod style;
 
@@ -9,10 +10,11 @@ use gpui::{
 use serde_json::Value;
 
 use crate::dialogs::frame;
-use crate::store::{self, Store, args};
+use crate::store::{self, Busy, Store, args};
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
 
+pub(super) use agents::close_agents;
 pub(crate) use checked::close_agent;
 pub(super) use checked::remove_worktree;
 pub(super) use style::group_style;
@@ -79,13 +81,11 @@ fn buttons(go: impl IntoIterator<Item = Stateful<Div>>) -> Div {
 }
 
 fn keyed<T: 'static>(focus: &FocusHandle, enter: fn(&mut T, &mut Context<T>), cx: &mut Context<T>) -> Div {
-    div().track_focus(focus).on_key_down(cx.listener(
-        move |this, e: &KeyDownEvent, _, cx| match e.keystroke.key.as_str() {
-            "enter" => enter(this, cx),
-            "escape" => close(cx),
-            _ => {}
-        },
-    ))
+    div().track_focus(focus).on_key_down(cx.listener(move |this, e: &KeyDownEvent, _, cx| {
+        if e.keystroke.key == "enter" {
+            enter(this, cx);
+        }
+    }))
 }
 
 pub(super) struct NewGroup {
@@ -123,15 +123,21 @@ fn group_created(project: Option<u64>, result: anyhow::Result<Value>, cx: &mut A
     store.update(cx, |s, cx| s.toast(text, kind, cx));
 }
 
+const CREATING_GROUP: &str = "group-new";
+
 impl NewGroup {
     fn submit(&mut self, cx: &mut Context<Self>) {
         let name = self.name.read(cx).text().trim().to_string();
         if name.is_empty() {
             return;
         }
+        if Store::get(cx).read(cx).busy(CREATING_GROUP) {
+            return;
+        }
         let project = self.project;
-        store::run_json(cx, args(&["group", "new", &name, "--json"]), move |_, result, cx| {
-            group_created(project, result, cx);
+        let busy = Busy::new(CREATING_GROUP, format!("Creating the group {name}…"));
+        store::run_busy(cx, busy, args(&["group", "new", &name, "--json"]), move |_, result, cx| {
+            group_created(project, result.and_then(|out| serde_json::from_str(&out).map_err(Into::into)), cx);
         });
     }
 }
@@ -153,8 +159,12 @@ impl Render for NewGroup {
                 .gap(px(8.))
                 .child(ui::field("Name", ui::input_box(self.name.clone(), focused)))
                 .child(ui::dim("It takes the next icon and colour; change them from its menu.")),
-            buttons([ui::primary_button("create", "Create")
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))]),
+            buttons([if Store::get(cx).read(cx).busy(CREATING_GROUP) {
+                ui::busy_button("create", "Creating…", ui::Tone::Primary)
+            } else {
+                ui::primary_button("create", "Create")
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
+            }]),
         )
     }
 }
@@ -187,11 +197,17 @@ pub(super) fn delete_group(group: u64, name: String, projects: usize, window: &m
 impl DeleteGroup {
     fn run(&self, close_projects: bool, cx: &mut App) {
         let mut a = args(&["group", "delete", &self.group.to_string()]);
-        if close_projects {
-            a.push("--close-projects".into());
+        if !close_projects {
+            Store::get(cx).update(cx, |s, cx| {
+                s.cmd(a);
+                s.close_dialog(cx);
+            });
+            return;
         }
+        a.push("--close-projects".into());
+        let busy = Busy::new(format!("delete-group:{}", self.group), format!("Closing the projects of {}…", self.name));
         Store::get(cx).update(cx, |s, cx| {
-            s.cmd(a);
+            s.run_aside(busy, a, cx);
             s.close_dialog(cx);
         });
     }

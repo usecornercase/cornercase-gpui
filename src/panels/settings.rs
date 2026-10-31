@@ -1,19 +1,37 @@
+mod agents;
 mod changes;
+mod choice;
 mod connection;
 mod controls;
 mod data;
+mod import;
 mod pages;
 mod projects;
+mod search;
+mod share;
+mod sources;
 pub(crate) mod widgets;
 
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
-use gpui::{AnyView, Context, Div, Entity, IntoElement, Render, Stateful, Window, div, prelude::*};
+use gpui::{
+    AnyView, App, Context, Entity, FocusHandle, Focusable as _, IntoElement, MouseButton, MouseDownEvent, Render,
+    ScrollHandle, Window, div, point, prelude::*, px,
+};
 
 use self::data::{Described, Script, Setting};
+use crate::cli;
 use crate::panels::PanelKind;
 use crate::store::{self, Store, args};
-use crate::ui::{self, TextField, TextFieldEvent};
+use crate::ui::split::{self, Edge, Split};
+use crate::ui::{TextField, TextFieldEvent};
+
+const NAV: Split = Split::new(204., 168., 420.);
+const PAGE_KEEP: f32 = 420.;
+const SAVED_FOR: Duration = Duration::from_millis(1600);
+
+struct NavGrip;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 enum Role {
@@ -22,16 +40,9 @@ enum Role {
     Script(String, Script),
 }
 
-struct Field {
-    entity: Entity<TextField>,
-    base: String,
-}
-
-#[derive(Clone, PartialEq, Eq)]
-enum Pending {
-    Remove(String),
-    Choice { key: String, value: String },
-    Clear(String, Script),
+struct OpenChoice {
+    key: String,
+    highlight: Option<usize>,
 }
 
 pub(crate) struct SettingsPanel {
@@ -40,19 +51,27 @@ pub(crate) struct SettingsPanel {
     loading: bool,
     boot: String,
     page: String,
-    fields: HashMap<Role, Field>,
-    open_choice: Option<String>,
-    pending: Option<Pending>,
+    fields: HashMap<Role, Entity<TextField>>,
+    choice: Option<OpenChoice>,
+    choice_focus: FocusHandle,
+    choice_scroll: ScrollHandle,
     busy: HashSet<Role>,
     errors: HashMap<Role, String>,
+    saved: Option<Role>,
     exported: Option<data::Exported>,
+    import: Option<import::Import>,
     was_open: bool,
+    nav_width: Split,
+    search: Entity<TextField>,
+    scroll: ScrollHandle,
 }
 
 impl SettingsPanel {
-    pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
-        cx.observe(&store, |this, store, cx| this.store_changed(&store, cx)).detach();
+        cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)).detach();
+        let search = Self::search_field(window, cx);
+        window.focus(&search.read(cx).focus_handle(cx));
         let mut this = Self {
             described: None,
             load_error: None,
@@ -60,27 +79,59 @@ impl SettingsPanel {
             boot: String::new(),
             page: "Worktrees".into(),
             fields: HashMap::new(),
-            open_choice: None,
-            pending: None,
+            choice: None,
+            choice_focus: cx.focus_handle(),
+            choice_scroll: ScrollHandle::new(),
             busy: HashSet::new(),
             errors: HashMap::new(),
+            saved: None,
             exported: None,
+            import: None,
             was_open: true,
+            nav_width: NAV,
+            search,
+            scroll: ScrollHandle::new(),
         };
         this.load(cx);
         this
     }
 
-    fn store_changed(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+    fn search_field(window: &mut Window, cx: &mut Context<Self>) -> Entity<TextField> {
+        let field = cx.new(|cx| TextField::new("Search settings", cx).clears_on_escape().in_tab_order());
+        cx.subscribe_in(&field, window, |this, _, event, _, cx| {
+            if matches!(event, TextFieldEvent::Changed) {
+                this.choice = None;
+                this.to_top();
+                cx.notify();
+            }
+        })
+        .detach();
+        field
+    }
+
+    fn store_changed(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {
         let s = store.read(cx);
         let open = s.sheet == Some(PanelKind::Settings);
         let (boot, revision) = s.session.as_ref().map(|s| (s.boot.clone(), s.config.revision)).unwrap_or_default();
         let loaded = self.described.as_ref().map_or(0, |d| d.revision);
         let newer = revision != 0 && (boot != self.boot || revision > loaded);
+        if open && !self.was_open {
+            self.opened(window, cx);
+        }
         if open && (!self.was_open || newer) {
             self.load(cx);
         }
+        if !open {
+            self.choice = None;
+        }
         self.was_open = open;
+    }
+
+    fn opened(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.choice = None;
+        self.search.update(cx, TextField::clear);
+        window.focus(&self.search.read(cx).focus_handle(cx));
+        self.to_top();
     }
 
     fn load(&mut self, cx: &mut Context<Self>) {
@@ -88,6 +139,7 @@ impl SettingsPanel {
             return;
         }
         self.loading = true;
+        cx.notify();
         self.boot = Store::get(cx).read(cx).session.as_ref().map(|s| s.boot.clone()).unwrap_or_default();
         store::run(cx, args(&["config", "--json"]), |this, result, cx| {
             this.loading = false;
@@ -96,7 +148,7 @@ impl SettingsPanel {
                     this.load_error = None;
                     this.apply(described, cx);
                 }
-                Err(e) => this.load_error = Some(data::clean_error(&e)),
+                Err(e) => this.load_error = Some(cli::reason(&e)),
             }
             cx.notify();
         });
@@ -104,8 +156,7 @@ impl SettingsPanel {
 
     fn apply(&mut self, described: Described, cx: &mut Context<Self>) {
         for setting in described.settings.iter().filter(|s| s.edited_as_text()) {
-            let empty = setting.text().is_empty() && !setting.shown.is_empty();
-            let placeholder = if empty { setting.shown.clone() } else { setting.label.clone() };
+            let placeholder = data::placeholder(setting);
             self.sync(Role::Setting(setting.key.clone()), &setting.text(), &placeholder, cx);
         }
         for connection in described.connections.iter().filter(|c| c.takes_secret()) {
@@ -126,8 +177,8 @@ impl SettingsPanel {
         if self.fields.contains_key(&role) {
             return;
         }
-        let entity = Self::field(role.clone(), "paste the token, then enter".to_string(), true, cx);
-        self.fields.insert(role, Field { entity, base: String::new() });
+        let entity = Self::field(role.clone(), "paste the token".to_string(), true, cx);
+        self.fields.insert(role, entity);
     }
 
     fn sync_scripts(&mut self, project: &data::ProjectEntry, cx: &mut Context<Self>) {
@@ -145,41 +196,40 @@ impl SettingsPanel {
     }
 
     fn sync(&mut self, role: Role, value: &str, placeholder: &str, cx: &mut Context<Self>) {
-        if let Some(field) = self.fields.get_mut(&role) {
-            let edited = field.entity.read(cx).text() != field.base;
-            if !edited && field.base != value {
-                field.entity.update(cx, |f, cx| f.set_text(value.to_string(), cx));
-            }
-            field.base = value.to_string();
+        let entity = if let Some(entity) = self.fields.get(&role) {
+            entity.clone()
         } else {
             let entity = Self::field(role.clone(), placeholder.to_string(), false, cx);
-            entity.update(cx, |f, cx| f.set_text(value.to_string(), cx));
-            self.fields.insert(role, Field { entity, base: value.to_string() });
-        }
+            self.fields.insert(role, entity.clone());
+            entity
+        };
+        entity.update(cx, |f, cx| f.keep_saved(value.to_string(), cx));
     }
 
     fn field(role: Role, placeholder: String, masked: bool, cx: &mut Context<Self>) -> Entity<TextField> {
         let entity = cx.new(|cx| {
-            let field = TextField::new(placeholder, cx);
+            let field = TextField::new(placeholder, cx).in_tab_order().reverts_on_escape();
             if masked { field.masked() } else { field }
         });
         cx.subscribe(&entity, move |this, _, event: &TextFieldEvent, cx| match event {
             TextFieldEvent::Submit => this.submit(&role, cx),
-            TextFieldEvent::Cancel => this.revert(&role, cx),
+            TextFieldEvent::Cancel => {
+                this.errors.remove(&role);
+                cx.notify();
+            }
             TextFieldEvent::Changed => cx.notify(),
         })
         .detach();
         entity
     }
 
-    fn edited(&self, role: &Role, cx: &gpui::App) -> bool {
-        self.fields.get(role).is_some_and(|f| f.entity.read(cx).text() != f.base)
+    fn edited(&self, role: &Role, cx: &App) -> bool {
+        self.fields.get(role).is_some_and(|f| f.read(cx).edited())
     }
 
     fn revert(&mut self, role: &Role, cx: &mut Context<Self>) {
         if let Some(field) = self.fields.get(role) {
-            let base = field.base.clone();
-            field.entity.update(cx, |f, cx| f.set_text(base, cx));
+            field.update(cx, TextField::revert);
         }
         self.errors.remove(role);
         cx.notify();
@@ -189,19 +239,36 @@ impl SettingsPanel {
         self.described.as_ref()?.settings.iter().find(|s| s.key == key)
     }
 
-    fn error_of(&self, role: &Role) -> Option<Div> {
-        self.errors.get(role).map(|e| widgets::error(e.clone()))
+    fn query(&self, cx: &App) -> String {
+        self.search.read(cx).text().trim().to_string()
     }
 
-    fn ask(question: impl Into<gpui::SharedString>, go: Stateful<Div>, cx: &mut Context<Self>) -> Div {
-        widgets::confirm(
-            question,
-            ui::button("pending-cancel", "Cancel").on_click(cx.listener(|this, _, _, cx| {
-                this.pending = None;
-                cx.notify();
-            })),
-            go,
-        )
+    fn go_to(&mut self, page: String, cx: &mut Context<Self>) {
+        self.page = page;
+        self.choice = None;
+        self.search.update(cx, TextField::clear);
+        self.to_top();
+        cx.notify();
+    }
+
+    fn to_top(&self) {
+        self.scroll.set_offset(point(px(0.), px(0.)));
+    }
+
+    fn mark_saved(&mut self, role: Role, cx: &mut Context<Self>) {
+        self.saved = Some(role.clone());
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(SAVED_FOR).await;
+            let _ = this.update(cx, |this, cx| this.unmark_saved(&role, cx));
+        })
+        .detach();
+    }
+
+    fn unmark_saved(&mut self, role: &Role, cx: &mut Context<Self>) {
+        if self.saved.as_ref() == Some(role) {
+            self.saved = None;
+            cx.notify();
+        }
     }
 }
 
@@ -215,14 +282,23 @@ fn role_id(role: &Role) -> String {
 
 impl Render for SettingsPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let at = (Edge::Right, self.nav_width.size());
         div()
             .size_full()
+            .relative()
             .flex()
-            .child(self.render_nav(cx))
-            .child(widgets::page("settings-page").child(self.render_page(window, cx)))
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, _: &MouseDownEvent, _, cx| this.close_choice(cx)))
+            .on_drag_move(split::follow::<_, NavGrip>(Edge::Right, PAGE_KEEP, nav_width, cx))
+            .child(self.render_nav(window, cx))
+            .child(widgets::page("settings-page", &self.scroll).child(self.render_page(window, cx)))
+            .child(split::handle("settings-split", NavGrip, at, nav_width, cx))
     }
 }
 
-pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
+fn nav_width(panel: &mut SettingsPanel) -> &mut Split {
+    &mut panel.nav_width
+}
+
+pub(crate) fn build(window: &mut Window, cx: &mut App) -> AnyView {
     cx.new(|cx| SettingsPanel::new(window, cx)).into()
 }

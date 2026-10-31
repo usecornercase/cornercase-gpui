@@ -1,7 +1,7 @@
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, WeakEntity,
-    Window, div, prelude::FluentBuilder as _, px,
+    IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::IssuesPanel;
@@ -9,7 +9,7 @@ use super::data::{Agents, Choice, EFFORT_AGENTS, Issue, Place, Sources, StartPla
 use crate::dialogs;
 use crate::store::Store;
 use crate::theme::colours;
-use crate::ui::{self, TextField, TextFieldEvent};
+use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone, boxed};
 
 pub(super) struct Setup {
     pub issue: Issue,
@@ -82,16 +82,12 @@ fn close(cx: &mut App) {
 
 fn text_field(placeholder: &str, text: &str, clear_error: bool, cx: &mut Context<StartForm>) -> Entity<TextField> {
     let field = cx.new(|cx| {
-        let mut field = TextField::new(placeholder.to_string(), cx);
+        let mut field = TextField::new(placeholder.to_string(), cx).in_tab_order().wraps();
         field.set_text(text.to_string(), cx);
         field
     });
     cx.subscribe(&field, move |this: &mut StartForm, _, event, cx| this.on_field(event, clear_error, cx)).detach();
     field
-}
-
-fn boxed(field: &Entity<TextField>, window: &Window, cx: &App) -> Div {
-    ui::input_box(field.clone(), field.read(cx).focus_handle(cx).is_focused(window))
 }
 
 fn chips(
@@ -241,7 +237,7 @@ impl StartForm {
             .flex_col()
             .gap(px(2.))
             .child(div().text_size(px(12.)).text_color(colours::accent()).child(self.issue.key.clone()))
-            .child(div().text_color(colours::muted()).line_clamp(2).child(self.issue.title.clone()))
+            .child(div().text_color(colours::muted()).line_clamp(2).text_ellipsis().child(self.issue.title.clone()))
     }
 
     fn now_or_later(&self, cx: &mut Context<Self>) -> Div {
@@ -299,8 +295,9 @@ impl StartForm {
     fn place_field(&self, cx: &mut Context<Self>) -> Option<Div> {
         if !self.places.choose {
             let place = self.place()?;
-            let what = if place.worktree { "a new worktree of" } else { "a new tab in" };
-            return Some(ui::dim(format!("Works in {what} {}, the issue's repository.", place.label)));
+            let what = if place.worktree { "A new worktree of" } else { "A new tab in" };
+            let text = format!("{what} {}, the issue's repository", place.label);
+            return Some(ui::field("Where", div().text_size(px(12.5)).text_color(colours::soft()).child(text)));
         }
         let places: Vec<AnyElement> =
             self.places.list.iter().enumerate().map(|(i, place)| self.place_chip(i, place, cx)).collect();
@@ -324,20 +321,12 @@ impl StartForm {
             .into_any_element()
     }
 
-    fn naming_fields(&self, window: &Window, cx: &App) -> Option<Div> {
-        if self.worktree() {
-            return Some(
-                div()
-                    .flex()
-                    .gap(px(10.))
-                    .child(div().flex_1().child(ui::field("Branch", boxed(&self.branch, window, cx))))
-                    .child(div().flex_1().child(ui::field(
-                        if self.schedule { "Name" } else { "Workspace name" },
-                        boxed(&self.name, window, cx),
-                    ))),
-            );
-        }
-        self.schedule.then(|| ui::field("Name", boxed(&self.name, window, cx)))
+    fn naming_fields(&self, window: &Window, cx: &App) -> Vec<Div> {
+        let worktree = self.worktree();
+        let name = if self.schedule { "Name" } else { "Workspace name" };
+        let branch = worktree.then(|| ui::field("Branch", boxed(&self.branch, window, cx)));
+        let named = (worktree || self.schedule).then(|| ui::field(name, boxed(&self.name, window, cx)));
+        branch.into_iter().chain(named).collect()
     }
 
     fn footnote(&self) -> Div {
@@ -349,13 +338,13 @@ impl StartForm {
     }
 
     fn buttons(&self, cx: &mut Context<Self>) -> Div {
-        let label: SharedString = if self.schedule { "Schedule".into() } else { "Start".into() };
+        let (glyph, label) = if self.schedule { (Icon::Queue, "Schedule") } else { (Icon::Play, "Start") };
         div()
             .flex()
             .gap(px(8.))
             .child(ui::button("start-cancel", "Cancel").on_click(|_: &ClickEvent, _, cx| close(cx)))
             .child(
-                ui::primary_button("start-go", label)
+                ui::icon_text_button("start-go", glyph, label, Tone::Primary)
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
             )
     }

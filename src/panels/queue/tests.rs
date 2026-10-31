@@ -1,8 +1,12 @@
 use serde_json::json;
 
-use super::data::{Place, agent_choices, entries, folder_name, mode_choices, place_label, status_label};
+use super::data::{
+    Body, Click, Entry, Group, Place, State, agent_choices, entries, folder_name, live_pane, mode_choices, notice,
+    place_label, sections, sentence, status_label,
+};
 use super::draft::{Draft, Target, When};
 use super::time::{Civil, days, local, relative, when_label};
+use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 
 #[test]
 fn reads_entries_leniently() {
@@ -23,9 +27,108 @@ fn reads_entries_leniently() {
     assert_eq!(list[0].server.as_deref(), Some("1-2"));
     assert_eq!(list[1].reason.as_deref(), Some("agent missing"));
     assert!(list[1].runnable() && !list[0].runnable());
-    assert_eq!(status_label(&list[1], None, None), "failed · agent missing");
-    assert_eq!(status_label(&list[0], Some("other"), None), "started · pane closed");
     assert_eq!(entries(None), vec![]);
+}
+
+fn entry(id: u64, state: &str) -> Entry {
+    Entry { id, state: state.into(), label: format!("entry {id}"), ..Entry::default() }
+}
+
+fn ids(list: &[Entry], filter: &str) -> Vec<(Group, Vec<u64>)> {
+    sections(list, filter, None)
+        .into_iter()
+        .map(|(group, shown)| (group, shown.iter().map(|e| e.id).collect()))
+        .collect()
+}
+
+fn session_with_pane(pane: u64) -> Session {
+    let tab = Tab { panes: vec![PaneInfo { id: pane, ..PaneInfo::default() }], ..Tab::default() };
+    let workspace = Workspace { tabs: vec![tab], ..Workspace::default() };
+    Session { projects: vec![Project { workspaces: vec![workspace], ..Project::default() }], ..Session::default() }
+}
+
+#[test]
+fn every_state_falls_in_its_section() {
+    let states = ["pending", "starting", "started", "failed", "missed", "cancelled"];
+    let groups: Vec<Group> = states.iter().map(|s| State::of(&entry(1, s)).group()).collect();
+    assert_eq!(
+        groups,
+        [Group::Scheduled, Group::Scheduled, Group::Started, Group::Unstarted, Group::Unstarted, Group::Other]
+    );
+}
+
+#[test]
+fn what_did_not_start_comes_first_and_each_section_keeps_the_servers_order() {
+    let list = [entry(1, "started"), entry(2, "missed"), entry(3, "pending"), entry(4, "failed"), entry(5, "pending")];
+    assert_eq!(
+        ids(&list, ""),
+        [(Group::Unstarted, vec![2, 4]), (Group::Scheduled, vec![3, 5]), (Group::Started, vec![1])]
+    );
+}
+
+#[test]
+fn the_scheduled_section_stays_to_say_that_nothing_is_scheduled() {
+    assert_eq!(ids(&[entry(1, "started")], ""), [(Group::Scheduled, vec![]), (Group::Started, vec![1])]);
+}
+
+#[test]
+fn a_filter_leaves_out_the_sections_it_empties() {
+    let list = [Entry { label: "release notes".into(), ..entry(1, "started") }, entry(2, "pending")];
+    assert_eq!(ids(&list, "release"), [(Group::Started, vec![1])]);
+}
+
+#[test]
+fn a_started_entry_names_its_pane_only_while_that_pane_lives() {
+    let started = Entry { pane: Some(9), server: Some("boot-1".into()), ..entry(1, "started") };
+    let session = session_with_pane(9);
+    assert_eq!(live_pane(&started, Some("boot-1"), Some(&session)), Some(9));
+    assert_eq!(live_pane(&started, Some("boot-2"), Some(&session)), None);
+    assert_eq!(live_pane(&started, Some("boot-1"), Some(&session_with_pane(4))), None);
+    assert_eq!(live_pane(&Entry { state: "failed".into(), ..started }, Some("boot-1"), Some(&session)), None);
+}
+
+#[test]
+fn the_status_names_the_state_and_the_pane() {
+    let labels: Vec<String> = ["pending", "starting", "failed", "missed", "cancelled"]
+        .iter()
+        .map(|s| status_label(&entry(1, s), None))
+        .collect();
+    assert_eq!(labels, ["Pending", "Starting…", "Failed", "Missed", "cancelled"]);
+    assert_eq!(status_label(&entry(1, "started"), Some(9)), "Started · pane 9");
+    assert_eq!(status_label(&entry(1, "started"), None), "Started · pane closed");
+}
+
+#[test]
+fn a_failed_entry_says_why_and_a_missed_one_what_happened() {
+    let failed = Entry { reason: Some(" agent missing".into()), ..entry(1, "failed") };
+    assert_eq!(notice(&failed).as_deref(), Some("Agent missing"));
+    assert_eq!(notice(&entry(2, "failed")), None);
+    assert!(notice(&entry(3, "missed")).is_some_and(|n| n.contains("Start it now")));
+    assert_eq!(notice(&entry(4, "pending")), None);
+}
+
+#[test]
+fn an_error_reads_as_a_sentence() {
+    assert_eq!(sentence("write the prompt it starts with"), "Write the prompt it starts with");
+    assert_eq!(sentence("éxito"), "Éxito");
+    assert_eq!(sentence(""), "");
+}
+
+#[test]
+fn a_click_edits_what_can_run_and_shows_a_live_pane() {
+    assert_eq!(Click::of(&entry(1, "missed"), None, false), Click::Edit);
+    assert_eq!(Click::of(&entry(1, "pending"), None, true), Click::Nothing);
+    assert_eq!(Click::of(&entry(1, "started"), Some(9), false), Click::Open(9));
+    assert_eq!(Click::of(&entry(1, "started"), None, false), Click::Nothing);
+    assert_eq!(Click::of(&entry(1, "starting"), None, false), Click::Nothing);
+}
+
+#[test]
+fn the_empty_page_shows_once_the_queue_is_known_to_be_empty() {
+    assert_eq!(Body::of(false, 0, 0), Body::Loading);
+    assert_eq!(Body::of(true, 0, 0), Body::Empty);
+    assert_eq!(Body::of(true, 3, 0), Body::NoMatch);
+    assert_eq!(Body::of(true, 3, 1), Body::List);
 }
 
 #[test]

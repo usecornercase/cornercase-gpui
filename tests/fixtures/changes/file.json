@@ -1,0 +1,122 @@
+{
+  "added": 2,
+  "digest": "d5dccd1bdadf10a2",
+  "fold": "open",
+  "hunks": [
+    {
+      "context": "",
+      "lines": [
+        {
+          "kind": "context",
+          "new": 1,
+          "old": 1,
+          "text": "1"
+        },
+        {
+          "kind": "context",
+          "new": 2,
+          "old": 2,
+          "text": "2"
+        },
+        {
+          "kind": "removed",
+          "new": null,
+          "old": 3,
+          "text": "3"
+        },
+        {
+          "kind": "added",
+          "new": 3,
+          "old": null,
+          "text": "three"
+        },
+        {
+          "kind": "context",
+          "new": 4,
+          "old": 4,
+          "text": "4"
+        },
+        {
+          "kind": "context",
+          "new": 5,
+          "old": 5,
+          "text": "5"
+        },
+        {
+          "kind": "context",
+          "new": 6,
+          "old": 6,
+          "text": "6"
+        }
+      ],
+      "new_start": 1,
+      "old_start": 1
+    },
+    {
+      "context": "",
+      "lines": [
+        {
+          "kind": "context",
+          "new": 27,
+          "old": 27,
+          "text": "27"
+        },
+        {
+          "kind": "context",
+          "new": 28,
+          "old": 28,
+          "text": "28"
+        },
+        {
+          "kind": "context",
+          "new": 29,
+          "old": 29,
+          "text": "29"
+        },
+        {
+          "kind": "removed",
+          "new": null,
+          "old": 30,
+          "text": "30"
+        },
+        {
+          "kind": "added",
+          "new": 30,
+          "old": null,
+          "text": "thirty"
+        },
+        {
+          "kind": "context",
+          "new": 31,
+          "old": 31,
+          "text": "31"
+        },
+        {
+          "kind": "context",
+          "new": 32,
+          "old": 32,
+          "text": "32"
+        },
+        {
+          "kind": "context",
+          "new": 33,
+          "old": 33,
+          "text": "33"
+        }
+      ],
+      "new_start": 27,
+      "old_start": 27
+    }
+  ],
+  "mode": "uncommitted",
+  "old_path": null,
+  "path": "a.txt",
+  "removed": 2,
+  "staged": "no",
+  "status": "modified",
+  "styles": [
+    {}
+  ],
+  "viewed": false,
+  "workspace": 43
+}

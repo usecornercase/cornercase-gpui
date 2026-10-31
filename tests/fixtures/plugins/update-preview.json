@@ -1,0 +1,49 @@
+{
+  "id": "acme.notes",
+  "name": "Notes",
+  "version": "1.3.0",
+  "description": "Notes beside each workspace.",
+  "repo": "acme/notes",
+  "url": "https://github.com/acme/notes.git",
+  "ref": "main",
+  "subdir": null,
+  "commit": "89abcdef0123456789abcdef0123456789abcdef",
+  "permissions": [
+    "read",
+    "send"
+  ],
+  "download": null,
+  "build": [
+    [
+      "make",
+      "build"
+    ]
+  ],
+  "runs": [
+    {
+      "entry": "service",
+      "id": "sync",
+      "command": [
+        "bin/notes",
+        "sync"
+      ]
+    }
+  ],
+  "replacing": {
+    "commit": "0123456789abcdef0123456789abcdef01234567",
+    "enabled": true
+  },
+  "lines": [
+    "Notes 1.3.0 (acme.notes)",
+    "Notes beside each workspace.",
+    "From acme/notes at commit 89abcdef0123456789abcdef0123456789abcdef (`main`).",
+    "It asks for read, send; that is shown, not enforced.",
+    "Installing it runs, in its folder:",
+    "  make build",
+    "Once on, it runs:",
+    "  service sync: bin/notes sync",
+    "It replaces the version you have, which is on: its new commands run right away.",
+    "Once on, it runs as you and can do anything you can, in every terminal: read its code or trust its author."
+  ],
+  "up_to_date": false
+}

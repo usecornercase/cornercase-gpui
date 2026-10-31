@@ -4,10 +4,12 @@ use gpui::{
 };
 
 use crate::model::Session;
-use crate::theme::{FONT_FAMILY, colours};
+use crate::store::Store;
+use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui;
 
 use super::pieces::plural;
+use super::selection::switching_base;
 use super::wire::{Base, Mode, State};
 use super::{ChangesPanel, Scope};
 
@@ -48,7 +50,7 @@ fn default_label(base: &Base) -> String {
 }
 
 fn branch_name(branch: &str) -> impl IntoElement + use<> {
-    div().flex_1().min_w(px(0.)).truncate().font_family(FONT_FAMILY).text_size(px(12.)).child(branch.to_string())
+    div().flex_1().min_w(px(0.)).font_family(FONT_FAMILY).text_size(px(12.)).child(ui::one_line(branch.to_string()))
 }
 
 impl ChangesPanel {
@@ -57,10 +59,10 @@ impl ChangesPanel {
             .flex_none()
             .flex()
             .flex_col()
-            .gap(px(8.))
-            .px(px(10.))
-            .pt(px(10.))
-            .pb(px(8.))
+            .gap(px(10.))
+            .px(px(12.))
+            .pt(px(12.))
+            .pb(px(10.))
             .border_b_1()
             .border_color(colours::border())
             .child(self.scope_tabs(cx))
@@ -101,6 +103,10 @@ impl ChangesPanel {
     }
 
     fn base_button(&self, label: String, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let workspace = self.follow.and_then(|f| f.workspace);
+        if workspace.is_some_and(|w| Store::get(cx).read(cx).busy(&switching_base(w))) {
+            return ui::busy_button("base", "switching…", ui::Tone::Plain).py(px(1.)).text_size(px(11.));
+        }
         ui::button("base", label)
             .py(px(1.))
             .text_size(px(11.))
@@ -115,14 +121,14 @@ impl ChangesPanel {
             .items_center()
             .gap(px(8.))
             .text_size(px(11.))
-            .child(div().flex_1().min_w(px(0.)).truncate().text_color(colours::muted()).child(place))
+            .child(div().flex_1().min_w(px(0.)).text_color(colours::muted()).child(ui::one_line(place)))
             .when_some(self.totals(), |d, totals| d.child(totals_view(&totals)))
             .when_some(self.base_label(), |d, label| d.child(self.base_button(label, cx)))
     }
 
     fn render_bases(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let Some(base) = &self.base else {
-            return div().child(ui::dim("reading the branches…"));
+            return div().child(ui::busy("bases-loading", "reading the branches…").text_size(px(11.)));
         };
         let default = ui::row("base-default", false)
             .py(px(3.))
@@ -139,7 +145,7 @@ impl ChangesPanel {
                 .flex()
                 .flex_col()
                 .p(px(4.))
-                .rounded(px(6.))
+                .rounded(px(radius::CONTROL))
                 .bg(colours::panel())
                 .border_1()
                 .border_color(colours::border())

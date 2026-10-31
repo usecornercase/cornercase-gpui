@@ -9,8 +9,8 @@ use gpui::{
 };
 
 use crate::panels::queue::toast_outcome;
-use crate::store::{self, Store, ToastKind, args};
-use crate::theme::colours;
+use crate::store::{self, Busy, Store, ToastKind, args};
+use crate::theme::{colours, radius};
 use crate::ui::{self, TextField, TextFieldEvent};
 use data::{Item, Target, drop_on, first_and_last, items, sent_message, short, step, targets, undo_number};
 
@@ -24,18 +24,7 @@ struct Dragged {
 
 impl Render for Dragged {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .max_w(px(360.))
-            .px(px(10.))
-            .py(px(5.))
-            .rounded(px(5.))
-            .bg(colours::selected())
-            .border_1()
-            .border_color(colours::accent())
-            .text_size(px(13.))
-            .text_color(colours::text())
-            .shadow_lg()
-            .child(self.text.clone())
+        ui::glass::dragged().max_w(px(360.)).px(px(10.)).py(px(5.)).text_size(px(13.)).child(self.text.clone())
     }
 }
 
@@ -57,6 +46,10 @@ pub(crate) struct TodoPanel {
     sending: Option<u64>,
     undo: Option<Undo>,
     _subscriptions: Vec<Subscription>,
+}
+
+fn sending(id: u64) -> String {
+    format!("todo-send:{id}")
 }
 
 fn cmd(command: Vec<String>, cx: &App) {
@@ -85,16 +78,12 @@ fn drop_marker<E: gpui::InteractiveElement>(element: E) -> E {
 
 impl TodoPanel {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let new_item = cx.new(|cx| TextField::new("New TODO", cx));
+        let new_item = cx.new(|cx| TextField::new("New TODO", cx).clears_on_escape().wraps());
         let subscriptions = vec![
             cx.observe(&Store::get(cx), |_, _, cx| cx.notify()),
-            cx.subscribe_in(&new_item, window, |this, field, event, window, cx| match event {
+            cx.subscribe_in(&new_item, window, |this, _, event, _, cx| match event {
                 TextFieldEvent::Submit => this.add(cx),
-                TextFieldEvent::Cancel => {
-                    field.update(cx, TextField::clear);
-                    window.blur();
-                }
-                TextFieldEvent::Changed => cx.notify(),
+                TextFieldEvent::Changed | TextFieldEvent::Cancel => cx.notify(),
             }),
         ];
         Self { new_item, editing: None, sending: None, undo: None, _subscriptions: subscriptions }
@@ -117,7 +106,7 @@ impl TodoPanel {
     fn start_edit(&mut self, item: &Item, window: &mut Window, cx: &mut Context<Self>) {
         self.commit_edit(cx);
         let field = cx.new(|cx| {
-            let mut field = TextField::new("What to do", cx);
+            let mut field = TextField::new("What to do", cx).wraps();
             field.set_text(item.text.clone(), cx);
             field
         });
@@ -205,7 +194,9 @@ impl TodoPanel {
         self.sending = None;
         let command = args(&["todo", "send", &id.to_string(), "--pane", &target.pane.to_string(), "--json"]);
         let label = target.label;
-        store::run_json(cx, command, move |_: &mut Self, answer, cx| {
+        let busy = Busy::new(sending(id), format!("Sending the TODO to {label}…"));
+        store::run_busy(cx, busy, command, move |_: &mut Self, answer, cx| {
+            let answer = answer.and_then(|out| serde_json::from_str::<serde_json::Value>(&out).map_err(Into::into));
             toast_outcome(answer, |answer| sent_message(&answer, &label), cx);
         });
         cx.notify();
@@ -288,7 +279,7 @@ impl TodoPanel {
     fn list(&self, loaded: bool, items: &[Item], window: &Window, cx: &mut Context<Self>) -> Div {
         let mut list = div().flex().flex_col().gap(px(1.)).px(px(6.));
         if !loaded {
-            list = list.child(ui::note("Loading…"));
+            list = list.child(ui::loading("Loading…"));
         } else if items.is_empty() {
             list = list.child(ui::note("Nothing to do. Add an item below; any client sees the same list."));
         }
@@ -303,7 +294,7 @@ impl TodoPanel {
     }
 
     fn end_drop(cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        drop_marker(div().id("todo-end").h(px(24.)).rounded(px(5.)))
+        drop_marker(div().id("todo-end").h(px(24.)))
             .on_drop(cx.listener(|_, dragged: &Dragged, _, cx| Self::drop_at_end(dragged.id, cx)))
     }
 
@@ -318,10 +309,10 @@ impl TodoPanel {
                 .group(SharedString::from(format!("todo-{id}")))
                 .flex()
                 .items_start()
-                .gap(px(6.))
-                .px(px(6.))
-                .py(px(5.))
-                .rounded(px(5.))
+                .gap(px(8.))
+                .px(px(8.))
+                .py(px(6.))
+                .rounded(px(radius::CONTROL))
                 .text_size(px(13.))
                 .text_color(colours::text())
                 .hover(|s| s.bg(colours::hover()))
@@ -366,6 +357,9 @@ impl TodoPanel {
 
     fn item_buttons(&self, item: &Item, items: &[Item], cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let id = item.id;
+        if Store::get(cx).read(cx).busy(&sending(id)) {
+            return div().flex_none().px(px(6.)).child(ui::spinner(("todo-sending", id), 12., colours::accent()));
+        }
         let editing = self.editing.as_ref().is_some_and(|e| e.id == id);
         let sending = self.sending == Some(id);
         let (first, last) = first_and_last(items, item);
@@ -402,7 +396,7 @@ impl TodoPanel {
             .p(px(4.))
             .flex()
             .flex_col()
-            .rounded(px(6.))
+            .rounded(px(radius::CONTROL))
             .bg(colours::panel())
             .border_1()
             .border_color(colours::border())
@@ -418,44 +412,27 @@ impl TodoPanel {
         ui::row(("todo-target", target.pane), false)
             .text_size(px(12.))
             .child(ui::badge(target.status.as_deref()))
-            .child(div().flex_1().min_w(px(0.)).truncate().child(target.label.clone()))
+            .child(div().flex_1().min_w(px(0.)).child(ui::one_line(target.label.clone())))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.send(id, target.clone(), cx)))
             .into_any_element()
     }
 
     fn undo_bar(&self, cx: &mut Context<Self>) -> Option<Div> {
         let undo = self.undo.as_ref()?;
-        Some(
-            div()
-                .flex_none()
-                .mx(px(10.))
-                .mb(px(6.))
-                .px(px(10.))
-                .py(px(6.))
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .rounded(px(6.))
-                .bg(colours::panel())
-                .border_1()
-                .border_color(colours::border())
-                .child(div().flex_1().min_w(px(0.)).truncate().text_size(px(12.)).child(undo.what.clone()))
-                .child(
-                    ui::primary_button("todo-undo", "Undo")
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.restore(cx))),
-                ),
-        )
+        let button = ui::primary_button("todo-undo", "Undo")
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.restore(cx)));
+        Some(ui::undo_bar(undo.what.clone(), button).mx(px(12.)).mb(px(8.)))
     }
 
     fn new_item_field(&self, window: &Window, cx: &App) -> impl IntoElement + use<> {
         let focused = self.new_item.read(cx).focus_handle(cx).is_focused(window);
-        div().flex_none().px(px(10.)).pb(px(10.)).pt(px(4.)).child(ui::input_box(
+        div().flex_none().px(px(12.)).pb(px(12.)).pt(px(6.)).child(ui::input_box(
             div()
                 .flex()
-                .items_center()
+                .items_start()
                 .gap(px(6.))
                 .child(div().text_color(if focused { colours::accent() } else { colours::faint() }).child("+"))
-                .child(div().flex_1().child(self.new_item.clone())),
+                .child(div().flex_1().min_w(px(0.)).child(self.new_item.clone())),
             focused,
         ))
     }

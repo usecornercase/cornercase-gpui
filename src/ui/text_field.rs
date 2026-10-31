@@ -1,10 +1,10 @@
 use std::ops::Range;
 
 use gpui::{
-    App, Bounds, ClipboardItem, Context, CursorStyle, ElementId, ElementInputHandler, Entity, EntityInputHandler,
+    App, AvailableSpace, Bounds, ClipboardItem, Context, CursorStyle, ElementInputHandler, Entity, EntityInputHandler,
     EventEmitter, FocusHandle, Focusable, GlobalElementId, Hsla, KeyBinding, LayoutId, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, ShapedLine, SharedString, Style, TextRun, UTF16Selection,
-    UnderlineStyle, Window, actions, div, fill, point, prelude::*, px, relative, size,
+    MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, SharedString, Size, Style, TextAlign, TextRun,
+    UTF16Selection, UnderlineStyle, Window, WrappedLine, actions, div, fill, point, prelude::*, px, relative, size,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -27,6 +27,8 @@ actions!(
         Paste,
         Cut,
         Copy,
+        FocusNext,
+        FocusPrevious,
     ]
 );
 
@@ -37,10 +39,41 @@ pub(crate) struct TextField {
     selected_range: Range<usize>,
     selection_reversed: bool,
     marked_range: Option<Range<usize>>,
-    last_layout: Option<ShapedLine>,
-    last_bounds: Option<Bounds<Pixels>>,
+    last_layout: Option<Layout>,
     is_selecting: bool,
+    options: Options,
+    saved: Option<SharedString>,
+}
+
+struct Layout {
+    line: WrappedLine,
+    line_height: Pixels,
+    bounds: Bounds<Pixels>,
+}
+
+#[derive(Default)]
+struct Options {
     masked: bool,
+    clears_on_escape: bool,
+    wraps: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Escaped {
+    Cancel,
+    Clear,
+    Revert,
+    Pass,
+}
+
+fn escaped(clears: bool, content: &str, saved: Option<&str>) -> Escaped {
+    match saved {
+        Some(saved) if content != saved => Escaped::Revert,
+        Some(_) => Escaped::Pass,
+        None if !clears => Escaped::Cancel,
+        None if content.is_empty() => Escaped::Pass,
+        None => Escaped::Clear,
+    }
 }
 
 impl TextField {
@@ -147,16 +180,15 @@ impl TextField {
             return 0;
         }
 
-        let (Some(bounds), Some(line)) = (self.last_bounds.as_ref(), self.last_layout.as_ref()) else {
-            return 0;
-        };
-        if position.y < bounds.top() {
+        let Some(layout) = self.last_layout.as_ref() else { return 0 };
+        if position.y < layout.bounds.top() {
             return 0;
         }
-        if position.y > bounds.bottom() {
+        if position.y >= layout.bounds.bottom() {
             return self.content.len();
         }
-        line.closest_index_for_x(position.x - bounds.left())
+        let local = position.relative_to(&layout.bounds.origin);
+        layout.line.closest_index_for_position(local, layout.line_height).unwrap_or_else(|index| index)
     }
 
     fn select_to(&mut self, offset: usize, cx: &mut Context<Self>) {
@@ -305,11 +337,14 @@ impl EntityInputHandler for TextField {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
-        let last_layout = self.last_layout.as_ref()?;
+        let layout = self.last_layout.as_ref()?;
         let range = self.range_from_utf16(&range_utf16);
+        let start = layout.line.position_for_index(range.start, layout.line_height)?;
+        let end = layout.line.position_for_index(range.end, layout.line_height).filter(|end| end.y == start.y);
+        let top = bounds.top() + start.y;
         Some(Bounds::from_corners(
-            point(bounds.left() + last_layout.x_for_index(range.start), bounds.top()),
-            point(bounds.left() + last_layout.x_for_index(range.end), bounds.bottom()),
+            point(bounds.left() + start.x, top),
+            point(bounds.left() + end.unwrap_or(start).x, top + layout.line_height),
         ))
     }
 
@@ -319,10 +354,9 @@ impl EntityInputHandler for TextField {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
-        let line_point = self.last_bounds?.localize(&point)?;
-        let last_layout = self.last_layout.as_ref()?;
-
-        let utf8_index = last_layout.index_for_x(point.x - line_point.x)?;
+        let layout = self.last_layout.as_ref()?;
+        let local = layout.bounds.localize(&point)?;
+        let utf8_index = layout.line.index_for_position(local, layout.line_height).ok()?;
         Some(self.offset_to_utf16(utf8_index))
     }
 }
@@ -331,10 +365,11 @@ struct TextElement {
     input: Entity<TextField>,
 }
 
+#[derive(Default)]
 struct PrepaintState {
-    line: Option<ShapedLine>,
+    line: Option<WrappedLine>,
     cursor: Option<PaintQuad>,
-    selection: Option<PaintQuad>,
+    selection: Vec<PaintQuad>,
 }
 
 impl IntoElement for TextElement {
@@ -349,13 +384,7 @@ impl Element for TextElement {
     type RequestLayoutState = ();
     type PrepaintState = PrepaintState;
 
-    fn id(&self) -> Option<ElementId> {
-        None
-    }
-
-    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
-        None
-    }
+    super::anonymous_element!();
 
     fn request_layout(
         &mut self,
@@ -366,8 +395,24 @@ impl Element for TextElement {
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut style = Style::default();
         style.size.width = relative(1.).into();
-        style.size.height = window.line_height().into();
-        (window.request_layout(style, [], cx), ())
+        let line_height = window.line_height();
+        if !self.input.read(cx).options.wraps {
+            style.size.height = line_height.into();
+            return (window.request_layout(style, [], cx), ());
+        }
+        let (text, runs, font_size) = self.shaping(window, cx);
+        let layout = window.request_measured_layout(style, move |known, available, window, _| {
+            let width = known.width.or(match available.width {
+                AvailableSpace::Definite(width) => Some(width),
+                _ => None,
+            });
+            let rows = window
+                .text_system()
+                .shape_text(text.clone(), font_size, &runs, width, None)
+                .map_or(1, |lines| lines.iter().map(|line| line.wrap_boundaries().len() + 1).sum());
+            Size { width: width.unwrap_or_default(), height: line_height * rows }
+        });
+        (layout, ())
     }
 
     fn prepaint(
@@ -379,21 +424,20 @@ impl Element for TextElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
+        let (text, runs, font_size) = self.shaping(window, cx);
         let input = self.input.read(cx);
-        let style = window.text_style();
-        let (display_text, text_color) = input.display_text(style.color);
-        let run = TextRun {
-            len: display_text.len(),
-            font: style.font(),
-            color: text_color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
+        let wrap_width = input.options.wraps.then_some(bounds.size.width);
+        let shaped = window.text_system().shape_text(text, font_size, &runs, wrap_width, None);
+        let Some(line) = shaped.ok().and_then(|lines| lines.into_iter().next()) else {
+            return PrepaintState::default();
         };
-        let runs = text_runs(run, input.marked_range.as_ref());
-        let font_size = style.font_size.to_pixels(window.rem_size());
-        let line = window.text_system().shape_line(display_text, font_size, &runs, None);
-        let (selection, cursor) = selection_or_cursor(&line, bounds, &input.selected_range, input.cursor_offset());
+        let at = Place { bounds, line_height: window.line_height() };
+        let selected = &input.selected_range;
+        let (selection, cursor) = if selected.is_empty() {
+            (Vec::new(), at.caret(&line, input.cursor_offset()))
+        } else {
+            (at.selection(&line, selected), None)
+        };
         PrepaintState { line: Some(line), cursor, selection }
     }
 
@@ -409,11 +453,12 @@ impl Element for TextElement {
     ) {
         let focus_handle = self.input.read(cx).focus_handle.clone();
         window.handle_input(&focus_handle, ElementInputHandler::new(bounds, self.input.clone()), cx);
-        if let Some(selection) = prepaint.selection.take() {
+        for selection in prepaint.selection.drain(..) {
             window.paint_quad(selection);
         }
         let Some(line) = prepaint.line.take() else { return };
-        let _ = line.paint(bounds.origin, window.line_height(), window, cx);
+        let line_height = window.line_height();
+        let _ = line.paint(bounds.origin, line_height, TextAlign::Left, None, window, cx);
 
         if focus_handle.is_focused(window)
             && let Some(cursor) = prepaint.cursor.take()
@@ -421,19 +466,35 @@ impl Element for TextElement {
             window.paint_quad(cursor);
         }
 
-        self.input.update(cx, |input, _cx| {
-            input.last_layout = Some(line);
-            input.last_bounds = Some(bounds);
-        });
+        self.input.update(cx, |input, _cx| input.last_layout = Some(Layout { line, line_height, bounds }));
+    }
+}
+
+impl TextElement {
+    fn shaping(&self, window: &Window, cx: &App) -> (SharedString, Vec<TextRun>, Pixels) {
+        let input = self.input.read(cx);
+        let style = window.text_style();
+        let (display_text, text_color) = input.display_text(style.color);
+        let run = TextRun {
+            len: display_text.len(),
+            font: style.font(),
+            color: text_color,
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let runs = text_runs(run, input.marked_range.as_ref());
+        (display_text, runs, style.font_size.to_pixels(window.rem_size()))
     }
 }
 
 impl TextField {
     fn display_text(&self, colour: Hsla) -> (SharedString, Hsla) {
         if self.content.is_empty() {
-            return (self.placeholder.clone(), crate::theme::colours::faint().into());
+            return (self.placeholder.clone(), crate::theme::colours::muted().into());
         }
-        let shown = if self.masked { "•".repeat(self.content.chars().count()).into() } else { self.content.clone() };
+        let shown =
+            if self.options.masked { "•".repeat(self.content.chars().count()).into() } else { self.content.clone() };
         (shown, colour)
     }
 }
@@ -455,23 +516,51 @@ fn text_runs(run: TextRun, marked: Option<&Range<usize>>) -> Vec<TextRun> {
     .collect()
 }
 
-fn selection_or_cursor(
-    line: &ShapedLine,
+struct Place {
     bounds: Bounds<Pixels>,
-    selected: &Range<usize>,
-    cursor: usize,
-) -> (Option<PaintQuad>, Option<PaintQuad>) {
-    if selected.is_empty() {
-        let at = point(bounds.left() + line.x_for_index(cursor), bounds.top());
-        let caret =
-            fill(Bounds::new(at, size(px(2.), bounds.bottom() - bounds.top())), crate::theme::colours::accent());
-        return (None, Some(caret));
+    line_height: Pixels,
+}
+
+impl Place {
+    fn caret(&self, line: &WrappedLine, cursor: usize) -> Option<PaintQuad> {
+        let at = line.position_for_index(cursor, self.line_height)?;
+        let area = Bounds::new(self.bounds.origin + at, size(px(2.), self.line_height));
+        Some(fill(area, crate::theme::colours::accent()))
     }
-    let area = Bounds::from_corners(
-        point(bounds.left() + line.x_for_index(selected.start), bounds.top()),
-        point(bounds.left() + line.x_for_index(selected.end), bounds.bottom()),
-    );
-    (Some(fill(area, gpui::rgba(0x7a_a2_f7_44))), None)
+
+    fn selection(&self, line: &WrappedLine, selected: &Range<usize>) -> Vec<PaintQuad> {
+        let layout = &line.unwrapped_layout;
+        let starts = row_starts(line);
+        selected_rows(&starts, line.len(), selected)
+            .into_iter()
+            .map(|(row, range)| {
+                let x = |index| self.bounds.left() + layout.x_for_index(index) - layout.x_for_index(starts[row]);
+                let top = self.bounds.top() + self.line_height * row;
+                let area =
+                    Bounds::from_corners(point(x(range.start), top), point(x(range.end), top + self.line_height));
+                fill(area, crate::theme::colours::selection())
+            })
+            .collect()
+    }
+}
+
+fn row_starts(line: &WrappedLine) -> Vec<usize> {
+    let runs = &line.unwrapped_layout.runs;
+    let wraps = line.wrap_boundaries().iter().map(|wrap| runs[wrap.run_ix].glyphs[wrap.glyph_ix].index);
+    std::iter::once(0).chain(wraps).collect()
+}
+
+fn selected_rows(starts: &[usize], len: usize, selected: &Range<usize>) -> Vec<(usize, Range<usize>)> {
+    let ends = starts.iter().skip(1).copied().chain([len]);
+    starts
+        .iter()
+        .zip(ends)
+        .enumerate()
+        .filter_map(|(row, (&start, end))| {
+            let range = selected.start.max(start)..selected.end.min(end);
+            (range.start < range.end).then_some((row, range))
+        })
+        .collect()
 }
 
 impl Render for TextField {
@@ -496,7 +585,9 @@ impl Render for TextField {
             .on_action(cx.listener(Self::cut))
             .on_action(cx.listener(Self::copy))
             .on_action(cx.listener(|_, _: &Submit, _, cx| cx.emit(TextFieldEvent::Submit)))
-            .on_action(cx.listener(|_, _: &Cancel, _, cx| cx.emit(TextFieldEvent::Cancel)))
+            .on_action(cx.listener(Self::cancel))
+            .on_action(cx.listener(Self::focus_next))
+            .on_action(cx.listener(Self::focus_previous))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
@@ -543,6 +634,8 @@ pub(crate) fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, ctx),
         KeyBinding::new("enter", Submit, ctx),
         KeyBinding::new("escape", Cancel, ctx),
+        KeyBinding::new("tab", FocusNext, ctx),
+        KeyBinding::new("shift-tab", FocusPrevious, ctx),
     ]);
 }
 
@@ -556,15 +649,74 @@ impl TextField {
             selection_reversed: false,
             marked_range: None,
             last_layout: None,
-            last_bounds: None,
             is_selecting: false,
-            masked: false,
+            options: Options::default(),
+            saved: None,
         }
     }
 
     pub(crate) fn masked(mut self) -> Self {
-        self.masked = true;
+        self.options.masked = true;
         self
+    }
+
+    pub(crate) fn in_tab_order(mut self) -> Self {
+        self.focus_handle = self.focus_handle.tab_stop(true);
+        self
+    }
+
+    pub(crate) fn clears_on_escape(mut self) -> Self {
+        self.options.clears_on_escape = true;
+        self
+    }
+
+    pub(crate) fn wraps(mut self) -> Self {
+        self.options.wraps = true;
+        self
+    }
+
+    pub(crate) fn reverts_on_escape(mut self) -> Self {
+        self.saved = Some(SharedString::default());
+        self
+    }
+
+    pub(crate) fn edited(&self) -> bool {
+        self.saved.as_ref().is_some_and(|saved| *saved != self.content)
+    }
+
+    pub(crate) fn keep_saved(&mut self, text: impl Into<SharedString>, cx: &mut Context<Self>) {
+        let text = text.into();
+        let follow = !self.edited();
+        self.saved = Some(text.clone());
+        if follow && self.content != text {
+            self.set_text(text, cx);
+        }
+    }
+
+    pub(crate) fn revert(&mut self, cx: &mut Context<Self>) {
+        if let Some(saved) = self.saved.clone() {
+            self.set_text(saved, cx);
+        }
+    }
+
+    fn cancel(&mut self, _: &Cancel, _: &mut Window, cx: &mut Context<Self>) {
+        match escaped(self.options.clears_on_escape, &self.content, self.saved.as_ref().map(SharedString::as_ref)) {
+            Escaped::Cancel => cx.emit(TextFieldEvent::Cancel),
+            Escaped::Clear => self.clear(cx),
+            Escaped::Pass => cx.propagate(),
+            Escaped::Revert => {
+                self.revert(cx);
+                cx.emit(TextFieldEvent::Cancel);
+            }
+        }
+    }
+
+    fn focus_next(&mut self, _: &FocusNext, window: &mut Window, cx: &mut Context<Self>) {
+        if self.focus_handle.tab_stop { window.focus_next() } else { cx.propagate() }
+    }
+
+    fn focus_previous(&mut self, _: &FocusPrevious, window: &mut Window, cx: &mut Context<Self>) {
+        if self.focus_handle.tab_stop { window.focus_prev() } else { cx.propagate() }
     }
 
     pub(crate) fn text(&self) -> String {
@@ -594,3 +746,6 @@ impl TextField {
         self.replace_text_in_range(None, "", window, cx);
     }
 }
+
+#[cfg(test)]
+mod tests;

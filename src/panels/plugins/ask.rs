@@ -1,16 +1,18 @@
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, FocusHandle, InteractiveElement as _, IntoElement, KeyDownEvent,
-    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    App, AppContext as _, ClickEvent, Context, Div, FocusHandle, InteractiveElement as _, IntoElement, KeyDownEvent,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use crate::dialogs;
 use crate::store::Store;
-use crate::theme::colours;
+use crate::theme::{colours, radius};
 use crate::ui;
 
 pub(super) struct Question {
     pub(super) title: String,
     pub(super) message: String,
+    pub(super) details: Vec<String>,
     pub(super) button: &'static str,
     pub(super) danger: bool,
 }
@@ -41,10 +43,8 @@ impl Ask {
     }
 
     fn key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        match event.keystroke.key.as_str() {
-            "enter" => self.yes(cx),
-            "escape" => close(cx),
-            _ => {}
+        if event.keystroke.key == "enter" {
+            self.yes(cx);
         }
     }
 }
@@ -60,7 +60,7 @@ impl Render for Ask {
         div().track_focus(&self.focus).on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| this.key(e, cx))).child(
             dialogs::frame(
                 question.title.clone(),
-                div().text_color(colours::muted()).child(question.message.clone()),
+                body(question),
                 div()
                     .flex()
                     .gap(px(8.))
@@ -69,4 +69,27 @@ impl Render for Ask {
             ),
         )
     }
+}
+
+fn body(question: &Question) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(10.))
+        .child(div().text_color(colours::muted()).child(question.message.clone()))
+        .when(!question.details.is_empty(), |d| d.child(text_box("details".into(), &question.details, 300.)))
+}
+
+pub(super) fn text_box(id: SharedString, lines: &[String], height: f32) -> impl IntoElement + use<> {
+    div()
+        .id(id)
+        .max_h(px(height))
+        .overflow_y_scroll()
+        .p(px(10.))
+        .rounded(px(radius::CONTROL))
+        .bg(colours::sidebar())
+        .font_family("Menlo")
+        .text_size(px(11.))
+        .text_color(colours::muted())
+        .children(lines.iter().map(|l| div().child(l.clone())).collect::<Vec<_>>())
 }

@@ -1,40 +1,45 @@
 mod ask;
 mod data;
+mod fetch;
+mod install;
+mod status;
 
+use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
 
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, FontWeight,
-    InteractiveElement as _, IntoElement, ParentElement as _, PathPromptOptions, Render, SharedString,
+    InteractiveElement as _, IntoElement, ParentElement as _, PathPromptOptions, Render, Rgba, SharedString, Stateful,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
+use crate::cli;
+use crate::dialogs::{self, PathQuestion};
 use crate::model::{Session, Shown};
 use crate::panels::PanelKind;
-use crate::store::{self, Store, ToastKind, args};
-use crate::theme::colours;
+use crate::store::{self, Busy, Store, ToastKind, args};
+use crate::theme::{colours, radius};
 use crate::ui::{self, TextField, TextFieldEvent};
-use ask::Question;
-use data::{Action, ActionList, List, Plugin, Ran, first_line, shell_quote, target};
+use ask::{Question, text_box};
+use data::{Action, ActionList, List, Plugin, Ran, first_line, target};
+use fetch::Checked;
+use install::{FETCHING, INSTALLING, LINKING, UPDATING_ALL, checking};
+use status::{Health, Status};
 
 const LOG_LINES: &str = "60";
 const WARNING: &str = "A plugin runs as you and can do anything you can, including typing into every terminal. \
                        What it asks for is shown, not enforced. Plugins start off.";
 const NO_PLUGINS: &str = "No plugins yet. Install one from GitHub or a git address above, or link a folder of \
                           yours while you write one.";
-const INSTALL_NOTE: &str = "Installing and updating show what the plugin runs and ask in a terminal tab; doing it \
-                            here needs usecornercase/cornercase-terminal#468";
-const SERVICE_NOTE: &str = "Whether its service runs needs usecornercase/cornercase-terminal#469";
-const POPUP_NOTE: &str =
-    "Popup actions open in cornercase's own window; showing them here needs usecornercase/cornercase-terminal#456";
+const NO_STATUS: &str = "What its services are doing needs the server, which did not answer";
 
 pub(crate) struct PluginsPanel {
     plugins: Option<Vec<Plugin>>,
     error: Option<String>,
     actions: ActionList,
+    status: Option<Status>,
     logs: HashMap<String, String>,
-    busy: HashSet<String>,
+    checks: HashMap<String, Checked>,
     source: Entity<TextField>,
     open: bool,
 }
@@ -43,19 +48,35 @@ fn shown(cx: &App) -> Shown {
     Store::get(cx).read(cx).session.as_ref().map(Session::shown).unwrap_or_default()
 }
 
-fn in_a_tab(words: &[&str], name: &str, cx: &mut App) {
-    let line =
-        std::iter::once("cornercase").chain(words.iter().copied()).map(shell_quote).collect::<Vec<_>>().join(" ");
-    Store::get(cx).update(cx, |s, cx| {
-        s.act(args(&["new-tab", "--focus", "--name", name, "--", &line]));
-        s.close_sheet(cx);
-    });
+fn job(key: &str, label: impl Into<String>) -> Busy {
+    Busy::new(format!("plugin:{key}"), label)
 }
 
-fn update(id: Option<&str>, cx: &mut App) {
-    let mut words = vec!["plugin", "update"];
-    words.extend(id);
-    in_a_tab(&words, "update plugin", cx);
+fn busy(key: &str, cx: &App) -> bool {
+    Store::get(cx).read(cx).busy(&format!("plugin:{key}"))
+}
+
+fn say(result: anyhow::Result<String>, cx: &mut App) {
+    let (text, kind) = match result {
+        Ok(text) => (text, ToastKind::Info),
+        Err(e) => (e.to_string(), ToastKind::Error),
+    };
+    if !text.is_empty() {
+        Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
+    }
+}
+
+fn chip(text: impl Into<SharedString>, colour: Rgba) -> Div {
+    let text: SharedString = text.into();
+    div().px(px(7.)).rounded(px(radius::CHIP)).bg(colours::sidebar()).text_size(px(11.)).text_color(colour).child(text)
+}
+
+fn health_colour(health: Health) -> Rgba {
+    match health {
+        Health::Running => colours::done(),
+        Health::Waiting => colours::waiting(),
+        Health::Stopped => colours::failed(),
+    }
 }
 
 fn removal(plugin: &Plugin) -> (Question, Vec<String>) {
@@ -64,17 +85,23 @@ fn removal(plugin: &Plugin) -> (Question, Vec<String>) {
     } else {
         ("Unlink", "cornercase forgets it; its folder and its files stay where they are.", "Unlink", "unlink")
     };
-    let question =
-        Question { title: format!("{title} {}?", plugin.name()), message: message.to_string(), button, danger: true };
+    let question = Question {
+        title: format!("{title} {}?", plugin.name()),
+        message: message.to_string(),
+        details: Vec::new(),
+        button,
+        danger: true,
+    };
     (question, args(&["plugin", verb, &plugin.id]))
 }
 
 impl PluginsPanel {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let source =
-            cx.new(|cx| TextField::new("owner/repo[/folder][@ref], an https:// git address or a git folder", cx));
-        cx.subscribe_in(&source, window, |this, _, event, _, cx| match event {
-            TextFieldEvent::Submit => this.install(cx),
+        let source = cx.new(|cx| {
+            TextField::new("owner/repo[/folder][@ref], an https:// git address or a git folder", cx).clears_on_escape()
+        });
+        cx.subscribe_in(&source, window, |this, _, event, window, cx| match event {
+            TextFieldEvent::Submit => this.install(window, cx),
             TextFieldEvent::Changed | TextFieldEvent::Cancel => cx.notify(),
         })
         .detach();
@@ -91,8 +118,9 @@ impl PluginsPanel {
             plugins: None,
             error: None,
             actions: ActionList::default(),
+            status: None,
             logs: HashMap::new(),
-            busy: HashSet::new(),
+            checks: HashMap::new(),
             source,
             open: true,
         };
@@ -101,7 +129,8 @@ impl PluginsPanel {
     }
 
     fn reload(&mut self, cx: &mut Context<Self>) {
-        store::run_json(cx, args(&["plugin", "list", "--json"]), |this, result, cx| {
+        let list = if cli::host().is_some() { "status" } else { "list" };
+        store::run_json(cx, args(&["plugin", list, "--json"]), |this, result, cx| {
             match result.and_then(|v| serde_json::from_value::<List>(v).map_err(anyhow::Error::from)) {
                 Ok(list) => {
                     this.plugins = Some(list.plugins);
@@ -115,58 +144,71 @@ impl PluginsPanel {
             this.actions = result.ok().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
             cx.notify();
         });
-        for id in self.logs.keys().cloned().collect::<Vec<_>>() {
-            Self::read_log(id, cx);
+        store::run_json(cx, args(&["plugin", "status", "--json"]), |this, result, cx| {
+            this.status = result.ok().and_then(|v| serde_json::from_value(v).ok());
+            cx.notify();
+        });
+        if cli::host().is_none() {
+            for id in self.logs.keys().cloned().collect::<Vec<_>>() {
+                Self::read_log(id, cx);
+            }
         }
     }
 
-    fn plugin_cmd(&mut self, command: Vec<String>, busy: Option<String>, cx: &mut Context<Self>) {
-        if let Some(key) = &busy {
-            self.busy.insert(key.clone());
-        }
-        store::run(cx, command, move |this, result, cx| {
-            if let Some(key) = &busy {
-                this.busy.remove(key);
-            }
-            let (text, kind) = match result {
-                Ok(out) => (first_line(&out), ToastKind::Info),
-                Err(e) => (e.to_string(), ToastKind::Error),
-            };
-            if !text.is_empty() {
-                Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
-            }
+    fn plugin_cmd(command: Vec<String>, busy: Busy, cx: &mut Context<Self>) {
+        Self::plugin_cmd_saying(command, busy, None, cx);
+    }
+
+    fn plugin_cmd_saying(command: Vec<String>, busy: Busy, done: Option<String>, cx: &mut Context<Self>) {
+        store::run_busy(cx, busy, command, move |this, result, cx| {
+            say(result.map(|out| done.unwrap_or_else(|| first_line(&out))), cx);
             this.reload(cx);
         });
     }
 
-    fn switch(&mut self, plugin: &Plugin, window: &mut Window, cx: &mut Context<Self>) {
+    fn switch(plugin: &Plugin, window: &mut Window, cx: &mut Context<Self>) {
         let id = plugin.id.clone();
         if plugin.enabled {
-            self.plugin_cmd(args(&["plugin", "disable", &id]), Some(id), cx);
+            Self::plugin_cmd(
+                args(&["plugin", "disable", &id]),
+                job(&id, format!("Turning off {}…", plugin.name())),
+                cx,
+            );
             return;
         }
+        let turning_on = job(&id, format!("Turning on {}…", plugin.name()));
         let question = Question {
             title: format!("Turn on {}?", plugin.name()),
             message: plugin.enable_warning(),
+            details: Vec::new(),
             button: "Turn on",
             danger: false,
         };
         let this = cx.entity();
         question.ask(window, cx, move |cx| {
-            this.update(cx, |this, cx| this.plugin_cmd(args(&["plugin", "enable", &id]), Some(id.clone()), cx));
+            this.update(cx, |_, cx| Self::plugin_cmd(args(&["plugin", "enable", &id]), turning_on.clone(), cx));
         });
     }
 
     fn remove(plugin: &Plugin, window: &mut Window, cx: &mut Context<Self>) {
-        let id = plugin.id.clone();
+        let removing = job(&plugin.id, format!("Removing {}…", plugin.name()));
         let this = cx.entity();
         let (question, command) = removal(plugin);
         question.ask(window, cx, move |cx| {
-            this.update(cx, |this, cx| this.plugin_cmd(command.clone(), Some(id.clone()), cx));
+            this.update(cx, |_, cx| Self::plugin_cmd(command.clone(), removing.clone(), cx));
         });
     }
 
-    fn link(cx: &mut Context<Self>) {
+    fn link(window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(host) = cli::host() {
+            let question = PathQuestion { title: format!("Link a plugin on {host}"), button: "Link" };
+            let this = cx.entity();
+            let then = move |path: String, _: &mut Window, cx: &mut App| {
+                this.update(cx, |_, cx| Self::link_path(&path, cx));
+            };
+            dialogs::ask_path(question, then, window, cx);
+            return;
+        }
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
@@ -178,19 +220,15 @@ impl PluginsPanel {
                 && let Some(path) = paths.first()
             {
                 let path = path.to_string_lossy().into_owned();
-                let _ = this.update(cx, |this, cx| this.plugin_cmd(args(&["plugin", "link", &path]), None, cx));
+                let _ = this.update(cx, |_, cx| Self::link_path(&path, cx));
             }
         })
         .detach();
     }
 
-    fn install(&mut self, cx: &mut Context<Self>) {
-        let source = self.source.read(cx).text().trim().to_string();
-        if source.is_empty() {
-            return;
-        }
-        self.source.update(cx, TextField::clear);
-        in_a_tab(&["plugin", "install", &source], "install plugin", cx);
+    fn link_path(path: &str, cx: &mut Context<Self>) {
+        let linking = job(LINKING, format!("Linking {path}…"));
+        Self::plugin_cmd(args(&["plugin", "link", path]), linking, cx);
     }
 
     fn toggle_log(&mut self, id: String, cx: &mut Context<Self>) {
@@ -220,11 +258,11 @@ impl PluginsPanel {
         let mut command = args(&["plugin", "run", &action.plugin, &action.name, "--json"]);
         command.extend(["--revision".to_string(), self.actions.revision.to_string()]);
         command.extend(target);
-        self.busy.insert(key.clone());
-        cx.notify();
+        if action.popup() {
+            Store::get(cx).update(cx, Store::close_sheet);
+        }
         let title = action.title.clone();
-        store::run(cx, command, move |this, result, cx| {
-            this.busy.remove(&key);
+        store::run_busy(cx, job(&key, format!("{title}…")), command, move |this, result, cx| {
             let (text, kind) = match result.map(|out| serde_json::from_str::<Ran>(&out)) {
                 Ok(Ok(ran)) => ran.say(&title),
                 Ok(Err(e)) => (format!("{title}: {e}"), ToastKind::Error),
@@ -235,15 +273,20 @@ impl PluginsPanel {
         });
     }
 
-    fn plugin_header(&self, plugin: &Plugin, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let busy = self.busy.contains(&plugin.id);
+    fn plugin_header(plugin: &Plugin, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let busy = busy(&plugin.id, cx);
         let (state, colour) = match (&plugin.error, plugin.enabled) {
             (Some(_), _) => ("cannot run", colours::failed()),
             (None, true) => ("on", colours::done()),
             (None, false) => ("off", colours::faint()),
         };
-        let switchable = plugin.error.is_none() && !busy;
+        let switchable = plugin.error.is_none() && !busy && cli::host().is_none();
         let switched = plugin.clone();
+        let chip = if busy {
+            ui::spinner(SharedString::from(format!("busy-{}", plugin.id)), 12., colour).into_any_element()
+        } else {
+            chip(state, colour).into_any_element()
+        };
         div()
             .flex()
             .items_center()
@@ -252,7 +295,7 @@ impl PluginsPanel {
                 ui::checkbox(SharedString::from(format!("switch-{}", plugin.id)), plugin.enabled, "")
                     .when(switchable, |d| {
                         d.on_click(
-                            cx.listener(move |this, _: &ClickEvent, window, cx| this.switch(&switched, window, cx)),
+                            cx.listener(move |_, _: &ClickEvent, window, cx| Self::switch(&switched, window, cx)),
                         )
                     })
                     .when(!switchable, |d| d.opacity(0.4).cursor_default()),
@@ -261,23 +304,27 @@ impl PluginsPanel {
             .children(plugin.manifest.as_ref().map(|m| ui::dim(m.version.clone())))
             .child(ui::dim(plugin.id.clone()))
             .child(div().flex_1())
-            .child(
-                div()
-                    .px(px(6.))
-                    .rounded(px(4.))
-                    .bg(colours::sidebar())
-                    .text_size(px(11.))
-                    .text_color(colour)
-                    .child(if busy { "…" } else { state }),
-            )
+            .child(chip)
     }
 
-    fn action_button(&self, action: Action, shown: Shown, cx: &mut Context<Self>) -> AnyElement {
+    fn services_row(&self, plugin: &Plugin) -> Option<Div> {
+        if !plugin.enabled || !plugin.has_service() {
+            return None;
+        }
+        let Some(status) = &self.status else { return Some(ui::dim(NO_STATUS)) };
+        let chips: Vec<Div> =
+            status.services(&plugin.id).iter().map(|s| chip(s.describe(), health_colour(s.health()))).collect();
+        Some(div().flex().flex_wrap().items_center().gap(px(6.)).child(ui::dim("Services")).children(chips))
+    }
+
+    fn action_button(action: Action, shown: Shown, cx: &mut Context<Self>) -> AnyElement {
         let key = action.key();
-        let running = self.busy.contains(&key);
-        let runnable = !action.popup() && !running && target(&action.contexts, shown).is_some();
-        let label = if running { format!("{} …", action.title) } else { format!("▶ {}", action.title) };
-        ui::button(SharedString::from(format!("action-{key}")), label)
+        let id = SharedString::from(format!("action-{key}"));
+        if busy(&key, cx) {
+            return ui::busy_button(id, action.title, ui::Tone::Plain).into_any_element();
+        }
+        let runnable = target(&action.contexts, shown).is_some();
+        ui::button(id, format!("▶ {}", action.title))
             .when(!runnable, |b| b.opacity(0.45).cursor_default())
             .when(runnable, |b| {
                 b.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.run_action(&action, cx)))
@@ -292,7 +339,7 @@ impl PluginsPanel {
         }
         let shown = shown(cx);
         let buttons: Vec<AnyElement> =
-            actions.into_iter().map(|action| self.action_button(action, shown, cx)).collect();
+            actions.into_iter().map(|action| Self::action_button(action, shown, cx)).collect();
         Some(div().flex().flex_wrap().items_center().gap(px(6.)).pt(px(2.)).child(ui::dim("Actions")).children(buttons))
     }
 
@@ -300,6 +347,7 @@ impl PluginsPanel {
         let id = plugin.id.clone();
         let (log_id, update_id) = (id.clone(), id.clone());
         let removed = plugin.clone();
+        let checked = busy(&checking(&id), cx);
         let log_label = if self.logs.contains_key(&id) { "Hide log" } else { "Log" };
         div()
             .flex()
@@ -309,12 +357,7 @@ impl PluginsPanel {
                 ui::button(SharedString::from(format!("log-{id}")), log_label)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_log(log_id.clone(), cx))),
             )
-            .when(plugin.source.installed(), |d| {
-                d.child(
-                    ui::button(SharedString::from(format!("update-{id}")), "Update…")
-                        .on_click(move |_: &ClickEvent, _, cx| update(Some(&update_id), cx)),
-                )
-            })
+            .when(plugin.source.installed(), |d| d.child(Self::update_button(update_id, checked, cx)))
             .child(div().flex_1())
             .child(
                 ui::danger_button(
@@ -325,26 +368,34 @@ impl PluginsPanel {
             )
     }
 
+    fn update_button(id: String, checked: bool, cx: &mut Context<Self>) -> Stateful<Div> {
+        let button = SharedString::from(format!("update-{id}"));
+        if checked {
+            return ui::busy_button(button, "Checking…", ui::Tone::Plain);
+        }
+        ui::button(button, "Update…").on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+            this.check_updates(vec![id.clone()], &checking(&id), window, cx);
+        }))
+    }
+
     fn plugin_card(&self, plugin: &Plugin, cx: &mut Context<Self>) -> AnyElement {
         let description = plugin.manifest.as_ref().and_then(|m| m.description.clone()).filter(|d| !d.is_empty());
-        let popups = self.actions.actions.iter().any(|a| a.plugin == plugin.id && a.popup());
         div()
             .flex()
             .flex_col()
-            .gap(px(6.))
-            .p(px(12.))
-            .rounded(px(8.))
+            .gap(px(8.))
+            .p(px(14.))
+            .rounded(px(radius::CARD))
             .bg(colours::terminal())
             .border_1()
             .border_color(colours::border())
-            .child(self.plugin_header(plugin, cx))
+            .child(Self::plugin_header(plugin, cx))
             .children(description.map(|d| div().text_size(px(12.)).text_color(colours::muted()).child(d)))
             .children(plugin.error.clone().map(|e| div().text_size(px(12.)).text_color(colours::failed()).child(e)))
             .child(ui::dim(plugin.facts()))
-            .when(plugin.has_service() && plugin.enabled, |d| d.child(ui::dim(SERVICE_NOTE)))
+            .children(self.services_row(plugin))
             .children(self.action_buttons(plugin, cx))
-            .when(popups, |d| d.child(ui::dim(POPUP_NOTE)))
-            .child(self.plugin_buttons(plugin, cx))
+            .when(cli::host().is_none(), |d| d.child(self.plugin_buttons(plugin, cx)))
             .children(self.logs.get(&plugin.id).map(|text| log_view(&plugin.id, text)))
             .into_any_element()
     }
@@ -352,21 +403,21 @@ impl PluginsPanel {
     fn install_row(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let focused = self.source.read(cx).focus_handle(cx).is_focused(window);
         let has_source = !self.source.read(cx).text().trim().is_empty();
-        let installed = self.plugins.as_ref().is_some_and(|ps| ps.iter().any(|p| p.source.installed()));
+        let installed = self.installed_ids();
+        let checking = busy(UPDATING_ALL, cx);
         div()
             .flex()
             .items_end()
             .gap(px(8.))
             .child(div().flex_1().child(ui::field("Install from", ui::input_box(self.source.clone(), focused))))
-            .child(
-                ui::primary_button("install", "Install…")
-                    .when(!has_source, |b| b.opacity(0.45))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.install(cx))),
-            )
-            .child(ui::button("link", "Link folder…").on_click(cx.listener(|_, _: &ClickEvent, _, cx| Self::link(cx))))
-            .when(installed, |d| {
-                d.child(ui::button("update-all", "Update all…").on_click(|_: &ClickEvent, _, cx| update(None, cx)))
+            .child(Self::install_button(has_source, cx))
+            .child(if busy(LINKING, cx) {
+                ui::busy_button("link", "Linking…", ui::Tone::Plain)
+            } else {
+                ui::button("link", "Link folder…")
+                    .on_click(cx.listener(|_, _: &ClickEvent, window, cx| Self::link(window, cx)))
             })
+            .when(!installed.is_empty(), |d| d.child(Self::update_all_button(installed, checking, cx)))
             .child(
                 ui::icon_button("reload", "↻")
                     .py(px(3.))
@@ -374,10 +425,41 @@ impl PluginsPanel {
             )
     }
 
+    fn installed_ids(&self) -> Vec<String> {
+        let plugins = self.plugins.iter().flatten();
+        plugins.filter(|p| p.source.installed()).map(|p| p.id.clone()).collect()
+    }
+
+    fn install_button(has_source: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        if busy(FETCHING, cx) {
+            return ui::busy_button("install", "Fetching…", ui::Tone::Primary);
+        }
+        if busy(INSTALLING, cx) {
+            return ui::busy_button("install", "Installing…", ui::Tone::Primary);
+        }
+        ui::primary_button("install", "Install…")
+            .when(!has_source, |b| b.opacity(0.45))
+            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.install(window, cx)))
+    }
+
+    fn update_all_button(ids: Vec<String>, checking: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        if checking {
+            return ui::busy_button("update-all", "Checking…", ui::Tone::Plain);
+        }
+        ui::button("update-all", "Update all…").on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+            this.check_updates(ids.clone(), UPDATING_ALL, window, cx);
+        }))
+    }
+
+    fn problem(&self) -> Option<Div> {
+        let problem = self.status.as_ref().and_then(|s| s.problem.clone())?;
+        Some(ui::note(problem).text_color(colours::failed()))
+    }
+
     fn list(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         match (&self.plugins, &self.error) {
             (_, Some(e)) => vec![ui::note(e.clone()).text_color(colours::failed()).into_any_element()],
-            (None, None) => vec![ui::note("Reading the plugins…").into_any_element()],
+            (None, None) => vec![ui::loading("Reading the plugins…").into_any_element()],
             (Some(ps), None) if ps.is_empty() => vec![ui::note(NO_PLUGINS).into_any_element()],
             (Some(ps), None) => ps.iter().map(|p| self.plugin_card(p, cx)).collect(),
         }
@@ -385,22 +467,24 @@ impl PluginsPanel {
 }
 
 fn log_view(id: &str, text: &str) -> impl IntoElement + use<> {
-    div()
-        .id(SharedString::from(format!("log-text-{id}")))
-        .max_h(px(220.))
-        .overflow_y_scroll()
-        .p(px(8.))
-        .rounded(px(5.))
-        .bg(colours::sidebar())
-        .font_family("Menlo")
-        .text_size(px(11.))
-        .text_color(colours::muted())
-        .children(text.lines().map(|l| div().child(l.to_string())).collect::<Vec<_>>())
+    let lines: Vec<String> = text.lines().map(ToString::to_string).collect();
+    text_box(SharedString::from(format!("log-text-{id}")), &lines, 220.)
+}
+
+fn remote_note(host: &str) -> String {
+    format!(
+        "These are the plugins of {host}. Installing, updating, removing, linking, turning them on or off and \
+         their logs act on that machine's files, which cornercase does not take through --remote: \
+         run `cornercase plugin …` on {host}."
+    )
 }
 
 impl Render for PluginsPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let install = self.install_row(window, cx);
+        let install = match cli::host() {
+            None => self.install_row(window, cx).into_any_element(),
+            Some(host) => ui::dim(remote_note(&host)).into_any_element(),
+        };
         let list = self.list(cx);
         div()
             .id("plugins")
@@ -412,8 +496,8 @@ impl Render for PluginsPanel {
             .gap(px(10.))
             .child(div().text_size(px(12.)).text_color(colours::muted()).child(WARNING))
             .child(install)
-            .child(ui::dim(INSTALL_NOTE))
             .child(ui::section("Installed"))
+            .children(self.problem())
             .children(list)
     }
 }

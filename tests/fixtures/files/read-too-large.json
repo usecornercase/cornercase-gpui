@@ -1,0 +1,14 @@
+{
+  "boot": "28257-1793303771316290000",
+  "bytes": 9000000,
+  "file": "/private/tmp/ccfiles/big.txt",
+  "image": null,
+  "kind": "too-large",
+  "language": null,
+  "modified": "2026-10-29T20:22:49.649Z",
+  "path": "big.txt",
+  "revision": 1,
+  "stream": null,
+  "text": null,
+  "workspace": 38
+}

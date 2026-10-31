@@ -1,10 +1,17 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use gpui::{AppContext as _, Context};
 
+use crate::model::{Project, Session, Workspace};
+
+use super::served::Listed;
+use super::source::Source;
 use super::{FilesPanel, Place, tree};
 
-type Listed = Vec<(PathBuf, std::io::Result<tree::Listing>)>;
+pub(super) fn shown_workspace(session: Option<&Session>) -> Option<(&Project, &Workspace)> {
+    let session = session?;
+    session.workspace(session.shown().workspace?)
+}
 
 impl Place {
     fn apply_listing(&mut self, rel: PathBuf, listing: std::io::Result<tree::Listing>) -> bool {
@@ -27,22 +34,10 @@ impl Place {
     }
 }
 
-fn list_all(root: &Path, folders: Vec<PathBuf>) -> Listed {
-    folders
-        .into_iter()
-        .map(|rel| {
-            let listing = tree::list(root, &rel);
-            (rel, listing)
-        })
-        .collect()
-}
-
 impl FilesPanel {
     pub(super) fn follow_workspace(&mut self, cx: &mut Context<Self>) {
-        let shown = self.store.read(cx).session.as_ref().and_then(|session| {
-            let (_, ws) = session.workspace(session.shown().workspace?)?;
-            Some((ws.id, PathBuf::from(&ws.path)))
-        });
+        let shown =
+            shown_workspace(self.store.read(cx).session.as_ref()).map(|(_, ws)| (ws.id, PathBuf::from(&ws.path)));
         let Some((id, root)) = shown else {
             if self.current.take().is_some() {
                 cx.notify();
@@ -65,7 +60,8 @@ impl FilesPanel {
         }
         self.current = Some(id);
         self.menu = None;
-        let place = self.places.entry(id).or_insert_with(|| Place::new(root));
+        let source = Source::new(id, root.clone(), self.remote);
+        let place = self.places.entry(id).or_insert_with(|| Place::new(root, source));
         let query = place.query.clone();
         self.search.index = None;
         self.search.clear();
@@ -101,8 +97,8 @@ impl FilesPanel {
 
     pub(super) fn list(&mut self, id: u64, folders: Vec<PathBuf>, cx: &mut Context<Self>) {
         let Some(place) = self.places.get(&id) else { return };
-        let root = place.root.clone();
-        let job = cx.background_spawn(async move { list_all(&root, folders) });
+        let source = place.source.clone();
+        let job = cx.background_spawn(async move { source.list(folders) });
         cx.spawn(async move |this, cx| {
             let listed = job.await;
             let _ = this.update(cx, |this, cx| this.apply_listings(id, listed, cx));

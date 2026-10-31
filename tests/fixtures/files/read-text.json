@@ -1,0 +1,14 @@
+{
+  "boot": "28257-1793303771316290000",
+  "bytes": 38,
+  "file": "/private/tmp/ccfiles/src/main.rs",
+  "image": null,
+  "kind": "text",
+  "language": "rust",
+  "modified": "2026-10-29T20:21:00.503Z",
+  "path": "src/main.rs",
+  "revision": 1,
+  "stream": null,
+  "text": "fn main() {\n\tprintln!(\"hello\");\n}\nmod\n",
+  "workspace": 38
+}

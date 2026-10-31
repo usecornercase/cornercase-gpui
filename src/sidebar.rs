@@ -1,29 +1,32 @@
 mod actions;
+mod agents;
+mod arrange;
+mod folds;
 mod forms;
+mod look;
 mod menus;
 pub(crate) mod order;
+pub(crate) mod rail;
 mod rows;
+mod tab_rows;
 mod workspace;
 
-use std::rc::Rc;
-
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, MouseDownEvent, ParentElement, Render, SharedString, Stateful, StatefulInteractiveElement, Styled,
-    Window, div, prelude::FluentBuilder as _, px,
+    App, AppContext as _, ClickEvent, Context, Div, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement, Render, SharedString, Stateful, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::app::{Root, SIDEBAR_WIDTH, TITLEBAR_HEIGHT};
+use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
 use crate::context_menu::{Menu, item};
 use crate::dialogs;
-use crate::model::Session;
-use crate::panels::PanelKind;
-use crate::theme::colours;
-use crate::ui::{self, TextField, TextFieldEvent, button_coloured as button};
+use crate::keymap::{Command, with_keys};
+use crate::theme::{colours, radius};
+use crate::ui::{self, Icon, TextField};
 
 pub(crate) use crate::store::args as cmd;
+pub(crate) use folds::Fold;
 pub(crate) use forms::close_agent;
-use rows::Listing;
+pub(crate) use look::Arrangement;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Target {
@@ -64,17 +67,7 @@ pub(crate) struct DragPreview(SharedString);
 
 impl Render for DragPreview {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .px(px(10.))
-            .py(px(4.))
-            .rounded(px(6.))
-            .bg(colours::selected())
-            .border_1()
-            .border_color(colours::accent())
-            .text_size(px(12.))
-            .text_color(colours::text())
-            .shadow_lg()
-            .child(self.0.clone())
+        ui::glass::dragged().px(px(10.)).py(px(4.)).text_size(px(12.)).child(self.0.clone())
     }
 }
 
@@ -87,14 +80,10 @@ pub(crate) struct Tip(SharedString);
 
 impl Render for Tip {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
+        ui::glass::popover()
             .max_w(px(360.))
-            .px(px(8.))
-            .py(px(5.))
-            .rounded(px(5.))
-            .bg(colours::panel())
-            .border_1()
-            .border_color(colours::border())
+            .px(px(9.))
+            .py(px(6.))
             .text_size(px(12.))
             .text_color(colours::text())
             .child(self.0.clone())
@@ -116,171 +105,91 @@ pub(crate) struct Rename {
 pub(crate) struct SideState {
     pub menu: Option<Menu>,
     pub rename: Option<Rename>,
-    pub filter: Option<Entity<TextField>>,
-    pub query: String,
-    pub pane_press: Option<crate::terminal::PanePress>,
+    pub folds: folds::Folds,
+    pub look: look::Looks,
+    pub sizes: arrange::Sizes,
 }
 
 impl Root {
-    pub(crate) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let filter = self.filter_field(cx);
-        let filtering = !self.side.query.is_empty();
+    pub(crate) fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         div()
-            .w(px(SIDEBAR_WIDTH))
+            .w(px(self.sidebar_extent()))
             .h_full()
+            .flex_none()
+            .relative()
             .flex()
             .flex_col()
-            .bg(colours::sidebar())
-            .border_r_1()
-            .border_color(colours::border())
-            .child(div().h(px(TITLEBAR_HEIGHT)).flex_none())
-            .child(sidebar_header(cx))
-            .child(filter_bar(filter, filtering, cx))
-            .child(self.sidebar_list(cx))
-            .child(self.panel_buttons())
-            .child(sidebar_footer(cx))
+            .pb(px(GAP))
+            .child(title_strip())
+            .child(self.sidebar_cards(cx))
             .children(self.render_menu(cx))
     }
 
-    fn sidebar_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let query = self.side.query.clone();
-        let nothing_matches = !query.is_empty()
-            && self.session.as_ref().is_some_and(|s| !s.projects.iter().any(|p| order::shows_project(p, &query)));
-        div()
-            .id("sidebar-list")
-            .flex_1()
-            .flex()
-            .flex_col()
-            .overflow_y_scroll()
-            .child(self.sidebar_rows(cx))
-            .when(nothing_matches, |d| d.child(ui::note("Nothing matches.")))
-            .child(list_end(cx))
-    }
-
-    fn sidebar_rows(&self, cx: &mut Context<Self>) -> Div {
-        let list = div().flex().flex_col().gap(px(1.)).px(px(8.));
-        let Some(session) = &self.session else { return list };
-        let listing = Listing {
-            shown: session.shown(),
-            query: self.side.query.clone(),
-            groups: Rc::new(session.groups.iter().map(|g| g.id).collect()),
-        };
-        let mut rows = Vec::new();
-        for section in order::sections(session) {
-            rows.extend(self.section_rows(session, section, &listing, cx));
+    pub(crate) fn sidebar_extent(&self) -> f32 {
+        if self.side.look.current.arrangement == Arrangement::SideBySide {
+            self.pair_width.size()
+        } else {
+            self.sidebar_width.size()
         }
-        list.children(rows)
-    }
-
-    fn panel_buttons(&self) -> impl IntoElement + use<> {
-        let store = self.store.clone();
-        div()
-            .flex()
-            .flex_wrap()
-            .gap(px(4.))
-            .px(px(10.))
-            .pt(px(8.))
-            .border_t_1()
-            .border_color(colours::border())
-            .children(PanelKind::ALL.into_iter().filter(|k| !k.docked()).map(move |kind| {
-                let store = store.clone();
-                ui::segment(SharedString::from(format!("open-{}", kind.title())), kind.title(), false)
-                    .on_click(move |_: &ClickEvent, _, cx| store.update(cx, |s, cx| s.open(kind, cx)))
-            }))
-    }
-
-    fn filter_field(&mut self, cx: &mut Context<Self>) -> Entity<TextField> {
-        if let Some(field) = &self.side.filter {
-            return field.clone();
-        }
-        let field = cx.new(|cx| TextField::new("Filter  ⌘P", cx));
-        cx.subscribe(&field, |this, field, event, cx| match event {
-            TextFieldEvent::Changed => {
-                this.side.query = field.read(cx).text();
-                cx.notify();
-            }
-            TextFieldEvent::Cancel => field.update(cx, TextField::clear),
-            TextFieldEvent::Submit => {
-                if let Some(id) = this.first_shown_workspace() {
-                    this.focus_item("workspace", id);
-                }
-            }
-        })
-        .detach();
-        self.side.filter = Some(field.clone());
-        field
-    }
-
-    fn first_shown_workspace(&self) -> Option<u64> {
-        let query = &self.side.query;
-        self.session.as_ref().and_then(|s: &Session| {
-            s.projects
-                .iter()
-                .find_map(|p| p.workspaces.iter().find(|w| order::shows_workspace(p, w, query)).map(|w| w.id))
-        })
-    }
-
-    pub(crate) fn focus_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let field = self.filter_field(cx);
-        window.focus(&field.read(cx).focus_handle(cx));
-        cx.notify();
     }
 }
 
-fn sidebar_header(cx: &mut Context<Root>) -> impl IntoElement + use<> {
+fn card() -> Div {
     div()
+        .relative()
+        .flex_1()
+        .flex()
+        .flex_col()
+        .rounded(px(radius::CARD))
+        .bg(colours::surface())
+        .border_1()
+        .border_color(colours::border())
+        .child(ui::glass::wash().rounded_t(px(radius::CARD - 1.)))
+}
+
+fn title_strip() -> impl IntoElement {
+    div()
+        .h(px(TITLEBAR_HEIGHT))
+        .flex_none()
         .flex()
         .items_center()
-        .justify_between()
-        .px(px(14.))
-        .pb(px(6.))
-        .child(div().text_size(px(11.)).text_color(colours::faint()).child("PROJECTS"))
-        .child(button("sidebar-new", "+ New", colours::muted()).on_mouse_down(
-            MouseButton::Left,
-            cx.listener(|this, e: &MouseDownEvent, window, cx| {
-                cx.stop_propagation();
-                let entries = vec![
-                    item("Open project…", Root::open_project),
-                    item("New group…", |_, window, cx| forms::new_group(None, window, cx)),
-                ];
-                this.open_menu(e.position, entries, window, cx);
-            }),
-        ))
+        .gap(px(8.))
+        .pl(px(34.))
+        .child(ui::brand::mark(1.25, false))
+        .child(ui::brand::wordmark(13.))
 }
 
-fn filter_bar(filter: Entity<TextField>, filtering: bool, cx: &mut Context<Root>) -> impl IntoElement + use<> {
-    let clear = filtering.then(|| {
-        ui::icon_button("filter-clear", "✕").on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-            if let Some(f) = &this.side.filter {
-                f.update(cx, TextField::clear);
-            }
-            window.focus(&this.focus);
-        }))
-    });
+fn section_head(title: &'static str, button: impl IntoElement) -> Div {
     div()
-        .px(px(10.))
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_between()
+        .pl(px(20.))
+        .pr(px(12.))
+        .pt(px(8.))
         .pb(px(6.))
-        .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, _| {
-            if e.keystroke.key == "escape" {
-                window.focus(&this.focus);
-            }
-        }))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .px(px(8.))
-                .py(px(2.))
-                .rounded(px(5.))
-                .bg(colours::terminal())
-                .border_1()
-                .border_color(colours::border())
-                .text_size(px(12.))
-                .child(div().text_color(colours::faint()).child("⌕"))
-                .child(div().flex_1().child(filter))
-                .children(clear),
-        )
+        .child(div().text_size(px(11.)).font_weight(FontWeight::SEMIBOLD).text_color(colours::muted()).child(title))
+        .child(button)
+}
+
+fn sidebar_header(cx: &mut Context<Root>) -> Div {
+    section_head(
+        "Projects",
+        ui::tool_button("sidebar-new", Icon::Plus, 24., false)
+            .tooltip(tip("Open a project or add a group"))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, e: &MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    let entries = vec![
+                        item("Open project…", Root::open_project),
+                        item("New group…", |_, window, cx| forms::new_group(None, window, cx)),
+                    ];
+                    this.open_menu(e.position, entries, window, cx);
+                }),
+            ),
+    )
 }
 
 fn list_end(cx: &mut Context<Root>) -> impl IntoElement + use<> {
@@ -289,7 +198,7 @@ fn list_end(cx: &mut Context<Root>) -> impl IntoElement + use<> {
         .flex_1()
         .min_h(px(40.))
         .drag_over::<Dragged>(|s, d, _, _| match d.target {
-            Target::Project(_) | Target::Group(_) => s.bg(colours::hover()),
+            Target::Project(_) | Target::Group(_) => s.bg(colours::accent_soft()),
             _ => s,
         })
         .on_drop(cx.listener(|this, d: &Dragged, _, _| match d.target {
@@ -302,14 +211,18 @@ fn list_end(cx: &mut Context<Root>) -> impl IntoElement + use<> {
 fn sidebar_footer(cx: &mut Context<Root>) -> impl IntoElement + use<> {
     div()
         .flex()
-        .gap(px(6.))
-        .p(px(10.))
+        .gap(px(8.))
+        .px(px(12.))
+        .pt(px(8.))
+        .pb(px(12.))
         .child(
-            button("new-workspace", "+ Workspace", colours::muted())
+            ui::labelled_button("new-workspace", Icon::Plus, "Workspace", false)
+                .tooltip(tip(with_keys("New workspace", Command::NewWorkspace)))
                 .on_click(cx.listener(|_, _: &ClickEvent, window, cx| dialogs::new_workspace(None, window, cx))),
         )
         .child(
-            button("start-agent", "▶ Agent", colours::accent())
+            ui::labelled_button("start-agent", Icon::Agent, "Agent", true)
+                .tooltip(tip(with_keys("Start an agent", Command::StartAgent)))
                 .on_click(cx.listener(|_, _: &ClickEvent, window, cx| dialogs::start_agent(window, cx))),
         )
 }

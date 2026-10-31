@@ -3,25 +3,21 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
     ParentElement, SharedString, Stateful, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px,
+    relative,
 };
 
-use super::{Dragged, Target, draggable, forms, order};
+use super::{Dragged, Fold, Target, draggable, forms, order};
 use crate::app::Root;
 use crate::dialogs;
 use crate::model::{Group, Project, Session, Shown};
-use crate::theme::colours;
-use crate::ui::{self, badge};
+use crate::theme::{colours, radius};
+use crate::ui::{self, badge, glass};
 
 pub(super) struct Listing {
     pub shown: Shown,
-    pub query: String,
     pub groups: Rc<Vec<u64>>,
-}
-
-impl Listing {
-    pub(super) fn filtering(&self) -> bool {
-        !self.query.trim().is_empty()
-    }
+    pub tree: bool,
+    pub tabs: bool,
 }
 
 fn id_prefix(target: Target) -> &'static str {
@@ -33,6 +29,8 @@ fn id_prefix(target: Target) -> &'static str {
     }
 }
 
+const GUIDE: f32 = 13.;
+
 pub(super) fn row_group_id(target: Target) -> SharedString {
     SharedString::from(format!("{}-{}", id_prefix(target), target.id()))
 }
@@ -42,42 +40,52 @@ pub(super) fn chevron(id: SharedString, open: bool) -> Stateful<Div> {
         .id(id)
         .w(px(14.))
         .flex_none()
-        .text_size(px(15.))
-        .text_color(colours::muted())
+        .text_size(px(13.))
+        .text_color(colours::faint())
         .cursor_pointer()
         .hover(|s| s.text_color(colours::text()))
         .child(if open { "▾" } else { "▸" })
 }
 
 pub(super) fn hover_button(id: SharedString, group: SharedString, glyph: &'static str, slot: u8) -> Stateful<Div> {
-    ui::icon_button(id, glyph)
-        .absolute()
-        .top_0()
-        .bottom_0()
-        .right(px(4. + 22. * f32::from(slot)))
-        .w(px(20.))
+    let chip = div()
+        .size(px(22.))
         .flex()
         .items_center()
         .justify_center()
-        .bg(colours::hover())
+        .rounded(px(radius::CHIP))
+        .text_color(colours::faint())
+        .bg(colours::raised())
+        .hover(|s| s.bg(colours::raised_hover()).text_color(colours::text()))
+        .child(glyph);
+    div()
+        .id(id)
+        .absolute()
+        .top_0()
+        .bottom_0()
+        .right(px(6. + 24. * f32::from(slot)))
+        .flex()
+        .items_center()
+        .cursor_pointer()
         .invisible()
         .group_hover(group, Styled::visible)
+        .child(chip)
 }
 
-pub(super) fn row_base(target: Target) -> Stateful<Div> {
+pub(super) fn row_base(target: Target, lit: bool) -> Stateful<Div> {
     let gid = row_group_id(target);
-    div()
+    let row = div()
         .id(gid.clone())
         .group(gid)
         .relative()
         .flex()
         .items_center()
-        .rounded(px(5.))
+        .rounded(px(radius::CONTROL))
         .border_t_2()
         .border_b_2()
         .border_color(gpui::transparent_black())
-        .cursor_pointer()
-        .hover(|s| s.bg(colours::hover()))
+        .cursor_pointer();
+    if lit { glass::lit(row) } else { row.hover(|s| s.bg(colours::hover())) }
 }
 
 pub(super) fn menu_button(target: Target, cx: &mut Context<Root>) -> Stateful<Div> {
@@ -109,6 +117,7 @@ pub(super) fn row_actions(
                 this.start_rename(target, window, cx);
             } else {
                 primary(this);
+                cx.notify();
             }
         }))
 }
@@ -122,7 +131,7 @@ pub(super) fn drop_target(
     el.drag_over::<Dragged>(move |s, d, _, _| {
         let into_group = matches!((d.target, target), (Target::Project(_), Target::Group(_)));
         if into_group {
-            return s.bg(colours::selected());
+            return s.bg(colours::accent_soft());
         }
         let accepted =
             d.target.same_kind(target) || matches!((d.target, target), (Target::Group(_), Target::Project(_)));
@@ -138,8 +147,24 @@ pub(super) fn drop_target(
     .on_drop(cx.listener(move |this, d: &Dragged, _, _| this.drop_on(d.target, target)))
 }
 
-pub(super) fn name_label() -> Div {
-    div().flex_1().overflow_hidden().whitespace_nowrap().text_ellipsis()
+pub(super) fn list_text(list: Div) -> Div {
+    list.text_size(px(12.5)).line_height(relative(1.4))
+}
+
+pub(super) fn nested(children: Vec<AnyElement>) -> Div {
+    div()
+        .ml(px(GUIDE))
+        .pl(px(5.))
+        .border_l_1()
+        .border_color(colours::border())
+        .flex()
+        .flex_col()
+        .gap(px(1.))
+        .children(children)
+}
+
+pub(super) fn name_label(name: impl Into<SharedString>) -> Div {
+    div().flex_1().child(ui::one_line(name))
 }
 
 impl Root {
@@ -157,18 +182,12 @@ impl Root {
         listing: &Listing,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
-        let projects: Vec<&Project> = ids
-            .iter()
-            .filter_map(|id| session.projects.iter().find(|p| p.id == *id))
-            .filter(|p| order::shows_project(p, &listing.query))
-            .collect();
+        let projects: Vec<&Project> =
+            ids.iter().filter_map(|id| session.projects.iter().find(|p| p.id == *id)).collect();
         let mut rows = Vec::new();
         if let Some(group) = group.and_then(|g| session.groups.iter().find(|x| x.id == g)) {
-            if listing.filtering() && projects.is_empty() {
-                return rows;
-            }
             rows.push(self.render_group(group, ids.len(), listing, cx));
-            if group.collapsed && !listing.filtering() {
+            if group.collapsed {
                 return rows;
             }
         }
@@ -188,20 +207,21 @@ impl Root {
             .session
             .as_ref()
             .is_some_and(|s| s.projects.iter().any(|p| p.group == Some(id) && Some(p.id) == listing.shown.project));
-        let name = name_label().text_size(px(12.)).font_weight(FontWeight::SEMIBOLD).text_color(colour);
-        let row = row_base(target)
+        let name =
+            name_label(group.name.clone()).text_size(px(12.)).font_weight(FontWeight::SEMIBOLD).text_color(colour);
+        let row = row_base(target, false)
             .mt(px(10.))
             .gap(px(6.))
-            .px(px(6.))
+            .px(px(8.))
             .py(px(3.))
             .when(collapsed && holds_shown, |d| d.bg(colours::selected()))
             .child(
                 div().w(px(14.)).flex_none().text_color(colour).child(group.icon.clone().unwrap_or_else(|| "●".into())),
             )
-            .child(self.name_or_rename(target, name.child(group.name.clone())))
+            .child(self.name_or_rename(target, name))
             .when(collapsed, |d| d.child(ui::dim(format!("{count}"))))
-            .child(div().text_size(px(15.)).text_color(colours::muted()).child(if collapsed { "▸" } else { "▾" }));
-        let row = row_actions(row, target, move |this| this.set_folded(target, !collapsed), cx);
+            .child(div().text_size(px(13.)).text_color(colours::faint()).child(if collapsed { "▸" } else { "▾" }));
+        let row = row_actions(row, target, move |this| this.set_folded(Fold::Group(id), !collapsed), cx);
         let row = draggable(row, target, group.name.clone());
         drop_target(row, target, listing.groups.clone(), cx).into_any_element()
     }
@@ -215,43 +235,45 @@ impl Root {
     ) -> AnyElement {
         let id = project.id;
         let target = Target::Project(id);
-        let collapsed = project.collapsed && !listing.filtering();
-        let row = self.project_row(project, listing.shown.project == Some(id), collapsed, cx);
+        let collapsed = project.collapsed || !listing.tree;
+        let row = self.project_row(project, (listing.shown.project == Some(id), listing.tree), collapsed, cx);
         let row = row_actions(row, target, move |this| this.focus_item("project", id), cx);
         let row = draggable(row, target, project.name.clone());
         let row = drop_target(row, target, siblings, cx);
-        let col = div().flex().flex_col().pt(px(4.)).child(row);
-        if collapsed {
+        let col = div().flex().flex_col().gap(px(1.)).when(listing.tree, |d| d.pt(px(4.))).child(row);
+        if collapsed || !listing.tree {
             return col.into_any_element();
         }
         let workspaces: Rc<Vec<u64>> = Rc::new(project.workspaces.iter().map(|w| w.id).collect());
         let mut children = Vec::new();
-        for ws in project.workspaces.iter().filter(|w| order::shows_workspace(project, w, &listing.query)) {
+        for ws in &project.workspaces {
             children.push(self.render_workspace(ws, listing, workspaces.clone(), cx));
         }
-        col.children(children).into_any_element()
+        col.child(nested(children)).into_any_element()
     }
 
-    fn project_row(&self, project: &Project, shown: bool, collapsed: bool, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn project_row(
+        &self,
+        project: &Project,
+        (shown, tree): (bool, bool),
+        collapsed: bool,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let id = project.id;
         let target = Target::Project(id);
-        let name = name_label()
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(if shown { colours::text() } else { colours::muted() })
-            .child(project.name.clone());
-        row_base(target)
+        let name = name_label(project.name.clone())
+            .min_w(px(0.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(if shown { colours::text() } else { colours::soft() });
+        let lead = if tree { project_fold(id, collapsed, cx) } else { div().id(("project-lead", id)).w(px(4.)) };
+        row_base(target, shown && !tree)
             .gap(px(4.))
-            .px(px(4.))
+            .px(px(6.))
             .py(px(3.))
-            .child(chevron(SharedString::from(format!("project-fold-{id}")), !collapsed).on_click(cx.listener(
-                move |this, _: &ClickEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.set_folded(target, !collapsed);
-                },
-            )))
+            .child(lead)
             .child(self.name_or_rename(target, name))
             .when(collapsed, |d| {
-                d.child(ui::dim(format!("{}", project.workspaces.len()))).child(badge(project.loudest()))
+                d.child(ui::dim(format!("{}", project.workspaces.len()))).child(badge(project.attention()))
             })
             .child(
                 hover_button(SharedString::from(format!("project-add-{id}")), row_group_id(target), "+", 1).on_click(
@@ -262,4 +284,14 @@ impl Root {
                 ),
             )
     }
+}
+
+fn project_fold(id: u64, collapsed: bool, cx: &mut Context<Root>) -> Stateful<Div> {
+    chevron(SharedString::from(format!("project-fold-{id}")), !collapsed).on_click(cx.listener(
+        move |this, _: &ClickEvent, _, cx| {
+            cx.stop_propagation();
+            this.set_folded(Fold::Project(id), !collapsed);
+            cx.notify();
+        },
+    ))
 }

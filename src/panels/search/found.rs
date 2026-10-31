@@ -22,6 +22,14 @@ pub(super) struct Hit {
 }
 
 impl Hit {
+    pub(super) fn reveal_args(&self, query: &str) -> Vec<String> {
+        let mut args = vec!["focus".into(), "--pane".into(), self.pane.to_string(), format!("--reveal={query}")];
+        if let Some(line) = self.line {
+            args.push(format!("--line={line}"));
+        }
+        args
+    }
+
     pub(super) fn when(&self) -> String {
         match (&self.written, self.line) {
             (Some(written), _) => parse_time(written).map(ago).unwrap_or_default(),

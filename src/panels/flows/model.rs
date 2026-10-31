@@ -21,6 +21,8 @@ pub(crate) struct FlowInfo {
     pub flow: FlowSpec,
     pub edited: bool,
     pub default: bool,
+    #[serde(skip)]
+    pub raw: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -71,6 +73,18 @@ pub(crate) struct BackSpec {
     pub at_most: u32,
 }
 
+impl BackSpec {
+    pub(crate) fn label(&self, rounds: Option<u32>, short: bool) -> String {
+        let (when, most) = (&self.when, self.at_most);
+        match (rounds, short) {
+            (Some(rounds), true) => format!("{when} {rounds}/{most}"),
+            (Some(rounds), false) => format!("{when} · {rounds}/{most}"),
+            (None, true) => format!("{when} ≤ {most}"),
+            (None, false) => format!("{when} · at most {most}"),
+        }
+    }
+}
+
 impl FlowInfo {
     pub(crate) fn key(&self) -> String {
         format!("{}\u{1f}{}\u{1f}{}", self.origin, self.name, self.path.as_deref().unwrap_or_default())
@@ -107,6 +121,10 @@ impl FlowSpec {
         self.roles.iter().find(|r| r.name == name)
     }
 
+    pub(crate) fn is_lead(&self, name: &str) -> bool {
+        name == "orchestrator" || name == self.orchestrator.name
+    }
+
     pub(crate) fn every_role(&self) -> impl Iterator<Item = &RoleSpec> {
         std::iter::once(&self.orchestrator).chain(&self.roles)
     }
@@ -121,31 +139,52 @@ impl FlowSpec {
             _ => "open a pull request",
         }
     }
+
+    pub(crate) fn ends_in_commits(&self) -> bool {
+        self.end == "commits"
+    }
+
+    pub(crate) fn loops(&self) -> usize {
+        self.stages.iter().filter(|s| s.back.is_some()).count()
+    }
+
+    pub(crate) fn outline(&self) -> String {
+        let mut parts = vec![plural(self.stages.len(), "stage")];
+        if self.loops() > 0 {
+            parts.push(plural(self.loops(), "loop"));
+        }
+        parts.join(" · ")
+    }
+}
+
+pub(crate) fn plural(count: usize, word: &str) -> String {
+    if count == 1 { format!("1 {word}") } else { format!("{count} {word}s") }
+}
+
+pub(crate) fn initials(name: &str) -> String {
+    let words: Vec<&str> = name.split_whitespace().collect();
+    let firsts: String = words.iter().take(2).filter_map(|w| w.chars().next()).flat_map(char::to_uppercase).collect();
+    if firsts.is_empty() { "?".into() } else { firsts }
 }
 
 impl RoleSpec {
     pub(crate) fn agent_facts(&self) -> Vec<String> {
         [Some(self.agent.clone()), self.model.clone(), self.effort.clone()].into_iter().flatten().collect()
     }
-
-    pub(crate) fn facts(&self) -> Vec<String> {
-        let mut facts = self.agent_facts();
-        facts.push(if self.edits { "edits".into() } else { "read only".into() });
-        if self.worktree == "own" {
-            facts.push("own worktree".into());
-        }
-        if !self.env.is_empty() {
-            facts.push(format!("env {}", self.env.keys().cloned().collect::<Vec<_>>().join(", ")));
-        }
-        if !self.args.is_empty() {
-            facts.push(format!("args {}", self.args.join(" ")));
-        }
-        facts
-    }
 }
 
 pub(crate) fn parse_listing(text: &str) -> anyhow::Result<Listing> {
-    Ok(serde_json::from_str(text)?)
+    let value: serde_json::Value = serde_json::from_str(text)?;
+    let mut listing: Listing = serde_json::from_value(value.clone())?;
+    keep_raw(&mut listing.flows, &value["flows"]);
+    keep_raw(&mut listing.hidden, &value["hidden"]);
+    Ok(listing)
+}
+
+fn keep_raw(flows: &mut [FlowInfo], entries: &serde_json::Value) {
+    for (flow, entry) in flows.iter_mut().zip(entries.as_array().into_iter().flatten()) {
+        flow.raw = entry["flow"].clone();
+    }
 }
 
 pub(crate) fn project_args(project: Option<u64>) -> Vec<String> {
@@ -210,9 +249,30 @@ pub(crate) enum Edge {
     Outside { from: Option<usize>, to: usize },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Progress {
+    Passed,
+    Active,
+    Ahead,
+}
+
 impl Run {
     pub(crate) fn closed(&self) -> bool {
         self.state.as_deref() == Some("closed")
+    }
+
+    pub(crate) fn progress(&self, stage: usize) -> Progress {
+        match self.stage {
+            _ if self.ended => Progress::Passed,
+            Some(active) if stage < active => Progress::Passed,
+            Some(active) if stage == active => Progress::Active,
+            _ => Progress::Ahead,
+        }
+    }
+
+    pub(crate) fn over_limit(&self, stage: usize) -> bool {
+        let rounds = self.rounds.get(stage).copied().unwrap_or_default();
+        self.flow.stages.get(stage).and_then(|s| s.back.as_ref()).is_some_and(|back| rounds > back.at_most)
     }
 
     pub(crate) fn orchestrator(&self) -> Option<&Member> {

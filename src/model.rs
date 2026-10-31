@@ -3,10 +3,14 @@ use std::collections::HashSet;
 use serde::Deserialize;
 
 mod grid;
+pub(crate) mod link;
 mod surface;
 
 pub(crate) use grid::{Applied, Grid, PaneGrid, Run};
-pub(crate) use surface::{Area, Colour, Colours, Cursor, CursorShape, Divider, Frame, MouseMode, Style, UnderlineKind};
+pub(crate) use link::Link;
+pub(crate) use surface::{
+    Area, Branch, Colour, Colours, Cursor, CursorShape, Frame, MouseMode, Node, OpenPopup, Style, UnderlineKind,
+};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -18,6 +22,7 @@ pub(crate) struct Session {
     pub projects: Vec<Project>,
     pub view: Option<ViewInfo>,
     pub config: ConfigInfo,
+    pub home: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
@@ -106,7 +111,7 @@ pub(crate) struct Tab {
 #[serde(default)]
 pub(crate) struct PaneInfo {
     pub id: u64,
-    pub path: String,
+    pub path: Option<String>,
     pub program: Option<String>,
     pub agent: Option<String>,
     pub status: Option<String>,
@@ -167,6 +172,33 @@ impl Session {
     pub(crate) fn pane(&self, id: u64) -> Option<&PaneInfo> {
         self.tabs().flat_map(|t| &t.panes).find(|p| p.id == id)
     }
+
+    pub(crate) fn anyone_working(&self) -> bool {
+        let working = |status: &Option<String>| status.as_deref() == Some("working");
+        self.tabs().any(|t| working(&t.status) || t.panes.iter().any(|p| working(&p.status)))
+    }
+
+    pub(crate) fn sections(&self) -> Vec<(Option<u64>, Vec<u64>)> {
+        let loose: Vec<u64> = self
+            .projects
+            .iter()
+            .filter(|p| p.group.is_none_or(|g| !self.groups.iter().any(|x| x.id == g)))
+            .map(|p| p.id)
+            .collect();
+        let mut out = vec![(None, loose)];
+        for group in &self.groups {
+            let ids = self.projects.iter().filter(|p| p.group == Some(group.id)).map(|p| p.id).collect();
+            out.push((Some(group.id), ids));
+        }
+        out
+    }
+}
+
+impl PaneInfo {
+    pub(crate) fn agent_title(&self) -> Option<String> {
+        let title = self.title.as_deref()?.trim_start_matches(|c: char| !c.is_alphanumeric()).trim();
+        (!title.is_empty()).then(|| title.to_string())
+    }
 }
 
 pub(crate) fn status_rank(status: Option<&str>) -> u8 {
@@ -201,43 +233,66 @@ impl Workspace {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AgentRow<'a> {
     pub pane: &'a PaneInfo,
+    pub workspace: u64,
     pub tab: u64,
     pub depth: usize,
     pub children: usize,
 }
 
+type Placed<'a> = (u64, u64, &'a PaneInfo);
+
+fn agents_of(ws: &Workspace) -> impl Iterator<Item = Placed<'_>> {
+    ws.tabs.iter().flat_map(move |t| t.panes.iter().filter(|p| p.agent.is_some()).map(move |p| (ws.id, t.id, p)))
+}
+
+fn agent_tree<'a>(agents: &[Placed<'a>]) -> Vec<AgentRow<'a>> {
+    let known = |id: Option<u64>| id.filter(|id| agents.iter().any(|(_, _, p)| p.id == *id));
+    let children = |id: u64| agents.iter().filter(|(_, _, p)| known(p.parent) == Some(id)).count();
+    let mut rows = Vec::new();
+    let mut seen = HashSet::new();
+    let mut stack: Vec<(Placed<'a>, usize)> =
+        agents.iter().rev().filter(|(_, _, p)| known(p.parent).is_none()).map(|a| (*a, 0)).collect();
+    while let Some(((workspace, tab, pane), depth)) = stack.pop() {
+        if !seen.insert(pane.id) {
+            continue;
+        }
+        rows.push(AgentRow { pane, workspace, tab, depth, children: children(pane.id) });
+        if pane.collapsed {
+            continue;
+        }
+        for a in agents.iter().rev().filter(|(_, _, p)| known(p.parent) == Some(pane.id)) {
+            stack.push((*a, depth + 1));
+        }
+    }
+    rows
+}
+
 impl Workspace {
     pub(crate) fn agent_rows(&self) -> Vec<AgentRow<'_>> {
-        let agents: Vec<(u64, &PaneInfo)> = self
-            .tabs
-            .iter()
-            .flat_map(|t| t.panes.iter().filter(|p| p.agent.is_some()).map(move |p| (t.id, p)))
-            .collect();
-        let known = |id: Option<u64>| id.filter(|id| agents.iter().any(|(_, p)| p.id == *id));
-        let children = |id: u64| agents.iter().filter(|(_, p)| known(p.parent) == Some(id)).count();
-        let mut rows = Vec::new();
-        let mut seen = HashSet::new();
-        let mut stack: Vec<(u64, &PaneInfo, usize)> =
-            agents.iter().rev().filter(|(_, p)| known(p.parent).is_none()).map(|(t, p)| (*t, *p, 0)).collect();
-        while let Some((tab, pane, depth)) = stack.pop() {
-            if !seen.insert(pane.id) {
-                continue;
-            }
-            rows.push(AgentRow { pane, tab, depth, children: children(pane.id) });
-            if pane.collapsed {
-                continue;
-            }
-            for (t, p) in agents.iter().rev().filter(|(_, p)| known(p.parent) == Some(pane.id)) {
-                stack.push((*t, p, depth + 1));
-            }
-        }
-        rows
+        agent_tree(&agents_of(self).collect::<Vec<_>>())
     }
 }
 
+impl Session {
+    pub(crate) fn agent_rows(&self, order: &[u64]) -> Vec<AgentRow<'_>> {
+        let agents: Vec<Placed<'_>> = order
+            .iter()
+            .filter_map(|id| self.projects.iter().find(|p| p.id == *id))
+            .flat_map(|p| &p.workspaces)
+            .flat_map(agents_of)
+            .collect();
+        agent_tree(&agents)
+    }
+}
+
+fn needs_you(status: &str) -> bool {
+    matches!(status, "waiting" | "failed" | "done" | "pending")
+}
+
 impl Project {
-    pub(crate) fn loudest(&self) -> Option<&str> {
-        self.workspaces.iter().filter_map(Workspace::loudest).max_by_key(|s| status_rank(Some(s)))
+    pub(crate) fn attention(&self) -> Option<&str> {
+        let loudest = self.workspaces.iter().filter_map(Workspace::loudest).max_by_key(|s| status_rank(Some(s)));
+        loudest.filter(|s| needs_you(s))
     }
 }
 

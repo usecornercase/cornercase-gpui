@@ -1,11 +1,23 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use gpui::{AppContext as _, Context, ScrollStrategy};
+use gpui::{AnyView, App, AppContext as _, Context, ScrollStrategy, WeakEntity};
 use grep_regex::RegexMatcher;
 
 use super::disk::{self, Content};
+use super::source::Source;
 use super::{FilesPanel, Spans, Viewer, highlight, tree};
+use crate::model::Link;
+use crate::panels::PanelKind;
+use crate::store::Store;
+
+#[derive(Clone)]
+struct Fetch {
+    id: u64,
+    path: PathBuf,
+    rel: PathBuf,
+    source: Source,
+}
 
 #[derive(Default)]
 pub(super) struct OpenAt {
@@ -57,19 +69,59 @@ impl Viewer {
     }
 }
 
+pub(crate) fn open_link(files: &AnyView, link: &Link, cx: &mut App) {
+    if let Ok(panel) = files.clone().downcast::<FilesPanel>() {
+        show_link(&panel.downgrade(), link, None, cx);
+    }
+}
+
+pub(super) fn show_link(panel: &WeakEntity<FilesPanel>, link: &Link, at: Option<usize>, cx: &mut App) {
+    let _ = panel.update(cx, |panel, cx| panel.open_link(link, at, cx));
+    dock_files(cx);
+}
+
+pub(super) fn dock_files(cx: &mut App) {
+    Store::get(cx).update(cx, |s, cx| {
+        s.close_dialog(cx);
+        s.close_sheet(cx);
+        s.open(PanelKind::Files, cx);
+    });
+}
+
+fn link_path(link: &Link, shown: Option<u64>) -> PathBuf {
+    match &link.relative {
+        Some(rel) if link.inside && link.workspace == shown => PathBuf::from(rel),
+        _ => PathBuf::from(&link.path),
+    }
+}
+
 impl FilesPanel {
+    fn open_link(&mut self, link: &Link, at: Option<usize>, cx: &mut Context<Self>) {
+        let from_search = self.place().is_some_and(|p| !p.query.trim().is_empty());
+        let target = OpenAt { line: at.or_else(|| link.first_line()), lit: None, from_search };
+        self.menu = None;
+        self.open_file(link_path(link, self.current), target, cx);
+    }
+
     pub(super) fn open_file(&mut self, rel: PathBuf, at: OpenAt, cx: &mut Context<Self>) {
         let Some(id) = self.current else { return };
         let Some(place) = self.places.get_mut(&id) else { return };
         let path = place.root.join(&rel);
         place.last = Some(rel.clone());
-        let opened = tree::reveal(&mut place.expanded, &rel);
-        place.viewer = Some(Viewer::new(path.clone(), rel, at));
+        let opened = if rel.is_absolute() { Vec::new() } else { tree::reveal(&mut place.expanded, &rel) };
+        let fetch = Fetch { id, path: path.clone(), rel: rel.clone(), source: place.source.clone() };
+        place.viewer = Some(Viewer::new(path, rel, at));
         if !opened.is_empty() {
             self.list(id, opened, cx);
         }
-        Self::read_file(id, path, true, cx);
+        Self::read_file(fetch, true, cx);
         cx.notify();
+    }
+
+    pub(super) fn reveal(&mut self, id: u64, root: &Path, rel: PathBuf, cx: &mut Context<Self>) {
+        let Some(place) = self.place().filter(|p| self.current == Some(id) && p.root == root) else { return };
+        let from_search = !place.query.trim().is_empty();
+        self.open_file(rel, OpenAt { from_search, ..OpenAt::default() }, cx);
     }
 
     fn apply_read(
@@ -94,9 +146,9 @@ impl FilesPanel {
         cx.notify();
     }
 
-    fn read_file(id: u64, path: PathBuf, first: bool, cx: &mut Context<Self>) {
-        let read_path = path.clone();
-        let read = cx.background_spawn(async move { disk::read(&read_path) });
+    fn read_file(fetch: Fetch, first: bool, cx: &mut Context<Self>) {
+        let Fetch { id, path, rel, source } = fetch;
+        let read = cx.background_spawn(async move { source.read(&rel) });
         cx.spawn(async move |this, cx| {
             let (content, stamp) = read.await;
             let lines = text_lines(&content);
@@ -121,25 +173,28 @@ impl FilesPanel {
 
     pub(super) fn check_file(&mut self, cx: &mut Context<Self>) {
         let Some(id) = self.current else { return };
-        let Some(viewer) = self.places.get_mut(&id).and_then(|p| p.viewer.as_mut()) else { return };
+        let Some(place) = self.places.get_mut(&id) else { return };
+        let source = place.source.clone();
+        let Some(viewer) = place.viewer.as_mut() else { return };
         if viewer.checking {
             return;
         }
         viewer.checking = true;
-        let path = viewer.path.clone();
+        let fetch = Fetch { id, path: viewer.path.clone(), rel: viewer.rel.clone(), source };
         let known = viewer.stamp;
-        let stamp_path = path.clone();
-        let stamp = cx.background_spawn(async move { disk::stamp(&stamp_path) });
+        let asked = fetch.clone();
+        let stamp = cx.background_spawn(async move { asked.source.stamp(&asked.rel) });
         cx.spawn(async move |this, cx| {
             let unchanged = stamp.await == known;
-            let _ = this.update(cx, |this, cx| this.checked(id, path, unchanged, cx));
+            let _ = this.update(cx, |this, cx| this.checked(fetch, unchanged, cx));
         })
         .detach();
     }
 
-    fn checked(&mut self, id: u64, path: PathBuf, unchanged: bool, cx: &mut Context<Self>) {
+    fn checked(&mut self, fetch: Fetch, unchanged: bool, cx: &mut Context<Self>) {
+        let id = fetch.id;
         if !unchanged {
-            Self::read_file(id, path, false, cx);
+            Self::read_file(fetch, false, cx);
             return;
         }
         if let Some(viewer) = self.places.get_mut(&id).and_then(|p| p.viewer.as_mut()) {
@@ -167,3 +222,6 @@ impl FilesPanel {
         cx.notify();
     }
 }
+
+#[cfg(test)]
+mod tests;

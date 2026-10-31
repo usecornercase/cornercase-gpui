@@ -1,26 +1,27 @@
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, InteractiveElement as _,
+    AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _,
     Window, div, px,
 };
 
-use crate::store::{Store, args};
-use crate::theme::colours;
+use crate::store::{self, Busy, Store, args};
+use crate::theme::{colours, radius};
 use crate::ui::{self, TextField, TextFieldEvent};
 
+mod remote;
+mod shortcuts;
+
+pub(crate) use remote::{PathQuestion, ask_path, connect};
+pub(crate) use shortcuts::shortcuts;
+
 pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> Div {
-    div()
-        .w(px(460.))
-        .p(px(18.))
+    ui::glass::card(radius::SHEET)
+        .w(px(480.))
+        .p(px(22.))
         .flex()
         .flex_col()
-        .gap(px(14.))
-        .rounded(px(10.))
-        .bg(colours::panel())
-        .border_1()
-        .border_color(colours::border())
-        .shadow_lg()
-        .child(ui::title(title))
+        .gap(px(16.))
+        .child(ui::title(title).text_size(px(15.)))
         .child(body)
         .child(div().flex().justify_end().gap(px(8.)).child(buttons))
 }
@@ -37,13 +38,18 @@ fn close(cx: &mut App) {
     Store::get(cx).update(cx, Store::close_dialog);
 }
 
+fn show(view: AnyView, focus: &FocusHandle, window: &mut Window, cx: &mut App) {
+    Store::get(cx).update(cx, |s, cx| s.show_dialog(view, cx));
+    window.focus(focus);
+}
+
 fn text_field<T: 'static>(
     placeholder: &str,
     cx: &mut Context<T>,
     on_submit: impl Fn(&mut T, &mut Window, &mut Context<T>) + 'static,
     window: &mut Window,
 ) -> Entity<TextField> {
-    let field = cx.new(|cx| TextField::new(placeholder.to_string(), cx));
+    let field = cx.new(|cx| TextField::new(placeholder.to_string(), cx).in_tab_order());
     cx.subscribe_in(&field, window, move |this, _, event, window, cx| match event {
         TextFieldEvent::Submit => on_submit(this, window, cx),
         TextFieldEvent::Cancel => close(cx),
@@ -72,8 +78,7 @@ pub(crate) fn new_workspace(project: Option<u64>, window: &mut Window, cx: &mut 
         NewWorkspace { project: id, project_name: name, name: name_field, worktree: true }
     });
     let focus = view.read(cx).name.read(cx).focus_handle(cx);
-    store.update(cx, |s, cx| s.show_dialog(view.into(), cx));
-    window.focus(&focus);
+    show(view.into(), &focus, window, cx);
 }
 
 impl NewWorkspace {
@@ -86,8 +91,9 @@ impl NewWorkspace {
         if self.worktree {
             a.push("--worktree".into());
         }
+        let busy = Busy::new(format!("new-workspace:{name}"), format!("Creating {name}…"));
         Store::get(cx).update(cx, |s, cx| {
-            s.act(a);
+            s.act_busy(busy, a, cx);
             s.close_dialog(cx);
         });
     }
@@ -118,6 +124,11 @@ impl Render for NewWorkspace {
     }
 }
 
+pub(crate) fn starting(agent: &str) -> Busy {
+    let label = if agent.is_empty() { "Starting an agent…".to_string() } else { format!("Starting {agent}…") };
+    Busy::new(format!("start:{agent}"), label)
+}
+
 pub(crate) struct StartAgent {
     agent: Entity<TextField>,
     prompt: Entity<TextField>,
@@ -137,8 +148,7 @@ pub(crate) fn start_agent(window: &mut Window, cx: &mut App) {
         StartAgent { agent, prompt, worktree }
     });
     let focus = view.read(cx).prompt.read(cx).focus_handle(cx);
-    store.update(cx, |s, cx| s.show_dialog(view.into(), cx));
-    window.focus(&focus);
+    show(view.into(), &focus, window, cx);
 }
 
 impl StartAgent {
@@ -146,6 +156,7 @@ impl StartAgent {
         let agent = self.agent.read(cx).text().trim().to_string();
         let prompt = self.prompt.read(cx).text().trim().to_string();
         let worktree = self.worktree.read(cx).text().trim().to_string();
+        let busy = starting(&agent);
         let mut a = args(&["start"]);
         if !agent.is_empty() {
             a.push(agent);
@@ -160,7 +171,7 @@ impl StartAgent {
             a.push(worktree);
         }
         Store::get(cx).update(cx, |s, cx| {
-            s.act(a);
+            s.act_busy(busy, a, cx);
             s.close_dialog(cx);
         });
     }
@@ -168,18 +179,15 @@ impl StartAgent {
 
 impl Render for StartAgent {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let boxed = |field: &Entity<TextField>, window: &Window, cx: &App| {
-            ui::input_box(field.clone(), field.read(cx).focus_handle(cx).is_focused(window))
-        };
         frame(
             "Start an agent in a new tab",
             div()
                 .flex()
                 .flex_col()
                 .gap(px(10.))
-                .child(ui::field("Agent", boxed(&self.agent, window, cx)))
-                .child(ui::field("Prompt", boxed(&self.prompt, window, cx)))
-                .child(ui::field("Worktree", boxed(&self.worktree, window, cx))),
+                .child(ui::field("Agent", ui::boxed(&self.agent, window, cx)))
+                .child(ui::field("Prompt", ui::boxed(&self.prompt, window, cx)))
+                .child(ui::field("Worktree", ui::boxed(&self.worktree, window, cx))),
             cancel_and(
                 ui::primary_button("start", "Start")
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
@@ -188,11 +196,17 @@ impl Render for StartAgent {
     }
 }
 
+type Reply = Box<dyn FnOnce(anyhow::Result<String>, &mut App)>;
+type OnYes = Box<dyn Fn(&mut App)>;
+
 pub(crate) struct Question {
     title: String,
     message: String,
     button: String,
     command: Vec<String>,
+    reply: Option<Reply>,
+    on_yes: Option<OnYes>,
+    busy: Option<Busy>,
 }
 
 impl Question {
@@ -202,7 +216,23 @@ impl Question {
         button: impl Into<String>,
         command: Vec<String>,
     ) -> Self {
-        Self { title: title.into(), message: message.into(), button: button.into(), command }
+        let (title, message, button) = (title.into(), message.into(), button.into());
+        Self { title, message, button, command, reply: None, on_yes: None, busy: None }
+    }
+
+    pub(crate) fn busy(mut self, busy: Busy) -> Self {
+        self.busy = Some(busy);
+        self
+    }
+
+    pub(crate) fn on_yes(mut self, then: impl Fn(&mut App) + 'static) -> Self {
+        self.on_yes = Some(Box::new(then));
+        self
+    }
+
+    pub(crate) fn on_reply(mut self, reply: impl FnOnce(anyhow::Result<String>, &mut App) + 'static) -> Self {
+        self.reply = Some(Box::new(reply));
+        self
     }
 }
 
@@ -214,15 +244,31 @@ pub(crate) struct Confirm {
 pub(crate) fn confirm(question: Question, window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| Confirm { question, focus: cx.focus_handle() });
     let focus = view.read(cx).focus.clone();
-    Store::get(cx).update(cx, |s, cx| s.show_dialog(view.into(), cx));
-    window.focus(&focus);
+    show(view.into(), &focus, window, cx);
 }
 
 impl Confirm {
     fn run(&mut self, cx: &mut Context<Self>) {
         let command = self.question.command.clone();
+        if let Some(then) = self.question.on_yes.take() {
+            Store::get(cx).update(cx, Store::close_dialog);
+            then(cx);
+            return;
+        }
+        let (reply, busy) = (self.question.reply.take(), self.question.busy.take());
+        if let Some(reply) = reply {
+            match busy {
+                Some(busy) => store::queued_busy(cx, busy, command, reply),
+                None => store::queued(cx, command, reply),
+            }
+            Store::get(cx).update(cx, Store::close_dialog);
+            return;
+        }
         Store::get(cx).update(cx, |s, cx| {
-            s.cmd(command);
+            match busy {
+                Some(busy) => s.run_aside(busy, command, cx),
+                None => s.cmd(command),
+            }
             s.close_dialog(cx);
         });
     }
@@ -232,10 +278,10 @@ impl Render for Confirm {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| match e.keystroke.key.as_str() {
-                "enter" => this.run(cx),
-                "escape" => close(cx),
-                _ => {}
+            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| {
+                if e.keystroke.key == "enter" {
+                    this.run(cx);
+                }
             }))
             .child(frame(
                 self.question.title.clone(),

@@ -1,30 +1,25 @@
 use gpui::{
-    AnyElement, Div, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText, IntoElement,
-    ParentElement as _, SharedString, StrikethroughStyle, Styled as _, StyledText, UnderlineStyle, div,
-    prelude::FluentBuilder as _, px,
+    AnyElement, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText, IntoElement, ParentElement as _,
+    SharedString, StrikethroughStyle, Styled as _, StyledText, UnderlineStyle, div, prelude::FluentBuilder as _, px,
 };
 
 use super::markdown::{Block, Inline, Mark};
 use crate::theme::FONT_FAMILY;
-use crate::theme::colours;
+use crate::theme::{colours, radius};
 
-pub(super) fn markdown(id: &str, source: &str) -> Vec<AnyElement> {
-    super::markdown::parse(source)
-        .into_iter()
-        .enumerate()
-        .map(|(i, block)| self::block(SharedString::from(format!("{id}-{i}")), block))
-        .collect()
+pub(super) fn blocks(id: &str, blocks: &[Block]) -> Vec<AnyElement> {
+    blocks.iter().enumerate().map(|(i, b)| block(SharedString::from(format!("{id}-{i}")), b)).collect()
 }
 
 pub(super) fn raw(source: &str) -> AnyElement {
     code_box(source)
 }
 
-fn block(id: SharedString, block: Block) -> AnyElement {
+pub(super) fn block(id: SharedString, block: &Block) -> AnyElement {
     match block {
-        Block::Heading(level, text) => heading(level, inline((id, 0), text)),
+        Block::Heading(level, text) => heading(*level, inline((id, 0), text)),
         Block::Paragraph(text) => div().child(inline((id, 0), text)).into_any_element(),
-        Block::Item(depth, marker, text) => item(depth, marker, inline((id, 0), text)),
+        Block::Item(depth, marker, text) => item(*depth, marker, inline((id, 0), text)),
         Block::Quote(text) => div()
             .pl(px(10.))
             .border_l_2()
@@ -32,7 +27,7 @@ fn block(id: SharedString, block: Block) -> AnyElement {
             .text_color(colours::muted())
             .child(inline((id, 0), text))
             .into_any_element(),
-        Block::Code(text) => code_box(&text),
+        Block::Code(text) => code_box(text),
         Block::Table(rows) => table(rows),
         Block::Rule => div().h(px(1.)).my(px(4.)).bg(colours::border()).into_any_element(),
     }
@@ -54,7 +49,7 @@ fn heading(level: u8, text: AnyElement) -> AnyElement {
         .into_any_element()
 }
 
-fn item(depth: usize, marker: String, text: AnyElement) -> AnyElement {
+fn item(depth: usize, marker: &str, text: AnyElement) -> AnyElement {
     let done = marker == "☑";
     let depth = f32::from(u8::try_from(depth).unwrap_or(u8::MAX));
     div()
@@ -66,7 +61,7 @@ fn item(depth: usize, marker: String, text: AnyElement) -> AnyElement {
                 .flex_none()
                 .min_w(px(14.))
                 .text_color(if done { colours::done() } else { colours::faint() })
-                .child(marker),
+                .child(marker.to_string()),
         )
         .child(div().flex_1().min_w_0().child(text))
         .into_any_element()
@@ -74,9 +69,9 @@ fn item(depth: usize, marker: String, text: AnyElement) -> AnyElement {
 
 fn code_box(text: &str) -> AnyElement {
     div()
-        .px(px(10.))
-        .py(px(8.))
-        .rounded(px(5.))
+        .px(px(12.))
+        .py(px(10.))
+        .rounded(px(radius::CONTROL))
         .bg(colours::terminal())
         .border_1()
         .border_color(colours::border())
@@ -84,28 +79,30 @@ fn code_box(text: &str) -> AnyElement {
         .text_size(px(12.))
         .text_color(colours::text())
         .overflow_hidden()
-        .children(text.lines().map(code_line))
+        .children(code_text(text))
         .into_any_element()
 }
 
-fn code_line(line: &str) -> Div {
-    let line = line.replace('\t', "    ");
-    div().min_h(px(16.)).child(if line.is_empty() { " ".to_string() } else { line })
+fn code_text(text: &str) -> Option<String> {
+    let lines: Vec<String> = text.lines().map(|line| line.replace('\t', "    ")).collect();
+    (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
-fn table(rows: Vec<Vec<String>>) -> AnyElement {
+fn table(rows: &[Vec<String>]) -> AnyElement {
     let columns = rows.iter().map(Vec::len).max().unwrap_or(0);
     div()
         .flex()
         .flex_col()
-        .rounded(px(5.))
+        .rounded(px(radius::CONTROL))
         .border_1()
         .border_color(colours::border())
         .text_size(px(12.))
-        .children(rows.into_iter().enumerate().map(move |(r, row)| {
+        .children(rows.iter().enumerate().map(move |(r, row)| {
             div()
                 .flex()
-                .when(r == 0, |d| d.font_weight(FontWeight::SEMIBOLD).bg(colours::sidebar()))
+                .when(r == 0, |d| {
+                    d.font_weight(FontWeight::SEMIBOLD).rounded_t(px(radius::CONTROL - 1.)).bg(colours::sidebar())
+                })
                 .when(r > 0, |d| d.border_t_1().border_color(colours::border()))
                 .children((0..columns).map(|c| {
                     div().flex_1().min_w_0().px(px(8.)).py(px(3.)).child(row.get(c).cloned().unwrap_or_default())
@@ -114,13 +111,13 @@ fn table(rows: Vec<Vec<String>>) -> AnyElement {
         .into_any_element()
 }
 
-pub(super) fn inline(id: impl Into<ElementId>, text: Inline) -> AnyElement {
+pub(super) fn inline(id: impl Into<ElementId>, text: &Inline) -> AnyElement {
     let highlights: Vec<_> = text.runs().into_iter().map(|(range, marks)| (range, style(&marks))).collect();
     let styled = StyledText::new(text.text.clone()).with_highlights(highlights);
     if text.links.is_empty() {
         return styled.into_any_element();
     }
-    let (ranges, urls): (Vec<_>, Vec<_>) = text.links.into_iter().unzip();
+    let (ranges, urls): (Vec<_>, Vec<_>) = text.links.iter().cloned().unzip();
     InteractiveText::new(id, styled)
         .on_click(ranges, move |i, _, cx| {
             if let Some(url) = urls.get(i) {
@@ -152,3 +149,6 @@ fn style(marks: &[Mark]) -> HighlightStyle {
     }
     style
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,0 +1,26 @@
+{
+  "ports": [
+    {
+      "addresses": [
+        "127.0.0.1"
+      ],
+      "agent": null,
+      "args": [
+        "/usr/bin/python3",
+        "-m",
+        "http.server",
+        "0",
+        "--bind",
+        "127.0.0.1"
+      ],
+      "pane": 28,
+      "pid": 52064,
+      "port": 61440,
+      "program": "Python",
+      "project": 21,
+      "url": "http://localhost:61440",
+      "via": "pane",
+      "workspace": 22
+    }
+  ]
+}

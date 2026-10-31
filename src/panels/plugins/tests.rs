@@ -1,4 +1,4 @@
-use super::data::{ActionList, List, Manifest, Plugin, Ran, duration, shell_quote, target};
+use super::data::{ActionList, List, Manifest, Plugin, Ran, duration, target};
 use crate::model::Shown;
 use crate::store::ToastKind;
 
@@ -65,12 +65,4 @@ fn runs_on_the_most_precise_place_shown() {
     assert_eq!(target(&ctx(&["pane", "button"]), shown), Some(vec![]));
     assert_eq!(target(&ctx(&["pane"]), Shown::default()), None);
     assert_eq!(target(&ctx(&[]), shown), None);
-}
-
-#[test]
-fn quotes_for_the_shell() {
-    assert_eq!(shell_quote("acme/notes@v1.2"), "acme/notes@v1.2");
-    assert_eq!(shell_quote("/My Plugins/x"), "'/My Plugins/x'");
-    assert_eq!(shell_quote("it's"), r"'it'\''s'");
-    assert_eq!(shell_quote(""), "''");
 }

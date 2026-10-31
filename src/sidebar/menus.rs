@@ -2,19 +2,21 @@ use gpui::{Context, Pixels, Point, SharedString, Window};
 
 use super::actions::{into_group, ungroup};
 use super::workspace::plural;
-use super::{Target, cmd, forms};
+use super::{Fold, Target, cmd, forms};
 use crate::app::{Root, tilde};
-use crate::context_menu::{Entry, act, danger, item, submenu};
+use crate::cli;
+use crate::context_menu::{Entry, act, act_busy, danger, item, submenu};
 use crate::dialogs;
 use crate::model::{Project, PullRequest, Session, Workspace};
-use crate::store::ToastKind;
+use crate::panels::PanelKind;
+use crate::store::{Busy, ToastKind};
 
 fn rename_item(label: &str, target: Target) -> Entry {
     item(label.to_string(), move |this, window, cx| this.start_rename(target, window, cx))
 }
 
-fn fold_item(target: Target, collapsed: bool) -> Entry {
-    item(if collapsed { "Expand" } else { "Collapse" }, move |this, _, _| this.set_folded(target, !collapsed))
+fn fold_item(fold: Fold, collapsed: bool) -> Entry {
+    item(if collapsed { "Expand" } else { "Collapse" }, move |this, _, _| this.set_folded(fold, !collapsed))
 }
 
 fn finder_item(path: String) -> Entry {
@@ -31,8 +33,20 @@ fn copy_item(label: &'static str, text: String, toast: String) -> Entry {
     })
 }
 
-fn path_items(path: &str) -> [Entry; 2] {
-    [finder_item(path.to_string()), copy_item("Copy path", path.to_string(), format!("Copied {}", tilde(path)))]
+fn path_items(path: &str) -> Vec<Entry> {
+    let copy = copy_item("Copy path", path.to_string(), format!("Copied {}", tilde(path)));
+    if cli::host().is_some() { vec![copy] } else { vec![finder_item(path.to_string()), copy] }
+}
+
+fn sheet_item(label: &'static str, kind: PanelKind, focus: Option<(&'static str, u64)>) -> Entry {
+    item(label, move |this, _, cx| {
+        this.store.update(cx, |s, cx| {
+            if let Some((what, id)) = focus {
+                s.focus(what, id);
+            }
+            s.open_sheet(kind, cx);
+        });
+    })
 }
 
 fn command_item(label: impl Into<SharedString>, args: Vec<String>) -> Entry {
@@ -45,11 +59,11 @@ fn group_menu(session: &Session, id: u64) -> Vec<Entry> {
     let (name, style_name) = (group.name.clone(), group.name.clone());
     let count = session.projects.iter().filter(|p| p.group == Some(id)).count();
     vec![
-        item("Add project…", move |_, _, cx| Root::open_project_into(Some(id), cx)),
+        item("Add project…", move |_, window, cx| Root::open_project_into(Some(id), window, cx)),
         Entry::Separator,
         rename_item("Rename group", target),
         item("Icon and colour…", move |_, window, cx| forms::group_style(id, style_name.clone(), window, cx)),
-        fold_item(target, group.collapsed),
+        fold_item(Fold::Group(id), group.collapsed),
         Entry::Separator,
         danger("Delete group…", move |_, window, cx| forms::delete_group(id, name.clone(), count, window, cx)),
     ]
@@ -77,14 +91,15 @@ fn project_menu(session: &Session, id: u64) -> Vec<Entry> {
     let name = project.name.clone();
     let mut entries = vec![
         item("New workspace…", move |_, window, cx| dialogs::new_workspace(Some(id), window, cx)),
-        act("Start agent here", cmd(&["start", "--project", &id.to_string(), "--focus"])),
+        act_busy("Start agent here", dialogs::starting(""), cmd(&["start", "--project", &id.to_string(), "--focus"])),
         Entry::Separator,
         rename_item("Rename project", target),
         submenu("Move to group", move_to_group_items(session, project)),
-        fold_item(target, project.collapsed),
+        fold_item(Fold::Project(id), project.collapsed),
         Entry::Separator,
     ];
     entries.extend(path_items(&project.path));
+    entries.push(sheet_item("Worktrees…", PanelKind::Worktrees, None));
     entries.push(Entry::Separator);
     entries.push(danger("Close project…", move |_, window, cx| {
         dialogs::confirm(
@@ -93,7 +108,8 @@ fn project_menu(session: &Session, id: u64) -> Vec<Entry> {
                 "Every shell in it stops, agents included. Its folder and worktrees stay on disk.",
                 "Close project",
                 cmd(&["close", "--project", &id.to_string()]),
-            ),
+            )
+            .busy(Busy::new(format!("close-project:{id}"), format!("Closing {name}…"))),
             window,
             cx,
         );
@@ -128,11 +144,43 @@ fn close_workspace_item(ws: &Workspace) -> Entry {
                 message,
                 "Close",
                 cmd(&["close", "--workspace", &id.to_string()]),
-            ),
+            )
+            .busy(Busy::new(format!("close-workspace:{id}"), format!("Closing {name}…"))),
             window,
             cx,
         );
     })
+}
+
+fn ask_item(label: String, question: impl Fn() -> dialogs::Question + 'static) -> Entry {
+    danger(label, move |_, window, cx| dialogs::confirm(question(), window, cx))
+}
+
+fn agent_items(ws: &Workspace) -> Vec<Entry> {
+    let (ids, name) = (ws.id.to_string(), ws.name.clone());
+    let mut entries = Vec::new();
+    if !ws.agent_rows().is_empty() {
+        let (ws_id, name) = (ws.id, name.clone());
+        entries.push(danger("Close its agents…", move |_, _, cx| forms::close_agents(ws_id, name.clone(), cx)));
+    }
+    if let Some(n) = ws.closed_agents.filter(|n| *n > 0) {
+        let reopening = Busy::new(format!("reopen:{ids}"), format!("Reopening the agents of {name}…"));
+        let reopen = cmd(&["agents", "reopen", "--workspace", &ids]);
+        entries.push(item(format!("Reopen {}", plural(n, "closed agent")), move |this, _, cx| {
+            let (busy, args) = (reopening.clone(), reopen.clone());
+            this.store.update(cx, |s, cx| s.run_aside(busy, args, cx));
+        }));
+        entries.push(ask_item(format!("Forget {}…", plural(n, "closed agent")), move || {
+            dialogs::Question::new(
+                format!("Forget the closed agents of {name}?"),
+                "They can no longer be reopened from here; their conversations stay with each agent.",
+                "Forget",
+                cmd(&["agents", "forget", "--workspace", &ids, "--yes"]),
+            )
+            .busy(Busy::new(format!("forget:{ids}"), format!("Forgetting the closed agents of {name}…")))
+        }));
+    }
+    entries
 }
 
 fn workspace_menu(session: &Session, id: u64) -> Vec<Entry> {
@@ -140,22 +188,18 @@ fn workspace_menu(session: &Session, id: u64) -> Vec<Entry> {
     let ids = id.to_string();
     let mut entries = vec![
         act("New tab here", cmd(&["new-tab", "--workspace", &ids, "--focus"])),
-        act("Start agent here", cmd(&["start", "--workspace", &ids, "--focus"])),
+        act_busy("Start agent here", dialogs::starting(""), cmd(&["start", "--workspace", &ids, "--focus"])),
     ];
-    if let Some(n) = ws.closed_agents.filter(|n| *n > 0) {
-        entries.push(command_item(
-            format!("Reopen {}", plural(n, "closed agent")),
-            cmd(&["agents", "reopen", "--workspace", &ids]),
-        ));
-    }
+    entries.extend(agent_items(ws));
     entries.push(Entry::Separator);
     entries.push(rename_item("Rename workspace", Target::Workspace(id)));
     entries.extend(ws.pull_request.as_ref().map(pull_request_menu));
     if !ws.agent_rows().is_empty() {
-        entries.push(fold_item(Target::Workspace(id), ws.collapsed));
+        entries.push(fold_item(Fold::Workspace(id), ws.collapsed));
     }
     entries.push(Entry::Separator);
     entries.extend(path_items(&ws.path));
+    entries.push(sheet_item("Ports…", PanelKind::Ports, Some(("workspace", id))));
     entries.push(Entry::Separator);
     if ws.worktree {
         let name = ws.name.clone();
@@ -224,9 +268,7 @@ impl Root {
             entries.push(act("Mark as pending review", cmd(&["mark", "--pane", &p])));
         }
         if self.agent_has_children(pane) {
-            let verb = if info.collapsed { "expand" } else { "collapse" };
-            let label = if info.collapsed { "Expand" } else { "Collapse" };
-            entries.push(command_item(label, cmd(&[verb, "--pane", &p])));
+            entries.push(fold_item(Fold::Pane(pane), info.collapsed));
         }
         entries.push(Entry::Separator);
         entries.push(danger("Close agent…", move |_, window, cx| forms::close_agent(pane, window, cx)));

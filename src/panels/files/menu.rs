@@ -6,8 +6,8 @@ use gpui::{
     deferred, div, px,
 };
 
-use crate::store::ToastKind;
-use crate::theme::colours;
+use crate::store::{Busy, ToastKind};
+use crate::theme::{colours, radius};
 use crate::ui;
 
 use super::open::{self, Launch, Opener};
@@ -61,8 +61,12 @@ impl FilesPanel {
         let label = opening.opener.label();
         let job = cx.background_spawn(async move { opening.run() });
         let store = self.store.clone();
+        let busy = Busy::new("open-with", format!("Opening in {label}…"));
+        let id = store.update(cx, |s, cx| s.start_job(busy, cx));
         cx.spawn(async move |_, cx| {
-            let Err(e) = job.await else { return };
+            let opened = job.await;
+            let _ = store.update(cx, |s, cx| s.end_job(id, cx));
+            let Err(e) = opened else { return };
             let text = format!("could not open in {label}: {e}");
             let _ = store.update(cx, |s, cx| s.toast(text, ToastKind::Error, cx));
         })
@@ -99,11 +103,10 @@ impl FilesPanel {
         entries
     }
 
-    fn copy_entries(menu: &Menu, cx: &mut Context<Self>) -> [AnyElement; 3] {
+    fn copy_entries(menu: &Menu, cx: &mut Context<Self>) -> [AnyElement; 2] {
         let abs = menu.path.display().to_string();
         let rel = menu.target.rel.display().to_string();
         [
-            div().my(px(4.)).h(px(1.)).bg(colours::border()).into_any_element(),
             menu_entry("files-menu-copy", "Copy path")
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.copy(abs.clone(), "path", cx)))
                 .into_any_element(),
@@ -115,17 +118,16 @@ impl FilesPanel {
 
     pub(super) fn render_menu(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let menu = self.menu.as_ref()?;
-        let mut entries = self.opener_entries(menu, cx);
+        let mut entries = Vec::new();
+        if !self.remote {
+            entries = self.opener_entries(menu, cx);
+            entries.push(div().my(px(4.)).h(px(1.)).bg(colours::border()).into_any_element());
+        }
         entries.extend(Self::copy_entries(menu, cx));
-        let frame = div()
+        let frame = ui::glass::card(radius::CARD)
             .id("files-menu")
             .min_w(px(200.))
             .p(px(4.))
-            .rounded(px(6.))
-            .bg(colours::panel())
-            .border_1()
-            .border_color(colours::border())
-            .shadow_lg()
             .text_size(px(13.))
             .children(entries)
             .on_mouse_down_out(cx.listener(|this, _: &MouseDownEvent, _, cx| {

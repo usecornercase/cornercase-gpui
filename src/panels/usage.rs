@@ -4,19 +4,16 @@ mod limits;
 mod stats;
 mod widgets;
 
-use std::process::Stdio;
 use std::time::Duration;
 
-use anyhow::bail;
 use gpui::{
     AnyElement, AnyView, AppContext as _, AsyncApp, ClickEvent, ClipboardItem, Context, Div, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Subscription, Task,
-    WeakEntity, Window, div, prelude::FluentBuilder as _, px,
+    IntoElement, ParentElement as _, Render, Stateful, StatefulInteractiveElement as _, Styled as _, Subscription,
+    Task, WeakEntity, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use self::data::{Plans, Stats, WINDOWS};
 use self::widgets::{card, failure, loading, plural, stale};
-use crate::cli;
 use crate::panels::PanelKind;
 use crate::store::{self, Store, ToastKind};
 use crate::theme::colours;
@@ -223,18 +220,21 @@ impl UsagePanel {
             .gap(px(10.))
             .child(ui::segments(tabs))
             .child(div().flex_1())
-            .child(ui::dim(status))
-            .when(can_share, |d| {
-                d.child(
-                    ui::button("usage-share", if self.sharing { "Copying…" } else { "Copy card link" })
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.share(cx))),
-                )
+            .when(!loading, |d| d.child(ui::dim(status)))
+            .when(can_share, |d| d.child(self.share_button(cx)))
+            .child(if loading {
+                ui::busy_button("usage-refresh", "Refreshing…", ui::Tone::Plain)
+            } else {
+                ui::button("usage-refresh", "Refresh")
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.refresh(true, cx)))
             })
-            .child(
-                ui::button("usage-refresh", if loading { "Refreshing…" } else { "Refresh" })
-                    .when(loading, |d| d.cursor_default().opacity(0.6))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.refresh(true, cx))),
-            )
+    }
+
+    fn share_button(&self, cx: &Context<Self>) -> Stateful<Div> {
+        if self.sharing {
+            return ui::busy_button("usage-share", "Copying…", ui::Tone::Plain);
+        }
+        ui::button("usage-share", "Copy card link").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.share(cx)))
     }
 
     fn limits_page(&self, cx: &Context<Self>) -> AnyElement {
@@ -370,20 +370,12 @@ async fn tick_while_alive(this: WeakEntity<UsagePanel>, cx: &mut AsyncApp) {
     }
 }
 
-fn run_json<T: serde::de::DeserializeOwned + Send + 'static>(
+fn run_json<T: serde::de::DeserializeOwned + 'static>(
     cx: &mut Context<UsagePanel>,
     args: Vec<String>,
     then: impl FnOnce(&mut UsagePanel, anyhow::Result<T>, &mut Context<UsagePanel>) + 'static,
 ) {
-    let task = cx.background_spawn(async move {
-        let out = cli::command(&args).stdin(Stdio::null()).output()?;
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        if !out.status.success() && stdout.trim().is_empty() {
-            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            let name = args.first().map(String::as_str).unwrap_or_default();
-            bail!("cornercase {name}: {}", if err.is_empty() { "failed".into() } else { err });
-        }
-        Ok(serde_json::from_str::<T>(&stdout)?)
+    store::run_partial(cx, args, move |this, out, cx| {
+        then(this, out.and_then(|out| Ok(serde_json::from_str::<T>(&out)?)), cx);
     });
-    crate::panels::flows::deliver(cx, task, then);
 }

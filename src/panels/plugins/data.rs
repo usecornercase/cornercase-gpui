@@ -88,7 +88,7 @@ impl Source {
     }
 }
 
-fn short(commit: &str) -> &str {
+pub(super) fn short(commit: &str) -> &str {
     commit.get(..12).unwrap_or(commit)
 }
 
@@ -199,12 +199,4 @@ pub(super) fn target(contexts: &[String], shown: Shown) -> Option<Vec<String>> {
 
 pub(super) fn first_line(text: &str) -> String {
     text.lines().next().unwrap_or_default().trim().to_string()
-}
-
-pub(super) fn shell_quote(word: &str) -> String {
-    if !word.is_empty() && word.chars().all(|c| c.is_ascii_alphanumeric() || "-_./:@=+,".contains(c)) {
-        word.to_string()
-    } else {
-        format!("'{}'", word.replace('\'', r"'\''"))
-    }
 }

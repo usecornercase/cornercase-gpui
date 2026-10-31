@@ -52,12 +52,6 @@ pub(crate) struct Area {
     pub rows: u16,
 }
 
-impl Area {
-    pub(crate) fn contains(self, x: u16, y: u16) -> bool {
-        x >= self.x && y >= self.y && x < self.x + self.cols && y < self.y + self.rows
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(crate) struct Size {
@@ -65,13 +59,18 @@ pub(crate) struct Size {
     pub rows: u16,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
-pub(crate) struct Divider {
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Node {
+    Leaf(u64),
+    Split(Box<Branch>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub(crate) struct Branch {
     pub dir: String,
-    pub path: Vec<bool>,
-    pub area: Area,
-    pub line: Area,
+    pub first: Node,
+    pub second: Node,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -179,6 +178,30 @@ pub(crate) struct WirePane {
     pub lines: Option<WireLines>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub(crate) struct PopupLabel {
+    pub pane: u64,
+    pub plugin: String,
+    pub action: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub(crate) struct OpenPopup {
+    pub plugin: String,
+    pub action: String,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+impl OpenPopup {
+    pub(crate) fn in_app(app: Option<&serde_json::Value>) -> Option<Self> {
+        let popup = app?.get("popup").filter(|p| p.is_object())?;
+        serde_json::from_value(popup.clone()).ok()
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub(crate) struct Frame {
@@ -190,7 +213,8 @@ pub(crate) struct Frame {
     pub rows: u16,
     pub base: Option<u64>,
     pub projection: Option<u64>,
-    pub dividers: Vec<Divider>,
+    pub layout: Option<Node>,
+    pub popup: Option<PopupLabel>,
     pub styles: Vec<Style>,
     pub hyperlinks: Vec<Hyperlink>,
     pub panes: Vec<WirePane>,

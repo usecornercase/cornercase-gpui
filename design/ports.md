@@ -1,0 +1,11 @@
+# Ports
+
+Code: `src/panels/ports.rs`, `src/panels/ports/`, `src/panels/poll.rs`
+
+- **The TUI's ports dialog as a sheet** (⇧⌘O, the rail's plug icon, or **Ports…** in a workspace's menu, which shows that workspace first): the TCP ports the workspace's programs listen on, from `ports --json`, with the URL, the addresses, the program and its arguments, its pid and how it belongs to the workspace (`pane 12 · dev`, `agent claude · pane 9`, `in the worktree, no tab`).
+- **This workspace or every port**: the default is the workspace on screen; **Every port** passes `--all` and names each port's workspace, or "no workspace". Ports Docker publishes show only there, which the sheet says.
+- **Refreshed every 2 s while open**, like Processes (`poll::Watch`); a change of the workspace on screen drops the old list.
+- **Open shows the port in the Browser panel** (since 2026-10-31): the sheet closes, the dock shows the Browser, and the URL opens in the workspace on screen, or that workspace's tab already on the same origin comes forward (`Store::open_in_browser`, `design/browser.md`). On another machine, where the URL is that machine's `localhost`, the Browser opens an ssh tunnel first, so a remote port is one click too, as it is here. On this Mac the system browser stays, as the icon button beside Open; **Copy** stays everywhere.
+  - Rejected: keeping the system browser as Open (the panel exists to show the page beside the agent changing it), only Copy and a note to run `ssh -L` by hand on another machine (what it offered until then), and opening a port of another workspace (under **Every port**) in its own workspace: the panel shows the tabs of the workspace on screen, so the tab would open out of sight.
+- **Stop asks first** and sends `ports stop PORT --pid PID`; only a port of a workspace has it, as cornercase refuses the others. The confirmation says when an agent started the program and when no tab did (found by its folder). While it stops, Stop reads `Stopping…`, as in Processes (`poll::confirm_stop`, `design/processes.md`).
+- Checked live on 2026-10-29 with cornercase 0.12.225 (a `python3 -m http.server` in a throwaway worktree). Open into the Browser panel checked on 2026-10-31 with cornercase 0.12.234, on this Mac and through `--remote` to a throwaway sshd on 127.0.0.1 (`design/browser.md`).

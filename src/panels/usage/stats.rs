@@ -4,8 +4,8 @@ use gpui::{
 };
 
 use super::data::{self, Stats, WEEKS, WINDOWS};
-use super::widgets::{bar, card, heading, plural};
-use crate::theme::{self, colours};
+use super::widgets::{card, heading, plural};
+use crate::theme::{self, colours, radius};
 use crate::ui;
 
 const CELL: f32 = 13.;
@@ -83,7 +83,7 @@ fn time_bar(label: &'static str, value: String, fraction: f32, colour: Rgba) -> 
                 .child(div().flex_1())
                 .child(value),
         )
-        .child(bar(fraction, colour, 8.))
+        .child(ui::bar(fraction, colour, 8.))
 }
 
 fn stat_pill(label: &'static str, value: String) -> Div {
@@ -91,8 +91,8 @@ fn stat_pill(label: &'static str, value: String) -> Div {
         .flex()
         .items_center()
         .px(px(10.))
-        .py(px(5.))
-        .rounded(px(6.))
+        .py(px(6.))
+        .rounded(px(radius::CONTROL))
         .bg(colours::panel())
         .text_size(px(12.))
         .child(div().text_color(colours::muted()).child(label))
@@ -115,9 +115,9 @@ pub(super) fn table(stats: &Stats) -> impl IntoElement + use<> {
         div()
             .id(("usage-row", i))
             .flex()
-            .px(px(8.))
-            .py(px(5.))
-            .rounded(px(4.))
+            .px(px(10.))
+            .py(px(6.))
+            .rounded(px(radius::CHIP))
             .when(i % 2 == 1, |d| d.bg(colours::panel()))
             .hover(|s| s.bg(colours::hover()))
             .child(div().flex_1().text_color(colours::muted()).child(label))
@@ -165,7 +165,7 @@ pub(super) fn heatmap(stats: &Stats, days: u64) -> impl IntoElement + use<> {
         (0..WEEKS).map(|c| {
             let week = WEEKS - 1 - c;
             div().flex().flex_col().gap(px(GAP)).children(
-                (0..7).map(|r| div().size(px(CELL)).rounded(px(3.)).bg(level_colour(level(week * 7 + 6 - r)))),
+                (0..7).map(|r| div().size(px(CELL)).rounded(px(2.)).bg(level_colour(level(week * 7 + 6 - r)))),
             )
         });
     card()

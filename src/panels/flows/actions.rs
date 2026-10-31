@@ -7,14 +7,13 @@ use serde::Deserialize;
 
 use super::dialog::close_dialog;
 use super::model::{self, FlowInfo, project_args};
+use super::widgets::{icon_action, open_path};
 use super::{FlowsPanel, Selected};
 use crate::cli;
 use crate::dialogs;
-use crate::store::{self, Store, ToastKind, args};
+use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::colours;
-use crate::ui;
-
-pub(super) const SAVE_ISSUE: &str = "usecornercase/cornercase-terminal#465";
+use crate::ui::{self, Icon, Tone};
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
@@ -68,6 +67,7 @@ pub(super) struct Question {
     message: String,
     button: String,
     command: Vec<String>,
+    doing: String,
 }
 
 impl Question {
@@ -77,8 +77,22 @@ impl Question {
         button: &str,
         command: Vec<String>,
     ) -> Self {
-        Self { title: title.into(), message: message.into(), button: button.to_string(), command }
+        let doing = format!("{button}…");
+        Self { title: title.into(), message: message.into(), button: button.to_string(), command, doing }
     }
+
+    pub(super) fn doing(mut self, doing: impl Into<String>) -> Self {
+        self.doing = doing.into();
+        self
+    }
+}
+
+pub(super) fn job_key(command: &[String]) -> String {
+    format!("flow:{}", command.join(" "))
+}
+
+pub(super) fn running(command: &[String], cx: &App) -> bool {
+    Store::get(cx).read(cx).busy(&job_key(command))
 }
 
 pub(super) fn ask_on_click(
@@ -98,9 +112,10 @@ fn with_flow(
 }
 
 impl FlowsPanel {
-    pub(super) fn run_cmd(args: Vec<String>, done: &str, cx: &mut Context<Self>) {
+    pub(super) fn run_cmd(args: Vec<String>, doing: &str, done: &str, cx: &mut Context<Self>) {
         let done = done.to_string();
-        store::run(cx, args, move |this, result, cx| {
+        let busy = Busy::new(job_key(&args), doing);
+        store::run_busy(cx, busy, args, move |this, result, cx| {
             match result {
                 Ok(_) => toast(done, ToastKind::Done, cx),
                 Err(e) => toast(e.to_string(), ToastKind::Error, cx),
@@ -117,7 +132,7 @@ impl FlowsPanel {
         window.focus(&focus);
     }
 
-    fn taken_names(&self) -> Vec<String> {
+    pub(super) fn taken_names(&self) -> Vec<String> {
         let Some(listing) = &self.listing else { return Vec::new() };
         listing.flows.iter().chain(&listing.hidden).map(|f| f.name.clone()).chain(listing.builtins.clone()).collect()
     }
@@ -131,7 +146,7 @@ impl FlowsPanel {
         } else {
             format!("The start dialog opens on {} now", flow.name)
         };
-        Self::run_cmd(command, &done, cx);
+        Self::run_cmd(command, "Saving the default flow…", &done, cx);
     }
 
     fn move_flow(&mut self, flow: &FlowInfo, delta: isize, cx: &mut Context<Self>) {
@@ -177,23 +192,20 @@ impl FlowsPanel {
         });
     }
 
-    fn import_text(text: String, extra: Vec<String>, open: bool, cx: &mut Context<Self>) {
+    fn import_text(text: String, extra: Vec<String>, cx: &mut Context<Self>) {
         let mut command = args(&["flow", "import", "-", "--yes", "--json"]);
         command.extend(extra);
         run_stdin(cx, command, text, move |this, result, cx| {
             match parse_imported(result) {
-                Ok(imported) => this.saved(&imported, open, cx),
+                Ok(imported) => this.saved(&imported, cx),
                 Err(e) => toast(e.to_string(), ToastKind::Error, cx),
             }
             this.refresh(cx);
         });
     }
 
-    fn saved(&mut self, imported: &Imported, open: bool, cx: &mut Context<Self>) {
+    fn saved(&mut self, imported: &Imported, cx: &mut App) {
         announce(imported.note.as_deref(), format!("Saved {}", imported.name), cx);
-        if open && let Some(path) = &imported.path {
-            cx.open_with_system(std::path::Path::new(path));
-        }
         self.select_imported(imported);
     }
 
@@ -216,53 +228,86 @@ impl FlowsPanel {
             extra.extend(["--to".into(), "project".into()]);
             extra.extend(project_args(self.project));
         }
-        self.export(flow, cx, move |_, text, cx| Self::import_text(text, extra, false, cx));
-    }
-
-    fn edit(&mut self, flow: &FlowInfo, cx: &mut Context<Self>) {
-        match &flow.path {
-            Some(path) => cx.open_with_system(std::path::Path::new(path)),
-            None => self.export(flow, cx, |_, text, cx| Self::import_text(text, vec!["--replace".into()], true, cx)),
-        }
+        self.export(flow, cx, move |_, text, cx| Self::import_text(text, extra, cx));
     }
 }
 
 pub(super) fn flow_buttons(flow: &FlowInfo, hidden: bool, cx: &Context<FlowsPanel>) -> Div {
-    let row = div().flex().flex_wrap().items_center().gap(px(6.)).pt(px(10.));
+    let row = div().relative().flex().flex_wrap().items_center().gap(px(8.));
     if hidden {
         return row.child(restore_hidden_button(flow, cx));
     }
-    let edit = if flow.path.is_some() { "Edit file" } else { "Customise" };
-    let row =
-        row.child(start_button(flow, cx))
-            .child(
-                ui::button("flow-default", if flow.default { "Clear default" } else { "Set default" })
-                    .on_click(with_flow(flow, cx, FlowsPanel::set_default)),
+    row.child(start_button(flow, cx))
+        .child(edit_button(flow, cx))
+        .child(ui::icon_text_button("flow-duplicate", Icon::CopyPlus, "Duplicate", Tone::Plain).on_click(with_flow(
+            flow,
+            cx,
+            FlowsPanel::duplicate,
+        )))
+        .child(div().w(px(1.)).h(px(18.)).mx(px(2.)).bg(colours::border()))
+        .child(tidy_buttons(flow, cx))
+}
+
+fn edit_button(flow: &FlowInfo, cx: &Context<FlowsPanel>) -> impl IntoElement + use<> {
+    let flow = flow.clone();
+    ui::icon_text_button("flow-edit", Icon::Pencil, "Edit", Tone::Plain)
+        .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| this.open_editor(Some(&flow), window, cx)))
+}
+
+fn tidy_buttons(flow: &FlowInfo, cx: &Context<FlowsPanel>) -> Div {
+    let (star, hint) = if flow.default {
+        (Icon::StarFilled, "Clear the default: the start dialog opens on the first built-in that can start")
+    } else {
+        (Icon::Star, "Make it the default: the start dialog opens on it")
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .child(icon_action("flow-default", star, hint, false).on_click(with_flow(flow, cx, FlowsPanel::set_default)))
+        .child(icon_action("flow-up", Icon::ArrowUp, "Move it up the list", false).on_click(with_flow(
+            flow,
+            cx,
+            |this, f, cx| this.move_flow(f, -1, cx),
+        )))
+        .child(icon_action("flow-down", Icon::ArrowDown, "Move it down the list", false).on_click(with_flow(
+            flow,
+            cx,
+            |this, f, cx| this.move_flow(f, 1, cx),
+        )))
+        .child(icon_action("flow-copy", Icon::Copy, "Copy as TOML, to share or commit", false).on_click(with_flow(
+            flow,
+            cx,
+            FlowsPanel::copy_toml,
+        )))
+        .when_some(flow.path.clone(), |d, path| {
+            d.child(
+                icon_action("flow-open", Icon::FolderOpen, "Open its file in your editor", false)
+                    .on_click(open_path(path)),
             )
-            .child(ui::button("flow-up", "↑").on_click(with_flow(flow, cx, |this, f, cx| this.move_flow(f, -1, cx))))
-            .child(ui::button("flow-down", "↓").on_click(with_flow(flow, cx, |this, f, cx| this.move_flow(f, 1, cx))))
-            .child(ui::button("flow-copy", "Copy as TOML").on_click(with_flow(flow, cx, FlowsPanel::copy_toml)))
-            .child(ui::button("flow-duplicate", "Duplicate").on_click(with_flow(flow, cx, FlowsPanel::duplicate)))
-            .child(ui::button("flow-edit", edit).on_click(with_flow(flow, cx, FlowsPanel::edit)))
-            .when(flow.edited, |d| d.child(restore_builtin_button(flow, cx)))
-            .child(ui::danger_button("flow-delete", "Delete").on_click(ask_on_click(delete_question(flow), cx)));
-    div().flex().flex_col().child(row).child(
-        ui::dim(format!("{edit} opens the flow's TOML in your editor; editing it in a form needs {SAVE_ISSUE}."))
-            .pt(px(6.)),
-    )
+        })
+        .when(flow.edited, |d| d.child(restore_builtin_button(flow, cx)))
+        .child(
+            icon_action("flow-delete", Icon::Trash, delete_hint(flow), true)
+                .on_click(ask_on_click(delete_question(flow), cx)),
+        )
 }
 
 fn start_button(flow: &FlowInfo, cx: &Context<FlowsPanel>) -> impl IntoElement + use<> {
     let key = flow.key();
-    ui::primary_button("flow-start", "Start…")
+    ui::icon_text_button("flow-start", Icon::Play, "Start…", Tone::Primary)
+        .px(px(16.))
         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| this.open_start(Some(key.clone()), window, cx)))
 }
 
 fn restore_hidden_button(flow: &FlowInfo, cx: &Context<FlowsPanel>) -> impl IntoElement + use<> {
     let name = flow.name.clone();
-    ui::primary_button("flow-unhide", "Restore").on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-        FlowsPanel::run_cmd(args(&["flow", "restore", &name]), &format!("Restored {name}"), cx);
-    }))
+    ui::icon_text_button("flow-unhide", Icon::Undo, "Restore", Tone::Primary).on_click(cx.listener(
+        move |_, _: &ClickEvent, _, cx| {
+            let command = args(&["flow", "restore", &name]);
+            FlowsPanel::run_cmd(command, &format!("Restoring {name}…"), &format!("Restored {name}"), cx);
+        },
+    ))
 }
 
 fn restore_builtin_button(flow: &FlowInfo, cx: &Context<FlowsPanel>) -> impl IntoElement + use<> {
@@ -271,8 +316,13 @@ fn restore_builtin_button(flow: &FlowInfo, cx: &Context<FlowsPanel>) -> impl Int
         format!("Your version of {} is deleted, and the built-in one runs again.", flow.name),
         "Restore",
         args(&["flow", "restore", &flow.name]),
-    );
-    ui::button("flow-restore", "Restore built-in").on_click(ask_on_click(question, cx))
+    )
+    .doing(format!("Restoring {}…", flow.name));
+    icon_action("flow-restore", Icon::Undo, "Restore the built-in", false).on_click(ask_on_click(question, cx))
+}
+
+fn delete_hint(flow: &FlowInfo) -> &'static str {
+    if flow.origin == "built-in" { "Hide this built-in" } else { "Delete" }
 }
 
 fn delete_question(flow: &FlowInfo) -> Question {
@@ -290,7 +340,7 @@ fn delete_question(flow: &FlowInfo) -> Question {
         (_, false, Some(path)) => (format!("{path} is deleted from disk."), args(&["flow", "delete", "--path", path])),
         (_, false, None) => (format!("{name} is deleted."), args(&["flow", "delete", name])),
     };
-    Question::new(format!("Delete {name}?"), message, "Delete", command)
+    Question::new(format!("Delete {name}?"), message, "Delete", command).doing(format!("Deleting {name}…"))
 }
 
 pub(super) struct Ask {
@@ -301,8 +351,9 @@ pub(super) struct Ask {
 
 impl Ask {
     fn run(&mut self, cx: &mut Context<Self>) {
-        let (command, button) = (self.question.command.clone(), self.question.button.clone());
-        let _ = self.panel.update(cx, |_, cx| FlowsPanel::run_cmd(command, &format!("{button}: done"), cx));
+        let (command, button, doing) =
+            (self.question.command.clone(), self.question.button.clone(), self.question.doing.clone());
+        let _ = self.panel.update(cx, |_, cx| FlowsPanel::run_cmd(command, &doing, &format!("{button}: done"), cx));
         close_dialog(cx);
     }
 }
@@ -311,10 +362,10 @@ impl Render for Ask {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| match e.keystroke.key.as_str() {
-                "enter" => this.run(cx),
-                "escape" => close_dialog(cx),
-                _ => {}
+            .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| {
+                if e.keystroke.key == "enter" {
+                    this.run(cx);
+                }
             }))
             .child(dialogs::frame(
                 self.question.title.clone(),

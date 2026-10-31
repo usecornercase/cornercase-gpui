@@ -2,3 +2,6 @@ too-many-lines-threshold = 40
 too-many-arguments-threshold = 5
 excessive-nesting-threshold = 4
 cognitive-complexity-threshold = 10
+disallowed-methods = [
+    { path = "gpui::Styled::truncate", reason = "gpui 0.2.2 cuts it without an ellipsis; use ui::one_line (design/widgets.md)" },
+]

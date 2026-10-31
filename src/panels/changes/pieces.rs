@@ -4,6 +4,7 @@ use serde::de::DeserializeOwned;
 use crate::model::{Colours, Style};
 use crate::store::{Store, ToastKind};
 use crate::theme::{FONT_FAMILY, Painter, colours};
+use crate::ui;
 
 use super::Look;
 use super::wire::{FileInfo, FileStatus, Summary};
@@ -67,7 +68,7 @@ pub(super) fn status_letter(status: FileStatus) -> gpui::Div {
 }
 
 pub(super) fn faint_detail(text: String) -> gpui::Div {
-    div().flex_1().min_w(px(0.)).truncate().text_size(px(11.)).text_color(colours::faint()).child(text)
+    div().flex_1().min_w(px(0.)).text_size(px(11.)).text_color(colours::faint()).child(ui::one_line(text))
 }
 
 pub(super) fn counts(added: usize, removed: usize) -> impl IntoElement {

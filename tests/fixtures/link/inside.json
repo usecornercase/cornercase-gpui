@@ -1,0 +1,16 @@
+{
+  "link": {
+    "end": 19,
+    "inside": true,
+    "lines": {
+      "first": 120,
+      "last": 130
+    },
+    "path": "/Users/me/shop/src/main.rs",
+    "relative": "src/main.rs",
+    "row": 0,
+    "start": 0,
+    "workspace": 36
+  },
+  "pane": 34
+}

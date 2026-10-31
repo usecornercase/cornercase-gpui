@@ -4,8 +4,8 @@ use gpui::{
 };
 
 use super::data::{self, Counts};
-use super::widgets::{bar, card, heading, swatch};
-use crate::theme::{self, colours};
+use super::widgets::{card, heading, swatch};
+use crate::theme::{self, colours, radius};
 use crate::ui;
 
 const COLUMNS: [&str; 7] = ["agent time", "started", "prompts", "turns", "waited", "tokens out", "tokens in"];
@@ -41,7 +41,7 @@ pub(super) fn by_agent(agents: &[(String, Counts)]) -> impl IntoElement + use<> 
 
 fn shares(agents: &[(String, Counts)]) -> [Div; 2] {
     let total: f64 = agents.iter().map(|(_, c)| c.agent_seconds).sum();
-    let share = div().flex().w_full().h(px(10.)).rounded(px(5.)).overflow_hidden().bg(colours::border()).children(
+    let share = div().flex().w_full().h(px(10.)).overflow_hidden().bg(colours::border()).children(
         agents.iter().filter(|(_, c)| c.agent_seconds > 0.).map(|(key, c)| {
             div().h_full().w(relative(data::ratio(c.agent_seconds, total.max(1e-9)))).bg(agent_colour(key))
         }),
@@ -91,9 +91,9 @@ fn agent_row(i: usize, key: &str, c: &Counts, most: f64) -> Stateful<Div> {
         .id(("usage-agent", i))
         .flex()
         .items_center()
-        .px(px(8.))
+        .px(px(10.))
         .py(px(8.))
-        .rounded(px(4.))
+        .rounded(px(radius::CONTROL))
         .hover(|s| s.bg(colours::hover()))
         .child(
             div()
@@ -112,7 +112,7 @@ fn agent_row(i: usize, key: &str, c: &Counts, most: f64) -> Stateful<Div> {
                         .child(data::agent_title(key))
                         .child(ui::dim(format!("{} from cache", data::tokens(c.tokens.cache_read)))),
                 )
-                .child(bar(fraction, agent_colour(key), 4.)),
+                .child(ui::bar(fraction, agent_colour(key), 4.)),
         )
         .children(values.into_iter().map(|v| column(v.into())))
 }

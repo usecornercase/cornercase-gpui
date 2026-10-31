@@ -3,12 +3,15 @@ use gpui::{
     Styled as _, div, prelude::FluentBuilder as _, px, relative,
 };
 
+use crate::store::Store;
 use crate::theme::colours;
 use crate::ui;
+use crate::ui::split::{self, Edge};
 
+use super::actions::file_busy;
 use super::pieces::{counts, faint_detail, find, split_path, status_letter};
 use super::wire::{FileInfo, FileStatus, FoldClass, Staging, State};
-use super::{ChangesPanel, Selected, diff, diff_view};
+use super::{ChangesPanel, FilesGrip, Selected, diff, diff_view, files_height};
 
 fn empty_diff_text(file: &FileInfo) -> &'static str {
     match file.fold {
@@ -20,14 +23,23 @@ fn empty_diff_text(file: &FileInfo) -> &'static str {
     }
 }
 
-fn uncommitted_buttons(workspace: u64, file: &FileInfo) -> [impl IntoElement + use<>; 2] {
+pub(super) fn shown_digest(shown: Option<String>, listed: &str) -> String {
+    shown.filter(|d| !d.is_empty()).unwrap_or_else(|| listed.to_string())
+}
+
+fn uncommitted_buttons(workspace: u64, file: &FileInfo, cx: &Context<ChangesPanel>) -> Vec<gpui::Stateful<gpui::Div>> {
+    if let Some(doing) = Store::get(cx).read(cx).jobs.doing(&file_busy(workspace, &file.path)) {
+        return vec![ui::busy_button("open-stage", doing.to_string(), ui::Tone::Plain)];
+    }
     let staged = file.staged == Some(Staging::Yes);
     let (stage_file, discard_file) = (file.clone(), file.clone());
-    [
-        ui::button("open-stage", if staged { "− Unstage" } else { "+ Stage" })
-            .on_click(move |_: &ClickEvent, _, cx| ChangesPanel::toggle_staged(workspace, &stage_file, cx)),
-        ui::button_coloured("open-discard", "↺ Discard", colours::failed())
-            .on_click(move |_: &ClickEvent, window, cx| ChangesPanel::discard(workspace, &discard_file, window, cx)),
+    vec![
+        ui::button("open-stage", if staged { "− Unstage" } else { "+ Stage" }).on_click(
+            cx.listener(move |_, _: &ClickEvent, _, cx| ChangesPanel::toggle_staged(workspace, &stage_file, cx)),
+        ),
+        ui::button_coloured("open-discard", "↺ Discard", colours::failed()).on_click(cx.listener(
+            move |_, _: &ClickEvent, window, cx| ChangesPanel::discard(workspace, &discard_file, window, cx),
+        )),
     ]
 }
 
@@ -41,6 +53,11 @@ impl ChangesPanel {
             .unwrap_or_else(|| FileInfo { path: selected.path.clone(), ..FileInfo::default() })
     }
 
+    fn shown_file(&self, selected: &Selected, file: &FileInfo) -> FileInfo {
+        let shown = self.open.data.as_ref().filter(|d| d.selected == *selected).map(|d| d.patch.file.digest.clone());
+        FileInfo { digest: shown_digest(shown, &file.digest), ..file.clone() }
+    }
+
     fn first_changed_line(&self) -> u32 {
         self.open.data.as_ref().and_then(|d| d.patch.hunks.first()).map_or(1, |h| diff::changed(h).0)
     }
@@ -48,7 +65,8 @@ impl ChangesPanel {
     fn open_actions(&self, selected: &Selected, file: &FileInfo, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let workspace = selected.workspace;
         let first_line = self.first_changed_line();
-        let (viewed_path, open_path) = (file.path.clone(), file.path.clone());
+        let shown = self.shown_file(selected, file);
+        let (viewed_file, open_path) = (shown.clone(), file.path.clone());
         let can_open = file.status != FileStatus::Deleted;
         div()
             .flex()
@@ -58,10 +76,10 @@ impl ChangesPanel {
                 ui::button("open-viewed", if file.viewed { "✓ Viewed" } else { "Mark viewed" })
                     .when(file.viewed, |b| b.text_color(colours::done()))
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.toggle_viewed(workspace, &viewed_path, cx);
+                        this.toggle_viewed(workspace, &viewed_file, cx);
                     })),
             )
-            .when(selected.mode.uncommitted(), |d| d.children(uncommitted_buttons(workspace, file)))
+            .when(selected.mode.uncommitted(), |d| d.children(uncommitted_buttons(workspace, &shown, cx)))
             .when(can_open, |d| {
                 d.child(ui::button("open-editor", "Open in editor").on_click(move |_: &ClickEvent, _, cx| {
                     Self::open_in_editor(workspace, &open_path, first_line, cx);
@@ -80,9 +98,18 @@ impl ChangesPanel {
             .items_center()
             .gap(px(6.))
             .child(status_letter(file.status).flex_none())
-            .child(div().flex_none().max_w(relative(0.6)).truncate().font_weight(FontWeight::SEMIBOLD).child(name))
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .max_w(relative(0.6))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(ui::one_line(name)),
+            )
             .child(faint_detail(detail))
-            .when(self.open.loading && self.open.data.is_some(), |d| d.child(ui::dim("updating…")))
+            .when(self.open.loading && self.open.data.is_some(), |d| {
+                d.child(ui::busy("diff-updating", "updating…").text_size(px(11.)))
+            })
             .child(counts(file.added, file.removed))
             .child(
                 ui::icon_button("open-close", "✕")
@@ -96,9 +123,9 @@ impl ChangesPanel {
             .flex_none()
             .flex()
             .flex_col()
-            .gap(px(6.))
-            .px(px(10.))
-            .py(px(8.))
+            .gap(px(8.))
+            .px(px(12.))
+            .py(px(10.))
             .bg(colours::panel())
             .border_y_1()
             .border_color(colours::border())
@@ -107,17 +134,19 @@ impl ChangesPanel {
         div()
             .flex_1()
             .min_h(px(0.))
+            .relative()
             .flex()
             .flex_col()
             .child(header)
             .child(div().flex_1().min_h(px(0.)).bg(colours::terminal()).child(self.render_diff(&file, cx)))
+            .child(split::handle("changes-split", FilesGrip, (Edge::Bottom, 0.), files_height, cx))
     }
 
     fn render_diff(&self, file: &FileInfo, cx: &mut Context<Self>) -> AnyElement {
         let Some(data) = self.open.data.clone() else {
             return match &self.open.error {
                 Some(err) => ui::note(err.clone()).text_color(colours::failed()).into_any_element(),
-                None => ui::note("Reading the diff…").into_any_element(),
+                None => ui::loading("Reading the diff…").into_any_element(),
             };
         };
         if data.rows.is_empty() {
@@ -143,8 +172,8 @@ impl ChangesPanel {
             .flex()
             .items_center()
             .justify_between()
-            .h(px(26.))
-            .px(px(10.))
+            .h(px(30.))
+            .px(px(12.))
             .border_t_1()
             .border_color(colours::border())
             .text_size(px(11.))
@@ -155,3 +184,6 @@ impl ChangesPanel {
             )
     }
 }
+
+#[cfg(test)]
+mod tests;

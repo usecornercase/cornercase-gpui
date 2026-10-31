@@ -5,15 +5,14 @@ use gpui::{
 
 use super::FlowsPanel;
 use super::actions::{Imported, announce, parse_imported, run_stdin};
+use super::checked::{Checked, parse_checked, preview};
 use super::dialog::{Submit, boxed, buttons, close_dialog, field};
 use super::model::project_args;
 use super::widgets::error_text;
 use crate::dialogs;
 use crate::store::{self, Store, args};
 use crate::theme::colours;
-use crate::ui::{self, TextField};
-
-const CHECK_ISSUE: &str = "usecornercase/cornercase-terminal#466";
+use crate::ui::{self, Icon, TextField};
 
 pub(super) struct ImportFlow {
     panel: WeakEntity<FlowsPanel>,
@@ -24,6 +23,7 @@ pub(super) struct ImportFlow {
     to_project: bool,
     replace: bool,
     busy: bool,
+    checked: Option<Checked>,
     error: Option<String>,
 }
 
@@ -40,6 +40,7 @@ impl FlowsPanel {
             to_project: false,
             replace: false,
             busy: false,
+            checked: None,
             error: None,
         });
         let focus = view.read(cx).source.read(cx).focus_handle(cx);
@@ -48,25 +49,30 @@ impl FlowsPanel {
     }
 }
 
-pub(super) fn import_args(
-    source: &str,
-    name: &str,
-    to_project: Option<u64>,
-    project: bool,
-    replace: bool,
-) -> Vec<String> {
-    let mut command = args(&["flow", "import", source, "--yes", "--json"]);
-    if project {
-        command.extend(["--to".into(), "project".into()]);
-        command.extend(project_args(to_project));
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct Request {
+    pub source: String,
+    pub name: String,
+    pub project: Option<u64>,
+    pub to_project: bool,
+    pub replace: bool,
+}
+
+impl Request {
+    pub(super) fn args(&self, check: bool) -> Vec<String> {
+        let mut command = args(&["flow", "import", &self.source, if check { "--check" } else { "--yes" }, "--json"]);
+        if self.to_project {
+            command.extend(["--to".into(), "project".into()]);
+            command.extend(project_args(self.project));
+        }
+        if !self.name.trim().is_empty() {
+            command.extend(["--name".into(), self.name.trim().to_string()]);
+        }
+        if self.replace {
+            command.push("--replace".into());
+        }
+        command
     }
-    if !name.trim().is_empty() {
-        command.extend(["--name".into(), name.trim().to_string()]);
-    }
-    if replace {
-        command.push("--replace".into());
-    }
-    command
 }
 
 impl Submit for ImportFlow {
@@ -74,31 +80,62 @@ impl Submit for ImportFlow {
         if self.busy {
             return;
         }
-        let source = self.source.read(cx).text().trim().to_string();
-        let name = self.name.read(cx).text();
-        let from = if self.pasted.is_some() { "-".to_string() } else { source };
-        if from.is_empty() {
+        let Some(request) = self.request(cx) else {
             self.error = Some("Give a file, an address or owner/repo, or paste the flow.".into());
             cx.notify();
             return;
-        }
-        let command = import_args(&from, &name, self.project, self.to_project, self.replace);
+        };
+        let check = self.checked.is_none();
         self.busy = true;
         self.error = None;
         cx.notify();
+        let then = if check { Self::checked } else { Self::imported };
         match self.pasted.clone() {
-            Some(text) => run_stdin(cx, command, text, Self::imported),
-            None => store::run(cx, command, Self::imported),
+            Some(text) => run_stdin(cx, request.args(check), text, then),
+            None => store::run(cx, request.args(check), then),
         }
+    }
+
+    fn changed(&mut self, cx: &mut Context<Self>) {
+        self.unchecked(cx);
     }
 }
 
 impl ImportFlow {
+    fn request(&self, cx: &Context<Self>) -> Option<Request> {
+        let source =
+            if self.pasted.is_some() { "-".to_string() } else { self.source.read(cx).text().trim().to_string() };
+        (!source.is_empty()).then(|| Request {
+            source,
+            name: self.name.read(cx).text(),
+            project: self.project,
+            to_project: self.to_project,
+            replace: self.replace,
+        })
+    }
+
+    fn unchecked(&mut self, cx: &mut Context<Self>) {
+        if !self.busy {
+            self.checked = None;
+        }
+        cx.notify();
+    }
+
+    fn checked(&mut self, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+        self.busy = false;
+        match result.and_then(|out| parse_checked(&out)) {
+            Ok(checked) => self.checked = Some(checked),
+            Err(e) => self.error = Some(e.to_string()),
+        }
+        cx.notify();
+    }
+
     fn paste(&mut self, cx: &mut Context<Self>) {
         match cx.read_from_clipboard().and_then(|item| item.text()) {
             Some(text) if !text.trim().is_empty() => {
                 self.pasted = Some(text);
                 self.error = None;
+                self.checked = None;
             }
             _ => self.error = Some("The clipboard holds no text.".into()),
         }
@@ -130,7 +167,7 @@ impl ImportFlow {
                 .child(ui::dim(format!("{} lines from the clipboard", text.lines().count())).flex_1())
                 .child(ui::button("import-unpaste", "Clear").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.pasted = None;
-                    cx.notify();
+                    this.unchecked(cx);
                 }))),
             None => row.child(div().flex_1().child(boxed(&self.source, window, cx))).child(
                 ui::button("import-paste", "Paste").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.paste(cx))),
@@ -143,7 +180,7 @@ impl ImportFlow {
             ui::segment(id, label, self.to_project == to_project)
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                     this.to_project = to_project;
-                    cx.notify();
+                    this.unchecked(cx);
                 }))
                 .into_any_element()
         };
@@ -161,23 +198,27 @@ impl ImportFlow {
             .child(ui::checkbox("import-replace", self.replace, "Replace the flow that has its name").on_click(
                 cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.replace = !this.replace;
-                    cx.notify();
+                    this.unchecked(cx);
                 }),
             ))
             .child(div().text_size(px(12.)).text_color(colours::waiting()).child(
-                "Every agent of a flow runs without permission prompts: read a flow's prompts, variables and \
-                 arguments before importing it, above all one from the web.",
+                "Every agent of a flow runs without permission prompts: Check shows its roles and what it sets \
+                 before anything is imported.",
             ))
-            .child(ui::dim(format!("Showing them here first needs {CHECK_ISSUE}.")))
+            .children(self.checked.as_ref().map(preview))
             .children(self.error.clone().map(error_text))
     }
 }
 
 impl Render for ImportFlow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let label = if self.busy { "Importing…" } else { "Import" };
-        dialogs::frame("Import a flow", self.form(window, cx), buttons(("import-cancel", "import-run"), label, cx))
-            .w(px(520.))
+        let (label, busy) = if self.checked.is_some() { ("Import", "Importing…") } else { ("Check", "Checking…") };
+        dialogs::frame(
+            "Import a flow",
+            self.form(window, cx),
+            buttons(("import-cancel", "import-run"), (Icon::Download, label), self.busy.then_some(busy), cx),
+        )
+        .w(px(520.))
     }
 }
 

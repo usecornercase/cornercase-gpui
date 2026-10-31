@@ -86,6 +86,15 @@ impl SourceInfo {
         parts.join(", ")
     }
 
+    pub(super) fn status_line(&self) -> String {
+        match self.state {
+            SourceState::Connected => capitalise(format!("connected {}", self.account_line()).trim()),
+            SourceState::Failing => self.reason.as_deref().map_or_else(|| "Connected, but failing".into(), capitalise),
+            SourceState::Missing if !self.missing.is_empty() => capitalise(&self.missing_line()),
+            _ => "Not connected".into(),
+        }
+    }
+
     pub(super) fn missing_line(&self) -> String {
         if self.missing.iter().any(|m| m == "repository") {
             return format!("this project's folder is not a {} repository", self.name);
@@ -211,6 +220,20 @@ impl Issue {
         info
     }
 
+    pub(super) fn state_label(&self) -> String {
+        match self.state.trim() {
+            "" if self.closed => "Closed".into(),
+            "" => "Open".into(),
+            state => capitalise(state),
+        }
+    }
+
+    pub(super) fn state_note(&self) -> Option<&str> {
+        let state = self.state.trim();
+        let plain = state.is_empty() || state.eq_ignore_ascii_case("open") || state.eq_ignore_ascii_case("closed");
+        (!plain).then_some(state)
+    }
+
     pub(super) fn meta(&self, source: Option<String>, now: i64) -> String {
         let mut meta: Vec<String> = source.into_iter().collect();
         if !self.assignees.is_empty() {
@@ -245,7 +268,18 @@ pub(super) struct Lists {
 
 pub(super) const LIST_CAP: usize = 100;
 
-#[derive(Debug, Clone, Default, Deserialize)]
+pub(super) fn count_line(shown: usize, total: usize, closed: bool) -> String {
+    let what = if closed { "issue" } else { "open issue" };
+    let plural = if total == 1 { "" } else { "s" };
+    if shown == total { format!("{total} {what}{plural}") } else { format!("{shown} of {total} {what}{plural}") }
+}
+
+pub(super) fn capitalise(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default()
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(super) struct Comment {
     pub author: String,
@@ -259,7 +293,7 @@ impl Comment {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(super) struct ReadIssue {
     pub issue: Issue,
@@ -283,10 +317,17 @@ impl Person {
     }
 
     pub(super) fn label(&self) -> String {
+        match self.display() {
+            (name, Some(handle)) => format!("{name} ({handle})"),
+            (name, None) => name,
+        }
+    }
+
+    pub(super) fn display(&self) -> (String, Option<String>) {
         match (self.name.trim(), self.handle.trim()) {
-            ("", handle) => handle.to_string(),
-            (name, handle) if name == handle || handle.is_empty() => name.to_string(),
-            (name, handle) => format!("{name} ({handle})"),
+            ("", handle) => (handle.to_string(), None),
+            (name, handle) if name == handle || handle.is_empty() => (name.to_string(), None),
+            (name, handle) => (name.to_string(), Some(handle.to_string())),
         }
     }
 }
@@ -531,7 +572,7 @@ impl StartPlan {
                 a.extend([flag.to_string(), value.clone()]);
             }
         }
-        a.push("--json".into());
+        a.extend(["--focus".into(), "--json".into()]);
         a
     }
 
@@ -562,11 +603,6 @@ impl StartPlan {
             None => {}
         }
     }
-}
-
-pub(super) fn started_pane(out: &str) -> Option<u64> {
-    let value: Value = serde_json::from_str(out.trim()).ok()?;
-    value.pointer("/ids/pane").or_else(|| value.get("pane")).and_then(Value::as_u64).or_else(|| value.as_u64())
 }
 
 #[cfg(test)]

@@ -1,0 +1,76 @@
+{
+  "notes": [],
+  "sections": [
+    {
+      "changes": [
+        {
+          "from": "auto",
+          "key": "agent",
+          "label": "default agent",
+          "to": "claude"
+        },
+        {
+          "from": "{}",
+          "key": "agent_args",
+          "label": "agent_args",
+          "to": "{\"claude\":[\"--dangerously-skip-permissions\"]}"
+        },
+        {
+          "from": "\"{url}\"",
+          "key": "prompt",
+          "label": "prompt",
+          "to": "\"Fix {url}\""
+        },
+        {
+          "from": "[ ] left to you",
+          "key": "accept_trust_prompts",
+          "label": "trust prompts",
+          "to": "[x] accepted for you"
+        }
+      ],
+      "id": "agents",
+      "notes": [
+        {
+          "kind": "risk",
+          "text": "starts claude in skip permissions (dangerous) mode"
+        },
+        {
+          "kind": "risk",
+          "text": "answers agents' trust questions by itself"
+        }
+      ]
+    },
+    {
+      "changes": [
+        {
+          "from": "not set",
+          "key": "jira_site",
+          "label": "Jira site",
+          "to": "acme.atlassian.net"
+        }
+      ],
+      "id": "issues",
+      "notes": []
+    },
+    {
+      "changes": [],
+      "id": "worktrees",
+      "notes": []
+    },
+    {
+      "changes": [],
+      "id": "interface",
+      "notes": []
+    },
+    {
+      "changes": [],
+      "id": "repositories",
+      "notes": [
+        {
+          "kind": "repository",
+          "text": "github.com/acme/app: no open project has this remote; open it and import again"
+        }
+      ]
+    }
+  ]
+}

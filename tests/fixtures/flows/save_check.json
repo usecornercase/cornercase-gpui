@@ -1,0 +1,11 @@
+{
+  "check": null,
+  "name": "zz-gpui-throwaway-7731",
+  "origin": "user",
+  "path": null,
+  "problems": [
+    "`ghost` runs `nosuchagent`, but a flow takes one of claude, codex, gemini, opencode, grok, cursor, copilot",
+    "`ghost` is in no stage"
+  ],
+  "saved": false
+}

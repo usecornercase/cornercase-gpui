@@ -1,0 +1,44 @@
+{
+  "id": "jacogaz.notch",
+  "name": "Notch",
+  "version": "0.1.1",
+  "description": "A plugin for cornercase that shows the coding agents that need you in the macOS notch, and answers their permission prompts and questions there.",
+  "repo": "jacogaz/cornercase-notch",
+  "url": "https://github.com/jacogaz/cornercase-notch.git",
+  "ref": null,
+  "subdir": null,
+  "commit": "4da3bb3f5be198050dc3cba0e96d15084a5e068a",
+  "permissions": [
+    "status",
+    "read",
+    "keys",
+    "focus"
+  ],
+  "download": {
+    "url": "https://github.com/jacogaz/cornercase-notch/releases/download/v0.1.1/cornercase-notch-aarch64-apple-darwin.tar.gz",
+    "sha256": "e813f874b3229357c3653cb2b9d27705a391e5f21838cb07e4030844e890043b"
+  },
+  "build": [],
+  "runs": [
+    {
+      "entry": "window",
+      "id": "panel",
+      "command": [
+        "bin/cornercase-notch",
+        "panel"
+      ]
+    }
+  ],
+  "replacing": null,
+  "lines": [
+    "Notch 0.1.1 (jacogaz.notch)",
+    "A plugin for cornercase that shows the coding agents that need you in the macOS notch, and answers their permission prompts and questions there.",
+    "From jacogaz/cornercase-notch at commit 4da3bb3f5be198050dc3cba0e96d15084a5e068a.",
+    "It asks for status, read, keys, focus; that is shown, not enforced.",
+    "It downloads https://github.com/jacogaz/cornercase-notch/releases/download/v0.1.1/cornercase-notch-aarch64-apple-darwin.tar.gz and checks its sha256 e813f874b3229357c3653cb2b9d27705a391e5f21838cb07e4030844e890043b.",
+    "Once on, it runs:",
+    "  window process panel: bin/cornercase-notch panel",
+    "It is installed turned off.",
+    "Once on, it runs as you and can do anything you can, in every terminal: read its code or trust its author."
+  ]
+}

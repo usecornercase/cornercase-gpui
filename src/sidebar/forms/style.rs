@@ -8,7 +8,7 @@ use serde_json::Value;
 use super::{Check, Checked, close, keyed, load_check, palette_colour, show, warning};
 use crate::dialogs::frame;
 use crate::store::{Store, args};
-use crate::theme::colours;
+use crate::theme::{colours, radius};
 use crate::ui;
 
 pub(in crate::sidebar) struct GroupStyle {
@@ -72,11 +72,11 @@ impl GroupStyle {
         let selected = glyph == choices.icon;
         div()
             .id(SharedString::from(format!("icon-{i}")))
-            .size(px(28.))
+            .size(px(30.))
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(5.))
+            .rounded(px(radius::CONTROL))
             .border_1()
             .border_color(if selected { colours::accent() } else { colours::border() })
             .when(selected, |d| d.bg(colours::selected()))
@@ -95,7 +95,7 @@ impl GroupStyle {
             .size(px(22.))
             .rounded_full()
             .border_2()
-            .border_color(if selected { colours::text() } else { colours::panel() })
+            .border_color(if selected { colours::text() } else { gpui::transparent_black().into() })
             .bg(palette_colour(c))
             .cursor_pointer()
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set("colour", Value::from(c), cx)))
@@ -138,7 +138,7 @@ impl Focusable for GroupStyle {
 impl Render for GroupStyle {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let body = match &self.check {
-            Check::Loading => ui::dim("Loading…"),
+            Check::Loading => ui::busy("style-loading", "Loading…"),
             Check::Failed(e) => warning(e.clone()),
             Check::Ready(v) => self.choices(Choices::of(v), cx),
         };

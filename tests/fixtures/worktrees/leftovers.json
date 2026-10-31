@@ -1,0 +1,38 @@
+{
+  "worktrees": [
+    {
+      "branch": null,
+      "changed": null,
+      "error": null,
+      "kind": "repository-gone",
+      "last_changed": null,
+      "lock": null,
+      "merged": false,
+      "no_commits": false,
+      "other_tabs": [],
+      "outside": [],
+      "path": "/home/me/.cornercase/worktrees/shop/feat-gone",
+      "project": null,
+      "project_name": "shop",
+      "removing": false,
+      "repository": null,
+      "risks": [
+        "its repository is gone; deletes the folder and its files"
+      ],
+      "run_role": false,
+      "running": [],
+      "safe": false,
+      "size": {
+        "builds": [],
+        "builds_bytes": 0,
+        "bytes": 8192,
+        "nested": [],
+        "path": "/home/me/.cornercase/worktrees/shop/feat-gone"
+      },
+      "size_error": null,
+      "unpushed": null,
+      "upstream_gone": false,
+      "workspace": null
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "check": "it sets FOO=1 for `reviewer` and passes --danger to `reviewer`; they run without asking, so check them",
+  "name": "zz-gpui-throwaway-7733",
+  "note": "`orchestrator` runs grok, which is not installed here; `coder` runs grok, which is not installed here",
+  "origin": "user",
+  "path": null,
+  "replaced": false,
+  "roles": [
+    {
+      "agent": "grok",
+      "edits": false,
+      "effort": null,
+      "model": null,
+      "role": "orchestrator"
+    },
+    {
+      "agent": "grok",
+      "edits": true,
+      "effort": null,
+      "model": null,
+      "role": "coder"
+    },
+    {
+      "agent": "codex",
+      "edits": false,
+      "effort": null,
+      "model": null,
+      "role": "reviewer"
+    }
+  ]
+}

@@ -7,11 +7,13 @@ use super::FlowsPanel;
 use super::actions::announce;
 use super::dialog::{Submit, boxed, buttons, close_dialog, field};
 use super::model::{self, FlowInfo, Started, project_args};
-use super::widgets::{agents_label, error_text, second_line};
+use super::widgets::{error_text, flow_summary, glyph};
 use crate::dialogs;
 use crate::store::{self, Store, args};
-use crate::theme::colours;
-use crate::ui::{self, TextField};
+use crate::theme::{colours, radius};
+use crate::ui::{self, Icon, TextField};
+
+const CHOICE: f32 = 30.;
 
 pub(super) struct StartFlow {
     panel: WeakEntity<FlowsPanel>,
@@ -188,10 +190,10 @@ impl StartFlow {
             .id("start-flows")
             .max_h(px(220.))
             .overflow_y_scroll()
-            .rounded(px(5.))
+            .rounded(px(radius::CONTROL))
             .border_1()
             .border_color(colours::border())
-            .p(px(2.))
+            .p(px(4.))
             .child(
                 div()
                     .flex()
@@ -205,25 +207,10 @@ impl StartFlow {
         let key = flow.key();
         let selected = self.selected.as_deref() == Some(key.as_str());
         ui::row(("start-flow", i), selected)
+            .gap(px(10.))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.choose(key.clone(), cx)))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .flex()
-                            .gap(px(6.))
-                            .items_center()
-                            .child(div().text_size(px(13.)).child(flow.name.clone()))
-                            .children(flow.tags().into_iter().map(ui::dim))
-                            .child(div().flex_1())
-                            .child(ui::dim(agents_label(flow))),
-                    )
-                    .child(second_line(flow)),
-            )
+            .child(glyph(&flow.flow, None, CHOICE))
+            .child(flow_summary(flow))
     }
 
     fn form(&self, window: &Window, cx: &Context<Self>) -> Div {
@@ -253,8 +240,11 @@ impl StartFlow {
 
 impl Render for StartFlow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let label = if self.busy { "Starting…" } else { "Start" };
-        dialogs::frame("Start a flow", self.form(window, cx), buttons(("start-cancel", "start-run"), label, cx))
-            .w(px(580.))
+        dialogs::frame(
+            "Start a flow",
+            self.form(window, cx),
+            buttons(("start-cancel", "start-run"), (Icon::Play, "Start"), self.busy.then_some("Starting…"), cx),
+        )
+        .w(px(580.))
     }
 }

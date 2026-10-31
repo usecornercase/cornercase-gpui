@@ -8,13 +8,14 @@ use std::time::{Duration, Instant};
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
-    div, prelude::FluentBuilder as _, px,
+    div, px,
 };
 
 use crate::cli::Stream;
 use crate::model::Session;
-use crate::store::{self, Store, ToastKind, args};
-use crate::theme::colours;
+use crate::store::{self, Busy, Store, ToastKind, args};
+use crate::theme::{colours, radius};
+use crate::ui::{self, glass};
 
 pub(crate) use feed::{AppState, Event, Notice, Prefs};
 
@@ -213,8 +214,8 @@ impl Notifier {
         }
     }
 
-    pub(crate) fn flashing(&self) -> bool {
-        self.flashing
+    pub(crate) fn flashing(&self) -> Option<u64> {
+        self.flashing.then_some(self.flash)
     }
 
     pub(crate) fn install(&mut self, cx: &mut Context<Self>) {
@@ -244,7 +245,8 @@ impl Notifier {
 
     pub(crate) fn restart(&mut self, when_idle: bool, cx: &mut Context<Self>) {
         if !when_idle {
-            self.store.read(cx).cmd(args(&["restart", "--yes"]));
+            let busy = Busy::new("restart", "Restarting the server…");
+            self.store.update(cx, |s, cx| s.run_aside(busy, args(&["restart", "--yes"]), cx));
             return;
         }
         self.restart = store::follow_until(
@@ -277,7 +279,7 @@ impl Notifier {
         let n = this.clone();
         if self.restart.is_some() {
             return Some(
-                chip("restart-pending", "↻ restart pending", Some(colours::working()), colours::working())
+                chip("restart-pending", "↻ restart pending", dot(Some(colours::working())), colours::working())
                     .tooltip(tip("Restarts once no agent is in the middle of a turn. Click to cancel."))
                     .on_click(move |_: &ClickEvent, _, cx| n.update(cx, Notifier::cancel_restart))
                     .into_any_element(),
@@ -294,12 +296,15 @@ impl Notifier {
             );
         }
         let release = self.app.release()?;
-        let label = match self.install {
-            InstallState::Running => format!("↑ installing {}…", release.version),
-            _ => format!("↑ {}", release.version),
+        let (label, lead) = match self.install {
+            InstallState::Running => (
+                format!("installing {}…", release.version),
+                Some(ui::spinner("installing", 10., colours::accent()).into_any_element()),
+            ),
+            _ => (format!("↑ {}", release.version), None),
         };
         Some(
-            chip("update", label, None, colours::accent())
+            chip("update", label, lead, colours::accent())
                 .tooltip(tip(format!("cornercase {} is out: see what changed", release.version)))
                 .on_click(move |_: &ClickEvent, window, cx| update::show_update(n.clone(), window, cx))
                 .into_any_element(),
@@ -311,7 +316,7 @@ impl Notifier {
             return None;
         }
         let on = self.app.away_on();
-        let (dot, text, hint, command) = if on.is_empty() {
+        let (light, text, hint, command) = if on.is_empty() {
             let ready: Vec<String> =
                 self.app.away.iter().filter(|a| a.ready).map(|a| feed::platform_name(&a.platform)).collect();
             (
@@ -330,9 +335,12 @@ impl Notifier {
             )
         };
         Some(
-            chip("away", "away", dot, text)
+            chip("away", "away", dot(light), text)
                 .tooltip(tip(hint))
-                .on_click(move |_: &ClickEvent, _, cx| Store::get(cx).read(cx).cmd(command.clone()))
+                .on_click(move |_: &ClickEvent, _, cx| {
+                    let busy = Busy::new("away", "Changing away…");
+                    Store::get(cx).update(cx, |s, cx| s.run_aside(busy, command.clone(), cx));
+                })
                 .into_any_element(),
         )
     }
@@ -342,7 +350,7 @@ impl Notifier {
         if awake.held {
             let by = awake.by.as_deref().map(|b| format!(" by {b}")).unwrap_or_default();
             return Some(
-                chip("awake", "awake", Some(colours::done()), colours::muted())
+                chip("awake", "awake", dot(Some(colours::done())), colours::muted())
                     .tooltip(tip(format!("The machine is kept awake{by} while agents work")))
                     .into_any_element(),
             );
@@ -379,20 +387,30 @@ fn tab_place(session: &Session, tab: u64) -> Option<String> {
     })
 }
 
-fn chip(id: &'static str, label: impl Into<SharedString>, dot: Option<Rgba>, text: Rgba) -> gpui::Stateful<gpui::Div> {
+fn dot(colour: Option<Rgba>) -> Option<AnyElement> {
+    let colour = colour?;
+    Some(div().size(px(6.)).rounded_full().bg(colour).shadow(glass::glow(colour, 0.8, 5.)).into_any_element())
+}
+
+fn chip(
+    id: &'static str,
+    label: impl Into<SharedString>,
+    lead: Option<AnyElement>,
+    text: Rgba,
+) -> gpui::Stateful<gpui::Div> {
     div()
         .id(id)
         .flex_none()
         .flex()
         .items_center()
         .gap(px(5.))
-        .px(px(6.))
+        .px(px(7.))
         .py(px(1.))
-        .rounded(px(4.))
+        .rounded(px(radius::CHIP))
         .text_color(text)
         .cursor_pointer()
         .hover(|s| s.bg(colours::hover()))
-        .when_some(dot, |d, colour| d.child(div().size(px(6.)).rounded_full().bg(colour)))
+        .children(lead)
         .child(label.into())
 }
 
@@ -405,15 +423,10 @@ struct Tip(SharedString);
 
 impl Render for Tip {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div()
+        glass::popover()
             .max_w(px(320.))
-            .px(px(8.))
-            .py(px(5.))
-            .rounded(px(5.))
-            .bg(colours::panel())
-            .border_1()
-            .border_color(colours::border())
-            .shadow_lg()
+            .px(px(9.))
+            .py(px(6.))
             .text_size(px(11.))
             .text_color(colours::text())
             .font_family(".SystemUIFont")

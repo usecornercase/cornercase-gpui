@@ -1,0 +1,1 @@
+{"boot": "48211-1760695200123456789", "revision": 6, "base": 5, "surface": 4, "tab": 0, "cols": 60, "rows": 10, "popup": {"pane": 40, "plugin": "acme.notes", "action": "browse"}, "styles": [{}], "hyperlinks": [], "panes": [{"pane": 40, "cursor": {"x": 3, "y": 0, "shape": "block", "blinking": false}, "lines": {"0": [{"style": 0, "cells": [">", " ", "n"]}]}}]}

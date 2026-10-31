@@ -1,10 +1,8 @@
-use gpui::Context;
-use serde_json::json;
-
 use crate::app::{Msg, Root};
 use crate::model::PaneGrid;
+use crate::model::link::row_cells;
 
-fn class(cell: &str) -> u8 {
+pub(super) fn class(cell: &str) -> u8 {
     match cell.chars().next() {
         None | Some(' ') => 0,
         Some(c) if c.is_alphanumeric() || "_-./~:@%+=#?&".contains(c) => 1,
@@ -39,7 +37,7 @@ pub(super) fn selection_args(pane: u64, from: (u16, u16), to: (u16, u16)) -> Vec
     ]
 }
 
-fn column(index: usize) -> u16 {
+pub(super) fn column(index: usize) -> u16 {
     u16::try_from(index).unwrap_or(u16::MAX)
 }
 
@@ -60,23 +58,13 @@ impl Root {
         });
     }
 
-    pub(crate) fn paste(&self, pane: u64, cx: &mut Context<Self>) {
-        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            self.queue.input(pane, json!({ "paste": text }));
-        }
-    }
-
     fn select(&self, pane: u64, from: (u16, u16), to: (u16, u16)) {
         self.queue.cmd(selection_args(pane, from, to));
         self.copy_selection(pane);
     }
 
     pub(super) fn select_by_clicks(&self, pane: &PaneGrid, (x, y): (u16, u16), clicks: usize) {
-        let cells: Vec<&str> = pane
-            .lines
-            .get(usize::from(y))
-            .map(|line| line.iter().flat_map(|run| run.cells.iter().map(String::as_str)).collect())
-            .unwrap_or_default();
+        let cells = row_cells(pane, y);
         let x = usize::from(x);
         if clicks >= 3 {
             self.select(pane.pane, (0, y), (pane.size.cols.saturating_sub(1), y));

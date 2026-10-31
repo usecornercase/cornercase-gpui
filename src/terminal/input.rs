@@ -39,14 +39,14 @@ impl EntityInputHandler for Root {
         _range: Option<Range<usize>>,
         text: &str,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) {
         self.marked.clear();
         let text: String = text.chars().filter(|c| !c.is_control()).collect();
         if text.is_empty() {
             return;
         }
-        self.input(json!({ "text": text }));
+        self.type_in(json!({ "text": text }), cx);
     }
 
     fn replace_and_mark_text_in_range(
@@ -63,16 +63,16 @@ impl EntityInputHandler for Root {
     fn bounds_for_range(
         &mut self,
         _range: Range<usize>,
-        element_bounds: Bounds<Pixels>,
+        _element_bounds: Bounds<Pixels>,
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         let metrics = self.metrics.as_ref()?;
-        let origin = self.origin.get().unwrap_or(element_bounds.origin);
         let pane = self.grid.active_pane()?;
         let c = pane.cursor?;
-        let x = origin.x + metrics.cell_width * f32::from(pane.rect.x + c.x);
-        let y = origin.y + metrics.line_height * f32::from(pane.rect.y + c.y);
+        let cells = self.layout.borrow().card(pane.pane)?.cells;
+        let x = cells.x + metrics.cell_width * f32::from(c.x);
+        let y = cells.y + metrics.line_height * f32::from(c.y);
         Some(Bounds::new(point(x, y), size(metrics.cell_width, metrics.line_height)))
     }
 

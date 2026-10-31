@@ -1,0 +1,49 @@
+{
+  "exceptionDetails": {
+    "exceptionId": 1,
+    "text": "Uncaught",
+    "lineNumber": 9,
+    "columnNumber": 36,
+    "url": "http://localhost:8783/errors.html",
+    "stackTrace": {
+      "callFrames": [
+        {
+          "functionName": "crash",
+          "url": "http://localhost:8783/errors.html",
+          "lineNumber": 9,
+          "columnNumber": 36
+        },
+        {
+          "functionName": "later",
+          "url": "http://localhost:8783/errors.html",
+          "lineNumber": 10,
+          "columnNumber": 30
+        }
+      ]
+    },
+    "exception": {
+      "type": "object",
+      "subtype": "error",
+      "className": "TypeError",
+      "description": "TypeError: Cannot read properties of undefined (reading 'x')\n    at crash (http://localhost:8783/errors.html:10:37)\n    at later (http://localhost:8783/errors.html:11:31)",
+      "preview": {
+        "type": "object",
+        "subtype": "error",
+        "description": "TypeError: Cannot read properties of undefined (reading 'x')\n    at crash (http://localhost:8783/errors.html:10:37)\n    at later (http://localhost:8783/errors.html:11:31)",
+        "overflow": false,
+        "properties": [
+          {
+            "name": "stack",
+            "type": "string",
+            "value": "TypeError: Cannot read properties of undefined (re\u2026t later (http://localhost:8783/errors.html:11:31)"
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "value": "Cannot read properties of undefined (reading 'x')"
+          }
+        ]
+      }
+    }
+  }
+}

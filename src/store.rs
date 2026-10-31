@@ -1,13 +1,18 @@
 use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
-use futures::channel::mpsc;
-use gpui::{AnyView, App, AppContext as _, AsyncApp, Context, Entity, Global, WeakEntity};
+use futures::channel::{mpsc, oneshot};
+use gpui::{AnyView, App, AppContext as _, AsyncApp, ClipboardItem, Context, Entity, Global, WeakEntity};
 use serde_json::Value;
 
-use crate::cli::{self, Queue, Stream};
+use crate::cli::{self, Queue, Stream, Target};
 use crate::model::Session;
 use crate::panels::PanelKind;
+
+mod jobs;
+
+pub(crate) use jobs::Busy;
+use jobs::Jobs;
 
 pub(crate) struct Store {
     pub session: Option<Session>,
@@ -18,6 +23,9 @@ pub(crate) struct Store {
     pub sheet: Option<PanelKind>,
     pub dialog: Option<AnyView>,
     pub toasts: Vec<Toast>,
+    pub switch_to: Option<Target>,
+    pub browse: Option<(String, Option<u64>)>,
+    pub jobs: Jobs,
     next_toast: u64,
     app_stream: Option<Stream>,
 }
@@ -29,6 +37,7 @@ pub(crate) struct Toast {
     pub kind: ToastKind,
     pub action: Option<(String, Vec<String>)>,
     pub at: Instant,
+    pub count: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -48,6 +57,20 @@ impl Toast {
         };
         self.at.elapsed() > Duration::from_secs(ttl)
     }
+
+    fn repeats(&self, other: &Toast) -> bool {
+        self.kind == other.kind && self.text == other.text && self.action == other.action && !self.expired()
+    }
+}
+
+pub(crate) fn push_toast(toasts: &mut Vec<Toast>, mut toast: Toast) {
+    if let Some(at) = toasts.iter().position(|t| t.repeats(&toast)) {
+        toast.count += toasts.remove(at).count;
+    }
+    toasts.push(toast);
+    if toasts.len() > 5 {
+        toasts.remove(0);
+    }
 }
 
 struct GlobalStore(Entity<Store>);
@@ -64,6 +87,9 @@ impl Store {
             sheet: None,
             dialog: None,
             toasts: Vec::new(),
+            switch_to: None,
+            browse: None,
+            jobs: Jobs::default(),
             next_toast: 1,
             app_stream: None,
         });
@@ -100,12 +126,35 @@ impl Store {
         self.queue.cmd(args);
     }
 
+    pub(crate) fn act_busy(&mut self, busy: Busy, args: Vec<String>, cx: &mut Context<Self>) {
+        let id = self.start_job(busy, cx);
+        let reply = reply_of(&self.queue, self.with_view(args));
+        cx.spawn(async move |this, cx| {
+            let result = reply.await;
+            let _ = this.update(cx, |s, cx| s.answered(id, result.ok(), cx));
+        })
+        .detach();
+    }
+
+    fn answered(&mut self, id: u64, answer: Option<anyhow::Result<String>>, cx: &mut Context<Self>) {
+        self.end_job(id, cx);
+        if let Some(Err(e)) = answer {
+            self.toast(e.to_string(), ToastKind::Error, cx);
+        }
+    }
+
     pub(crate) fn focus(&self, kind: &str, id: u64) {
         self.act(args(&["focus", &format!("--{kind}"), &id.to_string()]));
     }
 
     pub(crate) fn toast(&mut self, text: impl Into<String>, kind: ToastKind, cx: &mut Context<Self>) {
         self.toast_with(text, kind, None, cx);
+    }
+
+    pub(crate) fn copy_elsewhere(&mut self, path: String, cx: &mut Context<Self>) {
+        let text = format!("Copied {path}: it is on {}, not on this Mac", cli::host().unwrap_or_default());
+        cx.write_to_clipboard(ClipboardItem::new_string(path));
+        self.toast(text, ToastKind::Info, cx);
     }
 
     pub(crate) fn toast_with(
@@ -117,10 +166,7 @@ impl Store {
     ) {
         let id = self.next_toast;
         self.next_toast += 1;
-        self.toasts.push(Toast { id, text: text.into(), kind, action, at: Instant::now() });
-        if self.toasts.len() > 5 {
-            self.toasts.remove(0);
-        }
+        push_toast(&mut self.toasts, Toast { id, text: text.into(), kind, action, at: Instant::now(), count: 1 });
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(Duration::from_secs(16)).await;
             let _ = this.update(cx, |this, cx| {
@@ -132,6 +178,51 @@ impl Store {
         cx.notify();
     }
 
+    pub(crate) fn start_job(&mut self, busy: Busy, cx: &mut Context<Self>) -> u64 {
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(jobs::SHOW_AFTER).await;
+            let _ = this.update(cx, |_, cx| cx.notify());
+        })
+        .detach();
+        cx.notify();
+        self.jobs.start(busy)
+    }
+
+    pub(crate) fn end_job(&mut self, id: u64, cx: &mut Context<Self>) {
+        self.jobs.end(id);
+        cx.notify();
+    }
+
+    pub(crate) fn busy(&self, key: &str) -> bool {
+        self.jobs.busy(key)
+    }
+
+    pub(crate) fn removing(&self, workspace: u64) -> bool {
+        self.jobs.removing(workspace)
+    }
+
+    pub(crate) fn run_aside(&mut self, busy: Busy, args: Vec<String>, cx: &mut Context<Self>) {
+        let id = self.start_job(busy, cx);
+        run_job(cx, id, args, |this, result, cx| {
+            if let Err(e) = result {
+                this.toast(e.to_string(), ToastKind::Error, cx);
+            }
+        });
+    }
+
+    pub(crate) fn remove_worktree(&mut self, workspace: u64, name: &str, args: Vec<String>, cx: &mut Context<Self>) {
+        let id = self.start_job(Busy::remove_worktree(workspace, name), cx);
+        run_job(cx, id, args, move |this, result, cx| this.settle_removal(workspace, &result, cx));
+    }
+
+    pub(crate) fn settle_removal(&mut self, workspace: u64, result: &anyhow::Result<String>, cx: &mut Context<Self>) {
+        match result {
+            Ok(_) => self.jobs.removed(workspace),
+            Err(e) => self.toast(e.to_string(), ToastKind::Error, cx),
+        }
+        cx.notify();
+    }
+
     pub(crate) fn dismiss_toast(&mut self, id: u64, cx: &mut Context<Self>) {
         self.toasts.retain(|t| t.id != id);
         cx.notify();
@@ -140,6 +231,32 @@ impl Store {
     pub(crate) fn toggle_dock(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
         self.dock = if self.dock == Some(kind) { None } else { Some(kind) };
         cx.notify();
+    }
+
+    pub(crate) fn toggle(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
+        if kind.docked() {
+            self.toggle_dock(kind, cx);
+        } else if self.sheet == Some(kind) {
+            self.close_sheet(cx);
+        } else {
+            self.open_sheet(kind, cx);
+        }
+    }
+
+    pub(crate) fn close_overlay(&mut self, cx: &mut Context<Self>) -> bool {
+        let closed = self.dialog.take().is_some() || self.sheet.take().is_some();
+        if closed {
+            cx.notify();
+        }
+        closed
+    }
+
+    pub(crate) fn close_dock(&mut self, cx: &mut Context<Self>) -> bool {
+        let closed = self.dock.take().is_some();
+        if closed {
+            cx.notify();
+        }
+        closed
     }
 
     pub(crate) fn open_sheet(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
@@ -156,6 +273,11 @@ impl Store {
         }
     }
 
+    pub(crate) fn open_in_browser(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
+        self.browse = Some((url, workspace));
+        self.open(PanelKind::Browser, cx);
+    }
+
     pub(crate) fn close_sheet(&mut self, cx: &mut Context<Self>) {
         self.sheet = None;
         cx.notify();
@@ -170,6 +292,14 @@ impl Store {
         self.dialog = None;
         cx.notify();
     }
+
+    pub(crate) fn connect(&mut self, target: Target, cx: &mut Context<Self>) {
+        self.dialog = None;
+        if target != cli::target() {
+            self.switch_to = Some(target);
+        }
+        cx.notify();
+    }
 }
 
 pub(crate) fn args(parts: &[&str]) -> Vec<String> {
@@ -181,10 +311,92 @@ pub(crate) fn run<T: 'static>(
     args: Vec<String>,
     then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
 ) {
-    let task = cx.background_spawn(async move { cli::run(&args) });
+    run_with(cx, None, move || cli::run(&args), then);
+}
+
+pub(crate) fn run_partial<T: 'static>(
+    cx: &mut Context<T>,
+    args: Vec<String>,
+    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+) {
+    run_with(cx, None, move || cli::run_partial(&args), then);
+}
+
+pub(crate) fn run_busy<T: 'static>(
+    cx: &mut Context<T>,
+    busy: Busy,
+    args: Vec<String>,
+    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+) {
+    let id = Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx));
+    run_job(cx, id, args, then);
+}
+
+fn run_job<T: 'static>(
+    cx: &mut Context<T>,
+    id: u64,
+    args: Vec<String>,
+    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+) {
+    let job = (Store::get(cx), id);
+    run_with(cx, Some(job), move || cli::run(&args), then);
+}
+
+fn run_with<T: 'static>(
+    cx: &mut Context<T>,
+    job: Option<(Entity<Store>, u64)>,
+    work: impl FnOnce() -> anyhow::Result<String> + Send + 'static,
+    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+) {
+    let task = cx.background_spawn(async move { work() });
     cx.spawn(async move |this, cx| {
         let result = task.await;
+        if let Some((store, id)) = job {
+            let _ = store.update(cx, |s, cx| s.end_job(id, cx));
+        }
         let _ = this.update(cx, |this, cx| then(this, result, cx));
+    })
+    .detach();
+}
+
+fn reply_of(queue: &Queue, args: Vec<String>) -> oneshot::Receiver<anyhow::Result<String>> {
+    let (tx, rx) = oneshot::channel();
+    queue.cmd_then(args, move |result| {
+        let _ = tx.send(result);
+    });
+    rx
+}
+
+pub(crate) fn queued(cx: &App, args: Vec<String>, then: impl FnOnce(anyhow::Result<String>, &mut App) + 'static) {
+    let rx = reply_of(&Store::get(cx).read(cx).queue, args);
+    answered_on(cx, None, rx, then);
+}
+
+pub(crate) fn queued_busy(
+    cx: &mut App,
+    busy: Busy,
+    args: Vec<String>,
+    then: impl FnOnce(anyhow::Result<String>, &mut App) + 'static,
+) {
+    let store = Store::get(cx);
+    let id = store.update(cx, |s, cx| s.start_job(busy, cx));
+    let rx = reply_of(&store.read(cx).queue, args);
+    answered_on(cx, Some((store, id)), rx, then);
+}
+
+fn answered_on(
+    cx: &App,
+    job: Option<(Entity<Store>, u64)>,
+    rx: oneshot::Receiver<anyhow::Result<String>>,
+    then: impl FnOnce(anyhow::Result<String>, &mut App) + 'static,
+) {
+    cx.spawn(async move |cx| {
+        let result = rx.await;
+        if let Some((store, id)) = job {
+            let _ = store.update(cx, |s, cx| s.end_job(id, cx));
+        }
+        let Ok(result) = result else { return };
+        let _ = cx.update(|cx| then(result, cx));
     })
     .detach();
 }
@@ -267,3 +479,6 @@ async fn deliver<T: 'static>(
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

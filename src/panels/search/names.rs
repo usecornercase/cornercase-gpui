@@ -1,12 +1,16 @@
 use std::ops::Range;
 
-use crate::model::{Group, Project, Session, Workspace, status_rank};
+use crate::model::Shown;
+
+const FUZZY: u8 = 4;
+const CONTEXT: usize = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Kind {
     Group,
     Project,
     Workspace,
+    Agent,
     Tab,
 }
 
@@ -16,6 +20,19 @@ pub(super) enum Goto {
     Project(u64),
     Workspace(u64),
     Tab(u64),
+    Agent { pane: u64, tab: u64 },
+}
+
+impl Goto {
+    pub(super) fn focus(self) -> Option<(&'static str, u64)> {
+        match self {
+            Self::Group { first, .. } => first.map(|id| ("project", id)),
+            Self::Project(id) => Some(("project", id)),
+            Self::Workspace(id) => Some(("workspace", id)),
+            Self::Tab(id) => Some(("tab", id)),
+            Self::Agent { pane, .. } => Some(("pane", pane)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,119 +40,101 @@ pub(super) struct Candidate {
     pub(super) kind: Kind,
     pub(super) goto: Goto,
     pub(super) name: String,
-    pub(super) context: String,
+    pub(super) detail: String,
+    pub(super) place: String,
     pub(super) keys: Vec<String>,
     pub(super) status: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) struct Marks {
+    pub(super) name: Vec<Range<usize>>,
+    pub(super) detail: Vec<Range<usize>>,
+    pub(super) place: Vec<Range<usize>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Ranked {
     pub(super) candidate: Candidate,
-    pub(super) highlight: Vec<Range<usize>>,
+    pub(super) marks: Marks,
 }
 
-type Grouped<'a> = Vec<(Option<u64>, Vec<&'a Project>)>;
-
-fn grouped(session: &Session) -> Grouped<'_> {
-    let mut ordered: Grouped = Vec::new();
-    for project in &session.projects {
-        let group = project.group.filter(|g| session.groups.iter().any(|x| x.id == *g));
-        match ordered.iter_mut().find(|(g, _)| *g == group) {
-            Some((_, list)) => list.push(project),
-            None => ordered.push((group, vec![project])),
-        }
-    }
-    ordered
-}
-
-fn plural(n: usize) -> &'static str {
-    if n == 1 { "" } else { "s" }
-}
-
-fn group_candidate(group: &Group, ordered: &Grouped) -> Candidate {
-    let projects = ordered.iter().find(|(id, _)| *id == Some(group.id)).map_or(&[][..], |(_, ps)| ps.as_slice());
-    Candidate {
-        kind: Kind::Group,
-        goto: Goto::Group { id: group.id, first: projects.first().map(|p| p.id) },
-        name: group.name.clone(),
-        context: format!("{} project{}", projects.len(), plural(projects.len())),
-        keys: vec![group.name.clone()],
-        status: projects.iter().filter_map(|p| p.loudest()).max_by_key(|s| status_rank(Some(s))).map(String::from),
-    }
-}
-
-fn project_candidates(project: &Project, group_name: Option<&str>, out: &mut Vec<Candidate>) {
-    out.push(Candidate {
-        kind: Kind::Project,
-        goto: Goto::Project(project.id),
-        name: project.name.clone(),
-        context: group_name.unwrap_or_default().to_string(),
-        keys: vec![project.name.clone()],
-        status: project.loudest().map(String::from),
-    });
-    for workspace in &project.workspaces {
-        workspace_candidates(project, workspace, out);
-    }
-}
-
-fn workspace_candidates(project: &Project, workspace: &Workspace, out: &mut Vec<Candidate>) {
-    let mut keys = vec![workspace.name.clone()];
-    keys.extend(workspace.branch.clone().filter(|b| *b != workspace.name));
-    out.push(Candidate {
-        kind: Kind::Workspace,
-        goto: Goto::Workspace(workspace.id),
-        name: if workspace.worktree { format!("⎇ {}", workspace.name) } else { workspace.name.clone() },
-        context: project.name.clone(),
-        keys: keys.clone(),
-        status: workspace.loudest().map(String::from),
-    });
-    out.extend(workspace.tabs.iter().map(|tab| Candidate {
-        kind: Kind::Tab,
-        goto: Goto::Tab(tab.id),
-        name: tab.name.clone(),
-        context: format!("{} › {}", project.name, workspace.name),
-        keys: std::iter::once(tab.name.clone()).chain(keys.iter().cloned()).collect(),
-        status: tab.loudest().map(String::from),
-    }));
-}
-
-pub(super) fn candidates(session: &Session) -> Vec<Candidate> {
-    let ordered = grouped(session);
-    let mut out: Vec<Candidate> = session.groups.iter().map(|g| group_candidate(g, &ordered)).collect();
-    for (group, projects) in &ordered {
-        let group_name = group.and_then(|g| session.groups.iter().find(|x| x.id == g)).map(|g| g.name.as_str());
-        for project in projects {
-            project_candidates(project, group_name, &mut out);
-        }
-    }
-    out
-}
-
-fn rank_one(order: usize, candidate: Candidate, query: &str) -> Option<(u8, usize, Ranked)> {
-    let ((rank, ranges), key) = candidate
+fn best_key(candidate: &Candidate, query: &str) -> Option<(u8, usize, Vec<Range<usize>>)> {
+    candidate
         .keys
         .iter()
         .enumerate()
-        .filter_map(|(i, key)| key_rank(key, query).map(|r| (r, i)))
-        .min_by_key(|((rank, _), i)| (*rank, *i))?;
-    let shift = candidate.name.len() - candidate.keys[0].len().min(candidate.name.len());
-    let highlight = if key == 0 && candidate.name.ends_with(candidate.keys[0].as_str()) {
-        ranges.into_iter().map(|r| r.start + shift..r.end + shift).collect()
-    } else {
-        Vec::new()
-    };
-    Some((rank, order, Ranked { candidate, highlight }))
+        .filter_map(|(i, key)| key_rank(key, query).filter(|(rank, _)| i == 0 || *rank < FUZZY).map(|(r, s)| (r, i, s)))
+        .min_by_key(|(rank, i, _)| (*rank, *i))
+}
+
+fn marks(candidate: &Candidate, key: usize, ranges: Vec<Range<usize>>, query: &str) -> Marks {
+    let name_key = candidate.keys.first().map_or("", String::as_str);
+    if key == 0 {
+        if !candidate.name.ends_with(name_key) {
+            return Marks::default();
+        }
+        let shift = candidate.name.len() - name_key.len();
+        return Marks {
+            name: ranges.into_iter().map(|r| r.start + shift..r.end + shift).collect(),
+            ..Marks::default()
+        };
+    }
+    match find(&candidate.detail, query) {
+        Some(range) => Marks { detail: vec![range], ..Marks::default() },
+        None => Marks { place: find(&candidate.place, query).into_iter().collect(), ..Marks::default() },
+    }
+}
+
+fn rank_one(order: usize, candidate: Candidate, query: &str) -> Option<(u8, usize, Ranked)> {
+    let (rank, key, ranges) = best_key(&candidate, query)?;
+    let marks = marks(&candidate, key, ranges, query);
+    Some((rank, order, Ranked { candidate, marks }))
 }
 
 pub(super) fn rank(candidates: Vec<Candidate>, query: &str) -> Vec<Ranked> {
     let query = query.trim();
     if query.is_empty() {
-        return Vec::new();
+        return candidates.into_iter().map(|candidate| Ranked { candidate, marks: Marks::default() }).collect();
     }
     let mut hits: Vec<(u8, usize, Ranked)> =
         candidates.into_iter().enumerate().filter_map(|(order, candidate)| rank_one(order, candidate, query)).collect();
     hits.sort_by_key(|(rank, order, r)| (*rank, r.candidate.kind, *order));
     hits.into_iter().map(|(_, _, r)| r).collect()
+}
+
+pub(super) fn shown_row(ranked: &[Ranked], shown: Shown) -> Option<usize> {
+    let at = |wanted: &dyn Fn(Goto) -> bool| ranked.iter().position(|r| wanted(r.candidate.goto));
+    let agent = |pane: u64| at(&|goto| matches!(goto, Goto::Agent { pane: p, .. } if p == pane));
+    let tab = |tab: u64| at(&|goto| matches!(goto, Goto::Tab(t) | Goto::Agent { tab: t, .. } if t == tab));
+    shown
+        .pane
+        .and_then(agent)
+        .or_else(|| shown.tab.and_then(tab))
+        .or_else(|| shown.workspace.and_then(|id| at(&|goto| goto == Goto::Workspace(id))))
+        .or_else(|| shown.project.and_then(|id| at(&|goto| goto == Goto::Project(id))))
+}
+
+pub(super) fn context_top(ranked: &[Ranked], selected: usize) -> usize {
+    let floor = selected.saturating_sub(CONTEXT);
+    (floor..=selected)
+        .rev()
+        .find(|&i| ranked.get(i).is_some_and(|r| r.candidate.kind == Kind::Project))
+        .unwrap_or(floor)
+}
+
+pub(super) fn listing_status(query: &str, shown: usize, total: usize) -> String {
+    let query = query.trim();
+    match (query.is_empty(), total) {
+        (true, 0) => "No project is open: open one with ⌘O".into(),
+        (true, n) if n > shown => format!("The first {shown} of {n} in the sidebar's order · type to find the rest"),
+        (true, _) => {
+            "Everything open, in the sidebar's order · type to find it by name, branch, folder, agent or model".into()
+        }
+        (false, 0) => format!("Nothing matches “{query}”"),
+        (false, n) if n > shown => format!("The first {shown} of {n} results"),
+        (false, n) => format!("{n} result{}", if n == 1 { "" } else { "s" }),
+    }
 }
 
 fn letters(text: &str) -> Vec<char> {
@@ -171,7 +170,7 @@ fn in_order(hay: &[(Range<usize>, char)], needle: &[char]) -> Option<(u8, Vec<Ra
             next += 1;
         }
     }
-    (next == needle.len()).then_some((4, ranges))
+    (next == needle.len()).then_some((FUZZY, ranges))
 }
 
 fn fold(text: &str) -> Vec<(Range<usize>, char)> {

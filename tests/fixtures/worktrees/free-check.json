@@ -1,0 +1,16 @@
+{
+  "bytes": 303104,
+  "check": true,
+  "failed": [],
+  "folders": [
+    {
+      "bytes": 303104,
+      "path": "node_modules"
+    }
+  ],
+  "kept": [],
+  "path": "/Users/me/.cornercase/worktrees/ccwt/feat-try",
+  "running": [
+    "Python"
+  ]
+}

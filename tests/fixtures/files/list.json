@@ -1,0 +1,112 @@
+{
+  "boot": "28257-1793303771316290000",
+  "folders": [
+    {
+      "dir": "/private/tmp/ccfiles",
+      "entries": [
+        {
+          "bytes": null,
+          "hidden": true,
+          "kind": "folder",
+          "link": false,
+          "modified": "2026-10-29T20:21:00.478Z",
+          "name": ".hidden_dir",
+          "status": null
+        },
+        {
+          "bytes": null,
+          "hidden": false,
+          "kind": "folder",
+          "link": false,
+          "modified": "2026-10-29T20:21:16.947Z",
+          "name": "docs",
+          "status": "added"
+        },
+        {
+          "bytes": null,
+          "hidden": false,
+          "kind": "folder",
+          "link": false,
+          "modified": "2026-10-29T20:21:00.503Z",
+          "name": "src",
+          "status": "modified"
+        },
+        {
+          "bytes": 7,
+          "hidden": true,
+          "kind": "file",
+          "link": false,
+          "modified": "2026-10-29T20:21:00.479Z",
+          "name": ".gitignore",
+          "status": "untracked"
+        },
+        {
+          "bytes": 41,
+          "hidden": false,
+          "kind": "file",
+          "link": false,
+          "modified": "2026-10-29T20:21:16.947Z",
+          "name": "a.svg",
+          "status": "untracked"
+        },
+        {
+          "bytes": 8,
+          "hidden": false,
+          "kind": "file",
+          "link": false,
+          "modified": "2026-10-29T20:21:00.480Z",
+          "name": "bin.dat",
+          "status": "untracked"
+        },
+        {
+          "bytes": 69,
+          "hidden": false,
+          "kind": "file",
+          "link": false,
+          "modified": "2026-10-29T20:21:03.961Z",
+          "name": "tiny.png",
+          "status": "untracked"
+        }
+      ],
+      "error": null,
+      "more": false,
+      "path": ""
+    },
+    {
+      "dir": "/private/tmp/ccfiles/src",
+      "entries": [
+        {
+          "bytes": 38,
+          "hidden": false,
+          "kind": "file",
+          "link": false,
+          "modified": "2026-10-29T20:21:00.503Z",
+          "name": "main.rs",
+          "status": "modified"
+        },
+        {
+          "bytes": 4,
+          "hidden": false,
+          "kind": "file",
+          "link": false,
+          "modified": "2026-10-29T20:21:00.503Z",
+          "name": "new.rs",
+          "status": "untracked"
+        }
+      ],
+      "error": null,
+      "more": false,
+      "path": "src"
+    },
+    {
+      "dir": "/private/tmp/ccfiles/nope",
+      "entries": [],
+      "error": "no such folder",
+      "more": false,
+      "path": "nope"
+    }
+  ],
+  "revision": 1,
+  "stream": null,
+  "workspace": 38
+}
