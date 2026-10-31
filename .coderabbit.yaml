@@ -1,0 +1,82 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+language: en-US
+
+reviews:
+  profile: chill
+  high_level_summary: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  related_prs: false
+  suggested_labels: false
+  suggested_reviewers: false
+  in_progress_fortune: false
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "feat/.*"
+    ignore_usernames:
+      - dependabot[bot]
+
+  path_filters:
+    - "!target/**"
+    - "!Cargo.lock"
+    - "!docs/cornercase-cli.txt"
+    - "!assets/icons/*.svg"
+    - "!assets/file-icons/*.svg"
+
+  path_instructions:
+    - path: "src/**/*.rs"
+      instructions: |
+        Follow AGENTS.md and the design notes in design/ (DESIGN.md is their index). Never suggest adding comments or doc comments: the project has none on purpose, and tests/layers.rs fails on them.
+        This app is only a UI that drives cornercase through the `cornercase` command line. Flag any workaround for something cornercase lacks
+        (scraping text output, reading cornercase's own files, reimplementing server logic) instead of an upstream issue the UI names.
+        Flag `unwrap()` outside tests, `std::sync::Mutex` instead of `parking_lot::Mutex`, a command whose failure does not become a toast,
+        `impl Root` or `crate::app` outside the window's files, and key bindings other than ⌘ shortcuts in `src/keymap.rs`.
+        If it adds, removes or changes a feature or a ⌘ shortcut, check that README.md (What it has, Keys) is updated too.
+    - path: "{tests/**/*.rs,src/**/tests.rs,src/**/tests/**/*.rs}"
+      instructions: |
+        Tests never run the real `cornercase`, open a window or sleep: logic is tested in plain functions, with fixtures from tests/fixtures/ read by `test_util::fixture!`.
+        Fixtures hold no real data: no real projects, hosts, paths, emails or tokens.
+    - path: "{DESIGN.md,design/**/*.md}"
+      instructions: |
+        DESIGN.md is the index of design/, one line per area. Check new notes against its
+        "What goes in an area file".
+    - path: "assets/**"
+      instructions: |
+        Anything taken from another project keeps its licence: its licence file beside it and a line under the README's License.
+
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    title:
+      mode: "off"
+    description:
+      mode: "off"
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+
+  tools:
+    clippy:
+      enabled: false
+    github-checks:
+      enabled: true
+
+chat:
+  art: false
+  auto_reply: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - AGENTS.md
+      - DESIGN.md
+      - design/**/*.md

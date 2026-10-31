@@ -30,7 +30,7 @@ Quitting the window runs `cornercase theme --clear`, which also takes back the c
 
 ## Checks
 
-CI runs all of these on macOS; please run them before opening a pull request:
+CI runs all of these; please run them before opening a pull request:
 
 ```sh
 cargo fmt

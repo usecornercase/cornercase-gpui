@@ -23,7 +23,8 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 - **Before calling a task done, run fmt, clippy, tests, `cargo-machete` and jscpd, and fix what fails.** If one cannot pass, say so.
 - `jscpd` fails above 1 % duplication (50-token clones) in `src/` and `tests/`. It is a ratchet: extract the shared code, do not raise the threshold. `cargo-machete` is a text search; a false positive goes in `[package.metadata.cargo-machete] ignored`.
 - **Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)**: `<type>: <summary>`, the summary in the imperative and in lower case, such as `feat: show the queue's next start`. Types: `feat` (a feature users see), `fix`, `docs`, `test`, `refactor`, `perf`, `ci`, `build`, `chore`; a breaking change adds `!`.
-- **CI** (`.github/workflows/ci.yml`) runs the same checks on macOS: clippy and tests, then fmt, machete, jscpd and the size of `AGENTS.md`.
+- **CI** (`.github/workflows/ci.yml`) runs the same checks: clippy + tests on macOS (`target/` cached by `Swatinem/rust-cache`, saved from `main` only), and fmt + machete + jscpd (with the size of `AGENTS.md`) on Linux, since they need no Mac. Dependabot groups updates monthly; gpui's minor versions are ignored (pre-1.0, they break), so bumping it needs a manual check.
+- **Code review**: CodeRabbit reviews every non-draft pull request except Dependabot's; `.coderabbit.yaml` configures it. It reads `AGENTS.md`, `DESIGN.md` and `design/` as its guidelines (`knowledge_base.code_guidelines`). Its docstring check, test generation and clippy are off (no comments on purpose; it cannot build gpui's macOS code).
 
 ## Ground rules
 
