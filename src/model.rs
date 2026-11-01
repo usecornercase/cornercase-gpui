@@ -146,6 +146,10 @@ impl Session {
         self.projects.iter().find_map(|p| p.workspaces.iter().find(|w| w.id == id).map(|w| (p, w)))
     }
 
+    pub(crate) fn shown_runs_flow(&self) -> bool {
+        self.shown().workspace.and_then(|id| self.workspace(id)).is_some_and(|(_, w)| w.runs_flow())
+    }
+
     pub(crate) fn tabs(&self) -> impl Iterator<Item = &Tab> {
         self.projects.iter().flat_map(|p| &p.workspaces).flat_map(|w| &w.tabs)
     }
@@ -223,6 +227,10 @@ impl Tab {
 impl Workspace {
     pub(crate) fn loudest(&self) -> Option<&str> {
         self.tabs.iter().filter_map(Tab::loudest).max_by_key(|s| status_rank(Some(s)))
+    }
+
+    pub(crate) fn runs_flow(&self) -> bool {
+        self.tabs.iter().flat_map(|t| &t.panes).any(|p| p.role.is_some())
     }
 }
 

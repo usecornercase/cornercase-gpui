@@ -14,6 +14,8 @@ mod jobs;
 pub(crate) use jobs::Busy;
 use jobs::Jobs;
 
+const NO_FLOW: &str = "This workspace runs no flow";
+
 pub(crate) struct Store {
     pub session: Option<Session>,
     pub view_id: Option<u64>,
@@ -242,7 +244,21 @@ impl Store {
     }
 
     pub(crate) fn toggle_dock(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
+        if !kind.shows(self.session.as_ref()) {
+            self.toast(NO_FLOW, ToastKind::Info, cx);
+            return;
+        }
         self.dock = if self.dock == Some(kind) { None } else { Some(kind) };
+        cx.notify();
+    }
+
+    pub(crate) fn shown_dock(&self) -> Option<PanelKind> {
+        self.dock.filter(|kind| kind.shows(self.session.as_ref()))
+    }
+
+    pub(crate) fn show_run(&mut self, cx: &mut Context<Self>) {
+        self.sheet = None;
+        self.dock = Some(PanelKind::Flow);
         cx.notify();
     }
 

@@ -91,7 +91,7 @@ impl Watch {
 }
 
 fn shows(store: &Store, kind: PanelKind) -> bool {
-    if kind.docked() { store.dock == Some(kind) } else { store.sheet == Some(kind) }
+    if kind.docked() { store.shown_dock() == Some(kind) } else { store.sheet == Some(kind) }
 }
 
 async fn ticks<T: Polled>(this: WeakEntity<T>, cx: &mut AsyncApp) {

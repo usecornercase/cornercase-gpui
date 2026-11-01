@@ -59,6 +59,7 @@ pub(crate) const SHORTCUTS: &[Shortcut] = &[
     key(&["p"], true, Command::FindFile),
     key(&["l"], true, Command::Panel(PanelKind::Todo)),
     key(&["b"], true, Command::Panel(PanelKind::Browser)),
+    key(&["f"], true, Command::Panel(PanelKind::Flow)),
     key(&["f"], false, Command::Panel(PanelKind::Search)),
     key(&["i"], false, Command::Panel(PanelKind::Issues)),
     key(&["s"], true, Command::Panel(PanelKind::Queue)),
