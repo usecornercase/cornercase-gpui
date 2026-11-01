@@ -90,17 +90,28 @@ fn a_path_is_left_to_cornercase() {
     assert_eq!(web_under(&pane, &spot), None);
 }
 
+fn run(text: &str, link: Option<&str>) -> Run {
+    Run { style: Style::default(), link: link.map(Into::into), cells: text.chars().map(String::from).collect() }
+}
+
+fn hyperlinked_pane(url: &str) -> PaneGrid {
+    let mut pane = pane_showing("");
+    pane.lines = vec![vec![run("see ", None), run("[the docs]", Some(url)), run(" now", None)]];
+    pane
+}
+
 #[test]
 fn a_hyperlink_is_one_spot_blanks_and_brackets_included() {
-    let docs: Option<std::sync::Arc<str>> = Some("https://a.dev/docs".into());
-    let run = |text: &str, link: Option<std::sync::Arc<str>>| Run {
-        style: Style::default(),
-        link,
-        cells: text.chars().map(String::from).collect(),
-    };
-    let mut pane = pane_showing("");
-    pane.lines = vec![vec![run("see ", None), run("[the docs]", docs), run(" now", None)]];
+    let pane = hyperlinked_pane("https://a.dev/docs");
     let spot = spot_at(&pane, (8, 0)).expect("the hyperlink");
     assert_eq!((spot.start, spot.end, spot.text.as_str()), (4, 14, "[the docs]"));
     assert_eq!(web_at(&pane, (4, 0)).as_deref(), Some("https://a.dev/docs"));
+}
+
+#[test]
+fn a_hyperlink_redrawn_with_another_destination_is_another_spot() {
+    let (old, new) = (hyperlinked_pane("https://example.com/a"), hyperlinked_pane("https://example.com/b"));
+    let (old, new) = (spot_at(&old, (5, 0)).expect("a spot"), spot_at(&new, (5, 0)).expect("a spot"));
+    assert_eq!((old.text.as_str(), old.start, old.end), (new.text.as_str(), new.start, new.end));
+    assert_ne!(old, new);
 }

@@ -1,10 +1,12 @@
+use std::net::Ipv4Addr;
+
 use serde::Deserialize;
 
 use super::{Grid, PaneGrid};
 
 const SCHEMES: [&str; 2] = ["https://", "http://"];
 const TRAILING: [&str; 3] = [".", ":", "?"];
-const LOOPBACK: [&str; 5] = ["localhost", "127.0.0.1", "[::1]", "0.0.0.0", "[::]"];
+const LOOPBACK: [&str; 4] = ["localhost", "[::1]", "0.0.0.0", "[::]"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub(crate) struct Lines {
@@ -112,12 +114,30 @@ pub(crate) fn is_web(url: &str) -> bool {
     SCHEMES.iter().any(|scheme| url.len() > scheme.len() && url.starts_with(scheme))
 }
 
-pub(crate) fn is_loopback(url: &str) -> bool {
-    let Some(rest) = SCHEMES.iter().find_map(|scheme| url.strip_prefix(scheme)) else { return false };
+fn loopback_host(host: &str) -> bool {
+    LOOPBACK.contains(&host)
+        || host.ends_with(".localhost")
+        || host.parse::<Ipv4Addr>().is_ok_and(|ip| ip.is_loopback())
+}
+
+pub(crate) fn loopback_port(url: &str) -> Option<u16> {
+    let (scheme, rest) = url.split_once("://")?;
+    let default = match scheme {
+        "http" => 80,
+        "https" => 443,
+        _ => return None,
+    };
     let authority = &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())];
-    let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
-    let host = host.rsplit_once(':').filter(|(_, port)| port.parse::<u16>().is_ok()).map_or(host, |(host, _)| host);
-    LOOPBACK.contains(&host) || host.ends_with(".localhost") || host.starts_with("127.")
+    let authority = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port)) if !port.contains(']') => (host, port.parse().ok()?),
+        _ => (authority, default),
+    };
+    loopback_host(host).then_some(port)
+}
+
+pub(crate) fn is_loopback(url: &str) -> bool {
+    loopback_port(url).is_some()
 }
 
 pub(crate) fn url_in(cells: &[&str], start: usize, end: usize) -> Option<(usize, usize)> {

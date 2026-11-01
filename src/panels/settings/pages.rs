@@ -132,7 +132,9 @@ impl SettingsPanel {
     }
 
     pub(super) fn render_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
-        let Some(described) = &self.described else { return self.not_loaded(cx) };
+        let Some(described) = &self.described else {
+            return if self.page == data::LINKS { self.own_page(window, cx) } else { self.not_loaded(cx) };
+        };
         let query = self.query(cx);
         let problem = described.problem.as_deref().map(|p| {
             ui::callout(
@@ -169,7 +171,13 @@ impl SettingsPanel {
             .into_any_element()
     }
 
-    fn settings_sections(&self, d: &Described, page: &str, window: &Window, cx: &mut Context<Self>) -> Vec<Div> {
+    pub(super) fn settings_sections(
+        &self,
+        d: &Described,
+        page: &str,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<Div> {
         let sections = data::sections(d, page);
         sections
             .iter()

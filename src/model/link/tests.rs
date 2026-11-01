@@ -158,7 +158,8 @@ fn an_address_of_this_machines_own_servers_is_loopback() {
     for url in ["http://localhost:5173/", "http://127.0.0.1:8000", "http://[::1]:3000/x", "http://app.localhost/"] {
         assert!(is_loopback(url), "{url}");
     }
-    for url in ["https://example.com/localhost", "https://localhost.example.com/", "file:///tmp/x"] {
+    let elsewhere = ["https://example.com/localhost", "https://localhost.example.com/", "http://127.example.com/"];
+    for url in elsewhere.into_iter().chain(["file:///tmp/x", "http://user@example.com/"]) {
         assert!(!is_loopback(url), "{url}");
     }
 }

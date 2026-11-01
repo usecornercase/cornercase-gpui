@@ -17,6 +17,7 @@ pub(super) struct Spot {
     pub start: u16,
     pub end: u16,
     pub text: String,
+    pub link: Option<String>,
 }
 
 #[derive(Default)]
@@ -50,9 +51,9 @@ pub(super) fn spot_at(pane: &PaneGrid, cell: (u16, u16)) -> Option<Spot> {
 }
 
 fn hyperlink_spot(pane: &PaneGrid, cell: (u16, u16)) -> Option<Spot> {
-    let (span, _) = web_hyperlink(pane, cell)?;
+    let (span, url) = web_hyperlink(pane, cell)?;
     let text = text_between(&row_cells(pane, span.row), usize::from(span.start), usize::from(span.end));
-    Some(Spot { pane: pane.pane, row: span.row, start: span.start, end: span.end, text })
+    Some(Spot { pane: pane.pane, row: span.row, start: span.start, end: span.end, text, link: Some(url) })
 }
 
 fn word_spot(pane: &PaneGrid, (x, y): (u16, u16)) -> Option<Spot> {
@@ -63,7 +64,7 @@ fn word_spot(pane: &PaneGrid, (x, y): (u16, u16)) -> Option<Spot> {
     }
     let (start, end) = word_at(&cells, at);
     let text = text_between(&cells, start, end + 1);
-    Some(Spot { pane: pane.pane, row: y, start: column(start), end: column(end + 1), text })
+    Some(Spot { pane: pane.pane, row: y, start: column(start), end: column(end + 1), text, link: None })
 }
 
 pub(super) fn web_under(pane: &PaneGrid, spot: &Spot) -> Option<(Span, String)> {
@@ -232,7 +233,10 @@ impl Root {
 
     pub(super) fn link_under(&self, pane: u64, cell: (u16, u16)) -> Option<Target> {
         let hovered = self.pointer.links.hovered().filter(|h| h.at(pane, cell) && h.shown_in(&self.grid))?;
-        Some(hovered.target.clone())
+        match &hovered.target {
+            Target::Web(url) if web_at(self.grid.pane(pane)?, cell).as_ref() != Some(url) => None,
+            target => Some(target.clone()),
+        }
     }
 
     pub(super) fn press_link(&mut self, pane: u64, cell: (u16, u16), event: &MouseDownEvent) -> bool {

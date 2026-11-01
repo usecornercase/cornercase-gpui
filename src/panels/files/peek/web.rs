@@ -70,17 +70,17 @@ impl Peek {
         self.body = Some(Body::Loading);
         let generation = self.generation;
         let task = browser.update(cx, |browser, cx| browser.preview(url, cx));
-        cx.spawn(async move |this, cx| {
+        self.capturing = Some(cx.spawn(async move |this, cx| {
             let shot = task.await;
             let _ = this.update(cx, |this, cx| this.captured(generation, shot, cx));
-        })
-        .detach();
+        }));
     }
 
     fn captured(&mut self, generation: u64, shot: Result<Preview>, cx: &mut Context<Self>) {
         if generation != self.generation {
             return;
         }
+        self.capturing = None;
         let still = match shot {
             Ok(preview) => {
                 self.title = preview.title;

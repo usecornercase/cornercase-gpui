@@ -8,9 +8,10 @@ use gpui::{AsyncApp, Context, Image, ImageFormat, Task, WeakEntity};
 use serde_json::{Value, json};
 
 use super::cdp::Cdp;
-use super::tunnels::{loopback_port, rewrite};
+use super::tunnels::rewrite;
 use super::{Browser, Status};
 use crate::cli;
+use crate::model::link::loopback_port;
 
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 800;
@@ -56,6 +57,17 @@ pub(crate) struct Previews {
 impl Previews {
     pub(crate) fn owns(&self, info: &Value) -> bool {
         info["browserContextId"].as_str().is_some_and(|id| self.contexts.iter().any(|c| c == id))
+    }
+}
+
+struct Opened {
+    cdp: Cdp,
+    target: String,
+}
+
+impl Drop for Opened {
+    fn drop(&mut self) {
+        self.cdp.send(None, "Target.closeTarget", json!({ "targetId": self.target }));
     }
 }
 
@@ -190,9 +202,8 @@ async fn capture(job: Job, cx: &AsyncApp) -> Result<Preview> {
     let open = json!({ "url": "about:blank", "browserContextId": job.context });
     let made = answer(&job.cdp, (None, "Target.createTarget", open), cx).await?;
     let target = made["targetId"].as_str().context("Chrome opened no page for the preview")?.to_string();
-    let shot = shoot(&job, &target, cx).await;
-    job.cdp.send(None, "Target.closeTarget", json!({ "targetId": target }));
-    shot
+    let opened = Opened { cdp: job.cdp.clone(), target };
+    shoot(&job, &opened.target, cx).await
 }
 
 impl Browser {

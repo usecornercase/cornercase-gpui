@@ -28,6 +28,7 @@ Asked for on 2026-10-31 ("improve the whole Settings section, the modal, the UI 
 - **Links is a page of this app's own settings**, kept on this Mac in `~/Library/Application Support/cornercase-gpui/settings.json` (`prefs.rs`; `CORNERCASE_GPUI_SETTINGS` moves it): where a web address opens and which pages its card previews (`design/terminal.md`). They are about this window's Browser panel, which cornercase's TUI does not have, so they are not cornercase's to keep, and they stay here when the window shows another machine's server. Asked for on 2026-11-01.
 - **They are drawn as cornercase's settings are**: built as the same `Setting` rows (keys `app.open_links` and `app.preview_pages`, page Links) and added after `config --json` answers, so the segments, notes, the reset arrow and search work unchanged; `save` sends a key of the window's own to `Store::set_pref`, which writes the file at once (a small file, written beside and renamed over), instead of `config set`. The page sits after the line with the sheet's own pages, and the foot of the navigation names that file while it shows. A value this version does not know reads as the default.
 - They are not in Export and Import, which are cornercase's (`config export`). Another window reads the file when it starts.
+- **The Links page works without the server**: when `config --json` fails, the other pages say so, but Links is drawn from the window's own settings alone (`links::alone`), so previews can still be turned off.
 
 ## Search
 

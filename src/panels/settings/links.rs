@@ -1,8 +1,9 @@
-use gpui::Context;
+use gpui::{AnyElement, Context, IntoElement, ParentElement as _, Window};
 use serde_json::Value;
 
-use super::data::{Choice, Described, Kind, LINKS, Setting};
-use super::{Role, SettingsPanel};
+use super::data::{self, Choice, Described, Kind, LINKS, Setting};
+use super::pages::page_icon;
+use super::{Role, SettingsPanel, widgets};
 use crate::prefs::Prefs;
 use crate::store::Store;
 
@@ -74,7 +75,21 @@ pub(super) fn add(described: &mut Described, prefs: &Prefs) {
     described.settings.extend(settings(prefs));
 }
 
+pub(super) fn alone(prefs: &Prefs) -> Described {
+    let mut described = Described::default();
+    add(&mut described, prefs);
+    described
+}
+
 impl SettingsPanel {
+    pub(super) fn own_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let own = alone(&Store::get(cx).read(cx).prefs);
+        widgets::column()
+            .child(widgets::heading(page_icon(LINKS), LINKS.to_string(), data::about(LINKS)))
+            .children(self.settings_sections(&own, LINKS, window, cx))
+            .into_any_element()
+    }
+
     pub(super) fn save_own(&mut self, key: &str, value: &str, cx: &mut Context<Self>) {
         let Some(own) = owned(key) else { return };
         let role = Role::Setting(key.to_string());

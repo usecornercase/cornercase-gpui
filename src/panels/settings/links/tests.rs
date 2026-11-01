@@ -40,3 +40,10 @@ fn the_links_page_is_found_by_its_settings() {
     let found = data::search(&described, "preview");
     assert_eq!(found.iter().map(|f| f.page.as_str()).collect::<Vec<_>>(), [LINKS]);
 }
+
+#[test]
+fn the_links_page_needs_no_answer_from_the_server() {
+    let own = alone(&Prefs::default());
+    assert_eq!(data::pages(&own), [LINKS]);
+    assert_eq!(data::sections(&own, LINKS).iter().map(|s| s.items.len()).sum::<usize>(), 2);
+}

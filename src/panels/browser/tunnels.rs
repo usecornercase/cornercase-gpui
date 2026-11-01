@@ -9,11 +9,11 @@ use gpui::Context;
 
 use super::{Browser, say};
 use crate::cli;
+use crate::model::link::loopback_port;
 use crate::store::{Busy, Store};
 
 pub(crate) use ssh::quit;
 
-const LOOPBACK: &[&str] = &["localhost", "127.0.0.1", "[::1]", "0.0.0.0", "[::]"];
 const PICKS: usize = 8;
 
 pub(crate) enum Event {
@@ -110,20 +110,13 @@ impl Drop for Tunnels {
     }
 }
 
-pub(crate) fn loopback_port(url: &str) -> Option<u16> {
-    let (scheme, rest) = url.split_once("://")?;
-    if !matches!(scheme, "http" | "https") {
-        return None;
-    }
-    let authority = &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())];
-    let (host, port) = authority.rsplit_once(':')?;
-    if LOOPBACK.contains(&host) { port.parse().ok() } else { None }
-}
-
 pub(crate) fn rewrite(url: &str, local: u16) -> String {
     let Some((scheme, rest)) = url.split_once("://") else { return url.to_string() };
-    let path = rest.find(['/', '?', '#']).map_or("", |at| &rest[at..]);
-    format!("{scheme}://localhost:{local}{path}")
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let authority = rest[..end].rsplit_once('@').map_or(&rest[..end], |(_, host)| host);
+    let name = authority.rsplit_once(':').map_or(authority, |(host, _)| host);
+    let host = if name.ends_with(".localhost") { name } else { "localhost" };
+    format!("{scheme}://{host}:{local}{}", &rest[end..])
 }
 
 pub(crate) fn pick_local(

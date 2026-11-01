@@ -5,8 +5,9 @@ use gpui::{App, Context, Entity};
 use serde_json::Value;
 
 use super::Browser;
-use super::tunnels::{Tunnels, loopback_port};
+use super::tunnels::Tunnels;
 use crate::cli;
+use crate::model::link::loopback_port;
 use crate::panels::PanelKind;
 use crate::panels::poll::{Polled, Watch, parse};
 use crate::panels::ports::data::{List, Port, list_command};

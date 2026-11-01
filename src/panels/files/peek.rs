@@ -44,6 +44,7 @@ pub(crate) struct Peek {
     over_card: bool,
     generation: u64,
     timer: Option<Task<()>>,
+    capturing: Option<Task<()>>,
     code_scroll: UniformListScrollHandle,
 }
 
@@ -72,6 +73,7 @@ impl Peek {
             over_card: false,
             generation: 0,
             timer: None,
+            capturing: None,
             code_scroll: UniformListScrollHandle::new(),
         }
     }
@@ -94,6 +96,7 @@ impl Peek {
         self.generation += 1;
         self.subject = Some(subject);
         self.body = None;
+        self.capturing = None;
         self.title.clear();
         self.later(PEEK_AFTER, Self::open, cx);
         cx.notify();
@@ -119,6 +122,7 @@ impl Peek {
         self.subject = None;
         self.body = None;
         self.timer = None;
+        self.capturing = None;
         self.over_link = false;
         self.over_card = false;
         cx.notify();
