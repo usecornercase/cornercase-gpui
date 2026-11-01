@@ -8,9 +8,11 @@ use crate::store::{self, Busy, Store, args};
 use crate::theme::{colours, radius};
 use crate::ui::{self, TextField, TextFieldEvent};
 
+mod pull_request;
 mod remote;
 mod shortcuts;
 
+pub(crate) use pull_request::{pull_request, pull_tag, shown_pull_request, stack_tag};
 pub(crate) use remote::{PathQuestion, ask_path, connect};
 pub(crate) use shortcuts::shortcuts;
 

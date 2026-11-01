@@ -16,7 +16,7 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 ## Features
 
 - **Terminal.** Every pane sits on a floating card: drag the gap between cards to resize, select with the mouse, ⌘-click links and paths, drop files to paste them, and drag a pane by its handle onto another to move it.
-- **Sidebar.** Groups, projects, workspaces and agents, with each agent's status, model and context. Drag to reorder, in any layout of cornercase's Settings → UI.
+- **Sidebar.** Groups, projects, workspaces and agents, with each agent's status, model and context, and each workspace's pull request with how its checks went: click it, or press ⌘P, for its failed checks, its stack and Ask agent. Drag to reorder, in any layout of cornercase's Settings → UI.
 - **Previews.** Rest the pointer on a path a program printed and the file shows beside it: code at its lines, images, videos, sounds, PDFs. A click opens it in the Files panel.
 - **Docked panels.** Changes (the workspace's diff, to stage, discard and review), Files (tree, viewer and search), TODO and a Browser.
 - **A browser beside the agent.** A real Chrome on the workspace's dev servers, with device sizes and the console. Pick an element or take a screenshot and hand it to the agent.
@@ -68,7 +68,7 @@ Every key goes to the program in the active pane, except ⌘ shortcuts. ⌘/ lis
 | --- | --- |
 | **Tabs** | ⌘T new · ⇧⌘W close · ⌘1…9 go to one (⌘9 the last) · ⇧⌘[ ⇧⌘] previous, next |
 | **Panes** | ⌘D split right · ⇧⌘D split down · ⌘[ ⌘] previous, next · ⌘W close what is on top, else the pane |
-| **Projects** | ⌘O open a project · ⌘N new workspace · ⌘G start an agent · ⇧⌘P go to a file · ⇧⌘K connect to another server |
+| **Projects** | ⌘O open a project · ⌘N new workspace · ⌘G start an agent · ⌘P the workspace's pull request · ⇧⌘P go to a file · ⇧⌘K connect to another server |
 | **Panels** | ⇧⌘C Changes · ⇧⌘E Files · ⇧⌘L TODO · ⇧⌘B Browser |
 | **Sheets** | ⌘F Search · ⌘I Issues · ⇧⌘S Queue · ⇧⌘G Flows · ⌘U Usage · ⇧⌘A Accounts · ⇧⌘M Processes · ⇧⌘O Ports · ⇧⌘T Worktrees · ⇧⌘X Plugins · ⌘, Settings |
 | **Terminal** | ⌘C copy · ⌘V paste (an image as a file the agent can open) · ⌘+ ⌘- ⌘0 text size |

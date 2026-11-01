@@ -131,7 +131,10 @@ impl Root {
         let Some(command) = keymap::find(chord.key, chord.shift, chord.browser).map(|s| s.command) else {
             return false;
         };
-        let over_dialogs = matches!(command, Command::Close | Command::Copy | Command::Paste | Command::FindFile);
+        let over_dialogs = matches!(
+            command,
+            Command::Close | Command::Copy | Command::Paste | Command::FindFile | Command::PullRequest
+        );
         if self.store.read(cx).dialog.is_some() && !over_dialogs {
             return true;
         }
@@ -149,6 +152,7 @@ impl Root {
             Command::Connect => dialogs::connect(window, cx),
             Command::NewWorkspace => dialogs::new_workspace(None, window, cx),
             Command::StartAgent => dialogs::start_agent(window, cx),
+            Command::PullRequest => dialogs::shown_pull_request(window, cx),
             _ => self.view_shortcut(command, chord.key, cx),
         }
         true

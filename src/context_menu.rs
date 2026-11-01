@@ -19,7 +19,6 @@ pub(crate) type Action = Rc<dyn Fn(&mut Root, &mut Window, &mut Context<Root>)>;
 #[derive(Clone)]
 pub(crate) enum Entry {
     Item { label: SharedString, action: Action, danger: bool },
-    Note(SharedString),
     Submenu { label: SharedString, entries: Vec<Entry> },
     Separator,
 }
@@ -148,7 +147,7 @@ impl Root {
                     menu.highlight = step(&menu.entries, None, true);
                 }
             }
-            _ => {}
+            Entry::Separator => {}
         }
     }
 
@@ -191,7 +190,6 @@ fn menu_entry(index: usize, entry: Entry, highlighted: bool, cx: &mut Context<Ro
     let id = SharedString::from(format!("menu-{index}"));
     match entry {
         Entry::Separator => div().mx(px(10.)).my(px(4.)).h(px(1.)).bg(colours::border()).into_any_element(),
-        Entry::Note(text) => div().px(px(10.)).py(px(5.)).text_color(colours::faint()).child(text).into_any_element(),
         Entry::Item { label, action, danger } => menu_row(id, label, false, (highlighted, danger))
             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                 this.close_menu(window, cx);

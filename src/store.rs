@@ -151,6 +151,17 @@ impl Store {
         self.toast_with(text, kind, None, cx);
     }
 
+    pub(crate) fn ask_agent(&mut self, workspace: u64, text: &str, label: &str, cx: &mut Context<Self>) {
+        let Some((pane, agent)) = self.session.as_ref().and_then(|s| s.workspace_agent(workspace)) else {
+            cx.write_to_clipboard(ClipboardItem::new_string(text.trim_end().to_string()));
+            self.toast(format!("No agent in this workspace: copied {label}"), ToastKind::Info, cx);
+            return;
+        };
+        self.cmd(args(&["send", "--pane", &pane.to_string(), "--", text]));
+        self.focus("pane", pane);
+        self.toast(format!("Sent {label} to {agent}"), ToastKind::Info, cx);
+    }
+
     pub(crate) fn copy_elsewhere(&mut self, path: String, cx: &mut Context<Self>) {
         let text = format!("Copied {path}: it is on {}, not on this Mac", cli::host().unwrap_or_default());
         cx.write_to_clipboard(ClipboardItem::new_string(path));

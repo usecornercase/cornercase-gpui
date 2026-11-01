@@ -142,6 +142,9 @@ pub(crate) mod colours {
     pub(crate) fn failed() -> Rgba {
         rgb(0xff_6b_8b)
     }
+    pub(crate) fn merged() -> Rgba {
+        rgb(0x87_5f_ff)
+    }
 }
 
 pub(crate) fn palette(index: u8) -> [u8; 3] {

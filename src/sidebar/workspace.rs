@@ -9,31 +9,13 @@ use gpui::{
 use super::rows::{Listing, chevron, drop_target, hover_button, name_label, nested, row_actions, row_base};
 use super::{Fold, Target, draggable, forms, tip};
 use crate::app::Root;
+use crate::dialogs;
 use crate::model::{AgentRow, PaneInfo, PullRequest, Shown, Workspace};
 use crate::theme::colours;
 use crate::ui::{self, badge};
 
-pub(crate) fn pull_tag(pr: &PullRequest) -> (String, Rgba, bool) {
-    let number = format!("#{}", pr.number);
-    match pr.state.as_str() {
-        "merged" => (number, forms::palette_colour(99), false),
-        "closed" => (number, colours::faint(), true),
-        _ => match pr.checks.as_deref() {
-            Some("failing") => (format!("{number}✗"), colours::failed(), false),
-            Some("pending") => (format!("{number}•"), colours::working(), false),
-            Some("passing") => (format!("{number}✓"), colours::done(), false),
-            _ => (number, colours::muted(), false),
-        },
-    }
-}
-
 fn pull_tip(pr: &PullRequest) -> String {
-    let state = if pr.conflicts { format!("{}, conflicts", pr.state) } else { pr.state.clone() };
-    let mut text = format!("#{} {}\n{state}", pr.number, pr.title);
-    if let Some(checks) = &pr.checks {
-        text.push_str(" · checks ");
-        text.push_str(checks);
-    }
+    let mut text = format!("{} {}\n{}", pr.reference(), pr.title, pr.summary());
     if !pr.failed.is_empty() {
         text.push_str("\nfailed: ");
         text.push_str(&pr.failed.join(", "));
@@ -73,25 +55,33 @@ fn workspace_detail(ws: &Workspace, look: &WorkspaceLook) -> Vec<AnyElement> {
     detail
 }
 
-fn pull_request_tag(ws: &Workspace) -> Option<Stateful<Div>> {
+fn pull_request_tags(ws: &Workspace) -> Option<Div> {
     let pr = ws.pull_request.as_ref()?;
-    let (text, colour, crossed) = pull_tag(pr);
-    let url = pr.url.clone();
-    Some(
+    let id = ws.id;
+    let tag = |key: &str, text: String, colour: Rgba| {
         div()
-            .id(SharedString::from(format!("ws-pr-{}", ws.id)))
+            .id(SharedString::from(format!("ws-{key}-{id}")))
             .flex_none()
-            .text_size(px(11.))
             .text_color(colour)
-            .when(crossed, Styled::line_through)
             .cursor_pointer()
-            .hover(Styled::underline)
             .child(text)
             .tooltip(tip(pull_tip(pr)))
-            .on_click(move |_: &ClickEvent, _, cx| {
+            .on_click(move |_: &ClickEvent, window, cx| {
                 cx.stop_propagation();
-                cx.open_url(&url);
-            }),
+                dialogs::pull_request(id, window, cx);
+            })
+    };
+    let (text, colour, crossed) = dialogs::pull_tag(pr);
+    let stack = dialogs::stack_tag(pr).map(|(text, colour)| tag("stack", text, colour));
+    Some(
+        div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(4.))
+            .text_size(px(11.))
+            .child(tag("pr", text, colour).when(crossed, Styled::line_through))
+            .children(stack),
     )
 }
 
@@ -231,7 +221,7 @@ impl Root {
             .items_center()
             .gap(px(5.))
             .child(self.name_or_rename(Target::Workspace(ws.id), name))
-            .children(pull_request_tag(ws))
+            .children(pull_request_tags(ws))
             .when(ws.behind > 0, |d| {
                 d.child(
                     div().flex_none().text_size(px(11.)).text_color(colours::muted()).child(format!("↓{}", ws.behind)),
