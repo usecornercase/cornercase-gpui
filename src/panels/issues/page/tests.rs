@@ -76,18 +76,18 @@ fn going_to_the_top_scrolls_both_views() {
 #[test]
 fn the_same_answer_keeps_the_page_and_its_scroll() {
     let mut reads = HashMap::new();
-    take(&mut reads, id(), Ok(read("text", &["one"])));
+    take(&mut reads, Some(1), (1, id()), Ok(read("text", &["one"])));
     let first = page_of(&reads);
-    take(&mut reads, id(), Ok(read("text", &["one"])));
+    take(&mut reads, Some(1), (1, id()), Ok(read("text", &["one"])));
     assert!(Rc::ptr_eq(&first, &page_of(&reads)));
 }
 
 #[test]
 fn a_new_answer_replaces_the_page() {
     let mut reads = HashMap::new();
-    take(&mut reads, id(), Ok(read("text", &[])));
+    take(&mut reads, Some(1), (1, id()), Ok(read("text", &[])));
     let first = page_of(&reads);
-    take(&mut reads, id(), Ok(read("text", &["a new comment"])));
+    take(&mut reads, Some(1), (1, id()), Ok(read("text", &["a new comment"])));
     assert!(!Rc::ptr_eq(&first, &page_of(&reads)));
     assert_eq!(page_of(&reads).read.comments.len(), 1);
 }
@@ -95,7 +95,16 @@ fn a_new_answer_replaces_the_page() {
 #[test]
 fn a_failed_answer_is_shown() {
     let mut reads = HashMap::new();
-    take(&mut reads, id(), Ok(read("text", &[])));
-    take(&mut reads, id(), Err("gh: not found".to_string()));
+    take(&mut reads, Some(1), (1, id()), Ok(read("text", &[])));
+    take(&mut reads, Some(1), (1, id()), Err("gh: not found".to_string()));
     assert!(matches!(reads.get(&id()), Some(Err(e)) if e == "gh: not found"));
+}
+
+#[test]
+fn an_answer_for_a_project_no_longer_shown_is_dropped() {
+    let mut reads = HashMap::new();
+    take(&mut reads, Some(2), (1, id()), Ok(read("another repository's #1", &[])));
+    assert!(reads.is_empty());
+    take(&mut reads, None, (1, id()), Ok(read("text", &[])));
+    assert!(reads.is_empty());
 }

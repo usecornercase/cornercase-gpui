@@ -75,6 +75,7 @@ enum BodyView {
 }
 
 type IssueId = (String, String);
+type Asked = (u64, IssueId);
 
 struct Following {
     project: u64,
@@ -93,7 +94,7 @@ pub(crate) struct IssuesPanel {
     lists: HashMap<ListKey, ListState>,
     selected: Option<Issue>,
     reads: HashMap<IssueId, Read>,
-    reading: HashSet<IssueId>,
+    reading: HashSet<Asked>,
     body_view: BodyView,
     search: Entity<TextField>,
     picker: Option<usize>,

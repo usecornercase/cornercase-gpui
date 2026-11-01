@@ -5,7 +5,7 @@ use gpui::{ListOffset, ListState};
 
 use super::data::ReadIssue;
 use super::markdown::{self, Block};
-use super::{BodyView, IssueId, virtual_list};
+use super::{Asked, BodyView, IssueId, virtual_list};
 
 pub(super) type Read = Result<Rc<Page>, String>;
 
@@ -70,7 +70,15 @@ impl Page {
     }
 }
 
-pub(super) fn take(reads: &mut HashMap<IssueId, Read>, id: IssueId, read: Result<ReadIssue, String>) {
+pub(super) fn take(
+    reads: &mut HashMap<IssueId, Read>,
+    shown: Option<u64>,
+    (project, id): Asked,
+    read: Result<ReadIssue, String>,
+) {
+    if shown != Some(project) {
+        return;
+    }
     if let (Some(Ok(page)), Ok(read)) = (reads.get(&id), &read)
         && page.read == *read
     {

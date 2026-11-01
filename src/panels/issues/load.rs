@@ -170,8 +170,8 @@ impl IssuesPanel {
 
     fn read(&mut self, issue: &Issue, cx: &mut Context<Self>) {
         let Some(project) = self.project else { return };
-        let id = issue.id();
-        if !self.reading.insert(id.clone()) {
+        let asked = (project, issue.id());
+        if !self.reading.insert(asked.clone()) {
             return;
         }
         let command = args(&[
@@ -185,9 +185,9 @@ impl IssuesPanel {
             &project.to_string(),
         ]);
         ask(cx, command, move |this, out, cx| {
-            this.reading.remove(&id);
+            this.reading.remove(&asked);
             let read = out.and_then(|out| data::parse::<ReadIssue>(&out).ok_or_else(|| first_line(&out)));
-            page::take(&mut this.reads, id, read);
+            page::take(&mut this.reads, this.project, asked, read);
             cx.notify();
         });
     }

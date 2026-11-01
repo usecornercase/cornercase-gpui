@@ -131,6 +131,18 @@ fn a_task_typed_for_an_issue_whose_task_is_unknown_runs_as_the_prompt() {
 }
 
 #[test]
+fn a_task_read_late_fills_an_empty_field_and_keeps_what_was_typed() {
+    let unknown = || IssueTask { prompt: None, ..issue() };
+    let mut issue = unknown();
+    assert_eq!(issue.learn(Some("https://x/482".into()), " ").as_deref(), Some("https://x/482"));
+    assert_eq!(issue.prompt.as_deref(), Some("https://x/482"));
+    let mut typed_over = unknown();
+    assert_eq!(typed_over.learn(Some("https://x/482".into()), "Fix the returns page"), None);
+    assert_eq!(typed_over.prompt.as_deref(), Some("https://x/482"));
+    assert_eq!(unknown().learn(None, ""), None);
+}
+
+#[test]
 fn the_issue_task_is_read_on_its_tracker_in_the_chosen_project() {
     assert_eq!(issue().read_args(Some(4)), ["issue", "read", "#482", "--source", "github", "--json", "--project", "4"]);
     assert_eq!(issue().read_args(None).len(), 6);

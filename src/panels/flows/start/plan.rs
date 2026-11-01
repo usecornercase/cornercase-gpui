@@ -30,6 +30,12 @@ impl IssueTask {
         self.prompt.as_deref().unwrap_or_default().lines().collect::<Vec<_>>().join(" ")
     }
 
+    pub(super) fn learn(&mut self, prompt: Option<String>, typed: &str) -> Option<String> {
+        self.prompt = prompt;
+        let task = self.task();
+        (typed.trim().is_empty() && !task.is_empty()).then_some(task)
+    }
+
     pub(super) fn edited(&self, typed: &str) -> Option<String> {
         changed(typed, &self.task())
     }

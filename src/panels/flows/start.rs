@@ -144,10 +144,13 @@ impl StartFlow {
 
     fn read_issue(&mut self, cx: &mut Context<Self>) {
         let Some(issue) = self.issue.as_ref().filter(|i| i.prompt.is_none()) else { return };
+        let project = self.project;
         self.issue_read = IssueRead::Reading;
-        store::run(cx, issue.read_args(self.project), |this, result, cx| {
-            this.issue_answered(result.and_then(|out| issue_prompt(&out)), cx);
-            cx.notify();
+        store::run(cx, issue.read_args(project), move |this, result, cx| {
+            if this.project == project {
+                this.issue_answered(result.and_then(|out| issue_prompt(&out)), cx);
+                cx.notify();
+            }
         });
     }
 
@@ -160,14 +163,9 @@ impl StartFlow {
             }
         };
         self.issue_read = IssueRead::Done;
-        let Some(issue) = self.issue.as_mut() else { return };
-        issue.prompt = prompt;
-        let task = issue.task();
-        self.fields.prompt.update(cx, |field, cx| {
-            if field.text().is_empty() {
-                field.set_text(task, cx);
-            }
-        });
+        let typed = self.fields.prompt.read(cx).text();
+        let Some(task) = self.issue.as_mut().and_then(|issue| issue.learn(prompt, &typed)) else { return };
+        self.fields.prompt.update(cx, |field, cx| field.set_text(task, cx));
     }
 
     fn first_choice(&self) -> Option<String> {
@@ -257,6 +255,7 @@ impl StartFlow {
             self.project = Some(id);
             self.error = None;
             self.load(cx);
+            self.read_issue(cx);
             cx.notify();
         }
     }
