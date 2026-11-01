@@ -33,8 +33,8 @@ pub(crate) const GAP: f32 = 8.;
 const SIDEBAR: Split = Split::new(256., 200., 560.);
 const PAIR: Split = Split::new(456., 360., 760.);
 const DOCK: Split = Split::new(428., 308., 1208.);
-const BROWSER_DOCK: Split = Split::new(720., 420., 4096.);
-const DOCKS: DockWidths = DockWidths { panel: DOCK, browser: BROWSER_DOCK };
+const WIDE_DOCK: Split = Split::new(720., 420., 4096.);
+const DOCKS: DockWidths = DockWidths { panel: DOCK, browser: WIDE_DOCK, flow: WIDE_DOCK };
 const DOCK_HEADER: f32 = 42.;
 const TERMINAL_KEEP: f32 = 240.;
 const DOCK_SLIDE: f32 = 24.;
@@ -124,6 +124,17 @@ impl Focusable for Root {
 struct DockWidths {
     panel: Split,
     browser: Split,
+    flow: Split,
+}
+
+impl DockWidths {
+    fn wide(self, kind: PanelKind) -> Option<Split> {
+        match kind {
+            PanelKind::Browser => Some(self.browser),
+            PanelKind::Flow => Some(self.flow),
+            _ => None,
+        }
+    }
 }
 
 struct Kept {
@@ -198,7 +209,7 @@ impl Root {
         let s = store.read(cx);
         let overlay = s.dialog.is_some() || s.sheet.is_some();
         let in_dock = self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx);
-        if (self.had_overlay && !overlay) || (s.dock.is_none() && in_dock) {
+        if (self.had_overlay && !overlay) || (s.shown_dock().is_none() && in_dock) {
             window.focus(&self.focus);
         }
         self.had_overlay = overlay;
@@ -272,7 +283,7 @@ impl Root {
     fn track_leaving(&mut self, cx: &mut Context<Self>) {
         let (sheet, dialog, dock) = {
             let s = self.store.read(cx);
-            (s.sheet, s.dialog.clone(), s.dock)
+            (s.sheet, s.dialog.clone(), s.shown_dock())
         };
         if let Some(serial) = self.leaving_sheet.track(sheet) {
             Self::end_leave(cx, move |this| this.leaving_sheet.finish(serial));
@@ -571,11 +582,8 @@ impl Root {
     }
 
     fn dock_size(&self, kind: PanelKind, window: &Window) -> f32 {
-        let widths = self.dock_widths;
-        if kind != PanelKind::Browser {
-            return widths.panel.size();
-        }
-        widths.browser.chosen().unwrap_or_else(|| browser_default(f32::from(window.viewport_size().width)))
+        let Some(wide) = self.dock_widths.wide(kind) else { return self.dock_widths.panel.size() };
+        wide.chosen().unwrap_or_else(|| wide_default(f32::from(window.viewport_size().width)))
     }
 
     fn render_dock(
@@ -661,7 +669,7 @@ impl Root {
     }
 
     fn render_main(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let dock = self.store.read(cx).dock.map_or(0., |kind| self.dock_size(kind, window));
+        let dock = self.store.read(cx).shown_dock().map_or(0., |kind| self.dock_size(kind, window));
         let at = (Edge::Right, self.sidebar_extent());
         div()
             .flex_1()
@@ -690,10 +698,10 @@ impl Root {
     }
 
     fn render_body(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let shown = self.store.read(cx).dock;
+        let shown = self.store.read(cx).shown_dock();
         let dock = shown.map(|kind| self.render_dock(kind, window, cx));
         let leaving_dock = self.render_leaving_dock(window, cx);
-        let width: split::Access<Self> = if shown == Some(PanelKind::Browser) { browser_width } else { dock_width };
+        let width = dock_access(shown);
         let at = shown.map(|kind| (Edge::Left, self.dock_size(kind, window)));
         let handle = at.map(|at| split::handle("dock-split", DockGrip, at, width, cx));
         div()
@@ -739,8 +747,20 @@ fn browser_width(root: &mut Root) -> &mut Split {
     &mut root.dock_widths.browser
 }
 
-fn browser_default(window_width: f32) -> f32 {
-    (window_width / 2.).clamp(DOCK.size(), BROWSER_DOCK.size())
+fn flow_width(root: &mut Root) -> &mut Split {
+    &mut root.dock_widths.flow
+}
+
+fn dock_access(kind: Option<PanelKind>) -> split::Access<Root> {
+    match kind {
+        Some(PanelKind::Browser) => browser_width,
+        Some(PanelKind::Flow) => flow_width,
+        _ => dock_width,
+    }
+}
+
+fn wide_default(window_width: f32) -> f32 {
+    (window_width / 2.).clamp(DOCK.size(), WIDE_DOCK.size())
 }
 
 fn toast_colour(kind: ToastKind) -> Rgba {

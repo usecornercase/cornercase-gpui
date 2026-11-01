@@ -6,7 +6,7 @@ use gpui::{
 };
 
 pub(crate) use self::plan::{FlowStart, IssueTask};
-use self::plan::{Typed, hides_the_run, issue_prompt, plan};
+use self::plan::{Typed, issue_prompt, plan};
 use super::FlowsPanel;
 use super::actions::announce;
 use super::dialog::{Submit, boxed, buttons, field, filled_field};
@@ -381,8 +381,8 @@ fn finish(name: &str, focus: bool, started: &Started, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| {
         s.close_dialog(cx);
         s.run_started(workspace, cx);
-        if hides_the_run(focus, s.sheet) {
-            s.close_sheet(cx);
+        if focus {
+            s.show_run(cx);
         }
     });
 }

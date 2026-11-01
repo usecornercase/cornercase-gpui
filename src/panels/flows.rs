@@ -3,6 +3,7 @@ mod cards;
 mod checked;
 mod diagram;
 mod dialog;
+mod dock;
 mod draft;
 mod editor;
 mod editor_view;
@@ -31,6 +32,7 @@ use gpui::{
 };
 
 use self::diagram::Played;
+pub(crate) use self::dock::build_dock;
 use self::model::{Files, FlowInfo, Frame, Listing, Message, Run};
 use self::run_list::RunList;
 pub(crate) use self::start::{FlowStart, IssueTask, start_flow};
@@ -47,6 +49,12 @@ const DETAIL_KEEP: f32 = 320.;
 const BOARD: f32 = 680.;
 
 struct ListGrip;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Place {
+    Sheet,
+    Dock,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Selected {
@@ -65,6 +73,7 @@ struct Feed {
 }
 
 pub(crate) struct FlowsPanel {
+    place: Place,
     project: Option<u64>,
     listing: Option<Listing>,
     list_error: Option<String>,
@@ -85,14 +94,15 @@ pub(crate) struct FlowsPanel {
 }
 
 impl FlowsPanel {
-    pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn new(place: Place, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         cx.observe(&store, |this, store, cx| {
-            this.select_started(&store, cx);
+            this.store_changed(&store, cx);
             cx.notify();
         })
         .detach();
         let mut this = Self {
+            place,
             project: None,
             listing: None,
             list_error: None,
@@ -113,9 +123,16 @@ impl FlowsPanel {
         };
         this.follow_runs(cx);
         this.refresh(cx);
-        this.select_started(&store, cx);
+        this.store_changed(&store, cx);
         cx.spawn(async move |this, cx| poll_while_alive(this, cx).await).detach();
         this
+    }
+
+    fn store_changed(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+        match self.place {
+            Place::Sheet => self.select_started(store, cx),
+            Place::Dock => self.follow_shown(cx),
+        }
     }
 
     fn select_started(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
@@ -126,14 +143,19 @@ impl FlowsPanel {
     }
 
     fn poll(&mut self, cx: &mut Context<Self>) {
-        if Store::get(cx).read(cx).sheet == Some(PanelKind::Flows) {
+        let store = Store::get(cx);
+        let shown = match self.place {
+            Place::Sheet => store.read(cx).sheet == Some(PanelKind::Flows),
+            Place::Dock => store.read(cx).shown_dock() == Some(PanelKind::Flow),
+        };
+        if shown {
             self.refresh(cx);
             self.read_files(cx);
         }
     }
 
     pub(crate) fn refresh(&mut self, cx: &mut Context<Self>) {
-        if self.listing_busy {
+        if self.listing_busy || self.place == Place::Dock {
             return;
         }
         self.listing_busy = true;
@@ -178,7 +200,10 @@ impl FlowsPanel {
             Ok(runs) => {
                 self.runs = runs.runs;
                 self.runs_error = None;
-                self.ensure_selection();
+                match self.place {
+                    Place::Sheet => self.ensure_selection(),
+                    Place::Dock => self.follow_shown(cx),
+                }
                 self.sync_feed(cx);
                 cx.notify();
             }
@@ -405,6 +430,9 @@ async fn wait_for_run(this: WeakEntity<FlowsPanel>, workspace: u64, cx: &mut Asy
 
 impl Render for FlowsPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.place == Place::Dock {
+            return self.render_dock(cx);
+        }
         if let Some(editor) = &self.editor {
             return div().size_full().child(editor.clone());
         }
@@ -425,6 +453,6 @@ fn list_width(panel: &mut FlowsPanel) -> &mut Split {
     &mut panel.list_width
 }
 
-pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
-    cx.new(|cx| FlowsPanel::new(window, cx)).into()
+pub(crate) fn build(_window: &mut Window, cx: &mut gpui::App) -> AnyView {
+    cx.new(|cx| FlowsPanel::new(Place::Sheet, cx)).into()
 }

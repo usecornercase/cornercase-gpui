@@ -15,6 +15,8 @@ use crate::store::{Store, args};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone, glass::tint};
 
+const TWO_COLUMNS: f32 = 480.;
+
 impl FlowsPanel {
     pub(super) fn run_top(&self, run: &Run, cx: &Context<Self>) -> Div {
         let key = format!("run-{}", run.id);
@@ -25,7 +27,7 @@ impl FlowsPanel {
             .gap(px(22.))
             .child(run_hero(run, cx))
             .child(task(&run.task))
-            .child(block(Icon::Accounts, "Team").child(team(run)))
+            .child(block(Icon::Accounts, "Team").child(team(run, team_columns(self.board.get()))))
             .child(block(Icon::Flows, "Plan").child(self.diagram(plan, cx)))
     }
 }
@@ -124,10 +126,14 @@ fn closed_run_buttons(buttons: Div, workspace: u64, cx: &Context<FlowsPanel>) ->
     )
 }
 
-fn team(run: &Run) -> Div {
+fn team_columns(width: f32) -> u16 {
+    if width >= TWO_COLUMNS { 2 } else { 1 }
+}
+
+fn team(run: &Run, columns: u16) -> Div {
     div()
         .grid()
-        .grid_cols(2)
+        .grid_cols(columns)
         .gap(px(8.))
         .children(run.roles.iter().enumerate().map(|(i, member)| member_card(run, i, member)))
 }
@@ -200,3 +206,6 @@ fn member_side(member: &Member) -> Div {
                 .child(format!("pane {pane}"))
         }))
 }
+
+#[cfg(test)]
+mod tests;

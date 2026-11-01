@@ -49,7 +49,7 @@ impl Root {
                 .gap(px(6.))
                 .pt(px(5.))
                 .pb(px(10.))
-                .children(self.rail_buttons(&DOCKED, cx))
+                .children(self.rail_buttons(&self.docked_kinds(cx), cx))
                 .child(div().w(px(18.)).h(px(1.)).my(px(6.)).flex_none().rounded_full().bg(colours::edge()))
                 .children(self.rail_buttons(&SHEETS, cx))
                 .child(div().flex_1())
@@ -59,10 +59,15 @@ impl Root {
         )
     }
 
+    fn docked_kinds(&self, cx: &Context<Self>) -> Vec<PanelKind> {
+        let session = self.store.read(cx).session.as_ref();
+        DOCKED.into_iter().chain(Some(PanelKind::Flow).filter(|kind| kind.shows(session))).collect()
+    }
+
     fn rail_buttons(&self, kinds: &[PanelKind], cx: &mut Context<Self>) -> Vec<impl IntoElement + use<>> {
         let (dock, sheet) = {
             let s = self.store.read(cx);
-            (s.dock, s.sheet)
+            (s.shown_dock(), s.sheet)
         };
         let pointed = crate::tour::Guide::pointed(cx);
         kinds

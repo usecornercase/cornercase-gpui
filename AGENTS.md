@@ -52,7 +52,7 @@ npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.
 
 - **Every key goes to the program in the active pane, except ⌘ shortcuts**, which live in one table, `keymap.rs` (run by `terminal.rs::shortcut`; the app menu's system keys, ⌘Q ⌘H ⌘M ⌃⌘F, are actions in `main.rs`), and are listed in the README's Keys and the ⌘/ dialog. Text goes through macOS's input method, so dead keys and ⌥ characters (`@` on a Spanish keyboard) reach the program: never bind `⌥` or `Ctrl` combinations. The terminal takes keys only while its own focus handle is focused, so text fields and focused panels get theirs.
 - Anything that cannot be undone asks first, through `dialogs::confirm`. Escape is handled once, in `Root` (`design/terminal.md`): a dialog or panel does not close itself on it.
-- At most one sheet and one dialog are open; a docked panel (Changes, Files, TODO, Browser) sits right of the terminal and keeps its state while closed.
+- At most one sheet and one dialog are open; a docked panel (Changes, Files, TODO, Browser, Flow) sits right of the terminal and keeps its state while closed.
 - A command's error becomes a toast (`Store::act`, `Store::cmd` and `store::run` do it); never fail silently.
 - **Anything that can take a moment shows that it runs**: run it as a job (`store::run_busy`, `Store::act_busy`, `Store::run_aside`), which the status bar names, and turn the control that started it into `ui::busy_button` (or show `ui::busy`, `ui::loading`) until it answers. A command that only waits runs beside the queue, never in it (`design/connection.md`, `design/widgets.md`).
 

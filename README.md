@@ -18,9 +18,9 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 - **Terminal.** Every pane sits on a floating card: drag the gap between cards to resize, select with the mouse, ⌘-click links and paths, drop files to paste them, and drag a pane by its handle onto another to move it.
 - **Sidebar.** Groups, projects, workspaces and agents, with each agent's status, model and context, and each workspace's pull request with how its checks went: click it, or press ⌘P, for its failed checks, its stack and Ask agent. Drag to reorder, in any layout of cornercase's Settings → UI.
 - **Previews.** Rest the pointer on a path a program printed and the file shows beside it: code at its lines, images, videos, sounds, PDFs. A click opens it in the Files panel.
-- **Docked panels.** Changes (the workspace's diff, to stage, discard and review), Files (tree, viewer and search), TODO and a Browser.
+- **Docked panels.** Changes (the workspace's diff, to stage, discard and review), Files (tree, viewer and search), TODO, a Browser and, in a workspace that runs a flow, Flow: its plan lit up where the work stands, its team and their messages, beside the agents at work.
 - **A browser beside the agent.** A real Chrome on the workspace's dev servers, with device sizes and the console. Pick an element or take a screenshot and hand it to the agent.
-- **The rest of cornercase.** Search, Issues, Queue, Flows, Usage, Accounts, Processes, Ports, Worktrees, Plugins, Settings and the guided tours, each one shortcut away. A flow, a team of agents, starts from its sheet, from an issue or from a project's `+`; from an issue, its task comes filled in with the issue's, ready to add to.
+- **The rest of cornercase.** Search, Issues, Queue, Flows, Usage, Accounts, Processes, Ports, Worktrees, Plugins, Settings and the guided tours, each one shortcut away. A flow, a team of agents, starts from its sheet, from an issue or from a project's `+`, and opens its workspace with the Flow panel beside it (View flow in the workspace's menu opens it later); from an issue, its task comes filled in with the issue's, ready to add to.
 - **Other machines.** Connect the window to cornercase on another machine over your own `ssh`; it reconnects by itself when the link drops.
 - **Notifications.** Agent notices as toasts and macOS notifications, with sounds and the bell.
 
@@ -69,7 +69,7 @@ Every key goes to the program in the active pane, except ⌘ shortcuts. ⌘/ lis
 | **Tabs** | ⌘T new · ⇧⌘W close · ⌘1…9 go to one (⌘9 the last) · ⇧⌘[ ⇧⌘] previous, next |
 | **Panes** | ⌘D split right · ⇧⌘D split down · ⌘[ ⌘] previous, next · ⌘W close what is on top, else the pane |
 | **Projects** | ⌘O open a project · ⌘N new workspace · ⌘G start an agent · ⌘P the workspace's pull request · ⇧⌘P go to a file · ⇧⌘K connect to another server |
-| **Panels** | ⇧⌘C Changes · ⇧⌘E Files · ⇧⌘L TODO · ⇧⌘B Browser |
+| **Panels** | ⇧⌘C Changes · ⇧⌘E Files · ⇧⌘L TODO · ⇧⌘B Browser · ⇧⌘F Flow (in a flow's workspace) |
 | **Sheets** | ⌘F Search · ⌘I Issues · ⇧⌘S Queue · ⇧⌘G Flows · ⌘U Usage · ⇧⌘A Accounts · ⇧⌘M Processes · ⇧⌘O Ports · ⇧⌘T Worktrees · ⇧⌘X Plugins · ⌘, Settings |
 | **Terminal** | ⌘C copy · ⌘V paste (an image as a file the agent can open) · ⌘+ ⌘- ⌘0 text size |
 | **In the Browser** | ⌘L address · ⌘R reload · ⌘[ ⌘] back, forward · ⌘C ⌘X ⌘V on the page; every other key goes to the page |

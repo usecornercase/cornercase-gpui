@@ -1,6 +1,5 @@
 use serde::Deserialize;
 
-use crate::panels::PanelKind;
 use crate::panels::flows::model::project_args;
 use crate::store::args;
 
@@ -160,10 +159,6 @@ impl Plan {
         }
         command
     }
-}
-
-pub(super) fn hides_the_run(focus: bool, sheet: Option<PanelKind>) -> bool {
-    focus && sheet.is_some_and(|kind| kind != PanelKind::Flows)
 }
 
 #[cfg(test)]

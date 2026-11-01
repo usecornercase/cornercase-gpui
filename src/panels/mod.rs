@@ -17,6 +17,7 @@ pub(crate) mod worktrees;
 
 use gpui::{AnyView, Window};
 
+use crate::model::Session;
 use crate::ui::Icon;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,6 +26,7 @@ pub(crate) enum PanelKind {
     Files,
     Todo,
     Browser,
+    Flow,
     Queue,
     Issues,
     Usage,
@@ -39,11 +41,12 @@ pub(crate) enum PanelKind {
 }
 
 impl PanelKind {
-    pub(crate) const ALL: [PanelKind; 15] = [
+    pub(crate) const ALL: [PanelKind; 16] = [
         PanelKind::Changes,
         PanelKind::Files,
         PanelKind::Todo,
         PanelKind::Browser,
+        PanelKind::Flow,
         PanelKind::Queue,
         PanelKind::Issues,
         PanelKind::Usage,
@@ -63,6 +66,7 @@ impl PanelKind {
             Self::Files => Icon::Files,
             Self::Todo => Icon::Todo,
             Self::Browser => Icon::Globe,
+            Self::Flow => Icon::Waypoints,
             Self::Queue => Icon::Queue,
             Self::Issues => Icon::Issues,
             Self::Usage => Icon::Usage,
@@ -83,6 +87,7 @@ impl PanelKind {
             Self::Files => "Files",
             Self::Todo => "TODO",
             Self::Browser => "Browser",
+            Self::Flow => "Flow",
             Self::Queue => "Queue",
             Self::Issues => "Issues",
             Self::Usage => "Usage",
@@ -98,7 +103,11 @@ impl PanelKind {
     }
 
     pub(crate) fn docked(self) -> bool {
-        matches!(self, Self::Changes | Self::Files | Self::Todo | Self::Browser)
+        matches!(self, Self::Changes | Self::Files | Self::Todo | Self::Browser | Self::Flow)
+    }
+
+    pub(crate) fn shows(self, session: Option<&Session>) -> bool {
+        self != Self::Flow || session.is_some_and(Session::shown_runs_flow)
     }
 
     pub(crate) fn build(self, window: &mut Window, cx: &mut gpui::App) -> AnyView {
@@ -107,6 +116,7 @@ impl PanelKind {
             Self::Files => files::build(window, cx),
             Self::Todo => todo::build(window, cx),
             Self::Browser => browser::build(window, cx),
+            Self::Flow => flows::build_dock(window, cx),
             Self::Queue => queue::build(window, cx),
             Self::Issues => issues::build(window, cx),
             Self::Usage => usage::build(window, cx),
@@ -121,3 +131,6 @@ impl PanelKind {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

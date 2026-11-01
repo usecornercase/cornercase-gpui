@@ -39,13 +39,13 @@ fn path_items(path: &str) -> Vec<Entry> {
     if cli::host().is_some() { vec![copy] } else { vec![finder_item(path.to_string()), copy] }
 }
 
-fn sheet_item(label: &'static str, kind: PanelKind, focus: Option<(&'static str, u64)>) -> Entry {
+fn panel_item(label: &'static str, kind: PanelKind, focus: Option<(&'static str, u64)>) -> Entry {
     item(label, move |this, _, cx| {
         this.store.update(cx, |s, cx| {
             if let Some((what, id)) = focus {
                 s.focus(what, id);
             }
-            s.open_sheet(kind, cx);
+            s.open(kind, cx);
         });
     })
 }
@@ -109,7 +109,7 @@ fn project_menu(session: &Session, id: u64) -> Vec<Entry> {
         Entry::Separator,
     ];
     entries.extend(path_items(&project.path));
-    entries.push(sheet_item("Worktrees…", PanelKind::Worktrees, None));
+    entries.push(panel_item("Worktrees…", PanelKind::Worktrees, None));
     entries.push(Entry::Separator);
     entries.push(danger("Close project…", move |_, window, cx| {
         dialogs::confirm(
@@ -196,12 +196,15 @@ fn workspace_menu(session: &Session, id: u64) -> Vec<Entry> {
     entries.push(Entry::Separator);
     entries.push(rename_item("Rename workspace", Target::Workspace(id)));
     entries.extend(ws.pull_request.as_ref().map(|pr| pull_request_item(id, pr)));
+    if ws.runs_flow() {
+        entries.push(panel_item("View flow", PanelKind::Flow, Some(("workspace", id))));
+    }
     if !ws.agent_rows().is_empty() {
         entries.push(fold_item(Fold::Workspace(id), ws.collapsed));
     }
     entries.push(Entry::Separator);
     entries.extend(path_items(&ws.path));
-    entries.push(sheet_item("Ports…", PanelKind::Ports, Some(("workspace", id))));
+    entries.push(panel_item("Ports…", PanelKind::Ports, Some(("workspace", id))));
     entries.push(Entry::Separator);
     if ws.worktree {
         let name = ws.name.clone();

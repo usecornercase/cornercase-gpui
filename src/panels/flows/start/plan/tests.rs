@@ -190,11 +190,3 @@ fn an_issue_keeps_to_the_projects_it_allows_without_guessing_one() {
     assert_eq!(start.chosen(&choices, Some(1)), None);
     assert_eq!(FlowStart { project: Some(7), ..start }.chosen(&choices, Some(1)), Some(7));
 }
-
-#[test]
-fn a_run_shown_in_the_window_closes_the_sheet_over_it_unless_the_flows_sheet_shows_it() {
-    assert!(hides_the_run(true, Some(PanelKind::Issues)));
-    assert!(!hides_the_run(true, Some(PanelKind::Flows)));
-    assert!(!hides_the_run(false, Some(PanelKind::Issues)));
-    assert!(!hides_the_run(true, None));
-}

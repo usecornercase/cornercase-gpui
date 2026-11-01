@@ -150,6 +150,7 @@ fn edge_chip(flow: &FlowSpec, edge: Option<Edge>) -> Option<Div> {
 fn header(flow: &FlowSpec, message: &Message, text: String, now: i64) -> Div {
     div()
         .flex()
+        .flex_wrap()
         .items_center()
         .gap(px(6.))
         .text_size(px(12.))
