@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use base64::Engine as _;
+use futures::channel::oneshot;
 use futures::future::{self, Either};
 use gpui::{AsyncApp, Context, Image, ImageFormat, Task, WeakEntity};
 use serde_json::{Value, json};
@@ -198,11 +199,26 @@ async fn shoot(job: &Job, target: &str, cx: &AsyncApp) -> Result<Preview> {
     Ok(Preview { image: Arc::new(Image::from_bytes(ImageFormat::Jpeg, bytes)), title: title.trim().to_string() })
 }
 
+async fn open_page(job: &Job, cx: &AsyncApp) -> Result<Opened> {
+    let (cdp, (tx, rx)) = (job.cdp.clone(), oneshot::channel::<Opened>());
+    let reply = cdp.call(None, "Target.createTarget", json!({ "url": "about:blank", "browserContextId": job.context }));
+    cx.background_executor()
+        .spawn(async move {
+            let made = reply.await.ok().and_then(Result::ok);
+            if let Some(target) = made.and_then(|made| made["targetId"].as_str().map(str::to_string)) {
+                drop(tx.send(Opened { cdp, target }));
+            }
+        })
+        .detach();
+    match future::select(rx, cx.background_executor().timer(ANSWER)).await {
+        Either::Left((Ok(opened), _)) => Ok(opened),
+        Either::Left((Err(_), _)) => bail!("Chrome opened no page for the preview"),
+        Either::Right(_) => Err(Late("Target.createTarget".into()).into()),
+    }
+}
+
 async fn capture(job: Job, cx: &AsyncApp) -> Result<Preview> {
-    let open = json!({ "url": "about:blank", "browserContextId": job.context });
-    let made = answer(&job.cdp, (None, "Target.createTarget", open), cx).await?;
-    let target = made["targetId"].as_str().context("Chrome opened no page for the preview")?.to_string();
-    let opened = Opened { cdp: job.cdp.clone(), target };
+    let opened = open_page(&job, cx).await?;
     shoot(&job, &opened.target, cx).await
 }
 
