@@ -6,7 +6,10 @@ use gpui::{
     px,
 };
 
-use super::rows::{Listing, chevron, drop_target, hover_button, name_label, nested, row_actions, row_base};
+use super::rows::{
+    End, Listing, chevron, drop_target, hover_button, hover_listener, name_label, nested, row_actions, row_base,
+    trailing,
+};
 use super::{Fold, Target, draggable, forms, tip};
 use crate::app::Root;
 use crate::dialogs;
@@ -165,6 +168,7 @@ impl Root {
         let rows = ws.agent_rows();
         let look = workspace_look(ws, listing, &rows);
         let removing = self.store.read(cx).removing(id);
+        let end = self.workspace_end(ws, &look, removing, cx);
         let row = row_base(target, look.chosen == Chosen::Here)
             .gap(px(4.))
             .pl(px(6.))
@@ -177,7 +181,7 @@ impl Root {
                     .min_w(px(0.))
                     .flex()
                     .flex_col()
-                    .child(self.title_line(ws, &look))
+                    .child(self.title_line(ws, &look, end))
                     .children(detail_line(ws, &look, removing)),
             );
         let row = if removing {
@@ -210,24 +214,27 @@ impl Root {
         rows.iter().map(|agent| self.render_agent(agent, listing.shown, &place, cx)).collect()
     }
 
-    fn title_line(&self, ws: &Workspace, look: &WorkspaceLook) -> Div {
+    fn title_line(&self, ws: &Workspace, look: &WorkspaceLook, end: Div) -> Div {
         let chosen = look.chosen != Chosen::No;
         let name = name_label(look.label.clone())
             .min_w(px(0.))
             .text_color(if chosen { colours::text() } else { colours::soft() })
             .when(chosen, |d| d.font_weight(FontWeight::MEDIUM));
-        div()
-            .flex()
-            .items_center()
-            .gap(px(5.))
-            .child(self.name_or_rename(Target::Workspace(ws.id), name))
-            .children(pull_request_tags(ws))
+        div().flex().items_center().gap(px(5.)).child(self.name_or_rename(Target::Workspace(ws.id), name)).child(end)
+    }
+
+    fn workspace_end(&self, ws: &Workspace, look: &WorkspaceLook, removing: bool, cx: &mut Context<Self>) -> Div {
+        let status = !look.has_children || look.collapsed;
+        let figures = ws.pull_request.is_some() || ws.behind > 0 || status;
+        let end = End { gap: 5., buttons: u8::from(!removing), figures };
+        let end = if removing { trailing(end, false) } else { self.row_end(Target::Workspace(ws.id), end, cx) };
+        end.children(pull_request_tags(ws))
             .when(ws.behind > 0, |d| {
                 d.child(
                     div().flex_none().text_size(px(11.)).text_color(colours::muted()).child(format!("↓{}", ws.behind)),
                 )
             })
-            .when(!look.has_children || look.collapsed, |d| d.child(badge(ws.loudest())))
+            .when(status, |d| d.child(badge(ws.loudest())))
     }
 
     fn agent_tab_name(&self, tab: u64) -> String {
@@ -260,9 +267,8 @@ impl Root {
             .child(agent_fold(row, place.scope, cx))
             .child(badge(pane.status.as_deref()))
             .child(agent_text(title, details, selected))
-            .when(pane.collapsed && row.children > 0, |d| d.child(ui::dim(format!("+{}", row.children))))
-            .when(place.closable, |d| d.child(agent_close_button(id, place.scope, gid.clone(), cx)))
-            .child(agent_menu_button(id, place.scope, gid, cx))
+            .child(self.agent_end(row, place, gid.clone(), cx))
+            .on_hover(hover_listener(gid, cx))
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |this, e: &MouseDownEvent, window, cx| {
@@ -271,6 +277,16 @@ impl Root {
             )
             .on_click(cx.listener(move |this, _: &ClickEvent, _, _| this.focus_item("pane", id)))
             .into_any_element()
+    }
+
+    fn agent_end(&self, row: &AgentRow<'_>, place: &AgentPlace, gid: SharedString, cx: &mut Context<Self>) -> Div {
+        let id = row.pane.id;
+        let folded = row.pane.collapsed && row.children > 0;
+        let end = End { gap: 4., buttons: if place.closable { 2 } else { 1 }, figures: folded };
+        trailing(end, self.row_hovered(&gid))
+            .when(folded, |d| d.child(ui::dim(format!("+{}", row.children))))
+            .when(place.closable, |d| d.child(agent_close_button(id, place.scope, gid.clone(), cx)))
+            .child(agent_menu_button(id, place.scope, gid, cx))
     }
 }
 

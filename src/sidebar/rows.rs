@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement, SharedString, Stateful, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _, px,
-    relative,
+    AnyElement, App, ClickEvent, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement, SharedString, Stateful, StatefulInteractiveElement, Styled, Window, div,
+    prelude::FluentBuilder as _, px, relative,
 };
 
 use super::{Dragged, Fold, Target, draggable, forms, order};
@@ -11,6 +11,13 @@ use crate::app::Root;
 use crate::model::{Group, Project, Session, Shown};
 use crate::theme::{colours, radius};
 use crate::ui::{self, badge, glass};
+
+#[derive(Clone, Copy)]
+pub(super) struct End {
+    pub gap: f32,
+    pub buttons: u8,
+    pub figures: bool,
+}
 
 pub(super) struct Listing {
     pub shown: Shown,
@@ -29,6 +36,9 @@ fn id_prefix(target: Target) -> &'static str {
 }
 
 const GUIDE: f32 = 13.;
+const BUTTON: f32 = 22.;
+const BUTTON_GAP: f32 = 2.;
+const BESIDE: f32 = 4.;
 
 pub(super) fn row_group_id(target: Target) -> SharedString {
     SharedString::from(format!("{}-{}", id_prefix(target), target.id()))
@@ -46,9 +56,39 @@ pub(super) fn chevron(id: SharedString, open: bool) -> Stateful<Div> {
         .child(if open { "▾" } else { "▸" })
 }
 
+fn button_margin(slot: u8) -> f32 {
+    BESIDE + (BUTTON + BUTTON_GAP) * f32::from(slot)
+}
+
+fn room(buttons: u8) -> f32 {
+    buttons.checked_sub(1).map_or(0., |last| button_margin(last) + BUTTON)
+}
+
+fn end_margin(end: End, hovered: bool) -> f32 {
+    match (hovered, end.figures) {
+        (true, _) => room(end.buttons),
+        (false, true) => 0.,
+        (false, false) => -end.gap,
+    }
+}
+
+fn after_hover(current: Option<SharedString>, row: SharedString, hovered: bool) -> Option<SharedString> {
+    if hovered {
+        Some(row)
+    } else if current.as_ref() == Some(&row) {
+        None
+    } else {
+        current
+    }
+}
+
 pub(super) fn hover_button(id: SharedString, group: SharedString, glyph: &'static str, slot: u8) -> Stateful<Div> {
-    let chip = div()
-        .size(px(22.))
+    div()
+        .id(id)
+        .absolute()
+        .right(relative(1.))
+        .mr(px(button_margin(slot)))
+        .size(px(BUTTON))
         .flex()
         .items_center()
         .justify_center()
@@ -56,19 +96,21 @@ pub(super) fn hover_button(id: SharedString, group: SharedString, glyph: &'stati
         .text_color(colours::faint())
         .bg(colours::raised())
         .hover(|s| s.bg(colours::raised_hover()).text_color(colours::text()))
-        .child(glyph);
-    div()
-        .id(id)
-        .absolute()
-        .top_0()
-        .bottom_0()
-        .right(px(6. + 24. * f32::from(slot)))
-        .flex()
-        .items_center()
         .cursor_pointer()
         .invisible()
         .group_hover(group, Styled::visible)
-        .child(chip)
+        .child(glyph)
+}
+
+pub(super) fn trailing(end: End, hovered: bool) -> Div {
+    div().flex_none().flex().items_center().gap(px(end.gap)).ml(px(end_margin(end, hovered)))
+}
+
+pub(super) fn hover_listener(
+    row: SharedString,
+    cx: &mut Context<Root>,
+) -> impl Fn(&bool, &mut Window, &mut App) + 'static {
+    cx.listener(move |this, hovered: &bool, _, cx| this.hover_row(row.clone(), *hovered, cx))
 }
 
 pub(super) fn row_base(target: Target, lit: bool) -> Stateful<Div> {
@@ -104,7 +146,7 @@ pub(super) fn row_actions(
     primary: impl Fn(&mut Root) + 'static,
     cx: &mut Context<Root>,
 ) -> Stateful<Div> {
-    row.child(menu_button(target, cx))
+    row.on_hover(hover_listener(row_group_id(target), cx))
         .on_mouse_down(
             MouseButton::Right,
             cx.listener(move |this, e: &MouseDownEvent, window, cx| {
@@ -167,6 +209,22 @@ pub(super) fn name_label(name: impl Into<SharedString>) -> Div {
 }
 
 impl Root {
+    fn hover_row(&mut self, row: SharedString, hovered: bool, cx: &mut Context<Self>) {
+        let next = after_hover(self.side.hovered.clone(), row, hovered);
+        if next != self.side.hovered {
+            self.side.hovered = next;
+            cx.notify();
+        }
+    }
+
+    pub(super) fn row_hovered(&self, row: &SharedString) -> bool {
+        self.side.hovered.as_ref() == Some(row)
+    }
+
+    pub(super) fn row_end(&self, target: Target, end: End, cx: &mut Context<Self>) -> Div {
+        trailing(end, self.row_hovered(&row_group_id(target))).child(menu_button(target, cx))
+    }
+
     pub(super) fn name_or_rename(&self, target: Target, label: Div) -> AnyElement {
         let Some(rename) = self.side.rename.as_ref().filter(|r| r.target == target) else {
             return label.into_any_element();
@@ -218,11 +276,17 @@ impl Root {
                 div().w(px(14.)).flex_none().text_color(colour).child(group.icon.clone().unwrap_or_else(|| "●".into())),
             )
             .child(self.name_or_rename(target, name))
-            .when(collapsed, |d| d.child(ui::dim(format!("{count}"))))
-            .child(div().text_size(px(13.)).text_color(colours::faint()).child(if collapsed { "▸" } else { "▾" }));
+            .child(self.group_end(target, count, collapsed, cx));
         let row = row_actions(row, target, move |this| this.set_folded(Fold::Group(id), !collapsed), cx);
         let row = draggable(row, target, group.name.clone());
         drop_target(row, target, listing.groups.clone(), cx).into_any_element()
+    }
+
+    fn group_end(&self, target: Target, count: usize, collapsed: bool, cx: &mut Context<Self>) -> Div {
+        let fold = div().text_size(px(13.)).text_color(colours::faint()).child(if collapsed { "▸" } else { "▾" });
+        self.row_end(target, End { gap: 6., buttons: 1, figures: true }, cx)
+            .when(collapsed, |d| d.child(ui::dim(format!("{count}"))))
+            .child(fold)
     }
 
     fn render_project(
@@ -271,6 +335,13 @@ impl Root {
             .py(px(3.))
             .child(lead)
             .child(self.name_or_rename(target, name))
+            .child(self.project_end(project, collapsed, cx))
+    }
+
+    fn project_end(&self, project: &Project, collapsed: bool, cx: &mut Context<Self>) -> Div {
+        let id = project.id;
+        let target = Target::Project(id);
+        self.row_end(target, End { gap: 4., buttons: 2, figures: collapsed }, cx)
             .when(collapsed, |d| {
                 d.child(ui::dim(format!("{}", project.workspaces.len()))).child(badge(project.attention()))
             })
@@ -296,3 +367,6 @@ fn project_fold(id: u64, collapsed: bool, cx: &mut Context<Root>) -> Stateful<Di
         },
     ))
 }
+
+#[cfg(test)]
+mod tests;

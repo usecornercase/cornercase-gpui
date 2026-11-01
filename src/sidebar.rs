@@ -108,6 +108,7 @@ pub(crate) struct SideState {
     pub folds: folds::Folds,
     pub look: look::Looks,
     pub sizes: arrange::Sizes,
+    pub hovered: Option<SharedString>,
 }
 
 impl Root {
