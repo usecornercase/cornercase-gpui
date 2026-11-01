@@ -35,8 +35,9 @@ fn shift_p_goes_to_a_file_and_shift_m_shows_processes() {
 }
 
 #[test]
-fn p_without_shift_is_left_free() {
-    assert_eq!(command("p", false), None);
+fn p_without_shift_shows_the_pull_request() {
+    assert_eq!(command("p", false), Some(Command::PullRequest));
+    assert_eq!(keys_of(Command::PullRequest).as_deref(), Some("⌘P"));
 }
 
 #[test]

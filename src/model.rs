@@ -4,10 +4,12 @@ use serde::Deserialize;
 
 mod grid;
 pub(crate) mod link;
+mod pull_request;
 mod surface;
 
 pub(crate) use grid::{Applied, Grid, PaneGrid, Run};
 pub(crate) use link::Link;
+pub(crate) use pull_request::{Block, Layer, PullRequest, Rung, Stack};
 pub(crate) use surface::{
     Area, Branch, Colour, Colours, Cursor, CursorShape, Frame, MouseMode, Node, OpenPopup, Style, UnderlineKind,
 };
@@ -71,19 +73,6 @@ pub(crate) struct Workspace {
     pub setup: Option<String>,
     pub changes: Option<Changes>,
     pub closed_agents: Option<usize>,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
-pub(crate) struct PullRequest {
-    pub number: u64,
-    pub title: String,
-    pub url: String,
-    pub state: String,
-    pub checks: Option<String>,
-    pub failed: Vec<String>,
-    pub conflicts: bool,
-    pub base: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -171,6 +160,13 @@ impl Session {
 
     pub(crate) fn pane(&self, id: u64) -> Option<&PaneInfo> {
         self.tabs().flat_map(|t| &t.panes).find(|p| p.id == id)
+    }
+
+    pub(crate) fn workspace_agent(&self, workspace: u64) -> Option<(u64, String)> {
+        let (_, ws) = self.workspace(workspace)?;
+        let mut tabs: Vec<_> = ws.tabs.iter().collect();
+        tabs.sort_by_key(|t| !t.active);
+        tabs.iter().flat_map(|t| &t.panes).find_map(|p| Some((p.id, p.agent.clone()?)))
     }
 
     pub(crate) fn anyone_working(&self) -> bool {

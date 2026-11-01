@@ -117,16 +117,8 @@ fn project_menu(session: &Session, id: u64) -> Vec<Entry> {
     entries
 }
 
-fn pull_request_menu(pr: &PullRequest) -> Entry {
-    let url = pr.url.clone();
-    submenu(
-        format!("Pull request #{}", pr.number),
-        vec![
-            Entry::Note(SharedString::from(pr.title.clone())),
-            item("Open in browser", move |_, _, cx| cx.open_url(&url)),
-            copy_item("Copy link", pr.url.clone(), "Copied the link".into()),
-        ],
-    )
+fn pull_request_item(workspace: u64, pr: &PullRequest) -> Entry {
+    item(format!("{}…", pr.heading()), move |_, window, cx| dialogs::pull_request(workspace, window, cx))
 }
 
 fn close_workspace_item(ws: &Workspace) -> Entry {
@@ -193,7 +185,7 @@ fn workspace_menu(session: &Session, id: u64) -> Vec<Entry> {
     entries.extend(agent_items(ws));
     entries.push(Entry::Separator);
     entries.push(rename_item("Rename workspace", Target::Workspace(id)));
-    entries.extend(ws.pull_request.as_ref().map(pull_request_menu));
+    entries.extend(ws.pull_request.as_ref().map(|pr| pull_request_item(id, pr)));
     if !ws.agent_rows().is_empty() {
         entries.push(fold_item(Fold::Workspace(id), ws.collapsed));
     }
