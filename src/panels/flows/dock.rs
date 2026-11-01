@@ -30,13 +30,12 @@ impl FlowsPanel {
 
     pub(super) fn render_dock(&mut self, cx: &mut Context<Self>) -> Div {
         self.sync_run_list();
-        if self.selected_run().is_some() {
-            return div().size_full().child(self.render_run(cx));
+        let stopped =
+            self.runs_error.clone().map(|error| div().flex_none().px(px(20.)).pt(px(14.)).child(error_text(error)));
+        if self.selected_run().is_none() {
+            return stopped.unwrap_or_else(|| ui::loading("Reading the run…"));
         }
-        match &self.runs_error {
-            Some(error) => div().p(px(20.)).child(error_text(error.clone())),
-            None => ui::loading("Reading the run…"),
-        }
+        div().size_full().flex().flex_col().children(stopped).child(div().flex_1().min_h_0().child(self.render_run(cx)))
     }
 }
 
