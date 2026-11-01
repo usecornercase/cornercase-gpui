@@ -7,6 +7,7 @@ use crate::app::Root;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::Session;
+use crate::render::moving::Moves;
 use crate::sidebar::{cmd, reopening, tip};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone};
@@ -145,6 +146,13 @@ impl Root {
 
     pub(crate) fn frame_shown(&self) -> bool {
         self.has_frame && !self.shows_no_tab()
+    }
+
+    pub(crate) fn drop_drags_without_tab(&mut self) {
+        if self.shows_no_tab() {
+            self.drag = None;
+            self.moves.replace(Moves::default());
+        }
     }
 
     pub(super) fn empty_page(&self, cx: &mut Context<Self>) -> Option<Div> {

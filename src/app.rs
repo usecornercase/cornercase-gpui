@@ -419,6 +419,7 @@ impl Root {
             cx.notify();
         });
         self.session = Some(session);
+        self.drop_drags_without_tab();
         self.follow_look(cx);
     }
 
