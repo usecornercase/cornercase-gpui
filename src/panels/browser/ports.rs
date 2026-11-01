@@ -5,8 +5,9 @@ use gpui::{App, Context, Entity};
 use serde_json::Value;
 
 use super::Browser;
-use super::tunnels::{Tunnels, loopback_port};
+use super::tunnels::Tunnels;
 use crate::cli;
+use crate::model::link::loopback_port;
 use crate::panels::PanelKind;
 use crate::panels::poll::{Polled, Watch, parse};
 use crate::panels::ports::data::{List, Port, list_command};
@@ -54,6 +55,13 @@ pub(crate) fn origin(url: &str) -> &str {
     let start = url.find("://").map_or(0, |at| at + 3);
     let end = url[start..].find(['/', '?', '#']).map_or(url.len(), |at| start + at);
     &url[..end]
+}
+
+pub(crate) fn same_page(shown: &str, asked: &str) -> bool {
+    match &asked[origin(asked).len()..] {
+        "" | "/" => origin(shown) == origin(asked),
+        _ => shown == asked,
+    }
 }
 
 fn on_screen(cx: &App) -> (bool, Option<u64>) {
@@ -126,7 +134,7 @@ impl Browser {
     }
 
     pub(super) fn open_now(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
-        let shown = self.tabs.list.iter().find(|t| t.workspace == workspace && origin(&t.url) == origin(&url));
+        let shown = self.tabs.list.iter().find(|t| t.workspace == workspace && same_page(&t.url, &url));
         if let Some(target) = shown.map(|t| t.target.clone()) {
             self.tabs.activate(workspace, &target);
             self.recast(cx);

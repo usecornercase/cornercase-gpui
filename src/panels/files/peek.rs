@@ -3,6 +3,7 @@ mod card;
 mod place;
 mod player;
 mod quicklook;
+mod web;
 
 use std::time::Duration;
 
@@ -16,6 +17,7 @@ use super::viewer::show_link;
 use crate::model::Link;
 use crate::store::{Store, ToastKind};
 use body::Body;
+pub(crate) use web::WebPage;
 
 const PEEK_AFTER: Duration = Duration::from_millis(350);
 const GRACE: Duration = Duration::from_millis(280);
@@ -26,15 +28,23 @@ pub(crate) struct Anchor {
     pub room: Size<Pixels>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Subject {
+    File(Link),
+    Web(WebPage),
+}
+
 pub(crate) struct Peek {
-    link: Option<Link>,
+    subject: Option<Subject>,
     anchor: Anchor,
     files: WeakEntity<FilesPanel>,
     body: Option<Body>,
+    title: String,
     over_link: bool,
     over_card: bool,
     generation: u64,
     timer: Option<Task<()>>,
+    capturing: Option<Task<()>>,
     code_scroll: UniformListScrollHandle,
 }
 
@@ -54,14 +64,16 @@ impl Peek {
 
     fn new() -> Self {
         Self {
-            link: None,
+            subject: None,
             anchor: Anchor::default(),
             files: WeakEntity::new_invalid(),
             body: None,
+            title: String::new(),
             over_link: false,
             over_card: false,
             generation: 0,
             timer: None,
+            capturing: None,
             code_scroll: UniformListScrollHandle::new(),
         }
     }
@@ -72,16 +84,29 @@ impl Peek {
         if let Ok(panel) = files.clone().downcast::<FilesPanel>() {
             self.files = panel.downgrade();
         }
-        if self.link.as_ref().is_some_and(|shown| shown.same_file(&link)) {
-            self.link = Some(link);
+        if self.link().is_some_and(|shown| shown.same_file(&link)) {
+            self.subject = Some(Subject::File(link));
             cx.notify();
             return;
         }
+        self.show(Subject::File(link), cx);
+    }
+
+    fn show(&mut self, subject: Subject, cx: &mut Context<Self>) {
         self.generation += 1;
-        self.link = Some(link);
+        self.subject = Some(subject);
         self.body = None;
+        self.capturing = None;
+        self.title.clear();
         self.later(PEEK_AFTER, Self::open, cx);
         cx.notify();
+    }
+
+    fn link(&self) -> Option<&Link> {
+        match &self.subject {
+            Some(Subject::File(link)) => Some(link),
+            _ => None,
+        }
     }
 
     pub(crate) fn left_link(&mut self, cx: &mut Context<Self>) {
@@ -90,13 +115,14 @@ impl Peek {
     }
 
     pub(crate) fn close(&mut self, cx: &mut Context<Self>) {
-        if self.link.is_none() {
+        if self.subject.is_none() {
             return;
         }
         self.generation += 1;
-        self.link = None;
+        self.subject = None;
         self.body = None;
         self.timer = None;
+        self.capturing = None;
         self.over_link = false;
         self.over_card = false;
         cx.notify();
@@ -139,20 +165,25 @@ impl Peek {
     }
 
     fn open(&mut self, cx: &mut Context<Self>) {
-        let Some(link) = self.link.clone() else { return };
-        self.body = Some(Body::Loading);
-        self.load(&link, cx);
+        match self.subject.clone() {
+            Some(Subject::File(link)) => {
+                self.body = Some(Body::Loading);
+                self.load(&link, cx);
+            }
+            Some(Subject::Web(page)) => self.open_page(&page, cx),
+            None => return,
+        }
         cx.notify();
     }
 
     fn open_in_files(&mut self, at: Option<usize>, cx: &mut Context<Self>) {
-        let (Some(link), files) = (self.link.clone(), self.files.clone()) else { return };
+        let (Some(link), files) = (self.link().cloned(), self.files.clone()) else { return };
         self.close(cx);
         show_link(&files, &link, at, cx);
     }
 
     fn open_in_app(&mut self, cx: &mut Context<Self>) {
-        let Some(path) = self.link.as_ref().map(|link| link.path.clone()) else { return };
+        let Some(path) = self.link().map(|link| link.path.clone()) else { return };
         self.close(cx);
         if let Err(why) = std::process::Command::new("open").arg(&path).spawn() {
             let text = format!("Could not open {path}: {why}");

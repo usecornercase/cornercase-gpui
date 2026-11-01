@@ -3,7 +3,7 @@ use gpui::{
 };
 use serde_json::{Value, json};
 
-use super::links::link_args;
+use super::links::{link_args, web_at};
 use super::selection::selection_args;
 use crate::app::{Drag, Msg, Root};
 use crate::model::{Grid, Link, MouseMode, PaneGrid};
@@ -258,6 +258,10 @@ impl Root {
     pub(crate) fn open_link(&mut self, pane: &PaneGrid, x: u16, y: u16, cx: &mut Context<Self>) {
         if let Some(link) = pane.cell(x, y).and_then(|(_, run)| run.link.clone()) {
             self.open_hyperlink(&link, cx);
+            return;
+        }
+        if let Some(url) = web_at(pane, (x, y)) {
+            cx.open_url(&url);
             return;
         }
         let (tx, remote) = (self.tx.clone(), self.host.is_some());

@@ -114,7 +114,7 @@ impl Browser {
     fn target_created(&mut self, params: &Value, cx: &mut Context<Self>) {
         let info = &params["targetInfo"];
         let (Some(target), Some("page")) = (info["targetId"].as_str(), info["type"].as_str()) else { return };
-        if self.tabs.get(target).is_some() {
+        if self.tabs.get(target).is_some() || self.previews.owns(info) {
             return;
         }
         let opener = info["openerId"].as_str().and_then(|o| self.tabs.get(o)).map(|o| o.workspace);

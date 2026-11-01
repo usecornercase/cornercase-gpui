@@ -37,12 +37,6 @@ fn on_a_mac_chrome_is_looked_for_in_both_applications_folders() {
     assert!(found.contains(&PathBuf::from("/Users/me/Applications/Chromium.app/Contents/MacOS/Chromium")));
 }
 
-#[cfg(target_os = "macos")]
-#[test]
-fn on_a_mac_the_profile_lives_in_application_support() {
-    assert_eq!(data_dir(Path::new("/Users/me")), PathBuf::from("/Users/me/Library/Application Support"));
-}
-
 #[test]
 fn the_version_answer_names_the_browser_socket_on_localhost() {
     let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"Browser\": \"Chrome/156\", \"webSocketDebuggerUrl\": \"ws://localhost:9222/devtools/browser/abc\"}";

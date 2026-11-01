@@ -91,18 +91,7 @@ pub(crate) fn profile() -> PathBuf {
     if let Some(dir) = std::env::var_os("CORNERCASE_GPUI_BROWSER_PROFILE") {
         return PathBuf::from(dir);
     }
-    data_dir(&home()).join("cornercase-gpui").join("browser")
-}
-
-pub(crate) fn data_dir(home: &Path) -> PathBuf {
-    let var = |name: &str| std::env::var_os(name).map(PathBuf::from).filter(|p| p.is_absolute());
-    if cfg!(target_os = "macos") {
-        return home.join("Library/Application Support");
-    }
-    if cfg!(windows) {
-        return var("LOCALAPPDATA").unwrap_or_else(|| home.join("AppData\\Local"));
-    }
-    var("XDG_DATA_HOME").unwrap_or_else(|| home.join(".local/share"))
+    crate::prefs::app_dir().join("browser")
 }
 
 pub(crate) fn args(profile: &Path, port: u16) -> Vec<String> {

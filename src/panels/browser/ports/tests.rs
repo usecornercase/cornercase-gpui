@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use super::{appeared, origin, web_ports};
+use super::{appeared, origin, same_page, web_ports};
 use crate::panels::ports::data::{List, Port};
 use crate::test_util::fixture;
 
@@ -53,4 +53,18 @@ fn the_origin_is_the_scheme_host_and_port() {
     assert_eq!(origin("http://localhost:3000/admin?tab=2"), "http://localhost:3000");
     assert_eq!(origin("http://localhost:3000"), "http://localhost:3000");
     assert_eq!(origin("about:blank"), "about:blank");
+}
+
+#[test]
+fn an_address_without_a_path_comes_forward_on_any_page_of_its_origin() {
+    assert!(same_page("http://localhost:3000/admin", "http://localhost:3000"));
+    assert!(same_page("http://localhost:3000/", "http://localhost:3000/"));
+    assert!(!same_page("http://localhost:8000/", "http://localhost:3000"));
+}
+
+#[test]
+fn an_address_with_a_path_comes_forward_only_on_that_page() {
+    assert!(same_page("https://github.com/a/b/pull/12", "https://github.com/a/b/pull/12"));
+    assert!(!same_page("https://github.com/a/b", "https://github.com/a/b/pull/12"));
+    assert!(!same_page("http://localhost:3000/", "http://localhost:3000/?debug=1"));
 }

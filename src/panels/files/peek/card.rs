@@ -8,10 +8,10 @@ use gpui::{
 };
 
 use super::super::style::{CodeRow, code_row, file_icon, number_width, small_f32, span_styles};
-use super::Peek;
 use super::body::{Body, Code, Note, Picture, Still};
 use super::place::{NARROW, Place, Side, fit, place, shown_rows};
 use super::player::{Player, State};
+use super::{Peek, Subject};
 use crate::model::Link;
 use crate::notify::tip;
 use crate::theme::{colours, radius};
@@ -53,6 +53,24 @@ fn framed(element: impl IntoElement, width: f32) -> (AnyElement, f32) {
     (body.into_any_element(), (width + 2. * INSET).max(NARROW))
 }
 
+pub(super) fn header_row(icon: impl IntoElement, (name, rest): (String, String)) -> Div {
+    div()
+        .h(px(HEADER))
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap(px(8.))
+        .pl(px(12.))
+        .pr(px(6.))
+        .border_b_1()
+        .border_color(colours::border())
+        .child(icon)
+        .child(div().flex_none().flex().max_w(px(260.)).font_weight(FontWeight::SEMIBOLD).child(ui::one_line(name)))
+        .child(
+            div().flex_1().min_w_0().flex().text_size(px(11.)).text_color(colours::faint()).child(ui::one_line(rest)),
+        )
+}
+
 fn positioned(place: &Place, card: impl IntoElement) -> Div {
     div()
         .absolute()
@@ -73,7 +91,7 @@ fn note_body(note: &Note) -> (AnyElement, f32) {
     (body.into_any_element(), NARROW)
 }
 
-fn picture_body(picture: &Picture, place: &Place) -> (AnyElement, f32) {
+pub(super) fn picture_body(picture: &Picture, place: &Place) -> (AnyElement, f32) {
     let (w, h) = media_box(picture.size.unwrap_or(UNKNOWN_SIZE), place);
     let image = img(picture.image.clone())
         .w(px(w))
@@ -124,21 +142,24 @@ impl Peek {
             window.request_animation_frame();
         }
         if state == State::Failed
-            && let Some(link) = &self.link
+            && let Some(path) = self.link().map(|link| PathBuf::from(&link.path))
         {
-            self.preview(PathBuf::from(&link.path), cx);
+            self.preview(path, cx);
         }
     }
 
     fn body_element(&self, place: &Place, cx: &mut Context<Self>) -> (AnyElement, f32) {
         match self.body.as_ref() {
             Some(Body::Still(Still::Code(code))) => self.code_body(code, place, cx),
+            Some(Body::Still(Still::Picture(picture))) if self.page().is_some() => Self::page_shot(picture, place, cx),
             Some(Body::Still(Still::Picture(picture))) => picture_body(picture, place),
             Some(Body::Still(Still::Note(note))) => note_body(note),
             Some(Body::Video(player)) => Self::video_body(player, place, cx),
             Some(Body::Audio(player)) => Self::audio_body(player, cx),
+            Some(Body::Ask) => Self::ask_body(cx),
             Some(Body::Loading) | None => {
-                (div().p(px(16.)).child(ui::busy("peek-loading", "Reading…")).into_any_element(), NARROW)
+                let words = if self.link().is_some() { "Reading…" } else { "Loading the page…" };
+                (div().p(px(16.)).child(ui::busy("peek-loading", words)).into_any_element(), NARROW)
             }
         }
     }
@@ -157,7 +178,7 @@ impl Peek {
 
     fn code_rows(&mut self, range: Range<usize>, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let Some(Body::Still(Still::Code(code))) = &self.body else { return Vec::new() };
-        let lit = self.link.as_ref().and_then(|link| Some(link.first_line()?..=link.last_line()?));
+        let lit = self.link().and_then(|link| Some(link.first_line()?..=link.last_line()?));
         let width = number_width(code.lines.len());
         range
             .filter_map(|ix| code.lines.get(ix).map(|line| (ix, line)))
@@ -239,35 +260,8 @@ impl Peek {
     }
 
     fn header(&self, link: &Link, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let shown = link.shown_path();
-        div()
-            .h(px(HEADER))
-            .flex_none()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .pl(px(12.))
-            .pr(px(6.))
-            .border_b_1()
-            .border_color(colours::border())
-            .child(file_icon(link.name(), false, false))
-            .child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .max_w(px(260.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(ui::one_line(link.name().to_string())),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .text_size(px(11.))
-                    .text_color(colours::faint())
-                    .child(ui::one_line(folder_of(shown))),
-            )
+        let names = (link.name().to_string(), folder_of(link.shown_path()));
+        header_row(file_icon(link.name(), false, false), names)
             .child(
                 div()
                     .flex_none()
@@ -313,7 +307,7 @@ impl Peek {
 
     fn card(
         &self,
-        link: &Link,
+        header: AnyElement,
         (body, width): (AnyElement, f32),
         place: &Place,
         cx: &mut Context<Self>,
@@ -329,7 +323,7 @@ impl Peek {
             .overflow_hidden()
             .text_size(px(12.))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| this.card_hovered(*hovered, cx)))
-            .child(self.header(link, cx))
+            .child(header)
             .child(body);
         let from = match place.side {
             Side::Beside => (-8., 0.),
@@ -342,13 +336,17 @@ impl Peek {
 
 impl Render for Peek {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let Some(link) = self.link.clone().filter(|_| self.body.is_some()) else {
+        let Some(subject) = self.subject.clone().filter(|_| self.body.is_some()) else {
             return div().into_any_element();
         };
         self.tick(window, cx);
         let place = place(self.anchor.link, self.anchor.room);
         let body = self.body_element(&place, cx);
-        positioned(&place, self.card(&link, body, &place, cx)).into_any_element()
+        let header = match &subject {
+            Subject::File(link) => self.header(link, cx).into_any_element(),
+            Subject::Web(page) => self.web_header(page, cx).into_any_element(),
+        };
+        positioned(&place, self.card(header, body, &place, cx)).into_any_element()
     }
 }
 

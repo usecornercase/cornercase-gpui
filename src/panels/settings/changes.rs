@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use gpui::{AppContext as _, ClipboardItem, Context, Window};
 
 use super::data::{self, Connection, ConnectionKind, Kind, Script};
-use super::{Role, SettingsPanel};
+use super::{Role, SettingsPanel, links};
 use crate::cli;
 use crate::dialogs::{self, Question};
 use crate::store::{self, Busy, Store, ToastKind, args};
@@ -37,6 +37,10 @@ impl SettingsPanel {
 
     pub(super) fn save(&mut self, key: &str, value: &str, cx: &mut Context<Self>) {
         self.choice = None;
+        if links::owned(key).is_some() {
+            self.save_own(key, value, cx);
+            return;
+        }
         self.run(Role::Setting(key.to_string()), data::set_args(key, value), None, cx);
     }
 

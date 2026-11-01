@@ -4,9 +4,10 @@ use gpui::{
 };
 
 use super::Browser;
-use super::tunnels::{State, Tunnel, loopback_port, rewrite};
+use super::tunnels::{State, Tunnel, rewrite};
 use crate::cli;
 use crate::model::Session;
+use crate::model::link::loopback_port;
 use crate::panels::ports::{self, data::Port};
 use crate::store::Store;
 use crate::theme::{colours, radius};

@@ -111,7 +111,8 @@ pub(crate) const OTHER_KEYS: &[(&str, &str)] = &[
     ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
     ("Tab", "Next field of a dialog, ⇧Tab back"),
     ("↑ ↓ ↩", "Choose in a menu"),
-    ("⌘-click", "Open a link or a path"),
+    ("Click", "Open a web address as Settings › Links says, a path in Files"),
+    ("⌘-click", "Open a link or a path with macOS"),
 ];
 
 impl Shortcut {
