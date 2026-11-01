@@ -34,6 +34,7 @@ pub(crate) struct Grid {
     pub surface: u64,
     pub revision: u64,
     pub tab: u64,
+    pub projection: Option<u64>,
     pub cols: u16,
     pub rows: u16,
     pub layout: Option<Node>,
@@ -175,6 +176,7 @@ impl Grid {
         self.surface = frame.surface;
         self.revision = frame.revision;
         self.tab = frame.tab;
+        self.projection = frame.projection;
         self.cols = frame.cols;
         self.rows = frame.rows;
         self.layout = frame.layout;
@@ -193,6 +195,7 @@ impl Grid {
             grid.patch(wire, tables);
         }
         self.revision = frame.revision;
+        self.projection = frame.projection.or(self.projection);
         Applied::Ok
     }
 }

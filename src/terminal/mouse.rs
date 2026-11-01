@@ -87,7 +87,7 @@ impl Root {
             self.finish_rename(false, window, cx);
         }
         window.focus(&self.focus);
-        if !self.has_frame {
+        if !self.frame_shown() {
             return;
         }
         match self.hit(event.position) {
@@ -137,7 +137,7 @@ impl Root {
     pub(super) fn press_program(&mut self, pane: &PaneGrid, cell: (u16, u16), button: MouseButton) {
         self.queue.input(pane.pane, mouse("down", button_name(button), cell));
         let motion = matches!(pane.modes.mouse, MouseMode::ButtonMotion | MouseMode::AnyMotion);
-        self.drag = Some(Drag::Program { pane: pane.pane, motion });
+        self.drag = Some(Drag::Program { pane: pane.pane, motion, cell });
     }
 
     fn press_select(&mut self, pane: &PaneGrid, cell: (u16, u16), clicks: usize) {
@@ -167,8 +167,9 @@ impl Root {
         let layout = self.layout.clone();
         let layout = layout.borrow();
         match &mut self.drag {
-            Some(Drag::Program { pane, motion: true }) => {
+            Some(Drag::Program { pane, motion: true, cell: last }) => {
                 let Some(cell) = drag_cell(&self.grid, &layout, *pane, at) else { return };
+                *last = cell;
                 self.queue.input(*pane, mouse("drag", "left", cell));
             }
             Some(Drag::Select { pane, from, to }) => {
@@ -195,8 +196,8 @@ impl Root {
             return;
         }
         match self.drag.take() {
-            Some(Drag::Program { pane, .. }) => {
-                let Some(cell) = drag_cell(&self.grid, &self.layout.borrow(), pane, event.position) else { return };
+            Some(Drag::Program { pane, cell: last, .. }) => {
+                let cell = drag_cell(&self.grid, &self.layout.borrow(), pane, event.position).unwrap_or(last);
                 self.queue.input(pane, mouse("up", "left", cell));
             }
             Some(Drag::Select { pane, from, to }) if from == to => {

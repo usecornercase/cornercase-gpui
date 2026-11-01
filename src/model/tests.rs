@@ -93,6 +93,37 @@ fn the_session_says_whose_home_folder_it_runs_in() {
     assert_eq!(session.home.as_deref(), Some("/Users/ana"));
 }
 
+fn viewing(tab: Option<u64>, projection: u64) -> Session {
+    let shown = Shown { project: Some(1), workspace: Some(2), tab, pane: None };
+    Session { view: Some(ViewInfo { projection, shown, ..Default::default() }), ..Default::default() }
+}
+
+#[test]
+fn a_view_that_shows_no_tab_hides_the_frame_it_showed_before() {
+    assert!(viewing(None, 5).shows_no_tab(Some(4)));
+    assert!(viewing(None, 5).shows_no_tab(None));
+}
+
+#[test]
+fn a_frame_newer_than_the_session_shows_the_tab_it_came_for() {
+    assert!(!viewing(None, 5).shows_no_tab(Some(6)));
+}
+
+#[test]
+fn a_view_that_shows_a_tab_has_no_empty_page() {
+    assert!(!viewing(Some(7), 5).shows_no_tab(None));
+    assert!(!Session::default().shows_no_tab(None));
+}
+
+#[test]
+fn the_grid_keeps_the_projection_of_its_last_frame() {
+    let mut frame: serde_json::Value = parse(crate::test_util::fixture!("frame.json"));
+    frame["projection"] = 4.into();
+    let mut grid = Grid::default();
+    assert!(matches!(grid.apply(serde_json::from_value(frame).expect("a frame")), Applied::Ok));
+    assert_eq!(grid.projection, Some(4));
+}
+
 fn fixture_grid() -> Grid {
     let frame: Frame = parse(crate::test_util::fixture!("frame.json"));
     let mut grid = Grid::default();

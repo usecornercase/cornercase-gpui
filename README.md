@@ -15,7 +15,7 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 ## Features
 
-- **Terminal.** Every pane sits on a floating card: drag the gap between cards to resize, select with the mouse, ⌘-click links and paths, drop files to paste them, and drag a pane by its handle onto another to move it.
+- **Terminal.** Every pane sits on a floating card: drag the gap between cards to resize, select with the mouse, ⌘-click links and paths, drop files to paste them, and drag a pane by its handle onto another to move it. A project or workspace with nothing open says so, with buttons to start an agent, open a shell or reopen its closed agents.
 - **Sidebar.** Groups, projects, workspaces and agents, with each agent's status, model and context, and each workspace's pull request with how its checks went: click it, or press ⌘P, for its failed checks, its stack and Ask agent. Drag to reorder, in any layout of cornercase's Settings → UI.
 - **Previews.** Rest the pointer on a path a program printed and the file shows beside it: code at its lines, images, videos, sounds, PDFs. A click opens it in the Files panel.
 - **Docked panels.** Changes (the workspace's diff, to stage, discard and review), Files (tree, viewer and search), TODO, a Browser and, in a workspace that runs a flow, Flow: its plan lit up where the work stands, its team and their messages, beside the agents at work.

@@ -75,7 +75,7 @@ impl Root {
     }
 
     pub(super) fn hover_link(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
-        let found = if self.drag.is_none() && self.has_frame { self.spot_under(at) } else { None };
+        let found = if self.drag.is_none() && self.frame_shown() { self.spot_under(at) } else { None };
         let Some((spot, cell)) = found else {
             self.forget_link(cx);
             return;
