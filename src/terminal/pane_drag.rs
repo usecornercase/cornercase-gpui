@@ -89,7 +89,7 @@ fn listen(root: &Entity<Root>, window: &mut Window) {
 
 impl Root {
     pub(super) fn hover_handle(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
-        let near = if self.has_frame { moving::near_top(&self.layout.borrow(), at) } else { None };
+        let near = if self.frame_shown() { moving::near_top(&self.layout.borrow(), at) } else { None };
         if self.moves.borrow_mut().hover(near) {
             cx.notify();
         }
@@ -181,7 +181,7 @@ impl Root {
     }
 
     pub(super) fn render_handle(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let pane = self.moves.borrow().near().filter(|_| self.has_frame)?;
+        let pane = self.moves.borrow().near().filter(|_| self.frame_shown())?;
         let layout = self.layout.borrow();
         let area = moving::handle(layout.card(pane)?.bounds);
         let at = area.origin - layout.at.origin;

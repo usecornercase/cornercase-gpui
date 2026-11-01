@@ -158,6 +158,11 @@ fn ask_item(label: String, question: impl Fn() -> dialogs::Question + 'static) -
     danger(label, move |_, window, cx| dialogs::confirm(question(), window, cx))
 }
 
+pub(crate) fn reopening(workspace: u64, name: &str) -> (Busy, Vec<String>) {
+    let busy = Busy::new(format!("reopen:{workspace}"), format!("Reopening the agents of {name}…"));
+    (busy, cmd(&["agents", "reopen", "--workspace", &workspace.to_string()]))
+}
+
 fn agent_items(ws: &Workspace) -> Vec<Entry> {
     let (ids, name) = (ws.id.to_string(), ws.name.clone());
     let mut entries = Vec::new();
@@ -166,8 +171,7 @@ fn agent_items(ws: &Workspace) -> Vec<Entry> {
         entries.push(danger("Close its agents…", move |_, _, cx| forms::close_agents(ws_id, name.clone(), cx)));
     }
     if let Some(n) = ws.closed_agents.filter(|n| *n > 0) {
-        let reopening = Busy::new(format!("reopen:{ids}"), format!("Reopening the agents of {name}…"));
-        let reopen = cmd(&["agents", "reopen", "--workspace", &ids]);
+        let (reopening, reopen) = reopening(ws.id, &name);
         entries.push(item(format!("Reopen {}", plural(n, "closed agent")), move |this, _, cx| {
             let (busy, args) = (reopening.clone(), reopen.clone());
             this.store.update(cx, |s, cx| s.run_aside(busy, args, cx));

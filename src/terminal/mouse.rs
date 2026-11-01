@@ -87,7 +87,7 @@ impl Root {
             self.finish_rename(false, window, cx);
         }
         window.focus(&self.focus);
-        if !self.has_frame {
+        if !self.frame_shown() {
             return;
         }
         match self.hit(event.position) {

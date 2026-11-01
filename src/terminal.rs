@@ -3,8 +3,8 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use gpui::{
-    App, Bounds, ClickEvent, Context, CursorStyle, ElementInputHandler, Entity, FocusHandle, Hitbox, HitboxBehavior,
-    InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Pixels, Point,
+    AnyElement, App, Bounds, ClickEvent, Context, CursorStyle, ElementInputHandler, Entity, FocusHandle, Hitbox,
+    HitboxBehavior, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Pixels, Point,
     StatefulInteractiveElement as _, Styled, WeakEntity, Window, canvas, div, prelude::FluentBuilder as _, px,
 };
 
@@ -26,6 +26,7 @@ mod browser;
 mod input;
 mod links;
 mod mouse;
+mod no_tab;
 mod pane_drag;
 mod pane_menu;
 mod pasting;
@@ -297,7 +298,7 @@ impl Root {
             .cursor(self.pointer())
             .child(self.surface(metrics.clone(), window, cx))
             .children(handle)
-            .when(!self.has_frame, |d| d.child(self.connection_note()))
+            .children(self.cover(cx))
             .child(popup)
             .child(files::Peek::get(cx))
             .children(self.render_ghost(&metrics))
@@ -309,6 +310,13 @@ impl Root {
             .on_mouse_up(MouseButton::Right, cx.listener(Self::on_mouse_up))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .on_drop(cx.listener(Self::drop_paths))
+    }
+
+    fn cover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.conn == Conn::Connected && self.shows_no_tab() {
+            return self.empty_page(cx).map(IntoElement::into_any_element);
+        }
+        (!self.has_frame).then(|| self.connection_note().into_any_element())
     }
 
     fn connection_note(&self) -> impl IntoElement + use<> {
@@ -350,11 +358,12 @@ impl Root {
 
     fn surface(&self, metrics: Metrics, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let entity = cx.entity();
-        let grid = self.has_frame.then(|| self.grid.clone());
+        let shown = self.frame_shown();
+        let grid = shown.then(|| self.grid.clone());
         let (layout, moves) = (self.layout.clone(), self.moves.clone());
         let fit = Fit { layout, moves: moves.clone(), wanted: self.size, root: entity.downgrade(), metrics, grid };
         let focused = self.focus.is_focused(window) && window.is_window_active();
-        let (grid, has_frame, focus) = (self.grid.clone(), self.has_frame, self.focus.clone());
+        let (grid, has_frame, focus) = (self.grid.clone(), shown, self.focus.clone());
         let link = self.shown_link().filter(|_| self.drag.is_none() || matches!(self.drag, Some(Drag::Link { .. })));
         let painting = Painting { grid, has_frame, focus, focused, entity, moves, link };
         canvas(

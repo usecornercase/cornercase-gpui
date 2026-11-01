@@ -1,4 +1,5 @@
 mod status;
+mod surface;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -14,7 +15,7 @@ use gpui::{
 };
 
 use crate::cli::{self, Queue, Stream, Target};
-use crate::model::{Applied, Frame, Grid, Project, Session, Workspace};
+use crate::model::{Frame, Grid, Project, Session, Workspace};
 use crate::notify::{self, Notifier};
 use crate::panels::PanelKind;
 use crate::render::Metrics;
@@ -27,6 +28,7 @@ use crate::theme::{self, colours, radius};
 use crate::ui;
 use crate::ui::motion::{self, Leaving, Way};
 use crate::ui::split::{self, Edge, Split};
+use surface::Feed;
 
 pub(crate) const TITLEBAR_HEIGHT: f32 = 44.;
 pub(crate) const GAP: f32 = 8.;
@@ -80,7 +82,7 @@ pub(crate) struct Root {
     pub(crate) queue: Queue,
     pub(crate) generation: u64,
     pub(crate) view_stream: Option<Stream>,
-    pub(crate) surface_stream: Option<Stream>,
+    surface_stream: Feed,
     pub(crate) session: Option<Session>,
     pub(crate) view_id: Option<u64>,
     pub(crate) grid: Rc<Grid>,
@@ -245,7 +247,7 @@ impl Root {
             queue,
             generation: 0,
             view_stream: None,
-            surface_stream: None,
+            surface_stream: Feed::Off,
             session: None,
             view_id: None,
             grid: Rc::new(Grid::default()),
@@ -338,7 +340,7 @@ impl Root {
     fn open_view(&mut self, cx: &mut Context<Self>) {
         self.generation += 1;
         let generation = self.generation;
-        self.surface_stream = None;
+        self.surface_stream = Feed::Off;
         self.view_stream = None;
         self.view_id = None;
         self.queue.reconnect();
@@ -367,32 +369,8 @@ impl Root {
         self.store.update(cx, Store::follow_app);
     }
 
-    fn open_surface(&mut self, view: u64, cx: &mut Context<Self>) {
-        let generation = self.generation;
-        let args = ["surface".to_string(), "--view".into(), view.to_string(), "--patches".into()];
-        let (tx, end) = (self.tx.clone(), self.tx.clone());
-        let stream = cli::stream(
-            &args,
-            move |line| match serde_json::from_str::<Frame>(&line) {
-                Ok(f) => {
-                    let _ = tx.unbounded_send(Msg::Frame(generation, Box::new(f)));
-                }
-                Err(e) => {
-                    let _ = tx.unbounded_send(Msg::Error(format!("surface line: {e}")));
-                }
-            },
-            move |err| {
-                let _ = end.unbounded_send(Msg::SurfaceEnded(generation, err));
-            },
-        );
-        match stream {
-            Ok(s) => self.surface_stream = Some(s),
-            Err(e) => self.say(&e.to_string(), cx),
-        }
-    }
-
     fn lost(&mut self, why: String, cx: &mut Context<Self>) {
-        self.surface_stream = None;
+        self.surface_stream = Feed::Off;
         self.view_stream = None;
         self.view_id = None;
         self.has_frame = false;
@@ -431,13 +409,7 @@ impl Root {
         self.side.folds.apply(&mut session);
         self.conn = Conn::Connected;
         self.attempts = 0;
-        if let Some(id) = session.view.as_ref().map(|v| v.id)
-            && Some(id) != self.view_id
-        {
-            self.view_id = Some(id);
-            self.open_surface(id, cx);
-            self.match_view_size(&session);
-        }
+        self.follow_surface(&session, cx);
         let view_id = self.view_id;
         let shared = session.clone();
         self.store.update(cx, |s, cx| {
@@ -450,54 +422,10 @@ impl Root {
         self.follow_look(cx);
     }
 
-    fn match_view_size(&mut self, session: &Session) {
-        if let Some((cols, rows)) = self.size
-            && session.view.as_ref().is_some_and(|v| v.cols != Some(cols) || v.rows != Some(rows))
-        {
-            self.send_size(cols, rows);
-        }
-    }
-
     fn view_ended(&mut self, err: &str, cx: &mut Context<Self>) {
         let why = err.lines().last().filter(|why| !why.is_empty()).unwrap_or("the server stopped");
         self.lost(why.to_string(), cx);
         self.retry(cx);
-    }
-
-    fn frame_arrived(&mut self, frame: Frame) {
-        if let Applied::NeedRedraw = Rc::make_mut(&mut self.grid).apply(frame) {
-            let surface = self.grid.surface;
-            self.queue.coalesced("redraw", vec!["redraw".into(), "--surface".into(), surface.to_string()]);
-        } else {
-            self.has_frame = true;
-            self.surface_error = None;
-        }
-    }
-
-    fn surface_ended(&mut self, generation: u64, err: &str, cx: &mut Context<Self>) {
-        self.has_frame = false;
-        let err = first_line(err.trim());
-        let repeated = !err.is_empty() && self.surface_error.as_deref() == Some(err);
-        if !err.is_empty() && !repeated {
-            self.say(err, cx);
-        }
-        self.surface_error = (!err.is_empty()).then(|| err.to_string());
-        let wait = if repeated { 5000 } else { 400 };
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(Duration::from_millis(wait)).await;
-            let _ = this.update(cx, |this, cx| this.reopen_surface(generation, cx));
-        })
-        .detach();
-    }
-
-    fn reopen_surface(&mut self, generation: u64, cx: &mut Context<Self>) {
-        if self.generation == generation
-            && self.surface_stream.is_some()
-            && let Some(id) = self.view_id
-        {
-            self.open_surface(id, cx);
-            cx.notify();
-        }
     }
 
     fn retry(&mut self, cx: &mut Context<Self>) {
@@ -558,7 +486,7 @@ impl Root {
     }
 
     pub(crate) fn active_pane(&self) -> Option<u64> {
-        self.has_frame.then(|| self.grid.active_pane().map(|p| p.pane)).flatten()
+        self.frame_shown().then(|| self.grid.active_pane().map(|p| p.pane)).flatten()
     }
 
     pub(crate) fn input(&self, event: serde_json::Value) {

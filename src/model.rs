@@ -142,6 +142,10 @@ impl Session {
         self.view.as_ref().map(|v| v.shown).unwrap_or_default()
     }
 
+    pub(crate) fn shows_no_tab(&self, frame: Option<u64>) -> bool {
+        self.view.as_ref().is_some_and(|v| v.shown.tab.is_none() && frame.is_none_or(|p| p < v.projection))
+    }
+
     pub(crate) fn workspace(&self, id: u64) -> Option<(&Project, &Workspace)> {
         self.projects.iter().find_map(|p| p.workspaces.iter().find(|w| w.id == id).map(|w| (p, w)))
     }

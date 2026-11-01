@@ -27,6 +27,7 @@ pub(crate) use crate::store::args as cmd;
 pub(crate) use folds::Fold;
 pub(crate) use forms::close_agent;
 pub(crate) use look::Arrangement;
+pub(crate) use menus::reopening;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Target {
