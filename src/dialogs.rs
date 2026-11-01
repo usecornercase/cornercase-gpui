@@ -28,6 +28,10 @@ pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, butt
         .child(div().flex().justify_end().gap(px(8.)).child(buttons))
 }
 
+pub(crate) fn body_height(window: f32) -> f32 {
+    (window - 240.).clamp(200., 560.)
+}
+
 pub(crate) fn cancel_and(action: Stateful<Div>) -> Div {
     div()
         .flex()
@@ -295,3 +299,6 @@ impl Render for Confirm {
             ))
     }
 }
+
+#[cfg(test)]
+mod tests;

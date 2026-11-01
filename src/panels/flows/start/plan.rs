@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 use crate::panels::PanelKind;
 use crate::panels::flows::model::project_args;
 use crate::store::args;
@@ -16,12 +18,44 @@ pub(crate) struct IssueTask {
     pub(crate) source: String,
     pub(crate) title: String,
     pub(crate) branch: String,
+    pub(crate) prompt: Option<String>,
 }
 
 impl IssueTask {
     pub(crate) fn workspace_name(&self) -> String {
         format!("{} {}", self.key, self.title)
     }
+
+    pub(super) fn task(&self) -> String {
+        self.prompt.as_deref().unwrap_or_default().lines().collect::<Vec<_>>().join(" ")
+    }
+
+    pub(super) fn learn(&mut self, prompt: Option<String>, typed: &str) -> Option<String> {
+        self.prompt = prompt;
+        let task = self.task();
+        (typed.trim().is_empty() && !task.is_empty()).then_some(task)
+    }
+
+    pub(super) fn edited(&self, typed: &str) -> Option<String> {
+        changed(typed, &self.task())
+    }
+
+    pub(super) fn read_args(&self, project: Option<u64>) -> Vec<String> {
+        let mut command = args(&["issue", "read", &self.key, "--source", &self.source, "--json"]);
+        command.extend(project_args(project));
+        command
+    }
+}
+
+#[derive(Deserialize)]
+struct ReadPrompt {
+    #[serde(default)]
+    prompt: String,
+}
+
+pub(super) fn issue_prompt(out: &str) -> anyhow::Result<Option<String>> {
+    let read: ReadPrompt = serde_json::from_str(out.trim())?;
+    Ok(filled(&read.prompt).map(|_| read.prompt))
 }
 
 impl FlowStart {
@@ -72,14 +106,22 @@ pub(super) struct Plan {
 pub(super) fn plan(flow: &str, project: Option<u64>, issue: Option<&IssueTask>, typed: &Typed) -> Result<Plan, String> {
     let (task, branch, workspace_name) = match issue {
         Some(_) if project.is_none() => return Err("Choose the project the team works in.".into()),
-        Some(issue) => (
-            Task::Issue { key: issue.key.clone(), source: Some(issue.source.clone()) },
-            changed(&typed.branch, &issue.branch),
-            changed(&typed.workspace, &issue.workspace_name()),
-        ),
+        Some(issue) => on_issue(issue, typed),
         None => (typed_task(typed)?, filled(&typed.branch), None),
     };
     Ok(Plan { flow: flow.to_string(), project, task, branch, workspace_name, focus: typed.focus })
+}
+
+fn on_issue(issue: &IssueTask, typed: &Typed) -> (Task, Option<String>, Option<String>) {
+    if let Some(prompt) = issue.edited(&typed.prompt) {
+        let branch = filled(&typed.branch).or_else(|| filled(&issue.branch));
+        return (Task::Prompt(prompt), branch, None);
+    }
+    (
+        Task::Issue { key: issue.key.clone(), source: Some(issue.source.clone()) },
+        changed(&typed.branch, &issue.branch),
+        changed(&typed.workspace, &issue.workspace_name()),
+    )
 }
 
 fn typed_task(typed: &Typed) -> Result<Task, String> {

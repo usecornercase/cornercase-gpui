@@ -34,11 +34,3 @@ fn the_shortcut_says_why_there_is_nothing_to_show() {
     let none = Workspace { name: "feat".into(), branch: Some("feat/x".into()), ..Default::default() };
     assert_eq!(missing(&none).as_deref(), Some("No pull request for feat/x"));
 }
-
-#[test]
-fn the_body_grows_with_the_window_within_limits() {
-    assert_eq!(body_height(800.), 560.);
-    assert_eq!(body_height(600.), 360.);
-    assert_eq!(body_height(300.), 200.);
-    assert_eq!(body_height(1400.), 560.);
-}

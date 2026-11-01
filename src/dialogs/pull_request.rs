@@ -4,7 +4,7 @@ use gpui::{
     Subscription, Window, div, prelude::FluentBuilder as _, px,
 };
 
-use super::{close, frame, show};
+use super::{body_height, close, frame, show};
 use crate::model::{PullRequest, Session, Workspace};
 use crate::store::{Store, ToastKind};
 use crate::theme::{colours, radius};
@@ -122,10 +122,6 @@ impl Render for PullRequestDialog {
             })
             .children(shown.map(|shown| frame(shown.pr.heading(), body(&shown, height), buttons(&shown)).w(px(540.))))
     }
-}
-
-fn body_height(window: f32) -> f32 {
-    (window - 240.).clamp(200., 560.)
 }
 
 fn body(shown: &Shown, height: f32) -> impl IntoElement {

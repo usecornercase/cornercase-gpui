@@ -6,7 +6,7 @@ use gpui::{
 };
 
 pub(crate) use self::plan::{FlowStart, IssueTask};
-use self::plan::{Typed, hides_the_run, plan};
+use self::plan::{Typed, hides_the_run, issue_prompt, plan};
 use super::FlowsPanel;
 use super::actions::announce;
 use super::dialog::{Submit, boxed, buttons, field, filled_field};
@@ -21,7 +21,15 @@ use crate::ui::{self, Icon, TextField};
 const CHOICE: f32 = 30.;
 const TEAM_NOTE: &str =
     "One tab per role in a new worktree, the orchestrator first; every agent starts without permission prompts.";
-const ISSUE_NOTE: &str = "The issue is the task, through settings' prompt template.";
+const ISSUE_NOTE: &str = "The task starts as the issue's, through settings' prompt template.";
+const RENAMED: &str =
+    "With an edited task, the workspace is named after its branch: needs usecornercase/cornercase-terminal#573.";
+
+enum IssueRead {
+    Done,
+    Reading,
+    Failed(String),
+}
 
 struct Known {
     project: Option<u64>,
@@ -46,6 +54,7 @@ pub(super) struct StartFlow {
     focus: bool,
     busy: bool,
     error: Option<String>,
+    issue_read: IssueRead,
 }
 
 pub(crate) fn start_flow(preset: FlowStart, window: &mut Window, cx: &mut App) {
@@ -65,17 +74,21 @@ fn open(preset: FlowStart, known: Option<Known>, window: &mut Window, cx: &mut A
     let projects = preset.choices(&session.projects.iter().map(|p| (p.id, p.name.clone())).collect::<Vec<_>>());
     let project = preset.chosen(&projects, session.shown().project);
     let view = cx.new(|cx| StartFlow::new(preset, (projects, project), known, window, cx));
-    let focus = view.read(cx).first_field().read(cx).focus_handle(cx);
+    let focus = view.read(cx).fields.prompt.read(cx).focus_handle(cx);
     store.update(cx, |s, cx| s.show_dialog(view.into(), cx));
     window.focus(&focus);
 }
 
 impl Fields {
     fn new(issue: Option<&IssueTask>, window: &mut Window, cx: &mut Context<StartFlow>) -> Self {
-        let (branch, workspace) = issue.map(|i| (i.branch.clone(), i.workspace_name())).unwrap_or_default();
-        let hint = if issue.is_some() { "The issue's branch" } else { "From the task's first words, made unique" };
+        let (task, branch, workspace) =
+            issue.map(|i| (i.task(), i.branch.clone(), i.workspace_name())).unwrap_or_default();
+        let (task_hint, hint) = match issue {
+            Some(_) => ("The issue's, through settings' prompt template", "The issue's branch"),
+            None => ("What the team should do", "From the task's first words, made unique"),
+        };
         Self {
-            prompt: field("What the team should do", cx, window),
+            prompt: filled_field(task_hint, &task, cx, window),
             issue: field("#482, sc-48, ENG-42 or its URL (optional, instead of the task)", cx, window),
             branch: filled_field(hint, &branch, cx, window),
             workspace: filled_field("The issue's key and title", &workspace, cx, window),
@@ -118,17 +131,41 @@ impl StartFlow {
             focus: true,
             busy: false,
             error: None,
+            issue_read: IssueRead::Done,
         };
         this.selected =
             preset.flow.filter(|k| this.flows.iter().any(|f| f.key() == *k)).or_else(|| this.first_choice());
         if !fresh {
             this.load(cx);
         }
+        this.read_issue(cx);
         this
     }
 
-    fn first_field(&self) -> &Entity<TextField> {
-        if self.issue.is_some() { &self.fields.branch } else { &self.fields.prompt }
+    fn read_issue(&mut self, cx: &mut Context<Self>) {
+        let Some(issue) = self.issue.as_ref().filter(|i| i.prompt.is_none()) else { return };
+        let project = self.project;
+        self.issue_read = IssueRead::Reading;
+        store::run(cx, issue.read_args(project), move |this, result, cx| {
+            if this.project == project {
+                this.issue_answered(result.and_then(|out| issue_prompt(&out)), cx);
+                cx.notify();
+            }
+        });
+    }
+
+    fn issue_answered(&mut self, result: anyhow::Result<Option<String>>, cx: &mut Context<Self>) {
+        let prompt = match result {
+            Ok(prompt) => prompt,
+            Err(e) => {
+                self.issue_read = IssueRead::Failed(cli::reason(&e));
+                return;
+            }
+        };
+        self.issue_read = IssueRead::Done;
+        let typed = self.fields.prompt.read(cx).text();
+        let Some(task) = self.issue.as_mut().and_then(|issue| issue.learn(prompt, &typed)) else { return };
+        self.fields.prompt.update(cx, |field, cx| field.set_text(task, cx));
     }
 
     fn first_choice(&self) -> Option<String> {
@@ -218,6 +255,7 @@ impl StartFlow {
             self.project = Some(id);
             self.error = None;
             self.load(cx);
+            self.read_issue(cx);
             cx.notify();
         }
     }
@@ -285,11 +323,26 @@ impl StartFlow {
     fn task_fields(&self, window: &Window, cx: &App) -> Vec<Div> {
         let fields = &self.fields;
         let branch = ui::field("Branch", boxed(&fields.branch, window, cx));
-        if self.issue.is_some() {
-            return vec![branch, ui::field("Workspace name", boxed(&fields.workspace, window, cx))];
+        match &self.issue {
+            Some(issue) => vec![self.task_field(window, cx), branch, self.workspace_field(issue, window, cx)],
+            None => vec![self.task_field(window, cx), ui::field("Issue", boxed(&fields.issue, window, cx)), branch],
         }
-        let task = ui::field("Task", boxed(&fields.prompt, window, cx));
-        vec![task, ui::field("Issue", boxed(&fields.issue, window, cx)), branch]
+    }
+
+    fn task_field(&self, window: &Window, cx: &App) -> Div {
+        let field = ui::field("Task", boxed(&self.fields.prompt, window, cx));
+        match &self.issue_read {
+            IssueRead::Done => field,
+            IssueRead::Reading => field.child(ui::busy("start-issue-reading", "Reading the issue's task…")),
+            IssueRead::Failed(why) => field.child(error_text(format!("The issue's task could not be read: {why}"))),
+        }
+    }
+
+    fn workspace_field(&self, issue: &IssueTask, window: &Window, cx: &App) -> Div {
+        if issue.edited(&self.fields.prompt.read(cx).text()).is_some() {
+            return ui::field("Workspace name", ui::dim(RENAMED));
+        }
+        ui::field("Workspace name", boxed(&self.fields.workspace, window, cx))
     }
 
     fn focus_checkbox(&self, cx: &Context<Self>) -> Stateful<Div> {
@@ -352,9 +405,10 @@ fn issue_line(issue: &IssueTask) -> Div {
 impl Render for StartFlow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let title = if self.issue.is_some() { "Start a flow on an issue" } else { "Start a flow" };
+        let height = dialogs::body_height(f32::from(window.viewport_size().height));
         dialogs::frame(
             title,
-            self.form(window, cx),
+            div().id("start-flow-form").max_h(px(height)).overflow_y_scroll().child(self.form(window, cx)),
             buttons(("start-cancel", "start-run"), (Icon::Play, "Start"), self.busy.then_some("Starting…"), cx),
         )
         .w(px(580.))

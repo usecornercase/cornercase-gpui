@@ -607,7 +607,7 @@ impl StartPlan {
     }
 }
 
-pub(super) fn flow_start(issue: &Issue, sources: &Sources, repository: bool) -> FlowStart {
+pub(super) fn flow_start(issue: &Issue, sources: &Sources, repository: bool, read: Option<&ReadIssue>) -> FlowStart {
     let roots: Vec<&Place> = sources.places.iter().filter(|p| p.worktree && p.workspace.is_none()).collect();
     let (project, projects) = if repository {
         (Some(sources.project), vec![sources.project])
@@ -624,6 +624,7 @@ pub(super) fn flow_start(issue: &Issue, sources: &Sources, repository: bool) -> 
         source: issue.source.clone(),
         title: issue.title.clone(),
         branch: issue.branch.clone(),
+        prompt: read.map(|r| r.prompt.clone()).filter(|p| !p.trim().is_empty()),
     };
     FlowStart { project, projects: Some(projects), flow: None, issue: Some(task) }
 }

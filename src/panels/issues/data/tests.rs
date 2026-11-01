@@ -354,7 +354,7 @@ fn with_places(project: u64, places: Vec<Place>) -> Sources {
 #[test]
 fn a_flow_on_a_repository_issue_runs_in_the_issue_project_on_its_branch() {
     let issue = Issue { title: "Popups".into(), ..issue() };
-    let start = flow_start(&issue, &with_places(4, vec![root(5, true), tab_place(4, 12, false)]), true);
+    let start = flow_start(&issue, &with_places(4, vec![root(5, true), tab_place(4, 12, false)]), true, None);
     assert_eq!((start.project, start.projects), (Some(4), Some(vec![4])));
     let task = start.issue.expect("an issue");
     assert_eq!([task.key, task.source, task.title, task.branch], ["#456", "github", "Popups", "issue-456-popups"]);
@@ -363,14 +363,25 @@ fn a_flow_on_a_repository_issue_runs_in_the_issue_project_on_its_branch() {
 #[test]
 fn a_flow_on_another_tracker_issue_offers_the_repository_roots_and_chooses_the_sheet_project() {
     let sources = with_places(5, vec![root(4, true), tab_place(9, 12, false), root(5, false)]);
-    let start = flow_start(&tab_plan().issue, &sources, false);
+    let start = flow_start(&tab_plan().issue, &sources, false, None);
     assert_eq!((start.project, start.projects), (Some(5), Some(vec![4, 5])));
 }
 
 #[test]
 fn the_only_repository_root_is_chosen_and_several_leave_the_choice_open_whatever_cornercase_marks_here() {
-    let only = flow_start(&tab_plan().issue, &with_places(9, vec![root(4, false), tab_place(9, 12, true)]), false);
+    let only =
+        flow_start(&tab_plan().issue, &with_places(9, vec![root(4, false), tab_place(9, 12, true)]), false, None);
     assert_eq!(only.project, Some(4));
     let several = with_places(9, vec![root(4, true), root(5, false), tab_place(9, 12, false)]);
-    assert_eq!(flow_start(&tab_plan().issue, &several, false).project, None);
+    assert_eq!(flow_start(&tab_plan().issue, &several, false, None).project, None);
+}
+
+#[test]
+fn a_flow_on_an_issue_takes_the_task_of_its_read_page_and_leaves_a_blank_one_to_read() {
+    let sources = with_places(4, vec![root(4, true)]);
+    let read = ReadIssue { prompt: "https://x/456".into(), ..ReadIssue::default() };
+    let task = |read: &ReadIssue| flow_start(&issue(), &sources, true, Some(read)).issue.expect("an issue").prompt;
+    assert_eq!(task(&read).as_deref(), Some("https://x/456"));
+    assert_eq!(task(&ReadIssue { prompt: " ".into(), ..read }), None);
+    assert_eq!(flow_start(&issue(), &sources, true, None).issue.expect("an issue").prompt, None);
 }
