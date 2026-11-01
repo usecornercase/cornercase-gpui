@@ -200,28 +200,17 @@ impl StartFlow {
         self.busy = true;
         self.error = None;
         cx.notify();
-        store::run(cx, command, move |this, result, cx| this.started(&name, result, cx));
+        let focus = self.focus;
+        store::run(cx, command, move |this, result, cx| this.started(&name, focus, result, cx));
     }
 
-    fn started(&mut self, name: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn started(&mut self, name: &str, focus: bool, result: anyhow::Result<String>, cx: &mut Context<Self>) {
         self.busy = false;
         match result.and_then(|out| Ok(serde_json::from_str::<Started>(&out)?)) {
-            Ok(started) => self.finish(name, &started, cx),
+            Ok(started) => finish(name, focus, &started, cx),
             Err(e) => self.error = Some(cli::reason(&e)),
         }
         cx.notify();
-    }
-
-    fn finish(&self, name: &str, started: &Started, cx: &mut Context<Self>) {
-        announce(started.note.as_deref(), format!("Started {name} on {}", started.branch), cx);
-        let (workspace, focus) = (started.workspace, self.focus);
-        Store::get(cx).update(cx, |s, cx| {
-            s.close_dialog(cx);
-            s.run_started(workspace, cx);
-            if hides_the_run(focus, s.sheet) {
-                s.close_sheet(cx);
-            }
-        });
     }
 
     fn pick_project(&mut self, id: u64, cx: &mut Context<Self>) {
@@ -331,6 +320,18 @@ impl StartFlow {
             .child(ui::dim(self.footnote()))
             .children(self.error.clone().map(error_text))
     }
+}
+
+fn finish(name: &str, focus: bool, started: &Started, cx: &mut App) {
+    announce(started.note.as_deref(), format!("Started {name} on {}", started.branch), cx);
+    let workspace = started.workspace;
+    Store::get(cx).update(cx, |s, cx| {
+        s.close_dialog(cx);
+        s.run_started(workspace, cx);
+        if hides_the_run(focus, s.sheet) {
+            s.close_sheet(cx);
+        }
+    });
 }
 
 fn issue_line(issue: &IssueTask) -> Div {
