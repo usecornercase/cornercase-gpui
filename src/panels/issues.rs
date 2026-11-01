@@ -308,7 +308,8 @@ impl IssuesPanel {
     fn start_flow(&self, window: &mut Window, cx: &mut Context<Self>) {
         let (Some(issue), Some(sources)) = (&self.selected, &self.sources) else { return };
         let repository = self.source(&issue.source).is_some_and(|s| s.repository);
-        flows::start_flow(data::flow_start(issue, sources, repository), window, cx);
+        let read = self.reads.get(&issue.id()).and_then(|r| r.as_ref().ok()).map(|page| &page.read);
+        flows::start_flow(data::flow_start(issue, sources, repository, read), window, cx);
     }
 
     fn start(&mut self, plan: &StartPlan, cx: &mut Context<Self>) {
