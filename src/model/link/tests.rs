@@ -44,8 +44,8 @@ fn an_empty_span_reads_as_none() {
 #[test]
 fn the_span_covers_its_cells_and_not_the_one_after() {
     let link = link(INSIDE);
-    assert!(link.covers((0, 0)) && link.covers((18, 0)));
-    assert!(!link.covers((19, 0)) && !link.covers((10, 1)));
+    assert!(link.span().covers((0, 0)) && link.span().covers((18, 0)));
+    assert!(!link.span().covers((19, 0)) && !link.span().covers((10, 1)));
 }
 
 #[test]
@@ -88,4 +88,77 @@ fn a_span_still_shows_its_text_until_the_row_changes() {
     assert!(shows(&pane, (0, 2, 6), "a.rs"));
     assert!(!shows(&pane, (0, 2, 6), "b.rs"));
     assert!(!shows(&pane, (1, 2, 6), "a.rs"));
+}
+
+fn cells(text: &str) -> Vec<String> {
+    text.chars().map(String::from).collect()
+}
+
+fn url_of(text: &str) -> Option<String> {
+    let owned = cells(text);
+    let cells: Vec<&str> = owned.iter().map(String::as_str).collect();
+    url_in(&cells, 0, cells.len()).map(|(from, to)| text_between(&cells, from, to))
+}
+
+#[test]
+fn a_web_address_needs_its_scheme_and_a_host() {
+    assert!(is_web("https://example.com") && is_web("http://localhost:3000"));
+    assert!(!is_web("https://") && !is_web("ftp://example.com") && !is_web("example.com"));
+}
+
+#[test]
+fn a_word_that_holds_an_address_names_it() {
+    assert_eq!(url_of("http://localhost:5173/").as_deref(), Some("http://localhost:5173/"));
+    assert_eq!(url_of("url=https://a.dev/x?y=1#z").as_deref(), Some("https://a.dev/x?y=1#z"));
+    assert_eq!(url_of("src/main.rs:12"), None);
+    assert_eq!(url_of("https://"), None);
+}
+
+#[test]
+fn the_punctuation_that_ends_a_sentence_is_left_out() {
+    assert_eq!(url_of("https://a.dev/docs.").as_deref(), Some("https://a.dev/docs"));
+    assert_eq!(url_of("https://a.dev:").as_deref(), Some("https://a.dev"));
+    assert_eq!(url_of("https://a.dev/?").as_deref(), Some("https://a.dev/"));
+}
+
+fn hyperlinked(runs: &[(&str, Option<&str>)]) -> PaneGrid {
+    let line = runs
+        .iter()
+        .map(|(text, link)| Run { style: Style::default(), link: link.map(Into::into), cells: cells(text) })
+        .collect();
+    PaneGrid { lines: vec![line], ..PaneGrid::default() }
+}
+
+#[test]
+fn a_hyperlink_spans_its_runs_even_across_blanks() {
+    let docs = Some("https://a.dev/docs");
+    let pane = hyperlinked(&[("see ", None), ("the ", docs), ("docs", docs), (" now", None)]);
+    let (span, url) = web_hyperlink(&pane, (9, 0)).expect("a hyperlink");
+    assert_eq!((span.row, span.start, span.end, url.as_str()), (0, 4, 12, "https://a.dev/docs"));
+    assert_eq!(web_hyperlink(&pane, (2, 0)), None);
+}
+
+#[test]
+fn a_hyperlink_to_a_file_is_no_web_address() {
+    let pane = hyperlinked(&[("plan.md", Some("file:///home/me/plan.md"))]);
+    assert_eq!(web_hyperlink(&pane, (0, 0)), None);
+}
+
+#[test]
+fn a_web_address_still_shows_until_its_text_changes() {
+    let pane = hyperlinked(&[("go https://a.dev", None)]);
+    let span = Span { row: 0, start: 3, end: 16 };
+    let hovered = Hovered::new(&pane, span, Target::Web("https://a.dev".into()));
+    assert_eq!(hovered.text, "https://a.dev");
+    assert!(hovered.at(0, (3, 0)) && !hovered.at(0, (2, 0)));
+}
+
+#[test]
+fn an_address_of_this_machines_own_servers_is_loopback() {
+    for url in ["http://localhost:5173/", "http://127.0.0.1:8000", "http://[::1]:3000/x", "http://app.localhost/"] {
+        assert!(is_loopback(url), "{url}");
+    }
+    for url in ["https://example.com/localhost", "https://localhost.example.com/", "file:///tmp/x"] {
+        assert!(!is_loopback(url), "{url}");
+    }
 }

@@ -5,6 +5,7 @@ mod connection;
 mod controls;
 mod data;
 mod import;
+mod links;
 mod pages;
 mod projects;
 mod search;
@@ -154,7 +155,8 @@ impl SettingsPanel {
         });
     }
 
-    fn apply(&mut self, described: Described, cx: &mut Context<Self>) {
+    fn apply(&mut self, mut described: Described, cx: &mut Context<Self>) {
+        links::add(&mut described, &Store::get(cx).read(cx).prefs);
         for setting in described.settings.iter().filter(|s| s.edited_as_text()) {
             let placeholder = data::placeholder(setting);
             self.sync(Role::Setting(setting.key.clone()), &setting.text(), &placeholder, cx);

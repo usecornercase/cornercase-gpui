@@ -83,7 +83,7 @@ pub(crate) fn card(bounds: Bounds<Pixels>, colour: impl Into<Hsla>, edge: Rgba, 
 }
 
 pub(crate) fn paint_link(layout: &Layout, hovered: &Hovered, window: &mut Window) {
-    let (row, start, end) = (hovered.link.row, hovered.link.start, hovered.link.end);
+    let (row, start, end) = (hovered.span.row, hovered.span.start, hovered.span.end);
     let Some(span) = layout.span(hovered.pane, row, (start, end)) else { return };
     window.paint_quad(fill(span, faded(colours::accent().into(), 0.14)).corner_radii(px(3.)));
     let base = point(span.origin.x, span.origin.y + span.size.height - px(1.5));

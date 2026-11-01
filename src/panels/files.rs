@@ -38,7 +38,7 @@ use crate::ui::{self, TextField, TextFieldEvent};
 use disk::Content;
 pub(crate) use finder::{find_file, is_finder};
 use open::{Launch, Opener};
-pub(crate) use peek::{Anchor, Peek};
+pub(crate) use peek::{Anchor, Peek, WebPage};
 use source::Source;
 pub(crate) use viewer::open_link;
 

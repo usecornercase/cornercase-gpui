@@ -56,6 +56,13 @@ pub(crate) fn origin(url: &str) -> &str {
     &url[..end]
 }
 
+pub(crate) fn same_page(shown: &str, asked: &str) -> bool {
+    match &asked[origin(asked).len()..] {
+        "" | "/" => origin(shown) == origin(asked),
+        _ => shown == asked,
+    }
+}
+
 fn on_screen(cx: &App) -> (bool, Option<u64>) {
     let store = Store::get(cx).read(cx);
     (store.dock == Some(PanelKind::Browser), store.session.as_ref().and_then(|s| s.shown().workspace))
@@ -126,7 +133,7 @@ impl Browser {
     }
 
     pub(super) fn open_now(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
-        let shown = self.tabs.list.iter().find(|t| t.workspace == workspace && origin(&t.url) == origin(&url));
+        let shown = self.tabs.list.iter().find(|t| t.workspace == workspace && same_page(&t.url, &url));
         if let Some(target) = shown.map(|t| t.target.clone()) {
             self.tabs.activate(workspace, &target);
             self.recast(cx);

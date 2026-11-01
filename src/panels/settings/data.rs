@@ -338,6 +338,10 @@ pub(super) fn about(page: &str) -> &'static str {
         "Issues" => "The trackers issues come from, their accounts and filters.",
         "UI" => "How the sidebar, tabs and notifications look and sound.",
         "Remote" => "Reaching this computer's cornercase from a phone or a browser.",
+        LINKS => {
+            "Where web addresses in the terminal open, and the pages their card previews. Kept by this app on \
+                  this Mac, not in cornercase's settings."
+        }
         PROJECTS => "Setup and teardown: the commands a repository runs in a new worktree, and before removing it.",
         SHARE => {
             "Export your setup for a colleague, or import theirs: agents, issues, worktrees, the interface \
@@ -351,6 +355,7 @@ pub(super) fn alerts(described: &Described, page: &str) -> bool {
     described.connections.iter().any(|c| c.page == page && c.state == State::Refused)
 }
 
+pub(super) const LINKS: &str = "Links";
 pub(super) const PROJECTS: &str = "Projects";
 pub(super) const SHARE: &str = "Share";
 

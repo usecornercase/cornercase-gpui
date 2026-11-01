@@ -4,6 +4,7 @@ use super::agents::AgentItem;
 use super::data::{self, Described, Item, Kind, Setting};
 use super::{Role, SettingsPanel, widgets};
 use crate::notify::tip;
+use crate::prefs;
 use crate::theme::colours;
 use crate::ui::{self, Icon, TextField};
 
@@ -28,6 +29,7 @@ pub(super) fn page_icon(page: &str) -> Icon {
         "Issues" => Icon::Issues,
         "UI" => Icon::Interface,
         "Remote" => Icon::Devices,
+        data::LINKS => Icon::Globe,
         data::PROJECTS => Icon::FolderOpen,
         data::SHARE => Icon::Share,
         _ => Icon::Settings,
@@ -42,8 +44,8 @@ fn setting_label(setting: &Setting) -> Div {
 impl SettingsPanel {
     pub(super) fn all_pages(&self) -> Vec<String> {
         let mut pages = self.described.as_ref().map(data::pages).unwrap_or_default();
-        pages.push(data::PROJECTS.into());
-        pages.push(data::SHARE.into());
+        pages.retain(|page| page != data::LINKS);
+        pages.extend([data::LINKS, data::PROJECTS, data::SHARE].map(String::from));
         pages
     }
 
@@ -52,7 +54,7 @@ impl SettingsPanel {
         let found = self.described.as_ref().map(|d| data::search(d, &query)).unwrap_or_default();
         let pages = self.all_pages();
         let matching = data::pages_matching(&pages, &query);
-        let own = pages.len().saturating_sub(2);
+        let own = pages.len().saturating_sub(3);
         let items: Vec<Div> = pages
             .into_iter()
             .enumerate()
@@ -108,7 +110,10 @@ impl SettingsPanel {
     }
 
     fn config_path(&self) -> Option<impl IntoElement + use<>> {
-        let path = self.described.as_ref()?.path.clone();
+        let path = match self.page.as_str() {
+            data::LINKS => prefs::path().display().to_string(),
+            _ => self.described.as_ref()?.path.clone(),
+        };
         let shown = ui::home_relative(&path);
         Some(
             div()

@@ -277,6 +277,13 @@ impl Browser {
         cx.notify();
     }
 
+    pub(super) fn tunnel_to(&mut self, remote: u16, cx: &mut Context<Self>) -> Option<u16> {
+        if self.dev.tunnels.get(remote).is_none() {
+            self.start_tunnel(remote, cx);
+        }
+        self.dev.tunnels.get(remote).filter(|t| t.state == State::Ready).map(|t| t.local)
+    }
+
     pub(super) fn tunnelled(&self, url: String) -> String {
         let local = loopback_port(&url).and_then(|remote| self.dev.tunnels.get(remote)).map(|t| t.local);
         match local.filter(|_| cli::host().is_some()) {

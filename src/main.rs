@@ -7,6 +7,7 @@ mod keys;
 mod model;
 mod notify;
 mod panels;
+mod prefs;
 mod render;
 mod sidebar;
 mod store;

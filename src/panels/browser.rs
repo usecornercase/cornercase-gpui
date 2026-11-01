@@ -21,6 +21,7 @@ mod page;
 mod picker;
 mod pointer;
 mod ports;
+mod preview;
 mod prompts;
 mod select;
 mod shots;
@@ -44,8 +45,9 @@ use std::time::Duration;
 use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{
-    AnyView, AppContext as _, Context, CursorStyle, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, RenderImage, SharedString, Styled as _, Window, div, px,
+    AnyView, App, AppContext as _, Context, CursorStyle, Entity, FocusHandle, Focusable as _, Global,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, RenderImage, SharedString, Styled as _, Window,
+    div, px,
 };
 
 use crate::panels::PanelKind;
@@ -57,6 +59,8 @@ use engine::{Engine, Incoming};
 use input::Input;
 use notices::Notices;
 use ports::DevServers;
+pub(crate) use preview::Preview;
+use preview::Previews;
 use tabs::Tabs;
 pub(crate) use viewport::View;
 
@@ -96,10 +100,28 @@ pub(crate) struct Browser {
     strip: tab_bar::Strip,
     input: Input,
     notices: Notices,
+    previews: Previews,
 }
 
-pub(crate) fn build(window: &mut Window, cx: &mut gpui::App) -> AnyView {
-    cx.new(|cx| Browser::new(window, cx)).into()
+struct Shared(Entity<Browser>);
+
+impl Global for Shared {}
+
+pub(crate) fn shared(window: &mut Window, cx: &mut App) -> Entity<Browser> {
+    if let Some(Shared(browser)) = cx.try_global::<Shared>() {
+        return browser.clone();
+    }
+    let browser = cx.new(|cx| Browser::new(window, cx));
+    cx.set_global(Shared(browser.clone()));
+    browser
+}
+
+pub(crate) fn running(cx: &App) -> Option<Entity<Browser>> {
+    cx.try_global::<Shared>().map(|Shared(browser)| browser.clone())
+}
+
+pub(crate) fn build(window: &mut Window, cx: &mut App) -> AnyView {
+    shared(window, cx).into()
 }
 
 impl Browser {
@@ -146,6 +168,7 @@ impl Browser {
             strip: tab_bar::Strip::default(),
             input: Input::default(),
             notices: Notices::default(),
+            previews: Previews::default(),
         }
     }
 
@@ -179,6 +202,7 @@ impl Browser {
         self.restore = tabs.list.iter().map(|t| (t.url.clone(), t.workspace)).collect();
         self.stale.borrow_mut().extend(tabs.list.into_iter().filter_map(|t| t.shot.map(|s| s.image)));
         self.casting = None;
+        self.forget_previews();
         self.status = Status::Failed(why);
         let wait = Duration::from_secs(1u64 << self.attempts.min(4));
         self.attempts += 1;
@@ -201,7 +225,7 @@ impl Browser {
         self.tabs.active(self.workspace).map(|t| t.url.clone())
     }
 
-    pub(crate) fn focus_address(&self, window: &mut Window, cx: &gpui::App) {
+    pub(crate) fn focus_address(&self, window: &mut Window, cx: &App) {
         window.focus(&self.address.read(cx).focus_handle(cx));
     }
 

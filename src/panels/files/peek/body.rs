@@ -22,6 +22,7 @@ pub(super) enum Media {
 
 pub(super) enum Body {
     Loading,
+    Ask,
     Still(Still),
     Video(Player),
     Audio(Player),
@@ -70,11 +71,11 @@ pub(super) fn image_size(bytes: &[u8]) -> Option<(f32, f32)> {
     Some((pixels(w), pixels(h)))
 }
 
-fn note(title: &'static str, detail: impl Into<String>) -> Still {
+pub(super) fn note(title: &'static str, detail: impl Into<String>) -> Still {
     Still::Note(Note { title, detail: detail.into() })
 }
 
-fn picture(image: Arc<Image>, label: String) -> Still {
+pub(super) fn picture(image: Arc<Image>, label: String) -> Still {
     let size = image_size(&image.bytes);
     Still::Picture(Picture { image, size, label })
 }
@@ -154,7 +155,7 @@ impl Peek {
         }
         if let Still::Code(code) = &still {
             self.highlight(code.lines.clone(), cx);
-            let first = self.link.as_ref().and_then(Link::first_line).unwrap_or(0);
+            let first = self.link().and_then(Link::first_line).unwrap_or(0);
             self.code_scroll.scroll_to_item(first.saturating_sub(3), ScrollStrategy::Top);
         }
         self.body = Some(Body::Still(still));
@@ -162,7 +163,7 @@ impl Peek {
     }
 
     fn highlight(&self, lines: Arc<Vec<String>>, cx: &mut Context<Self>) {
-        let (generation, Some(path)) = (self.generation, self.link.as_ref().map(|l| PathBuf::from(&l.path))) else {
+        let (generation, Some(path)) = (self.generation, self.link().map(|l| PathBuf::from(&l.path))) else {
             return;
         };
         let task = cx.background_spawn(async move { highlight::highlight(&path, &lines).map(Arc::new) });

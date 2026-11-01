@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::cli::{self, Queue, Stream, Target};
 use crate::model::Session;
 use crate::panels::PanelKind;
+use crate::prefs::{self, Prefs};
 
 mod jobs;
 
@@ -27,6 +28,7 @@ pub(crate) struct Store {
     pub toasts: Vec<Toast>,
     pub switch_to: Option<Target>,
     pub browse: Option<(String, Option<u64>)>,
+    pub prefs: Prefs,
     pub started_run_in: Option<u64>,
     pub jobs: Jobs,
     next_toast: u64,
@@ -92,6 +94,7 @@ impl Store {
             toasts: Vec::new(),
             switch_to: None,
             browse: None,
+            prefs: prefs::load(),
             started_run_in: None,
             jobs: Jobs::default(),
             next_toast: 1,
@@ -305,6 +308,14 @@ impl Store {
     pub(crate) fn open_in_browser(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
         self.browse = Some((url, workspace));
         self.open(PanelKind::Browser, cx);
+    }
+
+    pub(crate) fn set_pref(&mut self, key: &str, value: &str, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        let changed = self.prefs.with(key, value)?;
+        prefs::save(&changed)?;
+        self.prefs = changed;
+        cx.notify();
+        Ok(())
     }
 
     pub(crate) fn run_started(&mut self, workspace: u64, cx: &mut Context<Self>) {
