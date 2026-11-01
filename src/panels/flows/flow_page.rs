@@ -112,7 +112,7 @@ fn flow_hero(flow: &FlowInfo, hidden: bool, cx: &Context<FlowsPanel>) -> Div {
                 .text_size(px(11.))
                 .text_color(colours::faint())
                 .child(ui::icon(Icon::File, 12.).text_color(colours::faint()))
-                .child(div().child(ui::one_line(path.clone())))
+                .child(div().min_w_0().flex().child(ui::one_line(path.clone())))
         }))
         .children(flow.problems.iter().map(|p| alert(format!("Cannot start: {p}"), colours::failed()).relative()))
         .children(flow.check.as_ref().map(|c| alert(c.clone(), colours::waiting()).relative()))
