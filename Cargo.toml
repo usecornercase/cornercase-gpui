@@ -12,9 +12,9 @@ categories = ["development-tools"]
 
 [dependencies]
 anyhow = "1.0.104"
-base64 = "0.22.1"
+base64 = "0.23.1"
 core-foundation = "0.10.0"
-core-video = "0.4.3"
+core-video = "0.6.1"
 futures = "0.3"
 libc = "0.2"
 gpui = { version = "0.2.2", features = ["runtime_shaders"] }
@@ -29,7 +29,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "regex-fancy", "parsing"] }
 unicode-segmentation = "1.13.3"
-parking_lot = "0.12"
+parking_lot = "0.13"
 
 [profile.dev.package."*"]
 opt-level = 3
