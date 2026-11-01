@@ -65,7 +65,7 @@ pub(crate) enum Conn {
 }
 
 pub(crate) enum Drag {
-    Program { pane: u64, motion: bool },
+    Program { pane: u64, motion: bool, cell: (u16, u16) },
     Select { pane: u64, from: (u16, u16), to: (u16, u16) },
     Divider { tab: u64, path: Vec<bool>, down: bool, along: Along },
     Link { pane: u64, cell: (u16, u16) },

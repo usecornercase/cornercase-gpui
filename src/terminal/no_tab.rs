@@ -3,7 +3,8 @@ use gpui::{
     div, px,
 };
 
-use crate::app::Root;
+use super::mouse::mouse;
+use crate::app::{Drag, Root};
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::Session;
@@ -149,10 +150,13 @@ impl Root {
     }
 
     pub(crate) fn drop_drags_without_tab(&mut self) {
-        if self.shows_no_tab() {
-            self.drag = None;
-            self.moves.replace(Moves::default());
+        if !self.shows_no_tab() {
+            return;
         }
+        if let Some(Drag::Program { pane, cell, .. }) = self.drag.take() {
+            self.queue.input(pane, mouse("up", "left", cell));
+        }
+        self.moves.replace(Moves::default());
     }
 
     pub(super) fn empty_page(&self, cx: &mut Context<Self>) -> Option<Div> {
