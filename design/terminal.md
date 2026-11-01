@@ -11,7 +11,7 @@ Code: `src/terminal.rs` (keys, ⌘ shortcuts, the surface element), `src/termina
 - **Escape is handled once, in `Root`**: it closes the dialog, else the sheet, else brings the focus back to the terminal from a panel or the sidebar; only with the terminal focused and nothing open does it reach the program (vim needs it). Dialogs and panels used to close themselves on Escape without stopping it, so a dialog over a sheet closed both; none of them handles it now. A text field emits `Cancel` (rename fields undo, dialog fields close), except a search or filter field (`clears_on_escape`), which clears its text and, when already empty, lets Escape go on to `Root`, as Spotlight does.
 - **A click on the veil closes the dialog or sheet**: the cards and toasts `occlude`, so a click on them never reaches the veil. The veil occludes too, so nothing behind it takes the pointer: a click that closed a sheet also reached the program in the pane under it, and the borders' resize handles showed their cursor through it.
 - **Tab moves between a dialog's fields** (`TextField::in_tab_order`, gpui's `focus_next`). Only dialog fields are tab stops: gpui's tab order spans the whole window, so fields behind a dialog would be reached too. In other fields Tab goes on to the panel (the Search panel switches modes with it).
-- **The context menu takes ↑ ↓ ↩** (and space): the highlight skips notes and separators and wraps; a submenu opens on its first entry.
+- **The context menu takes ↑ ↓ ↩** (and space): the highlight skips separators and wraps; a submenu opens on its first entry.
 - **Printable text goes through the platform's input method** (`EntityInputHandler for Root`), which composes accents, emoji and ⌥ characters (⌥2 types `@` on a Spanish keyboard). `keys::key_event` takes only what is not text: named keys, and anything with Ctrl. Encoding text ourselves would break dead keys and every non-US layout.
 - **Ctrl with a key** sends the key itself, lower case (ctrl+space, ctrl+letter, ctrl+[); cornercase encodes it for the program.
 - **⌥ with a key that types nothing else is meta** (⌥← moves by words in the shell): the key goes as a named key with `alt` rather than as text. ⌥ with a key that types a character is left to the input method.
@@ -85,4 +85,4 @@ Code: `src/terminal/pane_drag.rs` (the handle, pressing, dragging, dropping), `s
 - **A submenu takes the menu's place**, as the TUI's *move to group* does, instead of opening beside it: no hover timing, and it fits a narrow window.
 - **Separators come from optional entries left out**, so the menu drops separators at either end and doubled ones rather than every caller checking.
 - **An entry runs on the window after the menu has closed**, so it can open a dialog or another menu.
-- Entries that stop or remove something are red (`danger`); a `Note` is grey text that does nothing, used to say why something is missing.
+- Entries that stop or remove something are red (`danger`).
