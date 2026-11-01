@@ -68,7 +68,7 @@ pub(super) fn facts(parts: Vec<String>) -> Div {
     let dot = || div().text_color(colours::faint()).child("·");
     let mut line = div().flex().flex_wrap().items_center().gap(px(6.)).text_size(px(12.)).text_color(colours::muted());
     for (i, part) in parts.into_iter().enumerate() {
-        line = line.when(i > 0, |d| d.child(dot())).child(part);
+        line = line.when(i > 0, |d| d.child(dot())).child(div().flex().min_w_0().child(ui::one_line(part)));
     }
     line
 }
