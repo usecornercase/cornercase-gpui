@@ -22,6 +22,25 @@ pub(super) fn close_dialog(cx: &mut App) {
 
 pub(super) fn field<T: Submit>(placeholder: &str, cx: &mut Context<T>, window: &mut Window) -> Entity<TextField> {
     let field = cx.new(|cx| TextField::new(placeholder.to_string(), cx).in_tab_order());
+    subscribed(field, cx, window)
+}
+
+pub(super) fn filled_field<T: Submit>(
+    placeholder: &str,
+    text: &str,
+    cx: &mut Context<T>,
+    window: &mut Window,
+) -> Entity<TextField> {
+    let text = text.to_string();
+    let field = cx.new(|cx| {
+        let mut field = TextField::new(placeholder.to_string(), cx).in_tab_order().wraps();
+        field.set_text(text, cx);
+        field
+    });
+    subscribed(field, cx, window)
+}
+
+fn subscribed<T: Submit>(field: Entity<TextField>, cx: &mut Context<T>, window: &mut Window) -> Entity<TextField> {
     cx.subscribe_in(&field, window, |this, _, event, _, cx| match event {
         TextFieldEvent::Submit => this.submit(cx),
         TextFieldEvent::Cancel => close_dialog(cx),

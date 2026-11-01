@@ -338,3 +338,39 @@ fn a_person_shows_the_name_and_a_different_handle() {
     assert_eq!(person("bob", "bob").display(), ("bob".into(), None));
     assert_eq!(person("", "carla").display(), ("carla".into(), None));
 }
+
+fn root(project: u64, here: bool) -> Place {
+    Place { project, workspace: None, label: format!("p{project}"), worktree: true, here }
+}
+
+fn tab_place(project: u64, workspace: u64, here: bool) -> Place {
+    Place { project, workspace: Some(workspace), label: format!("w{workspace}"), worktree: false, here }
+}
+
+fn with_places(project: u64, places: Vec<Place>) -> Sources {
+    Sources { project, places, ..Default::default() }
+}
+
+#[test]
+fn a_flow_on_a_repository_issue_runs_in_the_issue_project_on_its_branch() {
+    let issue = Issue { title: "Popups".into(), ..issue() };
+    let start = flow_start(&issue, &with_places(4, vec![root(5, true), tab_place(4, 12, false)]), true);
+    assert_eq!((start.project, start.projects), (Some(4), Some(vec![4])));
+    let task = start.issue.expect("an issue");
+    assert_eq!([task.key, task.source, task.title, task.branch], ["#456", "github", "Popups", "issue-456-popups"]);
+}
+
+#[test]
+fn a_flow_on_another_tracker_issue_offers_the_repository_roots_and_chooses_the_sheet_project() {
+    let sources = with_places(5, vec![root(4, true), tab_place(9, 12, false), root(5, false)]);
+    let start = flow_start(&tab_plan().issue, &sources, false);
+    assert_eq!((start.project, start.projects), (Some(5), Some(vec![4, 5])));
+}
+
+#[test]
+fn the_only_repository_root_is_chosen_and_several_leave_the_choice_open_whatever_cornercase_marks_here() {
+    let only = flow_start(&tab_plan().issue, &with_places(9, vec![root(4, false), tab_place(9, 12, true)]), false);
+    assert_eq!(only.project, Some(4));
+    let several = with_places(9, vec![root(4, true), root(5, false), tab_place(9, 12, false)]);
+    assert_eq!(flow_start(&tab_plan().issue, &several, false).project, None);
+}

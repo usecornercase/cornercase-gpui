@@ -5,7 +5,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, div, px,
 };
 
-use super::rows::{drop_target, name_label, row_actions, row_base};
+use super::rows::{End, drop_target, name_label, row_actions, row_base};
 use super::workspace::{agent_details, plural};
 use super::{Target, draggable};
 use crate::app::Root;
@@ -78,7 +78,8 @@ impl Root {
             .px(px(6.))
             .py(px(3.))
             .child(badge(tab.loudest()))
-            .child(tab_text(self.name_or_rename(target, name), details));
+            .child(tab_text(self.name_or_rename(target, name), details))
+            .child(self.row_end(target, End { gap: 6., buttons: 1, figures: false }, cx));
         let row = row_actions(row, target, move |this| this.focus_item("tab", id), cx);
         let row = draggable(row, target, title);
         drop_target(row, target, siblings, cx).into_any_element()

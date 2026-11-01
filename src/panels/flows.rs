@@ -33,6 +33,7 @@ use gpui::{
 use self::diagram::Played;
 use self::model::{Files, FlowInfo, Frame, Listing, Message, Run};
 use self::run_list::RunList;
+pub(crate) use self::start::{FlowStart, IssueTask, start_flow};
 use crate::cli::Stream;
 use crate::panels::PanelKind;
 use crate::store::{self, Store, args};
@@ -86,7 +87,11 @@ pub(crate) struct FlowsPanel {
 impl FlowsPanel {
     pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
-        cx.observe(&store, |_, _, cx| cx.notify()).detach();
+        cx.observe(&store, |this, store, cx| {
+            this.select_started(&store, cx);
+            cx.notify();
+        })
+        .detach();
         let mut this = Self {
             project: None,
             listing: None,
@@ -108,8 +113,16 @@ impl FlowsPanel {
         };
         this.follow_runs(cx);
         this.refresh(cx);
+        this.select_started(&store, cx);
         cx.spawn(async move |this, cx| poll_while_alive(this, cx).await).detach();
         this
+    }
+
+    fn select_started(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+        let started = store.read(cx).started_run_in.is_some();
+        if let Some(workspace) = started.then(|| store.update(cx, |s, _| s.started_run_in.take())).flatten() {
+            self.select_workspace_run(workspace, cx);
+        }
     }
 
     fn poll(&mut self, cx: &mut Context<Self>) {
@@ -310,7 +323,7 @@ impl FlowsPanel {
         }
     }
 
-    pub(crate) fn select_workspace_run(&mut self, workspace: u64, cx: &mut Context<Self>) {
+    fn select_workspace_run(&mut self, workspace: u64, cx: &mut Context<Self>) {
         if self.select_run_in(workspace, cx) {
             return;
         }

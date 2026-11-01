@@ -223,6 +223,10 @@ fn detail_actions(url: &str, cx: &mut Context<IssuesPanel>) -> Div {
             ui::icon_text_button("issue-schedule", Icon::Queue, "Schedule…", Tone::Plain)
                 .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_start(true, window, cx))),
         )
+        .child(
+            ui::icon_text_button("issue-flow", Icon::Flows, "Start a flow…", Tone::Plain)
+                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.start_flow(window, cx))),
+        )
         .child(div().flex_1())
         .when(!url.is_empty(), |d| {
             d.child(

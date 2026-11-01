@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::panels::flows::{FlowStart, IssueTask};
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(super) enum SourceState {
@@ -603,6 +605,27 @@ impl StartPlan {
             None => {}
         }
     }
+}
+
+pub(super) fn flow_start(issue: &Issue, sources: &Sources, repository: bool) -> FlowStart {
+    let roots: Vec<&Place> = sources.places.iter().filter(|p| p.worktree && p.workspace.is_none()).collect();
+    let (project, projects) = if repository {
+        (Some(sources.project), vec![sources.project])
+    } else {
+        let only = match roots.as_slice() {
+            [root] => Some(root.project),
+            _ => None,
+        };
+        let shown = roots.iter().find(|p| p.project == sources.project).map(|p| p.project);
+        (shown.or(only), roots.iter().map(|p| p.project).collect())
+    };
+    let task = IssueTask {
+        key: issue.key.clone(),
+        source: issue.source.clone(),
+        title: issue.title.clone(),
+        branch: issue.branch.clone(),
+    };
+    FlowStart { project, projects: Some(projects), flow: None, issue: Some(task) }
 }
 
 #[cfg(test)]

@@ -25,6 +25,7 @@ pub(crate) struct Store {
     pub toasts: Vec<Toast>,
     pub switch_to: Option<Target>,
     pub browse: Option<(String, Option<u64>)>,
+    pub started_run_in: Option<u64>,
     pub jobs: Jobs,
     next_toast: u64,
     app_stream: Option<Stream>,
@@ -89,6 +90,7 @@ impl Store {
             toasts: Vec::new(),
             switch_to: None,
             browse: None,
+            started_run_in: None,
             jobs: Jobs::default(),
             next_toast: 1,
             app_stream: None,
@@ -287,6 +289,11 @@ impl Store {
     pub(crate) fn open_in_browser(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
         self.browse = Some((url, workspace));
         self.open(PanelKind::Browser, cx);
+    }
+
+    pub(crate) fn run_started(&mut self, workspace: u64, cx: &mut Context<Self>) {
+        self.started_run_in = Some(workspace);
+        cx.notify();
     }
 
     pub(crate) fn close_sheet(&mut self, cx: &mut Context<Self>) {

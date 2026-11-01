@@ -224,7 +224,7 @@ pub(super) fn name_line(name: String) -> Div {
         .flex()
         .items_center()
         .gap(px(6.))
-        .child(div().text_size(px(13.)).font_weight(FontWeight::MEDIUM).child(ui::one_line(name)))
+        .child(div().min_w_0().flex().text_size(px(13.)).font_weight(FontWeight::MEDIUM).child(ui::one_line(name)))
 }
 
 pub(super) fn flow_summary(flow: &FlowInfo) -> Div {
