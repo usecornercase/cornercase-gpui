@@ -9,6 +9,7 @@ use crate::context_menu::{Entry, act, act_busy, danger, item, submenu};
 use crate::dialogs;
 use crate::model::{Project, PullRequest, Session, Workspace};
 use crate::panels::PanelKind;
+use crate::panels::flows::{FlowStart, start_flow};
 use crate::store::{Busy, ToastKind};
 
 fn rename_item(label: &str, target: Target) -> Entry {
@@ -53,6 +54,14 @@ fn command_item(label: impl Into<SharedString>, args: Vec<String>) -> Entry {
     item(label, move |this, _, _| this.queue.cmd(args.clone()))
 }
 
+fn new_workspace_item(project: Option<u64>) -> Entry {
+    item("New workspace…", move |_, window, cx| dialogs::new_workspace(project, window, cx))
+}
+
+fn start_flow_item(project: Option<u64>) -> Entry {
+    item("Start a flow…", move |_, window, cx| start_flow(FlowStart::in_project(project), window, cx))
+}
+
 fn group_menu(session: &Session, id: u64) -> Vec<Entry> {
     let Some(group) = session.groups.iter().find(|g| g.id == id) else { return Vec::new() };
     let target = Target::Group(id);
@@ -90,7 +99,8 @@ fn project_menu(session: &Session, id: u64) -> Vec<Entry> {
     let target = Target::Project(id);
     let name = project.name.clone();
     let mut entries = vec![
-        item("New workspace…", move |_, window, cx| dialogs::new_workspace(Some(id), window, cx)),
+        new_workspace_item(Some(id)),
+        start_flow_item(Some(id)),
         act_busy("Start agent here", dialogs::starting(""), cmd(&["start", "--project", &id.to_string(), "--focus"])),
         Entry::Separator,
         rename_item("Rename project", target),
@@ -215,6 +225,16 @@ impl Root {
     ) {
         let entries = self.menu_for(target);
         self.open_menu(at, entries, window, cx);
+    }
+
+    pub(super) fn open_new_menu(
+        &mut self,
+        project: Option<u64>,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_menu(at, vec![new_workspace_item(project), start_flow_item(project)], window, cx);
     }
 
     pub(super) fn open_agent_menu(

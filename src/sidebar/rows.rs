@@ -8,7 +8,6 @@ use gpui::{
 
 use super::{Dragged, Fold, Target, draggable, forms, order};
 use crate::app::Root;
-use crate::dialogs;
 use crate::model::{Group, Project, Session, Shown};
 use crate::theme::{colours, radius};
 use crate::ui::{self, badge, glass};
@@ -276,12 +275,14 @@ impl Root {
                 d.child(ui::dim(format!("{}", project.workspaces.len()))).child(badge(project.attention()))
             })
             .child(
-                hover_button(SharedString::from(format!("project-add-{id}")), row_group_id(target), "+", 1).on_click(
-                    cx.listener(move |_, _: &ClickEvent, window, cx| {
-                        cx.stop_propagation();
-                        dialogs::new_workspace(Some(id), window, cx);
-                    }),
-                ),
+                hover_button(SharedString::from(format!("project-add-{id}")), row_group_id(target), "+", 1)
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.open_new_menu(Some(id), e.position, window, cx);
+                        }),
+                    ),
             )
     }
 }

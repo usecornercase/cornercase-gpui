@@ -8,7 +8,6 @@ use gpui::{
 use super::rows::{Listing, list_text};
 use super::{Arrangement, card, list_end, section_head, sidebar_footer, sidebar_header, tip};
 use crate::app::{GAP, Root};
-use crate::dialogs;
 use crate::model::Session;
 use crate::theme::colours;
 use crate::ui::split::{self, Edge, Split};
@@ -62,12 +61,12 @@ fn workspaces_header(project: Option<u64>, cx: &mut Context<Root>) -> Div {
     section_head(
         "Workspaces",
         ui::tool_button("sidebar-new-workspace", Icon::Plus, 24., false)
-            .tooltip(tip("New workspace in this project"))
+            .tooltip(tip("New workspace or flow in this project"))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(move |_, _: &MouseDownEvent, window, cx| {
+                cx.listener(move |this, e: &MouseDownEvent, window, cx| {
                     cx.stop_propagation();
-                    dialogs::new_workspace(project, window, cx);
+                    this.open_new_menu(project, e.position, window, cx);
                 }),
             ),
     )

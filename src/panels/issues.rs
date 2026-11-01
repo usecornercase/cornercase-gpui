@@ -19,7 +19,7 @@ use gpui::{
     Render, SharedString, Styled as _, Subscription, Svg, Window, div, px,
 };
 
-use crate::panels::PanelKind;
+use crate::panels::{PanelKind, flows};
 use crate::store::{self, Busy, Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui::split::{self, Edge, Split};
@@ -303,6 +303,12 @@ impl IssuesPanel {
         let project_name = shown_project_name(cx);
         let panel = cx.entity().downgrade();
         start::open(start::Setup { issue, sources, repository, agents, schedule, project_name, panel }, window, cx);
+    }
+
+    fn start_flow(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let (Some(issue), Some(sources)) = (&self.selected, &self.sources) else { return };
+        let repository = self.source(&issue.source).is_some_and(|s| s.repository);
+        flows::start_flow(data::flow_start(issue, sources, repository), window, cx);
     }
 
     fn start(&mut self, plan: &StartPlan, cx: &mut Context<Self>) {
