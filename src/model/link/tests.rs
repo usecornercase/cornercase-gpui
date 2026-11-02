@@ -170,3 +170,10 @@ fn an_address_of_this_machines_own_servers_is_loopback() {
         assert!(!is_loopback(url), "{url}");
     }
 }
+
+#[test]
+fn a_loopback_address_takes_its_scheme_and_host_in_any_case() {
+    assert_eq!(loopback_port("HTTP://LocalHost:5173/"), Some(5173));
+    assert_eq!(loopback_port("Https://APP.LOCALHOST/"), Some(443));
+    assert!(is_web("HTTP://LOCALHOST:3000") && is_loopback("HTTP://LOCALHOST:3000"));
+}

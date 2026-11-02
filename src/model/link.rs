@@ -126,14 +126,15 @@ fn host_and_port(rest: &str) -> (&str, Option<&str>) {
 }
 
 fn loopback_host(host: &str) -> bool {
-    LOOPBACK.contains(&host)
+    let host = host.to_ascii_lowercase();
+    LOOPBACK.contains(&host.as_str())
         || host.ends_with(".localhost")
         || host.parse::<Ipv4Addr>().is_ok_and(|ip| ip.is_loopback())
 }
 
 pub(crate) fn loopback_port(url: &str) -> Option<u16> {
     let (scheme, rest) = url.split_once("://")?;
-    let default = match scheme {
+    let default = match scheme.to_ascii_lowercase().as_str() {
         "http" => 80,
         "https" => 443,
         _ => return None,
