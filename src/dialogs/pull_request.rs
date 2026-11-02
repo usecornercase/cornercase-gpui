@@ -1,7 +1,7 @@
 use gpui::{
     App, AppContext as _, ClickEvent, ClipboardItem, Context, Div, Entity, FocusHandle, HighlightStyle,
     InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, Render, SharedString, Stateful,
-    StatefulInteractiveElement as _, Styled as _, Subscription, Window, div, prelude::FluentBuilder as _, px,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use super::{body_height, close, frame, show};
@@ -14,7 +14,7 @@ mod read;
 mod signs;
 mod stack;
 
-use read::{Note, Reads, answer_of};
+use read::{Note, REFRESH_AFTER, Reads, answer_of};
 use signs::{CheckLine, Sign, check_lines, checks_chip, state_chip};
 pub(crate) use signs::{pull_tag, stack_tag};
 
@@ -25,6 +25,7 @@ pub(crate) struct PullRequestDialog {
     workspace: u64,
     focus: FocusHandle,
     reads: Reads,
+    refresh: Option<Task<()>>,
     _store: Subscription,
 }
 
@@ -54,7 +55,13 @@ pub(crate) fn pull_request(workspace: u64, window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| {
         let store = Store::get(cx);
         let follow = cx.observe(&store, |this: &mut PullRequestDialog, store, cx| this.follow(&store, cx));
-        PullRequestDialog { workspace, focus: cx.focus_handle(), reads: Reads::default(), _store: follow }
+        PullRequestDialog {
+            workspace,
+            focus: cx.focus_handle(),
+            reads: Reads::default(),
+            refresh: None,
+            _store: follow,
+        }
     });
     let focus = view.read(cx).focus.clone();
     show(view.clone().into(), &focus, window, cx);
@@ -102,10 +109,15 @@ fn pull_of(session: &Session, workspace: u64) -> Option<&PullRequest> {
 }
 
 impl PullRequestDialog {
-    fn follow(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+    fn seen(&self, cx: &Context<Self>) -> (bool, Option<PullRequest>) {
+        let store = Store::get(cx);
         let s = store.read(cx);
-        let pr = s.session.as_ref().and_then(|session| pull_of(session, self.workspace)).cloned();
         let mine = s.dialog.as_ref().is_some_and(|d| d.entity_id() == cx.entity_id());
+        (mine, s.session.as_ref().and_then(|session| pull_of(session, self.workspace)).cloned())
+    }
+
+    fn follow(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+        let (mine, pr) = self.seen(cx);
         if !mine {
             return;
         }
@@ -116,16 +128,38 @@ impl PullRequestDialog {
     }
 
     fn ask(&mut self, pr: Option<PullRequest>, cx: &mut Context<Self>) {
-        let Some(pr) = pr.filter(|pr| self.reads.due(pr)) else { return };
-        let generation = self.reads.start(&pr);
+        if let Some(pr) = pr.filter(|pr| self.reads.due(pr)) {
+            self.send(&pr, cx);
+        }
+    }
+
+    fn send(&mut self, pr: &PullRequest, cx: &mut Context<Self>) {
+        let generation = self.reads.start(pr);
         let workspace = self.workspace;
         let busy =
             Busy::new(format!("pull-request:{workspace}"), format!("Asking {} about {}…", pr.site(), pr.reference()));
         store::run_busy(cx, busy, read::args(workspace), move |this, result, cx| {
             if this.reads.settle(generation, answer_of(workspace, result)) {
+                this.schedule(cx);
                 cx.notify();
             }
         });
+    }
+
+    fn schedule(&mut self, cx: &mut Context<Self>) {
+        self.refresh = self.reads.refresh_due().then(|| {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(REFRESH_AFTER).await;
+                let _ = this.update(cx, PullRequestDialog::refresh);
+            })
+        });
+    }
+
+    fn refresh(&mut self, cx: &mut Context<Self>) {
+        let (mine, pr) = self.seen(cx);
+        if let Some(pr) = pr.filter(|_| mine && self.reads.refresh_due()) {
+            self.send(&pr, cx);
+        }
     }
 }
 

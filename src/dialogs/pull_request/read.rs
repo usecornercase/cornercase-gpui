@@ -1,5 +1,9 @@
+use std::time::Duration;
+
 use crate::cli;
 use crate::model::{PullRequest, PullRequestAnswer};
+
+pub(super) const REFRESH_AFTER: Duration = Duration::from_secs(60);
 
 pub(super) const TOO_OLD: &str = "Every check with its link needs cornercase 0.12.237 or newer";
 
@@ -80,6 +84,12 @@ impl Reads {
 
     pub(super) fn asking(&self) -> bool {
         self.answered < self.asked
+    }
+
+    pub(super) fn refresh_due(&self) -> bool {
+        let Some(Answer::Found(found)) = &self.answer else { return false };
+        let pending = found.all_checks.as_ref().is_some_and(|all| all.iter().any(|c| c.outcome == "pending"));
+        pending && !self.asking()
     }
 
     pub(super) fn fill(&self, view: &mut PullRequest) {

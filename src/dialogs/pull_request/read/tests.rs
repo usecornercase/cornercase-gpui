@@ -159,3 +159,55 @@ fn every_check_comes_from_the_answer_not_the_view() {
 fn it_asks_for_the_workspace_with_json() {
     assert_eq!(args(4), ["pull-request", "--workspace", "4", "--json"]);
 }
+
+fn answered_with(outcomes: &[&str]) -> Reads {
+    let all =
+        outcomes.iter().map(|o| Check { name: (*o).into(), outcome: (*o).into(), ..Default::default() }).collect();
+    let mut reads = Reads::default();
+    let asked = reads.start(&view());
+    reads.settle(asked, Some(Answer::Found(Box::new(PullRequest { all_checks: Some(all), ..view() }))));
+    reads
+}
+
+#[test]
+fn a_pending_check_is_asked_about_again() {
+    assert!(answered_with(&["failed", "pending", "pending"]).refresh_due());
+    let mut reads = Reads::default();
+    let asked = reads.start(&view());
+    reads.settle(asked, found());
+    assert!(reads.refresh_due());
+}
+
+#[test]
+fn once_nothing_is_pending_it_is_not_asked_about_again() {
+    assert!(!answered_with(&["failed", "passed", "skipped"]).refresh_due());
+    assert!(!answered_with(&[]).refresh_due());
+}
+
+#[test]
+fn no_refresh_is_due_while_a_read_runs() {
+    let mut reads = answered_with(&["pending"]);
+    reads.start(&view());
+    assert!(!reads.refresh_due());
+}
+
+#[test]
+fn a_failed_read_an_older_server_or_no_answer_is_not_asked_about_again() {
+    let mut reads = answered_with(&["pending"]);
+    let asked = reads.start(&view());
+    reads.settle(asked, Some(failed("gh is not logged in: run gh auth login")));
+    assert!(!reads.refresh_due());
+    let asked = reads.start(&view());
+    reads.settle(asked, Some(Answer::TooOld));
+    assert!(!reads.refresh_due());
+    assert!(!Reads::default().refresh_due());
+}
+
+#[test]
+fn a_refresh_asks_again_about_the_same_view() {
+    let mut reads = answered_with(&["pending"]);
+    assert!(!reads.due(&view()));
+    let again = reads.start(&view());
+    assert!(reads.asking());
+    assert!(reads.settle(again, found()));
+}
