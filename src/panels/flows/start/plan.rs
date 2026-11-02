@@ -3,6 +3,8 @@ use serde::Deserialize;
 use crate::panels::flows::model::project_args;
 use crate::store::args;
 
+const TOO_OLD: &str = "A task of your own on an issue needs cornercase 0.12.239 or newer.";
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct FlowStart {
     pub(crate) project: Option<u64>,
@@ -35,7 +37,7 @@ impl IssueTask {
         (typed.trim().is_empty() && !task.is_empty()).then_some(task)
     }
 
-    pub(super) fn edited(&self, typed: &str) -> Option<String> {
+    fn edited(&self, typed: &str) -> Option<String> {
         changed(typed, &self.task())
     }
 
@@ -89,7 +91,7 @@ pub(super) struct Typed {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Task {
     Prompt(String),
-    Issue { key: String, source: Option<String> },
+    Issue { key: String, source: Option<String>, prompt: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,12 +114,9 @@ pub(super) fn plan(flow: &str, project: Option<u64>, issue: Option<&IssueTask>, 
 }
 
 fn on_issue(issue: &IssueTask, typed: &Typed) -> (Task, Option<String>, Option<String>) {
-    if let Some(prompt) = issue.edited(&typed.prompt) {
-        let branch = filled(&typed.branch).or_else(|| filled(&issue.branch));
-        return (Task::Prompt(prompt), branch, None);
-    }
+    let prompt = issue.edited(&typed.prompt);
     (
-        Task::Issue { key: issue.key.clone(), source: Some(issue.source.clone()) },
+        Task::Issue { key: issue.key.clone(), source: Some(issue.source.clone()), prompt },
         changed(&typed.branch, &issue.branch),
         changed(&typed.workspace, &issue.workspace_name()),
     )
@@ -125,7 +124,7 @@ fn on_issue(issue: &IssueTask, typed: &Typed) -> (Task, Option<String>, Option<S
 
 fn typed_task(typed: &Typed) -> Result<Task, String> {
     match (filled(&typed.prompt), filled(&typed.issue)) {
-        (_, Some(key)) => Ok(Task::Issue { key, source: None }),
+        (prompt, Some(key)) => Ok(Task::Issue { key, source: None, prompt }),
         (Some(prompt), None) => Ok(Task::Prompt(prompt)),
         (None, None) => Err("Say what the team should do, or give an issue.".into()),
     }
@@ -140,6 +139,11 @@ fn changed(text: &str, prefilled: &str) -> Option<String> {
     filled(text).filter(|text| text != prefilled.trim())
 }
 
+pub(super) fn refusal(reason: String) -> String {
+    let conflict = reason.contains("cannot be used with") && reason.contains("--issue") && reason.contains("--prompt");
+    if conflict { TOO_OLD.to_string() } else { reason }
+}
+
 fn flag(name: &str, value: Option<&String>) -> Vec<String> {
     value.map(|value| vec![name.to_string(), value.clone()]).unwrap_or_default()
 }
@@ -150,7 +154,10 @@ impl Plan {
         command.extend(project_args(self.project));
         command.extend(match &self.task {
             Task::Prompt(prompt) => flag("--prompt", Some(prompt)),
-            Task::Issue { key, source } => [flag("--issue", Some(key)), flag("--source", source.as_ref())].concat(),
+            Task::Issue { key, source, prompt } => {
+                [flag("--issue", Some(key)), flag("--source", source.as_ref()), flag("--prompt", prompt.as_ref())]
+                    .concat()
+            }
         });
         command.extend(flag("--worktree", self.branch.as_ref()));
         command.extend(flag("--workspace-name", self.workspace_name.as_ref()));

@@ -47,6 +47,12 @@ fn an_issue_typed_in_the_dialog_is_the_task_and_a_typed_branch_names_the_worktre
 }
 
 #[test]
+fn a_task_typed_beside_an_issue_replaces_the_issue_task() {
+    let plan = plan("Quick", None, None, &task(" Fix the login form ", "ENG-42", "")).expect("plans");
+    assert_eq!(plan.args(), ["flow", "run", "Quick", "--json", "--issue", "ENG-42", "--prompt", "Fix the login form"]);
+}
+
+#[test]
 fn a_start_without_a_task_or_an_issue_is_refused() {
     let refused = plan("Quick", Some(3), None, &task(" ", "", "fix-login"));
     assert_eq!(refused, Err("Say what the team should do, or give an issue.".into()));
@@ -88,46 +94,46 @@ fn a_task_left_as_prefilled_or_emptied_still_runs_on_the_issue() {
     let issue = issue();
     for prompt in [issue.task(), format!(" {} ", issue.task()), String::new()] {
         let plan = plan("Quick", Some(4), Some(&issue), &retold(&prompt, &issue.branch, "")).expect("plans");
-        assert_eq!(plan.task, Task::Issue { key: "#482".into(), source: Some("github".into()) });
+        assert_eq!(plan.task, Task::Issue { key: "#482".into(), source: Some("github".into()), prompt: None });
     }
 }
 
 #[test]
-fn an_edited_task_runs_as_the_prompt_on_the_issue_branch_without_the_issue() {
+fn an_edited_task_runs_on_the_issue_and_leaves_its_untouched_names_to_cornercase() {
     let issue = issue();
-    let typed = retold("Fix #482, test first", &issue.branch, "Returns crash");
+    let typed = retold(" Fix #482, test first ", &issue.branch, &issue.workspace_name());
     let plan = plan("Quick", Some(4), Some(&issue), &typed).expect("plans");
     assert_eq!(
-        plan.args(),
-        [
-            "flow",
-            "run",
-            "Quick",
-            "--json",
-            "--project",
-            "4",
-            "--prompt",
-            "Fix #482, test first",
-            "--worktree",
-            "issue-482-returns-page-crashes",
-            "--focus"
-        ]
+        plan.args()[4..],
+        ["--project", "4", "--issue", "#482", "--source", "github", "--prompt", "Fix #482, test first", "--focus"]
     );
 }
 
 #[test]
-fn an_edited_task_keeps_an_edited_branch_and_an_emptied_one_falls_back_to_the_issue_branch() {
-    let edited = plan("Quick", Some(4), Some(&issue()), &retold("Only the tests", "fix/482", "")).expect("plans");
-    assert_eq!(edited.branch.as_deref(), Some("fix/482"));
-    let emptied = plan("Quick", Some(4), Some(&issue()), &retold("Only the tests", " ", "")).expect("plans");
-    assert_eq!(emptied.branch.as_deref(), Some("issue-482-returns-page-crashes"));
+fn an_edited_task_keeps_an_edited_branch_and_workspace_name() {
+    let plan = plan("Quick", Some(4), Some(&issue()), &retold("Only the tests", "fix/482", "Returns crash"));
+    let plan = plan.expect("plans");
+    assert_eq!(
+        plan.args()[10..],
+        ["--prompt", "Only the tests", "--worktree", "fix/482", "--workspace-name", "Returns crash", "--focus"]
+    );
 }
 
 #[test]
-fn a_task_typed_for_an_issue_whose_task_is_unknown_runs_as_the_prompt() {
+fn a_task_typed_for_an_issue_whose_task_is_unknown_goes_with_the_issue() {
     let issue = IssueTask { prompt: None, ..issue() };
     let plan = plan("Quick", Some(4), Some(&issue), &retold("Fix it", "", "")).expect("plans");
-    assert_eq!(plan.task, Task::Prompt("Fix it".into()));
+    assert_eq!(
+        plan.task,
+        Task::Issue { key: "#482".into(), source: Some("github".into()), prompt: Some("Fix it".into()) }
+    );
+}
+
+#[test]
+fn a_cornercase_that_refuses_a_task_with_an_issue_is_named_too_old() {
+    let clap = "the argument '--issue <KEY>' cannot be used with '--prompt <TEXT>'\n\nUsage: cornercase flow run";
+    assert_eq!(refusal(clap.into()), TOO_OLD);
+    assert_eq!(refusal("no flow named Quick".into()), "no flow named Quick");
 }
 
 #[test]
