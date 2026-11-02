@@ -1,12 +1,15 @@
 mod plan;
+mod project;
 
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    IntoElement, MouseButton, MouseDownEvent, ParentElement as _, Render, Stateful, StatefulInteractiveElement as _,
+    Styled as _, Window, div, px,
 };
 
 pub(crate) use self::plan::{FlowStart, IssueTask};
 use self::plan::{Typed, issue_prompt, plan};
+use self::project::{ProjectChoice, ProjectMenu};
 use super::FlowsPanel;
 use super::actions::announce;
 use super::dialog::{Submit, boxed, buttons, field, filled_field};
@@ -45,8 +48,9 @@ struct Fields {
 
 pub(super) struct StartFlow {
     issue: Option<IssueTask>,
-    projects: Vec<(u64, String)>,
+    projects: Vec<(u64, ProjectChoice)>,
     project: Option<u64>,
+    menu: ProjectMenu,
     flows: Vec<FlowInfo>,
     selected: Option<String>,
     loading: bool,
@@ -71,7 +75,9 @@ impl FlowsPanel {
 fn open(preset: FlowStart, known: Option<Known>, window: &mut Window, cx: &mut App) {
     let store = Store::get(cx);
     let Some(session) = store.read(cx).session.as_ref() else { return };
-    let projects = preset.choices(&session.projects.iter().map(|p| (p.id, p.name.clone())).collect::<Vec<_>>());
+    let open: Vec<_> =
+        session.projects.iter().map(|p| (p.id, ProjectChoice { name: p.name.clone(), path: p.path.clone() })).collect();
+    let projects = preset.choices(&open);
     let project = preset.chosen(&projects, session.shown().project);
     let view = cx.new(|cx| StartFlow::new(preset, (projects, project), known, window, cx));
     let focus = view.read(cx).fields.prompt.read(cx).focus_handle(cx);
@@ -114,7 +120,7 @@ impl Submit for StartFlow {
 impl StartFlow {
     fn new(
         preset: FlowStart,
-        (projects, project): (Vec<(u64, String)>, Option<u64>),
+        (projects, project): (Vec<(u64, ProjectChoice)>, Option<u64>),
         known: Option<Known>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -125,6 +131,7 @@ impl StartFlow {
             issue: preset.issue,
             projects,
             project,
+            menu: ProjectMenu::new(cx),
             flows: known.map(|k| k.flows).unwrap_or_default(),
             selected: None,
             loading: false,
@@ -266,21 +273,6 @@ impl StartFlow {
         cx.notify();
     }
 
-    fn project_choices(&self, cx: &Context<Self>) -> Div {
-        if self.projects.is_empty() {
-            return ui::dim(
-                "Open a git repository's folder as a project first: a flow works in a worktree of its own.",
-            );
-        }
-        let segments = self.projects.iter().map(|(id, name)| {
-            let id = *id;
-            ui::segment(("start-project", id), name.clone(), self.project == Some(id))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_project(id, cx)))
-                .into_any_element()
-        });
-        ui::segments(segments.collect()).flex_wrap()
-    }
-
     fn flow_choices(&self, cx: &Context<Self>) -> Stateful<Div> {
         div()
             .id("start-flows")
@@ -365,7 +357,7 @@ impl StartFlow {
             .flex_col()
             .gap(px(10.))
             .children(self.issue.as_ref().map(|issue| ui::field("Issue", issue_line(issue))))
-            .child(ui::field("Project", self.project_choices(cx)))
+            .child(ui::field("Project", self.project_picker(cx)))
             .child(ui::field("Flow", self.flow_choices(cx)))
             .children(risk.map(error_text))
             .children(self.task_fields(window, cx))
@@ -388,7 +380,7 @@ fn finish(name: &str, focus: bool, started: &Started, cx: &mut App) {
     });
 }
 
-fn issue_line(issue: &IssueTask) -> Div {
+fn fact_line() -> Div {
     div()
         .flex()
         .items_center()
@@ -399,6 +391,10 @@ fn issue_line(issue: &IssueTask) -> Div {
         .bg(colours::panel())
         .border_1()
         .border_color(colours::border())
+}
+
+fn issue_line(issue: &IssueTask) -> Div {
+    fact_line()
         .child(div().flex_none().font_family(FONT_FAMILY).text_color(colours::accent()).child(issue.key.clone()))
         .child(div().flex_1().min_w_0().text_color(colours::soft()).child(ui::one_line(issue.title.clone())))
 }
@@ -413,5 +409,9 @@ impl Render for StartFlow {
             buttons(("start-cancel", "start-run"), (Icon::Play, "Start"), self.busy.then_some("Starting…"), cx),
         )
         .w(px(580.))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|this, _: &MouseDownEvent, window, cx| this.close_projects(window, cx)),
+        )
     }
 }

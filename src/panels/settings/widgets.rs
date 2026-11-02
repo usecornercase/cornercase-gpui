@@ -188,26 +188,13 @@ pub(crate) fn dropdown(
         (false, true) => glass::tint(colours::failed(), 0.45),
         (false, false) => colours::border(),
     };
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .gap(px(8.))
+    ui::menu::dropdown(id, edge)
         .min_w(px(120.))
         .max_w(px(260.))
-        .px(px(10.))
-        .py(px(5.))
-        .rounded(px(radius::CONTROL))
-        .text_size(px(12.))
         .text_color(ink)
-        .bg(colours::hover())
-        .border_1()
-        .border_color(edge)
-        .cursor_pointer()
-        .hover(|s| s.bg(colours::selected()))
         .children(risky.then(|| ui::icon(Icon::Alert, 12.).text_color(colours::failed())))
         .child(div().flex_1().min_w_0().flex().child(ui::one_line(label)))
-        .child(ui::icon(Icon::ChevronDown, 12.).text_color(colours::muted()))
+        .child(ui::menu::chevron())
 }
 
 #[cfg(test)]
