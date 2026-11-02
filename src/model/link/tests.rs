@@ -107,6 +107,13 @@ fn a_web_address_needs_its_scheme_and_a_host() {
 }
 
 #[test]
+fn a_web_address_takes_its_scheme_in_any_case_and_nothing_malformed() {
+    assert!(is_web("HTTPS://github.com/acme") && is_web("Http://[::1]:8080/"));
+    assert!(!is_web("https:///etc/passwd") && !is_web("https://user@:443/") && !is_web("https://a.dev/x y"));
+    assert!(!is_web("https://a.dev/\nx") && !is_web("https:/a.dev") && !is_web("javascript://a.dev/%0aalert(1)"));
+}
+
+#[test]
 fn a_word_that_holds_an_address_names_it() {
     assert_eq!(url_of("http://localhost:5173/").as_deref(), Some("http://localhost:5173/"));
     assert_eq!(url_of("url=https://a.dev/x?y=1#z").as_deref(), Some("https://a.dev/x?y=1#z"));

@@ -126,3 +126,13 @@ fn the_checks_chip_counts_every_check_once_known() {
     };
     assert_eq!((known.checks_said(), Sign::of_checks(known.rollup())), ("1 failed, 2 passed".into(), Sign::Failed));
 }
+
+#[test]
+fn only_a_web_address_opens_from_a_check() {
+    let opens = |url: &str| !CheckLine::of_check(&check("lint", "CI", "failed", url)).url.is_empty();
+    assert!(opens("https://github.com/acme/web-shop/actions/runs/1001/job/2001"));
+    assert!(opens("http://ci.internal:8080/job/7") && opens("HTTPS://gitlab.com/acme/-/jobs/1"));
+    for kept in ["file:///etc/passwd", "javascript:alert(1)", "vscode://open?file=/x", "", "not a link", "https://"] {
+        assert!(!opens(kept), "{kept}");
+    }
+}

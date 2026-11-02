@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use super::{Grid, PaneGrid};
 
-const SCHEMES: [&str; 2] = ["https://", "http://"];
+const SCHEMES: [&str; 2] = ["https", "http"];
 const TRAILING: [&str; 3] = [".", ":", "?"];
 const LOOPBACK: [&str; 4] = ["localhost", "[::1]", "0.0.0.0", "[::]"];
 
@@ -111,7 +111,18 @@ impl Hovered {
 }
 
 pub(crate) fn is_web(url: &str) -> bool {
-    SCHEMES.iter().any(|scheme| url.len() > scheme.len() && url.starts_with(scheme))
+    let Some((scheme, rest)) = url.split_once("://") else { return false };
+    let clean = !url.chars().any(|c| c.is_whitespace() || c.is_control());
+    SCHEMES.iter().any(|known| known.eq_ignore_ascii_case(scheme)) && clean && !host_and_port(rest).0.is_empty()
+}
+
+fn host_and_port(rest: &str) -> (&str, Option<&str>) {
+    let authority = &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())];
+    let authority = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
+    match authority.rsplit_once(':') {
+        Some((host, port)) if !port.contains(']') => (host, Some(port)),
+        _ => (authority, None),
+    }
 }
 
 fn loopback_host(host: &str) -> bool {
@@ -127,11 +138,10 @@ pub(crate) fn loopback_port(url: &str) -> Option<u16> {
         "https" => 443,
         _ => return None,
     };
-    let authority = &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())];
-    let authority = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
-    let (host, port) = match authority.rsplit_once(':') {
-        Some((host, port)) if !port.contains(']') => (host, port.parse().ok()?),
-        _ => (authority, default),
+    let (host, port) = host_and_port(rest);
+    let port = match port {
+        Some(port) => port.parse().ok()?,
+        None => default,
     };
     loopback_host(host).then_some(port)
 }

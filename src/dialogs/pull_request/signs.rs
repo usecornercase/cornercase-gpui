@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use gpui::{Div, Rgba};
 
+use crate::model::link::is_web;
 use crate::model::{Block, Check, Layer, PullRequest};
 use crate::theme::colours;
 use crate::ui::{self, Icon};
@@ -142,7 +143,8 @@ impl CheckLine {
 
     fn of_check(check: &Check) -> Self {
         let sign = Sign::of_outcome(&check.outcome);
-        Self { sign, name: check.name.clone(), workflow: check.workflow.clone(), url: check.url.clone() }
+        let url = if is_web(&check.url) { check.url.clone() } else { String::new() };
+        Self { sign, name: check.name.clone(), workflow: check.workflow.clone(), url }
     }
 
     pub(super) fn text(&self) -> (String, Option<Range<usize>>) {
