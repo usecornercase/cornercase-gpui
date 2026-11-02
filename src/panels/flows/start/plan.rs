@@ -145,7 +145,7 @@ pub(super) fn refusal(reason: String) -> String {
 }
 
 fn flag(name: &str, value: Option<&String>) -> Vec<String> {
-    value.map(|value| vec![name.to_string(), value.clone()]).unwrap_or_default()
+    value.map(|value| vec![format!("{name}={value}")]).unwrap_or_default()
 }
 
 impl Plan {
