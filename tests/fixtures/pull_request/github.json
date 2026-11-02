@@ -1,0 +1,44 @@
+{
+  "workspace": 4,
+  "branch": "feat/x",
+  "pull_request": {
+    "number": 482,
+    "title": "Returns page crashes on an empty address",
+    "url": "https://github.com/acme/web-shop/pull/482",
+    "state": "open",
+    "checks": "failing",
+    "failed": ["tests (ubuntu-24.04)"],
+    "conflicts": false,
+    "base": "main",
+    "provider": "github",
+    "stack": null,
+    "all_checks": [
+      {
+        "name": "tests (ubuntu-24.04)",
+        "workflow": "CI",
+        "outcome": "failed",
+        "url": "https://github.com/acme/web-shop/actions/runs/1001/job/2001"
+      },
+      {
+        "name": "tests (macos-15)",
+        "workflow": "CI",
+        "outcome": "pending",
+        "url": "https://github.com/acme/web-shop/actions/runs/1001/job/2002"
+      },
+      {
+        "name": "lint",
+        "workflow": "CI",
+        "outcome": "passed",
+        "url": "https://github.com/acme/web-shop/actions/runs/1001/job/2003"
+      },
+      { "name": "review-bot", "workflow": "", "outcome": "passed", "url": "" },
+      {
+        "name": "deploy",
+        "workflow": "Pages",
+        "outcome": "skipped",
+        "url": "https://github.com/acme/web-shop/actions/runs/1002/job/2004"
+      }
+    ]
+  },
+  "reason": null
+}

@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 use super::{Session, Workspace};
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(crate) struct PullRequest {
     pub number: u64,
@@ -15,9 +15,28 @@ pub(crate) struct PullRequest {
     pub base: Option<String>,
     pub provider: String,
     pub stack: Option<Stack>,
+    pub all_checks: Option<Vec<Check>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub(crate) struct Check {
+    pub name: String,
+    pub workflow: String,
+    pub outcome: String,
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct PullRequestAnswer {
+    pub workspace: u64,
+    pub branch: Option<String>,
+    pub pull_request: Option<PullRequest>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(crate) struct Stack {
     pub number: u64,
@@ -27,7 +46,7 @@ pub(crate) struct Stack {
     pub layers: Vec<Layer>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(crate) struct Layer {
     pub number: u64,
@@ -53,8 +72,18 @@ pub(crate) struct Rung<'a> {
     pub own: bool,
 }
 
+const OUTCOMES: [&str; 4] = ["failed", "pending", "passed", "skipped"];
+
+const ROLLUPS: [(&str, &str); 3] = [("failed", "failing"), ("pending", "pending"), ("passed", "passing")];
+
 fn settled(state: &str) -> bool {
     matches!(state, "merged" | "closed")
+}
+
+impl Check {
+    fn named(&self) -> String {
+        if self.url.is_empty() { self.name.clone() } else { format!("{} {}", self.name, self.url) }
+    }
 }
 
 impl PullRequest {
@@ -99,7 +128,23 @@ impl PullRequest {
         self.conflicts.then(|| format!("conflicts with {}", self.base_name()))
     }
 
+    pub(crate) fn rollup(&self) -> Option<&str> {
+        let Some(all) = &self.all_checks else { return self.checks.as_deref() };
+        ROLLUPS.into_iter().find(|(outcome, _)| all.iter().any(|c| c.outcome == *outcome)).map(|(_, rollup)| rollup)
+    }
+
+    fn counts(&self, all: &[Check]) -> String {
+        let counted =
+            OUTCOMES.into_iter().map(|outcome| (all.iter().filter(|c| c.outcome == outcome).count(), outcome));
+        let counts: Vec<String> =
+            counted.filter(|(n, _)| *n > 0).map(|(n, outcome)| format!("{n} {outcome}")).collect();
+        if counts.is_empty() { format!("no {}", self.checks_noun()) } else { counts.join(", ") }
+    }
+
     pub(crate) fn checks_said(&self) -> String {
+        if let Some(all) = &self.all_checks {
+            return self.counts(all);
+        }
         match &self.checks {
             Some(checks) => format!("{} {checks}", self.checks_noun()),
             None => format!("no {}", self.checks_noun()),
@@ -114,6 +159,18 @@ impl PullRequest {
         parts.join(" · ")
     }
 
+    fn failed_said(&self) -> Option<String> {
+        let failed: Vec<String> = match &self.all_checks {
+            Some(all) => all.iter().filter(|c| c.outcome == "failed").map(Check::named).collect(),
+            None => self.failed.clone(),
+        };
+        (!failed.is_empty()).then(|| failed.join(", "))
+    }
+
+    fn link_said(&self) -> String {
+        if self.all_checks.is_some() || self.url.is_empty() { String::new() } else { format!(" ({})", self.url) }
+    }
+
     pub(crate) fn problems(&self) -> Option<String> {
         if self.settled() {
             return None;
@@ -122,14 +179,13 @@ impl PullRequest {
         if self.conflicts {
             parts.push(format!("has merge conflicts with {}", self.base_name()));
         }
-        if !self.failed.is_empty() {
-            parts.push(format!("failed its {}: {}", self.checks_noun(), self.failed.join(", ")));
+        if let Some(failed) = self.failed_said() {
+            parts.push(format!("failed its {}: {failed}", self.checks_noun()));
         }
         if parts.is_empty() {
             return None;
         }
-        let link = if self.url.is_empty() { String::new() } else { format!(" ({})", self.url) };
-        Some(format!("{} {}{link} ", self.label(), parts.join(" and ")))
+        Some(format!("{} {}{} ", self.label(), parts.join(" and "), self.link_said()))
     }
 
     pub(crate) fn blocked(&self) -> Option<(&Layer, Block)> {

@@ -1,0 +1,43 @@
+{
+  "workspace": 7,
+  "branch": "feat/returns",
+  "pull_request": {
+    "number": 486,
+    "title": "Refund to the original card",
+    "url": "https://gitlab.com/acme/web-shop/-/merge_requests/486",
+    "state": "open",
+    "checks": "failing",
+    "failed": ["rspec", "pipeline"],
+    "conflicts": true,
+    "base": "main",
+    "provider": "gitlab",
+    "stack": null,
+    "all_checks": [
+      {
+        "name": "rspec",
+        "workflow": "test",
+        "outcome": "failed",
+        "url": "https://gitlab.com/acme/web-shop/-/jobs/81001"
+      },
+      {
+        "name": "pipeline",
+        "workflow": "",
+        "outcome": "failed",
+        "url": "https://gitlab.com/acme/web-shop/-/pipelines/9001"
+      },
+      {
+        "name": "build",
+        "workflow": "build",
+        "outcome": "passed",
+        "url": "https://gitlab.com/acme/web-shop/-/jobs/81000"
+      },
+      {
+        "name": "deploy-review",
+        "workflow": "deploy",
+        "outcome": "skipped",
+        "url": "https://gitlab.com/acme/web-shop/-/jobs/81002"
+      }
+    ]
+  },
+  "reason": null
+}

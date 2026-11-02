@@ -57,18 +57,72 @@ fn its_own_layer_shows_its_own_checks_rather_than_the_stack_rollup() {
     assert_eq!(layer_sign(&pull, &layer(483, "merged", Some("failing")), false), Sign::Quiet);
 }
 
+fn said(lines: &[CheckLine]) -> Vec<(Sign, &str)> {
+    lines.iter().map(|line| (line.sign, line.name.as_str())).collect()
+}
+
+fn check(name: &str, workflow: &str, outcome: &str, url: &str) -> Check {
+    Check { name: name.into(), workflow: workflow.into(), outcome: outcome.into(), url: url.into() }
+}
+
 #[test]
-fn failed_checks_are_listed_by_name() {
+fn before_every_check_is_known_failed_checks_are_listed_by_name() {
     let failing = PullRequest { failed: vec!["test".into(), "clippy".into()], ..pr("open", Some("failing")) };
-    let names: Vec<String> = check_lines(&failing).into_iter().map(|(_, name)| name).collect();
-    assert_eq!(names, ["test", "clippy"]);
+    assert_eq!(said(&check_lines(&failing)), [(Sign::Failed, "test"), (Sign::Failed, "clippy")]);
 }
 
 #[test]
 fn without_failures_one_line_says_how_the_checks_went() {
-    assert_eq!(check_lines(&pr("open", Some("pending"))), [(Sign::Pending, "Checks are running".to_string())]);
-    assert_eq!(check_lines(&pr("open", Some("passing"))), [(Sign::Passed, "Every check passed".to_string())]);
-    assert_eq!(check_lines(&pr("open", None)), [(Sign::Quiet, "No checks".to_string())]);
+    assert_eq!(said(&check_lines(&pr("open", Some("pending")))), [(Sign::Pending, "Checks are running")]);
+    assert_eq!(said(&check_lines(&pr("open", Some("passing")))), [(Sign::Passed, "Every check passed")]);
+    assert_eq!(said(&check_lines(&pr("open", None))), [(Sign::Quiet, "No checks")]);
     let gitlab = PullRequest { provider: "gitlab".into(), ..pr("open", Some("passing")) };
-    assert_eq!(check_lines(&gitlab), [(Sign::Passed, "The pipeline passed".to_string())]);
+    assert_eq!(said(&check_lines(&gitlab)), [(Sign::Passed, "The pipeline passed")]);
+}
+
+#[test]
+fn every_check_is_listed_in_the_order_given_with_its_sign_and_link() {
+    let all = vec![
+        check("tests", "CI", "failed", "https://x/1"),
+        check("build", "CI", "pending", "https://x/2"),
+        check("review-bot", "", "passed", ""),
+        check("deploy", "Pages", "skipped", "https://x/3"),
+    ];
+    let known = PullRequest { failed: vec!["other".into()], all_checks: Some(all), ..pr("open", Some("failing")) };
+    let lines = check_lines(&known);
+    assert_eq!(
+        said(&lines),
+        [(Sign::Failed, "tests"), (Sign::Pending, "build"), (Sign::Passed, "review-bot"), (Sign::Quiet, "deploy")]
+    );
+    let urls: Vec<&str> = lines.iter().map(|line| line.url.as_str()).collect();
+    assert_eq!(urls, ["https://x/1", "https://x/2", "", "https://x/3"]);
+}
+
+#[test]
+fn a_check_line_mutes_its_workflow_after_its_name() {
+    let line = CheckLine::of_check(&check("tests (macos-15)", "CI", "failed", ""));
+    let (text, muted) = line.text();
+    assert_eq!(text, "tests (macos-15)  CI");
+    assert_eq!(muted.map(|range| &text[range]), Some("CI"));
+    assert_eq!(CheckLine::of_check(&check("review-bot", "", "passed", "")).text(), ("review-bot".into(), None));
+}
+
+#[test]
+fn an_empty_list_says_there_are_no_checks() {
+    let none =
+        PullRequest { failed: vec!["stale".into()], all_checks: Some(Vec::new()), ..pr("open", Some("failing")) };
+    assert_eq!(said(&check_lines(&none)), [(Sign::Quiet, "No checks")]);
+}
+
+#[test]
+fn the_checks_chip_counts_every_check_once_known() {
+    let known = PullRequest {
+        all_checks: Some(vec![
+            check("a", "", "failed", ""),
+            check("b", "", "passed", ""),
+            check("c", "", "passed", ""),
+        ]),
+        ..pr("open", Some("pending"))
+    };
+    assert_eq!((known.checks_said(), Sign::of_checks(known.rollup())), ("1 failed, 2 passed".into(), Sign::Failed));
 }
