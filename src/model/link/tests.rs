@@ -177,3 +177,25 @@ fn a_loopback_address_takes_its_scheme_and_host_in_any_case() {
     assert_eq!(loopback_port("Https://APP.LOCALHOST/"), Some(443));
     assert!(is_web("HTTP://LOCALHOST:3000") && is_loopback("HTTP://LOCALHOST:3000"));
 }
+
+#[test]
+fn every_form_a_browser_reads_as_this_machine_is_loopback() {
+    let forms = [
+        ("HTTP://%6cocalhost:3000/", 3000),
+        ("http://localhost.:3000/", 3000),
+        ("http://127.1:8000", 8000),
+        ("http://0x7f.0.0.1/", 80),
+        ("http://2130706433:5173", 5173),
+        ("http://[0:0:0:0:0:0:0:1]:3000", 3000),
+        ("http://[::ffff:127.0.0.1]:3000", 3000),
+    ];
+    for (url, port) in forms {
+        assert_eq!(loopback_port(url), Some(port), "{url}");
+    }
+    assert_eq!(loopback_port("http://%6cocalhost.example.com/"), None);
+}
+
+#[test]
+fn an_address_written_in_capitals_is_found_in_the_text() {
+    assert_eq!(url_of("url=HTTP://LOCALHOST:3000/").as_deref(), Some("HTTP://LOCALHOST:3000/"));
+}
