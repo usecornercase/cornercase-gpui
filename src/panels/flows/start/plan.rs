@@ -62,12 +62,12 @@ impl FlowStart {
         Self { project, ..Self::default() }
     }
 
-    pub(super) fn choices(&self, open: &[(u64, String)]) -> Vec<(u64, String)> {
+    pub(super) fn choices<T: Clone>(&self, open: &[(u64, T)]) -> Vec<(u64, T)> {
         let allowed = |id: &u64| self.projects.as_ref().is_none_or(|only| only.contains(id));
         open.iter().filter(|(id, _)| allowed(id)).cloned().collect()
     }
 
-    pub(super) fn chosen(&self, choices: &[(u64, String)], shown: Option<u64>) -> Option<u64> {
+    pub(super) fn chosen<T>(&self, choices: &[(u64, T)], shown: Option<u64>) -> Option<u64> {
         let listed = |id: &u64| choices.iter().any(|(choice, _)| choice == id);
         let wanted = self.project.filter(listed);
         if self.projects.is_some() {

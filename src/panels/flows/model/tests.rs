@@ -70,6 +70,19 @@ fn reads_message_frames() {
 }
 
 #[test]
+fn a_started_run_is_shown_on_its_orchestrator_tab() {
+    let started: Started = serde_json::from_str(crate::test_util::fixture!("flows/started.json")).expect("started");
+    assert_eq!((started.run, started.workspace, started.branch.as_str()), (11, 10, "check-where-the-view-goes"));
+    assert_eq!(started.place(), ("tab", 15));
+}
+
+#[test]
+fn a_started_run_without_members_is_shown_by_its_workspace() {
+    let started: Started = serde_json::from_str(r#"{"run":2,"workspace":5,"branch":"b"}"#).expect("started");
+    assert_eq!(started.place(), ("workspace", 5));
+}
+
+#[test]
 fn reads_run_files() {
     let text = r#"{"workspace":3,"run":7,"dir":"/r","files":[{"name":"review.md","path":"/r/review.md","bytes":2048,"modified":"2026-10-18T09:24:00.000Z"}],"more":false}"#;
     let files = parse_files(text).expect("files");
