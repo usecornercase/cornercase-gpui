@@ -8,7 +8,7 @@ use gpui::{
 };
 
 pub(crate) use self::plan::{FlowStart, IssueTask};
-use self::plan::{Typed, issue_prompt, plan};
+use self::plan::{Typed, issue_prompt, plan, refusal};
 use self::project::{ProjectChoice, ProjectMenu};
 use super::FlowsPanel;
 use super::actions::announce;
@@ -25,8 +25,6 @@ const CHOICE: f32 = 30.;
 const TEAM_NOTE: &str =
     "One tab per role in a new worktree, the orchestrator first; every agent starts without permission prompts.";
 const ISSUE_NOTE: &str = "The task starts as the issue's, through settings' prompt template.";
-const RENAMED: &str =
-    "With an edited task, the workspace is named after its branch: needs usecornercase/cornercase-terminal#573.";
 
 enum IssueRead {
     Done,
@@ -95,7 +93,7 @@ impl Fields {
         };
         Self {
             prompt: filled_field(task_hint, &task, cx, window),
-            issue: field("#482, sc-48, ENG-42 or its URL (optional, instead of the task)", cx, window),
+            issue: field("#482, sc-48, ENG-42 or its URL (optional; a task above replaces its own)", cx, window),
             branch: filled_field(hint, &branch, cx, window),
             workspace: filled_field("The issue's key and title", &workspace, cx, window),
         }
@@ -252,7 +250,7 @@ impl StartFlow {
         self.busy = false;
         match result.and_then(|out| Ok(serde_json::from_str::<Started>(&out)?)) {
             Ok(started) => finish(name, focus, &started, cx),
-            Err(e) => self.error = Some(cli::reason(&e)),
+            Err(e) => self.error = Some(refusal(cli::reason(&e))),
         }
         cx.notify();
     }
@@ -314,10 +312,10 @@ impl StartFlow {
 
     fn task_fields(&self, window: &Window, cx: &App) -> Vec<Div> {
         let fields = &self.fields;
-        let branch = ui::field("Branch", boxed(&fields.branch, window, cx));
+        let (task, branch) = (self.task_field(window, cx), ui::field("Branch", boxed(&fields.branch, window, cx)));
         match &self.issue {
-            Some(issue) => vec![self.task_field(window, cx), branch, self.workspace_field(issue, window, cx)],
-            None => vec![self.task_field(window, cx), ui::field("Issue", boxed(&fields.issue, window, cx)), branch],
+            Some(_) => vec![task, branch, ui::field("Workspace name", boxed(&fields.workspace, window, cx))],
+            None => vec![task, ui::field("Issue", boxed(&fields.issue, window, cx)), branch],
         }
     }
 
@@ -328,13 +326,6 @@ impl StartFlow {
             IssueRead::Reading => field.child(ui::busy("start-issue-reading", "Reading the issue's task…")),
             IssueRead::Failed(why) => field.child(error_text(format!("The issue's task could not be read: {why}"))),
         }
-    }
-
-    fn workspace_field(&self, issue: &IssueTask, window: &Window, cx: &App) -> Div {
-        if issue.edited(&self.fields.prompt.read(cx).text()).is_some() {
-            return ui::field("Workspace name", ui::dim(RENAMED));
-        }
-        ui::field("Workspace name", boxed(&self.fields.workspace, window, cx))
     }
 
     fn focus_checkbox(&self, cx: &Context<Self>) -> Stateful<Div> {
