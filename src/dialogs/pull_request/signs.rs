@@ -1,6 +1,9 @@
+use std::ops::Range;
+
 use gpui::{Div, Rgba};
 
-use crate::model::{Block, Layer, PullRequest};
+use crate::model::link::is_web;
+use crate::model::{Block, Check, Layer, PullRequest};
 use crate::theme::colours;
 use crate::ui::{self, Icon};
 
@@ -19,6 +22,15 @@ impl Sign {
             Some("failing") => Self::Failed,
             Some("pending") => Self::Pending,
             Some("passing") => Self::Passed,
+            _ => Self::Quiet,
+        }
+    }
+
+    fn of_outcome(outcome: &str) -> Self {
+        match outcome {
+            "failed" => Self::Failed,
+            "pending" => Self::Pending,
+            "passed" => Self::Passed,
             _ => Self::Quiet,
         }
     }
@@ -99,7 +111,7 @@ pub(super) fn state_chip(pr: &PullRequest) -> Div {
 }
 
 pub(super) fn checks_chip(pr: &PullRequest) -> Div {
-    let sign = Sign::of_checks(pr.checks.as_deref());
+    let sign = Sign::of_checks(pr.rollup());
     if pr.settled() || sign == Sign::Quiet {
         return ui::quiet_chip(pr.checks_said());
     }
@@ -116,12 +128,44 @@ fn rollup_line(sign: Sign, gitlab: bool) -> &'static str {
     if gitlab { on_gitlab } else { on_github }
 }
 
-pub(super) fn check_lines(pr: &PullRequest) -> Vec<(Sign, String)> {
-    if !pr.failed.is_empty() {
-        return pr.failed.iter().map(|name| (Sign::Failed, name.clone())).collect();
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct CheckLine {
+    pub sign: Sign,
+    pub name: String,
+    pub workflow: String,
+    pub url: String,
+}
+
+impl CheckLine {
+    fn said(sign: Sign, name: impl Into<String>) -> Self {
+        Self { sign, name: name.into(), workflow: String::new(), url: String::new() }
     }
-    let sign = Sign::of_checks(pr.checks.as_deref());
-    vec![(sign, rollup_line(sign, pr.on_gitlab()).to_string())]
+
+    fn of_check(check: &Check) -> Self {
+        let sign = Sign::of_outcome(&check.outcome);
+        let url = if is_web(&check.url) { check.url.clone() } else { String::new() };
+        Self { sign, name: check.name.clone(), workflow: check.workflow.clone(), url }
+    }
+
+    pub(super) fn text(&self) -> (String, Option<Range<usize>>) {
+        if self.workflow.is_empty() {
+            return (self.name.clone(), None);
+        }
+        let text = format!("{}  {}", self.name, self.workflow);
+        let muted = text.len() - self.workflow.len()..text.len();
+        (text, Some(muted))
+    }
+}
+
+pub(super) fn check_lines(pr: &PullRequest) -> Vec<CheckLine> {
+    if let Some(all) = pr.all_checks.as_ref().filter(|all| !all.is_empty()) {
+        return all.iter().map(CheckLine::of_check).collect();
+    }
+    if pr.all_checks.is_none() && !pr.failed.is_empty() {
+        return pr.failed.iter().map(|name| CheckLine::said(Sign::Failed, name.clone())).collect();
+    }
+    let sign = Sign::of_checks(pr.rollup());
+    vec![CheckLine::said(sign, rollup_line(sign, pr.on_gitlab()))]
 }
 
 #[cfg(test)]

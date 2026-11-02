@@ -1,12 +1,10 @@
-use std::net::Ipv4Addr;
-
 use serde::Deserialize;
+use url::{Host, Url};
 
 use super::{Grid, PaneGrid};
 
-const SCHEMES: [&str; 2] = ["https://", "http://"];
+const SCHEMES: [&str; 2] = ["https", "http"];
 const TRAILING: [&str; 3] = [".", ":", "?"];
-const LOOPBACK: [&str; 4] = ["localhost", "[::1]", "0.0.0.0", "[::]"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub(crate) struct Lines {
@@ -111,29 +109,45 @@ impl Hovered {
 }
 
 pub(crate) fn is_web(url: &str) -> bool {
-    SCHEMES.iter().any(|scheme| url.len() > scheme.len() && url.starts_with(scheme))
+    let Some((scheme, rest)) = url.split_once("://") else { return false };
+    let clean = !url.chars().any(|c| c.is_whitespace() || c.is_control());
+    let named = SCHEMES.iter().any(|known| known.eq_ignore_ascii_case(scheme));
+    named && clean && !written_host(rest).is_empty() && web_host(url).is_some()
 }
 
-fn loopback_host(host: &str) -> bool {
-    LOOPBACK.contains(&host)
-        || host.ends_with(".localhost")
-        || host.parse::<Ipv4Addr>().is_ok_and(|ip| ip.is_loopback())
+fn written_host(rest: &str) -> &str {
+    let authority = &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())];
+    let authority = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
+    match authority.rsplit_once(':') {
+        Some((host, port)) if !port.contains(']') => host,
+        _ => authority,
+    }
+}
+
+fn web_host(url: &str) -> Option<(Host<String>, u16)> {
+    let parsed = Url::parse(url).ok()?;
+    let port = parsed.port_or_known_default()?;
+    let host = parsed.host()?.to_owned();
+    SCHEMES.contains(&parsed.scheme()).then_some((host, port))
+}
+
+fn loopback_host(host: &Host<String>) -> bool {
+    match host {
+        Host::Domain(name) => {
+            let name = name.trim_end_matches('.');
+            name == "localhost" || name.ends_with(".localhost")
+        }
+        Host::Ipv4(ip) => ip.is_loopback() || ip.is_unspecified(),
+        Host::Ipv6(ip) => {
+            let mapped = ip.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback() || v4.is_unspecified());
+            ip.is_loopback() || ip.is_unspecified() || mapped
+        }
+    }
 }
 
 pub(crate) fn loopback_port(url: &str) -> Option<u16> {
-    let (scheme, rest) = url.split_once("://")?;
-    let default = match scheme {
-        "http" => 80,
-        "https" => 443,
-        _ => return None,
-    };
-    let authority = &rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())];
-    let authority = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
-    let (host, port) = match authority.rsplit_once(':') {
-        Some((host, port)) if !port.contains(']') => (host, port.parse().ok()?),
-        _ => (authority, default),
-    };
-    loopback_host(host).then_some(port)
+    let (host, port) = web_host(url)?;
+    loopback_host(&host).then_some(port)
 }
 
 pub(crate) fn is_loopback(url: &str) -> bool {
@@ -141,7 +155,8 @@ pub(crate) fn is_loopback(url: &str) -> bool {
 }
 
 pub(crate) fn url_in(cells: &[&str], start: usize, end: usize) -> Option<(usize, usize)> {
-    let starts = |at: &usize| cells.get(*at) == Some(&"h") && is_web(&text_between(cells, *at, end));
+    let scheme = |at: &usize| cells.get(*at).is_some_and(|cell| cell.eq_ignore_ascii_case("h"));
+    let starts = |at: &usize| scheme(at) && is_web(&text_between(cells, *at, end));
     let from = (start..end).find(starts)?;
     let to = (from..end).rev().find(|at| cells.get(*at).is_some_and(|cell| !TRAILING.contains(cell)))? + 1;
     is_web(&text_between(cells, from, to)).then_some((from, to))

@@ -107,6 +107,13 @@ fn a_web_address_needs_its_scheme_and_a_host() {
 }
 
 #[test]
+fn a_web_address_takes_its_scheme_in_any_case_and_nothing_malformed() {
+    assert!(is_web("HTTPS://github.com/acme") && is_web("Http://[::1]:8080/"));
+    assert!(!is_web("https:///etc/passwd") && !is_web("https://user@:443/") && !is_web("https://a.dev/x y"));
+    assert!(!is_web("https://a.dev/\nx") && !is_web("https:/a.dev") && !is_web("javascript://a.dev/%0aalert(1)"));
+}
+
+#[test]
 fn a_word_that_holds_an_address_names_it() {
     assert_eq!(url_of("http://localhost:5173/").as_deref(), Some("http://localhost:5173/"));
     assert_eq!(url_of("url=https://a.dev/x?y=1#z").as_deref(), Some("https://a.dev/x?y=1#z"));
@@ -162,4 +169,33 @@ fn an_address_of_this_machines_own_servers_is_loopback() {
     for url in elsewhere.into_iter().chain(["file:///tmp/x", "http://user@example.com/"]) {
         assert!(!is_loopback(url), "{url}");
     }
+}
+
+#[test]
+fn a_loopback_address_takes_its_scheme_and_host_in_any_case() {
+    assert_eq!(loopback_port("HTTP://LocalHost:5173/"), Some(5173));
+    assert_eq!(loopback_port("Https://APP.LOCALHOST/"), Some(443));
+    assert!(is_web("HTTP://LOCALHOST:3000") && is_loopback("HTTP://LOCALHOST:3000"));
+}
+
+#[test]
+fn every_form_a_browser_reads_as_this_machine_is_loopback() {
+    let forms = [
+        ("HTTP://%6cocalhost:3000/", 3000),
+        ("http://localhost.:3000/", 3000),
+        ("http://127.1:8000", 8000),
+        ("http://0x7f.0.0.1/", 80),
+        ("http://2130706433:5173", 5173),
+        ("http://[0:0:0:0:0:0:0:1]:3000", 3000),
+        ("http://[::ffff:127.0.0.1]:3000", 3000),
+    ];
+    for (url, port) in forms {
+        assert_eq!(loopback_port(url), Some(port), "{url}");
+    }
+    assert_eq!(loopback_port("http://%6cocalhost.example.com/"), None);
+}
+
+#[test]
+fn an_address_written_in_capitals_is_found_in_the_text() {
+    assert_eq!(url_of("url=HTTP://LOCALHOST:3000/").as_deref(), Some("HTTP://LOCALHOST:3000/"));
 }

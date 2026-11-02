@@ -29,6 +29,7 @@ fn rewriting_moves_the_url_to_the_local_end_and_keeps_the_rest() {
     assert_eq!(rewrite("http://localhost:3000/a/b?c=1#d", 61234), "http://localhost:61234/a/b?c=1#d");
     assert_eq!(rewrite("https://127.0.0.1:8443", 8443), "https://localhost:8443");
     assert_eq!(rewrite("http://[::1]:3000/x", 61234), "http://localhost:61234/x");
+    assert_eq!(rewrite("HTTP://%6cocalhost:3000/x", 61234), "HTTP://localhost:61234/x");
 }
 
 #[test]
