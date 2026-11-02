@@ -377,11 +377,12 @@ impl StartFlow {
 
 fn finish(name: &str, focus: bool, started: &Started, cx: &mut App) {
     announce(started.note.as_deref(), format!("Started {name} on {}", started.branch), cx);
-    let workspace = started.workspace;
+    let (workspace, (kind, id)) = (started.workspace, started.place());
     Store::get(cx).update(cx, |s, cx| {
         s.close_dialog(cx);
         s.run_started(workspace, cx);
         if focus {
+            s.focus(kind, id);
             s.show_run(cx);
         }
     });

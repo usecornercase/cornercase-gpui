@@ -393,6 +393,19 @@ pub(crate) struct Started {
     pub workspace: u64,
     pub branch: String,
     pub note: Option<String>,
+    pub members: Vec<StartedMember>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub(crate) struct StartedMember {
+    pub tab: u64,
+}
+
+impl Started {
+    pub(crate) fn place(&self) -> (&'static str, u64) {
+        self.members.first().map_or(("workspace", self.workspace), |first| ("tab", first.tab))
+    }
 }
 
 pub(crate) fn same_name(a: &str, b: &str) -> bool {
