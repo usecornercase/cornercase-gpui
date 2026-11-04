@@ -17,6 +17,7 @@ const ACTIVE_PORT: &str = "DevToolsActivePort";
 const OWNER: &str = "cornercase-owner";
 const PORT_FILE: &str = "cornercase-port";
 const SAID: &str = "cornercase-chrome.log";
+const SNAP_BIN: &str = "/snap/bin";
 const START_WAIT: Duration = Duration::from_secs(20);
 const POLL: Duration = Duration::from_millis(100);
 
@@ -126,18 +127,30 @@ fn snap_of(exe: &Path) -> Option<String> {
     if let Ok(file) = fs::File::open(&real) {
         let _ = file.take(4096).read_to_end(&mut head);
     }
-    snap_name(exe, &real, &head)
+    let command = snap_command(exe, &real, &head)?;
+    let link = fs::read_link(Path::new(SNAP_BIN).join(&command)).ok();
+    snap_name(&command, link.as_deref())
 }
 
-fn snap_name(exe: &Path, real: &Path, head: &[u8]) -> Option<String> {
-    let snap = |command: &str| command.split('.').next().filter(|name| !name.is_empty()).map(str::to_string);
-    if exe.starts_with("/snap/") || real.file_name().is_some_and(|name| name == "snap") {
-        return snap(exe.file_name()?.to_str()?);
+fn snap_command(exe: &Path, real: &Path, head: &[u8]) -> Option<String> {
+    if exe.starts_with(SNAP_BIN) || real.file_name().is_some_and(|name| name == "snap") {
+        return exe.file_name()?.to_str().map(str::to_string);
     }
     let script = String::from_utf8_lossy(head.strip_prefix(b"#!")?);
-    let after = script.split("/snap/bin/").nth(1)?;
-    let command: String = after.chars().take_while(|c| c.is_ascii_alphanumeric() || "-._".contains(*c)).collect();
-    snap(&command)
+    script.lines().find_map(runs_snap)
+}
+
+fn runs_snap(line: &str) -> Option<String> {
+    let mut words = line.split_whitespace().map(|word| word.trim_matches(['"', '\'']));
+    let first = words.next()?;
+    let program = if first == "exec" { words.next()? } else { first };
+    let command = Path::new(program).strip_prefix(SNAP_BIN).ok()?.to_str()?;
+    (!command.is_empty() && !command.contains('/')).then(|| command.to_string())
+}
+
+fn snap_name(command: &str, link: Option<&Path>) -> Option<String> {
+    let alias = link.filter(|target| target.parent() == Some(Path::new(""))).and_then(Path::to_str);
+    alias.unwrap_or(command).split('.').next().filter(|name| !name.is_empty()).map(str::to_string)
 }
 
 pub(crate) fn args(os: Os, profile: &Path, port: u16) -> Vec<String> {

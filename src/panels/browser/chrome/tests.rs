@@ -35,15 +35,34 @@ fn chrome_never_asks_for_the_keychain_or_the_keyring() {
 #[test]
 fn a_snap_is_known_by_its_command_or_by_the_script_that_runs_it() {
     let snap = Path::new("/usr/bin/snap");
-    assert_eq!(snap_name(Path::new("/snap/bin/chromium"), snap, b"\x7fELF"), Some("chromium".into()));
-    assert_eq!(snap_name(Path::new("/home/me/bin/chromium.chromedriver"), snap, b""), Some("chromium".into()));
+    let command = |exe: &str, real: &Path, head: &[u8]| snap_command(Path::new(exe), real, head);
+    assert_eq!(command("/snap/bin/chromium", snap, b"\x7fELF").as_deref(), Some("chromium"));
+    assert_eq!(command("/home/me/bin/chromium.chromedriver", snap, b"").as_deref(), Some("chromium.chromedriver"));
     let wrapper = b"#!/bin/sh\nif ! [ -x /snap/bin/chromium ]; then exit 1; fi\nexec /snap/bin/chromium \"$@\"\n";
     let real = Path::new("/usr/bin/chromium-browser");
-    assert_eq!(snap_name(real, real, wrapper), Some("chromium".into()));
+    assert_eq!(command("/usr/bin/chromium-browser", real, wrapper).as_deref(), Some("chromium"));
+    assert_eq!(command("/usr/bin/x", real, b"#!/bin/sh\n  \"/snap/bin/brave\" \"$@\"\n").as_deref(), Some("brave"));
     let debian = Path::new("/usr/lib/chromium/chromium");
-    assert_eq!(snap_name(Path::new("/usr/bin/chromium"), debian, b"\x7fELF"), None);
+    assert_eq!(command("/usr/bin/chromium", debian, b"\x7fELF"), None);
     let plain_script = b"#!/bin/sh\nexec /usr/lib/chromium/chromium \"$@\"\n";
-    assert_eq!(snap_name(real, real, plain_script), None);
+    assert_eq!(command("/usr/bin/chromium-browser", real, plain_script), None);
+}
+
+#[test]
+fn a_script_that_only_checks_for_a_snap_runs_its_own_browser() {
+    let real = Path::new("/usr/local/bin/chromium");
+    let script = b"#!/bin/sh\nif [ -x /snap/bin/chromium ]; then echo 'the snap is here too' >&2; fi\n\
+                   exec /usr/lib/chromium/chromium \"$@\"\n";
+    assert_eq!(snap_command(real, real, script), None);
+}
+
+#[test]
+fn a_snap_is_named_by_its_command_or_by_the_command_its_alias_points_to() {
+    assert_eq!(snap_name("chromium", Some(Path::new("/usr/bin/snap"))).as_deref(), Some("chromium"));
+    assert_eq!(snap_name("chromium.chromedriver", None).as_deref(), Some("chromium"));
+    assert_eq!(snap_name("google-chrome", Some(Path::new("chromium"))).as_deref(), Some("chromium"));
+    assert_eq!(snap_name("chromedriver", Some(Path::new("chromium.chromedriver"))).as_deref(), Some("chromium"));
+    assert_eq!(snap_name("", None), None);
 }
 
 #[test]
