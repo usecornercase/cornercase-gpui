@@ -121,14 +121,57 @@ pub(super) fn argv(exec: &str, path: &Path, out: &Path, size: u32) -> Option<Vec
     (!argv.is_empty()).then_some(argv)
 }
 
-fn glob_matches(glob: &str, name: &str) -> bool {
-    match glob.strip_prefix('*') {
-        Some(suffix) if !suffix.contains(['*', '?', '[']) => name.ends_with(suffix),
-        _ => glob == name,
+enum Token {
+    Star,
+    One(usize),
+    Miss,
+}
+
+fn token(glob: &[char], c: char) -> Token {
+    let literal = |len: usize, wanted: char| if wanted == c { Token::One(len) } else { Token::Miss };
+    match glob {
+        [] => Token::Miss,
+        ['*', ..] => Token::Star,
+        ['?', ..] => Token::One(1),
+        ['[', ..] => bracket(glob, c).unwrap_or_else(|| literal(1, '[')),
+        ['\\', escaped, ..] => literal(2, *escaped),
+        [wanted, ..] => literal(1, *wanted),
     }
 }
 
-fn glob_line<'a>(line: &'a str, name: &str, lower: &str) -> Option<(u32, usize, &'a str)> {
+fn bracket(glob: &[char], c: char) -> Option<Token> {
+    let negated = matches!(glob.get(1), Some('!' | '^'));
+    let start = if negated { 2 } else { 1 };
+    let close = start + 1 + glob.get(start + 1..)?.iter().position(|&ch| ch == ']')?;
+    let hit = in_set(glob.get(start..close)?, c) != negated;
+    Some(if hit { Token::One(close + 1) } else { Token::Miss })
+}
+
+fn in_set(set: &[char], c: char) -> bool {
+    match set {
+        [] => false,
+        [low, '-', high, rest @ ..] => (*low..=*high).contains(&c) || in_set(rest, c),
+        [one, rest @ ..] => *one == c || in_set(rest, c),
+    }
+}
+
+fn glob_matches(glob: &str, name: &[char]) -> bool {
+    let glob: Vec<char> = glob.chars().collect();
+    let (mut at, mut n, mut star) = (0, 0, None);
+    while let Some(&c) = name.get(n) {
+        match token(glob.get(at..).unwrap_or_default(), c) {
+            Token::Star => (star, at) = (Some((at + 1, n)), at + 1),
+            Token::One(len) => (at, n) = (at + len, n + 1),
+            Token::Miss => {
+                let Some((after, from)) = star else { return false };
+                (at, n, star) = (after, from + 1, Some((after, from + 1)));
+            }
+        }
+    }
+    glob.get(at..).unwrap_or_default().iter().all(|&c| c == '*')
+}
+
+fn glob_line<'a>(line: &'a str, name: &[char], lower: &[char]) -> Option<(u32, usize, &'a str)> {
     let mut parts = line.split(':');
     let weight: u32 = parts.next()?.parse().ok()?;
     let (mime, glob) = (parts.next()?, parts.next()?);
@@ -141,8 +184,9 @@ fn glob_line<'a>(line: &'a str, name: &str, lower: &str) -> Option<(u32, usize, 
 }
 
 pub(super) fn mime_of(name: &str, globs: &str) -> Option<String> {
-    let lower = name.to_lowercase();
-    let matches = globs.lines().filter(|line| !line.starts_with('#')).filter_map(|line| glob_line(line, name, &lower));
+    let (exact, lower): (Vec<char>, Vec<char>) = (name.chars().collect(), name.to_lowercase().chars().collect());
+    let lines = globs.lines().filter(|line| !line.starts_with('#'));
+    let matches = lines.filter_map(|line| glob_line(line, &exact, &lower));
     matches.max_by_key(|(weight, len, _)| (*weight, *len)).map(|(_, _, mime)| mime.to_string())
 }
 

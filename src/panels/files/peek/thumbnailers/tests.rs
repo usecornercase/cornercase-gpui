@@ -64,6 +64,37 @@ fn the_type_comes_from_the_longest_glob_of_the_highest_weight() {
 }
 
 #[test]
+fn globs_match_as_fnmatch_does() {
+    let cases = [
+        ("*.anim[1-9j]", "clip.anim5", true),
+        ("*.anim[1-9j]", "clip.animj", true),
+        ("*.anim[1-9j]", "clip.anim0", false),
+        ("*.[!a-z]", "page.1", true),
+        ("*.[!a-z]", "page.x", false),
+        ("[]x]", "]", true),
+        ("README*", "README.md", true),
+        ("*.?z", "a.gz", true),
+        ("*.?z", "a.z", false),
+        ("*a*b*c", "xaybzbc", true),
+        ("a[b", "a[b", true),
+        ("\\*", "*", true),
+        ("\\*", "x", false),
+        ("*", "", true),
+        ("Makefile", "Makefile.am", false),
+    ];
+    for (glob, name, expected) in cases {
+        assert_eq!(glob_matches(glob, &name.chars().collect::<Vec<char>>()), expected, "{glob} against {name}");
+    }
+}
+
+#[test]
+fn a_type_is_found_by_any_glob_shared_mime_info_writes() {
+    let globs = "50:video/x-anim:*.anim[1-9j]\n50:text/x-readme:README*\n";
+    assert_eq!(mime_of("clip.ANIM5", globs).as_deref(), Some("video/x-anim"));
+    assert_eq!(mime_of("README.first", globs).as_deref(), Some("text/x-readme"));
+}
+
+#[test]
 fn the_first_thumbnailer_for_the_type_that_can_run_is_picked() {
     let all = [parse(EVINCE).expect("an entry"), parse(FFMPEG).expect("an entry")];
     assert_eq!(pick(&all, "video/mp4", &|_| true), all.get(1));
