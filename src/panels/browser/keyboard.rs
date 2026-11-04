@@ -173,14 +173,27 @@ pub(crate) fn commands(ks: &Keystroke) -> Vec<&'static str> {
     COMMANDS.iter().find(|(c, _)| *c == chord).map(|(_, names)| names.split(' ').collect()).unwrap_or_default()
 }
 
+fn alt_gr(ks: &Keystroke, os: Os) -> bool {
+    let m = ks.modifiers;
+    let typed = ks.key_char.as_deref().and_then(single).filter(|c| !c.is_control());
+    os == Os::Windows
+        && m.control
+        && m.alt
+        && !m.platform
+        && typed.is_some_and(|c| !c.to_lowercase().eq(ks.key.to_lowercase().chars()))
+}
+
 pub(crate) fn route(ks: &Keystroke, held: bool, os: Os) -> Route {
     let m = ks.modifiers;
     let meta = m.alt && os != Os::Mac;
+    if alt_gr(ks, os) {
+        return Route::Text;
+    }
     if m.platform || m.control || m.function || meta || named(&ks.key).is_some() {
         return Route::Key;
     }
     match ks.key_char.as_deref().filter(|t| !t.is_empty()) {
-        Some(text) if held => Route::Repeat(text.to_string()),
+        Some(text) if held && os != Os::Windows => Route::Repeat(text.to_string()),
         _ => Route::Text,
     }
 }
@@ -217,6 +230,7 @@ pub(crate) fn key_down(ks: &Keystroke, held: bool, os: Os) -> Value {
 
 pub(crate) fn typed(ks: &Keystroke, text: &str, held: bool) -> Value {
     let mut event = with_text(event("keyDown", ks), text);
+    event.insert("key".into(), text.into());
     event.insert("autoRepeat".into(), held.into());
     Value::Object(event)
 }
