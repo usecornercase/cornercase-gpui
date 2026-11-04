@@ -1,3 +1,4 @@
+pub(crate) mod frame;
 mod status;
 mod surface;
 
@@ -169,6 +170,7 @@ impl Kept {
 
 impl Root {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        theme::settle_fonts(cx.text_system());
         let root = Self::open(Kept::at_start(), window, cx);
         root.open_requested_panel(cx);
         root
@@ -552,24 +554,27 @@ impl Root {
         overlay(
             SharedString::from(format!("{id}-veil")),
             Way::In,
+            frame::Frame::read(window),
             motion::slide(card, SharedString::from(id), Way::In, (0., SHEET_RISE)),
         )
     }
 
     fn render_leaving(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let window_frame = frame::Frame::read(window);
         let sheet = self.leaving_sheet.gone().map(|(serial, kind)| (serial, *kind));
         let sheet = sheet.map(|(serial, kind)| {
             let card = sheet_card(kind, self.panel(kind, window, cx), &self.store);
             overlay(
                 ("sheet-out-veil", serial),
                 Way::Out,
+                window_frame,
                 motion::slide(card, ("sheet-out", serial), Way::Out, (0., SHEET_RISE)),
             )
             .into_any_element()
         });
         let dialog = self.leaving_dialog.gone().map(|(serial, view)| {
             let card = motion::slide(div().child(view.clone()), ("dialog-out", serial), Way::Out, (0., DIALOG_RISE));
-            overlay(("dialog-out-veil", serial), Way::Out, card).into_any_element()
+            overlay(("dialog-out-veil", serial), Way::Out, window_frame, card).into_any_element()
         });
         sheet.into_iter().chain(dialog).collect()
     }
@@ -608,7 +613,7 @@ impl Root {
             .flex()
             .flex_row()
             .on_drag_move(split::follow::<_, SidebarGrip>(Edge::Right, TERMINAL_KEEP + dock, sidebar_width, cx))
-            .child(self.render_sidebar(cx))
+            .child(self.render_sidebar(window, cx))
             .child(self.render_workspace_area(window, cx))
             .child(split::handle("sidebar-split", SidebarGrip, at, sidebar_width, cx))
     }
@@ -621,7 +626,7 @@ impl Root {
             .flex_col()
             .pl(px(GAP))
             .overflow_hidden()
-            .child(self.render_tabs(cx))
+            .child(self.render_tabs(window, cx))
             .child(self.render_body(window, cx))
             .child(self.render_status(cx))
     }
@@ -756,8 +761,9 @@ fn bell_flash() -> Div {
         .bg(ui::glass::tint(colours::working(), 0.07))
 }
 
-fn overlay(id: impl Into<ElementId>, way: Way, card: impl IntoElement) -> impl IntoElement {
+fn overlay(id: impl Into<ElementId>, way: Way, frame: frame::Frame, card: impl IntoElement) -> impl IntoElement {
     let backdrop = div().absolute().inset_0().occlude().flex().items_center().justify_center().child(card);
+    let backdrop = frame::round(backdrop, frame);
     let backdrop = match way {
         Way::Out => backdrop.child(occluder()),
         _ => backdrop.on_mouse_down(MouseButton::Left, |_, _, cx| {
@@ -873,12 +879,13 @@ impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_title(window);
         self.keep_beating(window, cx);
+        let window_frame = frame::Frame::read(window);
         let (sheet, dialog) = {
             let s = self.store.read(cx);
             (s.sheet, s.dialog.clone())
         };
         let sheet = sheet.map(|kind| self.render_sheet(kind, window, cx));
-        div()
+        let content = div()
             .size_full()
             .relative()
             .flex()
@@ -886,7 +893,7 @@ impl Render for Root {
             .bg(colours::glass())
             .text_color(colours::text())
             .text_size(px(13.))
-            .font_family(".SystemUIFont")
+            .font_family(theme::UI_FAMILY)
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
             .child(self.render_rail(cx))
@@ -897,12 +904,14 @@ impl Render for Root {
                 overlay(
                     ("dialog-in-veil", id),
                     Way::In,
+                    window_frame,
                     motion::slide(div().occlude().child(view), ("dialog-in", id), Way::In, (0., DIALOG_RISE)),
                 )
             }))
             .children(self.render_leaving(window, cx))
             .child(crate::tour::Guide::get(cx))
-            .child(self.render_toasts(cx))
+            .child(self.render_toasts(cx));
+        frame::framed(content, window_frame, window)
     }
 }
 

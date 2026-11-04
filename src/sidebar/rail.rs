@@ -13,6 +13,7 @@ use crate::ui::glass::ring;
 use crate::ui::{self, Icon};
 
 const RAIL_WIDTH: f32 = 44.;
+pub(super) const COLUMN: f32 = RAIL_WIDTH + 2. * GAP;
 
 const DOCKED: [PanelKind; 4] = [PanelKind::Changes, PanelKind::Files, PanelKind::Todo, PanelKind::Browser];
 const SHEETS: [PanelKind; 10] = [

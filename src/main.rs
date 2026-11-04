@@ -7,6 +7,7 @@ mod keys;
 mod model;
 mod notify;
 mod panels;
+mod platform;
 mod prefs;
 mod render;
 mod sidebar;
@@ -20,8 +21,8 @@ mod tour;
 mod ui;
 
 use gpui::{
-    App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowOptions, actions, point, px, size,
+    App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, Window, WindowBounds,
+    WindowOptions, actions, point, px,
 };
 
 actions!(cornercase_gpui, [Quit, Hide, HideOthers, ShowAll, Minimise, Zoom, FullScreen]);
@@ -91,7 +92,7 @@ fn main() {
         })
         .detach();
 
-        let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
+        let bounds = Bounds::centered(None, app::frame::outer(platform::Os::CURRENT, (1280., 800.)), cx);
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -100,8 +101,10 @@ fn main() {
                     appears_transparent: true,
                     traffic_light_position: Some(point(px(16.), px(16.))),
                 }),
-                window_background: WindowBackgroundAppearance::Blurred,
-                window_min_size: Some(size(px(640.), px(360.))),
+                window_background: app::frame::background(platform::Os::CURRENT),
+                window_decorations: app::frame::decorations(platform::Os::CURRENT),
+                app_id: Some(app::frame::APP_ID.into()),
+                window_min_size: Some(app::frame::outer(platform::Os::CURRENT, (640., 360.))),
                 ..Default::default()
             },
             |window, cx| cx.new(|cx| app::Root::new(window, cx)),

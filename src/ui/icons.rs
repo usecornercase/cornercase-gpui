@@ -95,10 +95,13 @@ pub(crate) enum Icon {
     Interface,
     Share,
     Key,
+    Minimise,
+    Maximise,
+    Restore,
 }
 
 impl Icon {
-    const ALL: [Icon; 82] = [
+    const ALL: [Icon; 85] = [
         Icon::Changes,
         Icon::Files,
         Icon::Todo,
@@ -181,6 +184,9 @@ impl Icon {
         Icon::Interface,
         Icon::Share,
         Icon::Key,
+        Icon::Minimise,
+        Icon::Maximise,
+        Icon::Restore,
     ];
 
     fn asset(self) -> (&'static str, &'static [u8]) {
@@ -218,6 +224,9 @@ impl Icon {
             Icon::Globe => asset!("globe"),
             Icon::Interface => asset!("app-window"),
             Icon::Share => asset!("share-2"),
+            Icon::Minimise => asset!("window-minimise"),
+            Icon::Maximise => asset!("window-maximise"),
+            Icon::Restore => asset!("window-restore"),
             _ => return None,
         })
     }

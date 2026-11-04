@@ -7,7 +7,7 @@ use super::layout::{Layout, PADDING};
 use super::moving::{Ghost, Stage, ZoneLook, shrunk};
 use super::{Metrics, PaneCanvas, text_run};
 use crate::model::PaneGrid;
-use crate::theme::{Painter, colours, faded, hsla, radius};
+use crate::theme::{Painter, UI_FAMILY, colours, faded, hsla, radius};
 use crate::ui::glass;
 
 const CAPTION_HEIGHT: f32 = 28.;
@@ -81,7 +81,7 @@ fn paint_zone(zone: &ZoneLook, window: &mut Window) {
 }
 
 fn label(text: &'static str, colour: Hsla, window: &mut Window) -> ShapedLine {
-    let mut face = font(".SystemUIFont");
+    let mut face = font(UI_FAMILY);
     face.weight = FontWeight::SEMIBOLD;
     let runs = [text_run(text.len(), face, colour)];
     window.text_system().shape_line(SharedString::from(text), px(12.), &runs, None)
