@@ -22,6 +22,7 @@ fn a_thumbnailer_file_names_its_program_command_and_types() {
     assert_eq!(parse("[Thumbnailer Entry]\nMimeType=a/b;\n"), None);
 }
 
+#[cfg(unix)]
 #[test]
 fn its_command_line_gets_the_file_the_picture_and_the_size() {
     let exec = "ffmpegthumbnailer -i %i -o \"%o\" -s %s -f 100%%";
@@ -32,6 +33,7 @@ fn its_command_line_gets_the_file_the_picture_and_the_size() {
     assert_eq!(argv("thumb %i", Path::new("relative"), Path::new("/t/o.png"), 64), None);
 }
 
+#[cfg(unix)]
 #[test]
 fn its_command_line_is_split_as_the_desktop_entry_spec_quotes_it() {
     let exec = r#"thumb --size="%s" '%i' "a \"b\" \$c \d" plain\ word "" end"#;
@@ -115,10 +117,12 @@ fn the_first_thumbnailer_for_the_type_that_can_run_is_picked() {
     assert_eq!(pick(&all, "font/ttf", &|_| true), None);
 }
 
+#[cfg(unix)]
 fn thumbnailer(exec: &str) -> Thumbnailer {
     Thumbnailer { try_exec: None, exec: exec.to_string(), types: vec!["video/mp4".into()] }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_thumbnailer_that_fails_is_named_with_what_went_wrong() {
     let file = Path::new("/w/a.mp4");

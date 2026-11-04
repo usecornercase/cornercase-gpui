@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use serde::Deserialize;
 
+use crate::platform::paths;
+
 mod grid;
 pub(crate) mod link;
 mod pull_request;
@@ -138,6 +140,11 @@ pub(crate) struct Shown {
 }
 
 impl Session {
+    pub(crate) fn path_style(&self) -> paths::Style {
+        let known = self.home.as_deref().or_else(|| self.projects.first().map(|p| p.path.as_str()));
+        known.map_or_else(paths::Style::default, paths::Style::of_path)
+    }
+
     pub(crate) fn shown(&self) -> Shown {
         self.view.as_ref().map(|v| v.shown).unwrap_or_default()
     }

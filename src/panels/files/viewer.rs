@@ -9,6 +9,7 @@ use super::source::Source;
 use super::{FilesPanel, Spans, Viewer, highlight, tree};
 use crate::model::Link;
 use crate::panels::PanelKind;
+use crate::platform::paths::{self, Style};
 use crate::store::Store;
 
 #[derive(Clone)]
@@ -90,7 +91,7 @@ pub(super) fn dock_files(cx: &mut App) {
 
 fn link_path(link: &Link, shown: Option<u64>) -> PathBuf {
     match &link.relative {
-        Some(rel) if link.inside && link.workspace == shown => PathBuf::from(rel),
+        Some(rel) if link.inside && link.workspace == shown => Style::of_path(&link.path).relative(rel),
         _ => PathBuf::from(&link.path),
     }
 }
@@ -106,9 +107,10 @@ impl FilesPanel {
     pub(super) fn open_file(&mut self, rel: PathBuf, at: OpenAt, cx: &mut Context<Self>) {
         let Some(id) = self.current else { return };
         let Some(place) = self.places.get_mut(&id) else { return };
-        let path = place.root.join(&rel);
+        let path = place.style.join(&place.root, &rel);
         place.last = Some(rel.clone());
-        let opened = if rel.is_absolute() { Vec::new() } else { tree::reveal(&mut place.expanded, &rel) };
+        let opened =
+            if paths::rooted(&rel.to_string_lossy()) { Vec::new() } else { tree::reveal(&mut place.expanded, &rel) };
         let fetch = Fetch { id, path: path.clone(), rel: rel.clone(), source: place.source.clone() };
         place.viewer = Some(Viewer::new(path, rel, at));
         if !opened.is_empty() {

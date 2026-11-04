@@ -13,7 +13,7 @@ use crate::app::{Drag, Msg, Root};
 use crate::desktop;
 use crate::keymap;
 use crate::model::{Grid, Link, MouseMode, PaneGrid};
-use crate::platform::Os;
+use crate::platform::{Os, paths};
 use crate::render::layout::{Gap, Hit, Layout};
 
 pub(super) fn button_name(button: MouseButton) -> &'static str {
@@ -110,7 +110,13 @@ fn file_of(uri: &str) -> Option<String> {
         Some(authority) => &authority[authority.find('/')?..],
         None => rest,
     };
-    path.starts_with('/').then(|| unescape(path))
+    let path = path.starts_with('/').then(|| unescape(path))?;
+    Some(on_a_drive(&path).unwrap_or(path))
+}
+
+fn on_a_drive(path: &str) -> Option<String> {
+    let drive = path.strip_prefix('/').filter(|drive| paths::on_a_drive(drive))?;
+    Some(drive.replace('/', "\\"))
 }
 
 impl Root {
@@ -314,7 +320,7 @@ impl Root {
             self.open_hyperlink(&link, cx);
             return;
         }
-        if let Some(url) = web_at(pane, (x, y)) {
+        if let Some(url) = web_at(pane, (x, y), self.path_style(cx)) {
             cx.open_url(&url);
             return;
         }

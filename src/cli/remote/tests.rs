@@ -51,10 +51,25 @@ fn reconnecting_waits_longer_each_time_up_to_fifteen_seconds() {
 }
 
 #[test]
-fn a_path_typed_from_home_becomes_relative_to_it() {
-    assert_eq!(from_home("~/src/shop"), "src/shop");
-    assert_eq!(from_home(" ~ "), ".");
-    assert_eq!(from_home("~/"), ".");
+fn a_path_typed_from_home_goes_for_that_machine_to_expand() {
+    assert_eq!(from_home("~/src/shop"), "~/src/shop");
+    assert_eq!(from_home(" ~ "), "~");
+    assert_eq!(from_home("~/"), "~");
+    assert_eq!(from_home("src"), "~/src");
+    assert_eq!(from_home("."), "~");
+    assert_eq!(from_home("~shop"), "~/~shop");
+}
+
+#[test]
+fn an_absolute_path_goes_as_its_machine_writes_it() {
     assert_eq!(from_home("/srv/app"), "/srv/app");
-    assert_eq!(from_home("src"), "src");
+    assert_eq!(from_home(r"C:\Users\me\shop"), r"C:\Users\me\shop");
+    assert_eq!(from_home("D:/shop"), "D:/shop");
+    assert_eq!(from_home(r"\\server\share\shop"), r"\\server\share\shop");
+}
+
+#[test]
+fn a_windows_home_path_is_sent_with_the_slash_cornercase_expands() {
+    assert_eq!(from_home(r"~\src\shop"), r"~/src\shop");
+    assert_eq!(from_home(r"~\"), "~");
 }

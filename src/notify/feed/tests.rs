@@ -127,7 +127,7 @@ fn plays_the_users_own_file() {
     let prefs = Prefs { sound_waiting: "~/ding.wav".into(), ..Prefs::default() };
     let home = dir.to_string_lossy().to_string();
     let played = prefs.own_sound(Os::CURRENT, "needs-you", &home).expect("the file is there");
-    assert_eq!(std::path::Path::new(&played), dir.join("ding.wav"));
+    assert_eq!(Path::new(&played), dir.join("ding.wav"));
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -155,6 +155,7 @@ fn on_windows_a_sound_file_of_your_own_is_on_a_drive_or_in_your_home() {
     assert_eq!(sound_path(Os::Windows, "d:/ding.wav", home).as_deref(), Some("d:/ding.wav"));
     assert_eq!(sound_path(Os::Windows, r"\\server\share\ding.wav", home), None);
     assert_eq!(sound_path(Os::Windows, "/ding.wav", home), None);
+    assert_eq!(sound_path(Os::Windows, "/home/me/ding.wav", home), None);
     assert_eq!(sound_path(Os::Windows, "C:ding.wav", home), None);
     assert_eq!(sound_path(Os::Windows, "~/ding.wav", ""), None);
 }

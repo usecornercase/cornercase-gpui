@@ -12,6 +12,7 @@ use gpui::{
 
 use crate::cli;
 use crate::model::{Project, Workspace};
+use crate::platform::paths::Style;
 use crate::store::Store;
 use crate::theme::radius;
 use crate::ui::{TextField, TextFieldEvent, glass};
@@ -31,6 +32,7 @@ const CHROME: f32 = 112.;
 struct Spot {
     id: u64,
     root: PathBuf,
+    style: Style,
     source: Source,
     label: String,
 }
@@ -39,7 +41,8 @@ impl Spot {
     fn new(project: &Project, workspace: &Workspace) -> Self {
         let root = PathBuf::from(&workspace.path);
         let source = Source::new(workspace.id, root.clone(), cli::host().is_some());
-        Self { id: workspace.id, root, source, label: place_label(project, workspace) }
+        let style = Style::of_path(&workspace.path);
+        Self { id: workspace.id, root, style, source, label: place_label(project, workspace) }
     }
 }
 
@@ -327,7 +330,7 @@ impl Finder {
 
     fn open(&mut self, ix: usize, cx: &mut Context<Self>) {
         let (Some(spot), Some(hit)) = (&self.spot, self.pick.hits.get(ix)) else { return };
-        let (id, root, rel) = (spot.id, spot.root.clone(), PathBuf::from(&hit.path));
+        let (id, root, rel) = (spot.id, spot.root.clone(), spot.style.relative(&hit.path));
         let _ = self.panel.update(cx, |panel, cx| panel.reveal(id, &root, rel, cx));
         dock_files(cx);
     }

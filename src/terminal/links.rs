@@ -1,12 +1,13 @@
-use gpui::{AppContext as _, Bounds, Context, Modifiers, MouseButton, MouseDownEvent, Pixels, Point, Window};
+use gpui::{App, AppContext as _, Bounds, Context, Modifiers, MouseButton, MouseDownEvent, Pixels, Point, Window};
 
 use super::selection::{class, column, word_at};
 use crate::app::{Drag, Root};
 use crate::cli;
 use crate::model::link::{Hovered, Span, Target, is_loopback, row_cells, text_between, url_in, web_hyperlink};
-use crate::model::{Link, MouseMode, PaneGrid};
+use crate::model::{Link, MouseMode, PaneGrid, Session};
 use crate::panels::PanelKind;
 use crate::panels::files::{self, Anchor, Peek, WebPage};
+use crate::platform::paths::Style;
 use crate::render::layout::Hit;
 use crate::store::args;
 
@@ -28,6 +29,7 @@ pub(crate) struct Pointer {
 
 #[derive(Default)]
 pub(super) struct Links {
+    pub(super) style: Style,
     spot: Option<Spot>,
     cell: (u16, u16),
     answer: Option<Hovered>,
@@ -46,8 +48,8 @@ pub(super) fn link_args(pane: u64, (x, y): (u16, u16)) -> Vec<String> {
     args(&["link", "--pane", &pane.to_string(), "--cell", &format!("{x},{y}"), "--json"])
 }
 
-pub(super) fn spot_at(pane: &PaneGrid, cell: (u16, u16)) -> Option<Spot> {
-    hyperlink_spot(pane, cell).or_else(|| word_spot(pane, cell))
+pub(super) fn spot_at(pane: &PaneGrid, cell: (u16, u16), style: Style) -> Option<Spot> {
+    hyperlink_spot(pane, cell).or_else(|| word_spot(pane, cell, style))
 }
 
 fn hyperlink_spot(pane: &PaneGrid, cell: (u16, u16)) -> Option<Spot> {
@@ -56,13 +58,13 @@ fn hyperlink_spot(pane: &PaneGrid, cell: (u16, u16)) -> Option<Spot> {
     Some(Spot { pane: pane.pane, row: span.row, start: span.start, end: span.end, text, link: Some(url) })
 }
 
-fn word_spot(pane: &PaneGrid, (x, y): (u16, u16)) -> Option<Spot> {
+fn word_spot(pane: &PaneGrid, (x, y): (u16, u16), style: Style) -> Option<Spot> {
     let cells = row_cells(pane, y);
     let at = usize::from(x);
-    if cells.get(at).is_none_or(|cell| class(cell) != 1) {
+    if cells.get(at).is_none_or(|cell| class(cell, style) != 1) {
         return None;
     }
-    let (start, end) = word_at(&cells, at);
+    let (start, end) = word_at(&cells, at, style);
     let text = text_between(&cells, start, end + 1);
     Some(Spot { pane: pane.pane, row: y, start: column(start), end: column(end + 1), text, link: None })
 }
@@ -76,8 +78,8 @@ pub(super) fn web_under(pane: &PaneGrid, spot: &Spot) -> Option<(Span, String)> 
     Some((Span { row: spot.row, start: column(from), end: column(to) }, text_between(&cells, from, to)))
 }
 
-pub(super) fn web_at(pane: &PaneGrid, cell: (u16, u16)) -> Option<String> {
-    let (span, url) = spot_at(pane, cell).and_then(|spot| web_under(pane, &spot))?;
+pub(super) fn web_at(pane: &PaneGrid, cell: (u16, u16), style: Style) -> Option<String> {
+    let (span, url) = spot_at(pane, cell, style).and_then(|spot| web_under(pane, &spot))?;
     span.covers(cell).then_some(url)
 }
 
@@ -96,10 +98,15 @@ impl Root {
         let Some(Hit::Pane(id, raw)) = self.hit(at) else { return None };
         let pane = self.grid.pane(id)?;
         let cell = inside(pane, raw)?;
-        Some((spot_at(pane, cell)?, cell))
+        Some((spot_at(pane, cell, self.pointer.links.style)?, cell))
+    }
+
+    pub(super) fn path_style(&self, cx: &App) -> Style {
+        self.store.read(cx).session.as_ref().map_or_else(Style::default, Session::path_style)
     }
 
     pub(super) fn hover_link(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        self.pointer.links.style = self.path_style(cx);
         let found = if self.drag.is_none() && self.frame_shown() { self.spot_under(at) } else { None };
         let Some((spot, cell)) = found else {
             self.forget_link(cx);
@@ -234,7 +241,9 @@ impl Root {
     pub(super) fn link_under(&self, pane: u64, cell: (u16, u16)) -> Option<Target> {
         let hovered = self.pointer.links.hovered().filter(|h| h.at(pane, cell) && h.shown_in(&self.grid))?;
         match &hovered.target {
-            Target::Web(url) if web_at(self.grid.pane(pane)?, cell).as_ref() != Some(url) => None,
+            Target::Web(url) if web_at(self.grid.pane(pane)?, cell, self.pointer.links.style).as_ref() != Some(url) => {
+                None
+            }
             target => Some(target.clone()),
         }
     }

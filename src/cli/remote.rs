@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result};
 
+use crate::platform::paths;
+
 const LONGEST_WAIT: u64 = 15;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,8 +55,13 @@ pub(crate) fn backoff(attempts: u32) -> Duration {
 
 pub(crate) fn from_home(path: &str) -> String {
     let path = path.trim();
-    let relative = if path == "~" { "" } else { path.strip_prefix("~/").unwrap_or(path) };
-    if relative.is_empty() { ".".to_string() } else { relative.to_string() }
+    let relative = match path.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with(['/', '\\']) => rest,
+        _ if paths::rooted(path) => return path.to_string(),
+        _ => path,
+    };
+    let relative = relative.trim_start_matches(['/', '\\']);
+    if relative.is_empty() || relative == "." { "~".to_string() } else { format!("~/{relative}") }
 }
 
 #[cfg(test)]

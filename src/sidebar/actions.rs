@@ -7,6 +7,7 @@ use crate::app::{Msg, Root};
 use crate::cli;
 use crate::dialogs::{self, PathQuestion};
 use crate::model::Session;
+use crate::platform::paths::Style;
 use crate::store::Busy;
 use crate::ui::{TextField, TextFieldEvent};
 
@@ -27,7 +28,7 @@ pub(super) fn place_args(dragged: Target, place: Place) -> Vec<String> {
 }
 
 fn opening(path: &str) -> Busy {
-    let name = std::path::Path::new(path).file_name().map_or_else(|| path.into(), |n| n.to_string_lossy());
+    let name = Some(Style::of_path(path).name(path)).filter(|n| !n.is_empty()).unwrap_or(path);
     Busy::new(format!("open:{path}"), format!("Opening {name}…"))
 }
 

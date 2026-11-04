@@ -67,6 +67,15 @@ fn the_name_is_the_last_part_of_the_path() {
 }
 
 #[test]
+fn a_path_from_windows_is_named_by_its_rules() {
+    let json = r#"{"link":{"path":"C:\\Users\\me\\shop\\src\\main.rs","inside":true,"workspace":2,
+        "relative":"src\\main.rs","row":0,"start":0,"end":11}}"#;
+    let link = link(json);
+    assert_eq!(link.style(), paths::Style::Windows);
+    assert_eq!((link.name(), link.shown_path()), ("main.rs", r"src\main.rs"));
+}
+
+#[test]
 fn the_same_file_at_other_lines_is_another_peek() {
     let (a, mut b) = (link(INSIDE), link(INSIDE));
     b.start = 0;

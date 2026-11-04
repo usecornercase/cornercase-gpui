@@ -19,7 +19,7 @@ gpui = { version = "0.2.2", features = ["runtime_shaders"] }
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
 grep-searcher = "0.1.17"
-image = { version = "0.25.10", default-features = false }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 ignore = "0.4.33"
 nucleo-matcher = "0.3.1"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -38,6 +38,8 @@ objc2 = "0.6.5"
 windows = { version = "0.61.3", features = [
     "Data_Xml_Dom",
     "UI_Notifications",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
     "Win32_Media_Audio",
     "Win32_System_Com",
     "Win32_System_Registry",
