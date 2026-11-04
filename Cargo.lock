@@ -1144,6 +1144,7 @@ dependencies = [
  "base64",
  "core-foundation 0.10.0",
  "core-video",
+ "embed-resource",
  "futures",
  "gpui",
  "grep-matcher",
