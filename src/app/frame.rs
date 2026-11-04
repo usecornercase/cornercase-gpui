@@ -1,8 +1,10 @@
+use std::time::Duration;
+
 use gpui::{
-    AnyElement, App, BoxShadow, ClickEvent, CursorStyle, Decorations, Div, Global, Hsla, InteractiveElement as _,
-    IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement as _, Pixels, ResizeEdge, Size, Stateful,
-    StatefulInteractiveElement as _, Styled, Tiling, Window, WindowBackgroundAppearance, WindowControls,
-    WindowDecorations, div, point, prelude::FluentBuilder as _, px, size,
+    AnyElement, AnyWindowHandle, App, BoxShadow, ClickEvent, CursorStyle, Decorations, Div, Global, Hsla,
+    InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement as _, Pixels,
+    ResizeEdge, Size, Stateful, StatefulInteractiveElement as _, Styled, Tiling, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowControls, WindowDecorations, div, point, prelude::FluentBuilder as _, px, size,
 };
 
 use super::GAP;
@@ -11,6 +13,8 @@ use crate::theme::{colours, radius};
 use crate::ui::{self, Icon};
 
 pub(crate) const APP_ID: &str = "cornercase-gpui";
+const RESTORE_POLL: Duration = Duration::from_millis(20);
+const RESTORE_TRIES: u32 = 100;
 const INSET: f32 = 12.;
 const REACH_IN: f32 = 4.;
 const CORNER_REACH: f32 = 16.;
@@ -58,6 +62,13 @@ pub(crate) enum Control {
     Maximise,
     Restore,
     Close,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Restore {
+    Wait,
+    Resize,
+    Done,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -285,6 +296,51 @@ pub(crate) fn claimed(element: Div, frame: Frame) -> Div {
         return element;
     }
     element.on_any_mouse_down(|_, _, cx| cx.default_global::<Grip>().claimed = true)
+}
+
+pub(crate) fn toggle_full_screen(window: &mut Window, cx: &mut App) {
+    let windowed = windowed_size(Os::CURRENT, window.window_bounds());
+    window.toggle_fullscreen();
+    if let Some(size) = windowed {
+        restore_when_out(window.window_handle(), size, cx);
+    }
+}
+
+pub(crate) fn windowed_size(os: Os, bounds: WindowBounds) -> Option<Size<Pixels>> {
+    match (os, bounds) {
+        (Os::Linux, WindowBounds::Fullscreen(windowed)) => Some(windowed.size),
+        _ => None,
+    }
+}
+
+pub(crate) fn restore_step(full_screen: bool, frame: Frame, now: Size<Pixels>, windowed: Size<Pixels>) -> Restore {
+    if full_screen {
+        Restore::Wait
+    } else if frame.maximised || frame.tiling.is_tiled() || now == windowed {
+        Restore::Done
+    } else {
+        Restore::Resize
+    }
+}
+
+fn restore(window: &mut Window, windowed: Size<Pixels>) -> Restore {
+    let step = restore_step(window.is_fullscreen(), Frame::read(window), window.bounds().size, windowed);
+    if step == Restore::Resize {
+        window.resize(windowed);
+    }
+    step
+}
+
+fn restore_when_out(window: AnyWindowHandle, windowed: Size<Pixels>, cx: &mut App) {
+    cx.spawn(async move |cx| {
+        for _ in 0..RESTORE_TRIES {
+            cx.background_executor().timer(RESTORE_POLL).await;
+            if !matches!(window.update(cx, |_, window, _| restore(window, windowed)), Ok(Restore::Wait)) {
+                break;
+            }
+        }
+    })
+    .detach();
 }
 
 pub(crate) fn window_controls(frame: Frame) -> Option<Div> {
