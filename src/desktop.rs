@@ -273,6 +273,10 @@ pub(crate) fn xdg_data_dirs() -> Vec<PathBuf> {
     data_dirs(Os::CURRENT, home().as_deref(), data_home, shared)
 }
 
+pub(crate) fn system_data_dirs() -> Vec<PathBuf> {
+    xdg_data_dirs().into_iter().chain(windows_folder()).collect()
+}
+
 pub(crate) fn home() -> Option<PathBuf> {
     std::env::home_dir().filter(|home| home.is_absolute())
 }

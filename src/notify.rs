@@ -3,7 +3,6 @@ mod feed;
 mod update;
 
 use std::collections::{HashMap, HashSet};
-use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -164,8 +163,8 @@ impl Notifier {
                 this.play(&prefs, cue, cx);
             }
             if behind && prefs.desktop {
-                let argv = alert::notification(Os::CURRENT, (&notice.headline(), &notice.message), &desktop::on_path);
-                this.run_or_tell(argv.map(|argv| vec![argv]), alert::NOTIFICATION_FAILED, cx);
+                let helper = alert::notification(Os::CURRENT, (&notice.headline(), &notice.message), &desktop::on_path);
+                this.run_or_tell(helper.map(|helper| vec![helper]), alert::NOTIFICATION_FAILED, cx);
             }
         });
     }
@@ -173,15 +172,15 @@ impl Notifier {
     fn play(&mut self, prefs: &Prefs, cue: &str, cx: &mut Context<Self>) {
         let os = Os::CURRENT;
         let home = desktop::home_text();
-        let own = prefs.own_sound(cue, &home).map(PathBuf::from);
-        let file = alert::cue_sound(os, cue, own, &desktop::xdg_data_dirs());
-        let tries = file.ok_or(alert::NO_THEME).and_then(|file| alert::sound(os, &file, &desktop::on_path));
+        let own = prefs.own_sound(os, cue, &home).map(PathBuf::from);
+        let file = alert::cue_sound(os, cue, own, &desktop::system_data_dirs());
+        let tries = file.ok_or(alert::no_system_sound(os)).and_then(|file| alert::sound(os, &file, &desktop::on_path));
         self.run_or_tell(tries, alert::SOUND_FAILED, cx);
     }
 
     fn run_or_tell(
         &mut self,
-        tries: Result<Vec<Vec<OsString>>, &'static str>,
+        tries: Result<Vec<alert::Helper>, &'static str>,
         failed: &'static str,
         cx: &mut Context<Self>,
     ) {
@@ -468,7 +467,7 @@ impl Render for Tip {
     }
 }
 
-fn run_helper(tries: Vec<Vec<OsString>>, failed: &'static str, cx: &mut Context<Notifier>) {
+fn run_helper(tries: Vec<alert::Helper>, failed: &'static str, cx: &mut Context<Notifier>) {
     let (tx, rx) = oneshot::channel();
     std::thread::spawn(move || tx.send(alert::first_that_works(&tries, alert::run)));
     cx.spawn(async move |this, cx| {
