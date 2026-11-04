@@ -14,6 +14,7 @@ const PREFERRED_PORT: u16 = 9222;
 const ACTIVE_PORT: &str = "DevToolsActivePort";
 const OWNER: &str = "cornercase-owner";
 const PORT_FILE: &str = "cornercase-port";
+const SAID: &str = "cornercase-chrome.log";
 const START_WAIT: Duration = Duration::from_secs(20);
 const POLL: Duration = Duration::from_millis(100);
 
@@ -218,17 +219,26 @@ fn launch(exe: &Path, profile: &Path) -> Result<Endpoint> {
     let _ = fs::remove_file(profile.join(ACTIVE_PORT));
     let port = if free(PREFERRED_PORT) { PREFERRED_PORT } else { 0 };
     let _ = fs::write(profile.join(PORT_FILE), port.to_string());
+    let said = fs::File::create(profile.join(SAID)).map_or_else(|_| Stdio::null(), Stdio::from);
     let child = Command::new(exe)
         .args(args(Os::CURRENT, profile, port))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(said)
         .spawn()
         .with_context(|| format!("could not start {}", exe.display()))?;
     let _ = fs::write(profile.join(OWNER), std::process::id().to_string());
     let pid = child.id();
     *OWNED.lock() = Owned { child: Some(child), pid: Some(pid) };
     wait_for_port(profile)
+}
+
+fn last_error(said: &str) -> Option<String> {
+    let error = |line: &str| {
+        let (head, text) = line.strip_prefix('[')?.split_once("] ")?;
+        (head.contains(":ERROR:") || head.contains(":FATAL:")).then(|| text.trim().chars().take(500).collect())
+    };
+    said.lines().rev().find_map(error)
 }
 
 fn free(port: u16) -> bool {
@@ -242,7 +252,11 @@ fn wait_for_port(profile: &Path) -> Result<Endpoint> {
             return Ok(endpoint);
         }
         if let Some(status) = OWNED.lock().child.as_mut().and_then(|c| c.try_wait().ok().flatten()) {
-            bail!("the browser stopped as it started ({status})");
+            let said = fs::read_to_string(profile.join(SAID)).unwrap_or_default();
+            match last_error(&said) {
+                Some(error) => bail!("the browser stopped as it started ({status}): {error}"),
+                None => bail!("the browser stopped as it started ({status})"),
+            }
         }
         std::thread::sleep(POLL);
     }

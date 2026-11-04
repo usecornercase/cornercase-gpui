@@ -47,6 +47,14 @@ fn a_snap_is_known_by_its_command_or_by_the_script_that_runs_it() {
 }
 
 #[test]
+fn a_browser_that_stops_as_it_starts_gives_its_last_error() {
+    let said = "\n[5887:5887:1104/112642.487358:ERROR:zygote_host_impl_linux.cc:130] No usable sandbox! Install it.\n\
+                [5887:5900:1104/112642.5:WARNING:bus.cc:408] Failed to connect to the bus\nDevTools listening on ws://x\n";
+    assert_eq!(last_error(said).as_deref(), Some("No usable sandbox! Install it."));
+    assert_eq!(last_error("DevTools listening on ws://127.0.0.1:9222/devtools/browser/x\n"), None);
+}
+
+#[test]
 fn a_snap_keeps_its_profile_where_its_confinement_lets_it_write() {
     let profile = snap_profile(Path::new("/home/me"), "chromium");
     assert_eq!(profile, Path::new("/home/me/snap/chromium/common/cornercase-gpui-browser"));
