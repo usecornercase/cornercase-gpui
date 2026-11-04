@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use gpui::{
-    AppContext as _, ClickEvent, Context, Div, ParentElement as _, PathPromptOptions, Stateful,
-    StatefulInteractiveElement as _,
+    AppContext as _, ClickEvent, Context, Div, InteractiveElement as _, ParentElement as _, PathPromptOptions,
+    Stateful, StatefulInteractiveElement as _,
 };
 
 use super::no_tab::{heading, lead_text, page, row, tall};
@@ -116,22 +116,28 @@ enum Choice {
 
 fn choice(checked: Result<Binary, Missing>) -> Choice {
     match checked {
-        Ok(binary) => {
-            let saved = binary.path.to_string_lossy().into_owned();
-            Choice::Use(binary, saved)
-        }
+        Ok(binary) => match binary.path.to_str().map(str::to_string) {
+            Some(saved) => Choice::Use(binary, saved),
+            None => Choice::Stay(Missing::Unusable {
+                path: binary.path,
+                origin: Origin::Chosen,
+                problem: Problem::DoesNotStart("its path is not valid text, so it cannot be kept".to_string()),
+            }),
+        },
         Err(missing) => Choice::Stay(missing),
     }
 }
 
 impl Root {
-    pub(super) fn missing_page(missing: &Missing, cx: &mut Context<Self>) -> Div {
+    pub(super) fn missing_page(missing: &Missing, cx: &mut Context<Self>) -> Stateful<Div> {
         let lead = lead(missing, Os::CURRENT, &desktop::home_text());
         let buttons = row()
             .child(guide_button(cx))
             .child(retry_button(cx))
             .children(offers_choice(missing).then(|| choose_button(cx)));
         page()
+            .id("missing-page")
+            .overflow_y_scroll()
             .child(ui::emblem(emblem_of(missing)))
             .child(heading(&heading_of(missing)))
             .child(lead_text(lead))
@@ -148,10 +154,17 @@ impl Root {
             PathPromptOptions { files: true, directories: false, multiple: false, prompt: Some("Use".into()) };
         let picked = cx.prompt_for_paths(options);
         cx.spawn(async move |this, cx| {
-            let path = picked.await.ok().and_then(Result::ok).flatten().and_then(|paths| paths.into_iter().next());
-            if let Some(path) = path {
-                let _ = this.update(cx, |this, cx| this.check_chosen(path, cx));
-            }
+            let _ = match picked.await {
+                Ok(Ok(Some(paths))) => {
+                    let first = paths.into_iter().next();
+                    first.map(|path| this.update(cx, |this, cx| this.check_chosen(path, cx)))
+                }
+                Ok(Err(e)) => {
+                    let why = format!("The file picker could not open: {e}");
+                    Some(this.update(cx, |this, cx| this.say(&why, cx)))
+                }
+                _ => None,
+            };
         })
         .detach();
     }

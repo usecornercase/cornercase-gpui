@@ -1,11 +1,9 @@
-use std::process::Stdio;
-
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Result, bail};
 
 const PARTIAL: i32 = 3;
 
 pub(crate) fn run_partial<S: AsRef<str>>(args: &[S]) -> Result<String> {
-    let out = super::command(args).stdin(Stdio::null()).output().context("could not run cornercase")?;
+    let out = super::output(&mut super::command(args))?;
     let name = args.first().map(AsRef::as_ref).unwrap_or_default();
     answer(name, out.status.code(), &out.stdout, &out.stderr)
 }

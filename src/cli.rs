@@ -4,8 +4,9 @@ mod remote;
 mod requests;
 mod typist;
 
+use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Output, Stdio};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, mpsc};
@@ -97,22 +98,26 @@ fn binary() -> Binary {
     })
 }
 
-fn bin() -> String {
-    binary().path.display().to_string()
-}
-
-fn forget_binary() {
-    *BINARY.lock() = None;
+fn forget_binary(program: &OsStr) {
+    let mut cached = BINARY.lock();
+    if cached.as_ref().is_some_and(|binary| binary.path.as_os_str() == program) {
+        *cached = None;
+    }
 }
 
 fn spawn(cmd: &mut Command) -> Result<Child> {
-    cmd.spawn().map_err(spawn_failure)
+    let program = cmd.get_program().to_owned();
+    cmd.spawn().map_err(|e| spawn_failure(&program, e))
 }
 
-fn spawn_failure(e: std::io::Error) -> anyhow::Error {
-    let shown = bin();
-    forget_binary();
-    anyhow::Error::new(e).context(format!("could not run `{shown}`"))
+pub(crate) fn output(cmd: &mut Command) -> Result<Output> {
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    Ok(spawn(cmd)?.wait_with_output()?)
+}
+
+fn spawn_failure(program: &OsStr, e: std::io::Error) -> anyhow::Error {
+    forget_binary(program);
+    anyhow::Error::new(e).context(format!("could not run `{}`", program.to_string_lossy()))
 }
 
 pub(crate) fn use_binary(binary: Binary) {

@@ -41,7 +41,7 @@ impl Probe for Fake {
         self.programs.iter().any(|program| program == path)
     }
 
-    fn version(&self, path: &Path) -> Result<Vec<String>, String> {
+    fn version(&self, path: &Path, _: Option<&str>) -> Result<Vec<String>, String> {
         self.versions.get(path).cloned().unwrap_or_else(|| Err("no such file".to_string()))
     }
 
@@ -192,6 +192,15 @@ fn a_chosen_binary_that_is_too_old_is_named_when_nothing_else_is_found() {
     let Err(Missing::Unusable { origin, problem, .. }) = locate(&inputs, &probe) else { panic!("unusable") };
     assert_eq!(origin, Origin::Chosen);
     assert!(matches!(problem, Problem::TooOld(_)));
+}
+
+#[test]
+fn a_chosen_binary_that_is_gone_is_named_when_nothing_else_is_found() {
+    let inputs = Inputs { chosen: Some("/gone/cornercase".into()), ..mac() };
+    let Err(Missing::Unusable { path, origin, problem }) = locate(&inputs, &Fake::default()) else {
+        panic!("unusable")
+    };
+    assert_eq!((path, origin, problem), (PathBuf::from("/gone/cornercase"), Origin::Chosen, Problem::NotAProgram));
 }
 
 #[test]

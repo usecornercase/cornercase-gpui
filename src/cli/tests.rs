@@ -116,9 +116,12 @@ fn a_binary_found_on_the_path_leaves_the_environment_alone() {
 }
 
 #[test]
-fn a_binary_that_cannot_start_is_named_and_forgotten() {
-    use_binary(Binary::plain("/opt/x/cornercase".into()));
-    let error = spawn_failure(std::io::Error::other("gone"));
-    assert_eq!(error.to_string(), "could not run `/opt/x/cornercase`");
+fn a_binary_that_cannot_start_is_named_and_forgotten_only_if_it_is_still_the_cached_one() {
+    use_binary(Binary::plain("/opt/new/cornercase".into()));
+    let old = spawn_failure(OsStr::new("/opt/old/cornercase"), std::io::Error::other("gone"));
+    assert_eq!(old.to_string(), "could not run `/opt/old/cornercase`");
+    assert!(BINARY.lock().is_some());
+    let new = spawn_failure(OsStr::new("/opt/new/cornercase"), std::io::Error::other("gone"));
+    assert_eq!(new.to_string(), "could not run `/opt/new/cornercase`");
     assert!(BINARY.lock().is_none());
 }

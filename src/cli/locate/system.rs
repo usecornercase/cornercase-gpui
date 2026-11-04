@@ -1,6 +1,6 @@
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{ChildStdout, Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -10,6 +10,7 @@ use crate::desktop::Lookup;
 use crate::platform;
 
 const VERSION_WAIT: Duration = Duration::from_secs(5);
+const OUTPUT_BUDGET: u64 = 256 * 1024;
 const SHELL_WAIT: Duration = Duration::from_secs(5);
 
 pub(crate) struct System {
@@ -31,9 +32,12 @@ impl Probe for System {
         self.lookup.is_program(path)
     }
 
-    fn version(&self, path: &Path) -> Result<Vec<String>, String> {
+    fn version(&self, path: &Path, path_env: Option<&str>) -> Result<Vec<String>, String> {
         let mut cmd = platform::command(path);
         cmd.arg("--version");
+        if let Some(path_env) = path_env {
+            cmd.env("PATH", path_env);
+        }
         lines_within(&mut cmd, VERSION_WAIT, |lines| !lines.is_empty())
     }
 
@@ -50,15 +54,28 @@ fn lines_within(cmd: &mut Command, limit: Duration, done: fn(&[String]) -> bool)
     let mut child = cmd.spawn().map_err(|e| e.to_string())?;
     let (tx, rx) = mpsc::channel();
     if let Some(stdout) = child.stdout.take() {
-        thread::spawn(move || forward(stdout, &tx));
+        thread::spawn(move || forward(stdout.take(OUTPUT_BUDGET), &tx));
     }
     let lines = gather(&rx, deadline, done);
+    let timed_out = Instant::now() >= deadline;
+    let status = if timed_out { None } else { child.wait().ok() };
     let _ = child.kill();
     let _ = child.wait();
-    Ok(lines)
+    silence(lines, status, limit)
 }
 
-fn forward(stdout: ChildStdout, tx: &mpsc::Sender<String>) {
+fn silence(lines: Vec<String>, status: Option<ExitStatus>, limit: Duration) -> Result<Vec<String>, String> {
+    if !lines.is_empty() {
+        return Ok(lines);
+    }
+    match status {
+        Some(status) if !status.success() => Err(format!("it exited with {status} and printed nothing")),
+        Some(_) => Ok(lines),
+        None => Err(format!("it did not answer within {} s", limit.as_secs())),
+    }
+}
+
+fn forward(stdout: impl Read, tx: &mpsc::Sender<String>) {
     let lines = BufReader::new(stdout).lines().map_while(Result::ok);
     for line in lines {
         if tx.send(line).is_err() {
@@ -71,6 +88,9 @@ fn gather(rx: &mpsc::Receiver<String>, deadline: Instant, done: fn(&[String]) ->
     let mut lines = Vec::new();
     while !done(&lines) {
         let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            break;
+        }
         match rx.recv_timeout(left) {
             Ok(line) => lines.push(line),
             Err(_) => break,

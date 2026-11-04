@@ -68,3 +68,11 @@ fn a_bad_pick_is_kept_out_of_the_settings() {
     let missing = too_old("/opt/cc", Origin::Chosen);
     assert!(matches!(choice(Err(missing.clone())), Choice::Stay(m) if m == missing));
 }
+
+#[cfg(unix)]
+#[test]
+fn a_pick_whose_path_is_not_text_is_not_saved() {
+    use std::os::unix::ffi::OsStringExt;
+    let path = PathBuf::from(std::ffi::OsString::from_vec(vec![b'/', 0xff, b'c']));
+    assert!(matches!(choice(Ok(Binary::plain(path))), Choice::Stay(_)));
+}

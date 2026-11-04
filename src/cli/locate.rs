@@ -101,7 +101,7 @@ impl Inputs {
 pub(crate) trait Probe {
     fn find(&self, dirs: &[PathBuf], name: &str) -> Option<PathBuf>;
     fn is_program(&self, path: &Path) -> bool;
-    fn version(&self, path: &Path) -> Result<Vec<String>, String>;
+    fn version(&self, path: &Path, path_env: Option<&str>) -> Result<Vec<String>, String>;
     fn login_path(&self, shell: &Path) -> Option<String>;
 }
 
@@ -195,12 +195,14 @@ pub(crate) fn locate(inputs: &Inputs, probe: &impl Probe) -> Result<Binary, Miss
         return named(name, inputs, probe);
     }
     let by_hand = inputs.chosen.clone().filter(|path| probe.is_program(path));
+    let gone = inputs.chosen.clone().filter(|_| by_hand.is_none());
     let by_hand = by_hand.map(|path| checked(Found::plain(path, Origin::Chosen), inputs.os, probe));
     if let Some(Ok(binary)) = by_hand {
         return Ok(binary);
     }
     let Some(found) = find_binary(inputs, probe) else {
-        return Err(by_hand.and_then(Result::err).unwrap_or_else(|| not_found(inputs, probe)));
+        let stale = gone.map(|path| Missing::Unusable { path, origin: Origin::Chosen, problem: Problem::NotAProgram });
+        return Err(by_hand.and_then(Result::err).or(stale).unwrap_or_else(|| not_found(inputs, probe)));
     };
     checked(found, inputs.os, probe)
 }
@@ -256,7 +258,7 @@ fn not_found(inputs: &Inputs, probe: &impl Probe) -> Missing {
 }
 
 fn checked(found: Found, os: Os, probe: &impl Probe) -> Result<Binary, Missing> {
-    match verdict(probe.version(&found.path), os) {
+    match verdict(probe.version(&found.path, found.path_env.as_deref()), os) {
         Ok(()) => Ok(Binary { path: found.path, path_env: found.path_env }),
         Err(problem) => Err(Missing::Unusable { path: found.path, origin: found.origin, problem }),
     }
