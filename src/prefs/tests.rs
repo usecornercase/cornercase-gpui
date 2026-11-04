@@ -1,5 +1,3 @@
-use std::path::{Path, PathBuf};
-
 use super::*;
 
 #[test]
@@ -45,5 +43,7 @@ fn pages_load_on_hover_as_the_setting_says() {
 #[cfg(target_os = "macos")]
 #[test]
 fn on_a_mac_the_app_keeps_its_files_in_application_support() {
+    use std::path::{Path, PathBuf};
+
     assert_eq!(data_dir(Path::new("/Users/me")), PathBuf::from("/Users/me/Library/Application Support"));
 }

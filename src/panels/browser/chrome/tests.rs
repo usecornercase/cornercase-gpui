@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::*;
 
@@ -32,6 +32,8 @@ fn the_singleton_lock_names_the_browser_pid() {
 #[cfg(target_os = "macos")]
 #[test]
 fn on_a_mac_chrome_is_looked_for_in_both_applications_folders() {
+    use std::path::PathBuf;
+
     let found = candidates(Path::new("/Users/me"));
     assert!(found.contains(&PathBuf::from("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")));
     assert!(found.contains(&PathBuf::from("/Users/me/Applications/Chromium.app/Contents/MacOS/Chromium")));
