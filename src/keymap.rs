@@ -1,4 +1,4 @@
-use gpui::{Keystroke, Modifiers};
+use gpui::{Keystroke, Modifiers, Window};
 
 use crate::panels::PanelKind;
 use crate::platform::Os;
@@ -321,19 +321,23 @@ pub(crate) fn find(key: &str, shift: bool, browser: bool, os: Os) -> Option<&'st
         .min_by_key(|s| (s.shift != shift, !s.in_browser()))
 }
 
-pub(crate) fn chord(ks: &Keystroke, os: Os, browser: bool) -> Option<(&str, bool)> {
+pub(crate) fn shift_held(ks: &Keystroke, window: &Window) -> bool {
+    ks.modifiers.shift || window.modifiers().shift
+}
+
+pub(crate) fn chord(ks: &Keystroke, shift: bool, os: Os, browser: bool) -> Option<(&str, bool)> {
     match os {
         Os::Mac => ks.modifiers.platform.then_some((ks.key.as_str(), ks.modifiers.shift)),
-        Os::Linux => linux_chord(ks, browser),
+        Os::Linux => linux_chord(ks, shift, browser),
     }
 }
 
-pub(crate) fn shortcut(ks: &Keystroke, os: Os, browser: bool) -> Option<&'static Shortcut> {
-    let (key, shift) = chord(ks, os, browser)?;
+pub(crate) fn shortcut(ks: &Keystroke, shift: bool, os: Os, browser: bool) -> Option<&'static Shortcut> {
+    let (key, shift) = chord(ks, shift, os, browser)?;
     find(key, shift, browser, os)
 }
 
-fn linux_chord(ks: &Keystroke, browser: bool) -> Option<(&str, bool)> {
+fn linux_chord(ks: &Keystroke, shift: bool, browser: bool) -> Option<(&str, bool)> {
     let m = ks.modifiers;
     if m.platform || m.function {
         return None;
@@ -344,10 +348,10 @@ fn linux_chord(ks: &Keystroke, browser: bool) -> Option<(&str, bool)> {
     if m.alt && !m.control && !m.shift {
         return DIGITS.contains(&ks.key.as_str()).then_some((ks.key.as_str(), false));
     }
-    if !m.control {
+    if !m.control || !shift {
         return None;
     }
-    let base = if m.shift { ks.key.as_str() } else { unshifted(&ks.key)? };
+    let base = unshifted(&ks.key).unwrap_or(ks.key.as_str());
     match (DIGITS.contains(&base), SHIFTED_ON_LINUX.contains(&base), m.alt) {
         (true, ..) | (false, true, false) => None,
         (false, true, true) => Some((base, false)),

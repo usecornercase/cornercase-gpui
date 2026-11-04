@@ -1,18 +1,14 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+use crate::desktop::Scratch;
 
 const PIXELS: u32 = 900;
 const WITHIN: Duration = Duration::from_secs(8);
 const POLL: Duration = Duration::from_millis(20);
-
-pub(super) fn scratch() -> PathBuf {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("cornercase-gpui-peek-{}-{n}", std::process::id()))
-}
+pub(super) const SCRATCH: &str = "peek";
 
 pub(super) fn args(path: &Path, out: &Path) -> Vec<OsString> {
     let mut args: Vec<OsString> = ["-t", "-s", &PIXELS.to_string(), "-o"].iter().map(OsString::from).collect();
@@ -44,12 +40,9 @@ pub(super) fn finished_within(command: &mut Command, limit: Duration) -> bool {
 }
 
 pub(super) fn thumbnail(path: &Path) -> Option<Vec<u8>> {
-    let out = scratch();
-    std::fs::create_dir_all(&out).ok()?;
-    let finished = finished_within(Command::new("qlmanage").args(args(path, &out)), WITHIN);
-    let png = made(path, &out).filter(|_| finished).and_then(|png| std::fs::read(png).ok());
-    let _ = std::fs::remove_dir_all(&out);
-    png
+    let out = Scratch::folder(SCRATCH).ok()?;
+    let finished = finished_within(Command::new("qlmanage").args(args(path, out.path())), WITHIN);
+    made(path, out.path()).filter(|_| finished).and_then(|png| std::fs::read(png).ok())
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::desktop::lossy;
 use crate::platform::Os;
 
 const APP: &str = "cornercase";
@@ -11,10 +12,6 @@ pub(super) const NO_NOTIFY_SEND: &str =
 pub(super) const NO_PLAYER: &str = "No sound: install paplay (pulseaudio-utils) or pw-play (pipewire-bin)";
 pub(super) const NO_THEME: &str =
     "No sound: install the freedesktop sound theme (sound-theme-freedesktop), or choose sound files in Settings";
-
-fn lossy(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
-}
 
 pub(super) fn notification(
     os: Os,

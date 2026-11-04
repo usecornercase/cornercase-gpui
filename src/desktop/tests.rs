@@ -130,3 +130,43 @@ fn only_executable_files_are_found() {
     assert_eq!(find_in(&[PathBuf::from("relative")], "sh"), None);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_scratch_folder_is_private_and_goes_when_dropped() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let scratch = Scratch::folder("test").expect("the temporary folder is writable");
+    let path = scratch.path().to_path_buf();
+    std::fs::write(path.join("made"), "").expect("the folder is writable");
+    let mode = std::fs::metadata(&path).expect("the folder is there").permissions().mode();
+    assert_eq!(mode & 0o777, 0o700);
+    drop(scratch);
+    assert!(!path.exists());
+}
+
+#[test]
+fn a_scratch_name_someone_else_took_is_never_used() {
+    let mut planted = None;
+    let (path, ()) = fresh("test", |path| {
+        if planted.is_none() {
+            std::fs::create_dir(path)?;
+            planted = Some(path.to_path_buf());
+        }
+        private_folder(path)
+    })
+    .expect("the temporary folder is writable");
+    let planted = planted.expect("a folder was planted");
+    assert_ne!(path, planted);
+    let _ = std::fs::remove_dir(&path);
+    let _ = std::fs::remove_dir(&planted);
+}
+
+#[test]
+fn a_scratch_file_is_private_and_has_no_name() {
+    use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+
+    let file = scratch_file().expect("the temporary folder is writable");
+    let meta = file.metadata().expect("the file is open");
+    assert_eq!(meta.permissions().mode() & 0o777, 0o600);
+    assert_eq!(meta.nlink(), 0);
+}

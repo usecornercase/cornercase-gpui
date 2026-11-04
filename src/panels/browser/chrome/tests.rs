@@ -61,6 +61,24 @@ fn a_snap_keeps_its_profile_where_its_confinement_lets_it_write() {
 }
 
 #[test]
+fn the_browser_and_its_profile_are_chosen_once_one_is_found() {
+    use std::cell::Cell;
+    use std::path::PathBuf;
+
+    let cell = OnceLock::new();
+    assert!(chosen_in(&cell, || None).is_none());
+    let found = chosen_in(&cell, || Some(PathBuf::from("/nowhere/chromium"))).expect("a browser");
+    assert_eq!(found.exe, Path::new("/nowhere/chromium"));
+    let looked = Cell::new(false);
+    let kept = chosen_in(&cell, || {
+        looked.set(true);
+        Some(PathBuf::from("/elsewhere/chrome"))
+    });
+    assert_eq!(kept.map(|chosen| chosen.exe.as_path()), Some(Path::new("/nowhere/chromium")));
+    assert!(!looked.get());
+}
+
+#[test]
 fn the_singleton_lock_names_the_browser_pid() {
     assert_eq!(lock_pid("my-mac.local-48213"), Some(48213));
     assert_eq!(lock_pid("nohyphen"), None);

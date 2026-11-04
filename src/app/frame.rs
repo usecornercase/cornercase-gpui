@@ -80,8 +80,11 @@ pub(crate) enum Press {
 }
 
 impl Frame {
-    pub(crate) fn read(window: &Window) -> Self {
-        Self::of(window.window_decorations(), window.window_controls(), window.is_maximized())
+    pub(crate) fn read(window: &Window, os: Os) -> Self {
+        match os {
+            Os::Mac => Self::default(),
+            Os::Linux => Self::of(window.window_decorations(), window.window_controls(), window.is_maximized()),
+        }
     }
 
     pub(crate) fn of(decorations: Decorations, controls: WindowControls, maximised: bool) -> Self {
@@ -173,6 +176,10 @@ impl Grip {
             Press::Menu => window.show_window_menu(e.position),
             Press::Pass => {}
         }
+    }
+
+    fn let_go(cx: &mut App) {
+        cx.default_global::<Grip>().held = false;
     }
 
     fn moved(e: &MouseMoveEvent, window: &mut Window, cx: &mut App) {
@@ -288,7 +295,9 @@ pub(crate) fn title_row(row: Div, frame: Frame) -> Div {
     let menu = frame.controls.window_menu;
     row.on_any_mouse_down(move |e, window, cx| Grip::down(e, menu, window, cx))
         .on_mouse_move(Grip::moved)
-        .on_mouse_up(MouseButton::Left, |_, _, cx| cx.default_global::<Grip>().held = false)
+        .on_mouse_up(MouseButton::Left, |_, _, cx| Grip::let_go(cx))
+        .on_mouse_up_out(MouseButton::Left, |_, _, cx| Grip::let_go(cx))
+        .on_mouse_down_out(|_, _, cx| Grip::let_go(cx))
 }
 
 pub(crate) fn claimed(element: Div, frame: Frame) -> Div {

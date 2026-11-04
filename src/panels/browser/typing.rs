@@ -60,8 +60,8 @@ impl Typing {
     }
 }
 
-pub(crate) fn window_claims(key: &Keystroke, os: Os) -> bool {
-    keymap::shortcut(key, os, true).is_some()
+pub(crate) fn window_claims(key: &Keystroke, shift: bool, os: Os) -> bool {
+    keymap::shortcut(key, shift, os, true).is_some()
 }
 
 impl Browser {
@@ -71,9 +71,9 @@ impl Browser {
         }
     }
 
-    pub(super) fn page_key_down(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn page_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let key = &event.keystroke;
-        if key.key == "escape" || window_claims(key, Os::CURRENT) {
+        if key.key == "escape" || window_claims(key, keymap::shift_held(key, window), Os::CURRENT) {
             return;
         }
         if self.input.choice.is_some() {
@@ -94,9 +94,9 @@ impl Browser {
         }
     }
 
-    pub(super) fn page_key_up(&mut self, event: &KeyUpEvent, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn page_key_up(&mut self, event: &KeyUpEvent, window: &mut Window, cx: &mut Context<Self>) {
         let key = &event.keystroke;
-        if window_claims(key, Os::CURRENT) || self.input.choice.is_some() {
+        if window_claims(key, keymap::shift_held(key, window), Os::CURRENT) || self.input.choice.is_some() {
             return;
         }
         self.tell_page(("Input.dispatchKeyEvent", keyboard::key_up(key)));

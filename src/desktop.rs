@@ -1,6 +1,7 @@
 use std::ffi::OsString;
-use std::fs::File;
-use std::io::Read as _;
+use std::fs::{DirBuilder, File, OpenOptions};
+use std::io::{self, Read as _, Seek as _};
+use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -16,6 +17,7 @@ const BUNDLES: &[&str] = &["app", "xcodeproj", "xcworkspace", "framework", "bund
 const FILE_MANAGER1: &str = "org.freedesktop.FileManager1";
 const FILE_MANAGER1_PATH: &str = "/org/freedesktop/FileManager1";
 const NO_OPENER: &str = "nothing on this computer opens files: install xdg-utils, which gives xdg-open";
+const SCRATCH_TRIES: usize = 100;
 
 pub(crate) const fn machine(os: Os) -> &'static str {
     match os {
@@ -75,7 +77,7 @@ pub(crate) fn xdg_data_dirs() -> Vec<PathBuf> {
     data_dirs(home.as_deref(), std::env::var_os("XDG_DATA_HOME"), std::env::var_os("XDG_DATA_DIRS"))
 }
 
-fn lossy(path: &Path) -> String {
+pub(crate) fn lossy(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
@@ -170,7 +172,8 @@ pub(crate) fn reveal(path: &Path, dir: bool) -> Result<()> {
 pub(crate) fn run(argv: &[String]) -> Result<()> {
     let (program, rest) = argv.split_first().context("nothing to run")?;
     let name = name_of(program);
-    let (log, mut said) = scratch()?;
+    let log = scratch_file().context("could not make a temporary file")?;
+    let mut said = log.try_clone().context("could not read a temporary file")?;
     let mut child = Command::new(program)
         .args(rest)
         .stdin(Stdio::null())
@@ -194,18 +197,51 @@ fn name_of(program: &str) -> String {
     Path::new(program).file_name().map_or_else(|| program.to_string(), |name| name.to_string_lossy().into_owned())
 }
 
-fn scratch() -> Result<(File, File)> {
+pub(crate) struct Scratch(PathBuf);
+
+impl Scratch {
+    pub(crate) fn folder(stem: &str) -> io::Result<Self> {
+        fresh(stem, private_folder).map(|(path, ())| Self(path))
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn private_folder(path: &Path) -> io::Result<()> {
+    DirBuilder::new().mode(0o700).create(path)
+}
+
+fn fresh<T>(stem: &str, mut make: impl FnMut(&Path) -> io::Result<T>) -> io::Result<(PathBuf, T)> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!("cornercase-gpui-said-{}-{n}", std::process::id()));
-    let write = File::create(&path).context("could not make a temporary file")?;
-    let read = File::open(&path);
+    for _ in 0..SCRATCH_TRIES {
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("cornercase-gpui-{stem}-{}-{n}", std::process::id()));
+        match make(&path) {
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+            result => return result.map(|made| (path, made)),
+        }
+    }
+    Err(io::ErrorKind::AlreadyExists.into())
+}
+
+fn scratch_file() -> io::Result<File> {
+    let open = |path: &Path| OpenOptions::new().read(true).write(true).create_new(true).mode(0o600).open(path);
+    let (path, file) = fresh("said", open)?;
     let _ = std::fs::remove_file(&path);
-    Ok((write, read.context("could not read a temporary file")?))
+    Ok(file)
 }
 
 fn read(file: &mut File) -> String {
     let mut bytes = Vec::new();
+    let _ = file.rewind();
     let _ = file.take(64 * 1024).read_to_end(&mut bytes);
     String::from_utf8_lossy(&bytes).into_owned()
 }

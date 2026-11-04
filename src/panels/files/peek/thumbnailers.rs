@@ -1,9 +1,10 @@
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-use super::quicklook::{finished_within, scratch};
-use crate::desktop;
+use super::quicklook::{SCRATCH, finished_within};
+use crate::desktop::{self, Scratch};
 
 const PIXELS: u32 = 900;
 const WITHIN: Duration = Duration::from_secs(8);
@@ -17,8 +18,8 @@ pub(super) struct Thumbnailer {
 }
 
 impl Thumbnailer {
-    fn program(&self) -> &str {
-        self.try_exec.as_deref().or_else(|| self.exec.split_whitespace().next()).unwrap_or_default()
+    fn program(&self) -> String {
+        self.try_exec.clone().or_else(|| words(&self.exec).into_iter().next()).unwrap_or_default()
     }
 
     fn reads(&self, mime: &str) -> bool {
@@ -45,38 +46,78 @@ pub(super) fn parse(text: &str) -> Option<Thumbnailer> {
     Some(Thumbnailer { try_exec, exec: exec.filter(|exec| !exec.is_empty())?, types })
 }
 
+#[derive(Default)]
+struct Words {
+    done: Vec<String>,
+    word: Option<String>,
+    quote: Option<char>,
+}
+
+impl Words {
+    fn take(&mut self, c: char, rest: &mut impl Iterator<Item = char>) {
+        match (self.quote, c) {
+            (None, c) if c.is_whitespace() => self.done.extend(self.word.take()),
+            (None, '"' | '\'') => {
+                self.quote = Some(c);
+                self.word.get_or_insert_default();
+            }
+            (Some(quote), c) if c == quote => self.quote = None,
+            (None, '\\') => self.word.get_or_insert_default().extend(rest.next()),
+            (Some('"'), '\\') => escaped(self.word.get_or_insert_default(), rest.next()),
+            (_, c) => self.word.get_or_insert_default().push(c),
+        }
+    }
+}
+
+fn escaped(word: &mut String, next: Option<char>) {
+    match next {
+        Some(c @ ('"' | '`' | '$' | '\\')) => word.push(c),
+        Some(c) => word.extend(['\\', c]),
+        None => word.push('\\'),
+    }
+}
+
+pub(super) fn words(exec: &str) -> Vec<String> {
+    let mut words = Words::default();
+    let mut chars = exec.chars();
+    while let Some(c) = chars.next() {
+        words.take(c, &mut chars);
+    }
+    words.done.extend(words.word);
+    words.done
+}
+
 struct Fill {
-    path: String,
+    path: OsString,
     uri: String,
-    out: String,
+    out: OsString,
     size: String,
 }
 
 impl Fill {
-    fn expand(&self, word: &str) -> String {
-        let mut text = String::new();
+    fn expand(&self, word: &str) -> OsString {
+        let mut text = OsString::new();
         let mut chars = word.chars();
         while let Some(c) = chars.next() {
             let code = if c == '%' { chars.next() } else { None };
             match code {
-                Some('i') => text.push_str(&self.path),
-                Some('u') => text.push_str(&self.uri),
-                Some('o') => text.push_str(&self.out),
-                Some('s') => text.push_str(&self.size),
-                Some('%') => text.push('%'),
-                Some(other) => text.extend(['%', other]),
-                None => text.push(c),
+                Some('i') => text.push(&self.path),
+                Some('u') => text.push(&self.uri),
+                Some('o') => text.push(&self.out),
+                Some('s') => text.push(&self.size),
+                Some('%') => text.push("%"),
+                Some(other) => text.push(format!("%{other}")),
+                None => text.push(c.encode_utf8(&mut [0; 4])),
             }
         }
         text
     }
 }
 
-pub(super) fn argv(exec: &str, path: &Path, out: &Path, size: u32) -> Option<Vec<String>> {
+pub(super) fn argv(exec: &str, path: &Path, out: &Path, size: u32) -> Option<Vec<OsString>> {
     let uri = url::Url::from_file_path(path).ok()?.to_string();
-    let lossy = |p: &Path| p.to_string_lossy().into_owned();
-    let fill = Fill { path: lossy(path), uri, out: lossy(out), size: size.to_string() };
-    let argv: Vec<String> = exec.split_whitespace().map(|word| fill.expand(word.trim_matches('"'))).collect();
+    let fill = Fill { path: path.into(), uri, out: out.into(), size: size.to_string() };
+    let argv: Vec<OsString> = words(exec).iter().map(|word| fill.expand(word)).collect();
     (!argv.is_empty()).then_some(argv)
 }
 
@@ -106,7 +147,7 @@ pub(super) fn mime_of(name: &str, globs: &str) -> Option<String> {
 }
 
 pub(super) fn pick<'a>(all: &'a [Thumbnailer], mime: &str, runs: &dyn Fn(&str) -> bool) -> Option<&'a Thumbnailer> {
-    all.iter().find(|thumbnailer| thumbnailer.reads(mime) && runs(thumbnailer.program()))
+    all.iter().find(|thumbnailer| thumbnailer.reads(mime) && runs(&thumbnailer.program()))
 }
 
 fn runs(program: &str) -> bool {
@@ -131,15 +172,12 @@ pub(super) fn thumbnail(path: &Path) -> Option<Vec<u8>> {
     let mime = data.iter().find_map(|dir| mime_of(name, &std::fs::read_to_string(dir.join("mime/globs2")).ok()?))?;
     let all = installed(&data);
     let chosen = pick(&all, &mime, &runs)?;
-    let out = scratch();
-    std::fs::create_dir_all(&out).ok()?;
-    let png = out.join("thumbnail.png");
+    let out = Scratch::folder(SCRATCH).ok()?;
+    let png = out.path().join("thumbnail.png");
     let argv = argv(&chosen.exec, path, &png, PIXELS)?;
     let (program, rest) = argv.split_first()?;
     let finished = finished_within(Command::new(program).args(rest), WITHIN);
-    let made = std::fs::read(&png).ok().filter(|_| finished);
-    let _ = std::fs::remove_dir_all(&out);
-    made
+    std::fs::read(&png).ok().filter(|_| finished)
 }
 
 #[cfg(test)]

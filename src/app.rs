@@ -19,6 +19,7 @@ use crate::cli::{self, Queue, Stream, Target};
 use crate::model::{Frame, Grid, Project, Session, Workspace};
 use crate::notify::{self, Notifier};
 use crate::panels::PanelKind;
+use crate::platform::Os;
 use crate::render::Metrics;
 use crate::render::layout::{Along, Layout};
 use crate::render::moving::Moves;
@@ -546,6 +547,7 @@ impl Root {
     fn render_sheet(
         &mut self,
         kind: PanelKind,
+        window_frame: frame::Frame,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
@@ -554,13 +556,17 @@ impl Root {
         overlay(
             SharedString::from(format!("{id}-veil")),
             Way::In,
-            frame::Frame::read(window),
+            window_frame,
             motion::slide(card, SharedString::from(id), Way::In, (0., SHEET_RISE)),
         )
     }
 
-    fn render_leaving(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let window_frame = frame::Frame::read(window);
+    fn render_leaving(
+        &mut self,
+        window_frame: frame::Frame,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
         let sheet = self.leaving_sheet.gone().map(|(serial, kind)| (serial, *kind));
         let sheet = sheet.map(|(serial, kind)| {
             let card = sheet_card(kind, self.panel(kind, window, cx), &self.store);
@@ -602,7 +608,12 @@ impl Root {
         }
     }
 
-    fn render_main(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_main(
+        &mut self,
+        window_frame: frame::Frame,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let dock = self.store.read(cx).shown_dock().map_or(0., |kind| self.dock_size(kind, window));
         let at = (Edge::Right, self.sidebar_extent());
         div()
@@ -613,12 +624,17 @@ impl Root {
             .flex()
             .flex_row()
             .on_drag_move(split::follow::<_, SidebarGrip>(Edge::Right, TERMINAL_KEEP + dock, sidebar_width, cx))
-            .child(self.render_sidebar(window, cx))
-            .child(self.render_workspace_area(window, cx))
+            .child(self.render_sidebar(window_frame, cx))
+            .child(self.render_workspace_area(window_frame, window, cx))
             .child(split::handle("sidebar-split", SidebarGrip, at, sidebar_width, cx))
     }
 
-    fn render_workspace_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_workspace_area(
+        &mut self,
+        window_frame: frame::Frame,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         div()
             .flex_1()
             .h_full()
@@ -626,7 +642,7 @@ impl Root {
             .flex_col()
             .pl(px(GAP))
             .overflow_hidden()
-            .child(self.render_tabs(window, cx))
+            .child(self.render_tabs(window_frame, cx))
             .child(self.render_body(window, cx))
             .child(self.render_status(cx))
     }
@@ -879,12 +895,12 @@ impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_title(window);
         self.keep_beating(window, cx);
-        let window_frame = frame::Frame::read(window);
+        let window_frame = frame::Frame::read(window, Os::CURRENT);
         let (sheet, dialog) = {
             let s = self.store.read(cx);
             (s.sheet, s.dialog.clone())
         };
-        let sheet = sheet.map(|kind| self.render_sheet(kind, window, cx));
+        let sheet = sheet.map(|kind| self.render_sheet(kind, window_frame, window, cx));
         let content = div()
             .size_full()
             .relative()
@@ -897,7 +913,7 @@ impl Render for Root {
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
             .child(self.render_rail(cx))
-            .child(self.render_main(window, cx))
+            .child(self.render_main(window_frame, window, cx))
             .children(sheet)
             .children(dialog.map(|view| {
                 let id = view.entity_id();
@@ -908,7 +924,7 @@ impl Render for Root {
                     motion::slide(div().occlude().child(view), ("dialog-in", id), Way::In, (0., DIALOG_RISE)),
                 )
             }))
-            .children(self.render_leaving(window, cx))
+            .children(self.render_leaving(window_frame, window, cx))
             .child(crate::tour::Guide::get(cx))
             .child(self.render_toasts(cx));
         frame::framed(content, window_frame, window)
