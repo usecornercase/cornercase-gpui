@@ -175,7 +175,7 @@ pub(crate) fn commands(ks: &Keystroke) -> Vec<&'static str> {
 
 pub(crate) fn route(ks: &Keystroke, held: bool, os: Os) -> Route {
     let m = ks.modifiers;
-    let meta = m.alt && os == Os::Linux;
+    let meta = m.alt && os != Os::Mac;
     if m.platform || m.control || m.function || meta || named(&ks.key).is_some() {
         return Route::Key;
     }

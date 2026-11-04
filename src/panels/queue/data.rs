@@ -16,6 +16,9 @@ pub(super) const fn missed(os: Os) -> &'static str {
         Os::Linux => {
             "It was due while cornercase was stopped or the computer slept. Start it now, or edit it for another time."
         }
+        Os::Windows => {
+            "It was due while cornercase was stopped or the PC slept. Start it now, or edit it for another time."
+        }
     }
 }
 

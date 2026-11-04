@@ -1,6 +1,6 @@
 use std::io::{BufRead as _, BufReader};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
-use std::process::{Child, ChildStderr, Command, Stdio};
+use std::process::{Child, ChildStderr, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -12,6 +12,7 @@ use parking_lot::Mutex;
 use super::Event;
 use crate::desktop;
 use crate::panels::browser::chrome;
+use crate::platform;
 
 const START_WAIT: Duration = Duration::from_secs(20);
 const PROBE_EVERY: Duration = Duration::from_millis(150);
@@ -67,7 +68,7 @@ static RUNNING: Mutex<Vec<(u64, Child)>> = Mutex::new(Vec::new());
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
 fn spawn(args: &[String]) -> Result<(u64, Option<ChildStderr>)> {
-    let mut child = Command::new("ssh")
+    let mut child = platform::command("ssh")
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

@@ -1,16 +1,17 @@
 use std::ffi::OsString;
 use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::{self, Read as _, Seek as _};
+#[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, anyhow, bail};
 use gpui::App;
 
-use crate::platform::Os;
+use crate::platform::{self, Os};
 
 const SETTLE: Duration = Duration::from_secs(8);
 const ANSWER: Duration = Duration::from_secs(30);
@@ -25,6 +26,7 @@ pub(crate) const fn machine(os: Os) -> &'static str {
     match os {
         Os::Mac => "Mac",
         Os::Linux => "computer",
+        Os::Windows => "PC",
     }
 }
 
@@ -36,6 +38,7 @@ pub(crate) const fn file_manager(os: Os) -> &'static str {
     match os {
         Os::Mac => "Finder",
         Os::Linux => "file manager",
+        Os::Windows => "File Explorer",
     }
 }
 
@@ -43,6 +46,7 @@ pub(crate) fn show_label(os: Os, dir: bool) -> String {
     match (os, dir) {
         (Os::Mac, false) => "Reveal in Finder".to_string(),
         (Os::Linux, false) => "Show in file manager".to_string(),
+        (Os::Windows, false) => "Show in File Explorer".to_string(),
         (_, true) => format!("Open in {}", file_manager(os)),
     }
 }
@@ -61,27 +65,33 @@ pub(crate) const fn selection_board(os: Os) -> Board {
     if has_primary(os) { Board::Primary } else { Board::Clipboard }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub(crate) fn write_primary(text: &str, cx: &App) {
     cx.write_to_primary(gpui::ClipboardItem::new_string(text.to_string()));
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
 pub(crate) fn write_primary(_text: &str, _cx: &App) {}
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub(crate) fn read_primary(cx: &App) -> Option<String> {
     cx.read_from_primary().and_then(|item| item.text()).filter(|text| !text.is_empty())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
 pub(crate) fn read_primary(_cx: &App) -> Option<String> {
     None
 }
 
+#[cfg(unix)]
 pub(crate) fn executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt as _;
     std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+pub(crate) fn executable(path: &Path) -> bool {
+    path.is_file()
 }
 
 pub(crate) fn find_in(dirs: &[PathBuf], name: &str) -> Option<PathBuf> {
@@ -107,8 +117,15 @@ pub(crate) fn data_dirs(home: Option<&Path>, data_home: Option<OsString>, shared
 }
 
 pub(crate) fn xdg_data_dirs() -> Vec<PathBuf> {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    data_dirs(home.as_deref(), std::env::var_os("XDG_DATA_HOME"), std::env::var_os("XDG_DATA_DIRS"))
+    data_dirs(home().as_deref(), std::env::var_os("XDG_DATA_HOME"), std::env::var_os("XDG_DATA_DIRS"))
+}
+
+pub(crate) fn home() -> Option<PathBuf> {
+    std::env::home_dir().filter(|home| home.is_absolute())
+}
+
+pub(crate) fn home_text() -> String {
+    home().map(|home| lossy(&home)).unwrap_or_default()
 }
 
 pub(crate) fn lossy(path: &Path) -> String {
@@ -121,6 +138,7 @@ fn opener(os: Os, find: &dyn Fn(&str) -> Option<PathBuf>) -> Option<Vec<String>>
         Os::Linux => find("xdg-open")
             .map(|xdg| vec![lossy(&xdg)])
             .or_else(|| find("gio").map(|gio| vec![lossy(&gio), "open".to_string()])),
+        Os::Windows => None,
     }
 }
 
@@ -147,6 +165,7 @@ pub(crate) fn reveal_argv(
     match os {
         Os::Mac => Some(finder_argv(path, dir)),
         Os::Linux => file_manager_call(path, dir, find),
+        Os::Windows => None,
     }
 }
 
@@ -219,7 +238,7 @@ const LAUNCH: Wait = Wait { limit: SETTLE, late: Late::Launched };
 
 fn reveal_wait(os: Os) -> Wait {
     match os {
-        Os::Mac => LAUNCH,
+        Os::Mac | Os::Windows => LAUNCH,
         Os::Linux => Wait { limit: ANSWER, late: Late::Failed },
     }
 }
@@ -233,7 +252,7 @@ fn run_within(argv: &[String], wait: Wait) -> Result<()> {
     let name = name_of(program);
     let log = scratch_file().context("could not make a temporary file")?;
     let mut said = log.try_clone().context("could not read a temporary file")?;
-    let mut child = Command::new(program)
+    let mut child = platform::command(program)
         .args(rest)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -283,8 +302,14 @@ impl Drop for Scratch {
     }
 }
 
+#[cfg(unix)]
 fn private_folder(path: &Path) -> io::Result<()> {
     DirBuilder::new().mode(0o700).create(path)
+}
+
+#[cfg(not(unix))]
+fn private_folder(path: &Path) -> io::Result<()> {
+    DirBuilder::new().create(path)
 }
 
 fn fresh<T>(stem: &str, mut make: impl FnMut(&Path) -> io::Result<T>) -> io::Result<(PathBuf, T)> {
@@ -301,7 +326,13 @@ fn fresh<T>(stem: &str, mut make: impl FnMut(&Path) -> io::Result<T>) -> io::Res
 }
 
 fn scratch_file() -> io::Result<File> {
-    let open = |path: &Path| OpenOptions::new().read(true).write(true).create_new(true).mode(0o600).open(path);
+    let open = |path: &Path| {
+        let mut file = OpenOptions::new();
+        file.read(true).write(true).create_new(true);
+        #[cfg(unix)]
+        file.mode(0o600);
+        file.open(path)
+    };
     let (path, file) = fresh("said", open)?;
     let _ = std::fs::remove_file(&path);
     Ok(file)

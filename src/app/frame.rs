@@ -24,7 +24,7 @@ const CONTROL: f32 = 24.;
 
 pub(crate) fn decorations(os: Os) -> Option<WindowDecorations> {
     match os {
-        Os::Mac => None,
+        Os::Mac | Os::Windows => None,
         Os::Linux => Some(WindowDecorations::Client),
     }
 }
@@ -62,6 +62,7 @@ pub(crate) fn background(os: Os) -> WindowBackgroundAppearance {
     match os {
         Os::Mac => WindowBackgroundAppearance::Blurred,
         Os::Linux => WindowBackgroundAppearance::Transparent,
+        Os::Windows => WindowBackgroundAppearance::Opaque,
     }
 }
 
@@ -107,7 +108,7 @@ pub(crate) enum Press {
 impl Frame {
     pub(crate) fn read(window: &Window, os: Os) -> Self {
         match os {
-            Os::Mac => Self::default(),
+            Os::Mac | Os::Windows => Self::default(),
             Os::Linux => Self::of(window.window_decorations(), window.window_controls(), window.is_maximized()),
         }
     }

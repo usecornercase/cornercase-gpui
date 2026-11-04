@@ -157,7 +157,7 @@ fn card() -> Div {
 fn mark_lead(os: Os) -> (f32, f32) {
     match os {
         Os::Mac => (0., 34.),
-        Os::Linux => {
+        Os::Linux | Os::Windows => {
             let rail = rail::COLUMN;
             (-rail, (rail - ui::brand::mark_size(MARK)) / 2.)
         }

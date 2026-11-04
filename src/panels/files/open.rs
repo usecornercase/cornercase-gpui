@@ -87,7 +87,7 @@ pub(super) fn app_folders(os: Os, home: Option<&Path>) -> Vec<PathBuf> {
 
 pub(super) fn detect() -> Vec<(Opener, Launch)> {
     let os = Os::CURRENT;
-    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let home = desktop::home();
     find(os, &desktop::path_dirs(), &extra_dirs(os, home.as_deref()), &app_folders(os, home.as_deref()))
 }
 

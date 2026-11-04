@@ -43,6 +43,7 @@ fn its_command_line_is_split_as_the_desktop_entry_spec_quotes_it() {
     assert_eq!(video[2], "/w/a.mp4");
 }
 
+#[cfg(unix)]
 #[test]
 fn a_path_that_is_not_utf8_reaches_the_thumbnailer_as_it_is() {
     use std::ffi::OsStr;

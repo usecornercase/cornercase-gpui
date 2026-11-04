@@ -18,7 +18,7 @@ struct Parsed {
 }
 
 pub(super) fn read() -> Vec<String> {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return Vec::new() };
+    let Some(home) = crate::desktop::home() else { return Vec::new() };
     let mut hosts = Vec::new();
     read_file(&home.join(".ssh").join("config"), &home, 0, &mut hosts);
     hosts

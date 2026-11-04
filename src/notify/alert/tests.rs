@@ -87,6 +87,7 @@ fn a_helper_that_fails_is_known_by_its_last_words_or_its_status() {
     assert!(missing.starts_with("could not start pw-play: "), "{missing}");
 }
 
+#[cfg(unix)]
 #[test]
 fn a_sound_or_a_player_whose_path_is_not_utf8_is_passed_as_it_is() {
     use std::ffi::OsStr;

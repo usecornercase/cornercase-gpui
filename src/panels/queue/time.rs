@@ -22,11 +22,24 @@ impl Civil {
     }
 }
 
-pub(crate) fn local(at: i64) -> Option<Civil> {
-    let t = libc::time_t::try_from(at).ok()?;
+#[cfg(unix)]
+fn local_tm(t: libc::time_t) -> Option<libc::tm> {
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
     let ok = unsafe { !libc::localtime_r(&raw const t, &raw mut tm).is_null() };
-    ok.then(|| Civil {
+    ok.then_some(tm)
+}
+
+#[cfg(windows)]
+fn local_tm(t: libc::time_t) -> Option<libc::tm> {
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    let ok = unsafe { libc::localtime_s(&raw mut tm, &raw const t) } == 0;
+    ok.then_some(tm)
+}
+
+pub(crate) fn local(at: i64) -> Option<Civil> {
+    let t = libc::time_t::try_from(at).ok()?;
+    let tm = local_tm(t)?;
+    Some(Civil {
         year: tm.tm_year + 1900,
         month: u32::try_from(tm.tm_mon + 1).unwrap_or(1),
         day: u32::try_from(tm.tm_mday).unwrap_or(1),

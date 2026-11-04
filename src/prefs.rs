@@ -69,7 +69,7 @@ impl Prefs {
 }
 
 fn home() -> PathBuf {
-    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default()
+    crate::desktop::home().unwrap_or_default()
 }
 
 fn data_dir(home: &Path) -> PathBuf {

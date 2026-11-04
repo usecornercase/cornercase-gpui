@@ -85,19 +85,22 @@ pub(super) fn picture(image: Arc<Image>, label: String) -> Still {
 pub(super) fn thumbnail_label(os: Os, media: Option<Media>) -> String {
     match (os, media) {
         (Os::Mac, _) => "Quick Look preview".into(),
-        (Os::Linux, Some(_)) => "Plays only on macOS".into(),
-        (Os::Linux, None) => "Thumbnail".into(),
+        (Os::Linux | Os::Windows, Some(_)) => "Plays only on macOS".into(),
+        (Os::Linux | Os::Windows, None) => "Thumbnail".into(),
     }
 }
 
 pub(super) fn no_preview(os: Os, media: Option<Media>, missing: Missing) -> Still {
     match (os, media, missing) {
         (Os::Mac, _, _) => note("No preview", "macOS has no preview for this kind of file."),
-        (Os::Linux, Some(_), _) => note("Plays only on macOS", "Open it in its default app with the button above."),
+        (Os::Linux | Os::Windows, Some(_), _) => {
+            note("Plays only on macOS", "Open it in its default app with the button above.")
+        }
         (Os::Linux, None, Missing::NoReader) => {
             note("No preview", "No thumbnailer on this computer reads this kind of file.")
         }
-        (Os::Linux, None, Missing::Failed(why)) => note("No preview", format!("{why}.")),
+        (Os::Windows, None, Missing::NoReader) => note("No preview", "Windows has no preview for this kind of file."),
+        (Os::Linux | Os::Windows, None, Missing::Failed(why)) => note("No preview", format!("{why}.")),
     }
 }
 
@@ -106,6 +109,7 @@ fn preview(path: &Path) -> Still {
     let png = match os {
         Os::Mac => quicklook::thumbnail(path).ok_or(Missing::NoReader),
         Os::Linux => thumbnailers::thumbnail(path),
+        Os::Windows => Err(Missing::NoReader),
     };
     match png {
         Ok(png) => picture(Arc::new(Image::from_bytes(ImageFormat::Png, png)), thumbnail_label(os, media)),

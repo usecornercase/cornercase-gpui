@@ -70,7 +70,7 @@ impl Root {
             cx.stop_propagation();
             return;
         }
-        if ks.modifiers.platform {
+        if ks.modifiers.platform || keymap::left_to_system(ks, Os::CURRENT) {
             return;
         }
         if ks.key == "escape" && self.escape(terminal, window, cx) {

@@ -9,6 +9,7 @@ pub(super) const fn kept_login(os: Os) -> &'static str {
     match os {
         Os::Mac => "The keychain item stays",
         Os::Linux => "A login kept in the system keyring stays",
+        Os::Windows => "A login kept in the Windows Credential Manager stays",
     }
 }
 

@@ -1,11 +1,11 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
 use super::super::disk;
 use super::quicklook::{SCRATCH, finished_within, picture};
 use crate::desktop::{self, Scratch};
+use crate::platform;
 
 const PIXELS: u32 = 900;
 const WITHIN: Duration = Duration::from_secs(8);
@@ -247,7 +247,7 @@ fn make(chosen: &Thumbnailer, path: &Path) -> Result<Vec<u8>, String> {
     let png = out.path().join("thumbnail.png");
     let argv = argv(&chosen.exec, path, &png, PIXELS).ok_or("cannot be given this file")?;
     let (program, rest) = argv.split_first().ok_or("has no command")?;
-    finished_within(Command::new(program).args(rest), WITHIN)?;
+    finished_within(platform::command(program).args(rest), WITHIN)?;
     picture(&png, disk::MAX_IMAGE_BYTES)
 }
 

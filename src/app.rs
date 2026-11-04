@@ -881,7 +881,7 @@ fn font_size_from_env() -> f32 {
 }
 
 pub(crate) fn tilde(path: &str) -> String {
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = desktop::home_text();
     match path.strip_prefix(&home) {
         Some(rest) if !home.is_empty() => format!("~{rest}"),
         _ => path.to_string(),

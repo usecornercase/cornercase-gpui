@@ -3,7 +3,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Write as _};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -11,7 +11,7 @@ use anyhow::{Context as _, Result, bail};
 use parking_lot::Mutex;
 
 use crate::desktop;
-use crate::platform::Os;
+use crate::platform::{self, Os};
 
 const PREFERRED_PORT: u16 = 9222;
 const ACTIVE_PORT: &str = "DevToolsActivePort";
@@ -92,7 +92,7 @@ fn chosen_in(cell: &OnceLock<Chosen>, look: impl FnOnce() -> Option<PathBuf>) ->
 }
 
 fn home() -> PathBuf {
-    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default()
+    desktop::home().unwrap_or_default()
 }
 
 pub(crate) fn candidates(home: &Path) -> Vec<PathBuf> {
@@ -169,8 +169,9 @@ pub(crate) fn args(os: Os, profile: &Path, port: u16) -> Vec<OsString> {
     let mut user_data = OsString::from("--user-data-dir=");
     user_data.push(profile);
     let keyring = match os {
-        Os::Mac => "--use-mock-keychain",
-        Os::Linux => "--password-store=basic",
+        Os::Mac => Some("--use-mock-keychain"),
+        Os::Linux => Some("--password-store=basic"),
+        Os::Windows => None,
     };
     let flags = [
         "--remote-debugging-address=127.0.0.1",
@@ -180,11 +181,11 @@ pub(crate) fn args(os: Os, profile: &Path, port: u16) -> Vec<OsString> {
         "--disable-features=Translate,MediaRouter",
         "--force-color-profile=srgb",
         "--window-size=1280,800",
-        keyring,
-        "--no-startup-window",
     ];
     let mut args = vec!["--headless".into(), user_data, format!("--remote-debugging-port={port}").into()];
     args.extend(flags.map(OsString::from));
+    args.extend(keyring.map(OsString::from));
+    args.push("--no-startup-window".into());
     args
 }
 
@@ -261,7 +262,7 @@ fn launch(exe: &Path, profile: &Path) -> Result<Endpoint> {
     let _ = fs::remove_file(profile.join(ACTIVE_PORT));
     let port = if free(PREFERRED_PORT) { PREFERRED_PORT } else { 0 };
     let _ = fs::write(profile.join(PORT_FILE), port.to_string());
-    let mut child = Command::new(exe)
+    let mut child = platform::command(exe)
         .args(args(Os::CURRENT, profile, port))
         .stdin(Stdio::null())
         .stdout(Stdio::null())

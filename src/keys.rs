@@ -48,7 +48,7 @@ fn mods(keystroke: &Keystroke) -> Vec<&'static str> {
 }
 
 fn meta_text(keystroke: &Keystroke, os: Os) -> Option<&str> {
-    let text = keystroke.key_char.as_deref().filter(|_| os == Os::Linux && keystroke.modifiers.alt)?;
+    let text = keystroke.key_char.as_deref().filter(|_| os != Os::Mac && keystroke.modifiers.alt)?;
     let mut chars = text.chars();
     chars.next().filter(|c| !c.is_control() && chars.next().is_none()).map(|_| text)
 }

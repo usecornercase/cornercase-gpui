@@ -1,9 +1,9 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 use crate::desktop;
-use crate::platform::Os;
+use crate::platform::{self, Os};
 
 const APP: &str = "cornercase";
 const ICON: &str = "utilities-terminal";
@@ -47,6 +47,7 @@ pub(super) fn system_sound(os: Os, cue: &str, data: &[PathBuf]) -> Option<PathBu
             let name = if finished { "complete.oga" } else { "message-new-instant.oga" };
             data.iter().map(|dir| dir.join(FREEDESKTOP).join(name)).find(|path| path.is_file())
         }
+        Os::Windows => None,
     }
 }
 
@@ -92,7 +93,7 @@ pub(super) fn first_that_works(
 pub(super) fn run(argv: &[OsString]) -> Result<(), String> {
     let Some((program, rest)) = argv.split_first() else { return Ok(()) };
     let name = Path::new(program).file_name().unwrap_or(program).to_string_lossy().into_owned();
-    let out = Command::new(program)
+    let out = platform::command(program)
         .args(rest)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

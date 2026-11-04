@@ -36,7 +36,7 @@ fn columns(os: Os) -> [&'static [Section]; 3] {
             &[Keys(Group::Window), Keys(Group::Terminal)],
             &[Keys(Group::TabsAndPanes), Keys(Group::Browser), Elsewhere],
         ],
-        Os::Linux => [
+        Os::Linux | Os::Windows => [
             &[Keys(Group::Panels), System],
             &[Keys(Group::Window), Keys(Group::Terminal), Keys(Group::Browser)],
             &[Keys(Group::TabsAndPanes), Elsewhere],
@@ -47,7 +47,7 @@ fn columns(os: Os) -> [&'static [Section]; 3] {
 fn width(os: Os, window: f32) -> f32 {
     let wanted: f32 = match os {
         Os::Mac => 940.,
-        Os::Linux => 1120.,
+        Os::Linux | Os::Windows => 1120.,
     };
     wanted.min(window - 64.).max(480.)
 }

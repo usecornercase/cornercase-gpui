@@ -1,5 +1,5 @@
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use gpui::{
     Div, ElementId, FontStyle, HighlightStyle, Hsla, ImageFormat, InteractiveElement as _, IntoElement,
@@ -150,7 +150,7 @@ pub(super) fn small_f32(n: usize) -> f32 {
 }
 
 pub(super) fn home_relative(path: &Path) -> String {
-    match std::env::var_os("HOME").map(PathBuf::from) {
+    match crate::desktop::home() {
         Some(home) if path.starts_with(&home) => {
             format!("~/{}", path.strip_prefix(&home).map(|p| p.display().to_string()).unwrap_or_default())
         }

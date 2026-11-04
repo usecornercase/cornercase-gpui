@@ -161,6 +161,13 @@ const MAC_SYSTEM_KEYS: &[(&str, &str)] = &[
 const LINUX_SYSTEM_KEYS: &[(&str, &str)] =
     &[("Ctrl+Shift+M", "Minimise the window"), ("F11", "Full screen"), ("Ctrl+Shift+Q", "Quit")];
 
+const WINDOWS_SYSTEM_KEYS: &[(&str, &str)] = &[
+    ("Ctrl+Shift+M", "Minimise the window"),
+    ("F11", "Full screen"),
+    ("Alt+F4", "Close the window"),
+    ("Ctrl+Shift+Q", "Quit"),
+];
+
 const MAC_OTHER_KEYS: &[(&str, &str)] = &[
     ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
     ("Tab", "Next field of a dialog, ⇧Tab back"),
@@ -179,10 +186,20 @@ const LINUX_OTHER_KEYS: &[(&str, &str)] = &[
     ("Middle click", "Paste what is selected, Shift+middle click where a program takes the mouse"),
 ];
 
+const WINDOWS_OTHER_KEYS: &[(&str, &str)] = &[
+    ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
+    ("Tab", "Next field of a dialog, Shift+Tab back"),
+    ("↑ ↓ Enter", "Choose in a menu"),
+    ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
+    ("Click", "Open a web address as Settings › Links says, a path in Files"),
+    ("Ctrl+click", "Open a link or a path with its default app"),
+];
+
 pub(crate) fn system_keys(os: Os) -> &'static [(&'static str, &'static str)] {
     match os {
         Os::Mac => MAC_SYSTEM_KEYS,
         Os::Linux => LINUX_SYSTEM_KEYS,
+        Os::Windows => WINDOWS_SYSTEM_KEYS,
     }
 }
 
@@ -190,20 +207,21 @@ pub(crate) fn other_keys(os: Os) -> &'static [(&'static str, &'static str)] {
     match os {
         Os::Mac => MAC_OTHER_KEYS,
         Os::Linux => LINUX_OTHER_KEYS,
+        Os::Windows => WINDOWS_OTHER_KEYS,
     }
 }
 
 pub(crate) fn link_click(os: Os) -> &'static str {
     match os {
         Os::Mac => "⌘-click",
-        Os::Linux => "Ctrl+click",
+        Os::Linux | Os::Windows => "Ctrl+click",
     }
 }
 
 pub(crate) fn opens_with_system(modifiers: Modifiers, os: Os) -> bool {
     match os {
         Os::Mac => modifiers.platform,
-        Os::Linux => modifiers.control,
+        Os::Linux | Os::Windows => modifiers.control,
     }
 }
 
@@ -211,8 +229,8 @@ impl Shortcut {
     pub(crate) fn label(&self, os: Os) -> String {
         match (self.command, os) {
             (Command::Tab, Os::Mac) => "⌘1…9".to_string(),
-            (Command::Tab, Os::Linux) => "Alt+1…9".to_string(),
-            (_, Os::Linux) if self.in_browser() => page_label(self.keys[0]),
+            (Command::Tab, Os::Linux | Os::Windows) => "Alt+1…9".to_string(),
+            (_, Os::Linux | Os::Windows) if self.in_browser() => page_label(self.keys[0]),
             _ => keys_label(self.keys[0], self.shift, os),
         }
     }
@@ -229,7 +247,7 @@ impl Shortcut {
 impl Command {
     pub(crate) fn describe(self, os: Os) -> &'static str {
         match (self, os) {
-            (Self::Tab, Os::Linux) => "Go to a tab (Alt+9 the last)",
+            (Self::Tab, Os::Linux | Os::Windows) => "Go to a tab (Alt+9 the last)",
             _ => self.describe_any(),
         }
     }
@@ -322,6 +340,11 @@ pub(crate) fn find(key: &str, shift: bool, browser: bool, os: Os) -> Option<&'st
         .min_by_key(|s| (s.shift != shift, !s.in_browser()))
 }
 
+pub(crate) fn left_to_system(ks: &Keystroke, os: Os) -> bool {
+    let m = ks.modifiers;
+    os == Os::Windows && ks.key == "f4" && m.alt && !m.control && !m.shift && !m.platform
+}
+
 pub(crate) fn shift_held(ks: &Keystroke, window: &Window) -> bool {
     ks.modifiers.shift || window.modifiers().shift
 }
@@ -329,7 +352,7 @@ pub(crate) fn shift_held(ks: &Keystroke, window: &Window) -> bool {
 pub(crate) fn chord(ks: &Keystroke, shift: bool, os: Os, browser: bool) -> Option<(&str, bool)> {
     match os {
         Os::Mac => ks.modifiers.platform.then_some((ks.key.as_str(), ks.modifiers.shift)),
-        Os::Linux => linux_chord(ks, shift, browser),
+        Os::Linux | Os::Windows => control_chord(ks, shift, browser),
     }
 }
 
@@ -338,7 +361,7 @@ pub(crate) fn shortcut(ks: &Keystroke, shift: bool, os: Os, browser: bool) -> Op
     find(key, shift, browser, os)
 }
 
-fn linux_chord(ks: &Keystroke, shift: bool, browser: bool) -> Option<(&str, bool)> {
+fn control_chord(ks: &Keystroke, shift: bool, browser: bool) -> Option<(&str, bool)> {
     let m = ks.modifiers;
     if m.platform || m.function {
         return None;
@@ -407,7 +430,7 @@ pub(crate) fn keys_of(command: Command, os: Os) -> Option<String> {
 pub(crate) fn keys_label(key: &str, shift: bool, os: Os) -> String {
     match os {
         Os::Mac => format!("{}⌘{}", if shift { "⇧" } else { "" }, key.to_uppercase()),
-        Os::Linux => {
+        Os::Linux | Os::Windows => {
             let base = unshifted(key).unwrap_or(key);
             let shifted = shift || SHIFTED_ON_LINUX.contains(&base);
             format!("{}{}", if shifted { "Ctrl+Alt+Shift+" } else { "Ctrl+Shift+" }, key_name(base))

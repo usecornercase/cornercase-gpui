@@ -192,7 +192,7 @@ impl SettingsPanel {
     }
 
     pub(super) fn export_to_file(cx: &mut Context<Self>) {
-        let home = std::env::var("HOME").map_or_else(|_| PathBuf::from("/"), PathBuf::from);
+        let home = crate::desktop::home().unwrap_or_else(|| PathBuf::from("/"));
         let rx = cx.prompt_for_new_path(&home, Some("cornercase-setup.toml"));
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(path))) = rx.await {

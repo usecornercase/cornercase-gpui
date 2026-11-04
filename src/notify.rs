@@ -172,7 +172,7 @@ impl Notifier {
 
     fn play(&mut self, prefs: &Prefs, cue: &str, cx: &mut Context<Self>) {
         let os = Os::CURRENT;
-        let home = std::env::var("HOME").unwrap_or_default();
+        let home = desktop::home_text();
         let own = prefs.own_sound(cue, &home).map(PathBuf::from);
         let file = alert::cue_sound(os, cue, own, &desktop::xdg_data_dirs());
         let tries = file.ok_or(alert::NO_THEME).and_then(|file| alert::sound(os, &file, &desktop::on_path));

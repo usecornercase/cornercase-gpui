@@ -8,9 +8,13 @@ fn temp(name: &str) -> PathBuf {
 }
 
 fn executable(path: &Path) {
-    use std::os::unix::fs::PermissionsExt as _;
     std::fs::write(path, "#!/bin/sh\n").expect("the temporary files are writable");
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("the temporary files are writable");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mode = std::fs::Permissions::from_mode(0o755);
+        std::fs::set_permissions(path, mode).expect("the temporary files are writable");
+    }
 }
 
 #[test]

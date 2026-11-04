@@ -23,6 +23,7 @@ fn chrome_runs_headless_on_its_own_profile_and_port_without_a_first_page() {
     assert_eq!(args.last().and_then(|arg| arg.to_str()), Some("--no-startup-window"));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_profile_whose_path_is_not_utf8_reaches_chrome_byte_for_byte() {
     use std::ffi::OsStr;

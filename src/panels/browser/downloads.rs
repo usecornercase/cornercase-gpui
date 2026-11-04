@@ -39,7 +39,7 @@ pub(crate) fn free_path(dir: &Path, name: &str, taken: impl Fn(&Path) -> bool) -
 }
 
 fn home() -> PathBuf {
-    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default()
+    crate::desktop::home().unwrap_or_default()
 }
 
 fn downloads_dir() -> PathBuf {

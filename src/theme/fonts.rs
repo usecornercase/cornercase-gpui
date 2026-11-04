@@ -20,6 +20,8 @@ const LINUX_MONO: [&str; 9] = [
 ];
 const LINUX_SANS: [&str; 8] =
     ["Ubuntu Sans", "Ubuntu", "Adwaita Sans", "Cantarell", "Noto Sans", "Inter", "DejaVu Sans", "Liberation Sans"];
+const WINDOWS_MONO: [&str; 4] = ["Cascadia Mono", "Consolas", "Lucida Console", "Courier New"];
+const WINDOWS_SANS: [&str; 2] = ["Segoe UI", "Tahoma"];
 
 static CHOSEN: OnceLock<Fonts> = OnceLock::new();
 
@@ -63,12 +65,15 @@ fn unsettled(os: Os) -> Fonts {
 }
 
 pub(crate) fn choose(os: Os, families: &[String], installed: impl Fn(&str) -> bool, falls_back: bool) -> Option<Fonts> {
-    if os == Os::Mac {
-        return Some(unsettled(os));
-    }
-    let mono = LINUX_MONO.into_iter().chain(own(families).filter(|name| is_mono(name))).find(|name| installed(name));
-    let sans = LINUX_SANS
-        .into_iter()
+    let (monos, sanses): (&[&str], &[&str]) = match os {
+        Os::Mac => return Some(unsettled(os)),
+        Os::Linux => (&LINUX_MONO, &LINUX_SANS),
+        Os::Windows => (&WINDOWS_MONO, &WINDOWS_SANS),
+    };
+    let mono = monos.iter().copied().chain(own(families).filter(|name| is_mono(name))).find(|name| installed(name));
+    let sans = sanses
+        .iter()
+        .copied()
         .find(|name| installed(name))
         .or(falls_back.then_some(SYSTEM_SANS))
         .or_else(|| {

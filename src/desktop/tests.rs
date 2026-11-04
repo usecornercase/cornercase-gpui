@@ -145,6 +145,7 @@ fn only_executable_files_are_found() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_scratch_folder_is_private_and_goes_when_dropped() {
     use std::os::unix::fs::PermissionsExt as _;
@@ -175,6 +176,7 @@ fn a_scratch_name_someone_else_took_is_never_used() {
     let _ = std::fs::remove_dir(&planted);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_scratch_file_is_private_and_has_no_name() {
     use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};

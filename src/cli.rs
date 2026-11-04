@@ -38,7 +38,7 @@ impl Target {
     }
 
     fn command<S: AsRef<str>>(&self, args: &[S]) -> Command {
-        let mut cmd = Command::new(bin());
+        let mut cmd = crate::platform::command(bin());
         if let Self::Remote(remote) = self {
             cmd.args(remote.flags());
         }

@@ -180,7 +180,7 @@ pub(crate) fn terminal_opacity() -> f32 {
 pub(crate) fn ground(os: Os) -> Rgba {
     match os {
         Os::Mac => rgba(0x0b_0c_0e_8c),
-        Os::Linux => rgb(0x0b_0c_0e),
+        Os::Linux | Os::Windows => rgb(0x0b_0c_0e),
     }
 }
 

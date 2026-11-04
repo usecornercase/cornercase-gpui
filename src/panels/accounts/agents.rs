@@ -14,7 +14,7 @@ use crate::ui::{self, Icon, Tone};
 const NAME_RULE: &str = "Letters, digits, `.`, `_` and `-`, at most 32: it names the account's folder.";
 
 fn home() -> String {
-    std::env::var("HOME").unwrap_or_default()
+    crate::desktop::home_text()
 }
 
 fn env_label(provider: &Provider) -> impl IntoElement + use<> {

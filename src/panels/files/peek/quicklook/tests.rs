@@ -15,18 +15,20 @@ fn the_thumbnail_is_named_after_the_file() {
     assert_eq!(made(Path::new("/"), Path::new("/tmp/out")), None);
 }
 
+#[cfg(unix)]
 #[test]
 fn a_helper_that_fails_says_how() {
-    let shell = |script: &str| finished_within(Command::new("sh").args(["-c", script]), Duration::from_secs(5));
+    let shell = |script: &str| finished_within(platform::command("sh").args(["-c", script]), Duration::from_secs(5));
     assert_eq!(shell("exit 0"), Ok(()));
     assert_eq!(shell("exit 3"), Err("ended with exit status: 3".to_string()));
-    let missing = finished_within(&mut Command::new("/nowhere/at-all"), Duration::from_secs(5));
+    let missing = finished_within(&mut platform::command("/nowhere/at-all"), Duration::from_secs(5));
     assert!(missing.expect_err("nothing runs").starts_with("could not start: "));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_helper_still_running_at_the_limit_is_stopped() {
-    let late = finished_within(Command::new("sh").args(["-c", "exec sleep 30"]), Duration::from_millis(50));
+    let late = finished_within(platform::command("sh").args(["-c", "exec sleep 30"]), Duration::from_millis(50));
     assert_eq!(late, Err("did not finish within 0 s".to_string()));
 }
 

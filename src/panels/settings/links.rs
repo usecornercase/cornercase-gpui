@@ -15,6 +15,7 @@ pub(super) const fn default_browser(os: Os) -> &'static str {
     match os {
         Os::Mac => "The browser macOS opens links with",
         Os::Linux => "The browser your desktop opens links with",
+        Os::Windows => "The browser Windows opens links with",
     }
 }
 
