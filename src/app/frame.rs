@@ -333,7 +333,7 @@ pub(crate) fn restore_step(full_screen: bool, frame: Frame, now: Size<Pixels>, w
 }
 
 fn restore(window: &mut Window, windowed: Size<Pixels>) -> Restore {
-    let step = restore_step(window.is_fullscreen(), Frame::read(window), window.bounds().size, windowed);
+    let step = restore_step(window.is_fullscreen(), Frame::read(window, Os::CURRENT), window.bounds().size, windowed);
     if step == Restore::Resize {
         window.resize(windowed);
     }
