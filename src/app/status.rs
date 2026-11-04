@@ -67,6 +67,7 @@ impl Root {
             Conn::Starting => (colours::working(), "connecting…".to_string(), None),
             Conn::Connected => (colours::done(), version, None),
             Conn::Lost(why) => (colours::failed(), "disconnected".to_string(), Some(why.clone())),
+            Conn::Missing(missing) => (colours::failed(), format!("cornercase {}", missing.label()), None),
         };
         let label = match &self.host {
             Some(host) => format!("{host} · {state}"),

@@ -47,3 +47,16 @@ fn on_a_mac_the_app_keeps_its_files_in_application_support() {
 
     assert_eq!(data_dir(Path::new("/Users/me")), PathBuf::from("/Users/me/Library/Application Support"));
 }
+
+#[test]
+fn a_chosen_cornercase_is_kept_in_the_settings() {
+    let prefs = Prefs::default().with("cornercase_bin", "/opt/cc/cornercase").expect("a string setting");
+    assert_eq!(prefs.cornercase_bin.as_deref(), Some("/opt/cc/cornercase"));
+    assert_eq!(Prefs::parse(&serde_json::to_string(&prefs).expect("writes")), prefs);
+}
+
+#[test]
+fn settings_from_before_keep_no_chosen_cornercase() {
+    let prefs = Prefs::parse(r#"{"open_links": "browser_panel"}"#);
+    assert_eq!((prefs.open_links, prefs.cornercase_bin), (OpenLinks::BrowserPanel, None));
+}

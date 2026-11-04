@@ -67,23 +67,23 @@ fn reopen_label(closed: usize) -> String {
     if closed == 1 { "Reopen the agent".to_string() } else { format!("Reopen {closed} agents") }
 }
 
-fn page() -> Div {
+pub(super) fn page() -> Div {
     div().absolute().inset_0().flex().flex_col().items_center().justify_center().gap(px(10.)).p(px(24.))
 }
 
-fn heading(text: &str) -> Div {
+pub(super) fn heading(text: &str) -> Div {
     div().text_size(px(17.)).font_weight(FontWeight::SEMIBOLD).text_center().child(text.to_string())
 }
 
-fn lead_text(text: String) -> Div {
+pub(super) fn lead_text(text: String) -> Div {
     div().max_w(px(540.)).text_center().text_color(colours::muted()).child(text)
 }
 
-fn tall(button: Stateful<Div>) -> Stateful<Div> {
+pub(super) fn tall(button: Stateful<Div>) -> Stateful<Div> {
     button.h(px(32.)).px(px(16.)).text_size(px(13.))
 }
 
-fn row() -> Div {
+pub(super) fn row() -> Div {
     div().flex().flex_wrap().justify_center().gap(px(10.)).pt(px(6.))
 }
 

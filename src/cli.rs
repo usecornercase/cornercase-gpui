@@ -1,3 +1,4 @@
+mod locate;
 mod partial;
 mod remote;
 mod requests;
@@ -11,8 +12,12 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 
 use anyhow::{Context as _, Result, bail};
+use locate::{Inputs, System};
 use parking_lot::Mutex;
 
+#[cfg(test)]
+pub(crate) use locate::parse_version;
+pub(crate) use locate::{Binary, INSTALL_GUIDE, Missing, Origin, Problem, minimum};
 pub(crate) use partial::run_partial;
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
@@ -38,7 +43,14 @@ impl Target {
     }
 
     fn command<S: AsRef<str>>(&self, args: &[S]) -> Command {
-        let mut cmd = crate::platform::command(bin());
+        self.command_with(&binary(), args)
+    }
+
+    fn command_with<S: AsRef<str>>(&self, binary: &Binary, args: &[S]) -> Command {
+        let mut cmd = crate::platform::command(&binary.path);
+        if let Some(path) = &binary.path_env {
+            cmd.env("PATH", path);
+        }
         if let Self::Remote(remote) = self {
             cmd.args(remote.flags());
         }
@@ -77,8 +89,32 @@ fn generation() -> u64 {
     CURRENT.lock().generation
 }
 
-pub(crate) fn bin() -> String {
-    std::env::var("CORNERCASE_BIN").unwrap_or_else(|_| "cornercase".to_string())
+static BINARY: Mutex<Option<Binary>> = Mutex::new(None);
+
+fn binary() -> Binary {
+    BINARY.lock().clone().unwrap_or_else(|| {
+        Binary::plain(std::env::var("CORNERCASE_BIN").unwrap_or_else(|_| "cornercase".to_string()).into())
+    })
+}
+
+fn bin() -> String {
+    binary().path.display().to_string()
+}
+
+pub(crate) fn use_binary(binary: Binary) {
+    *BINARY.lock() = Some(binary);
+}
+
+pub(crate) fn ensure_binary(chosen: Option<String>) -> Result<(), Missing> {
+    if BINARY.lock().is_some() {
+        return Ok(());
+    }
+    use_binary(locate::locate(&Inputs::here(chosen), &System::here())?);
+    Ok(())
+}
+
+pub(crate) fn check_chosen(path: std::path::PathBuf) -> Result<Binary, Missing> {
+    locate::chosen(path, crate::platform::Os::CURRENT, &System::here())
 }
 
 pub(crate) fn command<S: AsRef<str>>(args: &[S]) -> Command {

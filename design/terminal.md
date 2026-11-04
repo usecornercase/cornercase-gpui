@@ -1,6 +1,6 @@
 # Terminal
 
-Code: `src/terminal.rs` (keys, ⌘ shortcuts, the surface element), `src/keymap.rs` (the shortcuts and how a keystroke reads as one on each platform), `src/terminal/` (`mouse.rs`, `selection.rs`, `links.rs`, `pane_menu.rs`, `pane_drag.rs`, `input.rs`, `pasting.rs`, `popup.rs`, `no_tab.rs`), `src/render.rs`, `src/render/layout.rs`, `src/render/popup.rs`, `src/keys.rs`, `src/tabs.rs`, `src/context_menu.rs`
+Code: `src/terminal.rs` (keys, ⌘ shortcuts, the surface element), `src/keymap.rs` (the shortcuts and how a keystroke reads as one on each platform), `src/terminal/` (`mouse.rs`, `selection.rs`, `links.rs`, `pane_menu.rs`, `pane_drag.rs`, `input.rs`, `pasting.rs`, `popup.rs`, `no_tab.rs`, `missing.rs`), `src/render.rs`, `src/render/layout.rs`, `src/render/popup.rs`, `src/keys.rs`, `src/tabs.rs`, `src/context_menu.rs`
 
 ## Keys and text
 
@@ -67,6 +67,14 @@ Code: `keymap.rs` (`chord`, `left_to_system`, `typed_with_alt_gr`, the labels an
 - **No project at all is a welcome**, as the TUI's: the mark, the wordmark, the site's tagline and Open a project… (⌘O).
 - **What counts as showing no tab**: the session's view shows no tab, and the frame on screen is older than that session. Frames carry the view's `projection`, which cornercase bumps whenever what the view shows changes, so a frame with a projection at least the session's came for a tab shown since (`Session::shows_no_tab`). Gating on the session alone was rejected: view lines reach the window up to 500 ms after a change (`design/sidebar.md`, folds), while the new tab's frame comes at once, so going from an empty project to a tab would show the page for half a second over a terminal that had arrived. While it shows no tab the panes are neither drawn nor hit, and keys reach no pane (`Root::frame_shown`); a drag in progress when it switches there (a pane held by its handle, a divider, a selection) is dropped, so a pane's ghost does not hang over the page until the button is released, and a program that got the press gets its release at the last cell it was sent, so it is not left mid-drag (`Root::drop_drags_without_tab`, both found by Greptile on #10).
 - Checked live on 2026-11-01 with cornercase 0.12.235 on an isolated server (`CORNERCASE_SOCKET`): the welcome with no project, a project whose only tab was closed (from another tab, and closing the shown tab), back to a tab (its terminal drawn within 0.3 s), a window started on a project with nothing open (no toast, no surface asked for until a tab showed), New shell clicked (a tab opened there and drew), and two closed agents faked into `view` through a `CORNERCASE_BIN` wrapper (Reopen was not pressed). Not checked live: a worktree being removed, and Start an agent… (the dialog is the sidebar's).
+
+## cornercase missing (`missing.rs`)
+
+- **Asked for in #21**: a window started from the Finder or an app menu used to say "Lost cornercase / could not run `cornercase`" and retry every 1.5 s forever. Now it finds cornercase (`design/connection.md`) and, when it cannot use one, draws a page in the terminal's place, as it does for the welcome and "No tab open" (the window has nothing else to show then).
+- **The cases**: none found (with where it looked, the home as `~`), CORNERCASE_BIN or a chosen file that is not a program, a binary older than the minimum (naming its version and the path), one that does not start (with the system's reason), and one whose `--version` is not cornercase's. The status bar says the same in two or three words.
+- **Buttons**: Installation guide (usecornercase.dev/docs/installation/), Try again and Choose cornercase… (a file picker; hidden under CORNERCASE_BIN, which would still win, and the page says to fix or unset it).
+- **No retry of its own**, unlike a lost connection: the lookup can run the user's rc files and an install needs the user. Try again and a pick set the connection to starting, so the page becomes the "Connecting to cornercase…" note with the pulsing mark and the status bar's dot, which is how it shows that it runs. A pick that fails stays on the page with its reason and is not saved.
+- **Not checked**: the page on Windows and the not-found case on this Mac (cornercase is installed here); both are covered by plain tests of the texts and of the lookup.
 
 ## Mouse
 
