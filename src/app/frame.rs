@@ -10,8 +10,14 @@ use gpui::{
 
 use super::{GAP, TITLEBAR_HEIGHT};
 use crate::platform::Os;
-use crate::theme::{colours, radius};
+use crate::theme::{self, colours, radius};
 use crate::ui::{self, Icon};
+
+#[cfg(windows)]
+mod win32;
+#[cfg(not(windows))]
+#[path = "frame/no_win32.rs"]
+mod win32;
 
 pub(crate) const APP_ID: &str = "cornercase-gpui";
 const RESTORE_POLL: Duration = Duration::from_millis(20);
@@ -66,6 +72,12 @@ pub(crate) fn fit_to_frame(os: Os, wayland: bool, window: &mut Window) {
     let frame = Frame::read(window, os);
     if let Some(size) = fitted(os, wayland, frame, window.is_fullscreen(), window.bounds().size) {
         window.resize(size);
+    }
+}
+
+pub(crate) fn show_backdrop(window: &Window) {
+    if Os::CURRENT == Os::Windows {
+        theme::backdrop_shown(win32::backdrop(window).is_ok());
     }
 }
 

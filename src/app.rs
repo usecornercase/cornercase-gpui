@@ -172,6 +172,7 @@ impl Kept {
 
 impl Root {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        frame::show_backdrop(window);
         let missing = theme::missing_font();
         let mut root = Self::open(Kept::at_start(), window, cx);
         root.open_requested_panel(cx);
