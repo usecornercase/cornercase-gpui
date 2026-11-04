@@ -32,6 +32,9 @@ use crate::platform::Os;
 
 actions!(cornercase_gpui, [Quit, Hide, HideOthers, ShowAll, Minimise, Zoom, FullScreen]);
 
+const SHOWN: (f32, f32) = (1280., 800.);
+const LEAST: (f32, f32) = (640., 360.);
+
 fn on_window(cx: &mut App, act: fn(&mut Window, &mut App)) {
     if let Some(window) = cx.active_window() {
         cx.defer(move |cx| {
@@ -90,7 +93,9 @@ fn system_keys(cx: &mut App) {
 }
 
 fn open_window(cx: &mut App) {
-    let bounds = Bounds::centered(None, app::frame::outer(Os::CURRENT, (1280., 800.)), cx);
+    let screen = cx.primary_display().map(|display| display.bounds().size);
+    let shown = app::frame::opening_size(SHOWN, LEAST, screen);
+    let bounds = Bounds::centered(None, app::frame::outer(Os::CURRENT, shown), cx);
     let wayland = cx.compositor_name() == "Wayland";
     let opened = cx.open_window(
         WindowOptions {
@@ -103,7 +108,7 @@ fn open_window(cx: &mut App) {
             window_background: app::frame::background(Os::CURRENT),
             window_decorations: app::frame::decorations(Os::CURRENT),
             app_id: Some(app::frame::APP_ID.into()),
-            window_min_size: Some(app::frame::min_size(Os::CURRENT, wayland, (640., 360.))),
+            window_min_size: Some(app::frame::min_size(Os::CURRENT, wayland, LEAST)),
             ..Default::default()
         },
         move |window, cx| {

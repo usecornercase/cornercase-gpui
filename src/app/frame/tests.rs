@@ -5,7 +5,7 @@ use gpui::{
 
 use super::{
     Control, Frame, Grip, Press, RESTORE_POLL, RESTORE_POLL_LATER, Restore, background, cursor, decorations, fitted,
-    min_size, outer, press, restore_poll, restore_step, windowed_size,
+    min_size, opening_size, outer, press, restore_poll, restore_step, windowed_size,
 };
 use crate::platform::Os;
 
@@ -310,4 +310,28 @@ fn a_windows_window_opens_at_the_size_it_shows_and_is_never_fitted_or_restored_b
     assert_eq!(min_size(Os::Windows, false, (640., 360.)), bounds(640., 360.).size);
     assert_eq!(fitted(Os::Windows, false, windows(false, false), false, shown), None);
     assert_eq!(windowed_size(Os::Windows, WindowBounds::Fullscreen(bounds(1280., 800.))), None);
+}
+
+#[test]
+fn the_first_window_keeps_its_size_on_a_screen_with_room_for_it() {
+    let screen = Some(bounds(1920., 1080.).size);
+    assert_eq!(opening_size((1280., 800.), (640., 360.), screen), (1280., 800.));
+}
+
+#[test]
+fn the_first_window_shrinks_to_fit_a_small_screen_with_room_around_it() {
+    let (width, height) = opening_size((1280., 800.), (640., 360.), Some(bounds(1024., 768.).size));
+    assert!(width < 1024. && height < 768.);
+    assert!((1024. - width - 2. * super::SCREEN_MARGIN).abs() < f32::EPSILON);
+    assert!((768. - height - 2. * super::SCREEN_MARGIN).abs() < f32::EPSILON);
+}
+
+#[test]
+fn the_first_window_never_opens_below_its_minimum_size() {
+    assert_eq!(opening_size((1280., 800.), (640., 360.), Some(bounds(600., 400.).size)), (640., 360.));
+}
+
+#[test]
+fn the_first_window_keeps_its_size_when_no_screen_is_known() {
+    assert_eq!(opening_size((1280., 800.), (640., 360.), None), (1280., 800.));
 }

@@ -25,6 +25,7 @@ const CONTROL: f32 = 24.;
 const CAPTION_BUTTON: f32 = 46.;
 const CAPTION_GLYPH: f32 = 18.;
 const RESIZE_BAND: f32 = 4.;
+const SCREEN_MARGIN: f32 = 48.;
 
 pub(crate) fn decorations(os: Os) -> Option<WindowDecorations> {
     match os {
@@ -36,6 +37,12 @@ pub(crate) fn decorations(os: Os) -> Option<WindowDecorations> {
 pub(crate) fn outer(os: Os, (width, height): (f32, f32)) -> Size<Pixels> {
     let margin = if os == Os::Linux { 2. * INSET } else { 0. };
     size(px(width + margin), px(height + margin))
+}
+
+pub(crate) fn opening_size(wanted: (f32, f32), least: (f32, f32), screen: Option<Size<Pixels>>) -> (f32, f32) {
+    let Some(screen) = screen else { return wanted };
+    let fit = |wanted: f32, least: f32, room: f32| wanted.min(room - 2. * SCREEN_MARGIN).max(least);
+    (fit(wanted.0, least.0, screen.width.into()), fit(wanted.1, least.1, screen.height.into()))
 }
 
 pub(crate) fn min_size(os: Os, wayland: bool, (width, height): (f32, f32)) -> Size<Pixels> {
