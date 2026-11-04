@@ -12,5 +12,3 @@ pub(crate) fn windows_folder() -> Option<PathBuf> {
 pub(super) fn dangerous(_extension: &OsStr) -> bool {
     false
 }
-
-pub(super) fn set_app_id(_id: &str) {}

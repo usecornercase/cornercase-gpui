@@ -139,7 +139,6 @@ fn alert(why: &str) {
 fn alert(_: &str) {}
 
 fn main() {
-    desktop::set_app_id();
     let target =
         cli::Target::from_args(&std::env::args().collect::<Vec<_>>()).unwrap_or_else(|e| fail(&e.to_string(), 2));
     cli::connect(target);

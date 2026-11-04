@@ -5,8 +5,7 @@ use std::path::PathBuf;
 use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoInitializeEx, CoUninitialize};
 use windows::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
 use windows::Win32::UI::Shell::{
-    AssocIsDangerous, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW,
-    SetCurrentProcessExplicitAppUserModelID, ShellExecuteExW,
+    AssocIsDangerous, SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW, ShellExecuteExW,
 };
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{HSTRING, PCWSTR};
@@ -51,8 +50,4 @@ pub(super) fn dangerous(extension: &OsStr) -> bool {
     let mut dotted = OsString::from(".");
     dotted.push(extension);
     unsafe { AssocIsDangerous(&HSTRING::from(dotted.as_os_str())) }.as_bool()
-}
-
-pub(super) fn set_app_id(id: &str) {
-    let _ = unsafe { SetCurrentProcessExplicitAppUserModelID(&HSTRING::from(id)) };
 }

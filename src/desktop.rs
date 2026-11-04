@@ -138,10 +138,6 @@ pub(crate) fn read_primary(_cx: &App) -> Option<String> {
     None
 }
 
-pub(crate) fn set_app_id() {
-    win32::set_app_id(APP_USER_MODEL_ID);
-}
-
 #[cfg(unix)]
 fn has_execute_bit(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt as _;
