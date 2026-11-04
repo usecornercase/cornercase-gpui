@@ -16,11 +16,40 @@ fn an_active_port_file_without_a_path_is_not_ready() {
 
 #[test]
 fn chrome_runs_headless_on_its_own_profile_and_port_without_a_first_page() {
-    let args = args(Path::new("/tmp/profile"), 9333);
+    let args = args(Os::CURRENT, Path::new("/tmp/profile"), 9333);
     assert!(args.contains(&"--headless".to_string()));
     assert!(args.contains(&"--user-data-dir=/tmp/profile".to_string()));
     assert!(args.contains(&"--remote-debugging-port=9333".to_string()));
     assert_eq!(args.last().map(String::as_str), Some("--no-startup-window"));
+}
+
+#[test]
+fn chrome_never_asks_for_the_keychain_or_the_keyring() {
+    let mac = args(Os::Mac, Path::new("/p"), 9222);
+    assert!(mac.contains(&"--use-mock-keychain".to_string()));
+    let linux = args(Os::Linux, Path::new("/p"), 9222);
+    assert!(linux.contains(&"--password-store=basic".to_string()));
+    assert!(!linux.contains(&"--use-mock-keychain".to_string()));
+}
+
+#[test]
+fn a_snap_is_known_by_its_command_or_by_the_script_that_runs_it() {
+    let snap = Path::new("/usr/bin/snap");
+    assert_eq!(snap_name(Path::new("/snap/bin/chromium"), snap, b"\x7fELF"), Some("chromium".into()));
+    assert_eq!(snap_name(Path::new("/home/me/bin/chromium.chromedriver"), snap, b""), Some("chromium".into()));
+    let wrapper = b"#!/bin/sh\nif ! [ -x /snap/bin/chromium ]; then exit 1; fi\nexec /snap/bin/chromium \"$@\"\n";
+    let real = Path::new("/usr/bin/chromium-browser");
+    assert_eq!(snap_name(real, real, wrapper), Some("chromium".into()));
+    let debian = Path::new("/usr/lib/chromium/chromium");
+    assert_eq!(snap_name(Path::new("/usr/bin/chromium"), debian, b"\x7fELF"), None);
+    let plain_script = b"#!/bin/sh\nexec /usr/lib/chromium/chromium \"$@\"\n";
+    assert_eq!(snap_name(real, real, plain_script), None);
+}
+
+#[test]
+fn a_snap_keeps_its_profile_where_its_confinement_lets_it_write() {
+    let profile = snap_profile(Path::new("/home/me"), "chromium");
+    assert_eq!(profile, Path::new("/home/me/snap/chromium/common/cornercase-gpui-browser"));
 }
 
 #[test]

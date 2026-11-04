@@ -1,12 +1,14 @@
 use std::path::PathBuf;
 
+use anyhow::Context as _;
 use gpui::{
-    AnyElement, AppContext as _, ClickEvent, ClipboardItem, Context, InteractiveElement as _, IntoElement,
-    MouseDownEvent, ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Styled as _, anchored,
-    deferred, div, px,
+    AnyElement, ClickEvent, ClipboardItem, Context, InteractiveElement as _, IntoElement, MouseDownEvent,
+    ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Styled as _, anchored, deferred, div, px,
 };
 
-use crate::store::{Busy, ToastKind};
+use crate::desktop;
+use crate::platform::Os;
+use crate::store::{self, Busy, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
 
@@ -24,28 +26,29 @@ struct Opening {
 }
 
 impl Opening {
-    fn argv(&self) -> Option<Vec<String>> {
-        open::argv(self.opener, &self.launch, &self.path, self.line.map(|l| l + 1), self.dir)
-    }
-
-    fn run(&self) -> Result<(), String> {
-        match self.argv() {
-            Some(argv) => open::run(&argv),
-            None => Err("not a file it opens".to_string()),
+    fn run(&self) -> anyhow::Result<()> {
+        match self.opener {
+            Opener::FileManager => desktop::reveal(&self.path, self.dir),
+            Opener::DefaultApp => desktop::open(&self.path),
+            _ => {
+                let argv = open::argv(&self.launch, self.opener, &self.path, self.line.map(|l| l + 1), self.dir);
+                let label = self.opener.label(Os::CURRENT);
+                desktop::run(&argv.context("nothing to run")?).with_context(|| format!("could not open in {label}"))
+            }
         }
     }
 }
 
 fn opener_label(opener: Opener, dir: bool) -> String {
     match opener {
-        Opener::Finder if !dir => "Reveal in Finder".to_string(),
+        Opener::FileManager => desktop::show_label(Os::CURRENT, dir),
         Opener::DefaultApp => "Open with default app".to_string(),
-        other => format!("Open in {}", other.label()),
+        other => format!("Open in {}", other.label(Os::CURRENT)),
     }
 }
 
-fn opens(opener: Opener, launch: &Launch, menu: &Menu) -> bool {
-    opener != Opener::DefaultApp || open::argv(opener, launch, &menu.path, None, menu.target.dir).is_some()
+fn opens(opener: Opener, menu: &Menu) -> bool {
+    opener != Opener::DefaultApp || open::default_app_opens(&menu.path, menu.target.dir)
 }
 
 impl FilesPanel {
@@ -58,19 +61,8 @@ impl FilesPanel {
     fn open_with(&mut self, opening: Opening, cx: &mut Context<Self>) {
         self.menu = None;
         cx.notify();
-        let label = opening.opener.label();
-        let job = cx.background_spawn(async move { opening.run() });
-        let store = self.store.clone();
-        let busy = Busy::new("open-with", format!("Opening in {label}…"));
-        let id = store.update(cx, |s, cx| s.start_job(busy, cx));
-        cx.spawn(async move |_, cx| {
-            let opened = job.await;
-            let _ = store.update(cx, |s, cx| s.end_job(id, cx));
-            let Err(e) = opened else { return };
-            let text = format!("could not open in {label}: {e}");
-            let _ = store.update(cx, |s, cx| s.toast(text, ToastKind::Error, cx));
-        })
-        .detach();
+        let busy = Busy::new("open-with", format!("Opening in {}…", opening.opener.label(Os::CURRENT)));
+        store::run_local(cx, busy, move || opening.run());
     }
 
     pub(super) fn copy(&mut self, text: String, what: &str, cx: &mut Context<Self>) {
@@ -83,7 +75,7 @@ impl FilesPanel {
     fn opener_entries(&self, menu: &Menu, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let mut entries: Vec<AnyElement> = Vec::new();
         for (i, (opener, launch)) in self.openers.iter().enumerate() {
-            if !opens(*opener, launch, menu) {
+            if !opens(*opener, menu) {
                 continue;
             }
             let opening = Opening {

@@ -8,9 +8,9 @@ use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::Context;
 
 use super::{Browser, say};
-use crate::cli;
 use crate::model::link::loopback_port;
 use crate::store::{Busy, Store};
+use crate::{cli, desktop};
 
 pub(crate) use ssh::quit;
 
@@ -190,7 +190,7 @@ impl Browser {
         let local = pick_local(remote, previous, |p| !taken.contains(&p) && ssh::free(p), ssh::any_free);
         let events = self.dev.tunnels.events.clone();
         let started = local
-            .ok_or_else(|| anyhow!("no free port on this Mac"))
+            .ok_or_else(|| anyhow!("no free port on this {}", desktop::here()))
             .and_then(|local| ssh::forward(&host, (local, remote), events).map(|id| (local, id)));
         match started {
             Ok((local, id)) => self.tunnel_started((remote, local), id, &host, cx),

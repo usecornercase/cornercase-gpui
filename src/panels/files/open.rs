@@ -1,8 +1,11 @@
 use std::path::{Path, PathBuf};
 
+use crate::desktop;
+use crate::platform::Os;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Opener {
-    Finder,
+    FileManager,
     VsCode,
     Cursor,
     Zed,
@@ -11,9 +14,9 @@ pub(super) enum Opener {
 }
 
 impl Opener {
-    pub(super) fn label(self) -> &'static str {
+    pub(super) fn label(self, os: Os) -> &'static str {
         match self {
-            Self::Finder => "Finder",
+            Self::FileManager => desktop::file_manager(os),
             Self::VsCode => "VS Code",
             Self::Cursor => "Cursor",
             Self::Zed => "Zed",
@@ -22,106 +25,97 @@ impl Opener {
         }
     }
 
-    fn editor(self) -> Option<(&'static str, &'static str)> {
+    fn editor(self) -> Option<(&'static [&'static str], &'static str)> {
         match self {
-            Self::VsCode => Some(("code", "Visual Studio Code.app")),
-            Self::Cursor => Some(("cursor", "Cursor.app")),
-            Self::Zed => Some(("zed", "Zed.app")),
-            Self::Sublime => Some(("subl", "Sublime Text.app")),
-            Self::Finder | Self::DefaultApp => None,
+            Self::VsCode => Some((&["code", "com.visualstudio.code"], "Visual Studio Code.app")),
+            Self::Cursor => Some((&["cursor"], "Cursor.app")),
+            Self::Zed => Some((&["zed", "zeditor", "dev.zed.Zed"], "Zed.app")),
+            Self::Sublime => Some((&["subl", "com.sublimetext.three"], "Sublime Text.app")),
+            Self::FileManager | Self::DefaultApp => None,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Launch {
-    Open,
+    Desktop,
     Command(PathBuf),
     Bundle(PathBuf),
 }
 
-pub(super) fn find(path_env: &str, apps: &[PathBuf]) -> Vec<(Opener, Launch)> {
-    let on_path = |name: &str| std::env::split_paths(path_env).map(|dir| dir.join(name)).find(|p| is_executable(p));
+pub(super) fn find(os: Os, dirs: &[PathBuf], apps: &[PathBuf]) -> Vec<(Opener, Launch)> {
+    let on = |name: &str| desktop::find_in(dirs, name);
     let mut found = Vec::new();
-    let has_open = on_path("open").is_some() || Path::new("/usr/bin/open").exists();
-    if has_open {
-        found.push((Opener::Finder, Launch::Open));
+    if desktop::reveals(os, &on) {
+        found.push((Opener::FileManager, Launch::Desktop));
     }
+    let opens = desktop::opens(os, &on);
     for opener in [Opener::VsCode, Opener::Cursor, Opener::Zed, Opener::Sublime] {
-        let Some((command, bundle)) = opener.editor() else { continue };
-        if let Some(path) = on_path(command) {
+        let Some((commands, bundle)) = opener.editor() else { continue };
+        if let Some(path) = commands.iter().find_map(|command| on(command)) {
             found.push((opener, Launch::Command(path)));
-        } else if has_open && let Some(app) = apps.iter().map(|dir| dir.join(bundle)).find(|p| p.is_dir()) {
+        } else if os == Os::Mac
+            && let Some(app) = apps.iter().map(|dir| dir.join(bundle)).find(|p| p.is_dir())
+        {
             found.push((opener, Launch::Bundle(app)));
         }
     }
-    if has_open {
-        found.push((Opener::DefaultApp, Launch::Open));
+    if opens {
+        found.push((Opener::DefaultApp, Launch::Desktop));
     }
     found
 }
 
-pub(super) fn detect() -> Vec<(Opener, Launch)> {
-    let mut apps = vec![PathBuf::from("/Applications")];
-    if let Some(home) = std::env::var_os("HOME") {
-        apps.push(PathBuf::from(home).join("Applications"));
+pub(super) fn search_dirs(os: Os, path: &[PathBuf], home: Option<&Path>) -> Vec<PathBuf> {
+    let mut dirs = path.to_vec();
+    if os == Os::Linux {
+        dirs.push(PathBuf::from("/snap/bin"));
+        dirs.extend(home.map(|home| home.join(".local/share/flatpak/exports/bin")));
+        dirs.push(PathBuf::from("/var/lib/flatpak/exports/bin"));
     }
-    find(&std::env::var("PATH").unwrap_or_default(), &apps)
+    dirs
 }
 
-fn is_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt as _;
-    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+pub(super) fn app_folders(os: Os, home: Option<&Path>) -> Vec<PathBuf> {
+    if os != Os::Mac {
+        return Vec::new();
+    }
+    std::iter::once(PathBuf::from("/Applications")).chain(home.map(|home| home.join("Applications"))).collect()
 }
 
-const BUNDLES: &[&str] = &["app", "xcodeproj", "xcworkspace", "framework", "bundle", "playground"];
+pub(super) fn detect() -> Vec<(Opener, Launch)> {
+    let os = Os::CURRENT;
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    find(os, &search_dirs(os, &desktop::path_dirs(), home.as_deref()), &app_folders(os, home.as_deref()))
+}
+
+pub(super) fn default_app_opens(path: &Path, dir: bool) -> bool {
+    !dir && !desktop::executable(path)
+}
 
 pub(super) fn argv(
-    opener: Opener,
     launch: &Launch,
+    opener: Opener,
     path: &Path,
     line: Option<usize>,
     dir: bool,
 ) -> Option<Vec<String>> {
     let path_s = path.to_string_lossy().into_owned();
-    let open = || "open".to_string();
-    Some(match (opener, launch) {
-        (Opener::Finder, _) => {
-            let bundle = dir && path.extension().and_then(|e| e.to_str()).is_some_and(|e| BUNDLES.contains(&e));
-            if dir && !bundle { vec![open(), path_s] } else { vec![open(), "-R".into(), path_s] }
-        }
-        (Opener::DefaultApp, _) => {
-            if dir || is_executable(path) {
-                return None;
-            }
-            vec![open(), path_s]
-        }
-        (_, Launch::Bundle(app)) => vec![open(), "-a".into(), app.to_string_lossy().into_owned(), path_s],
-        (_, Launch::Command(command)) => {
+    match launch {
+        Launch::Desktop => None,
+        Launch::Bundle(app) => Some(vec!["open".into(), "-a".into(), app.to_string_lossy().into_owned(), path_s]),
+        Launch::Command(command) => {
             let command = command.to_string_lossy().into_owned();
             let target = match line {
                 Some(line) if !dir => format!("{path_s}:{line}"),
                 _ => path_s,
             };
-            match opener {
+            Some(match opener {
                 Opener::VsCode | Opener::Cursor if !dir => vec![command, "-g".into(), target],
                 _ => vec![command, target],
-            }
+            })
         }
-        (_, Launch::Open) => vec![open(), path_s],
-    })
-}
-
-pub(super) fn run(argv: &[String]) -> Result<(), String> {
-    let (program, rest) = argv.split_first().ok_or("nothing to run")?;
-    let status = std::process::Command::new(program)
-        .args(rest)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map_err(|e| e.to_string())?;
-    if status.success() { Ok(()) } else { Err(status.to_string()) }
+    }
 }
 
 #[cfg(test)]

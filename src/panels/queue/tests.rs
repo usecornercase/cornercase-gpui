@@ -1,12 +1,13 @@
 use serde_json::json;
 
 use super::data::{
-    Body, Click, Entry, Group, Place, State, agent_choices, entries, folder_name, live_pane, mode_choices, notice,
-    place_label, sections, sentence, status_label,
+    Body, Click, Entry, Group, Place, State, agent_choices, entries, folder_name, live_pane, missed, mode_choices,
+    notice, place_label, sections, sentence, status_label,
 };
 use super::draft::{Draft, Target, When};
 use super::time::{Civil, days, local, relative, when_label};
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
+use crate::platform::Os;
 
 #[test]
 fn reads_entries_leniently() {
@@ -96,6 +97,12 @@ fn the_status_names_the_state_and_the_pane() {
     assert_eq!(labels, ["Pending", "Starting…", "Failed", "Missed", "cancelled"]);
     assert_eq!(status_label(&entry(1, "started"), Some(9)), "Started · pane 9");
     assert_eq!(status_label(&entry(1, "started"), None), "Started · pane closed");
+}
+
+#[test]
+fn a_missed_start_blames_the_machine_by_its_name() {
+    assert!(missed(Os::Mac).contains("or the Mac slept."));
+    assert!(missed(Os::Linux).contains("or the computer slept."));
 }
 
 #[test]

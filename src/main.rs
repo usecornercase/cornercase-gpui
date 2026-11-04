@@ -1,12 +1,14 @@
 mod app;
 mod cli;
 mod context_menu;
+mod desktop;
 mod dialogs;
 mod keymap;
 mod keys;
 mod model;
 mod notify;
 mod panels;
+mod platform;
 mod prefs;
 mod render;
 mod sidebar;

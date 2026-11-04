@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{BufRead, BufReader, Write as _};
+use std::io::{BufRead, BufReader, Read as _, Write as _};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
 use parking_lot::Mutex;
+
+use crate::platform::Os;
 
 const PREFERRED_PORT: u16 = 9222;
 const ACTIVE_PORT: &str = "DevToolsActivePort";
@@ -25,6 +27,7 @@ const NAMES: &[&str] = &[
     "microsoft-edge-stable",
     "microsoft-edge",
     "brave-browser",
+    "brave",
     "chrome",
     "chrome-headless-shell",
 ];
@@ -91,10 +94,37 @@ pub(crate) fn profile() -> PathBuf {
     if let Some(dir) = std::env::var_os("CORNERCASE_GPUI_BROWSER_PROFILE") {
         return PathBuf::from(dir);
     }
-    crate::prefs::app_dir().join("browser")
+    match find().as_deref().and_then(snap_of) {
+        Some(snap) => snap_profile(&home(), &snap),
+        None => crate::prefs::app_dir().join("browser"),
+    }
 }
 
-pub(crate) fn args(profile: &Path, port: u16) -> Vec<String> {
+fn snap_profile(home: &Path, snap: &str) -> PathBuf {
+    home.join("snap").join(snap).join("common/cornercase-gpui-browser")
+}
+
+fn snap_of(exe: &Path) -> Option<String> {
+    let real = fs::canonicalize(exe).ok()?;
+    let mut head = Vec::new();
+    if let Ok(file) = fs::File::open(&real) {
+        let _ = file.take(4096).read_to_end(&mut head);
+    }
+    snap_name(exe, &real, &head)
+}
+
+fn snap_name(exe: &Path, real: &Path, head: &[u8]) -> Option<String> {
+    let snap = |command: &str| command.split('.').next().filter(|name| !name.is_empty()).map(str::to_string);
+    if exe.starts_with("/snap/") || real.file_name().is_some_and(|name| name == "snap") {
+        return snap(exe.file_name()?.to_str()?);
+    }
+    let script = String::from_utf8_lossy(head.strip_prefix(b"#!")?);
+    let after = script.split("/snap/bin/").nth(1)?;
+    let command: String = after.chars().take_while(|c| c.is_ascii_alphanumeric() || "-._".contains(*c)).collect();
+    snap(&command)
+}
+
+pub(crate) fn args(os: Os, profile: &Path, port: u16) -> Vec<String> {
     let mut args = vec![
         "--headless".to_string(),
         format!("--user-data-dir={}", profile.display()),
@@ -107,9 +137,10 @@ pub(crate) fn args(profile: &Path, port: u16) -> Vec<String> {
         "--force-color-profile=srgb".into(),
         "--window-size=1280,800".into(),
     ];
-    if cfg!(target_os = "macos") {
-        args.push("--use-mock-keychain".into());
-    }
+    args.push(match os {
+        Os::Mac => "--use-mock-keychain".into(),
+        Os::Linux => "--password-store=basic".into(),
+    });
     args.push("--no-startup-window".into());
     args
 }
@@ -188,7 +219,7 @@ fn launch(exe: &Path, profile: &Path) -> Result<Endpoint> {
     let port = if free(PREFERRED_PORT) { PREFERRED_PORT } else { 0 };
     let _ = fs::write(profile.join(PORT_FILE), port.to_string());
     let child = Command::new(exe)
-        .args(args(profile, port))
+        .args(args(Os::CURRENT, profile, port))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

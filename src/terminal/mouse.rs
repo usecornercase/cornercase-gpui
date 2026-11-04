@@ -1,3 +1,6 @@
+use std::path::Path;
+
+use futures::channel::mpsc::UnboundedSender;
 use gpui::{
     Context, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollWheelEvent, Window,
 };
@@ -6,6 +9,7 @@ use serde_json::{Value, json};
 use super::links::{link_args, web_at};
 use super::selection::selection_args;
 use crate::app::{Drag, Msg, Root};
+use crate::desktop;
 use crate::model::{Grid, Link, MouseMode, PaneGrid};
 use crate::render::layout::{Gap, Hit, Layout};
 
@@ -274,8 +278,14 @@ impl Root {
                 let _ = tx.unbounded_send(Msg::Elsewhere(path));
                 return;
             }
-            let _ = std::process::Command::new("open").arg(&path).spawn();
+            std::thread::spawn(move || open_path(&path, &tx));
         });
+    }
+}
+
+fn open_path(path: &str, tx: &UnboundedSender<Msg>) {
+    if let Err(e) = desktop::open(Path::new(path)) {
+        let _ = tx.unbounded_send(Msg::Error(format!("{e:#}")));
     }
 }
 

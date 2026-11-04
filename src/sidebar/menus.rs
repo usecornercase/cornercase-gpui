@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use gpui::{Context, Pixels, Point, SharedString, Window};
 
 use super::actions::{into_group, ungroup};
@@ -6,11 +8,13 @@ use super::{Fold, Target, cmd, forms};
 use crate::app::{Root, tilde};
 use crate::cli;
 use crate::context_menu::{Entry, act, act_busy, danger, item, submenu};
+use crate::desktop;
 use crate::dialogs;
 use crate::model::{Project, PullRequest, Session, Workspace};
 use crate::panels::PanelKind;
 use crate::panels::flows::{FlowStart, start_flow};
-use crate::store::{Busy, ToastKind};
+use crate::platform::Os;
+use crate::store::{self, Busy, ToastKind};
 
 fn rename_item(label: &str, target: Target) -> Entry {
     item(label.to_string(), move |this, window, cx| this.start_rename(target, window, cx))
@@ -20,9 +24,12 @@ fn fold_item(fold: Fold, collapsed: bool) -> Entry {
     item(if collapsed { "Expand" } else { "Collapse" }, move |this, _, _| this.set_folded(fold, !collapsed))
 }
 
-fn finder_item(path: String) -> Entry {
-    item("Open in Finder", move |_, _, _| {
-        let _ = std::process::Command::new("open").arg(&path).spawn();
+fn file_manager_item(path: String) -> Entry {
+    let os = Os::CURRENT;
+    item(desktop::show_label(os, true), move |_, _, cx| {
+        let path = PathBuf::from(&path);
+        let busy = Busy::new("file-manager", format!("Opening in {}…", desktop::file_manager(os)));
+        store::run_local(cx, busy, move || desktop::reveal(&path, true));
     })
 }
 
@@ -36,7 +43,7 @@ fn copy_item(label: &'static str, text: String, toast: String) -> Entry {
 
 fn path_items(path: &str) -> Vec<Entry> {
     let copy = copy_item("Copy path", path.to_string(), format!("Copied {}", tilde(path)));
-    if cli::host().is_some() { vec![copy] } else { vec![finder_item(path.to_string()), copy] }
+    if cli::host().is_some() { vec![copy] } else { vec![file_manager_item(path.to_string()), copy] }
 }
 
 fn panel_item(label: &'static str, kind: PanelKind, focus: Option<(&'static str, u64)>) -> Entry {

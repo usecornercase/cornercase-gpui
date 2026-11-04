@@ -8,7 +8,7 @@ const PIXELS: u32 = 900;
 const WITHIN: Duration = Duration::from_secs(8);
 const POLL: Duration = Duration::from_millis(20);
 
-fn scratch() -> PathBuf {
+pub(super) fn scratch() -> PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let n = NEXT.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!("cornercase-gpui-peek-{}-{n}", std::process::id()))
@@ -27,7 +27,7 @@ pub(super) fn made(path: &Path, out: &Path) -> Option<PathBuf> {
     Some(out.join(png))
 }
 
-fn finished_within(command: &mut Command, limit: Duration) -> bool {
+pub(super) fn finished_within(command: &mut Command, limit: Duration) -> bool {
     let spawned = command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
     let Ok(mut child) = spawned else { return false };
     let start = Instant::now();

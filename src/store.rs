@@ -6,6 +6,7 @@ use gpui::{AnyView, App, AppContext as _, AsyncApp, ClipboardItem, Context, Enti
 use serde_json::Value;
 
 use crate::cli::{self, Queue, Stream, Target};
+use crate::desktop;
 use crate::model::Session;
 use crate::panels::PanelKind;
 use crate::prefs::{self, Prefs};
@@ -170,7 +171,8 @@ impl Store {
     }
 
     pub(crate) fn copy_elsewhere(&mut self, path: String, cx: &mut Context<Self>) {
-        let text = format!("Copied {path}: it is on {}, not on this Mac", cli::host().unwrap_or_default());
+        let text =
+            format!("Copied {path}: it is on {}, not on this {}", cli::host().unwrap_or_default(), desktop::here());
         cx.write_to_clipboard(ClipboardItem::new_string(path));
         self.toast(text, ToastKind::Info, cx);
     }
@@ -375,6 +377,22 @@ pub(crate) fn run_busy<T: 'static>(
 ) {
     let id = Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx));
     run_job(cx, id, args, then);
+}
+
+pub(crate) fn run_local(cx: &mut App, busy: Busy, work: impl FnOnce() -> anyhow::Result<()> + Send + 'static) {
+    let store = Store::get(cx);
+    let id = store.update(cx, |s, cx| s.start_job(busy, cx));
+    let task = cx.background_spawn(async move { work() });
+    cx.spawn(async move |cx| {
+        let result = task.await;
+        let _ = store.update(cx, |s, cx| {
+            s.end_job(id, cx);
+            if let Err(e) = result {
+                s.toast(format!("{e:#}"), ToastKind::Error, cx);
+            }
+        });
+    })
+    .detach();
 }
 
 fn run_job<T: 'static>(

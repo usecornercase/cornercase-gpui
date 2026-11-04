@@ -198,21 +198,14 @@ impl Prefs {
         prefs
     }
 
-    pub(crate) fn sound_file(&self, cue: &str, home: &str) -> String {
+    pub(crate) fn own_sound(&self, cue: &str, home: &str) -> Option<String> {
         let own = if cue == "finished" { &self.sound_done } else { &self.sound_waiting };
         let own = match own.strip_prefix("~/") {
             Some(rest) if !home.is_empty() => format!("{home}/{rest}"),
             _ => own.clone(),
         };
-        if own.starts_with('/') && std::path::Path::new(&own).is_file() {
-            return own;
-        }
-        system_sound(cue).to_string()
+        (own.starts_with('/') && std::path::Path::new(&own).is_file()).then_some(own)
     }
-}
-
-pub(super) fn system_sound(cue: &str) -> &'static str {
-    if cue == "finished" { "/System/Library/Sounds/Glass.aiff" } else { "/System/Library/Sounds/Ping.aiff" }
 }
 
 #[cfg(test)]

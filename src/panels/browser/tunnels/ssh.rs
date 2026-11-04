@@ -10,6 +10,7 @@ use futures::channel::mpsc::UnboundedSender;
 use parking_lot::Mutex;
 
 use super::Event;
+use crate::desktop;
 use crate::panels::browser::chrome;
 
 const START_WAIT: Duration = Duration::from_secs(20);
@@ -275,7 +276,7 @@ fn open_reverse(key: &Key, events: &UnboundedSender<Event>) {
 }
 
 fn try_reverse(key: &Key, remote: u16, events: &UnboundedSender<Event>) -> Option<String> {
-    let Some(probe) = any_free() else { return Some("no free port on this Mac".into()) };
+    let Some(probe) = any_free() else { return Some(format!("no free port on this {}", desktop::here())) };
     let (id, stderr) = match spawn(&reverse_args(&key.host, (remote, key.browser), probe)) {
         Ok(started) => started,
         Err(e) => return Some(format!("{e:#}")),
