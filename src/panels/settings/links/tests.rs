@@ -10,6 +10,13 @@ fn the_default_browser_is_the_one_the_desktop_opens_links_with() {
 }
 
 #[test]
+fn the_click_hint_names_the_key_for_this_platform() {
+    let settings = settings(&Prefs::default());
+    assert!(!settings[0].note.contains("{click}"));
+    assert!(settings[0].note.contains(keymap::link_click(Os::CURRENT)));
+}
+
+#[test]
 fn the_apps_own_settings_are_choices_on_the_links_page() {
     let settings = settings(&Prefs::default());
     let keys: Vec<&str> = settings.iter().map(|s| s.key.as_str()).collect();

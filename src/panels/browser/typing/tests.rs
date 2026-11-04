@@ -77,6 +77,26 @@ fn unmarking_commits_what_was_marked() {
 }
 
 #[test]
+fn a_key_up_goes_where_its_key_down_went_whatever_shift_says_at_release() {
+    let mut typing = Typing::default();
+    assert!(!typing.claim_down("t", false));
+    assert!(!typing.claimed_up("t"));
+    assert!(typing.claim_down("t", true));
+    assert!(typing.claimed_up("t"));
+    assert!(!typing.claimed_up("t"));
+}
+
+#[test]
+fn a_key_down_the_page_gets_forgets_an_earlier_claim_on_its_key() {
+    let mut typing = Typing::default();
+    typing.claim_down("t", true);
+    typing.claim_down("c", true);
+    typing.claim_down("t", false);
+    assert!(!typing.claimed_up("t"));
+    assert!(typing.claimed_up("c"));
+}
+
+#[test]
 fn the_window_keeps_its_command_shortcuts_and_the_page_gets_the_rest() {
     let cmd = |name: &str| Keystroke {
         modifiers: Modifiers { platform: true, ..Modifiers::default() },

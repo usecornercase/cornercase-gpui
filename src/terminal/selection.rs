@@ -57,6 +57,13 @@ fn text_of_selection(out: &str) -> Option<String> {
     value.get("text")?.as_str().map(String::from)
 }
 
+pub(super) fn kept(board: Board, read: anyhow::Result<String>) -> Option<Msg> {
+    match read {
+        Ok(out) => text_of_selection(&out).filter(|text| !text.is_empty()).map(|text| Msg::Copied(board, text)),
+        Err(e) => Some(Msg::Error(format!("{e:#}"))),
+    }
+}
+
 impl Root {
     pub(crate) fn copy_selection(&self, pane: u64) {
         self.keep_selection(pane, Board::Clipboard);
@@ -68,10 +75,9 @@ impl Root {
 
     fn keep_selection(&self, pane: u64, board: Board) {
         let tx = self.tx.clone();
-        self.queue.cmd_then(read_args(pane, board), move |r| {
-            let text = r.ok().and_then(|out| text_of_selection(&out));
-            if let Some(text) = text.filter(|t| !t.is_empty()) {
-                let _ = tx.unbounded_send(Msg::Copied(board, text));
+        self.queue.cmd_then(read_args(pane, board), move |read| {
+            if let Some(msg) = kept(board, read) {
+                let _ = tx.unbounded_send(msg);
             }
         });
     }

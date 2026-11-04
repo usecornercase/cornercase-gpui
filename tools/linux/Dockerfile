@@ -1,4 +1,5 @@
 FROM debian:trixie-slim
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl git sudo procps psmisc openssh-client file \

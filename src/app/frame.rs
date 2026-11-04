@@ -14,6 +14,7 @@ use crate::ui::{self, Icon};
 
 pub(crate) const APP_ID: &str = "cornercase-gpui";
 const RESTORE_POLL: Duration = Duration::from_millis(20);
+const RESTORE_POLL_LATER: Duration = Duration::from_millis(250);
 const RESTORE_TRIES: u32 = 100;
 const INSET: f32 = 12.;
 const REACH_IN: f32 = 4.;
@@ -37,16 +38,22 @@ pub(crate) fn min_size(os: Os, wayland: bool, (width, height): (f32, f32)) -> Si
     if wayland { size(px(width), px(height)) } else { outer(os, (width, height)) }
 }
 
-pub(crate) fn fitted(os: Os, frame: Frame, full_screen: bool, now: Size<Pixels>) -> Option<Size<Pixels>> {
+pub(crate) fn fitted(
+    os: Os,
+    wayland: bool,
+    frame: Frame,
+    full_screen: bool,
+    now: Size<Pixels>,
+) -> Option<Size<Pixels>> {
     let windowed = !full_screen && !frame.maximised && !frame.tiling.is_tiled();
     let margin = outer(os, (0., 0.));
-    (margin.width > px(0.) && !frame.drawn && windowed)
+    (margin.width > px(0.) && !wayland && !frame.drawn && windowed)
         .then(|| size(now.width - margin.width, now.height - margin.height))
 }
 
-pub(crate) fn fit_to_frame(os: Os, window: &mut Window) {
+pub(crate) fn fit_to_frame(os: Os, wayland: bool, window: &mut Window) {
     let frame = Frame::read(window, os);
-    if let Some(size) = fitted(os, frame, window.is_fullscreen(), window.bounds().size) {
+    if let Some(size) = fitted(os, wayland, frame, window.is_fullscreen(), window.bounds().size) {
         window.resize(size);
     }
 }
@@ -200,10 +207,16 @@ impl Grip {
         cx.default_global::<Grip>().held = false;
     }
 
+    fn take_move(&mut self, dragging: bool) -> bool {
+        let starts = self.held && dragging;
+        if starts {
+            self.held = false;
+        }
+        starts
+    }
+
     fn moved(e: &MouseMoveEvent, window: &mut Window, cx: &mut App) {
-        let grip = cx.default_global::<Grip>();
-        if grip.held && e.dragging() {
-            grip.held = false;
+        if cx.default_global::<Grip>().take_move(e.dragging()) {
             window.start_window_move();
         }
     }
@@ -358,10 +371,14 @@ fn restore(window: &mut Window, windowed: Size<Pixels>) -> Restore {
     step
 }
 
+pub(crate) fn restore_poll(tries: u32) -> Duration {
+    if tries < RESTORE_TRIES { RESTORE_POLL } else { RESTORE_POLL_LATER }
+}
+
 fn restore_when_out(window: AnyWindowHandle, windowed: Size<Pixels>, cx: &mut App) {
     cx.spawn(async move |cx| {
-        for _ in 0..RESTORE_TRIES {
-            cx.background_executor().timer(RESTORE_POLL).await;
+        for tries in 0.. {
+            cx.background_executor().timer(restore_poll(tries)).await;
             if !matches!(window.update(cx, |_, window, _| restore(window, windowed)), Ok(Restore::Wait)) {
                 break;
             }

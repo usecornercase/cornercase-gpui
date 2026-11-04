@@ -104,8 +104,8 @@ fn open_window(cx: &mut App) {
             window_min_size: Some(app::frame::min_size(Os::CURRENT, wayland, (640., 360.))),
             ..Default::default()
         },
-        |window, cx| {
-            app::frame::fit_to_frame(Os::CURRENT, window);
+        move |window, cx| {
+            app::frame::fit_to_frame(Os::CURRENT, wayland, window);
             cx.new(|cx| app::Root::new(window, cx))
         },
     )

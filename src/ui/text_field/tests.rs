@@ -1,4 +1,4 @@
-use super::{Escaped, escaped, selected_rows, shared, word_end, word_start};
+use super::{Escaped, escaped, one_line, selected_rows, shared, word_end, word_start};
 
 #[test]
 fn a_selection_inside_one_row_paints_one_span() {
@@ -58,4 +58,11 @@ fn a_selection_goes_to_the_primary_selection_unless_it_is_empty_or_masked() {
     assert_eq!(shared("hello world", &(6..11), false), Some("world"));
     assert_eq!(shared("hello", &(2..2), false), None);
     assert_eq!(shared("secret", &(0..6), true), None);
+}
+
+#[test]
+fn pasted_line_breaks_of_any_kind_become_one_space_each() {
+    assert_eq!(one_line("first\nsecond"), "first second");
+    assert_eq!(one_line("first\r\nsecond\rthird"), "first second third");
+    assert_eq!(one_line("a\n\nb"), "a  b");
 }
