@@ -7,7 +7,7 @@ use windows::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_FILENAME, SND_NODE
 use windows::Win32::System::Registry::{HKEY_CURRENT_USER, REG_SZ, RegSetKeyValueW};
 use windows::core::{HSTRING, w};
 
-static REGISTERED: OnceLock<Result<(), String>> = OnceLock::new();
+static REGISTERED: OnceLock<()> = OnceLock::new();
 
 pub(super) fn play(file: &Path) -> Result<(), String> {
     let started = unsafe { PlaySoundW(&HSTRING::from(file), None, SND_FILENAME | SND_ASYNC | SND_NODEFAULT) };
@@ -15,7 +15,10 @@ pub(super) fn play(file: &Path) -> Result<(), String> {
 }
 
 pub(super) fn toast((id, key, name): (&str, &str, &str), xml: &str) -> Result<(), String> {
-    REGISTERED.get_or_init(|| register(key, name)).clone()?;
+    if REGISTERED.get().is_none() {
+        register(key, name)?;
+        let _ = REGISTERED.set(());
+    }
     show(id, xml).map_err(|e| e.message())
 }
 

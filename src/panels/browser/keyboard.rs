@@ -221,7 +221,9 @@ pub(crate) fn key_down(ks: &Keystroke, held: bool, os: Os) -> Value {
 
 pub(crate) fn typed(ks: &Keystroke, text: &str, held: bool) -> Value {
     let mut event = with_text(event("keyDown", ks), text);
-    event.insert("key".into(), text.into());
+    if text.chars().nth(1).is_none() {
+        event.insert("key".into(), text.into());
+    }
     event.insert("autoRepeat".into(), held.into());
     Value::Object(event)
 }

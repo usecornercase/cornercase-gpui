@@ -175,7 +175,10 @@ impl Root {
         }
         match press_for(event.button, pane.modes.mouse != MouseMode::None, event.modifiers.shift) {
             Press::Program => self.press_program(pane, cell, event.button),
-            Press::Select => self.press_select(pane, cell, event.click_count),
+            Press::Select => {
+                self.pointer.links.style = self.path_style(cx);
+                self.press_select(pane, cell, event.click_count);
+            }
             Press::PastePrimary => self.paste_primary(pane.pane, cx),
             Press::Nothing => {}
         }

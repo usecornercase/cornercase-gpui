@@ -351,7 +351,7 @@ fn wait_for_port(profile: &Path, said: &Mutex<Said>) -> Result<Endpoint> {
     let started = Instant::now();
     while started.elapsed() < START_WAIT {
         if let Some(endpoint) = answering(profile) {
-            return Ok(endpoint);
+            return ours(endpoint);
         }
         let ended = OWNED.lock().child.as_mut().and_then(|c| c.try_wait().ok().flatten());
         if let Some(status) = ended {
@@ -363,6 +363,27 @@ fn wait_for_port(profile: &Path, said: &Mutex<Said>) -> Result<Endpoint> {
         std::thread::sleep(POLL);
     }
     bail!("the browser did not open its DevTools port within {} s", START_WAIT.as_secs())
+}
+
+fn ours(endpoint: Endpoint) -> Result<Endpoint> {
+    if serves(Os::CURRENT, OWNED.lock().pid, endpoint.port) {
+        return Ok(endpoint);
+    }
+    bail!("port {} answers for another program, not the browser this window started", endpoint.port)
+}
+
+fn serves(os: Os, pid: Option<u32>, port: u16) -> bool {
+    os != Os::Windows || pid.is_some_and(|pid| port_owner(port) == Some(pid))
+}
+
+#[cfg(windows)]
+fn port_owner(port: u16) -> Option<u32> {
+    super::win32::listening_pid(port)
+}
+
+#[cfg(not(windows))]
+fn port_owner(_port: u16) -> Option<u32> {
+    None
 }
 
 fn adopt_if_orphan(profile: &Path) {
@@ -418,7 +439,9 @@ fn terminate(_pid: u32) {}
 
 fn ask_to_stop(os: Os, pid: u32, profile: &Path) -> bool {
     match os {
-        Os::Windows => known_port(profile).and_then(close_through_devtools).is_some(),
+        Os::Windows => {
+            known_port(profile).filter(|port| serves(os, Some(pid), *port)).and_then(close_through_devtools).is_some()
+        }
         Os::Mac | Os::Linux => {
             terminate(pid);
             true

@@ -289,15 +289,25 @@ fn a_browser_that_does_not_answer_is_not_asked_to_close() {
     assert_eq!(close_through_devtools(port), None);
 }
 
+#[cfg(windows)]
 #[test]
 fn on_windows_stopping_asks_the_profile_s_browser_on_its_port_rather_than_signalling_a_pid() {
     let (port, served) = fake_devtools();
     let profile = scratch_profile("stop");
     fs::write(profile.join(PORT_FILE), port.to_string()).expect("the port file");
-    assert!(ask_to_stop(Os::Windows, 0, &profile));
+    assert!(ask_to_stop(Os::Windows, std::process::id(), &profile));
     assert!(served.join().expect("served").contains("Browser.close"));
     fs::remove_file(profile.join(PORT_FILE)).expect("the port file goes");
-    assert!(!ask_to_stop(Os::Windows, 0, &profile));
+    assert!(!ask_to_stop(Os::Windows, std::process::id(), &profile));
+    let _ = fs::remove_dir_all(&profile);
+}
+
+#[test]
+fn on_windows_a_port_another_program_listens_on_is_never_asked_to_close() {
+    let (port, _served) = fake_devtools();
+    let profile = scratch_profile("not-ours");
+    fs::write(profile.join(PORT_FILE), port.to_string()).expect("the port file");
+    assert!(!ask_to_stop(Os::Windows, std::process::id() + 1, &profile));
     let _ = fs::remove_dir_all(&profile);
 }
 

@@ -60,7 +60,9 @@ pub(crate) fn from_home(path: &str) -> String {
         _ if paths::rooted(path) => return path.to_string(),
         _ => path,
     };
+    let windows = relative.starts_with('\\');
     let relative = relative.trim_start_matches(['/', '\\']);
+    let relative = if windows { relative.replace('\\', "/") } else { relative.to_string() };
     if relative.is_empty() || relative == "." { "~".to_string() } else { format!("~/{relative}") }
 }
 

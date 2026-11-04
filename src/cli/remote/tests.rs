@@ -70,6 +70,6 @@ fn an_absolute_path_goes_as_its_machine_writes_it() {
 
 #[test]
 fn a_windows_home_path_is_sent_with_the_slash_cornercase_expands() {
-    assert_eq!(from_home(r"~\src\shop"), r"~/src\shop");
+    assert_eq!(from_home(r"~\src\shop"), "~/src/shop");
     assert_eq!(from_home(r"~\"), "~");
 }

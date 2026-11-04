@@ -1156,6 +1156,7 @@ dependencies = [
  "nucleo-matcher",
  "objc2",
  "parking_lot",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "syntect",

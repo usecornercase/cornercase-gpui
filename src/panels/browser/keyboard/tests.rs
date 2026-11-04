@@ -216,3 +216,9 @@ fn typed_text_names_its_key_by_what_it_typed() {
     let event = typed(&plain("2", "2"), "@", false);
     assert_eq!((event["key"].as_str(), event["code"].as_str()), (Some("@"), Some("Digit2")));
 }
+
+#[test]
+fn text_of_more_than_one_character_keeps_the_key_it_was_typed_with() {
+    let event = typed(&plain("a", "a"), "´a", false);
+    assert_eq!((event["key"].as_str(), event["text"].as_str()), (Some("a"), Some("´a")));
+}

@@ -32,3 +32,12 @@ fn a_profile_no_browser_runs_has_no_singleton_window() {
 fn the_downloads_folder_is_a_whole_path() {
     assert!(downloads_folder().is_some_and(|dir| dir.is_absolute()));
 }
+
+#[test]
+fn a_port_this_process_listens_on_is_owned_by_it() {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("a port");
+    let port = listener.local_addr().expect("its address").port();
+    assert_eq!(listening_pid(port), Some(std::process::id()));
+    drop(listener);
+    assert_eq!(listening_pid(port), None);
+}

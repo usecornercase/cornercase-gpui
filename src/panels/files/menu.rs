@@ -49,13 +49,15 @@ fn opener_label(opener: Opener, dir: bool) -> String {
 }
 
 fn opens(opener: Opener, menu: &Menu) -> bool {
-    opener != Opener::DefaultApp || open::default_app_opens(Os::CURRENT, &menu.path, menu.target.dir)
+    opener != Opener::DefaultApp || menu.default_app
 }
 
 impl FilesPanel {
     pub(super) fn show_menu(&mut self, at: Point<Pixels>, target: Target, cx: &mut Context<Self>) {
         let Some(place) = self.place() else { return };
-        self.menu = Some(Menu { at, path: place.style.join(&place.root, &target.rel), target });
+        let path = place.style.join(&place.root, &target.rel);
+        let default_app = open::default_app_opens(Os::CURRENT, &path, target.dir);
+        self.menu = Some(Menu { at, path, target, default_app });
         cx.notify();
     }
 

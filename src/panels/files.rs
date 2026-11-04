@@ -157,6 +157,7 @@ struct Menu {
     at: Point<Pixels>,
     path: PathBuf,
     target: Target,
+    default_app: bool,
 }
 
 pub(crate) struct FilesPanel {
