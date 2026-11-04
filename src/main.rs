@@ -32,6 +32,9 @@ use crate::platform::Os;
 
 actions!(cornercase_gpui, [Quit, Hide, HideOthers, ShowAll, Minimise, Zoom, FullScreen]);
 
+const SHOWN: (f32, f32) = (1280., 800.);
+const LEAST: (f32, f32) = (640., 360.);
+
 fn on_window(cx: &mut App, act: fn(&mut Window, &mut App)) {
     if let Some(window) = cx.active_window() {
         cx.defer(move |cx| {
@@ -91,9 +94,11 @@ fn system_keys(cx: &mut App) {
 }
 
 fn open_window(cx: &mut App) {
-    let bounds = Bounds::centered(None, app::frame::outer(Os::CURRENT, (1280., 800.)), cx);
+    let screen = cx.primary_display().map(|display| display.bounds().size);
+    let shown = app::frame::opening_size(SHOWN, LEAST, screen);
+    let bounds = Bounds::centered(None, app::frame::outer(Os::CURRENT, shown), cx);
     let wayland = cx.compositor_name() == "Wayland";
-    cx.open_window(
+    let opened = cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: Some(TitlebarOptions {
@@ -104,28 +109,43 @@ fn open_window(cx: &mut App) {
             window_background: app::frame::background(Os::CURRENT),
             window_decorations: app::frame::decorations(Os::CURRENT),
             app_id: Some(app::frame::APP_ID.into()),
-            window_min_size: Some(app::frame::min_size(Os::CURRENT, wayland, (640., 360.))),
+            window_min_size: Some(app::frame::min_size(Os::CURRENT, wayland, LEAST)),
             ..Default::default()
         },
         move |window, cx| {
             app::frame::fit_to_frame(Os::CURRENT, wayland, window);
             cx.new(|cx| app::Root::new(window, cx))
         },
-    )
-    .expect("could not open the window");
+    );
+    if let Err(why) = opened {
+        fail(&format!("could not open the window: {why:#}"), 1);
+    }
 }
+
+fn fail(why: &str, code: i32) -> ! {
+    eprintln!("cornercase-gpui: {why}");
+    alert(why);
+    std::process::exit(code)
+}
+
+#[cfg(windows)]
+fn alert(why: &str) {
+    use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+    use windows::core::HSTRING;
+    unsafe { MessageBoxW(None, &HSTRING::from(why), &HSTRING::from("cornercase"), MB_OK | MB_ICONERROR) };
+}
+
+#[cfg(not(windows))]
+fn alert(_: &str) {}
 
 fn main() {
     desktop::set_app_id();
-    let target = cli::Target::from_args(&std::env::args().collect::<Vec<_>>()).unwrap_or_else(|e| {
-        eprintln!("cornercase-gpui: {e}");
-        std::process::exit(2)
-    });
+    let target =
+        cli::Target::from_args(&std::env::args().collect::<Vec<_>>()).unwrap_or_else(|e| fail(&e.to_string(), 2));
     cli::connect(target);
     let app = Application::new().with_assets(ui::icons::Assets);
     if let Err(why) = theme::settle_fonts(&app.text_system()) {
-        eprintln!("cornercase-gpui: {why}");
-        std::process::exit(1);
+        fail(why, 1);
     }
     app.run(|cx: &mut App| {
         system_keys(cx);

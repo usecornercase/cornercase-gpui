@@ -149,6 +149,12 @@ pub(crate) mod colours {
     pub(crate) fn merged() -> Rgba {
         rgb(0x87_5f_ff)
     }
+    pub(crate) fn caption_close() -> Rgba {
+        rgb(0xc4_2b_1c)
+    }
+    pub(crate) fn on_caption_close() -> Rgba {
+        rgb(0xff_ff_ff)
+    }
 }
 
 pub(crate) fn palette(index: u8) -> [u8; 3] {

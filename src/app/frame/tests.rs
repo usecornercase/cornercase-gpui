@@ -1,11 +1,11 @@
 use gpui::{
     CursorStyle, Decorations, MouseButton, ResizeEdge, Tiling, WindowBackgroundAppearance, WindowBounds,
-    WindowControls, WindowDecorations,
+    WindowControlArea, WindowControls, WindowDecorations,
 };
 
 use super::{
     Control, Frame, Grip, Press, RESTORE_POLL, RESTORE_POLL_LATER, Restore, background, cursor, decorations, fitted,
-    min_size, outer, press, restore_poll, restore_step, windowed_size,
+    min_size, opening_size, outer, press, restore_poll, restore_step, windowed_size,
 };
 use crate::platform::Os;
 
@@ -15,6 +15,10 @@ fn client(tiling: Tiling) -> Frame {
 
 fn server() -> Frame {
     Frame::of(Decorations::Server, WindowControls::default(), false)
+}
+
+fn windows(maximised: bool, full_screen: bool) -> Frame {
+    Frame::captioned(WindowControls::default(), maximised, full_screen)
 }
 
 #[test]
@@ -230,4 +234,104 @@ fn the_minimum_size_counts_the_margin_only_where_the_window_manager_measures_it(
     assert_eq!(min_size(Os::Mac, false, (640., 360.)), content);
     assert_eq!(min_size(Os::Linux, true, (640., 360.)), content);
     assert_eq!(min_size(Os::Linux, false, (640., 360.)), outer(Os::Linux, (640., 360.)));
+}
+
+#[test]
+fn windows_keeps_the_systems_frame_over_an_opaque_ground() {
+    assert_eq!(decorations(Os::Windows), None);
+    assert_eq!(background(Os::Windows), WindowBackgroundAppearance::Opaque);
+}
+
+#[test]
+fn a_windows_caption_draws_no_margin_corner_shadow_or_grip_of_its_own() {
+    let frame = windows(false, false);
+    assert!(!frame.drawn);
+    assert_eq!(frame.margins(), super::Sides { top: 0., right: 0., bottom: 0., left: 0. });
+    assert_eq!(frame.corners(), [0.; 4]);
+    assert_eq!(frame.grips(), Vec::<ResizeEdge>::new());
+    assert!(!frame.floating());
+}
+
+#[test]
+fn a_windows_caption_offers_minimise_maximise_and_close_and_restore_once_maximised() {
+    assert_eq!(windows(false, false).buttons(), vec![Control::Minimise, Control::Maximise, Control::Close]);
+    assert_eq!(windows(true, false).buttons(), vec![Control::Minimise, Control::Restore, Control::Close]);
+}
+
+#[test]
+fn a_full_screen_windows_window_shows_no_caption() {
+    let frame = windows(false, true);
+    assert_eq!(frame.buttons(), Vec::<Control>::new());
+    assert!(frame.resize_band().abs() < f32::EPSILON);
+    assert!((frame.title_end() - super::GAP).abs() < f32::EPSILON);
+}
+
+#[test]
+fn the_caption_buttons_answer_the_systems_hit_test_as_its_own_buttons() {
+    assert_eq!(Control::Minimise.area(), WindowControlArea::Min);
+    assert_eq!(Control::Maximise.area(), WindowControlArea::Max);
+    assert_eq!(Control::Restore.area(), WindowControlArea::Max);
+    assert_eq!(Control::Close.area(), WindowControlArea::Close);
+}
+
+#[test]
+fn the_caption_buttons_are_as_wide_as_windows_draws_them_and_fill_the_title_row() {
+    assert_eq!(windows(false, false).button_size(), (46., super::TITLEBAR_HEIGHT));
+    assert_eq!(client(Tiling::default()).button_size(), (super::CONTROL, super::CONTROL));
+}
+
+#[test]
+fn the_caption_buttons_reach_the_windows_right_edge() {
+    assert!(windows(false, false).title_end().abs() < f32::EPSILON);
+    assert!((client(Tiling::default()).title_end() - super::GAP).abs() < f32::EPSILON);
+    assert!((Frame::default().title_end() - super::GAP).abs() < f32::EPSILON);
+}
+
+#[test]
+fn close_turns_red_with_a_white_glyph_and_the_others_take_a_faint_fill() {
+    assert_eq!(Control::Close.caption_hover(), (gpui::rgb(0xc4_2b_1c), gpui::rgb(0xff_ff_ff)));
+    let (fill, _) = Control::Minimise.caption_hover();
+    assert!(fill.a < 0.1);
+    assert_eq!(Control::Maximise.caption_hover(), Control::Restore.caption_hover());
+}
+
+#[test]
+fn a_windowed_windows_window_keeps_a_band_at_its_top_edge_to_resize_by() {
+    assert!(windows(false, false).resize_band() > 0.);
+    assert!(windows(true, false).resize_band().abs() < f32::EPSILON);
+    assert!(client(Tiling::default()).resize_band().abs() < f32::EPSILON);
+    assert!(Frame::default().resize_band().abs() < f32::EPSILON);
+}
+
+#[test]
+fn a_windows_window_opens_at_the_size_it_shows_and_is_never_fitted_or_restored_by_hand() {
+    let shown = bounds(1280., 800.).size;
+    assert_eq!(outer(Os::Windows, (1280., 800.)), shown);
+    assert_eq!(min_size(Os::Windows, false, (640., 360.)), bounds(640., 360.).size);
+    assert_eq!(fitted(Os::Windows, false, windows(false, false), false, shown), None);
+    assert_eq!(windowed_size(Os::Windows, WindowBounds::Fullscreen(bounds(1280., 800.))), None);
+}
+
+#[test]
+fn the_first_window_keeps_its_size_on_a_screen_with_room_for_it() {
+    let screen = Some(bounds(1920., 1080.).size);
+    assert_eq!(opening_size((1280., 800.), (640., 360.), screen), (1280., 800.));
+}
+
+#[test]
+fn the_first_window_shrinks_to_fit_a_small_screen_with_room_around_it() {
+    let (width, height) = opening_size((1280., 800.), (640., 360.), Some(bounds(1024., 768.).size));
+    assert!(width < 1024. && height < 768.);
+    assert!((1024. - width - 2. * super::SCREEN_MARGIN).abs() < f32::EPSILON);
+    assert!((768. - height - 2. * super::SCREEN_MARGIN).abs() < f32::EPSILON);
+}
+
+#[test]
+fn the_first_window_never_opens_below_its_minimum_size() {
+    assert_eq!(opening_size((1280., 800.), (640., 360.), Some(bounds(600., 400.).size)), (640., 360.));
+}
+
+#[test]
+fn the_first_window_keeps_its_size_when_no_screen_is_known() {
+    assert_eq!(opening_size((1280., 800.), (640., 360.), None), (1280., 800.));
 }

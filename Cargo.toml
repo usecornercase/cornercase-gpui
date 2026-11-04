@@ -15,7 +15,7 @@ anyhow = "1.0.104"
 base64 = "0.22.1"
 futures = "0.3"
 libc = "0.2, <0.2.190"
-gpui = { version = "0.2.2", features = ["runtime_shaders"] }
+gpui = { version = "0.2.2", default-features = false, features = ["font-kit", "runtime_shaders", "wayland", "x11"] }
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
 grep-searcher = "0.1.17"
@@ -48,6 +48,9 @@ windows = { version = "0.61.3", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[build-dependencies]
+embed-resource = "3.0.12"
 
 [profile.dev.package."*"]
 opt-level = 3
