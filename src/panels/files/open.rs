@@ -43,17 +43,18 @@ pub(super) enum Launch {
     Bundle(PathBuf),
 }
 
-pub(super) fn find(os: Os, dirs: &[PathBuf], apps: &[PathBuf]) -> Vec<(Opener, Launch)> {
-    let on = |name: &str| desktop::find_in(dirs, name);
+pub(super) fn find(os: Os, path: &[PathBuf], extra: &[PathBuf], apps: &[PathBuf]) -> Vec<(Opener, Launch)> {
+    let on_path = |name: &str| desktop::find_in(path, name);
+    let on = |name: &str| on_path(name).or_else(|| desktop::find_in(extra, name));
     let mut found = Vec::new();
-    if desktop::reveals(os, &on) {
+    if desktop::reveals(os, &on_path) {
         found.push((Opener::FileManager, Launch::Desktop));
     }
-    let opens = desktop::opens(os, &on);
+    let opens = desktop::opens(os, &on_path);
     for opener in [Opener::VsCode, Opener::Cursor, Opener::Zed, Opener::Sublime] {
         let Some((commands, bundle)) = opener.editor() else { continue };
-        if let Some(path) = commands.iter().find_map(|command| on(command)) {
-            found.push((opener, Launch::Command(path)));
+        if let Some(command) = commands.iter().find_map(|command| on(command)) {
+            found.push((opener, Launch::Command(command)));
         } else if os == Os::Mac
             && let Some(app) = apps.iter().map(|dir| dir.join(bundle)).find(|p| p.is_dir())
         {
@@ -66,14 +67,15 @@ pub(super) fn find(os: Os, dirs: &[PathBuf], apps: &[PathBuf]) -> Vec<(Opener, L
     found
 }
 
-pub(super) fn search_dirs(os: Os, path: &[PathBuf], home: Option<&Path>) -> Vec<PathBuf> {
-    let mut dirs = path.to_vec();
-    if os == Os::Linux {
-        dirs.push(PathBuf::from("/snap/bin"));
-        dirs.extend(home.map(|home| home.join(".local/share/flatpak/exports/bin")));
-        dirs.push(PathBuf::from("/var/lib/flatpak/exports/bin"));
+pub(super) fn extra_dirs(os: Os, home: Option<&Path>) -> Vec<PathBuf> {
+    if os != Os::Linux {
+        return Vec::new();
     }
-    dirs
+    let user = home.map(|home| home.join(".local/share/flatpak/exports/bin"));
+    [Some(PathBuf::from("/snap/bin")), user, Some(PathBuf::from("/var/lib/flatpak/exports/bin"))]
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 pub(super) fn app_folders(os: Os, home: Option<&Path>) -> Vec<PathBuf> {
@@ -86,7 +88,7 @@ pub(super) fn app_folders(os: Os, home: Option<&Path>) -> Vec<PathBuf> {
 pub(super) fn detect() -> Vec<(Opener, Launch)> {
     let os = Os::CURRENT;
     let home = std::env::var_os("HOME").map(PathBuf::from);
-    find(os, &search_dirs(os, &desktop::path_dirs(), home.as_deref()), &app_folders(os, home.as_deref()))
+    find(os, &desktop::path_dirs(), &extra_dirs(os, home.as_deref()), &app_folders(os, home.as_deref()))
 }
 
 pub(super) fn default_app_opens(path: &Path, dir: bool) -> bool {

@@ -22,7 +22,7 @@ fn on_a_mac_finds_commands_then_bundles_in_order() {
     std::fs::create_dir_all(apps.join("Zed.app")).expect("the temporary files are writable");
     executable(&bin.join("code"));
     std::fs::write(bin.join("subl"), "").expect("the temporary files are writable");
-    let found = find(Os::Mac, std::slice::from_ref(&bin), std::slice::from_ref(&apps));
+    let found = find(Os::Mac, std::slice::from_ref(&bin), &[], std::slice::from_ref(&apps));
     assert_eq!(
         found,
         vec![
@@ -45,7 +45,8 @@ fn on_linux_finds_editors_by_any_of_their_names_and_never_a_bundle() {
     executable(&bin.join("xdg-open"));
     executable(&bin.join("zeditor"));
     executable(&flatpak.join("com.visualstudio.code"));
-    let found = find(Os::Linux, &[bin.clone(), flatpak.clone()], std::slice::from_ref(&apps));
+    let found =
+        find(Os::Linux, std::slice::from_ref(&bin), std::slice::from_ref(&flatpak), std::slice::from_ref(&apps));
     assert_eq!(
         found,
         vec![
@@ -62,25 +63,43 @@ fn on_linux_finds_editors_by_any_of_their_names_and_never_a_bundle() {
 fn on_linux_without_xdg_open_there_is_no_default_app() {
     let root = temp("bare");
     executable(&root.join("dbus-send"));
-    assert_eq!(find(Os::Linux, std::slice::from_ref(&root), &[]), vec![(Opener::FileManager, Launch::Desktop)]);
-    assert_eq!(find(Os::Linux, &[root.join("nothing")], &[]), vec![]);
+    assert_eq!(find(Os::Linux, std::slice::from_ref(&root), &[], &[]), vec![(Opener::FileManager, Launch::Desktop)]);
+    assert_eq!(find(Os::Linux, &[root.join("nothing")], &[], &[]), vec![]);
     let _ = std::fs::remove_dir_all(&root);
 }
 
 #[test]
-fn linux_also_looks_in_snap_and_flatpak_folders() {
-    let path = [PathBuf::from("/usr/bin")];
-    let dirs = search_dirs(Os::Linux, &path, Some(Path::new("/home/me")));
+fn on_linux_gio_alone_shows_in_the_file_manager_and_opens_with_the_default_app() {
+    let root = temp("gio");
+    executable(&root.join("gio"));
+    let found = find(Os::Linux, std::slice::from_ref(&root), &[], &[]);
+    assert_eq!(found, vec![(Opener::FileManager, Launch::Desktop), (Opener::DefaultApp, Launch::Desktop)]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn the_desktop_tools_count_only_on_the_path_where_they_are_run_from() {
+    let root = temp("snap-tools");
+    for tool in ["xdg-open", "gio", "gdbus", "dbus-send", "code"] {
+        executable(&root.join(tool));
+    }
+    let found = find(Os::Linux, &[], std::slice::from_ref(&root), &[]);
+    assert_eq!(found, vec![(Opener::VsCode, Launch::Command(root.join("code")))]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn linux_also_looks_for_editors_in_snap_and_flatpak_folders() {
+    let dirs = extra_dirs(Os::Linux, Some(Path::new("/home/me")));
     assert_eq!(
         dirs,
         [
-            PathBuf::from("/usr/bin"),
-            "/snap/bin".into(),
+            PathBuf::from("/snap/bin"),
             "/home/me/.local/share/flatpak/exports/bin".into(),
             "/var/lib/flatpak/exports/bin".into()
         ]
     );
-    assert_eq!(search_dirs(Os::Mac, &path, Some(Path::new("/Users/me"))), path);
+    assert_eq!(extra_dirs(Os::Mac, Some(Path::new("/Users/me"))), Vec::<PathBuf>::new());
 }
 
 #[test]
