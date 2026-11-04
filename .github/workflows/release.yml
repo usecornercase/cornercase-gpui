@@ -1,0 +1,265 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - .github/release/**
+      - tools/macos/**
+      - assets/macos/**
+      - assets/linux/**
+      - assets/windows/**
+      - .cargo/**
+      - LICENSE-*
+      - assets/icons/**
+      - assets/file-icons/**
+      - tools/icon.py
+      - CHANGELOG.md
+      - Cargo.toml
+      - Cargo.lock
+      - build.rs
+      - rust-toolchain.toml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  version:
+    name: version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: read
+        run: echo "version=$(.github/release/release.sh version)" >> "$GITHUB_OUTPUT"
+
+      - name: tag
+        if: ${{ github.event_name == 'push' }}
+        run: .github/release/release.sh check "$GITHUB_REF_NAME"
+
+  notices:
+    name: third-party notices
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: toolchain
+        run: rustup toolchain install
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9.3
+
+      - name: generate
+        run: .github/release/release.sh notices THIRD-PARTY-NOTICES.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: notices
+          path: THIRD-PARTY-NOTICES.txt
+          retention-days: 7
+          if-no-files-found: error
+
+  macos:
+    name: macOS (universal)
+    needs: [version, notices]
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: toolchain
+        run: rustup toolchain install && rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: build (arm64)
+        run: cargo build --release --locked --target aarch64-apple-darwin
+
+      - name: build (x86_64)
+        run: cargo build --release --locked --target x86_64-apple-darwin
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: notices
+          path: target/notices
+
+      - name: bundle
+        run: tools/macos/bundle.sh "$VERSION" target/notices/THIRD-PARTY-NOTICES.txt target/dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-macos
+          path: target/dist/cornercase-gpui-universal-apple-darwin.dmg
+          retention-days: 7
+          if-no-files-found: error
+
+  windows:
+    name: Windows (x64)
+    needs: [version, notices]
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: toolchain
+        run: rustup toolchain install
+
+      - name: fxc
+        shell: pwsh
+        run: |
+          $fxc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\fxc.exe" |
+            Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1
+          if (-not $fxc) { throw 'no fxc.exe in the Windows SDK' }
+          "GPUI_FXC_PATH=$($fxc.FullName)" >> $env:GITHUB_ENV
+
+      - name: build
+        run: cargo build --release --locked
+
+      - name: no C runtime to install
+        shell: pwsh
+        run: |
+          $imports = & "$env:ProgramFiles\LLVM\bin\llvm-readobj.exe" --coff-imports target\release\cornercase-gpui.exe
+          if ($imports -match 'VCRUNTIME|api-ms-win-crt') { throw 'the exe still imports the Visual C++ runtime' }
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: notices
+          path: target/notices
+
+      - name: package
+        run: |
+          dir=target/dist/cornercase-gpui-x86_64-pc-windows-msvc
+          mkdir -p "$dir"
+          cp target/release/cornercase-gpui.exe "$dir/"
+          .github/release/release.sh licences "$dir" target/notices/THIRD-PARTY-NOTICES.txt
+          (cd "$dir" && 7z a -tzip ../cornercase-gpui-x86_64-pc-windows-msvc.zip .)
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows
+          path: target/dist/cornercase-gpui-x86_64-pc-windows-msvc.zip
+          retention-days: 7
+          if-no-files-found: error
+
+  linux:
+    name: Linux (x86_64)
+    needs: [version, notices]
+    runs-on: ubuntu-24.04
+    container: ubuntu:22.04
+    timeout-minutes: 45
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: system libraries
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config \
+            libxkbcommon-x11-dev libfreetype-dev libfontconfig-dev libwayland-dev
+
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: rustup
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: toolchain
+        run: rustup toolchain install
+
+      - name: build
+        run: cargo build --release --locked
+
+      - name: what it needs to run
+        run: |
+          highest=$(objdump -T target/release/cornercase-gpui | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
+          echo "needs $highest"
+          [ "$(printf '%s\n%s\n' "${highest#GLIBC_}" 2.35 | sort -V | tail -n 1)" = 2.35 ] || { echo "::error::needs more than glibc 2.35, which the README promises"; exit 1; }
+          readelf -d target/release/cornercase-gpui | grep NEEDED
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: notices
+          path: target/notices
+
+      - name: package
+        run: |
+          name=cornercase-gpui-x86_64-unknown-linux-gnu
+          dir=target/dist/$name
+          mkdir -p "$dir"
+          cp target/release/cornercase-gpui assets/linux/cornercase-gpui.desktop assets/linux/cornercase-gpui.svg "$dir/"
+          .github/release/release.sh licences "$dir" target/notices/THIRD-PARTY-NOTICES.txt
+          tar -C target/dist --owner=0 --group=0 -czf "target/dist/$name.tar.gz" "$name"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-linux
+          path: target/dist/cornercase-gpui-x86_64-unknown-linux-gnu.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    name: publish
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    needs: [version, macos, windows, linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: notes and checksums
+        run: |
+          cp CHANGELOG.md dist/
+          .github/release/release.sh sums dist
+          .github/release/release.sh notes "$VERSION" > "$RUNNER_TEMP/notes.md"
+
+      - name: release
+        run: |
+          pre=""
+          case "$VERSION" in *-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "cornercase-gpui $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" $pre dist/*
+          gh release edit "$GITHUB_REF_NAME" --draft=false

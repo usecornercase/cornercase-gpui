@@ -7,10 +7,25 @@ GROUND = (0x0B, 0x0C, 0x0E)
 BRAND = (0x00, 0x5F, 0xFF)
 INK = (0xEC, 0xEE, 0xF1)
 SAMPLES = 8
+ICNS_ENTRIES = [
+    (b"icp4", 16),
+    (b"icp5", 32),
+    (b"ic11", 32),
+    (b"icp6", 64),
+    (b"ic12", 64),
+    (b"ic07", 128),
+    (b"ic13", 256),
+    (b"ic08", 256),
+    (b"ic14", 512),
+    (b"ic09", 512),
+    (b"ic10", 1024),
+]
 
 
 def tile_coverage(size, x, y):
     radius = size * 28 / 128
+    if radius <= x and x + 1 <= size - radius or radius <= y and y + 1 <= size - radius:
+        return 1.0
     inside = 0
     for i in range(SAMPLES):
         for j in range(SAMPLES):
@@ -34,18 +49,22 @@ def mark_rects(size):
     ]
 
 
-def pixels(size):
-    rects = mark_rects(size)
+def pixels(canvas, tile):
+    margin = (canvas - tile) // 2
+    rects = mark_rects(tile)
     rows = []
-    for y in range(size):
+    for y in range(canvas):
         row = []
-        for x in range(size):
+        for x in range(canvas):
+            tx, ty = x - margin, y - margin
+            if not (0 <= tx < tile and 0 <= ty < tile):
+                row.append((0, 0, 0, 0))
+                continue
             colour = GROUND
             for (rx, ry, rw, rh), fill in rects:
-                if rx <= x < rx + rw and ry <= y < ry + rh:
+                if rx <= tx < rx + rw and ry <= ty < ry + rh:
                     colour = fill
-            alpha = round(255 * tile_coverage(size, x, y))
-            row.append(colour + (alpha,))
+            row.append(colour + (round(255 * tile_coverage(tile, tx, ty)),))
         rows.append(row)
     return rows
 
@@ -74,10 +93,10 @@ def dib(size, rows):
     return header + colours + bytes(mask)
 
 
-def icon():
+def ico():
     images = []
     for size in SIZES:
-        rows = pixels(size)
+        rows = pixels(size, size)
         images.append((size, png(size, rows) if size >= 256 else dib(size, rows)))
     offset = 6 + 16 * len(images)
     entries = b""
@@ -88,6 +107,16 @@ def icon():
     return struct.pack("<HHH", 0, 1, len(images)) + entries + b"".join(data for _, data in images)
 
 
+def icns():
+    entries = b""
+    for kind, size in ICNS_ENTRIES:
+        tile = size - 2 * round(size * 100 / 1024)
+        data = png(size, pixels(size, tile))
+        entries += kind + struct.pack(">I", 8 + len(data)) + data
+    return b"icns" + struct.pack(">I", 8 + len(entries)) + entries
+
+
 if __name__ == "__main__":
-    with open(sys.argv[1], "wb") as out:
-        out.write(icon())
+    out_path = sys.argv[1]
+    with open(out_path, "wb") as out:
+        out.write(icns() if out_path.endswith(".icns") else ico())
