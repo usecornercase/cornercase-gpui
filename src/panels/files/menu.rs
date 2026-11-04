@@ -48,7 +48,7 @@ fn opener_label(opener: Opener, dir: bool) -> String {
 }
 
 fn opens(opener: Opener, menu: &Menu) -> bool {
-    opener != Opener::DefaultApp || open::default_app_opens(&menu.path, menu.target.dir)
+    opener != Opener::DefaultApp || open::default_app_opens(Os::CURRENT, &menu.path, menu.target.dir)
 }
 
 impl FilesPanel {
