@@ -76,6 +76,10 @@ fn shared<'a>(content: &'a str, selected: &Range<usize>, masked: bool) -> Option
     content.get(selected.clone()).filter(|text| !masked && !text.is_empty())
 }
 
+fn one_line(pasted: &str) -> String {
+    pasted.replace("\r\n", " ").replace(['\r', '\n'], " ")
+}
+
 fn escaped(clears: bool, content: &str, saved: Option<&str>) -> Escaped {
     match saved {
         Some(saved) if content != saved => Escaped::Revert,
@@ -170,7 +174,7 @@ impl TextField {
     }
 
     fn insert_pasted(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.replace_text_in_range(None, &text.replace('\n', " "), window, cx);
+        self.replace_text_in_range(None, &one_line(text), window, cx);
     }
 
     fn on_mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
