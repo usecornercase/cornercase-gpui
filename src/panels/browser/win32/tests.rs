@@ -27,3 +27,8 @@ fn a_profile_no_browser_runs_has_no_singleton_window() {
     let profile = std::env::temp_dir().join(format!("cornercase-gpui-no-browser-{}", std::process::id()));
     assert_eq!(singleton_pid(&profile), None);
 }
+
+#[test]
+fn the_downloads_folder_is_a_whole_path() {
+    assert!(downloads_folder().is_some_and(|dir| dir.is_absolute()));
+}
