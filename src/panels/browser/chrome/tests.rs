@@ -49,6 +49,13 @@ fn a_snap_is_known_by_its_command_or_by_the_script_that_runs_it() {
 }
 
 #[test]
+fn a_snap_run_after_its_check_on_one_line_still_counts() {
+    let real = Path::new("/usr/local/bin/chromium");
+    let one_line = b"#!/bin/sh\n[ -x /snap/bin/chromium ] && exec /snap/bin/chromium \"$@\"\nexec /usr/bin/false\n";
+    assert_eq!(snap_command(real, real, one_line).as_deref(), Some("chromium"));
+}
+
+#[test]
 fn a_script_that_only_checks_for_a_snap_runs_its_own_browser() {
     let real = Path::new("/usr/local/bin/chromium");
     let script = b"#!/bin/sh\nif [ -x /snap/bin/chromium ]; then echo 'the snap is here too' >&2; fi\n\

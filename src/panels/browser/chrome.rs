@@ -152,9 +152,9 @@ fn snap_command(exe: &Path, real: &Path, head: &[u8]) -> Option<String> {
 }
 
 fn runs_snap(line: &str) -> Option<String> {
-    let mut words = line.split_whitespace().map(|word| word.trim_matches(['"', '\'']));
-    let first = words.next()?;
-    let program = if first == "exec" { words.next()? } else { first };
+    let words: Vec<&str> = line.split_whitespace().map(|word| word.trim_matches(['"', '\''])).collect();
+    let exec = words.iter().position(|word| *word == "exec");
+    let program = exec.map_or(words.first(), |at| words.get(at + 1))?;
     let command = Path::new(program).strip_prefix(SNAP_BIN).ok()?.to_str()?;
     (!command.is_empty() && !command.contains('/')).then(|| command.to_string())
 }
