@@ -88,7 +88,8 @@ impl Root {
 
     fn key_shortcut(&mut self, ks: &Keystroke, terminal: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let browser = self.browser_has_focus(window, cx);
-        let Some((key, shift)) = keymap::chord(ks, Os::CURRENT, browser) else { return false };
+        let held = keymap::shift_held(ks, window);
+        let Some((key, shift)) = keymap::chord(ks, held, Os::CURRENT, browser) else { return false };
         self.shortcut(Chord { key, shift, terminal, browser }, window, cx)
     }
 

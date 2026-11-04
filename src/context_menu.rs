@@ -180,7 +180,8 @@ fn menu_frame(focus: &FocusHandle, cx: &mut Context<Root>) -> Stateful<Div> {
         .flex_col()
         .text_size(px(12.))
         .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
-            if keymap::chord(&e.keystroke, Os::CURRENT, false).is_none() {
+            let held = keymap::shift_held(&e.keystroke, window);
+            if keymap::chord(&e.keystroke, held, Os::CURRENT, false).is_none() {
                 this.menu_key(e.keystroke.key.as_str(), window, cx);
                 cx.stop_propagation();
             }

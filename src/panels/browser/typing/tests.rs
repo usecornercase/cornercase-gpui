@@ -83,10 +83,10 @@ fn the_window_keeps_its_command_shortcuts_and_the_page_gets_the_rest() {
         key: name.into(),
         key_char: None,
     };
-    assert!(window_claims(&cmd("c"), Os::Mac));
-    assert!(window_claims(&cmd("l"), Os::Mac));
-    assert!(!window_claims(&cmd("a"), Os::Mac));
-    assert!(!window_claims(&key("c", "c"), Os::Mac));
+    assert!(window_claims(&cmd("c"), false, Os::Mac));
+    assert!(window_claims(&cmd("l"), false, Os::Mac));
+    assert!(!window_claims(&cmd("a"), false, Os::Mac));
+    assert!(!window_claims(&key("c", "c"), false, Os::Mac));
 }
 
 #[test]
@@ -94,8 +94,10 @@ fn on_linux_the_window_keeps_ctrl_shift_and_chrome_s_clipboard_keys() {
     let held = |name: &str, modifiers| Keystroke { modifiers, key: name.into(), key_char: None };
     let ctrl = Modifiers { control: true, ..Modifiers::default() };
     let ctrl_shift = Modifiers { shift: true, ..ctrl };
-    assert!(window_claims(&held("c", ctrl), Os::Linux));
-    assert!(window_claims(&held("t", ctrl_shift), Os::Linux));
-    assert!(!window_claims(&held("a", ctrl), Os::Linux));
-    assert!(!window_claims(&held("z", ctrl), Os::Linux));
+    assert!(window_claims(&held("c", ctrl), false, Os::Linux));
+    assert!(window_claims(&held("t", ctrl_shift), true, Os::Linux));
+    assert!(window_claims(&held("{", ctrl), true, Os::Linux));
+    assert!(!window_claims(&held("{", ctrl), false, Os::Linux));
+    assert!(!window_claims(&held("a", ctrl), false, Os::Linux));
+    assert!(!window_claims(&held("z", ctrl), false, Os::Linux));
 }

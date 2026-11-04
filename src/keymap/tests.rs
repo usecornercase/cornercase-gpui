@@ -141,11 +141,15 @@ fn pressed(key: &str, modifiers: Modifiers) -> Keystroke {
 }
 
 fn on_linux(key: &str, modifiers: Modifiers) -> Option<Command> {
-    shortcut(&pressed(key, modifiers), Os::Linux, false).map(|s| s.command)
+    shortcut(&pressed(key, modifiers), modifiers.shift, Os::Linux, false).map(|s| s.command)
+}
+
+fn shift_held(key: &str, modifiers: Modifiers) -> Option<Command> {
+    shortcut(&pressed(key, modifiers), true, Os::Linux, false).map(|s| s.command)
 }
 
 fn in_a_page(key: &str, modifiers: Modifiers) -> Option<Command> {
-    shortcut(&pressed(key, modifiers), Os::Linux, true).map(|s| s.command)
+    shortcut(&pressed(key, modifiers), modifiers.shift, Os::Linux, true).map(|s| s.command)
 }
 
 #[test]
@@ -163,24 +167,43 @@ fn on_linux_ctrl_alt_shift_is_shift_and_the_command_key() {
     assert_eq!(on_linux("c", CTRL_ALT_SHIFT), Some(Command::Panel(PanelKind::Changes)));
     assert_eq!(on_linux("w", CTRL_ALT_SHIFT), Some(Command::CloseTab));
     assert_eq!(on_linux("p", CTRL_ALT_SHIFT), Some(Command::FindFile));
-    assert_eq!(on_linux("{", CTRL_ALT), Some(Command::PreviousTab));
-    assert_eq!(on_linux("}", CTRL_ALT), Some(Command::NextTab));
+    assert_eq!(shift_held("{", CTRL_ALT), Some(Command::PreviousTab));
+    assert_eq!(shift_held("}", CTRL_ALT), Some(Command::NextTab));
 }
 
 #[test]
 fn a_shifted_symbol_reads_as_its_key_on_a_us_keyboard() {
-    assert_eq!(on_linux("{", CTRL), Some(Command::PreviousPane));
-    assert_eq!(on_linux("}", CTRL), Some(Command::NextPane));
-    assert_eq!(on_linux("?", CTRL), Some(Command::Shortcuts));
-    assert_eq!(on_linux("+", CTRL), Some(Command::ZoomIn));
-    assert_eq!(on_linux("_", CTRL), Some(Command::ZoomOut));
-    assert_eq!(on_linux(")", CTRL), Some(Command::ZoomReset));
-    assert_eq!(on_linux("<", CTRL), Some(Command::Panel(PanelKind::Settings)));
+    assert_eq!(shift_held("{", CTRL), Some(Command::PreviousPane));
+    assert_eq!(shift_held("}", CTRL), Some(Command::NextPane));
+    assert_eq!(shift_held("?", CTRL), Some(Command::Shortcuts));
+    assert_eq!(shift_held("+", CTRL), Some(Command::ZoomIn));
+    assert_eq!(shift_held("_", CTRL), Some(Command::ZoomOut));
+    assert_eq!(shift_held(")", CTRL), Some(Command::ZoomReset));
+    assert_eq!(shift_held("<", CTRL), Some(Command::Panel(PanelKind::Settings)));
+}
+
+#[test]
+fn a_symbol_typed_with_ctrl_and_no_shift_reaches_the_program() {
+    assert_eq!(on_linux("<", CTRL), None);
+    assert_eq!(on_linux("_", CTRL), None);
+    assert_eq!(on_linux(")", CTRL), None);
+    assert_eq!(on_linux("+", CTRL), None);
+    assert_eq!(on_linux("?", CTRL), None);
+    assert_eq!(on_linux("{", CTRL), None);
+    assert_eq!(on_linux("{", CTRL_ALT), None);
+}
+
+#[test]
+fn with_shift_held_a_symbol_of_another_layout_is_read_as_typed() {
+    assert_eq!(shift_held("=", CTRL), Some(Command::ZoomIn));
+    assert_eq!(shift_held("/", CTRL), Some(Command::Shortcuts));
+    assert_eq!(shift_held("1", CTRL), None);
+    assert_eq!(shift_held(";", CTRL), None);
 }
 
 #[test]
 fn on_linux_alt_and_a_digit_goes_to_a_tab() {
-    assert_eq!(chord(&pressed("2", ALT), Os::Linux, false), Some(("2", false)));
+    assert_eq!(chord(&pressed("2", ALT), false, Os::Linux, false), Some(("2", false)));
     assert_eq!(on_linux("9", ALT), Some(Command::Tab));
     assert_eq!(on_linux("0", ALT), None);
     assert_eq!(on_linux("@", CTRL), None);
@@ -197,7 +220,7 @@ fn on_linux_other_keys_are_left_to_the_program() {
     assert_eq!(on_linux("i", CTRL_ALT_SHIFT), None);
     assert_eq!(on_linux("v", SUPER), None);
     assert_eq!(on_linux("1", SUPER), None);
-    assert_eq!(chord(&pressed("t", CTRL_SHIFT), Os::Mac, false), None);
+    assert_eq!(chord(&pressed("t", CTRL_SHIFT), true, Os::Mac, false), None);
 }
 
 #[test]
@@ -241,7 +264,7 @@ fn no_linux_shortcut_takes_a_key_the_desktop_keeps() {
     for kept in kept {
         let keystroke = Keystroke::parse(kept).expect("a keystroke");
         for browser in [false, true] {
-            let taken = shortcut(&keystroke, Os::Linux, browser).map(|s| s.command);
+            let taken = shortcut(&keystroke, keystroke.modifiers.shift, Os::Linux, browser).map(|s| s.command);
             assert_eq!(taken, None, "{kept} is the desktop's");
         }
     }
