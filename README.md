@@ -50,7 +50,7 @@ The first build takes a couple of minutes, and puts `cornercase-gpui` in `~/.car
 
 ```sh
 mkdir -p ~/.local/share/applications
-sed "s|^Exec=.*|Exec=$HOME/.cargo/bin/cornercase-gpui|" assets/linux/cornercase-gpui.desktop > ~/.local/share/applications/cornercase-gpui.desktop
+sed "s|^Exec=.*|Exec=\"$HOME/.cargo/bin/cornercase-gpui\"|" assets/linux/cornercase-gpui.desktop > ~/.local/share/applications/cornercase-gpui.desktop
 install -Dm644 assets/linux/cornercase-gpui.svg ~/.local/share/icons/hicolor/scalable/apps/cornercase-gpui.svg
 ```
 
