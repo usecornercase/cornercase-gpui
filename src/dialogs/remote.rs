@@ -163,7 +163,7 @@ impl Render for AskPath {
             .gap(px(8.))
             .child(ui::field(format!("Folder on {}", self.host), ui::boxed(&self.field, window, cx)))
             .child(ui::dim(format!(
-                "From its home folder, or from /. The folder picker only sees this {}'s disk.",
+                "From its home folder, or its full path there. The folder picker only sees this {}'s disk.",
                 desktop::here()
             )));
         let button = ui::primary_button("ask-path", self.question.button)
