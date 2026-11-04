@@ -1,9 +1,9 @@
 use std::fs;
-use std::io::{BufRead, BufReader, Read as _, Write as _};
+use std::io::{BufRead, BufReader, Read, Write as _};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
@@ -16,10 +16,11 @@ const PREFERRED_PORT: u16 = 9222;
 const ACTIVE_PORT: &str = "DevToolsActivePort";
 const OWNER: &str = "cornercase-owner";
 const PORT_FILE: &str = "cornercase-port";
-const SAID: &str = "cornercase-chrome.log";
 const SNAP_BIN: &str = "/snap/bin";
 const START_WAIT: Duration = Duration::from_secs(20);
 const POLL: Duration = Duration::from_millis(100);
+const LAST_WORDS: Duration = Duration::from_secs(1);
+const LINE_MAX: u64 = 4096;
 
 pub(crate) const NO_CHROME: &str = "No Chrome, Chromium, Edge or Brave was found";
 
@@ -65,6 +66,12 @@ struct Chosen {
 }
 
 static CHOSEN: OnceLock<Chosen> = OnceLock::new();
+
+#[derive(Default)]
+struct Said {
+    error: Option<String>,
+    ended: bool,
+}
 
 pub(crate) fn find() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("CORNERCASE_GPUI_CHROME") {
@@ -251,41 +258,62 @@ fn launch(exe: &Path, profile: &Path) -> Result<Endpoint> {
     let _ = fs::remove_file(profile.join(ACTIVE_PORT));
     let port = if free(PREFERRED_PORT) { PREFERRED_PORT } else { 0 };
     let _ = fs::write(profile.join(PORT_FILE), port.to_string());
-    let said = fs::File::create(profile.join(SAID)).map_or_else(|_| Stdio::null(), Stdio::from);
-    let child = Command::new(exe)
+    let mut child = Command::new(exe)
         .args(args(Os::CURRENT, profile, port))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(said)
+        .stderr(Stdio::piped())
         .spawn()
         .with_context(|| format!("could not start {}", exe.display()))?;
+    let said = Arc::new(Mutex::new(Said::default()));
+    if let Some(stderr) = child.stderr.take() {
+        let said = said.clone();
+        std::thread::spawn(move || keep_errors(stderr, &said));
+    }
     let _ = fs::write(profile.join(OWNER), std::process::id().to_string());
     let pid = child.id();
     *OWNED.lock() = Owned { child: Some(child), pid: Some(pid) };
-    wait_for_port(profile)
+    wait_for_port(profile, &said)
 }
 
-fn last_error(said: &str) -> Option<String> {
-    let error = |line: &str| {
-        let (head, text) = line.strip_prefix('[')?.split_once("] ")?;
-        (head.contains(":ERROR:") || head.contains(":FATAL:")).then(|| text.trim().chars().take(500).collect())
-    };
-    said.lines().rev().find_map(error)
+fn keep_errors(stderr: impl Read, said: &Mutex<Said>) {
+    let mut reader = BufReader::new(stderr);
+    let mut line = Vec::new();
+    while (&mut reader).take(LINE_MAX).read_until(b'\n', &mut line).is_ok_and(|read| read > 0) {
+        if let Some(error) = error_in(&String::from_utf8_lossy(&line)) {
+            said.lock().error = Some(error);
+        }
+        line.clear();
+    }
+    said.lock().ended = true;
+}
+
+fn error_in(line: &str) -> Option<String> {
+    let (head, text) = line.strip_prefix('[')?.split_once("] ")?;
+    (head.contains(":ERROR:") || head.contains(":FATAL:")).then(|| text.trim().chars().take(500).collect())
+}
+
+fn last_words(said: &Mutex<Said>) -> Option<String> {
+    let started = Instant::now();
+    while !said.lock().ended && started.elapsed() < LAST_WORDS {
+        std::thread::sleep(POLL);
+    }
+    said.lock().error.clone()
 }
 
 fn free(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
-fn wait_for_port(profile: &Path) -> Result<Endpoint> {
+fn wait_for_port(profile: &Path, said: &Mutex<Said>) -> Result<Endpoint> {
     let started = Instant::now();
     while started.elapsed() < START_WAIT {
         if let Some(endpoint) = running(profile) {
             return Ok(endpoint);
         }
-        if let Some(status) = OWNED.lock().child.as_mut().and_then(|c| c.try_wait().ok().flatten()) {
-            let said = fs::read_to_string(profile.join(SAID)).unwrap_or_default();
-            match last_error(&said) {
+        let ended = OWNED.lock().child.as_mut().and_then(|c| c.try_wait().ok().flatten());
+        if let Some(status) = ended {
+            match last_words(said) {
                 Some(error) => bail!("the browser stopped as it started ({status}): {error}"),
                 None => bail!("the browser stopped as it started ({status})"),
             }

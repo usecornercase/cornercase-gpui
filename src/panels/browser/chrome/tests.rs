@@ -65,12 +65,30 @@ fn a_snap_is_named_by_its_command_or_by_the_command_its_alias_points_to() {
     assert_eq!(snap_name("", None), None);
 }
 
+fn errors_kept(said: &[u8]) -> Option<String> {
+    let kept = Mutex::new(Said::default());
+    keep_errors(std::io::Cursor::new(said), &kept);
+    assert!(kept.lock().ended);
+    kept.into_inner().error
+}
+
 #[test]
 fn a_browser_that_stops_as_it_starts_gives_its_last_error() {
-    let said = "\n[5887:5887:1104/112642.487358:ERROR:zygote_host_impl_linux.cc:130] No usable sandbox! Install it.\n\
+    let said = b"\n[5887:5887:1104/112642.487358:ERROR:zygote_host_impl_linux.cc:130] No usable sandbox! Install it.\n\
                 [5887:5900:1104/112642.5:WARNING:bus.cc:408] Failed to connect to the bus\nDevTools listening on ws://x\n";
-    assert_eq!(last_error(said).as_deref(), Some("No usable sandbox! Install it."));
-    assert_eq!(last_error("DevTools listening on ws://127.0.0.1:9222/devtools/browser/x\n"), None);
+    assert_eq!(errors_kept(said).as_deref(), Some("No usable sandbox! Install it."));
+    assert_eq!(errors_kept(b"DevTools listening on ws://127.0.0.1:9222/devtools/browser/x\n"), None);
+}
+
+#[test]
+fn only_the_last_error_is_kept_however_long_the_browser_talks() {
+    let mut said = Vec::new();
+    for n in 0..2000 {
+        said.extend(format!("[1:1:1104/1.0:ERROR:x.cc:1] error {n}\n[1:1:1104/1.0:INFO:x.cc:1] chatter\n").bytes());
+    }
+    said.extend(std::iter::repeat_n(b'x', 100_000));
+    said.extend(b"\n[1:1:1104/1.0:FATAL:y.cc:2] the end\n");
+    assert_eq!(errors_kept(&said).as_deref(), Some("the end"));
 }
 
 #[test]
