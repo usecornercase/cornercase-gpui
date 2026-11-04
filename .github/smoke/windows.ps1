@@ -80,24 +80,27 @@ State $app maximised; Shot maximised
 $r = Rect $app
 Click ($r.R - 69) ($r.T + 22); Start-Sleep 3
 State $app restored; Shot restored
-$r = Rect $app
-$mid = [int](($r.L + $r.R) / 2)
-Click $mid ($r.T + 22) 2; Start-Sleep 3
+function Mid($app) { $r = Rect $app; @([int](($r.L + $r.R) / 2), ($r.T + 22)) }
+$m = Mid $app
+Click $m[0] $m[1] 2; Start-Sleep 3
 State $app double-clicked; Shot double-clicked
-Click $mid ($r.T + 22) 2; Start-Sleep 3
+$m = Mid $app
+Click $m[0] $m[1] 2; Start-Sleep 3
 State $app double-clicked-again
-$r = Rect $app
-[W]::SetCursorPos($mid, $r.T + 22); [W]::Down(); Start-Sleep -Milliseconds 200
-for ($i = 1; $i -le 10; $i++) { [W]::SetCursorPos($mid - 15 * $i, $r.T + 22 + 10 * $i); Start-Sleep -Milliseconds 50 }
+$m = Mid $app
+[W]::SetCursorPos($m[0], $m[1]); [W]::Down(); Start-Sleep -Milliseconds 200
+for ($i = 1; $i -le 10; $i++) { [W]::SetCursorPos($m[0] - 15 * $i, $m[1] + 10 * $i); Start-Sleep -Milliseconds 50 }
 [W]::Up(); Start-Sleep 2
 State $app dragged; Shot dragged
+Keys $app "% " alt-space 2
+Keys $app "{ESC}" alt-space-closed 1
 Keys $app "^%+b" browser 15
 Get-Process msedge, chrome -ErrorAction SilentlyContinue | Select-Object Name, Id | Format-Table | Out-String | Set-Content (Join-Path $out browsers.txt)
 Keys $app "{ESC}" browser-closed
 Keys $app "^+," settings 5
 Keys $app "{ESC}" settings-closed
 $r = Rect $app
-Click ($r.R - 161) ($r.T + 22); Start-Sleep 2
+Click ($r.R - 115) ($r.T + 22); Start-Sleep 2
 State $app minimised
 Front $app; Start-Sleep 2
 State $app back
