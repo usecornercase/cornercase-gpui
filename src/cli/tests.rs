@@ -4,7 +4,7 @@ use std::sync::mpsc;
 
 use serde_json::json;
 
-use super::{Binary, CALLER, Job, Remote, Target, gather_input, gather_scroll};
+use super::{BINARY, Binary, CALLER, Job, Remote, Target, gather_input, gather_scroll, spawn_failure, use_binary};
 
 fn args(cmd: &Command) -> Vec<&str> {
     cmd.get_args().filter_map(OsStr::to_str).collect()
@@ -113,4 +113,12 @@ fn a_binary_found_through_the_login_shell_runs_with_that_path() {
 fn a_binary_found_on_the_path_leaves_the_environment_alone() {
     let cmd = Target::Local.command_with(&Binary::plain("/usr/bin/cornercase".into()), &["status"]);
     assert_eq!(path_of(&cmd), None);
+}
+
+#[test]
+fn a_binary_that_cannot_start_is_named_and_forgotten() {
+    use_binary(Binary::plain("/opt/x/cornercase".into()));
+    let error = spawn_failure(std::io::Error::other("gone"));
+    assert_eq!(error.to_string(), "could not run `/opt/x/cornercase`");
+    assert!(BINARY.lock().is_none());
 }

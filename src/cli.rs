@@ -106,10 +106,13 @@ fn forget_binary() {
 }
 
 fn spawn(cmd: &mut Command) -> Result<Child> {
-    cmd.spawn().map_err(|e| {
-        forget_binary();
-        anyhow::Error::new(e).context(format!("could not run `{}`", bin()))
-    })
+    cmd.spawn().map_err(spawn_failure)
+}
+
+fn spawn_failure(e: std::io::Error) -> anyhow::Error {
+    let shown = bin();
+    forget_binary();
+    anyhow::Error::new(e).context(format!("could not run `{shown}`"))
 }
 
 pub(crate) fn use_binary(binary: Binary) {
