@@ -8,6 +8,7 @@ use gpui::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::desktop;
 use crate::platform::Os;
 
 actions!(
@@ -71,6 +72,10 @@ enum Escaped {
     Pass,
 }
 
+fn shared<'a>(content: &'a str, selected: &Range<usize>, masked: bool) -> Option<&'a str> {
+    content.get(selected.clone()).filter(|text| !masked && !text.is_empty())
+}
+
 fn escaped(clears: bool, content: &str, saved: Option<&str>) -> Escaped {
     match saved {
         Some(saved) if content != saved => Escaped::Revert,
@@ -100,15 +105,18 @@ impl TextField {
 
     fn select_left(&mut self, _: &SelectLeft, _: &mut Window, cx: &mut Context<Self>) {
         self.select_to(self.previous_boundary(self.cursor_offset()), cx);
+        self.share_selection(cx);
     }
 
     fn select_right(&mut self, _: &SelectRight, _: &mut Window, cx: &mut Context<Self>) {
         self.select_to(self.next_boundary(self.cursor_offset()), cx);
+        self.share_selection(cx);
     }
 
     fn select_all(&mut self, _: &SelectAll, _: &mut Window, cx: &mut Context<Self>) {
         self.move_to(0, cx);
         self.select_to(self.content.len(), cx);
+        self.share_selection(cx);
     }
 
     fn home(&mut self, _: &Home, _: &mut Window, cx: &mut Context<Self>) {
@@ -143,8 +151,26 @@ impl TextField {
         }
     }
 
-    fn on_mouse_up(&mut self, _: &MouseUpEvent, _window: &mut Window, _: &mut Context<Self>) {
-        self.is_selecting = false;
+    fn on_mouse_up(&mut self, _: &MouseUpEvent, _window: &mut Window, cx: &mut Context<Self>) {
+        if std::mem::take(&mut self.is_selecting) {
+            self.share_selection(cx);
+        }
+    }
+
+    fn share_selection(&self, cx: &App) {
+        if let Some(text) = shared(&self.content, &self.selected_range, self.options.masked) {
+            desktop::write_primary(text, cx);
+        }
+    }
+
+    fn paste_primary(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(text) = desktop::read_primary(cx) else { return };
+        self.move_to(self.index_for_mouse_position(event.position), cx);
+        self.insert_pasted(&text, window, cx);
+    }
+
+    fn insert_pasted(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.replace_text_in_range(None, &text.replace('\n', " "), window, cx);
     }
 
     fn on_mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -155,7 +181,7 @@ impl TextField {
 
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            self.replace_text_in_range(None, &text.replace('\n', " "), window, cx);
+            self.insert_pasted(&text, window, cx);
         }
     }
 
@@ -597,6 +623,9 @@ impl Render for TextField {
             .on_action(cx.listener(Self::focus_next))
             .on_action(cx.listener(Self::focus_previous))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .when(desktop::has_primary(Os::CURRENT), |d| {
+                d.on_mouse_down(MouseButton::Middle, cx.listener(Self::paste_primary))
+            })
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))

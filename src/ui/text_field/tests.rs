@@ -1,4 +1,4 @@
-use super::{Escaped, escaped, selected_rows, word_end, word_start};
+use super::{Escaped, escaped, selected_rows, shared, word_end, word_start};
 
 #[test]
 fn a_selection_inside_one_row_paints_one_span() {
@@ -51,4 +51,11 @@ fn a_word_ends_at_the_blank_after_it() {
     assert_eq!(word_end("cargo test", 5), 10);
     assert_eq!(word_end("cargo  test -q", 5), 11);
     assert_eq!(word_end("word", 4), 4);
+}
+
+#[test]
+fn a_selection_goes_to_the_primary_selection_unless_it_is_empty_or_masked() {
+    assert_eq!(shared("hello world", &(6..11), false), Some("world"));
+    assert_eq!(shared("hello", &(2..2), false), None);
+    assert_eq!(shared("secret", &(0..6), true), None);
 }
