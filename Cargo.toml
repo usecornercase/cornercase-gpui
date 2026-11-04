@@ -14,7 +14,7 @@ categories = ["development-tools"]
 anyhow = "1.0.104"
 base64 = "0.22.1"
 futures = "0.3"
-libc = "0.2"
+libc = "0.2, <0.2.190"
 gpui = { version = "0.2.2", features = ["runtime_shaders"] }
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
