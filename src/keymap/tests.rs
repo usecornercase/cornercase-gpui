@@ -342,3 +342,9 @@ fn a_link_opens_with_the_system_on_command_or_ctrl_click() {
     assert!(opens_with_system(CTRL, Os::Linux));
     assert!(!opens_with_system(SUPER, Os::Linux));
 }
+
+#[test]
+fn the_link_key_still_opens_with_shift_held() {
+    assert!(opens_with_system(Modifiers { shift: true, ..SUPER }, Os::Mac));
+    assert!(opens_with_system(CTRL_SHIFT, Os::Linux));
+}
