@@ -33,6 +33,27 @@ fn its_command_line_gets_the_file_the_picture_and_the_size() {
 }
 
 #[test]
+fn its_command_line_is_split_as_the_desktop_entry_spec_quotes_it() {
+    let exec = r#"thumb --size="%s" '%i' "a \"b\" \$c \d" plain\ word "" end"#;
+    assert_eq!(words(exec), ["thumb", "--size=%s", "%i", r#"a "b" $c \d"#, "plain word", "", "end"]);
+    let quoted = parse("[Thumbnailer Entry]\nExec=\"/opt/my thumb/run\" %i %o\n").expect("an entry");
+    assert_eq!(quoted.program(), "/opt/my thumb/run");
+    let video = argv(exec, Path::new("/w/a.mp4"), Path::new("/t/o.png"), 900).expect("an argv");
+    assert_eq!(video[1], "--size=900");
+    assert_eq!(video[2], "/w/a.mp4");
+}
+
+#[test]
+fn a_path_that_is_not_utf8_reaches_the_thumbnailer_as_it_is() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt as _;
+
+    let path = Path::new(OsStr::from_bytes(b"/w/caf\xe9.mp4"));
+    let argv = argv("thumb %i %o", path, Path::new("/t/o.png"), 64).expect("an argv");
+    assert_eq!(argv[1].as_bytes(), b"/w/caf\xe9.mp4");
+}
+
+#[test]
 fn the_type_comes_from_the_longest_glob_of_the_highest_weight() {
     assert_eq!(mime_of("Report.PDF", GLOBS).as_deref(), Some("application/pdf"));
     assert_eq!(mime_of("src.tar.gz", GLOBS).as_deref(), Some("application/x-compressed-tar"));
