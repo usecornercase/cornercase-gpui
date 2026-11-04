@@ -104,7 +104,11 @@ pub(crate) fn candidates(home: &Path) -> Vec<PathBuf> {
 }
 
 pub(crate) fn profile() -> PathBuf {
-    CHOSEN.get().map_or_else(|| profile_for(None), |chosen| chosen.profile.clone())
+    profile_in(&CHOSEN)
+}
+
+fn profile_in(cell: &OnceLock<Chosen>) -> PathBuf {
+    cell.get().map_or_else(|| profile_for(None), |chosen| chosen.profile.clone())
 }
 
 fn profile_for(exe: Option<&Path>) -> PathBuf {

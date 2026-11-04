@@ -98,6 +98,16 @@ fn the_browser_and_its_profile_are_chosen_once_one_is_found() {
 }
 
 #[test]
+fn the_profile_is_the_one_chosen_with_the_browser() {
+    use std::path::PathBuf;
+
+    let cell = OnceLock::new();
+    let chosen = Chosen { exe: PathBuf::from("/nowhere/chromium"), profile: PathBuf::from("/chosen/profile") };
+    assert!(cell.set(chosen).is_ok());
+    assert_eq!(profile_in(&cell), Path::new("/chosen/profile"));
+}
+
+#[test]
 fn the_singleton_lock_names_the_browser_pid() {
     assert_eq!(lock_pid("my-mac.local-48213"), Some(48213));
     assert_eq!(lock_pid("nohyphen"), None);
