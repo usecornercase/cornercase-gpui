@@ -113,8 +113,8 @@ fn reads_the_prefs() {
 #[test]
 fn a_sound_file_that_is_not_there_plays_the_system_sound() {
     let prefs = Prefs { sound_waiting: "~/ding.wav".into(), ..Prefs::default() };
-    assert_eq!(prefs.sound_file("needs-you", "/nowhere"), system_sound("needs-you"));
-    assert_eq!(prefs.sound_file("finished", "/nowhere"), system_sound("finished"));
+    assert_eq!(prefs.own_sound("needs-you", "/nowhere"), None);
+    assert_eq!(prefs.own_sound("finished", "/nowhere"), None);
 }
 
 #[test]
@@ -124,12 +124,12 @@ fn plays_the_users_own_file() {
     std::fs::write(dir.join("ding.wav"), b"RIFF").expect("file");
     let prefs = Prefs { sound_waiting: "~/ding.wav".into(), ..Prefs::default() };
     let home = dir.to_string_lossy().to_string();
-    assert_eq!(prefs.sound_file("needs-you", &home), format!("{home}/ding.wav"));
+    assert_eq!(prefs.own_sound("needs-you", &home), Some(format!("{home}/ding.wav")));
     let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn a_relative_sound_path_plays_the_system_sound() {
     let prefs = Prefs { sound_waiting: "ding.wav".into(), ..Prefs::default() };
-    assert_eq!(prefs.sound_file("needs-you", "/tmp"), system_sound("needs-you"));
+    assert_eq!(prefs.own_sound("needs-you", "/tmp"), None);
 }

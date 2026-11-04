@@ -2,6 +2,7 @@ use gpui::{Keystroke, Modifiers};
 use serde_json::json;
 
 use super::*;
+use crate::platform::Os;
 
 fn stroke(key: &str, key_char: Option<&str>, modifiers: Modifiers) -> Keystroke {
     Keystroke { modifiers, key: key.to_string(), key_char: key_char.map(str::to_string) }
@@ -80,7 +81,7 @@ fn a_key_outside_a_us_layout_keeps_its_character_without_a_code() {
 
 #[test]
 fn a_command_key_is_a_raw_key_down_with_its_editing_command() {
-    let event = key_down(&bare("a", cmd()), false);
+    let event = key_down(&bare("a", cmd()), false, Os::Mac);
     assert_eq!(event["type"], "rawKeyDown");
     assert_eq!(event["modifiers"], 4);
     assert_eq!(event["commands"], json!(["selectAll"]));
@@ -120,7 +121,7 @@ fn a_key_without_a_command_sends_none() {
 
 #[test]
 fn enter_carries_a_carriage_return_and_no_command_so_forms_submit() {
-    let event = key_down(&plain("enter", "\n"), false);
+    let event = key_down(&plain("enter", "\n"), false, Os::Mac);
     assert_eq!((event["type"].as_str(), event["text"].as_str()), (Some("keyDown"), Some("\r")));
     assert_eq!(event["commands"], json!([]));
 }
@@ -144,22 +145,37 @@ fn a_release_names_the_key() {
 
 #[test]
 fn printable_keys_are_left_to_the_input_method() {
-    assert_eq!(route(&plain("a", "a"), false), Route::Text);
-    assert_eq!(route(&stroke("2", Some("@"), alt()), false), Route::Text);
-    assert_eq!(route(&plain("space", " "), false), Route::Text);
+    assert_eq!(route(&plain("a", "a"), false, Os::Mac), Route::Text);
+    assert_eq!(route(&stroke("2", Some("@"), alt()), false, Os::Mac), Route::Text);
+    assert_eq!(route(&plain("space", " "), false, Os::Mac), Route::Text);
 }
 
 #[test]
 fn a_held_printable_key_repeats_its_text() {
-    assert_eq!(route(&plain("a", "a"), true), Route::Repeat("a".into()));
+    assert_eq!(route(&plain("a", "a"), true, Os::Mac), Route::Repeat("a".into()));
 }
 
 #[test]
 fn named_command_and_control_keys_go_as_keys() {
-    assert_eq!(route(&plain("enter", "\n"), false), Route::Key);
-    assert_eq!(route(&bare("left", alt()), false), Route::Key);
-    assert_eq!(route(&bare("a", cmd()), false), Route::Key);
-    assert_eq!(route(&bare("a", Modifiers { control: true, ..Modifiers::default() }), false), Route::Key);
+    assert_eq!(route(&plain("enter", "\n"), false, Os::Mac), Route::Key);
+    assert_eq!(route(&bare("left", alt()), false, Os::Mac), Route::Key);
+    assert_eq!(route(&bare("a", cmd()), false, Os::Mac), Route::Key);
+    assert_eq!(route(&bare("a", Modifiers { control: true, ..Modifiers::default() }), false, Os::Mac), Route::Key);
+}
+
+#[test]
+fn on_linux_a_ctrl_key_goes_without_mac_commands_so_chrome_edits_natively() {
+    let ctrl = Modifiers { control: true, ..Modifiers::default() };
+    let event = key_down(&bare("a", ctrl), false, Os::Linux);
+    assert_eq!((event["type"].as_str(), event["modifiers"].as_u64()), (Some("rawKeyDown"), Some(2)));
+    assert!(event.get("commands").is_none());
+}
+
+#[test]
+fn on_linux_alt_keys_go_as_keys_since_alt_types_nothing_there() {
+    assert_eq!(route(&stroke("f", Some("f"), alt()), false, Os::Linux), Route::Key);
+    assert_eq!(route(&stroke("f", Some("f"), alt()), false, Os::Mac), Route::Text);
+    assert_eq!(route(&plain("@", "@"), false, Os::Linux), Route::Text);
 }
 
 #[test]

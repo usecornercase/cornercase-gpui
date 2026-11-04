@@ -6,7 +6,7 @@ use gpui::{
 
 use crate::dialogs;
 use crate::store::Store;
-use crate::theme::{colours, radius};
+use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui;
 
 pub(super) struct Question {
@@ -88,7 +88,7 @@ pub(super) fn text_box(id: SharedString, lines: &[String], height: f32) -> impl 
         .p(px(10.))
         .rounded(px(radius::CONTROL))
         .bg(colours::sidebar())
-        .font_family("Menlo")
+        .font_family(FONT_FAMILY)
         .text_size(px(11.))
         .text_color(colours::muted())
         .children(lines.iter().map(|l| div().child(l.clone())).collect::<Vec<_>>())

@@ -6,6 +6,7 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 
+use crate::app::frame::{self, Frame};
 use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
 use crate::context_menu::{Entry, act, danger, item};
 use crate::dialogs;
@@ -83,7 +84,7 @@ fn new_tab_button(cx: &mut Context<Root>) -> impl IntoElement + use<> {
         }))
 }
 
-fn split_buttons(cx: &mut Context<Root>) -> impl IntoElement + use<> {
+fn split_buttons(cx: &mut Context<Root>) -> Div {
     div()
         .flex()
         .flex_none()
@@ -98,6 +99,15 @@ fn split_buttons(cx: &mut Context<Root>) -> impl IntoElement + use<> {
                 .tooltip(tip(with_keys("Split down", Command::SplitDown)))
                 .on_click(cx.listener(|this, _: &ClickEvent, _, _| this.split(true))),
         )
+}
+
+fn tools(window_frame: Frame, cx: &mut Context<Root>) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .child(frame::claimed(split_buttons(cx), window_frame))
+        .children(frame::window_controls(window_frame))
 }
 
 fn new_tab_menu() -> Vec<Entry> {
@@ -125,8 +135,8 @@ fn agent_entries(tab: &Tab) -> Vec<Entry> {
 }
 
 impl Root {
-    pub(crate) fn render_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        div()
+    pub(crate) fn render_tabs(&self, window_frame: Frame, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let row = div()
             .h(px(TITLEBAR_HEIGHT))
             .flex_none()
             .flex()
@@ -134,17 +144,20 @@ impl Root {
             .justify_between()
             .gap(px(8.))
             .pr(px(GAP))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .min_w_0()
-                    .gap(px(6.))
-                    .overflow_hidden()
-                    .child(self.tab_strip(cx))
-                    .when(!self.side.look.current.tabs_in_sidebar, |d| d.child(new_tab_button(cx))),
-            )
-            .child(split_buttons(cx))
+            .child(frame::claimed(self.tab_group(cx), window_frame))
+            .child(tools(window_frame, cx));
+        frame::title_row(row, window_frame)
+    }
+
+    fn tab_group(&self, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .items_center()
+            .min_w_0()
+            .gap(px(6.))
+            .overflow_hidden()
+            .child(self.tab_strip(cx))
+            .when(!self.side.look.current.tabs_in_sidebar, |d| d.child(new_tab_button(cx)))
     }
 
     fn tab_strip(&self, cx: &mut Context<Self>) -> Div {

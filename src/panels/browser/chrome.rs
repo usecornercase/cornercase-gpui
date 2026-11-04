@@ -1,19 +1,27 @@
+use std::ffi::OsString;
 use std::fs;
-use std::io::{BufRead, BufReader, Write as _};
+use std::io::{BufRead, BufReader, Read, Write as _};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
 use parking_lot::Mutex;
 
+use crate::desktop;
+use crate::platform::Os;
+
 const PREFERRED_PORT: u16 = 9222;
 const ACTIVE_PORT: &str = "DevToolsActivePort";
 const OWNER: &str = "cornercase-owner";
 const PORT_FILE: &str = "cornercase-port";
+const SNAP_BIN: &str = "/snap/bin";
 const START_WAIT: Duration = Duration::from_secs(20);
 const POLL: Duration = Duration::from_millis(100);
+const LAST_WORDS: Duration = Duration::from_secs(1);
+const LINE_MAX: u64 = 4096;
 
 pub(crate) const NO_CHROME: &str = "No Chrome, Chromium, Edge or Brave was found";
 
@@ -25,6 +33,7 @@ const NAMES: &[&str] = &[
     "microsoft-edge-stable",
     "microsoft-edge",
     "brave-browser",
+    "brave",
     "chrome",
     "chrome-headless-shell",
 ];
@@ -52,11 +61,34 @@ struct Owned {
 
 static OWNED: Mutex<Owned> = Mutex::new(Owned { child: None, pid: None });
 
+struct Chosen {
+    exe: PathBuf,
+    profile: PathBuf,
+}
+
+static CHOSEN: OnceLock<Chosen> = OnceLock::new();
+
+#[derive(Default)]
+struct Said {
+    error: Option<String>,
+    ended: bool,
+}
+
 pub(crate) fn find() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("CORNERCASE_GPUI_CHROME") {
         return Some(PathBuf::from(path)).filter(|p| p.is_file());
     }
-    candidates(&home()).into_iter().find(|p| p.is_file()).or_else(|| on_path(NAMES))
+    let on_path = || NAMES.iter().find_map(|name| desktop::on_path(name));
+    candidates(&home()).into_iter().find(|p| p.is_file()).or_else(on_path)
+}
+
+fn chosen_in(cell: &OnceLock<Chosen>, look: impl FnOnce() -> Option<PathBuf>) -> Option<&Chosen> {
+    if let Some(chosen) = cell.get() {
+        return Some(chosen);
+    }
+    let exe = look()?;
+    let profile = profile_for(Some(&exe));
+    Some(cell.get_or_init(|| Chosen { exe, profile }))
 }
 
 fn home() -> PathBuf {
@@ -79,38 +111,80 @@ pub(crate) fn candidates(home: &Path) -> Vec<PathBuf> {
     Vec::new()
 }
 
-fn on_path(names: &[&str]) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    let suffix = if cfg!(windows) { ".exe" } else { "" };
-    std::env::split_paths(&path)
-        .flat_map(|dir| names.iter().map(move |name| dir.join(format!("{name}{suffix}"))))
-        .find(|p| p.is_file())
+pub(crate) fn profile() -> PathBuf {
+    profile_in(&CHOSEN)
 }
 
-pub(crate) fn profile() -> PathBuf {
+fn profile_in(cell: &OnceLock<Chosen>) -> PathBuf {
+    cell.get().map_or_else(|| profile_for(None), |chosen| chosen.profile.clone())
+}
+
+fn profile_for(exe: Option<&Path>) -> PathBuf {
     if let Some(dir) = std::env::var_os("CORNERCASE_GPUI_BROWSER_PROFILE") {
         return PathBuf::from(dir);
     }
-    crate::prefs::app_dir().join("browser")
+    match exe.and_then(snap_of) {
+        Some(snap) => snap_profile(&home(), &snap),
+        None => crate::prefs::app_dir().join("browser"),
+    }
 }
 
-pub(crate) fn args(profile: &Path, port: u16) -> Vec<String> {
-    let mut args = vec![
-        "--headless".to_string(),
-        format!("--user-data-dir={}", profile.display()),
-        format!("--remote-debugging-port={port}"),
-        "--remote-debugging-address=127.0.0.1".into(),
-        "--no-first-run".into(),
-        "--no-default-browser-check".into(),
-        "--hide-crash-restore-bubble".into(),
-        "--disable-features=Translate,MediaRouter".into(),
-        "--force-color-profile=srgb".into(),
-        "--window-size=1280,800".into(),
-    ];
-    if cfg!(target_os = "macos") {
-        args.push("--use-mock-keychain".into());
+fn snap_profile(home: &Path, snap: &str) -> PathBuf {
+    home.join("snap").join(snap).join("common/cornercase-gpui-browser")
+}
+
+fn snap_of(exe: &Path) -> Option<String> {
+    let real = fs::canonicalize(exe).ok()?;
+    let mut head = Vec::new();
+    if let Ok(file) = fs::File::open(&real) {
+        let _ = file.take(4096).read_to_end(&mut head);
     }
-    args.push("--no-startup-window".into());
+    let command = snap_command(exe, &real, &head)?;
+    let link = fs::read_link(Path::new(SNAP_BIN).join(&command)).ok();
+    snap_name(&command, link.as_deref())
+}
+
+fn snap_command(exe: &Path, real: &Path, head: &[u8]) -> Option<String> {
+    if exe.starts_with(SNAP_BIN) || real.file_name().is_some_and(|name| name == "snap") {
+        return exe.file_name()?.to_str().map(str::to_string);
+    }
+    let script = String::from_utf8_lossy(head.strip_prefix(b"#!")?);
+    script.lines().find_map(runs_snap)
+}
+
+fn runs_snap(line: &str) -> Option<String> {
+    let words: Vec<&str> = line.split_whitespace().map(|word| word.trim_matches(['"', '\''])).collect();
+    let exec = words.iter().position(|word| *word == "exec");
+    let program = exec.map_or(words.first(), |at| words.get(at + 1))?;
+    let command = Path::new(program).strip_prefix(SNAP_BIN).ok()?.to_str()?;
+    (!command.is_empty() && !command.contains('/')).then(|| command.to_string())
+}
+
+fn snap_name(command: &str, link: Option<&Path>) -> Option<String> {
+    let alias = link.filter(|target| target.parent() == Some(Path::new(""))).and_then(Path::to_str);
+    alias.unwrap_or(command).split('.').next().filter(|name| !name.is_empty()).map(str::to_string)
+}
+
+pub(crate) fn args(os: Os, profile: &Path, port: u16) -> Vec<OsString> {
+    let mut user_data = OsString::from("--user-data-dir=");
+    user_data.push(profile);
+    let keyring = match os {
+        Os::Mac => "--use-mock-keychain",
+        Os::Linux => "--password-store=basic",
+    };
+    let flags = [
+        "--remote-debugging-address=127.0.0.1",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--hide-crash-restore-bubble",
+        "--disable-features=Translate,MediaRouter",
+        "--force-color-profile=srgb",
+        "--window-size=1280,800",
+        keyring,
+        "--no-startup-window",
+    ];
+    let mut args = vec!["--headless".into(), user_data, format!("--remote-debugging-port={port}").into()];
+    args.extend(flags.map(OsString::from));
     args
 }
 
@@ -122,14 +196,14 @@ pub(crate) fn active_port(text: &str) -> Option<Endpoint> {
 }
 
 pub(crate) fn attach_or_launch() -> Result<Endpoint> {
+    let chosen = chosen_in(&CHOSEN, find);
     let profile = profile();
     fs::create_dir_all(&profile).with_context(|| format!("could not make {}", profile.display()))?;
     if let Some(endpoint) = running(&profile) {
         adopt_if_orphan(&profile);
         return Ok(endpoint);
     }
-    let exe = find().context(NO_CHROME)?;
-    launch(&exe, &profile)
+    launch(&chosen.context(NO_CHROME)?.exe, &profile)
 }
 
 fn known_port(profile: &Path) -> Option<u16> {
@@ -187,31 +261,65 @@ fn launch(exe: &Path, profile: &Path) -> Result<Endpoint> {
     let _ = fs::remove_file(profile.join(ACTIVE_PORT));
     let port = if free(PREFERRED_PORT) { PREFERRED_PORT } else { 0 };
     let _ = fs::write(profile.join(PORT_FILE), port.to_string());
-    let child = Command::new(exe)
-        .args(args(profile, port))
+    let mut child = Command::new(exe)
+        .args(args(Os::CURRENT, profile, port))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .with_context(|| format!("could not start {}", exe.display()))?;
+    let said = Arc::new(Mutex::new(Said::default()));
+    if let Some(stderr) = child.stderr.take() {
+        let said = said.clone();
+        std::thread::spawn(move || keep_errors(stderr, &said));
+    }
     let _ = fs::write(profile.join(OWNER), std::process::id().to_string());
     let pid = child.id();
     *OWNED.lock() = Owned { child: Some(child), pid: Some(pid) };
-    wait_for_port(profile)
+    wait_for_port(profile, &said)
+}
+
+fn keep_errors(stderr: impl Read, said: &Mutex<Said>) {
+    let mut reader = BufReader::new(stderr);
+    let mut line = Vec::new();
+    while (&mut reader).take(LINE_MAX).read_until(b'\n', &mut line).is_ok_and(|read| read > 0) {
+        if let Some(error) = error_in(&String::from_utf8_lossy(&line)) {
+            said.lock().error = Some(error);
+        }
+        line.clear();
+    }
+    said.lock().ended = true;
+}
+
+fn error_in(line: &str) -> Option<String> {
+    let (head, text) = line.strip_prefix('[')?.split_once("] ")?;
+    (head.contains(":ERROR:") || head.contains(":FATAL:")).then(|| text.trim().chars().take(500).collect())
+}
+
+fn last_words(said: &Mutex<Said>) -> Option<String> {
+    let started = Instant::now();
+    while !said.lock().ended && started.elapsed() < LAST_WORDS {
+        std::thread::sleep(POLL);
+    }
+    said.lock().error.clone()
 }
 
 fn free(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
-fn wait_for_port(profile: &Path) -> Result<Endpoint> {
+fn wait_for_port(profile: &Path, said: &Mutex<Said>) -> Result<Endpoint> {
     let started = Instant::now();
     while started.elapsed() < START_WAIT {
         if let Some(endpoint) = running(profile) {
             return Ok(endpoint);
         }
-        if let Some(status) = OWNED.lock().child.as_mut().and_then(|c| c.try_wait().ok().flatten()) {
-            bail!("the browser stopped as it started ({status})");
+        let ended = OWNED.lock().child.as_mut().and_then(|c| c.try_wait().ok().flatten());
+        if let Some(status) = ended {
+            match last_words(said) {
+                Some(error) => bail!("the browser stopped as it started ({status}): {error}"),
+                None => bail!("the browser stopped as it started ({status})"),
+            }
         }
         std::thread::sleep(POLL);
     }

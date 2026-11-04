@@ -1,4 +1,7 @@
+use gpui::{Keystroke, Modifiers, Window};
+
 use crate::panels::PanelKind;
+use crate::platform::Os;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Command {
@@ -99,7 +102,55 @@ pub(crate) const SHORTCUTS: &[Shortcut] = &[
     key(&["x"], false, Command::Cut),
 ];
 
-pub(crate) const SYSTEM_KEYS: &[(&str, &str)] = &[
+const SHIFTED: &[(&str, &str)] = &[
+    ("~", "`"),
+    ("!", "1"),
+    ("@", "2"),
+    ("#", "3"),
+    ("$", "4"),
+    ("%", "5"),
+    ("^", "6"),
+    ("&", "7"),
+    ("*", "8"),
+    ("(", "9"),
+    (")", "0"),
+    ("_", "-"),
+    ("+", "="),
+    ("{", "["),
+    ("}", "]"),
+    ("|", "\\"),
+    (":", ";"),
+    ("\"", "'"),
+    ("<", ","),
+    (">", "."),
+    ("?", "/"),
+];
+
+const SHIFTED_ON_LINUX: &[&str] = &["u"];
+
+struct PageKey {
+    key: &'static str,
+    control: bool,
+    alt: bool,
+    mac: &'static str,
+}
+
+const fn page(key: &'static str, control: bool, alt: bool, mac: &'static str) -> PageKey {
+    PageKey { key, control, alt, mac }
+}
+
+const PAGE_KEYS: &[PageKey] = &[
+    page("c", true, false, "c"),
+    page("x", true, false, "x"),
+    page("v", true, false, "v"),
+    page("l", true, false, "l"),
+    page("r", true, false, "r"),
+    page("f5", false, false, "r"),
+    page("left", false, true, "["),
+    page("right", false, true, "]"),
+];
+
+const MAC_SYSTEM_KEYS: &[(&str, &str)] = &[
     ("⌘H", "Hide cornercase"),
     ("⌥⌘H", "Hide the other apps"),
     ("⌘M", "Minimise the window"),
@@ -107,7 +158,10 @@ pub(crate) const SYSTEM_KEYS: &[(&str, &str)] = &[
     ("⌘Q", "Quit"),
 ];
 
-pub(crate) const OTHER_KEYS: &[(&str, &str)] = &[
+const LINUX_SYSTEM_KEYS: &[(&str, &str)] =
+    &[("Ctrl+Shift+M", "Minimise the window"), ("F11", "Full screen"), ("Ctrl+Shift+Q", "Quit")];
+
+const MAC_OTHER_KEYS: &[(&str, &str)] = &[
     ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
     ("Tab", "Next field of a dialog, ⇧Tab back"),
     ("↑ ↓ ↩", "Choose in a menu"),
@@ -115,11 +169,51 @@ pub(crate) const OTHER_KEYS: &[(&str, &str)] = &[
     ("⌘-click", "Open a link or a path with macOS"),
 ];
 
+const LINUX_OTHER_KEYS: &[(&str, &str)] = &[
+    ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
+    ("Tab", "Next field of a dialog, Shift+Tab back"),
+    ("↑ ↓ Enter", "Choose in a menu"),
+    ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
+    ("Click", "Open a web address as Settings › Links says, a path in Files"),
+    ("Ctrl+click", "Open a link or a path with its default app"),
+    ("Middle click", "Paste what is selected, Shift+middle click where a program takes the mouse"),
+];
+
+pub(crate) fn system_keys(os: Os) -> &'static [(&'static str, &'static str)] {
+    match os {
+        Os::Mac => MAC_SYSTEM_KEYS,
+        Os::Linux => LINUX_SYSTEM_KEYS,
+    }
+}
+
+pub(crate) fn other_keys(os: Os) -> &'static [(&'static str, &'static str)] {
+    match os {
+        Os::Mac => MAC_OTHER_KEYS,
+        Os::Linux => LINUX_OTHER_KEYS,
+    }
+}
+
+pub(crate) fn link_click(os: Os) -> &'static str {
+    match os {
+        Os::Mac => "⌘-click",
+        Os::Linux => "Ctrl+click",
+    }
+}
+
+pub(crate) fn opens_with_system(modifiers: Modifiers, os: Os) -> bool {
+    match os {
+        Os::Mac => modifiers.platform,
+        Os::Linux => modifiers.control,
+    }
+}
+
 impl Shortcut {
-    pub(crate) fn label(&self) -> String {
-        match self.command {
-            Command::Tab => "⌘1…9".to_string(),
-            _ => keys_label(self.keys[0], self.shift),
+    pub(crate) fn label(&self, os: Os) -> String {
+        match (self.command, os) {
+            (Command::Tab, Os::Mac) => "⌘1…9".to_string(),
+            (Command::Tab, Os::Linux) => "Alt+1…9".to_string(),
+            (_, Os::Linux) if self.in_browser() => page_label(self.keys[0]),
+            _ => keys_label(self.keys[0], self.shift, os),
         }
     }
 
@@ -133,7 +227,14 @@ impl Shortcut {
 }
 
 impl Command {
-    pub(crate) fn describe(self) -> &'static str {
+    pub(crate) fn describe(self, os: Os) -> &'static str {
+        match (self, os) {
+            (Self::Tab, Os::Linux) => "Go to a tab (Alt+9 the last)",
+            _ => self.describe_any(),
+        }
+    }
+
+    fn describe_any(self) -> &'static str {
         match self {
             Self::Panel(kind) => kind.title(),
             Self::FindFile => "Go to a file",
@@ -213,27 +314,113 @@ impl Group {
     }
 }
 
-pub(crate) fn find(key: &str, shift: bool, browser: bool) -> Option<&'static Shortcut> {
+pub(crate) fn find(key: &str, shift: bool, browser: bool, os: Os) -> Option<&'static Shortcut> {
+    let either = shift && os == Os::Mac;
     SHORTCUTS
         .iter()
-        .filter(|s| s.takes(key) && (s.shift == shift || shift) && (browser || !s.in_browser()))
+        .filter(|s| s.takes(key) && (s.shift == shift || either) && (browser || !s.in_browser()))
         .min_by_key(|s| (s.shift != shift, !s.in_browser()))
+}
+
+pub(crate) fn shift_held(ks: &Keystroke, window: &Window) -> bool {
+    ks.modifiers.shift || window.modifiers().shift
+}
+
+pub(crate) fn chord(ks: &Keystroke, shift: bool, os: Os, browser: bool) -> Option<(&str, bool)> {
+    match os {
+        Os::Mac => ks.modifiers.platform.then_some((ks.key.as_str(), ks.modifiers.shift)),
+        Os::Linux => linux_chord(ks, shift, browser),
+    }
+}
+
+pub(crate) fn shortcut(ks: &Keystroke, shift: bool, os: Os, browser: bool) -> Option<&'static Shortcut> {
+    let (key, shift) = chord(ks, shift, os, browser)?;
+    find(key, shift, browser, os)
+}
+
+fn linux_chord(ks: &Keystroke, shift: bool, browser: bool) -> Option<(&str, bool)> {
+    let m = ks.modifiers;
+    if m.platform || m.function {
+        return None;
+    }
+    if let Some(mac) = page_key(ks).filter(|_| browser) {
+        return Some((mac, false));
+    }
+    if m.alt && !m.control && !m.shift {
+        return DIGITS.contains(&ks.key.as_str()).then_some((ks.key.as_str(), false));
+    }
+    if !m.control || !shift {
+        return None;
+    }
+    let base = unshifted(&ks.key).unwrap_or(ks.key.as_str());
+    match (DIGITS.contains(&base), SHIFTED_ON_LINUX.contains(&base), m.alt) {
+        (true, ..) | (false, true, false) => None,
+        (false, true, true) => Some((base, false)),
+        (false, false, alt) => Some((base, alt)),
+    }
+}
+
+fn unshifted(key: &str) -> Option<&'static str> {
+    SHIFTED.iter().find(|(shifted, _)| *shifted == key).map(|(_, base)| *base)
+}
+
+fn page_key(ks: &Keystroke) -> Option<&'static str> {
+    let m = ks.modifiers;
+    PAGE_KEYS.iter().find(|p| p.key == ks.key && p.control == m.control && p.alt == m.alt && !m.shift).map(|p| p.mac)
+}
+
+fn page_label(mac: &str) -> String {
+    PAGE_KEYS.iter().find(|p| p.mac == mac).map_or_else(
+        || keys_label(mac, false, Os::Linux),
+        |p| {
+            format!(
+                "{}{}",
+                if p.alt {
+                    "Alt+"
+                } else if p.control {
+                    "Ctrl+"
+                } else {
+                    ""
+                },
+                key_name(p.key)
+            )
+        },
+    )
+}
+
+fn key_name(key: &str) -> String {
+    match key {
+        "left" => "←".to_string(),
+        "right" => "→".to_string(),
+        _ => key.to_uppercase(),
+    }
 }
 
 pub(crate) fn in_group(group: Group) -> impl Iterator<Item = &'static Shortcut> {
     SHORTCUTS.iter().filter(move |s| s.command.group() == group)
 }
 
-pub(crate) fn keys_of(command: Command) -> Option<String> {
-    SHORTCUTS.iter().find(|s| s.command == command).map(Shortcut::label)
+pub(crate) fn keys_of(command: Command, os: Os) -> Option<String> {
+    SHORTCUTS.iter().find(|s| s.command == command).map(|s| s.label(os))
 }
 
-pub(crate) fn keys_label(key: &str, shift: bool) -> String {
-    format!("{}⌘{}", if shift { "⇧" } else { "" }, key.to_uppercase())
+pub(crate) fn keys_label(key: &str, shift: bool, os: Os) -> String {
+    match os {
+        Os::Mac => format!("{}⌘{}", if shift { "⇧" } else { "" }, key.to_uppercase()),
+        Os::Linux => {
+            let base = unshifted(key).unwrap_or(key);
+            let shifted = shift || SHIFTED_ON_LINUX.contains(&base);
+            format!("{}{}", if shifted { "Ctrl+Alt+Shift+" } else { "Ctrl+Shift+" }, key_name(base))
+        }
+    }
 }
 
 pub(crate) fn with_keys(label: &str, command: Command) -> String {
-    keys_of(command).map_or_else(|| label.to_string(), |keys| format!("{label}  {keys}"))
+    labelled(label, command, Os::CURRENT)
+}
+
+fn labelled(label: &str, command: Command, os: Os) -> String {
+    keys_of(command, os).map_or_else(|| label.to_string(), |keys| format!("{label}  {keys}"))
 }
 
 pub(crate) fn tab_index(key: &str, tabs: usize) -> Option<usize> {

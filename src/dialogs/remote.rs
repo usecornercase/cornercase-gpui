@@ -10,6 +10,7 @@ use gpui::{
 
 use super::{cancel_and, close, frame, show, text_field};
 use crate::cli::{self, Remote, Target};
+use crate::desktop;
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, Icon, TextField};
@@ -74,7 +75,8 @@ impl Connect {
     }
 
     fn places(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let here = place_row("connect-here", Icon::Laptop, "This Mac", self.current == Target::Local)
+        let this = format!("This {}", desktop::here());
+        let here = place_row("connect-here", Icon::Laptop, this, self.current == Target::Local)
             .on_click(|_: &ClickEvent, _, cx| Store::get(cx).update(cx, |s, cx| s.connect(Target::Local, cx)));
         let current = self.current.host().map(str::to_string);
         let hosts = self.hosts.iter().enumerate().map(|(i, host)| {
@@ -160,7 +162,10 @@ impl Render for AskPath {
             .flex_col()
             .gap(px(8.))
             .child(ui::field(format!("Folder on {}", self.host), ui::boxed(&self.field, window, cx)))
-            .child(ui::dim("From its home folder, or from /. The folder picker only sees this Mac's disk."));
+            .child(ui::dim(format!(
+                "From its home folder, or from /. The folder picker only sees this {}'s disk.",
+                desktop::here()
+            )));
         let button = ui::primary_button("ask-path", self.question.button)
             .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.submit(window, cx)));
         frame(self.question.title.clone(), body, cancel_and(button))

@@ -1,4 +1,4 @@
-use super::{Escaped, escaped, selected_rows};
+use super::{Escaped, escaped, one_line, selected_rows, shared, word_end, word_start};
 
 #[test]
 fn a_selection_inside_one_row_paints_one_span() {
@@ -35,4 +35,34 @@ fn escape_clears_a_search_then_passes_on() {
 #[test]
 fn escape_cancels_a_plain_field() {
     assert_eq!(escaped(false, "name", None), Escaped::Cancel);
+}
+
+#[test]
+fn a_word_starts_after_the_blank_before_it() {
+    assert_eq!(word_start("cargo test -q", 13), 11);
+    assert_eq!(word_start("cargo test  ", 12), 6);
+    assert_eq!(word_start("word", 4), 0);
+    assert_eq!(word_start("año\u{3000}más", "año\u{3000}más".len()), "año\u{3000}".len());
+}
+
+#[test]
+fn a_word_ends_at_the_blank_after_it() {
+    assert_eq!(word_end("cargo test", 0), 5);
+    assert_eq!(word_end("cargo test", 5), 10);
+    assert_eq!(word_end("cargo  test -q", 5), 11);
+    assert_eq!(word_end("word", 4), 4);
+}
+
+#[test]
+fn a_selection_goes_to_the_primary_selection_unless_it_is_empty_or_masked() {
+    assert_eq!(shared("hello world", &(6..11), false), Some("world"));
+    assert_eq!(shared("hello", &(2..2), false), None);
+    assert_eq!(shared("secret", &(0..6), true), None);
+}
+
+#[test]
+fn pasted_line_breaks_of_any_kind_become_one_space_each() {
+    assert_eq!(one_line("first\nsecond"), "first second");
+    assert_eq!(one_line("first\r\nsecond\rthird"), "first second third");
+    assert_eq!(one_line("a\n\nb"), "a  b");
 }

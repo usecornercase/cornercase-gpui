@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::platform::Os;
 use crate::store::args;
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -331,6 +332,19 @@ impl Connection {
     }
 }
 
+pub(super) const fn links_about(os: Os) -> &'static str {
+    match os {
+        Os::Mac => {
+            "Where web addresses in the terminal open, and the pages their card previews. Kept by this app on \
+                  this Mac, not in cornercase's settings."
+        }
+        Os::Linux => {
+            "Where web addresses in the terminal open, and the pages their card previews. Kept by this app on \
+                  this computer, not in cornercase's settings."
+        }
+    }
+}
+
 pub(super) fn about(page: &str) -> &'static str {
     match page {
         "Worktrees" => "Where worktrees go, how issue branches are named, and fetching.",
@@ -338,10 +352,7 @@ pub(super) fn about(page: &str) -> &'static str {
         "Issues" => "The trackers issues come from, their accounts and filters.",
         "UI" => "How the sidebar, tabs and notifications look and sound.",
         "Remote" => "Reaching this computer's cornercase from a phone or a browser.",
-        LINKS => {
-            "Where web addresses in the terminal open, and the pages their card previews. Kept by this app on \
-                  this Mac, not in cornercase's settings."
-        }
+        LINKS => links_about(Os::CURRENT),
         PROJECTS => "Setup and teardown: the commands a repository runs in a new worktree, and before removing it.",
         SHARE => {
             "Export your setup for a colleague, or import theirs: agents, issues, worktrees, the interface \

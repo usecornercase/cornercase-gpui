@@ -3,7 +3,7 @@ use gpui::{
     div, px,
 };
 
-use super::mouse::mouse;
+use super::mouse::{button_name, mouse};
 use crate::app::{Drag, Root};
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
@@ -153,8 +153,8 @@ impl Root {
         if !self.shows_no_tab() {
             return;
         }
-        if let Some(Drag::Program { pane, cell, .. }) = self.drag.take() {
-            self.queue.input(pane, mouse("up", "left", cell));
+        if let Some(Drag::Program { pane, button, cell, .. }) = self.drag.take() {
+            self.queue.input(pane, mouse("up", button_name(button), cell));
         }
         self.moves.replace(Moves::default());
     }

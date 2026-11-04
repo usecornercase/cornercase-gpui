@@ -1,6 +1,8 @@
 use std::ops::Range;
 
+use crate::keymap::{self, Command};
 use crate::model::Shown;
+use crate::platform::Os;
 
 const FUZZY: u8 = 4;
 const CONTEXT: usize = 5;
@@ -123,10 +125,15 @@ pub(super) fn context_top(ranked: &[Ranked], selected: usize) -> usize {
         .unwrap_or(floor)
 }
 
+pub(super) fn no_project(os: Os) -> String {
+    let keys = keymap::keys_of(Command::OpenProject, os).unwrap_or_default();
+    format!("No project is open: open one with {keys}")
+}
+
 pub(super) fn listing_status(query: &str, shown: usize, total: usize) -> String {
     let query = query.trim();
     match (query.is_empty(), total) {
-        (true, 0) => "No project is open: open one with ⌘O".into(),
+        (true, 0) => no_project(Os::CURRENT),
         (true, n) if n > shown => format!("The first {shown} of {n} in the sidebar's order · type to find the rest"),
         (true, _) => {
             "Everything open, in the sidebar's order · type to find it by name, branch, folder, agent or model".into()

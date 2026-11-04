@@ -8,12 +8,18 @@ use gpui::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
+use crate::desktop;
+use crate::platform::Os;
+
 actions!(
     text_field,
     [
         Submit,
         Cancel,
         DeleteWordLeft,
+        DeleteWordRight,
+        WordLeft,
+        WordRight,
         Backspace,
         Delete,
         Left,
@@ -66,6 +72,14 @@ enum Escaped {
     Pass,
 }
 
+fn shared<'a>(content: &'a str, selected: &Range<usize>, masked: bool) -> Option<&'a str> {
+    content.get(selected.clone()).filter(|text| !masked && !text.is_empty())
+}
+
+fn one_line(pasted: &str) -> String {
+    pasted.replace("\r\n", " ").replace(['\r', '\n'], " ")
+}
+
 fn escaped(clears: bool, content: &str, saved: Option<&str>) -> Escaped {
     match saved {
         Some(saved) if content != saved => Escaped::Revert,
@@ -95,15 +109,18 @@ impl TextField {
 
     fn select_left(&mut self, _: &SelectLeft, _: &mut Window, cx: &mut Context<Self>) {
         self.select_to(self.previous_boundary(self.cursor_offset()), cx);
+        self.share_selection(cx);
     }
 
     fn select_right(&mut self, _: &SelectRight, _: &mut Window, cx: &mut Context<Self>) {
         self.select_to(self.next_boundary(self.cursor_offset()), cx);
+        self.share_selection(cx);
     }
 
     fn select_all(&mut self, _: &SelectAll, _: &mut Window, cx: &mut Context<Self>) {
         self.move_to(0, cx);
         self.select_to(self.content.len(), cx);
+        self.share_selection(cx);
     }
 
     fn home(&mut self, _: &Home, _: &mut Window, cx: &mut Context<Self>) {
@@ -138,8 +155,26 @@ impl TextField {
         }
     }
 
-    fn on_mouse_up(&mut self, _: &MouseUpEvent, _window: &mut Window, _: &mut Context<Self>) {
-        self.is_selecting = false;
+    fn on_mouse_up(&mut self, _: &MouseUpEvent, _window: &mut Window, cx: &mut Context<Self>) {
+        if std::mem::take(&mut self.is_selecting) {
+            self.share_selection(cx);
+        }
+    }
+
+    fn share_selection(&self, cx: &App) {
+        if let Some(text) = shared(&self.content, &self.selected_range, self.options.masked) {
+            desktop::write_primary(text, cx);
+        }
+    }
+
+    fn paste_primary(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(text) = desktop::read_primary(cx) else { return };
+        self.move_to(self.index_for_mouse_position(event.position), cx);
+        self.insert_pasted(&text, window, cx);
+    }
+
+    fn insert_pasted(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.replace_text_in_range(None, &one_line(text), window, cx);
     }
 
     fn on_mouse_move(&mut self, event: &MouseMoveEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -150,7 +185,7 @@ impl TextField {
 
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            self.replace_text_in_range(None, &text.replace('\n', " "), window, cx);
+            self.insert_pasted(&text, window, cx);
         }
     }
 
@@ -573,6 +608,9 @@ impl Render for TextField {
             .on_action(cx.listener(Self::backspace))
             .on_action(cx.listener(Self::delete))
             .on_action(cx.listener(Self::delete_word_left))
+            .on_action(cx.listener(Self::delete_word_right))
+            .on_action(cx.listener(Self::word_left))
+            .on_action(cx.listener(Self::word_right))
             .on_action(cx.listener(Self::left))
             .on_action(cx.listener(Self::right))
             .on_action(cx.listener(Self::select_left))
@@ -589,6 +627,9 @@ impl Render for TextField {
             .on_action(cx.listener(Self::focus_next))
             .on_action(cx.listener(Self::focus_previous))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
+            .when(desktop::has_primary(Os::CURRENT), |d| {
+                d.on_mouse_down(MouseButton::Middle, cx.listener(Self::paste_primary))
+            })
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
@@ -613,30 +654,70 @@ pub(crate) enum TextFieldEvent {
 impl EventEmitter<TextFieldEvent> for TextField {}
 
 pub(crate) fn bind_keys(cx: &mut App) {
+    cx.bind_keys(bindings(Os::CURRENT));
+}
+
+fn bindings(os: Os) -> Vec<KeyBinding> {
     let ctx = Some("TextField");
-    cx.bind_keys([
+    let mut keys = vec![
         KeyBinding::new("backspace", Backspace, ctx),
         KeyBinding::new("delete", Delete, ctx),
-        KeyBinding::new("alt-backspace", DeleteWordLeft, ctx),
-        KeyBinding::new("cmd-backspace", DeleteWordLeft, ctx),
         KeyBinding::new("left", Left, ctx),
         KeyBinding::new("right", Right, ctx),
         KeyBinding::new("shift-left", SelectLeft, ctx),
         KeyBinding::new("shift-right", SelectRight, ctx),
-        KeyBinding::new("cmd-a", SelectAll, ctx),
-        KeyBinding::new("cmd-v", Paste, ctx),
-        KeyBinding::new("cmd-c", Copy, ctx),
-        KeyBinding::new("cmd-x", Cut, ctx),
         KeyBinding::new("home", Home, ctx),
-        KeyBinding::new("cmd-left", Home, ctx),
         KeyBinding::new("end", End, ctx),
-        KeyBinding::new("cmd-right", End, ctx),
-        KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, ctx),
         KeyBinding::new("enter", Submit, ctx),
         KeyBinding::new("escape", Cancel, ctx),
         KeyBinding::new("tab", FocusNext, ctx),
         KeyBinding::new("shift-tab", FocusPrevious, ctx),
-    ]);
+    ];
+    keys.extend(match os {
+        Os::Mac => mac_bindings(ctx),
+        Os::Linux => linux_bindings(ctx),
+    });
+    keys
+}
+
+fn mac_bindings(ctx: Option<&str>) -> Vec<KeyBinding> {
+    vec![
+        KeyBinding::new("alt-backspace", DeleteWordLeft, ctx),
+        KeyBinding::new("cmd-backspace", DeleteWordLeft, ctx),
+        KeyBinding::new("cmd-a", SelectAll, ctx),
+        KeyBinding::new("cmd-v", Paste, ctx),
+        KeyBinding::new("cmd-c", Copy, ctx),
+        KeyBinding::new("cmd-x", Cut, ctx),
+        KeyBinding::new("cmd-left", Home, ctx),
+        KeyBinding::new("cmd-right", End, ctx),
+        KeyBinding::new("ctrl-cmd-space", ShowCharacterPalette, ctx),
+    ]
+}
+
+fn linux_bindings(ctx: Option<&str>) -> Vec<KeyBinding> {
+    vec![
+        KeyBinding::new("ctrl-backspace", DeleteWordLeft, ctx),
+        KeyBinding::new("ctrl-delete", DeleteWordRight, ctx),
+        KeyBinding::new("ctrl-left", WordLeft, ctx),
+        KeyBinding::new("ctrl-right", WordRight, ctx),
+        KeyBinding::new("ctrl-a", SelectAll, ctx),
+        KeyBinding::new("ctrl-v", Paste, ctx),
+        KeyBinding::new("ctrl-c", Copy, ctx),
+        KeyBinding::new("ctrl-x", Cut, ctx),
+        KeyBinding::new("ctrl-shift-v", Paste, ctx),
+        KeyBinding::new("ctrl-shift-c", Copy, ctx),
+    ]
+}
+
+fn word_start(text: &str, at: usize) -> usize {
+    let before = text[..at].trim_end();
+    before.char_indices().rev().find(|(_, c)| c.is_whitespace()).map_or(0, |(i, c)| i + c.len_utf8())
+}
+
+fn word_end(text: &str, at: usize) -> usize {
+    let after = &text[at..];
+    let lead = after.len() - after.trim_start().len();
+    after[lead..].find(char::is_whitespace).map_or(text.len(), |i| at + lead + i)
 }
 
 impl TextField {
@@ -738,12 +819,24 @@ impl TextField {
 
     fn delete_word_left(&mut self, _: &DeleteWordLeft, window: &mut Window, cx: &mut Context<Self>) {
         if self.selected_range.is_empty() {
-            let before = &self.content[..self.cursor_offset()];
-            let trimmed = before.trim_end();
-            let start = trimmed.rfind(char::is_whitespace).map_or(0, |i| i + 1);
-            self.select_to(start, cx);
+            self.select_to(word_start(&self.content, self.cursor_offset()), cx);
         }
         self.replace_text_in_range(None, "", window, cx);
+    }
+
+    fn delete_word_right(&mut self, _: &DeleteWordRight, window: &mut Window, cx: &mut Context<Self>) {
+        if self.selected_range.is_empty() {
+            self.select_to(word_end(&self.content, self.cursor_offset()), cx);
+        }
+        self.replace_text_in_range(None, "", window, cx);
+    }
+
+    fn word_left(&mut self, _: &WordLeft, _: &mut Window, cx: &mut Context<Self>) {
+        self.move_to(word_start(&self.content, self.cursor_offset()), cx);
+    }
+
+    fn word_right(&mut self, _: &WordRight, _: &mut Window, cx: &mut Context<Self>) {
+        self.move_to(word_end(&self.content, self.cursor_offset()), cx);
     }
 }
 

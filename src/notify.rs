@@ -1,10 +1,13 @@
+mod alert;
 mod feed;
 mod update;
 
-use std::collections::HashMap;
-use std::process::{Command, Stdio};
+use std::collections::{HashMap, HashSet};
+use std::ffi::OsString;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use futures::channel::oneshot;
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
@@ -12,9 +15,11 @@ use gpui::{
 };
 
 use crate::cli::Stream;
+use crate::desktop;
 use crate::model::Session;
+use crate::platform::Os;
 use crate::store::{self, Busy, Store, ToastKind, args};
-use crate::theme::{colours, radius};
+use crate::theme::{UI_FAMILY, colours, radius};
 use crate::ui::{self, glass};
 
 pub(crate) use feed::{AppState, Event, Notice, Prefs};
@@ -42,6 +47,7 @@ pub(crate) struct Notifier {
     app_key: Option<(Option<String>, u64)>,
     active: bool,
     last_sound: Option<Instant>,
+    told: HashSet<&'static str>,
     bell_toasts: HashMap<u64, Instant>,
     flash: u64,
     flashing: bool,
@@ -63,6 +69,7 @@ impl Notifier {
             app_key: None,
             active: window.is_window_active(),
             last_sound: None,
+            told: HashSet::new(),
             bell_toasts: HashMap::new(),
             flash: 0,
             flashing: false,
@@ -144,23 +151,50 @@ impl Notifier {
     fn notice(&mut self, notice: Notice, cx: &mut Context<Self>) {
         let go = ("Go".to_string(), args(&["go", &notice.token]));
         self.store.update(cx, |s, cx| s.toast_with(notice.message.clone(), notice.toast_kind(), Some(go), cx));
-        let desktop = !self.active;
-        if notice.sound.is_none() && !desktop {
+        let behind = !self.active;
+        if notice.sound.is_none() && !behind {
             return;
         }
-        store::run_json(cx, args(&["config", "--json"]), move |this, config, _| {
+        store::run_json(cx, args(&["config", "--json"]), move |this, config, cx| {
             let prefs = config.map(|c| Prefs::from_config(&c)).unwrap_or_default();
             if let Some(cue) = &notice.sound
                 && this.last_sound.is_none_or(|t| t.elapsed() >= SOUND_EVERY)
             {
                 this.last_sound = Some(Instant::now());
-                let home = std::env::var("HOME").unwrap_or_default();
-                spawn_quietly("afplay", &[prefs.sound_file(cue, &home)]);
+                this.play(&prefs, cue, cx);
             }
-            if desktop && prefs.desktop {
-                desktop_notification(&notice.headline(), &notice.message);
+            if behind && prefs.desktop {
+                let argv = alert::notification(Os::CURRENT, (&notice.headline(), &notice.message), &desktop::on_path);
+                this.run_or_tell(argv.map(|argv| vec![argv]), alert::NOTIFICATION_FAILED, cx);
             }
         });
+    }
+
+    fn play(&mut self, prefs: &Prefs, cue: &str, cx: &mut Context<Self>) {
+        let os = Os::CURRENT;
+        let home = std::env::var("HOME").unwrap_or_default();
+        let own = prefs.own_sound(cue, &home).map(PathBuf::from);
+        let file = alert::cue_sound(os, cue, own, &desktop::xdg_data_dirs());
+        let tries = file.ok_or(alert::NO_THEME).and_then(|file| alert::sound(os, &file, &desktop::on_path));
+        self.run_or_tell(tries, alert::SOUND_FAILED, cx);
+    }
+
+    fn run_or_tell(
+        &mut self,
+        tries: Result<Vec<Vec<OsString>>, &'static str>,
+        failed: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        match tries {
+            Ok(tries) => run_helper(tries, failed, cx),
+            Err(why) => self.tell_once(why, why.to_string(), ToastKind::Info, cx),
+        }
+    }
+
+    fn tell_once(&mut self, key: &'static str, text: String, kind: ToastKind, cx: &mut Context<Self>) {
+        if self.told.insert(key) {
+            self.store.update(cx, |s, cx| s.toast(text, kind, cx));
+        }
     }
 
     fn clipboard(&mut self, text: String, pane: Option<u64>, cx: &mut Context<Self>) {
@@ -429,25 +463,21 @@ impl Render for Tip {
             .py(px(6.))
             .text_size(px(11.))
             .text_color(colours::text())
-            .font_family(".SystemUIFont")
+            .font_family(UI_FAMILY)
             .child(self.0.clone())
     }
 }
 
-fn desktop_notification(title: &str, body: &str) {
-    let script = ["on run argv", "display notification (item 2 of argv) with title (item 1 of argv)", "end run"];
-    let mut a: Vec<String> = script.iter().flat_map(|line| ["-e".to_string(), (*line).to_string()]).collect();
-    a.push(title.to_string());
-    a.push(body.to_string());
-    spawn_quietly("osascript", &a);
-}
-
-fn spawn_quietly(program: &'static str, a: &[String]) {
-    let a = a.to_vec();
-    std::thread::spawn(move || {
-        let _ =
-            Command::new(program).args(&a).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
-    });
+fn run_helper(tries: Vec<Vec<OsString>>, failed: &'static str, cx: &mut Context<Notifier>) {
+    let (tx, rx) = oneshot::channel();
+    std::thread::spawn(move || tx.send(alert::first_that_works(&tries, alert::run)));
+    cx.spawn(async move |this, cx| {
+        if let Ok(Err(why)) = rx.await {
+            let text = format!("{failed}: {why}");
+            let _ = this.update(cx, |this, cx| this.tell_once(failed, text, ToastKind::Error, cx));
+        }
+    })
+    .detach();
 }
 
 #[cfg(test)]

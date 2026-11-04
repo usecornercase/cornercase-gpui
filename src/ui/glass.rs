@@ -3,7 +3,7 @@ use gpui::{
     rgba,
 };
 
-use crate::theme::{colours, radius};
+use crate::theme::{UI_FAMILY, colours, radius};
 
 const WASH: f32 = 180.;
 
@@ -63,11 +63,18 @@ pub(crate) fn dragged() -> Div {
         .border_1()
         .border_color(colours::accent())
         .text_color(colours::text())
+        .font_family(UI_FAMILY)
         .shadow(halo)
 }
 
 pub(crate) fn popover() -> Div {
-    div().rounded(px(radius::CONTROL)).bg(colours::raised()).border_1().border_color(colours::edge()).shadow(lift())
+    div()
+        .rounded(px(radius::CONTROL))
+        .bg(colours::raised())
+        .border_1()
+        .border_color(colours::edge())
+        .font_family(UI_FAMILY)
+        .shadow(lift())
 }
 
 pub(crate) fn wash() -> Div {

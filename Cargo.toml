@@ -2,21 +2,19 @@
 name = "cornercase-gpui"
 version = "0.1.0"
 edition = "2024"
-description = "A native macOS window for cornercase, drawn with GPUI"
+description = "A native window for cornercase on macOS and Linux, drawn with GPUI"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/usecornercase/cornercase-gpui"
 homepage = "https://github.com/usecornercase/cornercase-gpui"
 readme = "README.md"
-keywords = ["terminal", "gpui", "macos", "worktree", "agents"]
+keywords = ["terminal", "gpui", "macos", "linux", "agents"]
 categories = ["development-tools"]
 
 [dependencies]
 anyhow = "1.0.104"
 base64 = "0.22.1"
-core-foundation = "0.10.0"
-core-video = "0.4.3"
 futures = "0.3"
-libc = "0.2"
+libc = "0.2, <0.2.190"
 gpui = { version = "0.2.2", features = ["runtime_shaders"] }
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
@@ -24,13 +22,17 @@ grep-searcher = "0.1.17"
 image = { version = "0.25.10", default-features = false }
 ignore = "0.4.33"
 nucleo-matcher = "0.3.1"
-objc2 = "0.6.5"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "regex-fancy", "parsing"] }
 unicode-segmentation = "1.13.3"
 url = "2.5.8"
 parking_lot = "0.12"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10.0"
+core-video = "0.4.3"
+objc2 = "0.6.5"
 
 [profile.dev.package."*"]
 opt-level = 3

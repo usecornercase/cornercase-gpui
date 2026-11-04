@@ -1,6 +1,8 @@
 use gpui::Keystroke;
 use serde_json::{Value, json};
 
+use crate::platform::Os;
+
 const NAMED: &[&str] = &[
     "enter",
     "escape",
@@ -44,7 +46,14 @@ fn mods(keystroke: &Keystroke) -> Vec<&'static str> {
     }
     mods
 }
-pub(crate) fn key_event(keystroke: &Keystroke) -> Option<Value> {
+
+fn meta_text(keystroke: &Keystroke, os: Os) -> Option<&str> {
+    let text = keystroke.key_char.as_deref().filter(|_| os == Os::Linux && keystroke.modifiers.alt)?;
+    let mut chars = text.chars();
+    chars.next().filter(|c| !c.is_control() && chars.next().is_none()).map(|_| text)
+}
+
+pub(crate) fn key_event(keystroke: &Keystroke, os: Os) -> Option<Value> {
     let key = keystroke.key.as_str();
     let m = keystroke.modifiers;
     let named = NAMED.contains(&key);
@@ -68,5 +77,8 @@ pub(crate) fn key_event(keystroke: &Keystroke) -> Option<Value> {
     if m.alt && keystroke.key_char.as_deref().is_none_or(|c| c == key) {
         return event(code);
     }
-    None
+    meta_text(keystroke, os).and_then(event)
 }
+
+#[cfg(test)]
+mod tests;

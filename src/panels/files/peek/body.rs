@@ -10,9 +10,11 @@ use super::super::style::image_label;
 use super::super::{Spans, highlight};
 use super::Peek;
 use super::player::Player;
-use super::quicklook;
+use super::thumbnailers::Missing;
+use super::{quicklook, thumbnailers};
 use crate::cli;
 use crate::model::Link;
+use crate::platform::Os;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Media {
@@ -80,10 +82,34 @@ pub(super) fn picture(image: Arc<Image>, label: String) -> Still {
     Still::Picture(Picture { image, size, label })
 }
 
+pub(super) fn thumbnail_label(os: Os, media: Option<Media>) -> String {
+    match (os, media) {
+        (Os::Mac, _) => "Quick Look preview".into(),
+        (Os::Linux, Some(_)) => "Plays only on macOS".into(),
+        (Os::Linux, None) => "Thumbnail".into(),
+    }
+}
+
+pub(super) fn no_preview(os: Os, media: Option<Media>, missing: Missing) -> Still {
+    match (os, media, missing) {
+        (Os::Mac, _, _) => note("No preview", "macOS has no preview for this kind of file."),
+        (Os::Linux, Some(_), _) => note("Plays only on macOS", "Open it in its default app with the button above."),
+        (Os::Linux, None, Missing::NoReader) => {
+            note("No preview", "No thumbnailer on this computer reads this kind of file.")
+        }
+        (Os::Linux, None, Missing::Failed(why)) => note("No preview", format!("{why}.")),
+    }
+}
+
 fn preview(path: &Path) -> Still {
-    match quicklook::thumbnail(path) {
-        Some(png) => picture(Arc::new(Image::from_bytes(ImageFormat::Png, png)), "Quick Look preview".into()),
-        None => note("No preview", "macOS has no preview for this kind of file."),
+    let (os, media) = (Os::CURRENT, media_of(path));
+    let png = match os {
+        Os::Mac => quicklook::thumbnail(path).ok_or(Missing::NoReader),
+        Os::Linux => thumbnailers::thumbnail(path),
+    };
+    match png {
+        Ok(png) => picture(Arc::new(Image::from_bytes(ImageFormat::Png, png)), thumbnail_label(os, media)),
+        Err(missing) => no_preview(os, media, missing),
     }
 }
 

@@ -1,6 +1,8 @@
 use gpui::{Keystroke, Modifiers};
 use serde_json::{Map, Value, json};
 
+use crate::platform::Os;
+
 const NAMED: &[(&str, &str, u16)] = &[
     ("enter", "Enter", 13),
     ("escape", "Escape", 27),
@@ -171,9 +173,10 @@ pub(crate) fn commands(ks: &Keystroke) -> Vec<&'static str> {
     COMMANDS.iter().find(|(c, _)| *c == chord).map(|(_, names)| names.split(' ').collect()).unwrap_or_default()
 }
 
-pub(crate) fn route(ks: &Keystroke, held: bool) -> Route {
+pub(crate) fn route(ks: &Keystroke, held: bool, os: Os) -> Route {
     let m = ks.modifiers;
-    if m.platform || m.control || m.function || named(&ks.key).is_some() {
+    let meta = m.alt && os == Os::Linux;
+    if m.platform || m.control || m.function || meta || named(&ks.key).is_some() {
         return Route::Key;
     }
     match ks.key_char.as_deref().filter(|t| !t.is_empty()) {
@@ -200,13 +203,15 @@ fn with_text(mut event: Map<String, Value>, text: &str) -> Map<String, Value> {
     event
 }
 
-pub(crate) fn key_down(ks: &Keystroke, held: bool) -> Value {
+pub(crate) fn key_down(ks: &Keystroke, held: bool, os: Os) -> Value {
     let mut event = event("rawKeyDown", ks);
     if ks.key == "enter" && !ks.modifiers.platform {
         event = with_text(event, "\r");
     }
     event.insert("autoRepeat".into(), held.into());
-    event.insert("commands".into(), json!(commands(ks)));
+    if os == Os::Mac {
+        event.insert("commands".into(), json!(commands(ks)));
+    }
     Value::Object(event)
 }
 

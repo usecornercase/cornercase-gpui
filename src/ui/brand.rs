@@ -14,13 +14,17 @@ fn cursor(unit: f32, blinking: bool) -> AnyElement {
     if blinking { motion::pulse(ink, "mark-cursor").into_any_element() } else { ink.into_any_element() }
 }
 
+pub(crate) fn mark_size(unit: f32) -> f32 {
+    GRID * unit
+}
+
 pub(crate) fn mark(unit: f32, blinking: bool) -> Div {
     let corner =
         |at, size| cell(unit, at, size).bg(colours::brand()).shadow(glass::glow(colours::brand(), 0.55, unit * 3.));
     div()
         .relative()
         .flex_none()
-        .size(px(GRID * unit))
+        .size(px(mark_size(unit)))
         .child(corner((3., 0.), (9., 3.)))
         .child(corner((0., 3.), (3., 9.)))
         .child(cursor(unit, blinking))

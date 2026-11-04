@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use gpui::{
     App, ClickEvent, Div, ElementId, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Rgba,
     SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div, linear_color_stop,
@@ -7,11 +9,11 @@ use gpui::{
 use super::diagram::role_colour;
 use super::graph::float;
 use super::model::{FlowInfo, FlowSpec, Progress, Run};
-use crate::cli;
 use crate::notify::tip;
-use crate::store::Store;
+use crate::store::{self, Busy, Store};
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, glass, glass::tint};
+use crate::{cli, desktop};
 
 pub(super) fn tag(text: &'static str) -> Div {
     let default = text == "default";
@@ -178,7 +180,8 @@ pub(super) fn open_path(path: String) -> impl Fn(&ClickEvent, &mut Window, &mut 
             let path = path.clone();
             Store::get(cx).update(cx, |s, cx| s.copy_elsewhere(path, cx));
         } else {
-            cx.open_with_system(std::path::Path::new(&path));
+            let (busy, path) = (Busy::new("open-app", format!("Opening {}…", file_name(&path))), PathBuf::from(&path));
+            store::run_local(cx, busy, move || desktop::open(&path));
         }
     }
 }

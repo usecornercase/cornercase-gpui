@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use gpui::{
     AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ObjectFit,
     ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window, div, img,
-    prelude::FluentBuilder as _, px, surface, uniform_list,
+    prelude::FluentBuilder as _, px, uniform_list,
 };
 
 use super::super::style::{CodeRow, code_row, file_icon, number_width, small_f32, span_styles};
@@ -197,8 +197,8 @@ impl Peek {
 
     fn video_body(player: &Player, place: &Place, cx: &mut Context<Self>) -> (AnyElement, f32) {
         let (w, h) = media_box(player.size().unwrap_or(UNKNOWN_SIZE), place);
-        let picture = match player.frame() {
-            Some(frame) => surface(frame).size_full().object_fit(ObjectFit::Contain).into_any_element(),
+        let picture = match player.picture() {
+            Some(picture) => picture,
             None => div()
                 .size_full()
                 .flex()

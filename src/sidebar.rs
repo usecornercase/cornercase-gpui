@@ -13,13 +13,16 @@ mod workspace;
 
 use gpui::{
     App, AppContext as _, ClickEvent, Context, Div, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton,
-    MouseDownEvent, ParentElement, Render, SharedString, Stateful, StatefulInteractiveElement, Styled, Window, div, px,
+    MouseDownEvent, ParentElement, Render, SharedString, Stateful, StatefulInteractiveElement, Styled, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
+use crate::app::frame::{self, Frame};
 use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
 use crate::context_menu::{Menu, item};
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
+use crate::platform::Os;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, TextField};
 
@@ -28,6 +31,8 @@ pub(crate) use folds::Fold;
 pub(crate) use forms::close_agent;
 pub(crate) use look::Arrangement;
 pub(crate) use menus::reopening;
+
+const MARK: f32 = 1.25;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Target {
@@ -113,7 +118,7 @@ pub(crate) struct SideState {
 }
 
 impl Root {
-    pub(crate) fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(crate) fn render_sidebar(&self, window_frame: Frame, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         div()
             .w(px(self.sidebar_extent()))
             .h_full()
@@ -122,7 +127,7 @@ impl Root {
             .flex()
             .flex_col()
             .pb(px(GAP))
-            .child(title_strip())
+            .child(frame::title_row(title_strip(Os::CURRENT), window_frame))
             .child(self.sidebar_cards(cx))
             .children(self.render_menu(cx))
     }
@@ -149,15 +154,27 @@ fn card() -> Div {
         .child(ui::glass::wash().rounded_t(px(radius::CARD - 1.)))
 }
 
-fn title_strip() -> impl IntoElement {
+fn mark_lead(os: Os) -> (f32, f32) {
+    match os {
+        Os::Mac => (0., 34.),
+        Os::Linux => {
+            let rail = rail::COLUMN;
+            (-rail, (rail - ui::brand::mark_size(MARK)) / 2.)
+        }
+    }
+}
+
+fn title_strip(os: Os) -> Div {
+    let (pull, lead) = mark_lead(os);
     div()
         .h(px(TITLEBAR_HEIGHT))
         .flex_none()
         .flex()
         .items_center()
         .gap(px(8.))
-        .pl(px(34.))
-        .child(ui::brand::mark(1.25, false))
+        .when(pull != 0., |d| d.ml(px(pull)))
+        .pl(px(lead))
+        .child(ui::brand::mark(MARK, false))
         .child(ui::brand::wordmark(13.))
 }
 
@@ -228,3 +245,6 @@ fn sidebar_footer(cx: &mut Context<Root>) -> impl IntoElement + use<> {
                 .on_click(cx.listener(|_, _: &ClickEvent, window, cx| dialogs::start_agent(window, cx))),
         )
 }
+
+#[cfg(test)]
+mod tests;

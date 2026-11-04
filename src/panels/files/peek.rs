@@ -1,10 +1,16 @@
 mod body;
 mod card;
 mod place;
+#[cfg(target_os = "macos")]
+mod player;
+#[cfg(not(target_os = "macos"))]
+#[path = "peek/no_player.rs"]
 mod player;
 mod quicklook;
+mod thumbnailers;
 mod web;
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use gpui::{
@@ -14,8 +20,9 @@ use gpui::{
 
 use super::FilesPanel;
 use super::viewer::show_link;
+use crate::desktop;
 use crate::model::Link;
-use crate::store::{Store, ToastKind};
+use crate::store::{self, Busy};
 use body::Body;
 pub(crate) use web::WebPage;
 
@@ -183,11 +190,10 @@ impl Peek {
     }
 
     fn open_in_app(&mut self, cx: &mut Context<Self>) {
-        let Some(path) = self.link().map(|link| link.path.clone()) else { return };
+        let Some(link) = self.link() else { return };
+        let busy = Busy::new("open-app", format!("Opening {}…", link.name()));
+        let path = PathBuf::from(&link.path);
         self.close(cx);
-        if let Err(why) = std::process::Command::new("open").arg(&path).spawn() {
-            let text = format!("Could not open {path}: {why}");
-            Store::get(cx).update(cx, |s, cx| s.toast(text, ToastKind::Error, cx));
-        }
+        store::run_local(cx, busy, move || desktop::open(&path));
     }
 }

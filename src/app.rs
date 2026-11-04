@@ -1,3 +1,4 @@
+pub(crate) mod frame;
 mod status;
 mod surface;
 
@@ -15,9 +16,11 @@ use gpui::{
 };
 
 use crate::cli::{self, Queue, Stream, Target};
+use crate::desktop::{self, Board};
 use crate::model::{Frame, Grid, Project, Session, Workspace};
 use crate::notify::{self, Notifier};
 use crate::panels::PanelKind;
+use crate::platform::Os;
 use crate::render::Metrics;
 use crate::render::layout::{Along, Layout};
 use crate::render::moving::Moves;
@@ -52,7 +55,7 @@ pub(crate) enum Msg {
     Frame(u64, Box<Frame>),
     SurfaceEnded(u64, String),
     Error(String),
-    Copied(String),
+    Copied(Board, String),
     Elsewhere(String),
     Folded(Fold, bool, Option<String>),
 }
@@ -65,7 +68,7 @@ pub(crate) enum Conn {
 }
 
 pub(crate) enum Drag {
-    Program { pane: u64, motion: bool, cell: (u16, u16) },
+    Program { pane: u64, button: MouseButton, motion: bool, cell: (u16, u16) },
     Select { pane: u64, from: (u16, u16), to: (u16, u16) },
     Divider { tab: u64, path: Vec<bool>, down: bool, along: Along },
     Link { pane: u64, cell: (u16, u16) },
@@ -169,8 +172,12 @@ impl Kept {
 
 impl Root {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let root = Self::open(Kept::at_start(), window, cx);
+        let missing = theme::missing_font();
+        let mut root = Self::open(Kept::at_start(), window, cx);
         root.open_requested_panel(cx);
+        if let Some(missing) = missing {
+            root.say(missing, cx);
+        }
         root
     }
 
@@ -394,10 +401,11 @@ impl Root {
             Msg::Frame(generation, frame) if generation == current => self.frame_arrived(*frame),
             Msg::SurfaceEnded(generation, err) if generation == current => self.surface_ended(generation, &err, cx),
             Msg::Error(e) => self.say(&e, cx),
-            Msg::Copied(text) => {
+            Msg::Copied(Board::Clipboard, text) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
                 self.store.update(cx, |s, cx| s.toast("Copied", ToastKind::Info, cx));
             }
+            Msg::Copied(Board::Primary, text) => desktop::write_primary(&text, cx),
             Msg::Elsewhere(path) => self.store.update(cx, |s, cx| s.copy_elsewhere(path, cx)),
             Msg::Folded(fold, collapsed, error) => self.fold_answered(fold, collapsed, error.as_deref(), cx),
             _ => return,
@@ -544,6 +552,7 @@ impl Root {
     fn render_sheet(
         &mut self,
         kind: PanelKind,
+        window_frame: frame::Frame,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
@@ -552,24 +561,31 @@ impl Root {
         overlay(
             SharedString::from(format!("{id}-veil")),
             Way::In,
+            window_frame,
             motion::slide(card, SharedString::from(id), Way::In, (0., SHEET_RISE)),
         )
     }
 
-    fn render_leaving(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn render_leaving(
+        &mut self,
+        window_frame: frame::Frame,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
         let sheet = self.leaving_sheet.gone().map(|(serial, kind)| (serial, *kind));
         let sheet = sheet.map(|(serial, kind)| {
             let card = sheet_card(kind, self.panel(kind, window, cx), &self.store);
             overlay(
                 ("sheet-out-veil", serial),
                 Way::Out,
+                window_frame,
                 motion::slide(card, ("sheet-out", serial), Way::Out, (0., SHEET_RISE)),
             )
             .into_any_element()
         });
         let dialog = self.leaving_dialog.gone().map(|(serial, view)| {
             let card = motion::slide(div().child(view.clone()), ("dialog-out", serial), Way::Out, (0., DIALOG_RISE));
-            overlay(("dialog-out-veil", serial), Way::Out, card).into_any_element()
+            overlay(("dialog-out-veil", serial), Way::Out, window_frame, card).into_any_element()
         });
         sheet.into_iter().chain(dialog).collect()
     }
@@ -597,7 +613,12 @@ impl Root {
         }
     }
 
-    fn render_main(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_main(
+        &mut self,
+        window_frame: frame::Frame,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let dock = self.store.read(cx).shown_dock().map_or(0., |kind| self.dock_size(kind, window));
         let at = (Edge::Right, self.sidebar_extent());
         div()
@@ -608,12 +629,17 @@ impl Root {
             .flex()
             .flex_row()
             .on_drag_move(split::follow::<_, SidebarGrip>(Edge::Right, TERMINAL_KEEP + dock, sidebar_width, cx))
-            .child(self.render_sidebar(cx))
-            .child(self.render_workspace_area(window, cx))
+            .child(self.render_sidebar(window_frame, cx))
+            .child(self.render_workspace_area(window_frame, window, cx))
             .child(split::handle("sidebar-split", SidebarGrip, at, sidebar_width, cx))
     }
 
-    fn render_workspace_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn render_workspace_area(
+        &mut self,
+        window_frame: frame::Frame,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         div()
             .flex_1()
             .h_full()
@@ -621,7 +647,7 @@ impl Root {
             .flex_col()
             .pl(px(GAP))
             .overflow_hidden()
-            .child(self.render_tabs(cx))
+            .child(self.render_tabs(window_frame, cx))
             .child(self.render_body(window, cx))
             .child(self.render_status(cx))
     }
@@ -756,8 +782,9 @@ fn bell_flash() -> Div {
         .bg(ui::glass::tint(colours::working(), 0.07))
 }
 
-fn overlay(id: impl Into<ElementId>, way: Way, card: impl IntoElement) -> impl IntoElement {
+fn overlay(id: impl Into<ElementId>, way: Way, frame: frame::Frame, card: impl IntoElement) -> impl IntoElement {
     let backdrop = div().absolute().inset_0().occlude().flex().items_center().justify_center().child(card);
+    let backdrop = frame::round(backdrop, frame);
     let backdrop = match way {
         Way::Out => backdrop.child(occluder()),
         _ => backdrop.on_mouse_down(MouseButton::Left, |_, _, cx| {
@@ -873,12 +900,13 @@ impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_title(window);
         self.keep_beating(window, cx);
+        let window_frame = frame::Frame::read(window, Os::CURRENT);
         let (sheet, dialog) = {
             let s = self.store.read(cx);
             (s.sheet, s.dialog.clone())
         };
-        let sheet = sheet.map(|kind| self.render_sheet(kind, window, cx));
-        div()
+        let sheet = sheet.map(|kind| self.render_sheet(kind, window_frame, window, cx));
+        let content = div()
             .size_full()
             .relative()
             .flex()
@@ -886,23 +914,25 @@ impl Render for Root {
             .bg(colours::glass())
             .text_color(colours::text())
             .text_size(px(13.))
-            .font_family(".SystemUIFont")
+            .font_family(theme::UI_FAMILY)
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
             .child(self.render_rail(cx))
-            .child(self.render_main(window, cx))
+            .child(self.render_main(window_frame, window, cx))
             .children(sheet)
             .children(dialog.map(|view| {
                 let id = view.entity_id();
                 overlay(
                     ("dialog-in-veil", id),
                     Way::In,
+                    window_frame,
                     motion::slide(div().occlude().child(view), ("dialog-in", id), Way::In, (0., DIALOG_RISE)),
                 )
             }))
-            .children(self.render_leaving(window, cx))
+            .children(self.render_leaving(window_frame, window, cx))
             .child(crate::tour::Guide::get(cx))
-            .child(self.render_toasts(cx))
+            .child(self.render_toasts(cx));
+        frame::framed(content, window_frame, window)
     }
 }
 

@@ -2,8 +2,11 @@ use std::ops::Range;
 
 use super::candidates::{candidates, tilde};
 use super::found::{Found, Hit, ago_from, by_pane, parse_time, row_of_match};
-use super::names::{Candidate, Goto, Kind, Ranked, context_top, find, key_rank, listing_status, rank, shown_row};
+use super::names::{
+    Candidate, Goto, Kind, Ranked, context_top, find, key_rank, listing_status, no_project, rank, shown_row,
+};
 use crate::model::{Session, Shown};
+use crate::platform::Os;
 
 fn session() -> Session {
     serde_json::from_value(serde_json::json!({
@@ -240,10 +243,16 @@ fn choosing_an_agent_focuses_its_pane() {
 }
 
 #[test]
+fn with_no_project_the_status_names_the_keys_that_open_one() {
+    assert_eq!(no_project(Os::Mac), "No project is open: open one with ⌘O");
+    assert_eq!(no_project(Os::Linux), "No project is open: open one with Ctrl+Shift+O");
+}
+
+#[test]
 fn the_status_says_what_the_list_holds() {
     assert!(listing_status("", 11, 11).starts_with("Everything open, in the sidebar's order"));
     assert_eq!(listing_status("", 200, 640), "The first 200 of 640 in the sidebar's order · type to find the rest");
-    assert_eq!(listing_status(" ", 0, 0), "No project is open: open one with ⌘O");
+    assert_eq!(listing_status(" ", 0, 0), no_project(Os::CURRENT));
     assert_eq!(listing_status("zz", 0, 0), "Nothing matches “zz”");
     assert_eq!(listing_status("a", 1, 1), "1 result");
     assert_eq!(listing_status("a", 200, 300), "The first 200 of 300 results");

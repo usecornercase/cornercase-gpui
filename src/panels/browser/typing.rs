@@ -10,6 +10,7 @@ use super::Browser;
 use super::keyboard::{self, Route};
 use super::viewport::{Rect, from_page};
 use crate::keymap;
+use crate::platform::Os;
 
 pub(crate) type Outgoing = (&'static str, Value);
 
@@ -17,6 +18,7 @@ pub(crate) type Outgoing = (&'static str, Value);
 pub(crate) struct Typing {
     pending: Option<Keystroke>,
     marked: String,
+    claimed: Vec<String>,
     pub(crate) caret: Option<Rect>,
 }
 
@@ -27,6 +29,20 @@ fn utf16(text: &str) -> usize {
 impl Typing {
     pub(crate) fn pressed(&mut self, key: &Keystroke) {
         self.pending = Some(key.clone());
+    }
+
+    pub(crate) fn claim_down(&mut self, key: &str, claimed: bool) -> bool {
+        self.claimed.retain(|held| held != key);
+        if claimed {
+            self.claimed.push(key.to_string());
+        }
+        claimed
+    }
+
+    pub(crate) fn claimed_up(&mut self, key: &str) -> bool {
+        let held = self.claimed.len();
+        self.claimed.retain(|claimed| claimed != key);
+        self.claimed.len() < held
     }
 
     pub(crate) fn commit(&mut self, text: &str) -> Option<Outgoing> {
@@ -59,8 +75,8 @@ impl Typing {
     }
 }
 
-pub(crate) fn window_claims(key: &Keystroke) -> bool {
-    key.modifiers.platform && keymap::find(&key.key, key.modifiers.shift, true).is_some()
+pub(crate) fn window_claims(key: &Keystroke, shift: bool, os: Os) -> bool {
+    keymap::shortcut(key, shift, os, true).is_some()
 }
 
 impl Browser {
@@ -70,9 +86,13 @@ impl Browser {
         }
     }
 
-    pub(super) fn page_key_down(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn page_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let key = &event.keystroke;
-        if key.key == "escape" || window_claims(key) {
+        if key.key == "escape" {
+            return;
+        }
+        let claimed = window_claims(key, keymap::shift_held(key, window), Os::CURRENT);
+        if self.input.typing.claim_down(&key.key, claimed) {
             return;
         }
         if self.input.choice.is_some() {
@@ -80,22 +100,22 @@ impl Browser {
             cx.stop_propagation();
             return;
         }
-        match keyboard::route(key, event.is_held) {
+        match keyboard::route(key, event.is_held, Os::CURRENT) {
             Route::Text => self.input.typing.pressed(key),
             Route::Repeat(text) => {
                 self.tell_page(("Input.dispatchKeyEvent", keyboard::typed(key, &text, true)));
                 cx.stop_propagation();
             }
             Route::Key => {
-                self.tell_page(("Input.dispatchKeyEvent", keyboard::key_down(key, event.is_held)));
+                self.tell_page(("Input.dispatchKeyEvent", keyboard::key_down(key, event.is_held, Os::CURRENT)));
                 cx.stop_propagation();
             }
         }
     }
 
-    pub(super) fn page_key_up(&mut self, event: &KeyUpEvent, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn page_key_up(&mut self, event: &KeyUpEvent, _: &mut Window, cx: &mut Context<Self>) {
         let key = &event.keystroke;
-        if window_claims(key) || self.input.choice.is_some() {
+        if self.input.typing.claimed_up(&key.key) || self.input.choice.is_some() {
             return;
         }
         self.tell_page(("Input.dispatchKeyEvent", keyboard::key_up(key)));
@@ -104,7 +124,7 @@ impl Browser {
 
     pub(super) fn press_escape(&self) {
         let escape = Keystroke { key: "escape".into(), ..Keystroke::default() };
-        self.tell_page(("Input.dispatchKeyEvent", keyboard::key_down(&escape, false)));
+        self.tell_page(("Input.dispatchKeyEvent", keyboard::key_down(&escape, false, Os::CURRENT)));
     }
 
     fn caret_bounds(&self, element: Bounds<Pixels>) -> Bounds<Pixels> {

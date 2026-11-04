@@ -2,6 +2,7 @@ use gpui::{Keystroke, Modifiers};
 use serde_json::json;
 
 use super::*;
+use crate::platform::Os;
 
 fn key(name: &str, typed: &str) -> Keystroke {
     Keystroke { modifiers: Modifiers::default(), key: name.into(), key_char: Some(typed.into()) }
@@ -76,14 +77,47 @@ fn unmarking_commits_what_was_marked() {
 }
 
 #[test]
+fn a_key_up_goes_where_its_key_down_went_whatever_shift_says_at_release() {
+    let mut typing = Typing::default();
+    assert!(!typing.claim_down("t", false));
+    assert!(!typing.claimed_up("t"));
+    assert!(typing.claim_down("t", true));
+    assert!(typing.claimed_up("t"));
+    assert!(!typing.claimed_up("t"));
+}
+
+#[test]
+fn a_key_down_the_page_gets_forgets_an_earlier_claim_on_its_key() {
+    let mut typing = Typing::default();
+    typing.claim_down("t", true);
+    typing.claim_down("c", true);
+    typing.claim_down("t", false);
+    assert!(!typing.claimed_up("t"));
+    assert!(typing.claimed_up("c"));
+}
+
+#[test]
 fn the_window_keeps_its_command_shortcuts_and_the_page_gets_the_rest() {
     let cmd = |name: &str| Keystroke {
         modifiers: Modifiers { platform: true, ..Modifiers::default() },
         key: name.into(),
         key_char: None,
     };
-    assert!(window_claims(&cmd("c")));
-    assert!(window_claims(&cmd("l")));
-    assert!(!window_claims(&cmd("a")));
-    assert!(!window_claims(&key("c", "c")));
+    assert!(window_claims(&cmd("c"), false, Os::Mac));
+    assert!(window_claims(&cmd("l"), false, Os::Mac));
+    assert!(!window_claims(&cmd("a"), false, Os::Mac));
+    assert!(!window_claims(&key("c", "c"), false, Os::Mac));
+}
+
+#[test]
+fn on_linux_the_window_keeps_ctrl_shift_and_chrome_s_clipboard_keys() {
+    let held = |name: &str, modifiers| Keystroke { modifiers, key: name.into(), key_char: None };
+    let ctrl = Modifiers { control: true, ..Modifiers::default() };
+    let ctrl_shift = Modifiers { shift: true, ..ctrl };
+    assert!(window_claims(&held("c", ctrl), false, Os::Linux));
+    assert!(window_claims(&held("t", ctrl_shift), true, Os::Linux));
+    assert!(window_claims(&held("{", ctrl), true, Os::Linux));
+    assert!(!window_claims(&held("{", ctrl), false, Os::Linux));
+    assert!(!window_claims(&held("a", ctrl), false, Os::Linux));
+    assert!(!window_claims(&held("z", ctrl), false, Os::Linux));
 }

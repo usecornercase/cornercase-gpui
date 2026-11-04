@@ -26,18 +26,13 @@ pub(crate) struct Metrics {
 }
 
 impl Metrics {
-    pub(crate) fn measure(family: &str, font_size: f32, window: &Window) -> Self {
+    pub(crate) fn measure(family: impl Into<SharedString>, font_size: f32, window: &Window) -> Self {
         let font_size = px(font_size);
-        let base = font(SharedString::from(family.to_string()));
+        let family = family.into();
         let text = window.text_system();
-        let id = text.resolve_font(&base);
+        let id = text.resolve_font(&font(family.clone()));
         let cell_width = text.advance(id, font_size, 'M').map_or(font_size * 0.6, |s| s.width);
-        Self {
-            family: SharedString::from(family.to_string()),
-            font_size,
-            cell_width,
-            line_height: (font_size * 1.3).round(),
-        }
+        Self { family, font_size, cell_width, line_height: (font_size * 1.3).round() }
     }
 
     fn font(&self, bold: bool, italic: bool) -> Font {
