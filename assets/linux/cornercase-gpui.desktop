@@ -6,6 +6,6 @@ Comment=A window for cornercase, the terminal multiplexer for running coding age
 Exec=cornercase-gpui
 Icon=cornercase-gpui
 Terminal=false
-Categories=Development;TerminalEmulator;
+Categories=Development;
 Keywords=terminal;multiplexer;agents;worktree;
 StartupWMClass=cornercase-gpui
