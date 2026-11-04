@@ -1,13 +1,13 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement,
-    SharedString, Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,
+    AnyElement, ClickEvent, Context, Div, FocusHandle, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement, SharedString, Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
 use crate::app::frame::{self, Frame};
-use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
+use crate::app::{Root, TITLEBAR_HEIGHT};
 use crate::context_menu::{Entry, act, danger, item};
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
@@ -101,13 +101,13 @@ fn split_buttons(cx: &mut Context<Root>) -> Div {
         )
 }
 
-fn tools(window_frame: Frame, cx: &mut Context<Root>) -> Div {
+fn tools(window_frame: Frame, terminal: &FocusHandle, cx: &mut Context<Root>) -> Div {
     div()
         .flex()
         .flex_none()
         .items_center()
-        .child(frame::claimed(split_buttons(cx), window_frame))
-        .children(frame::window_controls(window_frame))
+        .child(frame::claimed(split_buttons(cx), window_frame, terminal))
+        .children(frame::window_controls(window_frame, terminal))
 }
 
 fn new_tab_menu() -> Vec<Entry> {
@@ -143,9 +143,9 @@ impl Root {
             .items_center()
             .justify_between()
             .gap(px(8.))
-            .pr(px(GAP))
-            .child(frame::claimed(self.tab_group(cx), window_frame))
-            .child(tools(window_frame, cx));
+            .pr(px(window_frame.title_end()))
+            .child(frame::claimed(self.tab_group(cx), window_frame, &self.focus))
+            .child(tools(window_frame, &self.focus, cx));
         frame::title_row(row, window_frame)
     }
 

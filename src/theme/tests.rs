@@ -81,6 +81,11 @@ fn the_ground_is_translucent_on_a_mac_and_opaque_on_linux() {
 }
 
 #[test]
+fn windows_takes_the_opaque_ground_linux_has() {
+    assert_eq!(ground(Os::Windows), ground(Os::Linux));
+}
+
+#[test]
 fn a_pane_on_an_opaque_ground_is_tokyo_night_at_the_terminal_opacity() {
     for opacity in [LEAST_OPACITY, OPACITY, 1.] {
         let wanted = Rgba { a: opacity, ..rgb(0x1a_1b_26) };
