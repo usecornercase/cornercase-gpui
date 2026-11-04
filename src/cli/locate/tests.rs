@@ -179,6 +179,22 @@ fn a_chosen_binary_that_is_gone_is_passed_over() {
 }
 
 #[test]
+fn a_chosen_binary_that_is_too_old_gives_way_to_a_good_one_on_the_path() {
+    let probe = Fake::default().with("/opt/cc/cornercase", "cornercase 0.12.100").with("/usr/bin/cornercase", GOOD);
+    let inputs = Inputs { chosen: Some("/opt/cc/cornercase".into()), ..mac() };
+    assert_eq!(found(locate(&inputs, &probe)).path, PathBuf::from("/usr/bin/cornercase"));
+}
+
+#[test]
+fn a_chosen_binary_that_is_too_old_is_named_when_nothing_else_is_found() {
+    let probe = Fake::default().with("/opt/cc/cornercase", "cornercase 0.12.100");
+    let inputs = Inputs { chosen: Some("/opt/cc/cornercase".into()), ..mac() };
+    let Err(Missing::Unusable { origin, problem, .. }) = locate(&inputs, &probe) else { panic!("unusable") };
+    assert_eq!(origin, Origin::Chosen);
+    assert!(matches!(problem, Problem::TooOld(_)));
+}
+
+#[test]
 fn the_login_shell_is_asked_only_when_nothing_else_is_on_the_path() {
     let probe = Fake::default().with("/usr/bin/cornercase", GOOD).shell("/opt/homebrew/bin");
     assert!(locate(&mac(), &probe).is_ok());

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use super::{emblem_of, heading_of, lead, offers_choice};
-use crate::cli::{Missing, Origin, Problem, parse_version};
+use super::{Choice, choice, emblem_of, heading_of, lead, offers_choice};
+use crate::cli::{Binary, Missing, Origin, Problem, parse_version};
 use crate::platform::Os;
 use crate::ui::Icon;
 
@@ -54,4 +54,17 @@ fn cornercase_bin_says_so_and_offers_no_choice() {
 fn a_binary_chosen_by_hand_is_said_to_be() {
     let missing = too_old("/opt/cc", Origin::Chosen);
     assert!(lead(&missing, Os::Mac, "").contains("(chosen by hand)"));
+}
+
+#[test]
+fn a_good_pick_is_used_and_saved_by_its_path() {
+    let binary = Binary::plain(PathBuf::from("/opt/cc/cornercase"));
+    let Choice::Use(used, saved) = choice(Ok(binary.clone())) else { panic!("used") };
+    assert_eq!((used, saved.as_str()), (binary, "/opt/cc/cornercase"));
+}
+
+#[test]
+fn a_bad_pick_is_kept_out_of_the_settings() {
+    let missing = too_old("/opt/cc", Origin::Chosen);
+    assert!(matches!(choice(Err(missing.clone())), Choice::Stay(m) if m == missing));
 }

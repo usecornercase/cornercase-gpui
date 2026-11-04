@@ -55,7 +55,7 @@ fn unusable(path: &Path, origin: Origin, problem: &Problem, os: Os, home: &str) 
     let text = match (problem, origin) {
         (Problem::NotAProgram, Origin::Variable) => format!(
             "CORNERCASE_BIN is set to {place}, which is not a program here. Point it at cornercase {min} or newer, \
-             or unset it, then try again."
+             or unset it and restart the window."
         ),
         (Problem::NotAProgram, _) => format!(
             "{place} cannot be run. Choose cornercase itself, the file named cornercase in a folder such as \
@@ -109,6 +109,21 @@ fn choose_button(cx: &mut Context<Root>) -> Stateful<Div> {
         .on_click(cx.listener(|_, _: &ClickEvent, _, cx| Root::choose_cornercase(cx)))
 }
 
+enum Choice {
+    Use(Binary, String),
+    Stay(Missing),
+}
+
+fn choice(checked: Result<Binary, Missing>) -> Choice {
+    match checked {
+        Ok(binary) => {
+            let saved = binary.path.to_string_lossy().into_owned();
+            Choice::Use(binary, saved)
+        }
+        Err(missing) => Choice::Stay(missing),
+    }
+}
+
 impl Root {
     pub(super) fn missing_page(missing: &Missing, cx: &mut Context<Self>) -> Div {
         let lead = lead(missing, Os::CURRENT, &desktop::home_text());
@@ -153,16 +168,15 @@ impl Root {
     }
 
     fn chosen(&mut self, checked: Result<Binary, Missing>, cx: &mut Context<Self>) {
-        match checked {
-            Ok(binary) => {
-                let saved = binary.path.to_string_lossy().into_owned();
+        match choice(checked) {
+            Choice::Use(binary, saved) => {
                 if let Err(e) = self.store.update(cx, |s, cx| s.set_pref("cornercase_bin", &saved, cx)) {
                     self.say(&e.to_string(), cx);
                 }
                 cli::use_binary(binary);
                 self.start(cx);
             }
-            Err(missing) => self.conn = Conn::Missing(missing),
+            Choice::Stay(missing) => self.conn = Conn::Missing(missing),
         }
         cx.notify();
     }

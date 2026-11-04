@@ -886,13 +886,18 @@ fn font_size_from_env() -> f32 {
 }
 
 fn start_server(tx: &UnboundedSender<Msg>, (cols, rows): (u16, u16), chosen: Option<String>) {
-    if let Err(missing) = cli::ensure_binary(chosen) {
-        let _ = tx.unbounded_send(Msg::Missing(missing));
-        return;
+    let msg = start_message(cli::ensure_binary(chosen), || {
+        let args = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-"];
+        cli::run_with_stdin(&args, Some(&theme::theme_json())).map_err(|e| e.to_string())
+    });
+    let _ = tx.unbounded_send(msg);
+}
+
+fn start_message(found: Result<(), cli::Missing>, start: impl FnOnce() -> Result<String, String>) -> Msg {
+    match found {
+        Ok(()) => Msg::Started(start()),
+        Err(missing) => Msg::Missing(missing),
     }
-    let args = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-"];
-    let result = cli::run_with_stdin(&args, Some(&theme::theme_json())).map_err(|e| e.to_string());
-    let _ = tx.unbounded_send(Msg::Started(result));
 }
 
 fn start_place() -> Vec<String> {

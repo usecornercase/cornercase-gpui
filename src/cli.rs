@@ -101,6 +101,17 @@ fn bin() -> String {
     binary().path.display().to_string()
 }
 
+fn forget_binary() {
+    *BINARY.lock() = None;
+}
+
+fn spawn(cmd: &mut Command) -> Result<Child> {
+    cmd.spawn().map_err(|e| {
+        forget_binary();
+        anyhow::Error::new(e).context(format!("could not run `{}`", bin()))
+    })
+}
+
 pub(crate) fn use_binary(binary: Binary) {
     *BINARY.lock() = Some(binary);
 }
@@ -133,7 +144,7 @@ fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&[u8]>) -> R
     let mut cmd = target.command(args);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() });
-    let mut child = cmd.spawn().with_context(|| format!("could not run `{}`", bin()))?;
+    let mut child = spawn(&mut cmd)?;
     if let Some(text) = stdin
         && let Some(mut pipe) = child.stdin.take()
     {
@@ -212,7 +223,7 @@ pub(crate) fn stream<S: AsRef<str>>(
     let target = target();
     let mut cmd = target.command(args);
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = cmd.spawn().with_context(|| format!("could not run `{}`", bin()))?;
+    let mut child = spawn(&mut cmd)?;
     let stdout = child.stdout.take().context("no stdout")?;
     let stderr = child.stderr.take().context("no stderr")?;
     let stream = keep(child);

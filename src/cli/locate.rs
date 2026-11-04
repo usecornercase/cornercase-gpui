@@ -194,7 +194,14 @@ pub(crate) fn locate(inputs: &Inputs, probe: &impl Probe) -> Result<Binary, Miss
     if let Some(name) = &inputs.variable {
         return named(name, inputs, probe);
     }
-    let Some(found) = find_binary(inputs, probe) else { return Err(not_found(inputs, probe)) };
+    let by_hand = inputs.chosen.clone().filter(|path| probe.is_program(path));
+    let by_hand = by_hand.map(|path| checked(Found::plain(path, Origin::Chosen), inputs.os, probe));
+    if let Some(Ok(binary)) = by_hand {
+        return Ok(binary);
+    }
+    let Some(found) = find_binary(inputs, probe) else {
+        return Err(by_hand.and_then(Result::err).unwrap_or_else(|| not_found(inputs, probe)));
+    };
     checked(found, inputs.os, probe)
 }
 
@@ -222,10 +229,9 @@ fn named(name: &str, inputs: &Inputs, probe: &impl Probe) -> Result<Binary, Miss
 }
 
 fn find_binary(inputs: &Inputs, probe: &impl Probe) -> Option<Found> {
-    let by_hand = inputs.chosen.clone().filter(|path| probe.is_program(path));
-    by_hand
-        .map(|path| Found::plain(path, Origin::Chosen))
-        .or_else(|| probe.find(&inputs.path, NAME).map(|path| Found::plain(path, Origin::Path)))
+    probe
+        .find(&inputs.path, NAME)
+        .map(|path| Found::plain(path, Origin::Path))
         .or_else(|| through_login_shell(inputs, probe))
         .or_else(|| probe.find(&places(inputs), NAME).map(|path| Found::plain(path, Origin::Installer)))
 }
