@@ -12,6 +12,11 @@ on:
       - assets/linux/**
       - assets/windows/**
       - .cargo/**
+      - LICENSE-*
+      - assets/icons/**
+      - assets/file-icons/**
+      - tools/icon.py
+      - CHANGELOG.md
       - Cargo.toml
       - Cargo.lock
       - build.rs
@@ -196,7 +201,9 @@ jobs:
 
       - name: what it needs to run
         run: |
-          objdump -T target/release/cornercase-gpui | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1
+          highest=$(objdump -T target/release/cornercase-gpui | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
+          echo "needs $highest"
+          [ "$(printf '%s\n%s\n' "${highest#GLIBC_}" 2.35 | sort -V | tail -n 1)" = 2.35 ] || { echo "::error::needs more than glibc 2.35, which the README promises"; exit 1; }
           readelf -d target/release/cornercase-gpui | grep NEEDED
 
       - uses: actions/download-artifact@v8
@@ -253,5 +260,6 @@ jobs:
         run: |
           pre=""
           case "$VERSION" in *-*) pre="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" --verify-tag --title "cornercase-gpui $VERSION" \
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "cornercase-gpui $VERSION" \
             --notes-file "$RUNNER_TEMP/notes.md" $pre dist/*
+          gh release edit "$GITHUB_REF_NAME" --draft=false

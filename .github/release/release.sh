@@ -18,7 +18,7 @@ check() {
   [ "$tag" = "v$current" ] || fail "the tag $tag does not match Cargo.toml's version $current: tag v$current, or change the version"
   git merge-base --is-ancestor HEAD origin/main \
     || fail "the tagged commit is not on main: merge it first, then tag"
-  grep -qx "## $current" CHANGELOG.md \
+  grep -Fqx "## $current" CHANGELOG.md \
     || fail "CHANGELOG.md has no '## $current' section: rename '## Unreleased' before tagging"
 }
 
