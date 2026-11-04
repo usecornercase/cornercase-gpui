@@ -4,7 +4,8 @@ use gpui::{
 };
 
 use super::{
-    Control, Frame, Press, Restore, background, cursor, decorations, outer, press, restore_step, windowed_size,
+    Control, Frame, Press, Restore, background, cursor, decorations, fitted, min_size, outer, press, restore_step,
+    windowed_size,
 };
 use crate::platform::Os;
 
@@ -172,4 +173,33 @@ fn a_window_that_leaves_full_screen_maximised_or_tiled_keeps_its_size() {
     assert_eq!(restore_step(false, maximised, screen, windowed), Restore::Done);
     let tiled = client(Tiling { left: true, top: true, bottom: true, right: false });
     assert_eq!(restore_step(false, tiled, screen, windowed), Restore::Done);
+}
+
+#[test]
+fn a_linux_window_opened_for_a_margin_the_window_manager_draws_instead_shrinks_by_it() {
+    let opened = outer(Os::Linux, (1280., 800.));
+    assert_eq!(fitted(Os::Linux, server(), false, opened), Some(bounds(1280., 800.).size));
+}
+
+#[test]
+fn a_window_with_its_own_frame_or_on_a_mac_keeps_its_size() {
+    let opened = outer(Os::Linux, (1280., 800.));
+    assert_eq!(fitted(Os::Linux, client(Tiling::default()), false, opened), None);
+    assert_eq!(fitted(Os::Mac, Frame::default(), false, bounds(1280., 800.).size), None);
+}
+
+#[test]
+fn a_maximised_or_full_screen_window_is_left_to_the_window_manager() {
+    let opened = outer(Os::Linux, (1280., 800.));
+    let maximised = Frame::of(Decorations::Server, WindowControls::default(), true);
+    assert_eq!(fitted(Os::Linux, maximised, false, opened), None);
+    assert_eq!(fitted(Os::Linux, server(), true, opened), None);
+}
+
+#[test]
+fn the_minimum_size_counts_the_margin_only_where_the_window_manager_measures_it() {
+    let content = bounds(640., 360.).size;
+    assert_eq!(min_size(Os::Mac, false, (640., 360.)), content);
+    assert_eq!(min_size(Os::Linux, true, (640., 360.)), content);
+    assert_eq!(min_size(Os::Linux, false, (640., 360.)), outer(Os::Linux, (640., 360.)));
 }
