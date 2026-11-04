@@ -35,6 +35,8 @@ mod tunnels;
 mod typing;
 mod viewport;
 mod watch;
+#[cfg(windows)]
+mod win32;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

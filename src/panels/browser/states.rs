@@ -3,14 +3,35 @@ use gpui::{
 };
 
 use super::{Browser, Status, chrome, notice};
+use crate::platform::Os;
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui;
 
 const TEXT_WIDTH: f32 = 420.;
-const CHROME_VARIABLE: &str = "CORNERCASE_GPUI_CHROME=/path/to/chrome";
 
 pub(crate) fn chrome_missing(why: &str) -> bool {
     why.contains(chrome::NO_CHROME)
+}
+
+pub(crate) fn install_hint(os: Os) -> &'static str {
+    match os {
+        Os::Windows => {
+            "The Browser panel draws a headless Chromium, and not even Microsoft Edge was found where Windows \
+             installs it. Install Google Chrome, Microsoft Edge or Brave, or set this variable to one's .exe, then \
+             start cornercase-gpui again:"
+        }
+        Os::Mac | Os::Linux => {
+            "The Browser panel draws a headless Chromium. Install Google Chrome, Chromium, Microsoft Edge or Brave, or \
+             point this variable at one before starting cornercase-gpui:"
+        }
+    }
+}
+
+pub(crate) fn variable_hint(os: Os) -> &'static str {
+    match os {
+        Os::Windows => r#"setx CORNERCASE_GPUI_CHROME "C:\path\to\chrome.exe""#,
+        Os::Mac | Os::Linux => "CORNERCASE_GPUI_CHROME=/path/to/chrome",
+    }
 }
 
 fn explanation(text: impl Into<gpui::SharedString>) -> Div {
@@ -50,11 +71,8 @@ impl Browser {
         }));
         if chrome_missing(why) {
             return notice("No Chromium browser found")
-                .child(explanation(
-                    "The Browser panel draws a headless Chromium. Install Google Chrome, Chromium, Microsoft Edge or \
-                     Brave, or point this variable at one before starting cornercase-gpui:",
-                ))
-                .child(code(CHROME_VARIABLE))
+                .child(explanation(install_hint(Os::CURRENT)))
+                .child(code(variable_hint(Os::CURRENT)))
                 .child(retry);
         }
         notice("The browser cannot be shown").child(explanation(why.to_string())).child(retry)
