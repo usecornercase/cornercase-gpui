@@ -1,3 +1,6 @@
+use anyhow::Context as _;
+use serde::Deserialize;
+
 use crate::app::{Msg, Root};
 use crate::desktop::{self, Board};
 use crate::model::PaneGrid;
@@ -52,14 +55,18 @@ pub(super) fn column(index: usize) -> u16 {
     u16::try_from(index).unwrap_or(u16::MAX)
 }
 
-fn text_of_selection(out: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(out).ok()?;
-    value.get("text")?.as_str().map(String::from)
+#[derive(Deserialize)]
+struct Selected {
+    text: Option<String>,
 }
 
 pub(super) fn kept(board: Board, read: anyhow::Result<String>) -> Option<Msg> {
-    match read {
-        Ok(out) => text_of_selection(&out).filter(|text| !text.is_empty()).map(|text| Msg::Copied(board, text)),
+    let selected = read.and_then(|out| {
+        serde_json::from_str::<Selected>(&out).context("could not read the selection cornercase answered with")
+    });
+    match selected {
+        Ok(Selected { text: Some(text) }) if !text.is_empty() => Some(Msg::Copied(board, text)),
+        Ok(_) => None,
         Err(e) => Some(Msg::Error(format!("{e:#}"))),
     }
 }
