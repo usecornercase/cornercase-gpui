@@ -3,11 +3,13 @@ use std::io::{BufRead, BufReader, Read as _, Write as _};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
 use parking_lot::Mutex;
 
+use crate::desktop;
 use crate::platform::Os;
 
 const PREFERRED_PORT: u16 = 9222;
@@ -56,11 +58,28 @@ struct Owned {
 
 static OWNED: Mutex<Owned> = Mutex::new(Owned { child: None, pid: None });
 
+struct Chosen {
+    exe: PathBuf,
+    profile: PathBuf,
+}
+
+static CHOSEN: OnceLock<Chosen> = OnceLock::new();
+
 pub(crate) fn find() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("CORNERCASE_GPUI_CHROME") {
         return Some(PathBuf::from(path)).filter(|p| p.is_file());
     }
-    candidates(&home()).into_iter().find(|p| p.is_file()).or_else(|| on_path(NAMES))
+    let on_path = || NAMES.iter().find_map(|name| desktop::on_path(name));
+    candidates(&home()).into_iter().find(|p| p.is_file()).or_else(on_path)
+}
+
+fn chosen_in(cell: &OnceLock<Chosen>, look: impl FnOnce() -> Option<PathBuf>) -> Option<&Chosen> {
+    if let Some(chosen) = cell.get() {
+        return Some(chosen);
+    }
+    let exe = look()?;
+    let profile = profile_for(Some(&exe));
+    Some(cell.get_or_init(|| Chosen { exe, profile }))
 }
 
 fn home() -> PathBuf {
@@ -83,19 +102,15 @@ pub(crate) fn candidates(home: &Path) -> Vec<PathBuf> {
     Vec::new()
 }
 
-fn on_path(names: &[&str]) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    let suffix = if cfg!(windows) { ".exe" } else { "" };
-    std::env::split_paths(&path)
-        .flat_map(|dir| names.iter().map(move |name| dir.join(format!("{name}{suffix}"))))
-        .find(|p| p.is_file())
+pub(crate) fn profile() -> PathBuf {
+    CHOSEN.get().map_or_else(|| profile_for(None), |chosen| chosen.profile.clone())
 }
 
-pub(crate) fn profile() -> PathBuf {
+fn profile_for(exe: Option<&Path>) -> PathBuf {
     if let Some(dir) = std::env::var_os("CORNERCASE_GPUI_BROWSER_PROFILE") {
         return PathBuf::from(dir);
     }
-    match find().as_deref().and_then(snap_of) {
+    match exe.and_then(snap_of) {
         Some(snap) => snap_profile(&home(), &snap),
         None => crate::prefs::app_dir().join("browser"),
     }
@@ -154,14 +169,14 @@ pub(crate) fn active_port(text: &str) -> Option<Endpoint> {
 }
 
 pub(crate) fn attach_or_launch() -> Result<Endpoint> {
+    let chosen = chosen_in(&CHOSEN, find);
     let profile = profile();
     fs::create_dir_all(&profile).with_context(|| format!("could not make {}", profile.display()))?;
     if let Some(endpoint) = running(&profile) {
         adopt_if_orphan(&profile);
         return Ok(endpoint);
     }
-    let exe = find().context(NO_CHROME)?;
-    launch(&exe, &profile)
+    launch(&chosen.context(NO_CHROME)?.exe, &profile)
 }
 
 fn known_port(profile: &Path) -> Option<u16> {
