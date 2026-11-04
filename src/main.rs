@@ -118,7 +118,12 @@ fn main() {
         std::process::exit(2)
     });
     cli::connect(target);
-    Application::new().with_assets(ui::icons::Assets).run(|cx: &mut App| {
+    let app = Application::new().with_assets(ui::icons::Assets);
+    if let Err(why) = theme::settle_fonts(&app.text_system()) {
+        eprintln!("cornercase-gpui: {why}");
+        std::process::exit(1);
+    }
+    app.run(|cx: &mut App| {
         system_keys(cx);
         ui::text_field::bind_keys(cx);
         cx.on_app_quit(|_| async {

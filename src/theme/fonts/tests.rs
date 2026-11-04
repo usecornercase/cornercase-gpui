@@ -3,12 +3,12 @@ use crate::platform::Os;
 
 fn chosen(os: Os, installed: &[&str]) -> Fonts {
     let families: Vec<String> = installed.iter().map(ToString::to_string).collect();
-    choose(os, &families, |name| installed.contains(&name), true)
+    choose(os, &families, |name| installed.contains(&name), true).expect("gpui falls back")
 }
 
 fn alone(installed: &[&str]) -> Fonts {
     let families: Vec<String> = installed.iter().map(ToString::to_string).collect();
-    choose(Os::Linux, &families, |name| installed.contains(&name), false)
+    choose(Os::Linux, &families, |name| installed.contains(&name), false).expect("a family loads")
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn linux_takes_any_installed_mono_family_when_none_of_its_list_is_there() {
 #[test]
 fn a_family_named_mono_must_be_installed_to_be_taken() {
     let families = vec!["Ghost Mono".to_string()];
-    assert_ne!(choose(Os::Linux, &families, |_| false, true).mono, "Ghost Mono");
+    assert_ne!(choose(Os::Linux, &families, |_| false, true).map(|fonts| fonts.mono), Some("Ghost Mono".into()));
 }
 
 #[test]
@@ -85,4 +85,12 @@ fn where_none_of_gpuis_fallbacks_loads_any_installed_family_draws_the_interface(
     assert_eq!(alone(&["Arimo", "Cousine"]).sans, "Arimo");
     let mono_only = alone(&["Nimbus Mono PS"]);
     assert_eq!((mono_only.mono.as_str(), mono_only.sans.as_str()), ("Nimbus Mono PS", "Nimbus Mono PS"));
+}
+
+#[test]
+fn where_no_family_and_none_of_gpuis_fallbacks_loads_there_is_nothing_to_draw_with() {
+    let listed: Vec<String> = [".ZedMono", "DejaVu Sans", "Noto Sans", "Nimbus Mono PS"].map(String::from).into();
+    assert_eq!(choose(Os::Linux, &listed, |_| false, false), None);
+    assert!(choose(Os::Linux, &listed, |_| false, true).is_some());
+    assert!(choose(Os::Mac, &listed, |_| false, false).is_some());
 }
