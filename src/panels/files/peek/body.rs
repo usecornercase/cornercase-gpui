@@ -11,7 +11,7 @@ use super::super::{Spans, highlight};
 use super::Peek;
 use super::player::Player;
 use super::thumbnailers::Missing;
-use super::{quicklook, thumbnailers};
+use super::{quicklook, shell, thumbnailers};
 use crate::cli;
 use crate::model::Link;
 use crate::platform::Os;
@@ -109,7 +109,7 @@ fn preview(path: &Path) -> Still {
     let png = match os {
         Os::Mac => quicklook::thumbnail(path).ok_or(Missing::NoReader),
         Os::Linux => thumbnailers::thumbnail(path),
-        Os::Windows => Err(Missing::NoReader),
+        Os::Windows => shell::thumbnail(path),
     };
     match png {
         Ok(png) => picture(Arc::new(Image::from_bytes(ImageFormat::Png, png)), thumbnail_label(os, media)),
