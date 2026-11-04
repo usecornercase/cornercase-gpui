@@ -1,4 +1,4 @@
-use super::{Escaped, escaped, selected_rows};
+use super::{Escaped, escaped, selected_rows, word_end, word_start};
 
 #[test]
 fn a_selection_inside_one_row_paints_one_span() {
@@ -35,4 +35,20 @@ fn escape_clears_a_search_then_passes_on() {
 #[test]
 fn escape_cancels_a_plain_field() {
     assert_eq!(escaped(false, "name", None), Escaped::Cancel);
+}
+
+#[test]
+fn a_word_starts_after_the_blank_before_it() {
+    assert_eq!(word_start("cargo test -q", 13), 11);
+    assert_eq!(word_start("cargo test  ", 12), 6);
+    assert_eq!(word_start("word", 4), 0);
+    assert_eq!(word_start("año\u{3000}más", "año\u{3000}más".len()), "año\u{3000}".len());
+}
+
+#[test]
+fn a_word_ends_at_the_blank_after_it() {
+    assert_eq!(word_end("cargo test", 0), 5);
+    assert_eq!(word_end("cargo test", 5), 10);
+    assert_eq!(word_end("cargo  test -q", 5), 11);
+    assert_eq!(word_end("word", 4), 4);
 }

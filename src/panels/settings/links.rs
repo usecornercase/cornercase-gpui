@@ -4,6 +4,8 @@ use serde_json::Value;
 use super::data::{self, Choice, Described, Kind, LINKS, Setting};
 use super::pages::page_icon;
 use super::{Role, SettingsPanel, widgets};
+use crate::keymap;
+use crate::platform::Os;
 use crate::prefs::Prefs;
 use crate::store::Store;
 
@@ -20,7 +22,7 @@ const OWN: [Own; 2] = [
     Own {
         key: "open_links",
         label: "web addresses open in",
-        note: "Where a click on a web address in the terminal opens it. ⌘-click opens it in your default browser \
+        note: "Where a click on a web address in the terminal opens it. {click} opens it in your default browser \
                either way. An address of another machine's own server (localhost) opens in the Browser panel, \
                which reaches it over ssh.",
         choices: &[
@@ -59,7 +61,7 @@ fn setting(own: &Own, values: &serde_json::Map<String, Value>, defaults: &serde_
         kind: Kind::Choice,
         value: values.get(own.key).cloned().unwrap_or_default(),
         default: defaults.get(own.key).cloned().unwrap_or_default(),
-        note: own.note.into(),
+        note: own.note.replace("{click}", keymap::link_click(Os::CURRENT)),
         choices: choices.collect(),
         ..Setting::default()
     }

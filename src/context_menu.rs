@@ -7,6 +7,8 @@ use gpui::{
 };
 
 use crate::app::Root;
+use crate::keymap;
+use crate::platform::Os;
 use crate::store::Busy;
 use crate::theme::{colours, radius};
 use crate::ui::glass;
@@ -178,7 +180,7 @@ fn menu_frame(focus: &FocusHandle, cx: &mut Context<Root>) -> Stateful<Div> {
         .flex_col()
         .text_size(px(12.))
         .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
-            if !e.keystroke.modifiers.platform {
+            if keymap::chord(&e.keystroke, Os::CURRENT, false).is_none() {
                 this.menu_key(e.keystroke.key.as_str(), window, cx);
                 cx.stop_propagation();
             }

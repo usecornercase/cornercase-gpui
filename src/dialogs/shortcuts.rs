@@ -4,7 +4,8 @@ use gpui::{
 };
 
 use super::{close, frame};
-use crate::keymap::{self, Group, OTHER_KEYS, SYSTEM_KEYS};
+use crate::keymap::{self, Group};
+use crate::platform::Os;
 use crate::store::Store;
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui;
@@ -49,7 +50,7 @@ fn block(title: &'static str, lines: impl IntoIterator<Item = Div>) -> Div {
 }
 
 fn group(group: Group) -> Div {
-    block(group.title(), keymap::in_group(group).map(|s| line(s.label(), s.command.describe())))
+    block(group.title(), keymap::in_group(group).map(|s| line(s.label(Os::CURRENT), s.command.describe(Os::CURRENT))))
 }
 
 fn listed(title: &'static str, entries: &'static [(&'static str, &'static str)]) -> Div {
@@ -68,13 +69,13 @@ fn body() -> impl IntoElement {
         .flex()
         .gap(px(24.))
         .text_size(px(12.))
-        .child(column().child(group(Group::Panels)).child(listed("System", SYSTEM_KEYS)))
+        .child(column().child(group(Group::Panels)).child(listed("System", keymap::system_keys(Os::CURRENT))))
         .child(column().child(group(Group::Window)).child(group(Group::Terminal)))
         .child(
             column()
                 .child(group(Group::TabsAndPanes))
                 .child(group(Group::Browser))
-                .child(listed("Everywhere else", OTHER_KEYS)),
+                .child(listed("Everywhere else", keymap::other_keys(Os::CURRENT))),
         )
 }
 
