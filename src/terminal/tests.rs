@@ -1,8 +1,9 @@
 use gpui::CursorStyle;
 
 use super::pane_menu::move_pane_args;
-use super::selection::{read_args, word_at};
+use super::selection::{kept, read_args, word_at};
 use super::{cycled, divider_cursor};
+use crate::app::Msg;
 use crate::desktop::Board;
 use crate::render::moving::{Aim, Place};
 
@@ -43,4 +44,17 @@ fn cycling_wraps_around_both_ways() {
 fn copying_asks_cornercase_to_copy_while_the_primary_selection_only_reads_the_text() {
     assert_eq!(read_args(4, Board::Clipboard), ["selection", "--pane", "4", "--copy", "--json"]);
     assert_eq!(read_args(4, Board::Primary), ["selection", "--pane", "4", "--json"]);
+}
+
+#[test]
+fn a_read_selection_goes_to_its_board() {
+    let read = Ok(r#"{"text":"ls -la"}"#.to_string());
+    assert!(matches!(kept(Board::Primary, read), Some(Msg::Copied(Board::Primary, text)) if text == "ls -la"));
+    assert!(kept(Board::Primary, Ok(r#"{"text":""}"#.to_string())).is_none());
+}
+
+#[test]
+fn a_selection_that_cannot_be_read_says_why() {
+    let read = Err(anyhow::anyhow!("no such pane"));
+    assert!(matches!(kept(Board::Primary, read), Some(Msg::Error(e)) if e == "no such pane"));
 }
