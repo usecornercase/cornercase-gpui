@@ -5,7 +5,6 @@ use gpui::{
 
 use super::PortsPanel;
 use super::data::{Port, stop_warning};
-use crate::cli;
 use crate::dialogs::Question;
 use crate::model::Session;
 use crate::notify::tip;
@@ -14,9 +13,11 @@ use crate::panels::queue::open_pane;
 use crate::store::{Busy, Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon};
+use crate::{cli, desktop};
 
 pub(super) fn remote_note(host: &str) -> String {
-    format!("These ports are on {host}: Open shows one in the Browser panel, through an ssh tunnel to this Mac.")
+    let here = desktop::here();
+    format!("These ports are on {host}: Open shows one in the Browser panel, through an ssh tunnel to this {here}.")
 }
 
 fn stopping(port: &Port) -> String {

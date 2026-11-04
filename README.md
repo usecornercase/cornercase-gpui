@@ -15,14 +15,14 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 ## Features
 
-- **Terminal.** Every pane sits on a floating card: drag the gap between cards to resize, select with the mouse, click a web address to open it in your browser or the Browser panel (Settings › Links), ⌘-click links and paths to open them with macOS, drop files to paste them, and drag a pane by its handle onto another to move it. A project or workspace with nothing open says so, with buttons to start an agent, open a shell or reopen its closed agents.
+- **Terminal.** Every pane sits on a floating card: drag the gap between cards to resize, select with the mouse, click a web address to open it in your browser or the Browser panel (Settings › Links), ⌘-click links and paths to open them in their default app, drop files to paste them, and drag a pane by its handle onto another to move it. A project or workspace with nothing open says so, with buttons to start an agent, open a shell or reopen its closed agents.
 - **Sidebar.** Groups, projects, workspaces and agents, with each agent's status, model and context, and each workspace's pull request with how its checks went: click it, or press ⌘P, for every check with its link, its stack and Ask agent. Drag to reorder, in any layout of cornercase's Settings → UI.
-- **Previews.** Rest the pointer on a path a program printed and the file shows beside it: code at its lines, images, videos, sounds, PDFs. A click opens it in the Files panel. Rest it on a web address and the page shows, drawn by the Browser panel's Chrome: a local dev server's at once, others when you ask.
+- **Previews.** Rest the pointer on a path a program printed and the file shows beside it: code at its lines, images, PDFs and documents (Quick Look on macOS, the desktop's thumbnailers on Linux), and videos and sounds that play on macOS. A click opens it in the Files panel. Rest it on a web address and the page shows, drawn by the Browser panel's Chrome: a local dev server's at once, others when you ask.
 - **Docked panels.** Changes (the workspace's diff, to stage, discard and review), Files (tree, viewer and search), TODO, a Browser and, in a workspace that runs a flow, Flow: its plan lit up where the work stands, its team and their messages, beside the agents at work.
 - **A browser beside the agent.** A real Chrome on the workspace's dev servers, with device sizes and the console. Pick an element or take a screenshot and hand it to the agent.
 - **The rest of cornercase.** Search, Issues, Queue, Flows, Usage, Accounts, Processes, Ports, Worktrees, Plugins, Settings and the guided tours, each one shortcut away. A flow, a team of agents, starts from its sheet, from an issue or from a project's `+`, and opens its workspace with the Flow panel beside it (View flow in the workspace's menu opens it later); from an issue, its task comes filled in with the issue's, ready to add to.
 - **Other machines.** Connect the window to cornercase on another machine over your own `ssh`; it reconnects by itself when the link drops.
-- **Notifications.** Agent notices as toasts and macOS notifications, with sounds and the bell.
+- **Notifications.** Agent notices as toasts and desktop notifications, with sounds and the bell.
 
 ## Install
 

@@ -1,7 +1,9 @@
+mod alert;
 mod feed;
 mod update;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -12,7 +14,9 @@ use gpui::{
 };
 
 use crate::cli::Stream;
+use crate::desktop;
 use crate::model::Session;
+use crate::platform::Os;
 use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::{colours, radius};
 use crate::ui::{self, glass};
@@ -42,6 +46,7 @@ pub(crate) struct Notifier {
     app_key: Option<(Option<String>, u64)>,
     active: bool,
     last_sound: Option<Instant>,
+    told: HashSet<&'static str>,
     bell_toasts: HashMap<u64, Instant>,
     flash: u64,
     flashing: bool,
@@ -63,6 +68,7 @@ impl Notifier {
             app_key: None,
             active: window.is_window_active(),
             last_sound: None,
+            told: HashSet::new(),
             bell_toasts: HashMap::new(),
             flash: 0,
             flashing: false,
@@ -144,23 +150,40 @@ impl Notifier {
     fn notice(&mut self, notice: Notice, cx: &mut Context<Self>) {
         let go = ("Go".to_string(), args(&["go", &notice.token]));
         self.store.update(cx, |s, cx| s.toast_with(notice.message.clone(), notice.toast_kind(), Some(go), cx));
-        let desktop = !self.active;
-        if notice.sound.is_none() && !desktop {
+        let behind = !self.active;
+        if notice.sound.is_none() && !behind {
             return;
         }
-        store::run_json(cx, args(&["config", "--json"]), move |this, config, _| {
+        store::run_json(cx, args(&["config", "--json"]), move |this, config, cx| {
             let prefs = config.map(|c| Prefs::from_config(&c)).unwrap_or_default();
             if let Some(cue) = &notice.sound
                 && this.last_sound.is_none_or(|t| t.elapsed() >= SOUND_EVERY)
             {
                 this.last_sound = Some(Instant::now());
-                let home = std::env::var("HOME").unwrap_or_default();
-                spawn_quietly("afplay", &[prefs.sound_file(cue, &home)]);
+                this.play(&prefs, cue, cx);
             }
-            if desktop && prefs.desktop {
-                desktop_notification(&notice.headline(), &notice.message);
+            if behind && prefs.desktop {
+                let argv = alert::notification(Os::CURRENT, (&notice.headline(), &notice.message), &desktop::on_path);
+                this.run_or_tell(argv, cx);
             }
         });
+    }
+
+    fn play(&mut self, prefs: &Prefs, cue: &str, cx: &mut Context<Self>) {
+        let os = Os::CURRENT;
+        let home = std::env::var("HOME").unwrap_or_default();
+        let own = prefs.own_sound(cue, &home).map(PathBuf::from);
+        let file = own.or_else(|| alert::system_sound(os, cue, &desktop::xdg_data_dirs()));
+        let argv = file.ok_or(alert::NO_THEME).and_then(|file| alert::sound(os, &file, &desktop::on_path));
+        self.run_or_tell(argv, cx);
+    }
+
+    fn run_or_tell(&mut self, argv: Result<Vec<String>, &'static str>, cx: &mut Context<Self>) {
+        match argv {
+            Ok(argv) => spawn_quietly(argv),
+            Err(why) if self.told.insert(why) => self.store.update(cx, |s, cx| s.toast(why, ToastKind::Info, cx)),
+            Err(_) => {}
+        }
     }
 
     fn clipboard(&mut self, text: String, pane: Option<u64>, cx: &mut Context<Self>) {
@@ -434,19 +457,11 @@ impl Render for Tip {
     }
 }
 
-fn desktop_notification(title: &str, body: &str) {
-    let script = ["on run argv", "display notification (item 2 of argv) with title (item 1 of argv)", "end run"];
-    let mut a: Vec<String> = script.iter().flat_map(|line| ["-e".to_string(), (*line).to_string()]).collect();
-    a.push(title.to_string());
-    a.push(body.to_string());
-    spawn_quietly("osascript", &a);
-}
-
-fn spawn_quietly(program: &'static str, a: &[String]) {
-    let a = a.to_vec();
+fn spawn_quietly(argv: Vec<String>) {
     std::thread::spawn(move || {
+        let Some((program, rest)) = argv.split_first() else { return };
         let _ =
-            Command::new(program).args(&a).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+            Command::new(program).args(rest).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
     });
 }
 

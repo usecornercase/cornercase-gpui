@@ -61,3 +61,27 @@ fn what_cannot_be_read_says_why() {
     let gone = described(Content::Gone("No such file".into()), Path::new("a"), false);
     assert_eq!(note_of(&gone), Some("Cannot read this file"));
 }
+
+fn detail_of(still: &Still) -> Option<&str> {
+    match still {
+        Still::Note(note) => Some(note.detail.as_str()),
+        _ => None,
+    }
+}
+
+#[test]
+fn a_mac_names_quick_look_for_a_preview_or_its_absence() {
+    assert_eq!(thumbnail_label(Os::Mac, None), "Quick Look preview");
+    assert_eq!(thumbnail_label(Os::Mac, Some(Media::Video)), "Quick Look preview");
+    let none = no_preview(Os::Mac, Some(Media::Video));
+    assert_eq!(detail_of(&none), Some("macOS has no preview for this kind of file."));
+}
+
+#[test]
+fn on_linux_a_video_or_a_sound_says_it_plays_only_on_macos() {
+    assert_eq!(thumbnail_label(Os::Linux, Some(Media::Video)), "Plays only on macOS");
+    assert_eq!(thumbnail_label(Os::Linux, None), "Thumbnail");
+    assert_eq!(note_of(&no_preview(Os::Linux, Some(Media::Audio))), Some("Plays only on macOS"));
+    let none = no_preview(Os::Linux, None);
+    assert_eq!(detail_of(&none), Some("No thumbnailer on this computer reads this kind of file."));
+}

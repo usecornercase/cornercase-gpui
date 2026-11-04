@@ -2,7 +2,15 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+use crate::platform::Os;
 use crate::store::args;
+
+pub(super) const fn kept_login(os: Os) -> &'static str {
+    match os {
+        Os::Mac => "The keychain item stays",
+        Os::Linux => "A login kept in the system keyring stays",
+    }
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -179,9 +187,10 @@ impl<'a> Row<'a> {
         Ask {
             title: format!("Remove the account {}?", self.name()),
             message: format!(
-                "Its folder is deleted, and panes and profiles that use it go back to {}'s own login. The keychain \
-                 item stays: to log out first, run the agent's logout in a tab of this account.",
-                self.provider.title
+                "Its folder is deleted, and panes and profiles that use it go back to {}'s own login. {}: to log \
+                 out first, run the agent's logout in a tab of this account.",
+                self.provider.title,
+                kept_login(Os::CURRENT)
             ),
             button: "Remove",
             command: remove_args(self.agent(), self.folder()),

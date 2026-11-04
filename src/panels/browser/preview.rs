@@ -11,8 +11,8 @@ use serde_json::{Value, json};
 use super::cdp::Cdp;
 use super::tunnels::rewrite;
 use super::{Browser, Status};
-use crate::cli;
 use crate::model::link::loopback_port;
+use crate::{cli, desktop};
 
 const WIDTH: u32 = 1280;
 const HEIGHT: u32 = 800;
@@ -84,7 +84,7 @@ pub(crate) fn failure(error: &str) -> String {
     match code {
         "CONNECTION_REFUSED" => "Nothing answers at this address.".into(),
         "NAME_NOT_RESOLVED" => "No server has this name.".into(),
-        "INTERNET_DISCONNECTED" => "This Mac is offline.".into(),
+        "INTERNET_DISCONNECTED" => format!("This {} is offline.", desktop::here()),
         "ABORTED" => "The page did not load: it may be a download, which a preview never takes.".into(),
         _ if code.starts_with("CERT_") => "Its certificate is not valid.".into(),
         _ => format!("The page did not load: {}.", code.replace('_', " ").to_lowercase()),

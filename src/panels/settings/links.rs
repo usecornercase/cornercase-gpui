@@ -11,6 +11,13 @@ use crate::store::Store;
 
 const PREFIX: &str = "app.";
 
+pub(super) const fn default_browser(os: Os) -> &'static str {
+    match os {
+        Os::Mac => "The browser macOS opens links with",
+        Os::Linux => "The browser your desktop opens links with",
+    }
+}
+
 struct Own {
     key: &'static str,
     label: &'static str,
@@ -26,7 +33,7 @@ const OWN: [Own; 2] = [
                either way. An address of another machine's own server (localhost) opens in the Browser panel, \
                which reaches it over ssh.",
         choices: &[
-            ("default_browser", "The browser macOS opens links with"),
+            ("default_browser", default_browser(Os::CURRENT)),
             ("browser_panel", "The Browser panel, beside the terminal"),
         ],
     },

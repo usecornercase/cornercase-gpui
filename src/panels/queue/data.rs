@@ -4,11 +4,20 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::model::Session;
+use crate::platform::Os;
 
 pub(super) const SOURCES: [&str; 7] = ["github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"];
 
-const MISSED: &str =
-    "It was due while cornercase was stopped or the Mac slept. Start it now, or edit it for another time.";
+pub(super) const fn missed(os: Os) -> &'static str {
+    match os {
+        Os::Mac => {
+            "It was due while cornercase was stopped or the Mac slept. Start it now, or edit it for another time."
+        }
+        Os::Linux => {
+            "It was due while cornercase was stopped or the computer slept. Start it now, or edit it for another time."
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum State {
@@ -214,7 +223,7 @@ pub(crate) fn status_label(entry: &Entry, pane: Option<u64>) -> String {
 pub(super) fn notice(entry: &Entry) -> Option<String> {
     match State::of(entry) {
         State::Failed => entry.reason.as_deref().map(str::trim).filter(|r| !r.is_empty()).map(sentence),
-        State::Missed => Some(MISSED.into()),
+        State::Missed => Some(missed(Os::CURRENT).into()),
         _ => None,
     }
 }

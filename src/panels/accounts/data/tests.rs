@@ -191,8 +191,15 @@ fn removing_names_the_account_and_the_login_its_panes_go_back_to() {
     let ask = work.remove_ask();
     assert_eq!(ask.title, "Remove the account Work?");
     assert!(ask.message.contains("go back to Claude Code's own login"));
+    assert!(ask.message.contains(&format!("{}: to log out first", kept_login(Os::CURRENT))));
     assert_eq!(ask.command, remove_args("claude", "work"));
     assert_eq!(delete_ask("Night").command, profile_delete_args("Night"));
+}
+
+#[test]
+fn a_login_the_system_keeps_is_named_as_the_system_names_its_store() {
+    assert_eq!(kept_login(Os::Mac), "The keychain item stays");
+    assert_eq!(kept_login(Os::Linux), "A login kept in the system keyring stays");
 }
 
 #[test]

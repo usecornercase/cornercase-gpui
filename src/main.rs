@@ -1,6 +1,7 @@
 mod app;
 mod cli;
 mod context_menu;
+mod desktop;
 mod dialogs;
 mod keymap;
 mod keys;
