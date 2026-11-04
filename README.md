@@ -2,10 +2,10 @@
 
 [![CI](https://github.com/usecornercase/cornercase-gpui/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/usecornercase/cornercase-gpui/actions/workflows/ci.yml?query=branch%3Amain)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
-[![Platform: macOS | Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#install)
+[![Platform: macOS | Linux | Windows](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#install)
 [![Discord](https://img.shields.io/badge/chat-Discord-5865f2?logo=discord&logoColor=white)](https://discord.gg/aYqCa4xC4R)
 
-A native window for [cornercase](https://github.com/usecornercase/cornercase-terminal), the terminal multiplexer for running coding agents in parallel, on macOS and Linux. It is drawn on the GPU with [GPUI](https://gpui.rs), the UI framework behind the Zed editor, and aims to do everything cornercase's own window does, with the look and feel of a native app.
+A native window for [cornercase](https://github.com/usecornercase/cornercase-terminal), the terminal multiplexer for running coding agents in parallel, on macOS, Linux and Windows. It is drawn on the GPU with [GPUI](https://gpui.rs), the UI framework behind the Zed editor, and aims to do everything cornercase's own window does, with the look and feel of a native app.
 
 It is only a window: cornercase's server keeps owning the shells, agents and worktrees, and this app drives it through the `cornercase` command line. Both windows show the same session, and closing either one stops nothing.
 
@@ -17,7 +17,7 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 - **Terminal.** Every pane sits on a floating card: drag the gap between cards to resize, select with the mouse, click a web address to open it in your browser or the Browser panel (Settings › Links), ⌘-click links and paths to open them in their default app, drop files to paste them, and drag a pane by its handle onto another to move it. A project or workspace with nothing open says so, with buttons to start an agent, open a shell or reopen its closed agents.
 - **Sidebar.** Groups, projects, workspaces and agents, with each agent's status, model and context, and each workspace's pull request with how its checks went: click it, or press ⌘P, for every check with its link, its stack and Ask agent. Drag to reorder, in any layout of cornercase's Settings → UI.
-- **Previews.** Rest the pointer on a path a program printed and the file shows beside it: code at its lines, images, PDFs and documents (Quick Look on macOS, the desktop's thumbnailers on Linux), and videos and sounds that play on macOS. A click opens it in the Files panel. Rest it on a web address and the page shows, drawn by the Browser panel's Chrome: a local dev server's at once, others when you ask.
+- **Previews.** Rest the pointer on a path a program printed and the file shows beside it: code at its lines, images, PDFs and documents (Quick Look on macOS, the desktop's thumbnailers on Linux, File Explorer's thumbnails on Windows), and videos and sounds that play on macOS. A click opens it in the Files panel. Rest it on a web address and the page shows, drawn by the Browser panel's Chrome: a local dev server's at once, others when you ask.
 - **Docked panels.** Changes (the workspace's diff, to stage, discard and review), Files (tree, viewer and search), TODO, a Browser and, in a workspace that runs a flow, Flow: its plan lit up where the work stands, its team and their messages, beside the agents at work.
 - **A browser beside the agent.** A real Chrome on the workspace's dev servers, with device sizes and the console. Pick an element or take a screenshot and hand it to the agent.
 - **The rest of cornercase.** Search, Issues, Queue, Flows, Usage, Accounts, Processes, Ports, Worktrees, Plugins, Settings and the guided tours, each one shortcut away. A flow, a team of agents, starts from its sheet, from an issue or from a project's `+`, and opens its workspace with the Flow panel beside it (View flow in the workspace's menu opens it later); from an issue, its task comes filled in with the issue's, ready to add to.
@@ -28,9 +28,9 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 There are no prebuilt releases yet, so build it from source. You need:
 
-- macOS with the Xcode Command Line Tools (`xcode-select --install`), or Linux (X11 or Wayland) with a Vulkan driver and the libraries below
+- macOS with the Xcode Command Line Tools (`xcode-select --install`), Linux (X11 or Wayland) with a Vulkan driver and the libraries below, or Windows 10 or 11 (x64) with Visual Studio's [Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) and their "Desktop development with C++" workload (the MSVC compiler and the Windows SDK)
 - [rustup](https://rustup.rs), which installs the pinned Rust version on the first build
-- [cornercase](https://usecornercase.dev/docs/installation/) 0.12.234 or newer on your `PATH`
+- [cornercase](https://usecornercase.dev/docs/installation/) 0.12.234 or newer on your `PATH` (0.12.287 or newer on Windows, its first release there)
 
 On Linux, install a C compiler, `pkg-config` and these libraries first. On Debian and Ubuntu:
 
@@ -56,6 +56,16 @@ install -Dm644 assets/linux/cornercase-gpui.svg ~/.local/share/icons/hicolor/sca
 
 An app started from the menu sees your session's `PATH`, not your shell's: if `cornercase` lives somewhere only your shell adds, put its path in `CORNERCASE_BIN` on the `Exec` line (`Exec=env CORNERCASE_BIN=/path/to/cornercase …`).
 
+On Windows, run the same three lines in PowerShell after installing cornercase (`powershell -ExecutionPolicy Bypass -c "irm https://usecornercase.dev/install.ps1 | iex"`); the build puts `cornercase-gpui.exe` in `%USERPROFILE%\.cargo\bin`. A release build compiles gpui's shaders with `fxc.exe` from the Windows SDK, which the Build Tools install; if it is not found, set `GPUI_FXC_PATH` to it. To start it from the Start menu as well:
+
+```powershell
+$link = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\cornercase.lnk")
+$link.TargetPath = "$env:USERPROFILE\.cargo\bin\cornercase-gpui.exe"
+$link.Save()
+```
+
+The Browser panel runs Chrome, Chromium or Brave if one is installed, else Microsoft Edge, which every Windows has. Opening files and File Explorer go through Windows' shell; desktop notifications show as "cornercase" in Settings › System › Notifications; a sound file of your own must be a WAV; and videos and sounds in a preview play only on macOS.
+
 ## Usage
 
 ```sh
@@ -71,10 +81,10 @@ These environment variables change its defaults:
 | Variable | What it sets | Default |
 | --- | --- | --- |
 | `CORNERCASE_BIN` | The `cornercase` binary to drive | `cornercase` on the `PATH` |
-| `CORNERCASE_GPUI_FONT_SIZE` | The terminal's font size (Menlo on macOS; on Linux the first monospace font installed of DejaVu Sans Mono, Noto Sans Mono and the like) | `13` |
+| `CORNERCASE_GPUI_FONT_SIZE` | The terminal's font size (Menlo on macOS; on Linux the first monospace font installed of DejaVu Sans Mono, Noto Sans Mono and the like; Cascadia Mono, else Consolas, on Windows) | `13` |
 | `CORNERCASE_GPUI_OPACITY` | The opacity of the terminal's background; `1` makes it opaque | `0.65` |
-| `CORNERCASE_GPUI_CHROME` | The browser the Browser panel runs, headless | Chrome, Chromium, Edge or Brave |
-| `CORNERCASE_GPUI_BROWSER_PROFILE` | Where that browser keeps its profile | `~/Library/Application Support/cornercase-gpui/browser`; on Linux `~/.local/share/cornercase-gpui/browser`, or `~/snap/chromium/common/cornercase-gpui-browser` for a snap |
+| `CORNERCASE_GPUI_CHROME` | The browser the Browser panel runs, headless (on Windows, set it for good with `setx`) | Chrome, Chromium, Edge or Brave; on Windows Edge comes last |
+| `CORNERCASE_GPUI_BROWSER_PROFILE` | Where that browser keeps its profile | `~/Library/Application Support/cornercase-gpui/browser`; on Linux `~/.local/share/cornercase-gpui/browser`, or `~/snap/chromium/common/cornercase-gpui-browser` for a snap; on Windows `%LOCALAPPDATA%\cornercase-gpui\browser` |
 
 ## Keys
 
@@ -94,6 +104,8 @@ Every key goes to the program in the active pane, except ⌘ shortcuts. ⌘/ lis
 The key that opens a panel or sheet also closes it. Esc closes the menu, dialog or sheet on top, or gives the keys back to the terminal. Text goes through macOS's input method, so dead keys and ⌥ characters (`@` on a Spanish keyboard) reach the program.
 
 On Linux, ⌘ is Ctrl+Shift and ⇧⌘ is Ctrl+Alt+Shift, as in Linux terminals: ⌘T is Ctrl+Shift+T, ⇧⌘C is Ctrl+Alt+Shift+C, ⌘C ⌘V are Ctrl+Shift+C Ctrl+Shift+V, and a symbol is the key where it sits on a US keyboard (⌘+ is Ctrl+Shift+=). The exceptions: ⌘1…9 is Alt+1…9, Usage is Ctrl+Alt+Shift+U (IBus takes Ctrl+Shift+U), a page in the Browser also takes Chrome's keys (Ctrl+C Ctrl+X Ctrl+V, Ctrl+L, Ctrl+R or F5, Alt+← Alt+→), the window's keys are Ctrl+Shift+Q quit, F11 full screen and Ctrl+Shift+M minimise, and ⌘-click is Ctrl+click. Selecting text puts it in the primary selection and a middle click pastes it (Shift+middle click where a program takes the mouse), while Ctrl+Shift+C and Ctrl+Shift+V keep to the clipboard. AltGr characters reach the program, and Ctrl+Shift+/ lists every key as Linux spells it.
+
+On Windows the keys are Linux's, as Windows Terminal's own are Ctrl+Shift: ⌘T is Ctrl+Shift+T, ⇧⌘C is Ctrl+Alt+Shift+C, ⌘1…9 is Alt+1…9, Usage is Ctrl+Alt+Shift+U, the Browser takes Chrome's keys, and ⌘-click is Ctrl+click. The window's keys are Windows' own: Alt+F4 quits, Alt+Space opens the window menu, F11 is full screen and Ctrl+Shift+M minimises; the title bar moves, snaps and maximises the window as any other's. There is no primary selection: a finished selection is copied as on a Mac. AltGr characters reach the program, also on layouts where Windows reports AltGr as Ctrl+Alt, and Ctrl+Shift+/ lists every key as Windows spells it.
 
 ## How it works
 

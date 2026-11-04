@@ -16,7 +16,8 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 
 - [Architecture](design/architecture.md): what each file of `src/` holds, `Store`, panels, widgets.
 - [Linux](design/linux.md) (`Cargo.toml`, `platform.rs`, `assets/linux/`, `tools/linux/`): the second platform, platform code as plain logic, building and running it, checking it from a Mac in Docker.
-- [Window](design/window.md) (`app.rs`): the connection's two streams, reconnecting, visibility, focus, panels kept alive.
+- [Windows](design/windows.md) (`Cargo.toml`, `build.rs`, `platform.rs`, the `win32.rs` modules, `assets/windows/`, `tools/windows/`): the third platform, a GUI program whose children get no console window, Win32 calls beside the logic that takes the platform, building and checking it from a Mac, CI, what was checked on Windows.
+- [Window](design/window.md) (`app.rs`, `app/frame.rs`): the connection's two streams, reconnecting, visibility, focus, panels kept alive.
 - [Connection](design/connection.md) (`main.rs`, `cli.rs`, `store.rs`): the command line as the only contract, streams, the ordered queue, `Store`.
 - [Remote servers](design/remote.md) (`cli/remote.rs`, `dialogs/remote.rs`): another machine's server over ssh, the shared connection, quoting, streams that stop there, switching servers, what only works on this Mac.
 - [Code layout](design/code-layout.md) (`tests/layers.rs`, `clippy.toml`): no comments, where code goes, 1,000 lines per file, small functions, `pub(crate)`.
