@@ -1,6 +1,8 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
+use crate::desktop;
 use crate::platform::Os;
 
 const APP: &str = "cornercase";
@@ -12,6 +14,10 @@ pub(super) const NO_NOTIFY_SEND: &str =
 pub(super) const NO_PLAYER: &str = "No sound: install paplay (pulseaudio-utils) or pw-play (pipewire-bin)";
 pub(super) const NO_THEME: &str =
     "No sound: install the freedesktop sound theme (sound-theme-freedesktop), or choose sound files in Settings";
+pub(super) const SOUND_FAILED: &str = "No sound";
+pub(super) const NOTIFICATION_FAILED: &str = "No desktop notification";
+
+const PLAYERS: [(&str, &[&str]); 3] = [("paplay", &[]), ("pw-play", &[]), ("aplay", &["-q"])];
 
 pub(super) fn notification(
     os: Os,
@@ -52,19 +58,51 @@ pub(super) fn sound(
     os: Os,
     file: &Path,
     find: &dyn Fn(&str) -> Option<PathBuf>,
-) -> Result<Vec<OsString>, &'static str> {
-    let file = file.as_os_str().to_owned();
+) -> Result<Vec<Vec<OsString>>, &'static str> {
+    let file = file.as_os_str();
     if os == Os::Mac {
-        return Ok(vec!["afplay".into(), file]);
+        return Ok(vec![vec!["afplay".into(), file.to_owned()]]);
     }
-    if let Some(player) = find("paplay").or_else(|| find("pw-play")) {
-        return Ok(vec![player.into_os_string(), file]);
+    let wav = Path::new(file).extension().is_some_and(|e| e.eq_ignore_ascii_case("wav"));
+    let tries: Vec<Vec<OsString>> = PLAYERS
+        .iter()
+        .filter(|(name, _)| wav || *name != "aplay")
+        .filter_map(|(name, flags)| {
+            let player = find(name)?.into_os_string();
+            Some([player].into_iter().chain(flags.iter().map(OsString::from)).chain([file.to_owned()]).collect())
+        })
+        .collect();
+    if tries.is_empty() { Err(NO_PLAYER) } else { Ok(tries) }
+}
+
+pub(super) fn first_that_works(
+    tries: &[Vec<OsString>],
+    run: impl Fn(&[OsString]) -> Result<(), String>,
+) -> Result<(), String> {
+    let mut failures = Vec::new();
+    for argv in tries {
+        match run(argv) {
+            Ok(()) => return Ok(()),
+            Err(why) => failures.push(why),
+        }
     }
-    let wav = Path::new(&file).extension().is_some_and(|e| e.eq_ignore_ascii_case("wav"));
-    match find("aplay") {
-        Some(aplay) if wav => Ok(vec![aplay.into_os_string(), "-q".into(), file]),
-        _ => Err(NO_PLAYER),
+    Err(failures.join("; "))
+}
+
+pub(super) fn run(argv: &[OsString]) -> Result<(), String> {
+    let Some((program, rest)) = argv.split_first() else { return Ok(()) };
+    let name = Path::new(program).file_name().unwrap_or(program).to_string_lossy().into_owned();
+    let out = Command::new(program)
+        .args(rest)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("could not start {name}: {e}"))?;
+    if out.status.success() {
+        return Ok(());
     }
+    Err(desktop::failure(&name, &out.status.to_string(), &String::from_utf8_lossy(&out.stderr)))
 }
 
 #[cfg(test)]
