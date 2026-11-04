@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use gpui::{
     AnyElement, App, Bounds, ClickEvent, Context, CursorStyle, ElementInputHandler, Entity, FocusHandle, Hitbox,
-    HitboxBehavior, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Pixels, Point,
-    StatefulInteractiveElement as _, Styled, WeakEntity, Window, canvas, div, prelude::FluentBuilder as _, px,
+    HitboxBehavior, InteractiveElement, IntoElement, KeyDownEvent, Keystroke, MouseButton, ParentElement, Pixels,
+    Point, StatefulInteractiveElement as _, Styled, WeakEntity, Window, canvas, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::{Conn, Drag, Root};
@@ -15,6 +15,7 @@ use crate::keys;
 use crate::model::Grid;
 use crate::model::link::Hovered;
 use crate::panels::{PanelKind, files};
+use crate::platform::Os;
 use crate::render::layout::{Hit, Layout};
 use crate::render::moving::Moves;
 use crate::render::{self, Metrics, Surface};
@@ -64,14 +65,12 @@ fn cells_across(space: f32, cell: Pixels, max: f32) -> u16 {
 impl Root {
     pub(crate) fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let ks = &event.keystroke;
-        let m = ks.modifiers;
         let terminal = self.focus.is_focused(window);
-        if m.platform {
-            let browser = self.browser_has_focus(window, cx);
-            let chord = Chord { key: ks.key.as_str(), shift: m.shift, terminal, browser };
-            if self.shortcut(chord, window, cx) {
-                cx.stop_propagation();
-            }
+        if self.key_shortcut(ks, terminal, window, cx) {
+            cx.stop_propagation();
+            return;
+        }
+        if ks.modifiers.platform {
             return;
         }
         if ks.key == "escape" && self.escape(terminal, window, cx) {
@@ -81,10 +80,16 @@ impl Root {
         if !terminal || self.overlay_open(cx) {
             return;
         }
-        if let Some(event) = keys::key_event(ks) {
+        if let Some(event) = keys::key_event(ks, Os::CURRENT) {
             self.type_in(event, cx);
             cx.stop_propagation();
         }
+    }
+
+    fn key_shortcut(&mut self, ks: &Keystroke, terminal: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let browser = self.browser_has_focus(window, cx);
+        let Some((key, shift)) = keymap::chord(ks, Os::CURRENT, browser) else { return false };
+        self.shortcut(Chord { key, shift, terminal, browser }, window, cx)
     }
 
     fn type_in(&mut self, event: serde_json::Value, cx: &mut Context<Self>) {
@@ -129,7 +134,7 @@ impl Root {
     }
 
     fn shortcut(&mut self, chord: Chord<'_>, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let Some(command) = keymap::find(chord.key, chord.shift, chord.browser).map(|s| s.command) else {
+        let Some(command) = keymap::find(chord.key, chord.shift, chord.browser, Os::CURRENT).map(|s| s.command) else {
             return false;
         };
         let over_dialogs = matches!(

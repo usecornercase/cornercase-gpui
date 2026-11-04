@@ -7,6 +7,7 @@ mod keys;
 mod model;
 mod notify;
 mod panels;
+mod platform;
 mod prefs;
 mod render;
 mod sidebar;
@@ -24,11 +25,30 @@ use gpui::{
     WindowBackgroundAppearance, WindowBounds, WindowOptions, actions, point, px, size,
 };
 
+use crate::platform::Os;
+
 actions!(cornercase_gpui, [Quit, Hide, HideOthers, ShowAll, Minimise, Zoom, FullScreen]);
 
 fn on_window(cx: &mut App, act: fn(&Window)) {
     if let Some(window) = cx.active_window() {
         let _ = window.update(cx, |_, window, _| act(window));
+    }
+}
+
+fn system_bindings(os: Os) -> Vec<KeyBinding> {
+    match os {
+        Os::Mac => vec![
+            KeyBinding::new("cmd-q", Quit, None),
+            KeyBinding::new("cmd-h", Hide, None),
+            KeyBinding::new("alt-cmd-h", HideOthers, None),
+            KeyBinding::new("cmd-m", Minimise, None),
+            KeyBinding::new("ctrl-cmd-f", FullScreen, None),
+        ],
+        Os::Linux => vec![
+            KeyBinding::new("ctrl-shift-q", Quit, None),
+            KeyBinding::new("ctrl-shift-m", Minimise, None),
+            KeyBinding::new("f11", FullScreen, None),
+        ],
     }
 }
 
@@ -40,13 +60,7 @@ fn system_keys(cx: &mut App) {
     cx.on_action(|_: &Minimise, cx| on_window(cx, Window::minimize_window));
     cx.on_action(|_: &Zoom, cx| on_window(cx, Window::zoom_window));
     cx.on_action(|_: &FullScreen, cx| on_window(cx, Window::toggle_fullscreen));
-    cx.bind_keys([
-        KeyBinding::new("cmd-q", Quit, None),
-        KeyBinding::new("cmd-h", Hide, None),
-        KeyBinding::new("alt-cmd-h", HideOthers, None),
-        KeyBinding::new("cmd-m", Minimise, None),
-        KeyBinding::new("ctrl-cmd-f", FullScreen, None),
-    ]);
+    cx.bind_keys(system_bindings(Os::CURRENT));
     cx.set_menus(vec![
         Menu {
             name: "cornercase".into(),

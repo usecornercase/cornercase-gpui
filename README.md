@@ -77,6 +77,8 @@ Every key goes to the program in the active pane, except ⌘ shortcuts. ⌘/ lis
 
 The key that opens a panel or sheet also closes it. Esc closes the menu, dialog or sheet on top, or gives the keys back to the terminal. Text goes through macOS's input method, so dead keys and ⌥ characters (`@` on a Spanish keyboard) reach the program.
 
+On Linux, ⌘ is Ctrl+Shift and ⇧⌘ is Ctrl+Alt+Shift, as in Linux terminals: ⌘T is Ctrl+Shift+T, ⇧⌘C is Ctrl+Alt+Shift+C, ⌘C ⌘V are Ctrl+Shift+C Ctrl+Shift+V, and a symbol is the key where it sits on a US keyboard (⌘+ is Ctrl+Shift+=). The exceptions: ⌘1…9 is Alt+1…9, Usage is Ctrl+Alt+Shift+U (IBus takes Ctrl+Shift+U), a page in the Browser also takes Chrome's keys (Ctrl+C Ctrl+X Ctrl+V, Ctrl+L, Ctrl+R or F5, Alt+← Alt+→), the window's keys are Ctrl+Shift+Q quit, F11 full screen and Ctrl+Shift+M minimise, and ⌘-click is Ctrl+click. AltGr characters reach the program, and Ctrl+Shift+/ lists every key as Linux spells it.
+
 ## How it works
 
 The window never speaks cornercase's socket protocol. It follows `cornercase view` for the session and `cornercase surface` for what the panes show, types through `cornercase input --follow`, and does everything else with `cornercase` commands and their `--json`: the contract cornercase documents for programs that draw it ([#345](https://github.com/usecornercase/cornercase-terminal/issues/345)). On another machine, every command runs as `cornercase --remote DESTINATION …`.

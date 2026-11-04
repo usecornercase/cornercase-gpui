@@ -6,7 +6,9 @@ use serde_json::{Value, json};
 use super::links::{link_args, web_at};
 use super::selection::selection_args;
 use crate::app::{Drag, Msg, Root};
+use crate::keymap;
 use crate::model::{Grid, Link, MouseMode, PaneGrid};
+use crate::platform::Os;
 use crate::render::layout::{Gap, Hit, Layout};
 
 pub(super) fn button_name(button: MouseButton) -> &'static str {
@@ -120,7 +122,7 @@ impl Root {
         if !pane.active {
             self.focus_item("pane", pane.pane);
         }
-        if event.modifiers.platform {
+        if keymap::opens_with_system(event.modifiers, Os::CURRENT) {
             self.open_link(pane, cell.0, cell.1, cx);
             return;
         }
