@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use gpui::{
     AnyElement, App, Bounds, ClickEvent, Context, CursorStyle, ElementInputHandler, Entity, FocusHandle, Hitbox,
-    HitboxBehavior, InteractiveElement, IntoElement, KeyDownEvent, Keystroke, MouseButton, ParentElement, Pixels,
-    Point, StatefulInteractiveElement as _, Styled, WeakEntity, Window, canvas, div, prelude::FluentBuilder as _, px,
+    HitboxBehavior, InteractiveElement, IntoElement, KeyDownEvent, Keystroke, ParentElement, Pixels, Point,
+    StatefulInteractiveElement as _, Styled, WeakEntity, Window, canvas, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::{Conn, Drag, Root};
@@ -309,11 +309,8 @@ impl Root {
             .child(files::Peek::get(cx))
             .children(self.render_ghost(&metrics))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| this.left_terminal(*hovered, cx)))
-            .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
-            .on_mouse_down(MouseButton::Right, cx.listener(Self::on_mouse_down))
+            .map(|terminal| Self::on_buttons(terminal, cx))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
-            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
-            .on_mouse_up(MouseButton::Right, cx.listener(Self::on_mouse_up))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .on_drop(cx.listener(Self::drop_paths))
     }

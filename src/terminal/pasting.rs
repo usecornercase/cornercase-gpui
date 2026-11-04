@@ -4,6 +4,7 @@ use gpui::{ClipboardEntry, Context, ExternalPaths, Image, ImageFormat, Window};
 use serde_json::json;
 
 use crate::app::Root;
+use crate::desktop;
 use crate::render::layout::Hit;
 
 fn image_name(format: ImageFormat) -> String {
@@ -51,6 +52,12 @@ impl Root {
             self.queue.input(pane, json!({ "paste": text }));
         } else if let Some(image) = image_of(item.entries()) {
             self.queue.cmd_with_stdin(image_args(pane, image.format), image.bytes.clone());
+        }
+    }
+
+    pub(super) fn paste_primary(&self, pane: u64, cx: &mut Context<Self>) {
+        if let Some(text) = desktop::read_primary(cx) {
+            self.queue.input(pane, json!({ "paste": text }));
         }
     }
 

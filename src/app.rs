@@ -16,6 +16,7 @@ use gpui::{
 };
 
 use crate::cli::{self, Queue, Stream, Target};
+use crate::desktop::{self, Board};
 use crate::model::{Frame, Grid, Project, Session, Workspace};
 use crate::notify::{self, Notifier};
 use crate::panels::PanelKind;
@@ -54,7 +55,7 @@ pub(crate) enum Msg {
     Frame(u64, Box<Frame>),
     SurfaceEnded(u64, String),
     Error(String),
-    Copied(String),
+    Copied(Board, String),
     Elsewhere(String),
     Folded(Fold, bool, Option<String>),
 }
@@ -67,7 +68,7 @@ pub(crate) enum Conn {
 }
 
 pub(crate) enum Drag {
-    Program { pane: u64, motion: bool, cell: (u16, u16) },
+    Program { pane: u64, button: MouseButton, motion: bool, cell: (u16, u16) },
     Select { pane: u64, from: (u16, u16), to: (u16, u16) },
     Divider { tab: u64, path: Vec<bool>, down: bool, along: Along },
     Link { pane: u64, cell: (u16, u16) },
@@ -397,10 +398,11 @@ impl Root {
             Msg::Frame(generation, frame) if generation == current => self.frame_arrived(*frame),
             Msg::SurfaceEnded(generation, err) if generation == current => self.surface_ended(generation, &err, cx),
             Msg::Error(e) => self.say(&e, cx),
-            Msg::Copied(text) => {
+            Msg::Copied(Board::Clipboard, text) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
                 self.store.update(cx, |s, cx| s.toast("Copied", ToastKind::Info, cx));
             }
+            Msg::Copied(Board::Primary, text) => desktop::write_primary(&text, cx),
             Msg::Elsewhere(path) => self.store.update(cx, |s, cx| s.copy_elsewhere(path, cx)),
             Msg::Folded(fold, collapsed, error) => self.fold_answered(fold, collapsed, error.as_deref(), cx),
             _ => return,
