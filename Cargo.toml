@@ -12,9 +12,9 @@ categories = ["development-tools"]
 
 [dependencies]
 anyhow = "1.0.104"
-base64 = "0.22.1"
+base64 = "0.23.1"
 futures = "0.3"
-libc = "0.2, <0.2.190"
+libc = "0.2, <0.2.192"
 gpui = { version = "0.2.2", default-features = false, features = ["font-kit", "runtime_shaders", "wayland", "x11"] }
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
@@ -27,16 +27,16 @@ serde_json = "1.0.154"
 syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "regex-fancy", "parsing"] }
 unicode-segmentation = "1.13.3"
 url = "2.5.8"
-parking_lot = "0.12"
+parking_lot = "0.13"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10.0"
-core-video = "0.4.3"
+core-video = "0.6.1"
 objc2 = "0.6.5"
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6.2"
-windows = { version = "0.61.3", features = [
+windows = { version = "0.62.2", features = [
     "Data_Xml_Dom",
     "UI_Notifications",
     "Win32_Foundation",
