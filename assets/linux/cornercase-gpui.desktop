@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=cornercase
+GenericName=Terminal for coding agents
+Comment=A window for cornercase, the terminal multiplexer for running coding agents in parallel
+Exec=cornercase-gpui
+Icon=cornercase-gpui
+Terminal=false
+Categories=Development;TerminalEmulator;
+Keywords=terminal;multiplexer;agents;worktree;
+StartupWMClass=cornercase-gpui

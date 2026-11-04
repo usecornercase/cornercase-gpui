@@ -2,10 +2,10 @@
 
 [![CI](https://github.com/usecornercase/cornercase-gpui/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/usecornercase/cornercase-gpui/actions/workflows/ci.yml?query=branch%3Amain)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
-[![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)](#install)
+[![Platform: macOS | Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](#install)
 [![Discord](https://img.shields.io/badge/chat-Discord-5865f2?logo=discord&logoColor=white)](https://discord.gg/aYqCa4xC4R)
 
-A native macOS window for [cornercase](https://github.com/usecornercase/cornercase-terminal), the terminal multiplexer for running coding agents in parallel. It is drawn on the GPU with [GPUI](https://gpui.rs), the UI framework behind the Zed editor, and aims to do everything cornercase's own window does, with the look and feel of a Mac app.
+A native window for [cornercase](https://github.com/usecornercase/cornercase-terminal), the terminal multiplexer for running coding agents in parallel, on macOS and Linux. It is drawn on the GPU with [GPUI](https://gpui.rs), the UI framework behind the Zed editor, and aims to do everything cornercase's own window does, with the look and feel of a native app.
 
 It is only a window: cornercase's server keeps owning the shells, agents and worktrees, and this app drives it through the `cornercase` command line. Both windows show the same session, and closing either one stops nothing.
 
@@ -28,9 +28,17 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 There are no prebuilt releases yet, so build it from source. You need:
 
-- macOS with the Xcode Command Line Tools (`xcode-select --install`)
+- macOS with the Xcode Command Line Tools (`xcode-select --install`), or Linux (X11 or Wayland) with a Vulkan driver and the libraries below
 - [rustup](https://rustup.rs), which installs the pinned Rust version on the first build
 - [cornercase](https://usecornercase.dev/docs/installation/) 0.12.234 or newer on your `PATH`
+
+On Linux, install a C compiler, `pkg-config` and these libraries first. On Debian and Ubuntu:
+
+```sh
+sudo apt install build-essential pkg-config libxkbcommon-x11-dev libfreetype-dev libfontconfig-dev libwayland-dev mesa-vulkan-drivers
+```
+
+Other distributions name them alike: xkbcommon with its X11 part, FreeType, Fontconfig and Wayland's client library, plus the Vulkan loader and your GPU's Vulkan driver.
 
 ```sh
 git clone https://github.com/usecornercase/cornercase-gpui.git
@@ -38,7 +46,15 @@ cd cornercase-gpui
 cargo install --locked --path .
 ```
 
-The first build takes a couple of minutes, and puts `cornercase-gpui` in `~/.cargo/bin`.
+The first build takes a couple of minutes, and puts `cornercase-gpui` in `~/.cargo/bin`. On Linux, to start it from your desktop's app menu as well:
+
+```sh
+mkdir -p ~/.local/share/applications
+sed "s|^Exec=.*|Exec=$HOME/.cargo/bin/cornercase-gpui|" assets/linux/cornercase-gpui.desktop > ~/.local/share/applications/cornercase-gpui.desktop
+install -Dm644 assets/linux/cornercase-gpui.svg ~/.local/share/icons/hicolor/scalable/apps/cornercase-gpui.svg
+```
+
+An app started from the menu sees your session's `PATH`, not your shell's: if `cornercase` lives somewhere only your shell adds, put its path in `CORNERCASE_BIN` on the `Exec` line (`Exec=env CORNERCASE_BIN=/path/to/cornercase …`).
 
 ## Usage
 

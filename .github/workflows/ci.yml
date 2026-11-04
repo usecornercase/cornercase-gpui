@@ -41,6 +41,34 @@ jobs:
       - name: tests
         run: cargo test --locked
 
+  linux:
+    name: clippy + tests (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libxkbcommon-x11-dev libfreetype-dev libfontconfig-dev libwayland-dev
+
+      - name: toolchain
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: clippy
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+      - name: tests
+        run: cargo test --locked
+
   guardrails:
     name: fmt + machete + jscpd
     runs-on: ubuntu-24.04

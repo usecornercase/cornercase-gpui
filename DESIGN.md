@@ -15,6 +15,7 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 ## Areas
 
 - [Architecture](design/architecture.md): what each file of `src/` holds, `Store`, panels, widgets.
+- [Linux](design/linux.md) (`Cargo.toml`, `platform.rs`, `assets/linux/`, `tools/linux/`): the second platform, platform code as plain logic, building and running it, checking it from a Mac in Docker.
 - [Window](design/window.md) (`app.rs`): the connection's two streams, reconnecting, visibility, focus, panels kept alive.
 - [Connection](design/connection.md) (`main.rs`, `cli.rs`, `store.rs`): the command line as the only contract, streams, the ordered queue, `Store`.
 - [Remote servers](design/remote.md) (`cli/remote.rs`, `dialogs/remote.rs`): another machine's server over ssh, the shared connection, quoting, streams that stop there, switching servers, what only works on this Mac.
