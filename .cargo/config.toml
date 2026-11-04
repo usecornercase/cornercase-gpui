@@ -1,0 +1,5 @@
+[env]
+MACOSX_DEPLOYMENT_TARGET = "12.0"
+
+[target.'cfg(target_os = "windows")']
+rustflags = ["-C", "target-feature=+crt-static"]

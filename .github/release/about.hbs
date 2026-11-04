@@ -1,0 +1,19 @@
+Third-party notices for cornercase-gpui
+
+cornercase-gpui is a native window for cornercase, drawn with GPUI. It is licensed under either of the Apache License 2.0 or the MIT licence, at your option (LICENSE-APACHE, LICENSE-MIT). The icons and the text field it carries keep their licences (LICENSE-LUCIDE, LICENSE-FILE-ICONS, LICENSE-GPUI). This file lists the Rust crates compiled into it and the licence of each.
+
+Source code of a crate under the Mozilla Public License 2.0 is available at the address given beside it.
+
+{{#each licenses}}
+--------------------------------------------------------------------------------
+{{name}} ({{id}})
+--------------------------------------------------------------------------------
+
+Used by:
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}: {{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}/{{crate.version}}{{/if}}
+{{/each}}
+
+{{{text}}}
+
+{{/each}}

@@ -57,7 +57,7 @@ Tests never run the real `cornercase`, open a window or sleep: logic is factored
 
 ## Pull requests
 
-Keep them focused: one change per pull request. Describe what changed and why, how you tested it, and add a screenshot or a recording for anything visible. If it changes a design decision, update the area's file in `design/` in the same pull request. Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>: <summary>`, in the imperative and in lower case, such as `feat: show the queue's next start`.
+Keep them focused: one change per pull request. Describe what changed and why, how you tested it, and add a screenshot or a recording for anything visible. Anything users see adds a line under `## Unreleased` in `CHANGELOG.md`, written for them: it becomes the release's notes. If it changes a design decision, update the area's file in `design/` in the same pull request. Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>: <summary>`, in the imperative and in lower case, such as `feat: show the queue's next start`.
 
 Code or assets taken from another project keep their licence: add its licence file and a line under the README's License, and only take them from projects under a licence compatible with MIT and Apache-2.0.
 

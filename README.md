@@ -11,7 +11,7 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 ![cornercase-gpui showing the web-shop project's feat/dark-mode worktree: its theme open in Neovim, its tests passing below, the Changes panel with the checkout's diff, and agents at work in the other worktrees listed in the sidebar.](docs/screenshot.png)
 
-**[usecornercase.dev](https://usecornercase.dev)** · [cornercase](https://github.com/usecornercase/cornercase-terminal) · [Discord](https://discord.gg/aYqCa4xC4R)
+**[Download](https://github.com/usecornercase/cornercase-gpui/releases/latest)** · **[usecornercase.dev](https://usecornercase.dev)** · [cornercase](https://github.com/usecornercase/cornercase-terminal) · [Discord](https://discord.gg/aYqCa4xC4R)
 
 ## Features
 
@@ -26,11 +26,24 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 ## Install
 
-There are no prebuilt releases yet, so build it from source. You need:
+You need [cornercase](https://usecornercase.dev/docs/installation/) 0.12.234 or newer (0.12.287 or newer on Windows, its first release there). The window finds it on the `PATH`, in your login shell's `PATH` or where its installers put it, and says so, with the way to install it, when it is missing.
+
+### Download
+
+None of the downloads is signed yet, so each system asks before it runs the app the first time. The [latest release](https://github.com/usecornercase/cornercase-gpui/releases/latest) lists them all, with the notes of what changed; each file has a `.sha256` beside it, and `sha256.sum` holds them all.
+
+- **macOS 12 or later, Apple silicon or Intel**: [cornercase-gpui-universal-apple-darwin.dmg](https://github.com/usecornercase/cornercase-gpui/releases/latest/download/cornercase-gpui-universal-apple-darwin.dmg). Open it and drag cornercase to Applications. macOS says it "could not verify" the app (it is not notarized yet, [#23](https://github.com/usecornercase/cornercase-gpui/issues/23)): on macOS 15 and later, close the message, then open System Settings › Privacy & Security and press Open Anyway; on 12 to 14, Control-click the app and choose Open. Or run `xattr -dr com.apple.quarantine /Applications/cornercase.app`. An app opened from the Finder or the Dock does not see your shell's `PATH`, so it may not find `cornercase` ([#21](https://github.com/usecornercase/cornercase-gpui/issues/21)); start it from a terminal with `/Applications/cornercase.app/Contents/MacOS/cornercase-gpui`, which does.
+- **Windows 10 or 11 (x64)**: [cornercase-gpui-x86_64-pc-windows-msvc.zip](https://github.com/usecornercase/cornercase-gpui/releases/latest/download/cornercase-gpui-x86_64-pc-windows-msvc.zip). Unzip it, for example into `%LOCALAPPDATA%\Programs\cornercase`, and run `cornercase-gpui.exe`; no Visual C++ runtime is needed. SmartScreen warns about an unknown publisher: More info › Run anyway. Windows 11's Smart App Control blocks unsigned programs outright, with no way to allow just this one, until it is signed ([#24](https://github.com/usecornercase/cornercase-gpui/issues/24)). To start it from the Start menu, make the shortcut below with `TargetPath` where you unzipped it.
+- **Linux x86_64** (built on Ubuntu 22.04, so it needs its glibc 2.35 or a newer one): [cornercase-gpui-x86_64-unknown-linux-gnu.tar.gz](https://github.com/usecornercase/cornercase-gpui/releases/latest/download/cornercase-gpui-x86_64-unknown-linux-gnu.tar.gz). It needs a Vulkan driver and the runtime libraries; on Debian and Ubuntu, `sudo apt install libxkbcommon-x11-0 libfreetype6 libfontconfig1 libwayland-client0 libvulkan1 mesa-vulkan-drivers`. Extract it, then `install -Dm755 cornercase-gpui ~/.local/bin/cornercase-gpui` and the desktop entry and icon as below, with that path. Packages are tracked in [#25](https://github.com/usecornercase/cornercase-gpui/issues/25).
+
+To check a download: `shasum -a 256 -c <file>.sha256` on macOS, `sha256sum -c <file>.sha256` on Linux, or `Get-FileHash -Algorithm SHA256 <file>` on Windows, compared with the `.sha256`. Every download carries the licences of the code and the icons in it (`THIRD-PARTY-NOTICES.txt` lists the crates).
+
+### Build from source
+
+You need:
 
 - macOS with the Xcode Command Line Tools (`xcode-select --install`), Linux (X11 or Wayland) with a Vulkan driver and the libraries below, or Windows 10 or 11 (x64) with Visual Studio's [Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) and their "Desktop development with C++" workload (the MSVC compiler and the Windows SDK)
 - [rustup](https://rustup.rs), which installs the pinned Rust version on the first build
-- [cornercase](https://usecornercase.dev/docs/installation/) 0.12.234 or newer (0.12.287 or newer on Windows, its first release there). The window finds it on the `PATH`, in your login shell's `PATH` or where its installers put it, and says so, with the way to install it, when it is missing
 
 On Linux, install a C compiler, `pkg-config` and these libraries first. On Debian and Ubuntu:
 
