@@ -3,7 +3,7 @@ use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::{self, Read as _, Seek as _};
 use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -13,6 +13,7 @@ use gpui::App;
 use crate::platform::Os;
 
 const SETTLE: Duration = Duration::from_secs(8);
+const ANSWER: Duration = Duration::from_secs(30);
 const POLL: Duration = Duration::from_millis(20);
 const BUNDLES: &[&str] = &["app", "xcodeproj", "xcworkspace", "framework", "bundle", "playground"];
 const FILE_MANAGER1: &str = "org.freedesktop.FileManager1";
@@ -193,7 +194,7 @@ fn launch(path: &Path) -> Result<()> {
 
 pub(crate) fn reveal(path: &Path, dir: bool) -> Result<()> {
     let os = Os::CURRENT;
-    let shown = reveal_argv(os, path, dir, &on_path).map(|argv| run(&argv));
+    let shown = reveal_argv(os, path, dir, &on_path).map(|argv| run_within(&argv, reveal_wait(os)));
     let result = match (os, shown) {
         (_, Some(Ok(()))) => Ok(()),
         (Os::Mac, Some(Err(e))) => Err(e),
@@ -202,7 +203,32 @@ pub(crate) fn reveal(path: &Path, dir: bool) -> Result<()> {
     result.with_context(|| format!("could not show {} in the {}", path.display(), file_manager(os)))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Late {
+    Launched,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Wait {
+    limit: Duration,
+    late: Late,
+}
+
+const LAUNCH: Wait = Wait { limit: SETTLE, late: Late::Launched };
+
+fn reveal_wait(os: Os) -> Wait {
+    match os {
+        Os::Mac => LAUNCH,
+        Os::Linux => Wait { limit: ANSWER, late: Late::Failed },
+    }
+}
+
 pub(crate) fn run(argv: &[String]) -> Result<()> {
+    run_within(argv, LAUNCH)
+}
+
+fn run_within(argv: &[String], wait: Wait) -> Result<()> {
     let (program, rest) = argv.split_first().context("nothing to run")?;
     let name = name_of(program);
     let log = scratch_file().context("could not make a temporary file")?;
@@ -215,15 +241,24 @@ pub(crate) fn run(argv: &[String]) -> Result<()> {
         .spawn()
         .with_context(|| format!("could not start {name}"))?;
     let started = Instant::now();
-    while started.elapsed() < SETTLE {
+    while started.elapsed() < wait.limit {
         match child.try_wait()? {
             Some(status) if status.success() => return Ok(()),
             Some(status) => bail!(failure(&name, &status.to_string(), &read(&mut said))),
             None => std::thread::sleep(POLL),
         }
     }
-    std::thread::spawn(move || child.wait());
-    Ok(())
+    overdue(child, &name, wait)
+}
+
+fn overdue(mut child: Child, name: &str, wait: Wait) -> Result<()> {
+    if wait.late == Late::Launched {
+        std::thread::spawn(move || child.wait());
+        return Ok(());
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    bail!("{name} did not answer within {} s", wait.limit.as_secs())
 }
 
 fn name_of(program: &str) -> String {

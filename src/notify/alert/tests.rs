@@ -7,7 +7,7 @@ fn only(tools: &'static [&'static str]) -> impl Fn(&str) -> Option<PathBuf> {
 #[test]
 fn a_mac_notifies_through_osascript_with_the_text_as_arguments() {
     let argv = notification(Os::Mac, ("Claude", "done; \"rm\""), &only(&[])).expect("osascript is always there");
-    assert_eq!(argv.first().map(String::as_str), Some("osascript"));
+    assert_eq!(argv.first().and_then(|program| program.to_str()), Some("osascript"));
     assert_eq!(argv[argv.len() - 2..], ["Claude", "done; \"rm\""]);
 }
 
@@ -50,4 +50,40 @@ fn linux_plays_with_paplay_then_pw_play_then_aplay_for_wav_only() {
     assert_eq!(sound(Os::Linux, file, &alsa), Err(NO_PLAYER));
     let wav = Path::new("/s/ding.WAV");
     assert_eq!(sound(Os::Linux, wav, &alsa).expect("aplay reads wav"), ["/usr/bin/aplay", "-q", "/s/ding.WAV"]);
+}
+
+#[test]
+fn a_sound_or_a_player_whose_path_is_not_utf8_is_passed_as_it_is() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt as _;
+
+    let file = Path::new(OsStr::from_bytes(b"/s/caf\xe9.oga"));
+    let player = |name: &str| (name == "paplay").then(|| PathBuf::from(OsStr::from_bytes(b"/opt/b\xe9/paplay")));
+    let argv = sound(Os::Linux, file, &player).expect("a player");
+    assert_eq!(argv[0].as_bytes(), b"/opt/b\xe9/paplay");
+    assert_eq!(argv[1].as_bytes(), b"/s/caf\xe9.oga");
+    assert_eq!(sound(Os::Mac, file, &only(&[])).expect("afplay")[1].as_bytes(), b"/s/caf\xe9.oga");
+}
+
+#[test]
+fn without_a_sound_of_its_own_a_cue_plays_the_system_sound() {
+    for (cue, system) in [("needs-you", "Ping"), ("finished", "Glass")] {
+        let played = cue_sound(Os::Mac, cue, None, &[]);
+        assert_eq!(played, Some(PathBuf::from(format!("/System/Library/Sounds/{system}.aiff"))));
+        assert_eq!(cue_sound(Os::Mac, cue, Some("/s/own.wav".into()), &[]), Some("/s/own.wav".into()));
+    }
+}
+
+#[test]
+fn on_linux_a_cue_without_a_sound_of_its_own_plays_the_theme() {
+    let root = std::env::temp_dir().join(format!("cc-gpui-cues-{}", std::process::id()));
+    let stereo = root.join(FREEDESKTOP);
+    std::fs::create_dir_all(&stereo).expect("the temporary files are writable");
+    for name in ["complete.oga", "message-new-instant.oga"] {
+        std::fs::write(stereo.join(name), "").expect("the temporary files are writable");
+    }
+    let data = [root.clone()];
+    assert_eq!(cue_sound(Os::Linux, "finished", None, &data), Some(stereo.join("complete.oga")));
+    assert_eq!(cue_sound(Os::Linux, "needs-you", None, &data), Some(stereo.join("message-new-instant.oga")));
+    let _ = std::fs::remove_dir_all(&root);
 }

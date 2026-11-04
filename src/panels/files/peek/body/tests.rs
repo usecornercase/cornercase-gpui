@@ -73,7 +73,7 @@ fn detail_of(still: &Still) -> Option<&str> {
 fn a_mac_names_quick_look_for_a_preview_or_its_absence() {
     assert_eq!(thumbnail_label(Os::Mac, None), "Quick Look preview");
     assert_eq!(thumbnail_label(Os::Mac, Some(Media::Video)), "Quick Look preview");
-    let none = no_preview(Os::Mac, Some(Media::Video));
+    let none = no_preview(Os::Mac, Some(Media::Video), Missing::NoReader);
     assert_eq!(detail_of(&none), Some("macOS has no preview for this kind of file."));
 }
 
@@ -81,7 +81,14 @@ fn a_mac_names_quick_look_for_a_preview_or_its_absence() {
 fn on_linux_a_video_or_a_sound_says_it_plays_only_on_macos() {
     assert_eq!(thumbnail_label(Os::Linux, Some(Media::Video)), "Plays only on macOS");
     assert_eq!(thumbnail_label(Os::Linux, None), "Thumbnail");
-    assert_eq!(note_of(&no_preview(Os::Linux, Some(Media::Audio))), Some("Plays only on macOS"));
-    let none = no_preview(Os::Linux, None);
+    assert_eq!(note_of(&no_preview(Os::Linux, Some(Media::Audio), Missing::NoReader)), Some("Plays only on macOS"));
+    let none = no_preview(Os::Linux, None, Missing::NoReader);
     assert_eq!(detail_of(&none), Some("No thumbnailer on this computer reads this kind of file."));
+}
+
+#[test]
+fn on_linux_a_thumbnailer_that_failed_says_how_rather_than_that_none_is_there() {
+    let failed = no_preview(Os::Linux, None, Missing::Failed("evince-thumbnailer did not finish within 8 s".into()));
+    assert_eq!(note_of(&failed), Some("No preview"));
+    assert_eq!(detail_of(&failed), Some("evince-thumbnailer did not finish within 8 s."));
 }

@@ -122,6 +122,20 @@ fn a_tool_that_fails_reports_what_it_said() {
 }
 
 #[test]
+fn a_file_manager_call_waits_for_its_answer_on_linux_and_a_mac_launch_does_not() {
+    assert_eq!(reveal_wait(Os::Mac), LAUNCH);
+    assert_eq!(reveal_wait(Os::Linux), Wait { limit: ANSWER, late: Late::Failed });
+    assert!(ANSWER > Duration::from_secs(25));
+}
+
+#[test]
+fn a_call_with_no_answer_in_time_fails_so_the_folder_can_open_instead() {
+    let script = ["sh", "-c", "exec sleep 30"].map(String::from);
+    let error = run_within(&script, Wait { limit: Duration::from_millis(50), late: Late::Failed }).expect_err("late");
+    assert_eq!(error.to_string(), "sh did not answer within 0 s");
+}
+
+#[test]
 fn only_executable_files_are_found() {
     let dir = std::env::temp_dir().join(format!("cc-gpui-desktop-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("the temporary files are writable");

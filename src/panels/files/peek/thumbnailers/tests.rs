@@ -64,9 +64,67 @@ fn the_type_comes_from_the_longest_glob_of_the_highest_weight() {
 }
 
 #[test]
+fn globs_match_as_fnmatch_does() {
+    let cases = [
+        ("*.anim[1-9j]", "clip.anim5", true),
+        ("*.anim[1-9j]", "clip.animj", true),
+        ("*.anim[1-9j]", "clip.anim0", false),
+        ("*.[!a-z]", "page.1", true),
+        ("*.[!a-z]", "page.x", false),
+        ("[]x]", "]", true),
+        ("README*", "README.md", true),
+        ("*.?z", "a.gz", true),
+        ("*.?z", "a.z", false),
+        ("*a*b*c", "xaybzbc", true),
+        ("a[b", "a[b", true),
+        ("\\*", "*", true),
+        ("\\*", "x", false),
+        ("*", "", true),
+        ("Makefile", "Makefile.am", false),
+    ];
+    for (glob, name, expected) in cases {
+        assert_eq!(glob_matches(glob, &name.chars().collect::<Vec<char>>()), expected, "{glob} against {name}");
+    }
+}
+
+#[test]
+fn a_type_is_found_by_any_glob_shared_mime_info_writes() {
+    let globs = "50:video/x-anim:*.anim[1-9j]\n50:text/x-readme:README*\n";
+    assert_eq!(mime_of("clip.ANIM5", globs).as_deref(), Some("video/x-anim"));
+    assert_eq!(mime_of("README.first", globs).as_deref(), Some("text/x-readme"));
+}
+
+#[test]
+fn the_globs_of_every_data_folder_are_ranked_together() {
+    let user = "50:application/gzip:*.gz\n50:text/x-mine:*.foo\n".to_string();
+    let system = "55:application/x-compressed-tar:*.tar.gz\n50:text/x-theirs:*.foo\n50:video/mp4:*.mp4\n".to_string();
+    let files = [user, system];
+    assert_eq!(mime_in("src.tar.gz", &files).as_deref(), Some("application/x-compressed-tar"));
+    assert_eq!(mime_in("notes.gz", &files).as_deref(), Some("application/gzip"));
+    assert_eq!(mime_in("a.foo", &files).as_deref(), Some("text/x-mine"));
+    assert_eq!(mime_in("a.mp4", &files).as_deref(), Some("video/mp4"));
+    assert_eq!(mime_in("a.mp4", &[]), None);
+}
+
+#[test]
 fn the_first_thumbnailer_for_the_type_that_can_run_is_picked() {
     let all = [parse(EVINCE).expect("an entry"), parse(FFMPEG).expect("an entry")];
     assert_eq!(pick(&all, "video/mp4", &|_| true), all.get(1));
     assert_eq!(pick(&all, "video/mp4", &|program| program != "ffmpegthumbnailer"), None);
     assert_eq!(pick(&all, "font/ttf", &|_| true), None);
+}
+
+fn thumbnailer(exec: &str) -> Thumbnailer {
+    Thumbnailer { try_exec: None, exec: exec.to_string(), types: vec!["video/mp4".into()] }
+}
+
+#[test]
+fn a_thumbnailer_that_fails_is_named_with_what_went_wrong() {
+    let file = Path::new("/w/a.mp4");
+    let made = made_by(&thumbnailer("sh -c 'printf picture > \"$0\"' %o"), file);
+    assert_eq!(made, Ok(b"picture".to_vec()));
+    let failed = made_by(&thumbnailer("/bin/sh -c 'exit 2'"), file);
+    assert_eq!(failed, Err(Missing::Failed("sh ended with exit status: 2".into())));
+    let silent = made_by(&thumbnailer("true %o"), file);
+    assert_eq!(silent, Err(Missing::Failed("true made no picture".into())));
 }

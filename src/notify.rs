@@ -3,6 +3,7 @@ mod feed;
 mod update;
 
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -173,12 +174,12 @@ impl Notifier {
         let os = Os::CURRENT;
         let home = std::env::var("HOME").unwrap_or_default();
         let own = prefs.own_sound(cue, &home).map(PathBuf::from);
-        let file = own.or_else(|| alert::system_sound(os, cue, &desktop::xdg_data_dirs()));
+        let file = alert::cue_sound(os, cue, own, &desktop::xdg_data_dirs());
         let argv = file.ok_or(alert::NO_THEME).and_then(|file| alert::sound(os, &file, &desktop::on_path));
         self.run_or_tell(argv, cx);
     }
 
-    fn run_or_tell(&mut self, argv: Result<Vec<String>, &'static str>, cx: &mut Context<Self>) {
+    fn run_or_tell(&mut self, argv: Result<Vec<OsString>, &'static str>, cx: &mut Context<Self>) {
         match argv {
             Ok(argv) => spawn_quietly(argv),
             Err(why) if self.told.insert(why) => self.store.update(cx, |s, cx| s.toast(why, ToastKind::Info, cx)),
@@ -457,7 +458,7 @@ impl Render for Tip {
     }
 }
 
-fn spawn_quietly(argv: Vec<String>) {
+fn spawn_quietly(argv: Vec<OsString>) {
     std::thread::spawn(move || {
         let Some((program, rest)) = argv.split_first() else { return };
         let _ =

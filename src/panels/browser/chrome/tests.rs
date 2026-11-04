@@ -35,23 +35,67 @@ fn chrome_never_asks_for_the_keychain_or_the_keyring() {
 #[test]
 fn a_snap_is_known_by_its_command_or_by_the_script_that_runs_it() {
     let snap = Path::new("/usr/bin/snap");
-    assert_eq!(snap_name(Path::new("/snap/bin/chromium"), snap, b"\x7fELF"), Some("chromium".into()));
-    assert_eq!(snap_name(Path::new("/home/me/bin/chromium.chromedriver"), snap, b""), Some("chromium".into()));
+    let command = |exe: &str, real: &Path, head: &[u8]| snap_command(Path::new(exe), real, head);
+    assert_eq!(command("/snap/bin/chromium", snap, b"\x7fELF").as_deref(), Some("chromium"));
+    assert_eq!(command("/home/me/bin/chromium.chromedriver", snap, b"").as_deref(), Some("chromium.chromedriver"));
     let wrapper = b"#!/bin/sh\nif ! [ -x /snap/bin/chromium ]; then exit 1; fi\nexec /snap/bin/chromium \"$@\"\n";
     let real = Path::new("/usr/bin/chromium-browser");
-    assert_eq!(snap_name(real, real, wrapper), Some("chromium".into()));
+    assert_eq!(command("/usr/bin/chromium-browser", real, wrapper).as_deref(), Some("chromium"));
+    assert_eq!(command("/usr/bin/x", real, b"#!/bin/sh\n  \"/snap/bin/brave\" \"$@\"\n").as_deref(), Some("brave"));
     let debian = Path::new("/usr/lib/chromium/chromium");
-    assert_eq!(snap_name(Path::new("/usr/bin/chromium"), debian, b"\x7fELF"), None);
+    assert_eq!(command("/usr/bin/chromium", debian, b"\x7fELF"), None);
     let plain_script = b"#!/bin/sh\nexec /usr/lib/chromium/chromium \"$@\"\n";
-    assert_eq!(snap_name(real, real, plain_script), None);
+    assert_eq!(command("/usr/bin/chromium-browser", real, plain_script), None);
+}
+
+#[test]
+fn a_snap_run_after_its_check_on_one_line_still_counts() {
+    let real = Path::new("/usr/local/bin/chromium");
+    let one_line = b"#!/bin/sh\n[ -x /snap/bin/chromium ] && exec /snap/bin/chromium \"$@\"\nexec /usr/bin/false\n";
+    assert_eq!(snap_command(real, real, one_line).as_deref(), Some("chromium"));
+}
+
+#[test]
+fn a_script_that_only_checks_for_a_snap_runs_its_own_browser() {
+    let real = Path::new("/usr/local/bin/chromium");
+    let script = b"#!/bin/sh\nif [ -x /snap/bin/chromium ]; then echo 'the snap is here too' >&2; fi\n\
+                   exec /usr/lib/chromium/chromium \"$@\"\n";
+    assert_eq!(snap_command(real, real, script), None);
+}
+
+#[test]
+fn a_snap_is_named_by_its_command_or_by_the_command_its_alias_points_to() {
+    assert_eq!(snap_name("chromium", Some(Path::new("/usr/bin/snap"))).as_deref(), Some("chromium"));
+    assert_eq!(snap_name("chromium.chromedriver", None).as_deref(), Some("chromium"));
+    assert_eq!(snap_name("google-chrome", Some(Path::new("chromium"))).as_deref(), Some("chromium"));
+    assert_eq!(snap_name("chromedriver", Some(Path::new("chromium.chromedriver"))).as_deref(), Some("chromium"));
+    assert_eq!(snap_name("", None), None);
+}
+
+fn errors_kept(said: &[u8]) -> Option<String> {
+    let kept = Mutex::new(Said::default());
+    keep_errors(std::io::Cursor::new(said), &kept);
+    assert!(kept.lock().ended);
+    kept.into_inner().error
 }
 
 #[test]
 fn a_browser_that_stops_as_it_starts_gives_its_last_error() {
-    let said = "\n[5887:5887:1104/112642.487358:ERROR:zygote_host_impl_linux.cc:130] No usable sandbox! Install it.\n\
+    let said = b"\n[5887:5887:1104/112642.487358:ERROR:zygote_host_impl_linux.cc:130] No usable sandbox! Install it.\n\
                 [5887:5900:1104/112642.5:WARNING:bus.cc:408] Failed to connect to the bus\nDevTools listening on ws://x\n";
-    assert_eq!(last_error(said).as_deref(), Some("No usable sandbox! Install it."));
-    assert_eq!(last_error("DevTools listening on ws://127.0.0.1:9222/devtools/browser/x\n"), None);
+    assert_eq!(errors_kept(said).as_deref(), Some("No usable sandbox! Install it."));
+    assert_eq!(errors_kept(b"DevTools listening on ws://127.0.0.1:9222/devtools/browser/x\n"), None);
+}
+
+#[test]
+fn only_the_last_error_is_kept_however_long_the_browser_talks() {
+    let mut said = Vec::new();
+    for n in 0..2000 {
+        said.extend(format!("[1:1:1104/1.0:ERROR:x.cc:1] error {n}\n[1:1:1104/1.0:INFO:x.cc:1] chatter\n").bytes());
+    }
+    said.extend(std::iter::repeat_n(b'x', 100_000));
+    said.extend(b"\n[1:1:1104/1.0:FATAL:y.cc:2] the end\n");
+    assert_eq!(errors_kept(&said).as_deref(), Some("the end"));
 }
 
 #[test]
@@ -76,6 +120,16 @@ fn the_browser_and_its_profile_are_chosen_once_one_is_found() {
     });
     assert_eq!(kept.map(|chosen| chosen.exe.as_path()), Some(Path::new("/nowhere/chromium")));
     assert!(!looked.get());
+}
+
+#[test]
+fn the_profile_is_the_one_chosen_with_the_browser() {
+    use std::path::PathBuf;
+
+    let cell = OnceLock::new();
+    let chosen = Chosen { exe: PathBuf::from("/nowhere/chromium"), profile: PathBuf::from("/chosen/profile") };
+    assert!(cell.set(chosen).is_ok());
+    assert_eq!(profile_in(&cell), Path::new("/chosen/profile"));
 }
 
 #[test]
