@@ -1,6 +1,10 @@
 mod body;
 mod card;
 mod place;
+#[cfg(target_os = "macos")]
+mod player;
+#[cfg(not(target_os = "macos"))]
+#[path = "peek/no_player.rs"]
 mod player;
 mod quicklook;
 mod web;

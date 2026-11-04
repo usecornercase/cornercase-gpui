@@ -6,6 +6,7 @@ use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use core_video::pixel_buffer::{CVPixelBuffer, CVPixelBufferKeys, kCVPixelFormatType_420YpCbCr8BiPlanarFullRange};
+use gpui::{AnyElement, IntoElement as _, ObjectFit, Styled as _, surface};
 use objc2::encode::{Encode, Encoding, RefEncode};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Bool};
@@ -143,8 +144,9 @@ impl Player {
         seconds(unsafe { msg_send![&*self.item, currentTime] }).unwrap_or(0.)
     }
 
-    pub(super) fn frame(&self) -> Option<CVPixelBuffer> {
-        self.frame.clone()
+    pub(super) fn picture(&self) -> Option<AnyElement> {
+        let frame = self.frame.clone()?;
+        Some(surface(frame).size_full().object_fit(ObjectFit::Contain).into_any_element())
     }
 
     pub(super) fn playing(&self) -> bool {
