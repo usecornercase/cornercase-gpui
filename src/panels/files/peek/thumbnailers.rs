@@ -190,6 +190,11 @@ pub(super) fn mime_of(name: &str, globs: &str) -> Option<String> {
     matches.max_by_key(|(weight, len, _)| (*weight, *len)).map(|(_, _, mime)| mime.to_string())
 }
 
+pub(super) fn mime_in(name: &str, files: &[String]) -> Option<String> {
+    let merged: Vec<&str> = files.iter().rev().map(String::as_str).collect();
+    mime_of(name, &merged.join("\n"))
+}
+
 pub(super) fn pick<'a>(all: &'a [Thumbnailer], mime: &str, runs: &dyn Fn(&str) -> bool) -> Option<&'a Thumbnailer> {
     all.iter().find(|thumbnailer| thumbnailer.reads(mime) && runs(&thumbnailer.program()))
 }
@@ -213,7 +218,9 @@ fn installed(data: &[PathBuf]) -> Vec<Thumbnailer> {
 pub(super) fn thumbnail(path: &Path) -> Option<Vec<u8>> {
     let data = desktop::xdg_data_dirs();
     let name = path.file_name()?.to_str()?;
-    let mime = data.iter().find_map(|dir| mime_of(name, &std::fs::read_to_string(dir.join("mime/globs2")).ok()?))?;
+    let globs: Vec<String> =
+        data.iter().filter_map(|dir| std::fs::read_to_string(dir.join("mime/globs2")).ok()).collect();
+    let mime = mime_in(name, &globs)?;
     let all = installed(&data);
     let chosen = pick(&all, &mime, &runs)?;
     let out = Scratch::folder(SCRATCH).ok()?;

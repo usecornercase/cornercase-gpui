@@ -95,6 +95,18 @@ fn a_type_is_found_by_any_glob_shared_mime_info_writes() {
 }
 
 #[test]
+fn the_globs_of_every_data_folder_are_ranked_together() {
+    let user = "50:application/gzip:*.gz\n50:text/x-mine:*.foo\n".to_string();
+    let system = "55:application/x-compressed-tar:*.tar.gz\n50:text/x-theirs:*.foo\n50:video/mp4:*.mp4\n".to_string();
+    let files = [user, system];
+    assert_eq!(mime_in("src.tar.gz", &files).as_deref(), Some("application/x-compressed-tar"));
+    assert_eq!(mime_in("notes.gz", &files).as_deref(), Some("application/gzip"));
+    assert_eq!(mime_in("a.foo", &files).as_deref(), Some("text/x-mine"));
+    assert_eq!(mime_in("a.mp4", &files).as_deref(), Some("video/mp4"));
+    assert_eq!(mime_in("a.mp4", &[]), None);
+}
+
+#[test]
 fn the_first_thumbnailer_for_the_type_that_can_run_is_picked() {
     let all = [parse(EVINCE).expect("an entry"), parse(FFMPEG).expect("an entry")];
     assert_eq!(pick(&all, "video/mp4", &|_| true), all.get(1));
