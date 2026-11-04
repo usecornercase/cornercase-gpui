@@ -349,8 +349,7 @@ pub(crate) fn typed_with_alt_gr(ks: &Keystroke, os: Os) -> bool {
 
 pub(crate) fn left_to_system(ks: &Keystroke, os: Os) -> bool {
     let m = ks.modifiers;
-    let system = matches!(ks.key.as_str(), "f4" | "space");
-    os == Os::Windows && system && m.alt && !m.control && !m.shift && !m.platform
+    os == Os::Windows && ks.key == "f4" && m.alt && !m.control && !m.shift && !m.platform
 }
 
 pub(crate) fn shift_held(ks: &Keystroke, window: &Window) -> bool {

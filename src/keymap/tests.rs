@@ -359,11 +359,10 @@ fn windows_takes_the_same_keys_as_linux() {
 }
 
 #[test]
-fn alt_f4_and_alt_space_are_left_to_windows_alone() {
+fn alt_f4_is_left_to_windows_alone() {
     let alt = Modifiers { alt: true, ..Modifiers::default() };
     assert!(left_to_system(&pressed("f4", alt), Os::Windows));
-    assert!(left_to_system(&pressed("space", alt), Os::Windows));
-    assert!(!left_to_system(&pressed("space", alt), Os::Linux));
+    assert!(!left_to_system(&pressed("space", alt), Os::Windows));
     assert!(!left_to_system(&pressed("f4", alt), Os::Linux));
     assert!(!left_to_system(&pressed("f4", Modifiers { shift: true, ..alt }), Os::Windows));
     assert!(!left_to_system(&pressed("f4", Modifiers::default()), Os::Windows));

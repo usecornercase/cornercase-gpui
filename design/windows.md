@@ -8,7 +8,7 @@ Code: `Cargo.toml` (the `windows` crate's features, gpui without `windows-manife
 - **What is the user's own**: the home folder is `std::env::home_dir` (`desktop::home`), `USERPROFILE` on Windows, where `HOME` is not set (it was read in eight places); the window's settings and the browser's profile live under `%LOCALAPPDATA%` (`prefs.rs`, `design/browser.md`); temporary files need no mode, since `%TEMP%` is the user's own (`design/files-panel.md`).
 - **Areas**, each in its file:
   - The window: Windows draws the frame and the app the title bar, whose empty ground and buttons are marked for Windows' own hit test (moving, snapping, Snap Layouts on the maximise button, the window menu); the buttons look like Windows'; the ground stays opaque; the exe's icon, manifest and version; errors before the window in a message box; the first window fits the screen (`design/window.md`, Windows; `design/widgets.md`, the ground).
-  - Keys: Linux's scheme, Alt+F4 and Alt+Space left to Windows, AltGr that Windows reports as Ctrl+Alt (`design/terminal.md`, Keys on Windows).
+  - Keys: Linux's scheme, Alt+F4 left to Windows, AltGr that Windows reports as Ctrl+Alt (`design/terminal.md`, Keys on Windows).
   - Fonts: Cascadia Mono, else Consolas, Lucida Console or Courier New, for the terminal, and Segoe UI for the chrome (`theme/fonts.rs`, `design/widgets.md`, Fonts).
   - Paths: whose rules a path follows (a server's, git's or this machine's), `~` (`design/remote.md`; `design/files-panel.md`, Paths on Windows and across machines).
   - Opening a path with its default app and in File Explorer through the shell, programs found through `PATHEXT`, the refusal of programs (`design/files-panel.md`, Opening elsewhere).
