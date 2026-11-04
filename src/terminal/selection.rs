@@ -6,23 +6,25 @@ use crate::desktop::{self, Board};
 use crate::model::PaneGrid;
 use crate::model::link::row_cells;
 use crate::platform::Os;
+use crate::platform::paths::Style;
 
-pub(super) fn class(cell: &str) -> u8 {
+pub(super) fn class(cell: &str, style: Style) -> u8 {
     match cell.chars().next() {
         None | Some(' ') => 0,
-        Some(c) if c.is_alphanumeric() || "_-./~:@%+=#?&".contains(c) => 1,
+        Some(c) if c.is_alphanumeric() || "_-./~:@%+=#?&".contains(c) || style.is_separator(c) => 1,
         Some(_) => 2,
     }
 }
 
-pub(super) fn word_at(cells: &[&str], x: usize) -> (usize, usize) {
+pub(super) fn word_at(cells: &[&str], x: usize, style: Style) -> (usize, usize) {
     if x >= cells.len() {
         return (x, x);
     }
+    let of = |c: &str| class(c, style);
     let classes: Vec<u8> = cells
         .iter()
         .enumerate()
-        .map(|(i, c)| if c.is_empty() && i > 0 && !cells[i - 1].is_empty() { class(cells[i - 1]) } else { class(c) })
+        .map(|(i, c)| if c.is_empty() && i > 0 && !cells[i - 1].is_empty() { of(cells[i - 1]) } else { of(c) })
         .collect();
     let at = classes[x];
     let start = (0..x).rev().take_while(|&i| classes[i] == at).last().unwrap_or(x);
@@ -99,8 +101,8 @@ impl Root {
         let x = usize::from(x);
         if clicks >= 3 {
             self.select(pane.pane, (0, y), (pane.size.cols.saturating_sub(1), y));
-        } else if x < cells.len() && class(cells[x]) != 0 {
-            let (start, end) = word_at(&cells, x);
+        } else if x < cells.len() && class(cells[x], self.pointer.links.style) != 0 {
+            let (start, end) = word_at(&cells, x, self.pointer.links.style);
             self.select(pane.pane, (column(start), y), (column(end), y));
         }
     }

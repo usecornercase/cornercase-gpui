@@ -31,6 +31,8 @@ use grep_regex::RegexMatcher;
 
 use crate::cli;
 use crate::panels::PanelKind;
+use crate::platform::Os;
+use crate::platform::paths::Style;
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
@@ -57,6 +59,7 @@ enum Mode {
 
 struct Place {
     root: PathBuf,
+    style: Style,
     source: Source,
     listings: HashMap<PathBuf, tree::Listing>,
     error: Option<String>,
@@ -70,6 +73,7 @@ struct Place {
 impl Place {
     fn new(root: PathBuf, source: Source) -> Self {
         Self {
+            style: Style::of_path(&root.to_string_lossy()),
             root,
             source,
             listings: HashMap::new(),
@@ -243,6 +247,10 @@ impl FilesPanel {
 
     fn place(&self) -> Option<&Place> {
         self.places.get(&self.current?)
+    }
+
+    fn style(&self) -> Style {
+        self.place().map_or(Style::of(Os::CURRENT), |place| place.style)
     }
 
     fn place_mut(&mut self) -> Option<&mut Place> {

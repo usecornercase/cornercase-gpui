@@ -5,6 +5,7 @@ use serde::Deserialize;
 
 use crate::model::Session;
 use crate::panels::files::disk::human_size;
+use crate::platform::paths::Style;
 
 const COMMAND_CHARS: usize = 60;
 const ARGUMENT_CHARS: usize = 240;
@@ -248,7 +249,7 @@ pub(crate) fn command_line(name: &str, args: &[String]) -> String {
 }
 
 fn command(name: &str, args: &[String]) -> (String, String) {
-    let program = args.first().and_then(|a| a.rsplit('/').next()).filter(|a| !a.is_empty()).unwrap_or(name);
+    let program = args.first().map(|a| Style::of_path(a).name(a)).filter(|a| !a.is_empty()).unwrap_or(name);
     (program.to_string(), args.iter().skip(1).map(String::as_str).collect::<Vec<_>>().join(" "))
 }
 

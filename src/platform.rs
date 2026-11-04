@@ -1,6 +1,8 @@
 use std::ffi::OsStr;
 use std::process::Command;
 
+pub(crate) mod paths;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Os {
     Mac,

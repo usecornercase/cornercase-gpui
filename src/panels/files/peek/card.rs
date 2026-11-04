@@ -39,8 +39,9 @@ pub(super) fn clock(seconds: f64) -> String {
     format!("{}:{:02}", whole / 60, whole % 60)
 }
 
-pub(super) fn folder_of(shown: &str) -> String {
-    shown.rsplit_once('/').map(|(folder, _)| folder.to_string()).unwrap_or_default()
+pub(super) fn folder_of(link: &Link) -> String {
+    let style = link.style();
+    style.in_form(style.split(link.shown_path()).0)
 }
 
 fn media_box(size: (f32, f32), place: &Place) -> (f32, f32) {
@@ -260,7 +261,7 @@ impl Peek {
     }
 
     fn header(&self, link: &Link, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let names = (link.name().to_string(), folder_of(link.shown_path()));
+        let names = (link.name().to_string(), folder_of(link));
         header_row(file_icon(link.name(), false, false), names)
             .child(
                 div()

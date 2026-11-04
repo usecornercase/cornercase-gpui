@@ -6,6 +6,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, StyledImage as _, div, img, px, relative, uniform_list,
 };
 
+use crate::platform::paths::Style;
 use crate::theme::{colours, radius};
 use crate::ui;
 
@@ -46,11 +47,13 @@ fn content_info(viewer: &Viewer) -> Vec<String> {
     info
 }
 
-fn heading(viewer: &Viewer) -> Heading {
+fn heading(viewer: &Viewer, style: Style) -> Heading {
     let rel = &viewer.rel;
+    let shown = style.shown(rel);
+    let (folder, name) = style.split(&shown);
     Heading {
-        name: rel.file_name().map_or_else(|| rel.display().to_string(), |n| n.to_string_lossy().into_owned()),
-        folder: rel.parent().map(|p| p.display().to_string()).unwrap_or_default(),
+        name: if name.is_empty() { shown.clone() } else { name.to_string() },
+        folder: folder.to_string(),
         back: if viewer.from_search { "‹ Results" } else { "‹ Files" },
         info: content_info(viewer).join("  ·  "),
         path: viewer.path.clone(),
@@ -154,7 +157,7 @@ impl FilesPanel {
 
     pub(super) fn render_viewer(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let Some(viewer) = self.place().and_then(|p| p.viewer.as_ref()) else { return div().into_any_element() };
-        let heading = heading(viewer);
+        let heading = heading(viewer, self.style());
         let body = self.viewer_body(viewer.content.as_ref(), cx);
         div()
             .flex_1()

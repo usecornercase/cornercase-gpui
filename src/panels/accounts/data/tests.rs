@@ -69,14 +69,6 @@ fn a_row_without_a_login_says_whether_the_check_is_still_coming() {
 }
 
 #[test]
-fn folders_under_home_start_with_a_tilde() {
-    assert_eq!(home_relative("/Users/ana/.claude", "/Users/ana"), "~/.claude");
-    assert_eq!(home_relative("/Users/ana", "/Users/ana"), "~");
-    assert_eq!(home_relative("/Users/anabel/.claude", "/Users/ana"), "/Users/anabel/.claude");
-    assert_eq!(home_relative("/srv/claude", ""), "/srv/claude");
-}
-
-#[test]
 fn token_variables_are_named_in_one_sentence() {
     assert_eq!(tokens_title(&["ANTHROPIC_API_KEY".into()]), "ANTHROPIC_API_KEY is set where cornercase runs");
     assert_eq!(tokens_title(&["A".into(), "B".into(), "C".into()]), "A, B and C are set where cornercase runs");

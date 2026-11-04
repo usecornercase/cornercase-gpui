@@ -1,7 +1,6 @@
-use std::path::Path;
-
 use super::names::{Candidate, Goto, Kind};
 use crate::model::{Group, PaneInfo, Project, Session, Tab, Workspace, status_rank};
+use crate::platform::paths::{self, Style};
 
 fn plural(n: usize, one: &str) -> String {
     format!("{n} {one}{}", if n == 1 { "" } else { "s" })
@@ -15,14 +14,6 @@ fn distinct(items: impl IntoIterator<Item = String>) -> Vec<String> {
         }
     }
     out
-}
-
-pub(super) fn tilde(path: &str, home: Option<&str>) -> String {
-    let home = home.map(|h| h.trim_end_matches('/')).filter(|h| !h.is_empty());
-    match home.and_then(|h| path.strip_prefix(h)) {
-        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("~{rest}"),
-        _ => path.to_string(),
-    }
 }
 
 pub(super) fn candidates(session: &Session) -> Vec<Candidate> {
@@ -63,12 +54,12 @@ fn project_candidates(project: &Project, group: Option<&Group>, home: Option<&st
 }
 
 fn project_candidate(project: &Project, group: Option<&Group>, home: Option<&str>) -> Candidate {
-    let folder = Path::new(&project.path).file_name().map(|n| n.to_string_lossy().into_owned());
+    let folder = Some(Style::of_path(&project.path).name(&project.path)).filter(|n| !n.is_empty()).map(str::to_string);
     Candidate {
         kind: Kind::Project,
         goto: Goto::Project(project.id),
         name: project.name.clone(),
-        detail: tilde(&project.path, home),
+        detail: paths::home_relative(&project.path, home.unwrap_or_default()),
         place: group.map(|g| g.name.clone()).unwrap_or_default(),
         keys: distinct(std::iter::once(project.name.clone()).chain(folder)),
         status: project.attention().map(String::from),

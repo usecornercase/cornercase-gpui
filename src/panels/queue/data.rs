@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use crate::model::Session;
 use crate::platform::Os;
+use crate::platform::paths::Style;
 
 pub(super) const SOURCES: [&str; 7] = ["github", "gitlab", "shortcut", "linear", "jira", "plane", "asana"];
 
@@ -178,7 +179,7 @@ pub(crate) fn entries(app: Option<&Value>) -> Vec<Entry> {
 }
 
 pub(super) fn folder_name(path: &str) -> String {
-    path.trim_end_matches('/').rsplit('/').next().unwrap_or(path).to_string()
+    Style::of_path(path).name(path).to_string()
 }
 
 pub(crate) fn place_label(place: &Place, session: Option<&Session>) -> String {

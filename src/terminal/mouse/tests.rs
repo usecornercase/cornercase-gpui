@@ -20,6 +20,13 @@ fn a_file_link_reads_its_escapes() {
 }
 
 #[test]
+fn a_file_link_to_a_drive_names_a_windows_path() {
+    assert_eq!(file_of("file:///C:/Users/me/a.rs").as_deref(), Some(r"C:\Users\me\a.rs"));
+    assert_eq!(file_of("file://devbox/D:/my%20notes/a.md").as_deref(), Some(r"D:\my notes\a.md"));
+    assert_eq!(file_of("file:///C:").as_deref(), Some("/C:"));
+}
+
+#[test]
 fn only_a_file_link_names_a_path() {
     assert_eq!(file_of("https://example.com/a"), None);
     assert_eq!(file_of("file://devbox"), None);

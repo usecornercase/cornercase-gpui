@@ -7,6 +7,7 @@ use gpui::{
     uniform_list,
 };
 
+use crate::platform::paths::Style;
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
 
@@ -57,27 +58,27 @@ fn line_hit_row(ix: usize, hit: &search::LineHit) -> Stateful<Div> {
         .child(ellipsis(ui::one_line(hit.text.clone()).highlights(spans)).flex_1().text_color(colours::muted()))
 }
 
-fn file_hit_row(ix: usize, file: &search::FileHits) -> Stateful<Div> {
-    let name = file.path.rsplit('/').next().unwrap_or(&file.path).to_string();
+fn file_hit_row(ix: usize, file: &search::FileHits, style: Style) -> Stateful<Div> {
     result_row(("files-hit-file", ix))
         .mt(px(if ix == 0 { 0. } else { 6. }))
-        .child(file_icon(&name, false, false))
-        .child(ellipsis(ui::one_line(file.path.clone())).flex_1().font_weight(FontWeight::MEDIUM))
+        .child(file_icon(style.name(&file.path), false, false))
+        .child(ellipsis(ui::one_line(style.in_form(&file.path))).flex_1().font_weight(FontWeight::MEDIUM))
         .child(ui::dim(file.lines.len().to_string()).flex_none())
 }
 
-pub(super) fn name_hit(row: Stateful<Div>, hit: &search::NameHit) -> Stateful<Div> {
-    let split = hit.path.rfind('/').map_or(0, |i| i + 1);
+pub(super) fn name_hit(row: Stateful<Div>, hit: &search::NameHit, style: Style) -> Stateful<Div> {
+    let split = style.name_start(&hit.path);
     let (folder, name) = hit.path.split_at(split);
     let name_lit = lit_parts(&hit.lit, split..hit.path.len());
-    let folder_lit = lit_parts(&hit.lit, 0..split);
+    let folder = style.in_form(folder.trim_end_matches(|c| style.is_separator(c)));
+    let folder_lit = lit_parts(&hit.lit, 0..folder.len());
     row.child(file_icon(name, false, false))
         .child(ellipsis(ui::one_line(name.to_string()).highlights(name_lit)))
-        .child(faint_small(ui::one_line(folder.trim_end_matches('/').to_string()).highlights(folder_lit)).flex_1())
+        .child(faint_small(ui::one_line(folder).highlights(folder_lit)).flex_1())
 }
 
-fn name_hit_row(ix: usize, hit: &search::NameHit) -> Stateful<Div> {
-    name_hit(result_row(("files-name", ix)), hit)
+fn name_hit_row(ix: usize, hit: &search::NameHit, style: Style) -> Stateful<Div> {
+    name_hit(result_row(("files-name", ix)), hit, style)
 }
 
 impl FilesPanel {
@@ -122,16 +123,17 @@ impl FilesPanel {
     }
 
     fn result_item(&self, ix: usize, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let style = self.style();
         let row = match &self.search.results {
             Results::None | Results::Failed(_) => return None,
             Results::Names(hits) => {
                 let hit = hits.get(ix)?;
-                Self::with_menu(name_hit_row(ix, hit), PathBuf::from(&hit.path), cx)
+                Self::with_menu(name_hit_row(ix, hit, style), style.relative(&hit.path), cx)
             }
             Results::Text(text) => match self.search.rows.get(ix)? {
                 TextRow::File(f) => {
                     let file = text.files.get(*f)?;
-                    Self::with_menu(file_hit_row(ix, file), PathBuf::from(&file.path), cx)
+                    Self::with_menu(file_hit_row(ix, file, style), style.relative(&file.path), cx)
                 }
                 TextRow::Line(f, l) => line_hit_row(ix, text.files.get(*f)?.lines.get(*l)?),
             },

@@ -139,4 +139,22 @@ fn paths_are_passed_after_the_options_and_never_as_home_or_flags() {
 #[test]
 fn a_path_outside_the_workspace_goes_as_it_is() {
     assert_eq!(arg(Path::new("/Users/me/plan.md")), "/Users/me/plan.md");
+    assert_eq!(arg(Path::new(r"C:\Users\me\plan.md")), r"C:\Users\me\plan.md");
+    assert_eq!(arg(Path::new(r"\\server\share\plan.md")), r"\\server\share\plan.md");
+}
+
+#[test]
+fn a_relative_path_goes_to_the_server_with_slashes() {
+    assert_eq!(arg(&Path::new("src").join("main.rs")), "./src/main.rs");
+}
+
+#[test]
+fn a_stamp_is_asked_of_the_folder_by_the_servers_rules() {
+    let pair = |folder: &str, name: &str| Some((folder.to_string(), name.to_string()));
+    assert_eq!(folder_and_name(&Path::new("src").join("main.rs")), pair("./src", "main.rs"));
+    assert_eq!(folder_and_name(Path::new("main.rs")), pair(".", "main.rs"));
+    assert_eq!(folder_and_name(Path::new("/srv/main.rs")), pair("/srv", "main.rs"));
+    assert_eq!(folder_and_name(Path::new("/main.rs")), pair("/", "main.rs"));
+    assert_eq!(folder_and_name(Path::new(r"C:\Users\me\main.rs")), pair(r"C:\Users\me", "main.rs"));
+    assert_eq!(folder_and_name(Path::new(r"C:\main.rs")), pair(r"C:\", "main.rs"));
 }

@@ -124,8 +124,27 @@ fn plays_the_users_own_file() {
     std::fs::write(dir.join("ding.wav"), b"RIFF").expect("file");
     let prefs = Prefs { sound_waiting: "~/ding.wav".into(), ..Prefs::default() };
     let home = dir.to_string_lossy().to_string();
-    assert_eq!(prefs.own_sound("needs-you", &home), Some(format!("{home}/ding.wav")));
+    assert_eq!(prefs.own_sound("needs-you", &home), Some(dir.join("ding.wav").to_string_lossy().into_owned()));
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_sound_of_your_own_on_windows_is_on_a_drive_or_under_home() {
+    let home = r"C:\Users\me";
+    assert_eq!(own_path("~/sounds/ding.wav", home, Os::Windows).as_deref(), Some(r"C:\Users\me\sounds\ding.wav"));
+    assert_eq!(own_path(r"D:\ding.wav", home, Os::Windows).as_deref(), Some(r"D:\ding.wav"));
+    assert_eq!(own_path("D:/ding.wav", home, Os::Windows).as_deref(), Some("D:/ding.wav"));
+    assert_eq!(own_path(r"\\server\share\ding.wav", home, Os::Windows), None);
+    assert_eq!(own_path("/home/me/ding.wav", home, Os::Windows), None);
+    assert_eq!(own_path("ding.wav", home, Os::Windows), None);
+}
+
+#[test]
+fn a_sound_of_your_own_on_unix_starts_at_the_root_or_under_home() {
+    assert_eq!(own_path("~/ding.wav", "/home/me", Os::Linux).as_deref(), Some("/home/me/ding.wav"));
+    assert_eq!(own_path("/srv/ding.wav", "/home/me", Os::Mac).as_deref(), Some("/srv/ding.wav"));
+    assert_eq!(own_path(r"C:\ding.wav", "/home/me", Os::Mac), None);
+    assert_eq!(own_path("~/ding.wav", "", Os::Linux), None);
 }
 
 #[test]

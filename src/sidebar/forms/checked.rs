@@ -5,7 +5,6 @@ use gpui::{
 use serde_json::Value;
 
 use super::{Check, Checked, bullet, buttons, keyed, line, load_check, show, warning};
-use crate::app::tilde;
 use crate::dialogs::frame;
 use crate::store::{Busy, Store, args};
 use crate::theme::colours;
@@ -121,7 +120,7 @@ impl RemoveWorktree {
             .flex()
             .flex_col()
             .gap(px(6.))
-            .child(line(format!("Folder: {}", tilde(&check.path))))
+            .child(line(format!("Folder: {}", ui::home_relative(&check.path))))
             .when(!check.branch.is_empty(), |d| d.child(line(format!("Branch {} stays.", check.branch))))
             .child(if check.changed {
                 warning("Changes not committed: removing the worktree deletes them.")

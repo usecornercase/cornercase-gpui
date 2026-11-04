@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use super::candidates::{candidates, tilde};
+use super::candidates::candidates;
 use super::found::{Found, Hit, ago_from, by_pane, parse_time, row_of_match};
 use super::names::{
     Candidate, Goto, Kind, Ranked, context_top, find, key_rank, listing_status, no_project, rank, shown_row,
@@ -170,14 +170,6 @@ fn a_project_is_found_by_its_folder_shown_from_home() {
     assert_eq!(hit.candidate.goto, Goto::Project(11));
     assert_eq!((hit.candidate.detail.as_str(), hit.candidate.place.as_str()), ("~/src/gpui-app", "Work"));
     assert_eq!(marked(&hit.candidate.detail, &hit.marks.detail), ["gpui-app"]);
-}
-
-#[test]
-fn paths_under_home_start_with_a_tilde() {
-    assert_eq!(tilde("/Users/ana/src/x", Some("/Users/ana")), "~/src/x");
-    assert_eq!(tilde("/Users/ana", Some("/Users/ana/")), "~");
-    assert_eq!(tilde("/Users/anabel/x", Some("/Users/ana")), "/Users/anabel/x");
-    assert_eq!(tilde("/srv/x", None), "/srv/x");
 }
 
 #[test]

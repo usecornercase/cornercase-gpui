@@ -1,6 +1,10 @@
+use std::path::Path;
+
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::platform::Os;
+use crate::platform::paths::{self, Style};
 use crate::store::ToastKind;
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -200,12 +204,21 @@ impl Prefs {
 
     pub(crate) fn own_sound(&self, cue: &str, home: &str) -> Option<String> {
         let own = if cue == "finished" { &self.sound_done } else { &self.sound_waiting };
-        let own = match own.strip_prefix("~/") {
-            Some(rest) if !home.is_empty() => format!("{home}/{rest}"),
-            _ => own.clone(),
-        };
-        (own.starts_with('/') && std::path::Path::new(&own).is_file()).then_some(own)
+        own_path(own, home, Os::CURRENT).filter(|own| Path::new(own).is_file())
     }
+}
+
+fn own_path(own: &str, home: &str, os: Os) -> Option<String> {
+    let style = Style::of(os);
+    let own = match own.strip_prefix("~/") {
+        Some(rest) if !home.is_empty() => style.join(Path::new(home), Path::new(rest)).to_string_lossy().into_owned(),
+        _ => own.to_string(),
+    };
+    let absolute = match style {
+        Style::Unix => own.starts_with('/'),
+        Style::Windows => paths::on_a_drive(&own),
+    };
+    absolute.then_some(own)
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use crate::platform::Os;
+use crate::platform::{Os, paths};
 use crate::store::args;
 
 pub(super) const fn kept_login(os: Os) -> &'static str {
@@ -163,7 +163,7 @@ impl<'a> Row<'a> {
             Some(a) => a.path.as_str(),
             None => self.provider.system_path.as_deref().unwrap_or_default(),
         };
-        let path = home_relative(path, home);
+        let path = paths::home_relative(path, home);
         match self.account {
             Some(a) if !a.label.is_empty() => format!("folder {} · {path}", a.name),
             _ => path,
@@ -259,13 +259,6 @@ pub(super) fn valid_name(name: &str) -> bool {
 
 pub(super) fn profile_accounts<'a>(profile: &'a Profile, providers: &'a [Provider]) -> Vec<(&'a Provider, &'a str)> {
     providers.iter().map(|p| (p, profile.accounts.get(&p.id).map_or("", String::as_str))).collect()
-}
-
-pub(super) fn home_relative(path: &str, home: &str) -> String {
-    match path.strip_prefix(home) {
-        Some(rest) if !home.is_empty() && (rest.is_empty() || rest.starts_with('/')) => format!("~{rest}"),
-        _ => path.to_string(),
-    }
 }
 
 fn listed(names: &[String]) -> String {

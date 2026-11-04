@@ -27,9 +27,15 @@ fn classifies_by_content() {
 
 #[test]
 fn reads_only_regular_files() {
-    assert!(matches!(read(Path::new("/dev/zero")).0, Content::NotRegular));
-    assert!(matches!(read(Path::new("/definitely/not/here")).0, Content::Gone(_)));
+    let missing = Path::new(env!("CARGO_MANIFEST_DIR")).join("definitely").join("not").join("here");
+    assert!(matches!(read(&missing).0, Content::Gone(_)));
     assert!(matches!(read(Path::new(env!("CARGO_MANIFEST_DIR"))).0, Content::NotRegular));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_device_is_never_read() {
+    assert!(matches!(read(Path::new("/dev/zero")).0, Content::NotRegular));
 }
 
 #[test]

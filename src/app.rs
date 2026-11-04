@@ -880,14 +880,6 @@ fn font_size_from_env() -> f32 {
     std::env::var("CORNERCASE_GPUI_FONT_SIZE").ok().and_then(|s| s.parse().ok()).unwrap_or(13.)
 }
 
-pub(crate) fn tilde(path: &str) -> String {
-    let home = desktop::home_text();
-    match path.strip_prefix(&home) {
-        Some(rest) if !home.is_empty() => format!("~{rest}"),
-        _ => path.to_string(),
-    }
-}
-
 fn start_place() -> Vec<String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     args.windows(2)
