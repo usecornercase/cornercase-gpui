@@ -69,8 +69,11 @@ pub(crate) enum Press {
 }
 
 impl Frame {
-    pub(crate) fn read(window: &Window) -> Self {
-        Self::of(window.window_decorations(), window.window_controls(), window.is_maximized())
+    pub(crate) fn read(window: &Window, os: Os) -> Self {
+        match os {
+            Os::Mac => Self::default(),
+            Os::Linux => Self::of(window.window_decorations(), window.window_controls(), window.is_maximized()),
+        }
     }
 
     pub(crate) fn of(decorations: Decorations, controls: WindowControls, maximised: bool) -> Self {

@@ -135,8 +135,7 @@ fn agent_entries(tab: &Tab) -> Vec<Entry> {
 }
 
 impl Root {
-    pub(crate) fn render_tabs(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let window_frame = Frame::read(window);
+    pub(crate) fn render_tabs(&self, window_frame: Frame, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let row = div()
             .h(px(TITLEBAR_HEIGHT))
             .flex_none()

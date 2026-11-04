@@ -118,7 +118,7 @@ pub(crate) struct SideState {
 }
 
 impl Root {
-    pub(crate) fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(crate) fn render_sidebar(&self, window_frame: Frame, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         div()
             .w(px(self.sidebar_extent()))
             .h_full()
@@ -127,7 +127,7 @@ impl Root {
             .flex()
             .flex_col()
             .pb(px(GAP))
-            .child(frame::title_row(title_strip(Os::CURRENT), Frame::read(window)))
+            .child(frame::title_row(title_strip(Os::CURRENT), window_frame))
             .child(self.sidebar_cards(cx))
             .children(self.render_menu(cx))
     }
