@@ -31,7 +31,9 @@ actions!(cornercase_gpui, [Quit, Hide, HideOthers, ShowAll, Minimise, Zoom, Full
 
 fn on_window(cx: &mut App, act: fn(&Window)) {
     if let Some(window) = cx.active_window() {
-        let _ = window.update(cx, |_, window, _| act(window));
+        cx.defer(move |cx| {
+            let _ = window.update(cx, |_, window, _| act(window));
+        });
     }
 }
 
