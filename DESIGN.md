@@ -15,8 +15,9 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 ## Areas
 
 - [Architecture](design/architecture.md): what each file of `src/` holds, `Store`, panels, widgets.
+- [Releases](design/releases.md) (`.github/workflows/release.yml`, `.github/release/`, `tools/macos/`, `tools/icon.py`, `assets/macos/`, `.cargo/config.toml`, `CHANGELOG.md`): what each platform's download is and how it is built, the macOS bundle and its icon, Windows' C runtime, the Linux build image, checksums, licences and notices, the notes, cutting a release, what waits on signing and packages.
 - [Linux](design/linux.md) (`Cargo.toml`, `platform.rs`, `assets/linux/`, `tools/linux/`): the second platform, platform code as plain logic, building and running it, checking it from a Mac in Docker.
-- [Windows](design/windows.md) (`Cargo.toml`, `build.rs`, `platform.rs`, the `win32.rs` modules, `assets/windows/`, `tools/windows/`): the third platform, a GUI program whose children get no console window, Win32 calls beside the logic that takes the platform, building and checking it from a Mac, CI, what was checked on Windows.
+- [Windows](design/windows.md) (`Cargo.toml`, `build.rs`, `platform.rs`, the `win32.rs` modules, `assets/windows/`, `tools/icon.py`, `.cargo/config.toml`): the third platform, a GUI program whose children get no console window, Win32 calls beside the logic that takes the platform, building and checking it from a Mac, CI, what was checked on Windows.
 - [Window](design/window.md) (`app.rs`, `app/frame.rs`): the connection's two streams, reconnecting, visibility, focus, panels kept alive.
 - [Connection](design/connection.md) (`main.rs`, `cli.rs`, `store.rs`): the command line as the only contract, streams, the ordered queue, `Store`.
 - [Remote servers](design/remote.md) (`cli/remote.rs`, `dialogs/remote.rs`): another machine's server over ssh, the shared connection, quoting, streams that stop there, switching servers, what only works on this Mac.
