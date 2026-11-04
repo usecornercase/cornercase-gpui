@@ -51,3 +51,19 @@ fn on_linux_alt_is_meta_for_any_character() {
 fn on_macos_option_characters_stay_with_the_input_method() {
     assert_eq!(key_event(&stroke("a", Some("Å"), alt_shift()), Os::Mac), None);
 }
+
+#[test]
+fn on_windows_alt_with_a_key_is_meta_as_on_linux() {
+    assert_eq!(
+        key_event(&stroke("b", Some("B"), alt_shift()), Os::Windows),
+        key_event(&stroke("b", Some("B"), alt_shift()), Os::Linux)
+    );
+}
+
+#[test]
+fn on_windows_a_character_alt_gr_types_as_ctrl_alt_goes_as_text() {
+    let ctrl_alt = Modifiers { control: true, alt: true, ..Modifiers::default() };
+    assert_eq!(key_event(&stroke("e", Some("é"), ctrl_alt), Os::Windows), None);
+    assert_eq!(key_event(&stroke("e", None, ctrl_alt), Os::Windows), Some(sent("e", &["ctrl", "alt"])));
+    assert_eq!(key_event(&stroke("e", Some("é"), ctrl_alt), Os::Linux), Some(sent("e", &["ctrl", "alt"])));
+}

@@ -336,9 +336,21 @@ pub(crate) fn find(key: &str, shift: bool, browser: bool, os: Os) -> Option<&'st
         .min_by_key(|s| (s.shift != shift, !s.in_browser()))
 }
 
+pub(crate) fn typed_with_alt_gr(ks: &Keystroke, os: Os) -> bool {
+    let m = ks.modifiers;
+    let mut chars = ks.key_char.as_deref().unwrap_or_default().chars();
+    let typed = chars.next().filter(|c| !c.is_control()).filter(|_| chars.next().is_none());
+    os == Os::Windows
+        && m.control
+        && m.alt
+        && !m.platform
+        && typed.is_some_and(|c| !c.to_lowercase().eq(ks.key.to_lowercase().chars()))
+}
+
 pub(crate) fn left_to_system(ks: &Keystroke, os: Os) -> bool {
     let m = ks.modifiers;
-    os == Os::Windows && ks.key == "f4" && m.alt && !m.control && !m.shift && !m.platform
+    let system = matches!(ks.key.as_str(), "f4" | "space");
+    os == Os::Windows && system && m.alt && !m.control && !m.shift && !m.platform
 }
 
 pub(crate) fn shift_held(ks: &Keystroke, window: &Window) -> bool {
@@ -348,6 +360,7 @@ pub(crate) fn shift_held(ks: &Keystroke, window: &Window) -> bool {
 pub(crate) fn chord(ks: &Keystroke, shift: bool, os: Os, browser: bool) -> Option<(&str, bool)> {
     match os {
         Os::Mac => ks.modifiers.platform.then_some((ks.key.as_str(), ks.modifiers.shift)),
+        Os::Windows if typed_with_alt_gr(ks, os) => None,
         Os::Linux | Os::Windows => control_chord(ks, shift, browser),
     }
 }

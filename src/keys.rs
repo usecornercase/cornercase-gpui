@@ -1,6 +1,7 @@
 use gpui::Keystroke;
 use serde_json::{Value, json};
 
+use crate::keymap;
 use crate::platform::Os;
 
 const NAMED: &[&str] = &[
@@ -54,6 +55,9 @@ fn meta_text(keystroke: &Keystroke, os: Os) -> Option<&str> {
 }
 
 pub(crate) fn key_event(keystroke: &Keystroke, os: Os) -> Option<Value> {
+    if keymap::typed_with_alt_gr(keystroke, os) {
+        return None;
+    }
     let key = keystroke.key.as_str();
     let m = keystroke.modifiers;
     let named = NAMED.contains(&key);

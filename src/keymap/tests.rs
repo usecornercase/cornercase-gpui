@@ -2,7 +2,7 @@ use gpui::{Keystroke, Modifiers};
 
 use super::{
     Command, Group, SHORTCUTS, chord, find, in_group, keys_label, keys_of, labelled, left_to_system, opens_with_system,
-    other_keys, shortcut, system_keys, tab_index,
+    other_keys, shortcut, system_keys, tab_index, typed_with_alt_gr,
 };
 use crate::panels::PanelKind;
 use crate::platform::Os;
@@ -359,12 +359,36 @@ fn windows_takes_the_same_keys_as_linux() {
 }
 
 #[test]
-fn alt_f4_is_left_to_windows_alone() {
+fn alt_f4_and_alt_space_are_left_to_windows_alone() {
     let alt = Modifiers { alt: true, ..Modifiers::default() };
     assert!(left_to_system(&pressed("f4", alt), Os::Windows));
+    assert!(left_to_system(&pressed("space", alt), Os::Windows));
+    assert!(!left_to_system(&pressed("space", alt), Os::Linux));
     assert!(!left_to_system(&pressed("f4", alt), Os::Linux));
     assert!(!left_to_system(&pressed("f4", Modifiers { shift: true, ..alt }), Os::Windows));
     assert!(!left_to_system(&pressed("f4", Modifiers::default()), Os::Windows));
+}
+
+fn typed(key: &str, modifiers: Modifiers, text: &str) -> Keystroke {
+    Keystroke { key_char: Some(text.into()), ..pressed(key, modifiers) }
+}
+
+#[test]
+fn a_character_alt_gr_types_as_ctrl_alt_is_text_on_windows() {
+    assert!(typed_with_alt_gr(&typed("e", CTRL_ALT, "é"), Os::Windows));
+    assert!(typed_with_alt_gr(&typed("2", CTRL_ALT, "@"), Os::Windows));
+    assert!(!typed_with_alt_gr(&typed("e", CTRL_ALT, "é"), Os::Linux));
+    assert!(!typed_with_alt_gr(&typed("e", CTRL_ALT, "e"), Os::Windows));
+    assert!(!typed_with_alt_gr(&typed("e", CTRL, "é"), Os::Windows));
+    assert!(!typed_with_alt_gr(&pressed("e", CTRL_ALT), Os::Windows));
+}
+
+#[test]
+fn a_character_alt_gr_types_never_reads_as_a_shortcut_on_windows() {
+    let pound = typed("c", CTRL_ALT_SHIFT, "¢");
+    assert_eq!(chord(&pound, true, Os::Windows, false), None);
+    assert_eq!(chord(&pressed("c", CTRL_ALT_SHIFT), true, Os::Windows, false), Some(("c", true)));
+    assert_eq!(chord(&pound, true, Os::Linux, false), Some(("c", true)));
 }
 
 #[test]

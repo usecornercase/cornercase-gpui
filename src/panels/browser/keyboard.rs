@@ -1,6 +1,7 @@
 use gpui::{Keystroke, Modifiers};
 use serde_json::{Map, Value, json};
 
+use crate::keymap;
 use crate::platform::Os;
 
 const NAMED: &[(&str, &str, u16)] = &[
@@ -173,20 +174,10 @@ pub(crate) fn commands(ks: &Keystroke) -> Vec<&'static str> {
     COMMANDS.iter().find(|(c, _)| *c == chord).map(|(_, names)| names.split(' ').collect()).unwrap_or_default()
 }
 
-fn alt_gr(ks: &Keystroke, os: Os) -> bool {
-    let m = ks.modifiers;
-    let typed = ks.key_char.as_deref().and_then(single).filter(|c| !c.is_control());
-    os == Os::Windows
-        && m.control
-        && m.alt
-        && !m.platform
-        && typed.is_some_and(|c| !c.to_lowercase().eq(ks.key.to_lowercase().chars()))
-}
-
 pub(crate) fn route(ks: &Keystroke, held: bool, os: Os) -> Route {
     let m = ks.modifiers;
     let meta = m.alt && os != Os::Mac;
-    if alt_gr(ks, os) {
+    if keymap::typed_with_alt_gr(ks, os) {
         return Route::Text;
     }
     if m.platform || m.control || m.function || meta || named(&ks.key).is_some() {
