@@ -4,8 +4,8 @@ use gpui::{
 };
 
 use super::{
-    Control, Frame, Press, Restore, background, cursor, decorations, fitted, min_size, outer, press, restore_step,
-    windowed_size,
+    Control, Frame, Grip, Press, RESTORE_POLL, RESTORE_POLL_LATER, Restore, background, cursor, decorations, fitted,
+    min_size, outer, press, restore_poll, restore_step, windowed_size,
 };
 use crate::platform::Os;
 
@@ -119,6 +119,19 @@ fn a_double_press_on_the_title_row_zooms_and_a_single_one_holds_for_a_move() {
 }
 
 #[test]
+fn a_held_press_starts_one_move_once_the_pointer_drags() {
+    let mut grip = Grip { held: true, claimed: false };
+    assert!(!grip.take_move(false));
+    assert!(grip.take_move(true));
+    assert!(!grip.take_move(true));
+}
+
+#[test]
+fn a_drag_without_a_held_press_moves_nothing() {
+    assert!(!Grip::default().take_move(true));
+}
+
+#[test]
 fn a_right_press_opens_the_window_menu_only_where_there_is_one() {
     assert_eq!(press(MouseButton::Right, 1, false, true), Press::Menu);
     assert_eq!(press(MouseButton::Right, 1, false, false), Press::Pass);
@@ -167,6 +180,15 @@ fn the_windowed_size_comes_back_once_the_compositor_has_left_full_screen() {
 }
 
 #[test]
+fn the_restore_keeps_waiting_for_a_slow_compositor_less_often() {
+    assert_eq!(restore_poll(0), RESTORE_POLL);
+    assert_eq!(restore_poll(99), RESTORE_POLL);
+    assert_eq!(restore_poll(100), RESTORE_POLL_LATER);
+    assert_eq!(restore_poll(u32::MAX), RESTORE_POLL_LATER);
+    assert!(RESTORE_POLL_LATER > RESTORE_POLL);
+}
+
+#[test]
 fn a_window_that_leaves_full_screen_maximised_or_tiled_keeps_its_size() {
     let (screen, windowed) = (bounds(1500., 950.).size, bounds(1304., 824.).size);
     let maximised = Frame::of(Decorations::Client { tiling: Tiling::tiled() }, WindowControls::default(), true);
@@ -178,22 +200,28 @@ fn a_window_that_leaves_full_screen_maximised_or_tiled_keeps_its_size() {
 #[test]
 fn a_linux_window_opened_for_a_margin_the_window_manager_draws_instead_shrinks_by_it() {
     let opened = outer(Os::Linux, (1280., 800.));
-    assert_eq!(fitted(Os::Linux, server(), false, opened), Some(bounds(1280., 800.).size));
+    assert_eq!(fitted(Os::Linux, false, server(), false, opened), Some(bounds(1280., 800.).size));
 }
 
 #[test]
 fn a_window_with_its_own_frame_or_on_a_mac_keeps_its_size() {
     let opened = outer(Os::Linux, (1280., 800.));
-    assert_eq!(fitted(Os::Linux, client(Tiling::default()), false, opened), None);
-    assert_eq!(fitted(Os::Mac, Frame::default(), false, bounds(1280., 800.).size), None);
+    assert_eq!(fitted(Os::Linux, false, client(Tiling::default()), false, opened), None);
+    assert_eq!(fitted(Os::Mac, false, Frame::default(), false, bounds(1280., 800.).size), None);
 }
 
 #[test]
 fn a_maximised_or_full_screen_window_is_left_to_the_window_manager() {
     let opened = outer(Os::Linux, (1280., 800.));
     let maximised = Frame::of(Decorations::Server, WindowControls::default(), true);
-    assert_eq!(fitted(Os::Linux, maximised, false, opened), None);
-    assert_eq!(fitted(Os::Linux, server(), true, opened), None);
+    assert_eq!(fitted(Os::Linux, false, maximised, false, opened), None);
+    assert_eq!(fitted(Os::Linux, false, server(), true, opened), None);
+}
+
+#[test]
+fn a_wayland_window_is_never_fitted_whatever_the_compositor_first_answers() {
+    let opened = outer(Os::Linux, (1280., 800.));
+    assert_eq!(fitted(Os::Linux, true, server(), false, opened), None);
 }
 
 #[test]
