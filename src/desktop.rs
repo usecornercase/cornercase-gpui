@@ -1,4 +1,4 @@
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File, OpenOptions};
 use std::io::{self, Read as _, Seek as _};
 #[cfg(unix)]
@@ -13,6 +13,14 @@ use gpui::App;
 
 use crate::platform::{self, Os};
 
+#[cfg(windows)]
+mod win32;
+#[cfg(not(windows))]
+#[path = "desktop/no_win32.rs"]
+mod win32;
+
+pub(crate) use win32::windows_folder;
+
 const SETTLE: Duration = Duration::from_secs(8);
 const ANSWER: Duration = Duration::from_secs(30);
 const POLL: Duration = Duration::from_millis(20);
@@ -21,6 +29,53 @@ const FILE_MANAGER1: &str = "org.freedesktop.FileManager1";
 const FILE_MANAGER1_PATH: &str = "/org/freedesktop/FileManager1";
 const NO_OPENER: &str = "nothing on this computer opens files: install xdg-utils, which gives xdg-open";
 const SCRATCH_TRIES: usize = 100;
+const RUNNABLE: [&str; 4] = [".com", ".exe", ".bat", ".cmd"];
+const RUN_WHEN_OPENED: &[&str] = &[
+    "appinstaller",
+    "application",
+    "appref-ms",
+    "appx",
+    "bat",
+    "chm",
+    "cmd",
+    "com",
+    "cpl",
+    "diagcab",
+    "exe",
+    "hta",
+    "jar",
+    "js",
+    "jse",
+    "lnk",
+    "msc",
+    "msi",
+    "msix",
+    "msp",
+    "pif",
+    "pl",
+    "ps1",
+    "psc1",
+    "py",
+    "pyc",
+    "pyw",
+    "pyz",
+    "pyzw",
+    "rb",
+    "reg",
+    "scf",
+    "scr",
+    "settingcontent-ms",
+    "sh",
+    "url",
+    "vbe",
+    "vbs",
+    "ws",
+    "wsf",
+    "wsh",
+];
+const A_PROGRAM: &str = "it is a program, which Windows would run rather than open";
+
+pub(crate) const APP_USER_MODEL_ID: &str = "Cornercase.Gpui";
 
 pub(crate) const fn machine(os: Os) -> &'static str {
     match os {
@@ -83,19 +138,80 @@ pub(crate) fn read_primary(_cx: &App) -> Option<String> {
     None
 }
 
+pub(crate) fn set_app_id() {
+    win32::set_app_id(APP_USER_MODEL_ID);
+}
+
 #[cfg(unix)]
-pub(crate) fn executable(path: &Path) -> bool {
+fn has_execute_bit(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt as _;
     std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
 #[cfg(not(unix))]
-pub(crate) fn executable(path: &Path) -> bool {
+fn has_execute_bit(path: &Path) -> bool {
     path.is_file()
 }
 
-pub(crate) fn find_in(dirs: &[PathBuf], name: &str) -> Option<PathBuf> {
-    dirs.iter().filter(|dir| dir.is_absolute()).map(|dir| dir.join(name)).find(|path| executable(path))
+pub(crate) fn extensions(os: Os, pathext: Option<&str>) -> Vec<String> {
+    if os != Os::Windows {
+        return Vec::new();
+    }
+    let listed = pathext.unwrap_or_default().split(';').map(|extension| extension.trim().to_ascii_lowercase());
+    let runnable: Vec<String> = listed.filter(|extension| RUNNABLE.contains(&extension.as_str())).collect();
+    if runnable.is_empty() { RUNNABLE.map(String::from).to_vec() } else { runnable }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Lookup {
+    pub(crate) os: Os,
+    extensions: Vec<String>,
+}
+
+impl Lookup {
+    pub(crate) fn new(os: Os, pathext: Option<&str>) -> Self {
+        Self { os, extensions: extensions(os, pathext) }
+    }
+
+    pub(crate) fn here() -> Self {
+        Self::new(Os::CURRENT, std::env::var("PATHEXT").ok().as_deref())
+    }
+
+    pub(crate) fn find_in(&self, dirs: &[PathBuf], name: &str) -> Option<PathBuf> {
+        dirs.iter().filter(|dir| dir.is_absolute()).find_map(|dir| self.runnable(&dir.join(name)))
+    }
+
+    pub(crate) fn is_program(&self, path: &Path) -> bool {
+        match self.os {
+            Os::Windows => self.listed(path) && path.is_file(),
+            Os::Mac | Os::Linux => has_execute_bit(path),
+        }
+    }
+
+    fn runnable(&self, path: &Path) -> Option<PathBuf> {
+        self.candidates(path).into_iter().find(|candidate| self.is_program(candidate))
+    }
+
+    fn candidates(&self, path: &Path) -> Vec<PathBuf> {
+        if self.extensions.is_empty() || self.listed(path) {
+            return vec![path.to_path_buf()];
+        }
+        let named = |extension: &String| {
+            let mut name = path.as_os_str().to_owned();
+            name.push(extension);
+            PathBuf::from(name)
+        };
+        self.extensions.iter().map(named).collect()
+    }
+
+    fn listed(&self, path: &Path) -> bool {
+        let extension = path.extension().and_then(OsStr::to_str).map(|e| format!(".{}", e.to_ascii_lowercase()));
+        extension.is_some_and(|extension| self.extensions.contains(&extension))
+    }
+}
+
+pub(crate) fn executable(path: &Path) -> bool {
+    Lookup::here().is_program(path)
 }
 
 pub(crate) fn path_dirs() -> Vec<PathBuf> {
@@ -103,10 +219,46 @@ pub(crate) fn path_dirs() -> Vec<PathBuf> {
 }
 
 pub(crate) fn on_path(name: &str) -> Option<PathBuf> {
-    find_in(&path_dirs(), name)
+    Lookup::here().find_in(&path_dirs(), name)
 }
 
-pub(crate) fn data_dirs(home: Option<&Path>, data_home: Option<OsString>, shared: Option<OsString>) -> Vec<PathBuf> {
+pub(crate) fn runs_when_opened(os: Os, path: &Path) -> bool {
+    match os {
+        Os::Windows => real(path).ok().is_none_or(|real| windows_runs(&real)),
+        Os::Mac | Os::Linux => has_execute_bit(path),
+    }
+}
+
+fn windows_runs(path: &Path) -> bool {
+    let extension = path.extension();
+    let known = |e: &str| RUN_WHEN_OPENED.iter().any(|runs| e.eq_ignore_ascii_case(runs));
+    extension.and_then(OsStr::to_str).is_some_and(known) || extension.is_some_and(win32::dangerous)
+}
+
+pub(crate) fn plain(path: &Path) -> PathBuf {
+    let Some(text) = path.to_str() else { return path.to_path_buf() };
+    if let Some(share) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{share}"));
+    }
+    match text.strip_prefix(r"\\?\") {
+        Some(local) if local.as_bytes().get(1) == Some(&b':') => PathBuf::from(local),
+        _ => path.to_path_buf(),
+    }
+}
+
+fn real(path: &Path) -> io::Result<PathBuf> {
+    std::fs::canonicalize(path).map(|real| plain(&real))
+}
+
+pub(crate) fn data_dirs(
+    os: Os,
+    home: Option<&Path>,
+    data_home: Option<OsString>,
+    shared: Option<OsString>,
+) -> Vec<PathBuf> {
+    if os == Os::Windows {
+        return Vec::new();
+    }
     let absolute = |dir: &PathBuf| dir.is_absolute();
     let own = data_home.map(PathBuf::from).filter(absolute).or_else(|| home.map(|h| h.join(".local/share")));
     let shared: Vec<PathBuf> = match shared.filter(|s| !s.is_empty()) {
@@ -117,7 +269,12 @@ pub(crate) fn data_dirs(home: Option<&Path>, data_home: Option<OsString>, shared
 }
 
 pub(crate) fn xdg_data_dirs() -> Vec<PathBuf> {
-    data_dirs(home().as_deref(), std::env::var_os("XDG_DATA_HOME"), std::env::var_os("XDG_DATA_DIRS"))
+    let (data_home, shared) = (std::env::var_os("XDG_DATA_HOME"), std::env::var_os("XDG_DATA_DIRS"));
+    data_dirs(Os::CURRENT, home().as_deref(), data_home, shared)
+}
+
+pub(crate) fn system_data_dirs() -> Vec<PathBuf> {
+    xdg_data_dirs().into_iter().chain(windows_folder()).collect()
 }
 
 pub(crate) fn home() -> Option<PathBuf> {
@@ -143,7 +300,7 @@ fn opener(os: Os, find: &dyn Fn(&str) -> Option<PathBuf>) -> Option<Vec<String>>
 }
 
 pub(crate) fn opens(os: Os, find: &dyn Fn(&str) -> Option<PathBuf>) -> bool {
-    opener(os, find).is_some()
+    os == Os::Windows || opener(os, find).is_some()
 }
 
 pub(crate) fn reveals(os: Os, find: &dyn Fn(&str) -> Option<PathBuf>) -> bool {
@@ -202,24 +359,94 @@ fn folder_of(path: &Path, dir: bool) -> &Path {
     if dir { path } else { path.parent().unwrap_or(path) }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Shell {
+    verb: Option<&'static str>,
+    file: OsString,
+    parameters: Option<OsString>,
+}
+
+impl Shell {
+    fn open(path: &Path) -> Self {
+        Self { verb: None, file: path.into(), parameters: None }
+    }
+
+    fn explore(folder: &Path) -> Self {
+        Self { verb: Some("explore"), file: folder.into(), parameters: None }
+    }
+
+    fn select(path: &Path, windows: &Path) -> Self {
+        let mut select = OsString::from("/select,\"");
+        select.push(path);
+        select.push("\"");
+        Self { verb: None, file: windows.join("explorer.exe").into(), parameters: Some(select) }
+    }
+
+    fn run(&self) -> Result<()> {
+        win32::shell_open(self.verb, &self.file, self.parameters.as_deref()).map_err(|why| anyhow!(why))
+    }
+}
+
+fn explorer_steps(path: &Path, dir: bool, windows: Option<&Path>) -> Vec<Shell> {
+    if dir {
+        return vec![Shell::explore(path)];
+    }
+    let select = windows.map(|windows| Shell::select(path, windows));
+    select.into_iter().chain([Shell::explore(folder_of(path, false))]).collect()
+}
+
+fn shown_in(os: Os) -> &'static str {
+    match os {
+        Os::Mac => "the Finder",
+        Os::Linux => "the file manager",
+        Os::Windows => "File Explorer",
+    }
+}
+
 pub(crate) fn open(path: &Path) -> Result<()> {
     launch(path).with_context(|| format!("could not open {}", path.display()))
 }
 
 fn launch(path: &Path) -> Result<()> {
+    if Os::CURRENT == Os::Windows {
+        return shell_launch(path);
+    }
     let argv = open_argv(Os::CURRENT, path, &on_path).ok_or_else(|| anyhow!(NO_OPENER))?;
     run(&argv)
 }
 
+fn shell_launch(path: &Path) -> Result<()> {
+    let real = real(path)?;
+    if !real.is_dir() && windows_runs(&real) {
+        bail!(A_PROGRAM);
+    }
+    Shell::open(&real).run()
+}
+
 pub(crate) fn reveal(path: &Path, dir: bool) -> Result<()> {
     let os = Os::CURRENT;
+    let result = if os == Os::Windows { explorer_reveal(path, dir) } else { file_manager_reveal(os, path, dir) };
+    result.with_context(|| format!("could not show {} in {}", path.display(), shown_in(os)))
+}
+
+fn file_manager_reveal(os: Os, path: &Path, dir: bool) -> Result<()> {
     let shown = reveal_argv(os, path, dir, &on_path).map(|argv| run_within(&argv, reveal_wait(os)));
-    let result = match (os, shown) {
+    match (os, shown) {
         (_, Some(Ok(()))) => Ok(()),
         (Os::Mac, Some(Err(e))) => Err(e),
         _ => launch(folder_of(path, dir)),
-    };
-    result.with_context(|| format!("could not show {} in the {}", path.display(), file_manager(os)))
+    }
+}
+
+fn explorer_reveal(path: &Path, dir: bool) -> Result<()> {
+    let mut shown = Err(anyhow!("nothing to run"));
+    for step in explorer_steps(&plain(path), dir, windows_folder().as_deref()) {
+        shown = step.run();
+        if shown.is_ok() {
+            break;
+        }
+    }
+    shown
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

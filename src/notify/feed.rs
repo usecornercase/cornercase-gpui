@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::platform::Os;
 use crate::store::ToastKind;
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -198,13 +199,35 @@ impl Prefs {
         prefs
     }
 
-    pub(crate) fn own_sound(&self, cue: &str, home: &str) -> Option<String> {
+    pub(crate) fn own_sound(&self, os: Os, cue: &str, home: &str) -> Option<String> {
         let own = if cue == "finished" { &self.sound_done } else { &self.sound_waiting };
-        let own = match own.strip_prefix("~/") {
-            Some(rest) if !home.is_empty() => format!("{home}/{rest}"),
-            _ => own.clone(),
-        };
-        (own.starts_with('/') && std::path::Path::new(&own).is_file()).then_some(own)
+        sound_path(os, own, home).filter(|own| std::path::Path::new(own).is_file())
+    }
+}
+
+pub(super) fn sound_path(os: Os, own: &str, home: &str) -> Option<String> {
+    match os {
+        Os::Mac | Os::Linux => {
+            let own = match own.strip_prefix("~/") {
+                Some(rest) if !home.is_empty() => format!("{home}/{rest}"),
+                _ => own.to_string(),
+            };
+            own.starts_with('/').then_some(own)
+        }
+        Os::Windows => {
+            let own = match own.strip_prefix("~/").or_else(|| own.strip_prefix("~\\")) {
+                Some(rest) if !home.is_empty() => format!("{home}\\{}", rest.replace('/', "\\")),
+                _ => own.to_string(),
+            };
+            on_a_drive(&own).then_some(own)
+        }
+    }
+}
+
+fn on_a_drive(path: &str) -> bool {
+    match path.as_bytes() {
+        [drive, b':', b'\\' | b'/', ..] => drive.is_ascii_alphabetic(),
+        _ => false,
     }
 }
 

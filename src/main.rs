@@ -116,6 +116,7 @@ fn open_window(cx: &mut App) {
 }
 
 fn main() {
+    desktop::set_app_id();
     let target = cli::Target::from_args(&std::env::args().collect::<Vec<_>>()).unwrap_or_else(|e| {
         eprintln!("cornercase-gpui: {e}");
         std::process::exit(2)

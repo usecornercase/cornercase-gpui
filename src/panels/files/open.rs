@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::desktop;
+use crate::desktop::{self, Lookup};
 use crate::platform::Os;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -43,9 +43,10 @@ pub(super) enum Launch {
     Bundle(PathBuf),
 }
 
-pub(super) fn find(os: Os, path: &[PathBuf], extra: &[PathBuf], apps: &[PathBuf]) -> Vec<(Opener, Launch)> {
-    let on_path = |name: &str| desktop::find_in(path, name);
-    let on = |name: &str| on_path(name).or_else(|| desktop::find_in(extra, name));
+pub(super) fn find(lookup: &Lookup, path: &[PathBuf], extra: &[PathBuf], apps: &[PathBuf]) -> Vec<(Opener, Launch)> {
+    let os = lookup.os;
+    let on_path = |name: &str| lookup.find_in(path, name);
+    let on = |name: &str| on_path(name).or_else(|| lookup.find_in(extra, name));
     let mut found = Vec::new();
     if desktop::reveals(os, &on_path) {
         found.push((Opener::FileManager, Launch::Desktop));
@@ -67,15 +68,29 @@ pub(super) fn find(os: Os, path: &[PathBuf], extra: &[PathBuf], apps: &[PathBuf]
     found
 }
 
-pub(super) fn extra_dirs(os: Os, home: Option<&Path>) -> Vec<PathBuf> {
-    if os != Os::Linux {
-        return Vec::new();
+pub(super) fn extra_dirs(os: Os, home: Option<&Path>, var: &dyn Fn(&str) -> Option<PathBuf>) -> Vec<PathBuf> {
+    match os {
+        Os::Mac => Vec::new(),
+        Os::Linux => snaps_and_flatpaks(home),
+        Os::Windows => install_folders(var),
     }
+}
+
+fn snaps_and_flatpaks(home: Option<&Path>) -> Vec<PathBuf> {
     let user = home.map(|home| home.join(".local/share/flatpak/exports/bin"));
     [Some(PathBuf::from("/snap/bin")), user, Some(PathBuf::from("/var/lib/flatpak/exports/bin"))]
         .into_iter()
         .flatten()
         .collect()
+}
+
+fn install_folders(var: &dyn Fn(&str) -> Option<PathBuf>) -> Vec<PathBuf> {
+    let own = var("LOCALAPPDATA").map(|local| local.join("Programs"));
+    let shared = var("ProgramFiles");
+    let vs_code = [&own, &shared].into_iter().flatten().map(|dir| dir.join("Microsoft VS Code").join("bin"));
+    let zed = own.iter().map(|dir| dir.join("Zed").join("bin"));
+    let sublime = shared.iter().flat_map(|dir| [dir.join("Sublime Text"), dir.join("Sublime Text 3")]);
+    vs_code.chain(zed).chain(sublime).collect()
 }
 
 pub(super) fn app_folders(os: Os, home: Option<&Path>) -> Vec<PathBuf> {
@@ -88,11 +103,13 @@ pub(super) fn app_folders(os: Os, home: Option<&Path>) -> Vec<PathBuf> {
 pub(super) fn detect() -> Vec<(Opener, Launch)> {
     let os = Os::CURRENT;
     let home = desktop::home();
-    find(os, &desktop::path_dirs(), &extra_dirs(os, home.as_deref()), &app_folders(os, home.as_deref()))
+    let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
+    let extra = extra_dirs(os, home.as_deref(), &var);
+    find(&Lookup::here(), &desktop::path_dirs(), &extra, &app_folders(os, home.as_deref()))
 }
 
-pub(super) fn default_app_opens(path: &Path, dir: bool) -> bool {
-    !dir && !desktop::executable(path)
+pub(super) fn default_app_opens(os: Os, path: &Path, dir: bool) -> bool {
+    !dir && !desktop::runs_when_opened(os, path)
 }
 
 pub(super) fn argv(
