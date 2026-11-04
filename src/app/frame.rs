@@ -33,6 +33,24 @@ pub(crate) fn outer(os: Os, (width, height): (f32, f32)) -> Size<Pixels> {
     size(px(width + margin), px(height + margin))
 }
 
+pub(crate) fn min_size(os: Os, wayland: bool, (width, height): (f32, f32)) -> Size<Pixels> {
+    if wayland { size(px(width), px(height)) } else { outer(os, (width, height)) }
+}
+
+pub(crate) fn fitted(os: Os, frame: Frame, full_screen: bool, now: Size<Pixels>) -> Option<Size<Pixels>> {
+    let windowed = !full_screen && !frame.maximised && !frame.tiling.is_tiled();
+    let margin = outer(os, (0., 0.));
+    (margin.width > px(0.) && !frame.drawn && windowed)
+        .then(|| size(now.width - margin.width, now.height - margin.height))
+}
+
+pub(crate) fn fit_to_frame(os: Os, window: &mut Window) {
+    let frame = Frame::read(window, os);
+    if let Some(size) = fitted(os, frame, window.is_fullscreen(), window.bounds().size) {
+        window.resize(size);
+    }
+}
+
 pub(crate) fn background(os: Os) -> WindowBackgroundAppearance {
     match os {
         Os::Mac => WindowBackgroundAppearance::Blurred,

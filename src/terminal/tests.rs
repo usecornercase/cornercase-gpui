@@ -1,8 +1,9 @@
 use gpui::CursorStyle;
 
 use super::pane_menu::move_pane_args;
-use super::selection::word_at;
+use super::selection::{read_args, word_at};
 use super::{cycled, divider_cursor};
+use crate::desktop::Board;
 use crate::render::moving::{Aim, Place};
 
 #[test]
@@ -36,4 +37,10 @@ fn cycling_wraps_around_both_ways() {
     assert_eq!(cycled(&ids, Some(7), 1), Some(9));
     assert_eq!(cycled(&ids, None, 1), Some(7));
     assert_eq!(cycled(&[], Some(1), 1), None);
+}
+
+#[test]
+fn copying_asks_cornercase_to_copy_while_the_primary_selection_only_reads_the_text() {
+    assert_eq!(read_args(4, Board::Clipboard), ["selection", "--pane", "4", "--copy", "--json"]);
+    assert_eq!(read_args(4, Board::Primary), ["selection", "--pane", "4", "--json"]);
 }

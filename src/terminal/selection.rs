@@ -1,6 +1,8 @@
 use crate::app::{Msg, Root};
+use crate::desktop::{self, Board};
 use crate::model::PaneGrid;
 use crate::model::link::row_cells;
+use crate::platform::Os;
 
 pub(super) fn class(cell: &str) -> u8 {
     match cell.chars().next() {
@@ -37,6 +39,15 @@ pub(super) fn selection_args(pane: u64, from: (u16, u16), to: (u16, u16)) -> Vec
     ]
 }
 
+pub(super) fn read_args(pane: u64, board: Board) -> Vec<String> {
+    let mut args = vec!["selection".into(), "--pane".into(), pane.to_string()];
+    if board == Board::Clipboard {
+        args.push("--copy".into());
+    }
+    args.push("--json".into());
+    args
+}
+
 pub(super) fn column(index: usize) -> u16 {
     u16::try_from(index).unwrap_or(u16::MAX)
 }
@@ -48,19 +59,26 @@ fn text_of_selection(out: &str) -> Option<String> {
 
 impl Root {
     pub(crate) fn copy_selection(&self, pane: u64) {
+        self.keep_selection(pane, Board::Clipboard);
+    }
+
+    pub(super) fn selection_made(&self, pane: u64) {
+        self.keep_selection(pane, desktop::selection_board(Os::CURRENT));
+    }
+
+    fn keep_selection(&self, pane: u64, board: Board) {
         let tx = self.tx.clone();
-        let args = ["selection", "--pane", &pane.to_string(), "--copy", "--json"].map(String::from);
-        self.queue.cmd_then(args.to_vec(), move |r| {
+        self.queue.cmd_then(read_args(pane, board), move |r| {
             let text = r.ok().and_then(|out| text_of_selection(&out));
             if let Some(text) = text.filter(|t| !t.is_empty()) {
-                let _ = tx.unbounded_send(Msg::Copied(text));
+                let _ = tx.unbounded_send(Msg::Copied(board, text));
             }
         });
     }
 
     fn select(&self, pane: u64, from: (u16, u16), to: (u16, u16)) {
         self.queue.cmd(selection_args(pane, from, to));
-        self.copy_selection(pane);
+        self.selection_made(pane);
     }
 
     pub(super) fn select_by_clicks(&self, pane: &PaneGrid, (x, y): (u16, u16), clicks: usize) {

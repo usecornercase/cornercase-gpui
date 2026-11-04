@@ -176,6 +176,7 @@ const LINUX_OTHER_KEYS: &[(&str, &str)] = &[
     ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("Ctrl+click", "Open a link or a path with its default app"),
+    ("Middle click", "Paste what is selected, Shift+middle click where a program takes the mouse"),
 ];
 
 pub(crate) fn system_keys(os: Os) -> &'static [(&'static str, &'static str)] {

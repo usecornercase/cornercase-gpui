@@ -87,6 +87,31 @@ fn system_keys(cx: &mut App) {
     ]);
 }
 
+fn open_window(cx: &mut App) {
+    let bounds = Bounds::centered(None, app::frame::outer(Os::CURRENT, (1280., 800.)), cx);
+    let wayland = cx.compositor_name() == "Wayland";
+    cx.open_window(
+        WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            titlebar: Some(TitlebarOptions {
+                title: Some("cornercase".into()),
+                appears_transparent: true,
+                traffic_light_position: Some(point(px(16.), px(16.))),
+            }),
+            window_background: app::frame::background(Os::CURRENT),
+            window_decorations: app::frame::decorations(Os::CURRENT),
+            app_id: Some(app::frame::APP_ID.into()),
+            window_min_size: Some(app::frame::min_size(Os::CURRENT, wayland, (640., 360.))),
+            ..Default::default()
+        },
+        |window, cx| {
+            app::frame::fit_to_frame(Os::CURRENT, window);
+            cx.new(|cx| app::Root::new(window, cx))
+        },
+    )
+    .expect("could not open the window");
+}
+
 fn main() {
     let target = cli::Target::from_args(&std::env::args().collect::<Vec<_>>()).unwrap_or_else(|e| {
         eprintln!("cornercase-gpui: {e}");
@@ -108,24 +133,7 @@ fn main() {
         })
         .detach();
 
-        let bounds = Bounds::centered(None, app::frame::outer(Os::CURRENT, (1280., 800.)), cx);
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                titlebar: Some(TitlebarOptions {
-                    title: Some("cornercase".into()),
-                    appears_transparent: true,
-                    traffic_light_position: Some(point(px(16.), px(16.))),
-                }),
-                window_background: app::frame::background(Os::CURRENT),
-                window_decorations: app::frame::decorations(Os::CURRENT),
-                app_id: Some(app::frame::APP_ID.into()),
-                window_min_size: Some(app::frame::outer(Os::CURRENT, (640., 360.))),
-                ..Default::default()
-            },
-            |window, cx| cx.new(|cx| app::Root::new(window, cx)),
-        )
-        .expect("could not open the window");
+        open_window(cx);
         cx.activate(true);
     });
 }

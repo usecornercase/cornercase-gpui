@@ -1,4 +1,8 @@
-use super::file_of;
+use gpui::MouseButton::{Left, Middle, Navigate, Right};
+use gpui::NavigationDirection;
+
+use super::{Press, buttons, file_of, press_for};
+use crate::platform::Os;
 
 #[test]
 fn a_file_link_names_its_path_whatever_its_host() {
@@ -20,4 +24,25 @@ fn only_a_file_link_names_a_path() {
     assert_eq!(file_of("https://example.com/a"), None);
     assert_eq!(file_of("file://devbox"), None);
     assert_eq!(file_of("file:relative"), None);
+}
+
+#[test]
+fn the_middle_button_is_heard_only_where_it_pastes_the_primary_selection() {
+    assert_eq!(buttons(Os::Mac), [Left, Right]);
+    assert_eq!(buttons(Os::Linux), [Left, Middle, Right]);
+}
+
+#[test]
+fn a_program_that_reads_the_mouse_gets_the_press_unless_shift_is_held() {
+    assert_eq!(press_for(Left, true, false), Press::Program);
+    assert_eq!(press_for(Middle, true, false), Press::Program);
+    assert_eq!(press_for(Left, true, true), Press::Select);
+    assert_eq!(press_for(Middle, true, true), Press::PastePrimary);
+}
+
+#[test]
+fn otherwise_the_left_button_selects_and_the_middle_one_pastes() {
+    assert_eq!(press_for(Left, false, false), Press::Select);
+    assert_eq!(press_for(Middle, false, false), Press::PastePrimary);
+    assert_eq!(press_for(Navigate(NavigationDirection::Back), false, false), Press::Nothing);
 }

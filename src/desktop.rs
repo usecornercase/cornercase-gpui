@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, anyhow, bail};
+use gpui::App;
 
 use crate::platform::Os;
 
@@ -43,6 +44,38 @@ pub(crate) fn show_label(os: Os, dir: bool) -> String {
         (Os::Linux, false) => "Show in file manager".to_string(),
         (_, true) => format!("Open in {}", file_manager(os)),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Board {
+    Clipboard,
+    Primary,
+}
+
+pub(crate) const fn has_primary(os: Os) -> bool {
+    matches!(os, Os::Linux)
+}
+
+pub(crate) const fn selection_board(os: Os) -> Board {
+    if has_primary(os) { Board::Primary } else { Board::Clipboard }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn write_primary(text: &str, cx: &App) {
+    cx.write_to_primary(gpui::ClipboardItem::new_string(text.to_string()));
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn write_primary(_text: &str, _cx: &App) {}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn read_primary(cx: &App) -> Option<String> {
+    cx.read_from_primary().and_then(|item| item.text()).filter(|text| !text.is_empty())
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn read_primary(_cx: &App) -> Option<String> {
+    None
 }
 
 pub(crate) fn executable(path: &Path) -> bool {

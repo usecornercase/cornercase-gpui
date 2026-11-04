@@ -170,3 +170,9 @@ fn a_scratch_file_is_private_and_has_no_name() {
     assert_eq!(meta.permissions().mode() & 0o777, 0o600);
     assert_eq!(meta.nlink(), 0);
 }
+
+#[test]
+fn a_finished_selection_is_copied_on_a_mac_and_kept_in_the_primary_selection_on_linux() {
+    assert_eq!(selection_board(Os::Mac), Board::Clipboard);
+    assert_eq!(selection_board(Os::Linux), Board::Primary);
+}
