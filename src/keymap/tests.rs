@@ -1,8 +1,8 @@
 use gpui::{Keystroke, Modifiers};
 
 use super::{
-    Command, Group, SHORTCUTS, chord, find, in_group, keys_label, keys_of, labelled, opens_with_system, other_keys,
-    shortcut, system_keys, tab_index,
+    Command, Group, SHORTCUTS, chord, find, in_group, keys_label, keys_of, labelled, left_to_system, opens_with_system,
+    other_keys, shortcut, system_keys, tab_index,
 };
 use crate::panels::PanelKind;
 use crate::platform::Os;
@@ -336,11 +336,45 @@ fn the_system_keys_follow_the_platform() {
 }
 
 #[test]
+fn windows_quits_with_alt_f4_and_lists_no_mac_key() {
+    assert_eq!(system_keys(Os::Windows).last(), Some(&("Alt+F4", "Quit")));
+    assert_eq!(system_keys(Os::Windows).len(), system_keys(Os::Linux).len());
+    let labels = SHORTCUTS.iter().map(|s| s.label(Os::Windows));
+    let listed = system_keys(Os::Windows).iter().chain(other_keys(Os::Windows)).map(|(keys, _)| (*keys).to_string());
+    for label in labels.chain(listed) {
+        assert!(!label.contains(['⌘', '⇧', '⌥', '⌃', '↩']), "{label} is a Mac key");
+    }
+    assert!(other_keys(Os::Windows).iter().all(|(keys, _)| !keys.contains("Middle")));
+}
+
+#[test]
+fn windows_takes_the_same_keys_as_linux() {
+    for s in SHORTCUTS {
+        assert_eq!(s.label(Os::Windows), s.label(Os::Linux));
+    }
+    for (key, modifiers) in [("t", CTRL_SHIFT), ("2", ALT), ("{", CTRL_SHIFT), ("c", CTRL_SHIFT)] {
+        let ks = pressed(key, modifiers);
+        assert_eq!(chord(&ks, true, Os::Windows, false), chord(&ks, true, Os::Linux, false));
+    }
+}
+
+#[test]
+fn alt_f4_is_left_to_windows_alone() {
+    let alt = Modifiers { alt: true, ..Modifiers::default() };
+    assert!(left_to_system(&pressed("f4", alt), Os::Windows));
+    assert!(!left_to_system(&pressed("f4", alt), Os::Linux));
+    assert!(!left_to_system(&pressed("f4", Modifiers { shift: true, ..alt }), Os::Windows));
+    assert!(!left_to_system(&pressed("f4", Modifiers::default()), Os::Windows));
+}
+
+#[test]
 fn a_link_opens_with_the_system_on_command_or_ctrl_click() {
     assert!(opens_with_system(SUPER, Os::Mac));
     assert!(!opens_with_system(CTRL, Os::Mac));
     assert!(opens_with_system(CTRL, Os::Linux));
     assert!(!opens_with_system(SUPER, Os::Linux));
+    assert!(opens_with_system(CTRL, Os::Windows));
+    assert!(!opens_with_system(SUPER, Os::Windows));
 }
 
 #[test]

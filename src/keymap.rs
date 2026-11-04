@@ -161,12 +161,8 @@ const MAC_SYSTEM_KEYS: &[(&str, &str)] = &[
 const LINUX_SYSTEM_KEYS: &[(&str, &str)] =
     &[("Ctrl+Shift+M", "Minimise the window"), ("F11", "Full screen"), ("Ctrl+Shift+Q", "Quit")];
 
-const WINDOWS_SYSTEM_KEYS: &[(&str, &str)] = &[
-    ("Ctrl+Shift+M", "Minimise the window"),
-    ("F11", "Full screen"),
-    ("Alt+F4", "Close the window"),
-    ("Ctrl+Shift+Q", "Quit"),
-];
+const WINDOWS_SYSTEM_KEYS: &[(&str, &str)] =
+    &[("Ctrl+Shift+M", "Minimise the window"), ("F11", "Full screen"), ("Alt+F4", "Quit")];
 
 const MAC_OTHER_KEYS: &[(&str, &str)] = &[
     ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),

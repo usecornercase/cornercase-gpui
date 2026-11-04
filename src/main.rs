@@ -49,11 +49,12 @@ fn system_bindings(os: Os) -> Vec<KeyBinding> {
             KeyBinding::new("cmd-m", Minimise, None),
             KeyBinding::new("ctrl-cmd-f", FullScreen, None),
         ],
-        Os::Linux | Os::Windows => vec![
+        Os::Linux => vec![
             KeyBinding::new("ctrl-shift-q", Quit, None),
             KeyBinding::new("ctrl-shift-m", Minimise, None),
             KeyBinding::new("f11", FullScreen, None),
         ],
+        Os::Windows => vec![KeyBinding::new("ctrl-shift-m", Minimise, None), KeyBinding::new("f11", FullScreen, None)],
     }
 }
 

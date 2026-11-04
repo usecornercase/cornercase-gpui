@@ -6,7 +6,7 @@ use crate::platform::Os;
 fn every_section_shows_once_on_each_platform() {
     let mut all: Vec<Section> = Group::ALL.into_iter().map(Section::Keys).collect();
     all.extend([Section::System, Section::Elsewhere]);
-    for os in [Os::Mac, Os::Linux] {
+    for os in [Os::Mac, Os::Linux, Os::Windows] {
         let shown: Vec<Section> = columns(os).concat();
         assert_eq!(shown.len(), all.len(), "{os:?}");
         assert!(all.iter().all(|s| shown.contains(s)), "{os:?}");
