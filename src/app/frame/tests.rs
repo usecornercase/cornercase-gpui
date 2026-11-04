@@ -1,9 +1,11 @@
 use gpui::{
-    CursorStyle, Decorations, MouseButton, ResizeEdge, Tiling, WindowBackgroundAppearance, WindowControls,
-    WindowDecorations,
+    CursorStyle, Decorations, MouseButton, ResizeEdge, Tiling, WindowBackgroundAppearance, WindowBounds,
+    WindowControls, WindowDecorations,
 };
 
-use super::{Control, Frame, Press, background, cursor, decorations, outer, press};
+use super::{
+    Control, Frame, Press, Restore, background, cursor, decorations, outer, press, restore_step, windowed_size,
+};
 use crate::platform::Os;
 
 fn client(tiling: Tiling) -> Frame {
@@ -135,4 +137,39 @@ fn a_linux_window_opens_larger_by_its_margins_so_it_shows_the_size_a_mac_does() 
     let linux = outer(Os::Linux, (1280., 800.));
     let m = client(Tiling::default()).margins();
     assert_eq!(linux, gpui::size(gpui::px(1280. + m.left + m.right), gpui::px(800. + m.top + m.bottom)));
+}
+
+fn bounds(width: f32, height: f32) -> gpui::Bounds<gpui::Pixels> {
+    gpui::Bounds::new(gpui::point(gpui::px(0.), gpui::px(0.)), gpui::size(gpui::px(width), gpui::px(height)))
+}
+
+#[test]
+fn leaving_full_screen_on_linux_remembers_the_windowed_size() {
+    let windowed = bounds(1304., 824.);
+    assert_eq!(windowed_size(Os::Linux, WindowBounds::Fullscreen(windowed)), Some(windowed.size));
+    assert_eq!(windowed_size(Os::Linux, WindowBounds::Windowed(windowed)), None);
+    assert_eq!(windowed_size(Os::Linux, WindowBounds::Maximized(windowed)), None);
+}
+
+#[test]
+fn a_mac_leaves_full_screen_as_before() {
+    assert_eq!(windowed_size(Os::Mac, WindowBounds::Fullscreen(bounds(1280., 800.))), None);
+}
+
+#[test]
+fn the_windowed_size_comes_back_once_the_compositor_has_left_full_screen() {
+    let (screen, windowed) = (bounds(1500., 950.).size, bounds(1304., 824.).size);
+    let floating = client(Tiling::default());
+    assert_eq!(restore_step(true, client(Tiling::tiled()), screen, windowed), Restore::Wait);
+    assert_eq!(restore_step(false, floating, screen, windowed), Restore::Resize);
+    assert_eq!(restore_step(false, floating, windowed, windowed), Restore::Done);
+}
+
+#[test]
+fn a_window_that_leaves_full_screen_maximised_or_tiled_keeps_its_size() {
+    let (screen, windowed) = (bounds(1500., 950.).size, bounds(1304., 824.).size);
+    let maximised = Frame::of(Decorations::Client { tiling: Tiling::tiled() }, WindowControls::default(), true);
+    assert_eq!(restore_step(false, maximised, screen, windowed), Restore::Done);
+    let tiled = client(Tiling { left: true, top: true, bottom: true, right: false });
+    assert_eq!(restore_step(false, tiled, screen, windowed), Restore::Done);
 }

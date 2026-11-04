@@ -30,10 +30,10 @@ use crate::platform::Os;
 
 actions!(cornercase_gpui, [Quit, Hide, HideOthers, ShowAll, Minimise, Zoom, FullScreen]);
 
-fn on_window(cx: &mut App, act: fn(&Window)) {
+fn on_window(cx: &mut App, act: fn(&mut Window, &mut App)) {
     if let Some(window) = cx.active_window() {
         cx.defer(move |cx| {
-            let _ = window.update(cx, |_, window, _| act(window));
+            let _ = window.update(cx, |_, window, cx| act(window, cx));
         });
     }
 }
@@ -60,9 +60,9 @@ fn system_keys(cx: &mut App) {
     cx.on_action(|_: &Hide, cx| cx.hide());
     cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
     cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
-    cx.on_action(|_: &Minimise, cx| on_window(cx, Window::minimize_window));
-    cx.on_action(|_: &Zoom, cx| on_window(cx, Window::zoom_window));
-    cx.on_action(|_: &FullScreen, cx| on_window(cx, Window::toggle_fullscreen));
+    cx.on_action(|_: &Minimise, cx| on_window(cx, |window, _| window.minimize_window()));
+    cx.on_action(|_: &Zoom, cx| on_window(cx, |window, _| window.zoom_window()));
+    cx.on_action(|_: &FullScreen, cx| on_window(cx, app::frame::toggle_full_screen));
     cx.bind_keys(system_bindings(Os::CURRENT));
     cx.set_menus(vec![
         Menu {
