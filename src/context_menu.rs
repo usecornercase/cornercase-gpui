@@ -103,6 +103,7 @@ impl Root {
         }
         let focus = cx.focus_handle();
         window.focus(&focus);
+        window.prevent_default();
         self.side.menu = Some(Menu { at, entries, focus, highlight: None });
         cx.notify();
     }

@@ -22,7 +22,10 @@ struct Source {
 impl Source {
     fn read(root: &Path, path: &Path) -> Self {
         let text = fs::read_to_string(path).expect("source is readable");
-        let path = path.strip_prefix(root).expect("source is under the root").to_string_lossy().into_owned();
+        let relative = path.strip_prefix(root).expect("source is under the root");
+        let parts: Vec<String> =
+            relative.components().map(|part| part.as_os_str().to_string_lossy().into_owned()).collect();
+        let path = parts.join("/");
         let (code, comments) = Lexer::new(&text).split();
         Self { module: module_of(&path), path, text, code, comments }
     }

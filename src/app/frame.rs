@@ -1,16 +1,23 @@
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, AnyWindowHandle, App, BoxShadow, ClickEvent, CursorStyle, Decorations, Div, Global, Hsla,
+    AnyElement, AnyWindowHandle, App, BoxShadow, ClickEvent, CursorStyle, Decorations, Div, FocusHandle, Global, Hsla,
     InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement as _, Pixels,
-    ResizeEdge, Size, Stateful, StatefulInteractiveElement as _, Styled, Tiling, Window, WindowBackgroundAppearance,
-    WindowBounds, WindowControls, WindowDecorations, div, point, prelude::FluentBuilder as _, px, size,
+    ResizeEdge, Rgba, Size, Stateful, StatefulInteractiveElement as _, Styled, Tiling, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls, WindowDecorations, div, point,
+    prelude::FluentBuilder as _, px, size,
 };
 
-use super::GAP;
+use super::{GAP, TITLEBAR_HEIGHT};
 use crate::platform::Os;
-use crate::theme::{colours, radius};
+use crate::theme::{self, colours, radius};
 use crate::ui::{self, Icon};
+
+#[cfg(windows)]
+mod win32;
+#[cfg(not(windows))]
+#[path = "frame/no_win32.rs"]
+mod win32;
 
 pub(crate) const APP_ID: &str = "cornercase-gpui";
 const RESTORE_POLL: Duration = Duration::from_millis(20);
@@ -21,10 +28,14 @@ const REACH_IN: f32 = 4.;
 const CORNER_REACH: f32 = 16.;
 const CORNER: f32 = radius::CARD + GAP;
 const CONTROL: f32 = 24.;
+const CAPTION_BUTTON: f32 = 46.;
+const CAPTION_GLYPH: f32 = 18.;
+const RESIZE_BAND: f32 = 4.;
+const SCREEN_MARGIN: f32 = 48.;
 
 pub(crate) fn decorations(os: Os) -> Option<WindowDecorations> {
     match os {
-        Os::Mac => None,
+        Os::Mac | Os::Windows => None,
         Os::Linux => Some(WindowDecorations::Client),
     }
 }
@@ -32,6 +43,12 @@ pub(crate) fn decorations(os: Os) -> Option<WindowDecorations> {
 pub(crate) fn outer(os: Os, (width, height): (f32, f32)) -> Size<Pixels> {
     let margin = if os == Os::Linux { 2. * INSET } else { 0. };
     size(px(width + margin), px(height + margin))
+}
+
+pub(crate) fn opening_size(wanted: (f32, f32), least: (f32, f32), screen: Option<Size<Pixels>>) -> (f32, f32) {
+    let Some(screen) = screen else { return wanted };
+    let fit = |wanted: f32, least: f32, room: f32| wanted.min(room - 2. * SCREEN_MARGIN).max(least);
+    (fit(wanted.0, least.0, screen.width.into()), fit(wanted.1, least.1, screen.height.into()))
 }
 
 pub(crate) fn min_size(os: Os, wayland: bool, (width, height): (f32, f32)) -> Size<Pixels> {
@@ -58,10 +75,17 @@ pub(crate) fn fit_to_frame(os: Os, wayland: bool, window: &mut Window) {
     }
 }
 
+pub(crate) fn show_backdrop(window: &Window) {
+    if Os::CURRENT == Os::Windows {
+        theme::backdrop_shown(win32::backdrop(window).is_ok());
+    }
+}
+
 pub(crate) fn background(os: Os) -> WindowBackgroundAppearance {
     match os {
         Os::Mac => WindowBackgroundAppearance::Blurred,
         Os::Linux => WindowBackgroundAppearance::Transparent,
+        Os::Windows => WindowBackgroundAppearance::Opaque,
     }
 }
 
@@ -76,6 +100,7 @@ pub(crate) struct Sides {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub(crate) struct Frame {
     pub(crate) drawn: bool,
+    caption: bool,
     tiling: Tiling,
     controls: WindowControls,
     maximised: bool,
@@ -109,14 +134,31 @@ impl Frame {
         match os {
             Os::Mac => Self::default(),
             Os::Linux => Self::of(window.window_decorations(), window.window_controls(), window.is_maximized()),
+            Os::Windows => Self::captioned(window.window_controls(), window.is_maximized(), window.is_fullscreen()),
         }
     }
 
     pub(crate) fn of(decorations: Decorations, controls: WindowControls, maximised: bool) -> Self {
         match decorations {
             Decorations::Server => Self { controls, maximised, ..Self::default() },
-            Decorations::Client { tiling } => Self { drawn: true, tiling, controls, maximised },
+            Decorations::Client { tiling } => Self { drawn: true, tiling, controls, maximised, ..Self::default() },
         }
+    }
+
+    pub(crate) fn captioned(controls: WindowControls, maximised: bool, full_screen: bool) -> Self {
+        Self { caption: !full_screen, controls, maximised, ..Self::default() }
+    }
+
+    pub(crate) fn resize_band(self) -> f32 {
+        if self.caption && !self.maximised { RESIZE_BAND } else { 0. }
+    }
+
+    pub(crate) fn title_end(self) -> f32 {
+        if self.caption { 0. } else { GAP }
+    }
+
+    pub(crate) fn button_size(self) -> (f32, f32) {
+        if self.caption { (CAPTION_BUTTON, TITLEBAR_HEIGHT) } else { (CONTROL, CONTROL) }
     }
 
     pub(crate) fn margins(self) -> Sides {
@@ -154,7 +196,7 @@ impl Frame {
     }
 
     pub(crate) fn buttons(self) -> Vec<Control> {
-        if !self.drawn {
+        if !self.drawn && !self.caption {
             return Vec::new();
         }
         let resize = if self.maximised { Control::Restore } else { Control::Maximise };
@@ -232,6 +274,21 @@ impl Control {
         }
     }
 
+    pub(crate) fn area(self) -> WindowControlArea {
+        match self {
+            Control::Minimise => WindowControlArea::Min,
+            Control::Maximise | Control::Restore => WindowControlArea::Max,
+            Control::Close => WindowControlArea::Close,
+        }
+    }
+
+    pub(crate) fn caption_hover(self) -> (Rgba, Rgba) {
+        match self {
+            Control::Close => (colours::caption_close(), colours::on_caption_close()),
+            Control::Minimise | Control::Maximise | Control::Restore => (colours::hover(), colours::text()),
+        }
+    }
+
     fn act(self, window: &mut Window) {
         match self {
             Control::Minimise => window.minimize_window(),
@@ -241,20 +298,29 @@ impl Control {
     }
 }
 
-fn control_button(control: Control) -> Stateful<Div> {
+fn button_face(id: &'static str, (width, height): (f32, f32)) -> Stateful<Div> {
+    div().id(id).flex_none().flex().items_center().justify_center().w(px(width)).h(px(height))
+}
+
+fn control_button(control: Control, size: (f32, f32)) -> Stateful<Div> {
     let (id, glyph) = control.look();
-    div()
-        .id(id)
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .size(px(CONTROL))
+    button_face(id, size)
         .rounded_full()
         .bg(colours::hover())
         .hover(|s| s.bg(colours::selected()))
         .child(ui::icon(glyph, 16.).text_color(colours::soft()))
         .on_click(move |_: &ClickEvent, window, _| control.act(window))
+}
+
+fn caption_button(control: Control, size: (f32, f32)) -> Stateful<Div> {
+    let (id, glyph) = control.look();
+    let (fill, ink) = control.caption_hover();
+    button_face(id, size)
+        .group(id)
+        .occlude()
+        .window_control_area(control.area())
+        .hover(move |s| s.bg(fill))
+        .child(ui::icon(glyph, CAPTION_GLYPH).text_color(colours::soft()).group_hover(id, move |s| s.text_color(ink)))
 }
 
 pub(crate) fn round<E: Styled>(element: E, frame: Frame) -> E {
@@ -301,9 +367,14 @@ fn grip(edge: ResizeEdge, m: Sides) -> Div {
     }
 }
 
+fn resize_band(height: f32) -> Div {
+    div().absolute().top_0().left_0().right_0().h(px(height)).occlude()
+}
+
 pub(crate) fn framed(content: Div, frame: Frame, window: &mut Window) -> AnyElement {
     if !frame.drawn {
-        return content.into_any_element();
+        let band = frame.resize_band();
+        return content.when(band > 0., |d| d.child(resize_band(band))).into_any_element();
     }
     window.set_client_inset(px(INSET));
     let m = frame.margins();
@@ -320,6 +391,9 @@ pub(crate) fn framed(content: Div, frame: Frame, window: &mut Window) -> AnyElem
 }
 
 pub(crate) fn title_row(row: Div, frame: Frame) -> Div {
+    if frame.caption {
+        return row.occlude().window_control_area(WindowControlArea::Drag);
+    }
     if !frame.drawn {
         return row;
     }
@@ -331,7 +405,15 @@ pub(crate) fn title_row(row: Div, frame: Frame) -> Div {
         .on_mouse_down_out(|_, _, cx| Grip::let_go(cx))
 }
 
-pub(crate) fn claimed(element: Div, frame: Frame) -> Div {
+pub(crate) fn claimed(element: Div, frame: Frame, terminal: &FocusHandle) -> Div {
+    if frame.caption {
+        let terminal = terminal.clone();
+        return element.occlude().on_any_mouse_down(move |_, window, _| {
+            if !window.default_prevented() {
+                window.focus(&terminal);
+            }
+        });
+    }
     if !frame.drawn {
         return element;
     }
@@ -387,13 +469,17 @@ fn restore_when_out(window: AnyWindowHandle, windowed: Size<Pixels>, cx: &mut Ap
     .detach();
 }
 
-pub(crate) fn window_controls(frame: Frame) -> Option<Div> {
+pub(crate) fn window_controls(frame: Frame, terminal: &FocusHandle) -> Option<Div> {
     let buttons = frame.buttons();
     if buttons.is_empty() {
         return None;
     }
+    if frame.caption {
+        let row = div().flex().flex_none().pl(px(GAP));
+        return Some(row.children(buttons.into_iter().map(|c| caption_button(c, frame.button_size()))));
+    }
     let row = div().flex().flex_none().items_center().gap(px(10.)).pl(px(6.));
-    Some(claimed(row.children(buttons.into_iter().map(control_button)), frame))
+    Some(claimed(row.children(buttons.into_iter().map(|c| control_button(c, frame.button_size()))), frame, terminal))
 }
 
 #[cfg(test)]

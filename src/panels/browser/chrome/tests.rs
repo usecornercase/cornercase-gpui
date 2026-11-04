@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::*;
 
@@ -23,6 +23,7 @@ fn chrome_runs_headless_on_its_own_profile_and_port_without_a_first_page() {
     assert_eq!(args.last().and_then(|arg| arg.to_str()), Some("--no-startup-window"));
 }
 
+#[cfg(unix)]
 #[test]
 fn a_profile_whose_path_is_not_utf8_reaches_chrome_byte_for_byte() {
     use std::ffi::OsStr;
@@ -118,7 +119,6 @@ fn a_snap_keeps_its_profile_where_its_confinement_lets_it_write() {
 #[test]
 fn the_browser_and_its_profile_are_chosen_once_one_is_found() {
     use std::cell::Cell;
-    use std::path::PathBuf;
 
     let cell = OnceLock::new();
     assert!(chosen_in(&cell, || None).is_none());
@@ -135,8 +135,6 @@ fn the_browser_and_its_profile_are_chosen_once_one_is_found() {
 
 #[test]
 fn the_profile_is_the_one_chosen_with_the_browser() {
-    use std::path::PathBuf;
-
     let cell = OnceLock::new();
     let chosen = Chosen { exe: PathBuf::from("/nowhere/chromium"), profile: PathBuf::from("/chosen/profile") };
     assert!(cell.set(chosen).is_ok());
@@ -149,14 +147,168 @@ fn the_singleton_lock_names_the_browser_pid() {
     assert_eq!(lock_pid("nohyphen"), None);
 }
 
-#[cfg(target_os = "macos")]
 #[test]
 fn on_a_mac_chrome_is_looked_for_in_both_applications_folders() {
-    use std::path::PathBuf;
-
-    let found = candidates(Path::new("/Users/me"));
+    let found = candidates(Os::Mac, Path::new("/Users/me"), &|_| None);
     assert!(found.contains(&PathBuf::from("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")));
     assert!(found.contains(&PathBuf::from("/Users/me/Applications/Chromium.app/Contents/MacOS/Chromium")));
+}
+
+fn windows_folders(name: &str) -> Option<OsString> {
+    match name {
+        "ProgramFiles" => Some(r"C:\Program Files".into()),
+        "ProgramFiles(x86)" => Some(r"C:\Program Files (x86)".into()),
+        "LOCALAPPDATA" => Some(r"C:\Users\me\AppData\Local".into()),
+        _ => None,
+    }
+}
+
+fn windows_candidates() -> Vec<String> {
+    let found = candidates(Os::Windows, Path::new(r"C:\Users\me"), &windows_folders);
+    found.iter().map(|path| path.to_string_lossy().into_owned()).collect()
+}
+
+#[test]
+fn on_windows_each_browser_is_looked_for_per_machine_then_per_user() {
+    let found = windows_candidates();
+    assert_eq!(
+        found[..3],
+        [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            r"C:\Users\me\AppData\Local\Google\Chrome\Application\chrome.exe",
+        ]
+    );
+    assert!(found.contains(&r"C:\Users\me\AppData\Local\Google\Chrome SxS\Application\chrome.exe".to_string()));
+    assert!(found.contains(&r"C:\Users\me\AppData\Local\Chromium\Application\chrome.exe".to_string()));
+    assert!(found.contains(&r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe".to_string()));
+}
+
+#[test]
+fn on_windows_edge_comes_after_every_browser_installed_on_purpose() {
+    let found = windows_candidates();
+    let first_edge = found.iter().position(|path| path.ends_with(r"\msedge.exe")).expect("edge is looked for");
+    assert!(found[first_edge..].iter().all(|path| path.ends_with(r"Microsoft\Edge\Application\msedge.exe")));
+    assert!(found.contains(&r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe".to_string()));
+}
+
+#[test]
+fn on_windows_a_folder_that_is_not_set_is_skipped_and_one_ending_in_a_separator_is_not_doubled() {
+    let only_root = |name: &str| (name == "ProgramFiles").then(|| OsString::from(r"D:\"));
+    let found = candidates(Os::Windows, Path::new(r"C:\Users\me"), &only_root);
+    assert_eq!(found.first().map(PathBuf::as_path), Some(Path::new(r"D:\Google\Chrome\Application\chrome.exe")));
+    assert_eq!(found.len(), WINDOWS_APPS.len());
+}
+
+#[test]
+fn on_linux_chrome_is_only_looked_for_on_the_path() {
+    assert_eq!(candidates(Os::Linux, Path::new("/home/me"), &windows_folders), Vec::<PathBuf>::new());
+}
+
+#[test]
+fn on_windows_the_path_is_searched_for_exe_names() {
+    assert!(path_names(Os::Windows).iter().all(|name| Path::new(name).extension().is_some_and(|e| e == "exe")));
+    assert!(path_names(Os::Windows).contains(&"msedge.exe"));
+    assert!(path_names(Os::Linux).contains(&"google-chrome-stable"));
+}
+
+#[test]
+fn on_windows_chrome_logs_its_errors_to_the_pipe_and_asks_for_no_keyring() {
+    let windows = args(Os::Windows, Path::new(r"C:\p"), 9222);
+    assert!(windows.contains(&"--enable-logging=stderr".into()));
+    assert!(windows.contains(&"--log-level=2".into()));
+    assert!(!windows.iter().any(|arg| arg == "--use-mock-keychain" || arg == "--password-store=basic"));
+    assert_eq!(windows.last().and_then(|arg| arg.to_str()), Some("--no-startup-window"));
+    assert!(!args(Os::Linux, Path::new("/p"), 9222).contains(&"--enable-logging=stderr".into()));
+}
+
+#[test]
+fn on_windows_a_profile_with_spaces_and_accents_is_one_argument() {
+    let profile = Path::new(r"C:\Users\José Núñez\AppData\Local\cornercase-gpui\browser");
+    let args = args(Os::Windows, profile, 9222);
+    let dirs: Vec<&OsString> = args.iter().filter(|arg| arg.to_string_lossy().contains("José")).collect();
+    assert_eq!(dirs, [&OsString::from(r"--user-data-dir=C:\Users\José Núñez\AppData\Local\cornercase-gpui\browser")]);
+}
+
+#[cfg(windows)]
+#[test]
+fn a_profile_whose_path_is_not_unicode_reaches_chrome_unit_for_unit() {
+    use std::os::windows::ffi::{OsStrExt as _, OsStringExt as _};
+
+    let wide: Vec<u16> = r"C:\caf".encode_utf16().chain([0xd800]).collect();
+    let profile = PathBuf::from(OsString::from_wide(&wide));
+    let args = args(Os::Windows, &profile, 9222);
+    let flag: Vec<u16> = "--user-data-dir=".encode_utf16().collect();
+    let dir = args.iter().map(|arg| arg.encode_wide().collect::<Vec<u16>>()).find(|arg| arg.starts_with(&flag));
+    assert_eq!(dir.map(|arg| arg[flag.len()..].to_vec()), Some(wide));
+}
+
+fn skip_head(reader: &mut impl BufRead) {
+    let mut line = String::new();
+    while reader.read_line(&mut line).is_ok_and(|read| read > 0) && !line.trim().is_empty() {
+        line.clear();
+    }
+}
+
+fn fake_devtools() -> (u16, std::thread::JoinHandle<String>) {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("a port");
+    let port = listener.local_addr().expect("its address").port();
+    let served = std::thread::spawn(move || {
+        let mut asked = BufReader::new(listener.accept().expect("asked for its version").0);
+        skip_head(&mut asked);
+        let body = format!(r#"{{"webSocketDebuggerUrl":"ws://127.0.0.1:{port}/devtools/browser/b"}}"#);
+        let answer = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}", body.len());
+        asked.get_mut().write_all(answer.as_bytes()).expect("answers");
+        let mut socket = BufReader::new(listener.accept().expect("opened its socket").0);
+        skip_head(&mut socket);
+        socket.get_mut().write_all(b"HTTP/1.1 101 Switching Protocols\r\n\r\n").expect("upgrades");
+        let Ok(Message::Text(request)) = socket::read_message(&mut socket) else { return String::new() };
+        socket.get_mut().write_all(&socket::encode(1, br#"{"id":1,"result":{}}"#, None)).expect("replies");
+        request
+    });
+    (port, served)
+}
+
+fn scratch_profile(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("cornercase-gpui-{name}-{}", std::process::id()));
+    fs::create_dir_all(&dir).expect("a profile");
+    dir
+}
+
+#[test]
+fn on_windows_the_browser_is_asked_to_close_through_its_devtools_socket() {
+    let (port, served) = fake_devtools();
+    assert_eq!(close_through_devtools(port), Some(()));
+    let request: serde_json::Value = serde_json::from_str(&served.join().expect("served")).expect("json");
+    assert_eq!(request["method"], "Browser.close");
+}
+
+#[test]
+fn a_browser_that_does_not_answer_is_not_asked_to_close() {
+    let port = TcpListener::bind(("127.0.0.1", 0)).expect("a port").local_addr().expect("its address").port();
+    assert_eq!(close_through_devtools(port), None);
+}
+
+#[cfg(windows)]
+#[test]
+fn on_windows_stopping_asks_the_profile_s_browser_on_its_port_rather_than_signalling_a_pid() {
+    let (port, served) = fake_devtools();
+    let profile = scratch_profile("stop");
+    fs::write(profile.join(PORT_FILE), port.to_string()).expect("the port file");
+    assert!(ask_to_stop(Os::Windows, std::process::id(), &profile));
+    assert!(served.join().expect("served").contains("Browser.close"));
+    fs::remove_file(profile.join(PORT_FILE)).expect("the port file goes");
+    assert!(!ask_to_stop(Os::Windows, std::process::id(), &profile));
+    let _ = fs::remove_dir_all(&profile);
+}
+
+#[test]
+fn on_windows_a_port_another_program_listens_on_is_never_asked_to_close() {
+    let (port, _served) = fake_devtools();
+    let profile = scratch_profile("not-ours");
+    fs::write(profile.join(PORT_FILE), port.to_string()).expect("the port file");
+    assert!(!ask_to_stop(Os::Windows, std::process::id() + 1, &profile));
+    let _ = fs::remove_dir_all(&profile);
 }
 
 #[test]

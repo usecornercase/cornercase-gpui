@@ -3,11 +3,13 @@ use gpui::{AnyElement, Context, Div, FontWeight, IntoElement, SharedString, Wind
 use super::controls::Look;
 use super::data::{Described, ProjectEntry, Script};
 use super::{Role, SettingsPanel, role_id, widgets};
+use crate::platform::paths::Style;
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::{self, Icon};
 
 fn project_header(project: &ProjectEntry) -> Div {
-    let name = project.folder.rsplit('/').find(|s| !s.is_empty()).unwrap_or(&project.folder).to_string();
+    let name = Some(Style::of_path(&project.folder).name(&project.folder)).filter(|n| !n.is_empty());
+    let name = name.unwrap_or(&project.folder).to_string();
     let chips = [
         project.project.is_none().then(|| ui::quiet_chip("not open")),
         (!project.repository).then(|| ui::tinted_chip("not a git repository", colours::waiting())),

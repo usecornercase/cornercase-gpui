@@ -7,6 +7,7 @@ use base64::Engine as _;
 use serde::Deserialize;
 
 use crate::cli;
+use crate::platform::paths::{self, Style};
 
 use super::disk::{self, Content, Stamp};
 use super::search::{self, FileHits, LineHit, NameHit, TextResults};
@@ -75,13 +76,24 @@ struct Line {
 }
 
 fn arg(rel: &Path) -> String {
-    if rel.as_os_str().is_empty() {
+    let text = rel.to_string_lossy();
+    if text.is_empty() {
         ".".to_string()
-    } else if rel.is_absolute() {
-        rel.display().to_string()
+    } else if paths::rooted(&text) {
+        text.into_owned()
     } else {
-        format!("./{}", rel.display())
+        format!("./{}", Style::Unix.shown(rel))
     }
+}
+
+fn folder_and_name(rel: &Path) -> Option<(String, String)> {
+    let text = rel.to_string_lossy();
+    if paths::rooted(&text) {
+        let (folder, name) = Style::of_path(&text).split(&text);
+        return (!name.is_empty()).then(|| (folder.to_string(), name.to_string()));
+    }
+    let name = rel.file_name()?.to_string_lossy().into_owned();
+    Some((arg(rel.parent().unwrap_or(Path::new(""))), name))
 }
 
 fn files_args(command: &str, workspace: u64, flags: &[&str], rest: impl IntoIterator<Item = String>) -> Vec<String> {
@@ -165,9 +177,8 @@ pub(super) fn stamp_in(json: &str, name: &str) -> Option<Stamp> {
 }
 
 pub(super) fn stamp(workspace: u64, rel: &Path) -> Option<Stamp> {
-    let name = rel.file_name()?.to_string_lossy().into_owned();
-    let parent = rel.parent().unwrap_or(Path::new(""));
-    let json = answer(&files_args("list", workspace, &[], [arg(parent)])).ok()?;
+    let (folder, name) = folder_and_name(rel)?;
+    let json = answer(&files_args("list", workspace, &[], [folder])).ok()?;
     stamp_in(&json, &name)
 }
 

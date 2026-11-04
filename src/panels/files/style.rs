@@ -1,5 +1,4 @@
 use std::ops::Range;
-use std::path::{Path, PathBuf};
 
 use gpui::{
     Div, ElementId, FontStyle, HighlightStyle, Hsla, ImageFormat, InteractiveElement as _, IntoElement,
@@ -147,15 +146,6 @@ pub(super) fn plural<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
 
 pub(super) fn small_f32(n: usize) -> f32 {
     f32::from(u16::try_from(n).unwrap_or(u16::MAX))
-}
-
-pub(super) fn home_relative(path: &Path) -> String {
-    match std::env::var_os("HOME").map(PathBuf::from) {
-        Some(home) if path.starts_with(&home) => {
-            format!("~/{}", path.strip_prefix(&home).map(|p| p.display().to_string()).unwrap_or_default())
-        }
-        _ => path.display().to_string(),
-    }
 }
 
 pub(super) fn file_icon(name: &str, dir: bool, open: bool) -> impl IntoElement + use<> {

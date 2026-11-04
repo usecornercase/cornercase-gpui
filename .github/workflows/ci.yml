@@ -69,6 +69,58 @@ jobs:
       - name: tests
         run: cargo test --locked
 
+  windows:
+    name: clippy + tests (Windows)
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: toolchain
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: clippy
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+      - name: tests
+        run: cargo test --locked
+
+  smoke-windows:
+    name: smoke (Windows)
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: toolchain
+        run: rustup toolchain install
+
+      - name: cornercase
+        run: powershell -ExecutionPolicy Bypass -c "irm https://usecornercase.dev/install.ps1 | iex"
+
+      - name: build
+        run: cargo build --locked
+
+      - name: run
+        shell: pwsh
+        run: ./.github/smoke/windows.ps1
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: smoke-windows
+          path: smoke-out
+
   guardrails:
     name: fmt + machete + jscpd
     runs-on: ubuntu-24.04

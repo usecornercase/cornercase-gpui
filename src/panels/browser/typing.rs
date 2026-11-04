@@ -16,7 +16,7 @@ pub(crate) type Outgoing = (&'static str, Value);
 
 #[derive(Default)]
 pub(crate) struct Typing {
-    pending: Option<Keystroke>,
+    pending: Option<(Keystroke, bool)>,
     marked: String,
     claimed: Vec<String>,
     pub(crate) caret: Option<Rect>,
@@ -27,8 +27,8 @@ fn utf16(text: &str) -> usize {
 }
 
 impl Typing {
-    pub(crate) fn pressed(&mut self, key: &Keystroke) {
-        self.pending = Some(key.clone());
+    pub(crate) fn pressed(&mut self, key: &Keystroke, held: bool) {
+        self.pending = Some((key.clone(), held));
     }
 
     pub(crate) fn claim_down(&mut self, key: &str, claimed: bool) -> bool {
@@ -50,7 +50,9 @@ impl Typing {
         let key = self.pending.take().filter(|_| !composing);
         let text: String = text.chars().filter(|c| !c.is_control()).collect();
         match key {
-            Some(key) if !text.is_empty() => Some(("Input.dispatchKeyEvent", keyboard::typed(&key, &text, false))),
+            Some((key, held)) if !text.is_empty() => {
+                Some(("Input.dispatchKeyEvent", keyboard::typed(&key, &text, held)))
+            }
             _ if text.is_empty() && !composing => None,
             _ => Some(("Input.insertText", json!({ "text": text }))),
         }
@@ -76,7 +78,7 @@ impl Typing {
 }
 
 pub(crate) fn window_claims(key: &Keystroke, shift: bool, os: Os) -> bool {
-    keymap::shortcut(key, shift, os, true).is_some()
+    keymap::shortcut(key, shift, os, true).is_some() || keymap::left_to_system(key, os)
 }
 
 impl Browser {
@@ -101,7 +103,7 @@ impl Browser {
             return;
         }
         match keyboard::route(key, event.is_held, Os::CURRENT) {
-            Route::Text => self.input.typing.pressed(key),
+            Route::Text => self.input.typing.pressed(key, event.is_held),
             Route::Repeat(text) => {
                 self.tell_page(("Input.dispatchKeyEvent", keyboard::typed(key, &text, true)));
                 cx.stop_propagation();

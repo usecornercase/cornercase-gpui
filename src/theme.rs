@@ -1,6 +1,7 @@
 mod fonts;
 
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{Hsla, Rgba, rgb, rgba};
 use serde_json::json;
@@ -13,6 +14,8 @@ pub(crate) use fonts::{FONT_FAMILY, UI_FAMILY, missing as missing_font, settle a
 const OPACITY: f32 = 0.65;
 const LEAST_OPACITY: f32 = 0.3;
 pub(crate) const INACTIVE: f32 = 0.55;
+
+static BACKDROP: AtomicBool = AtomicBool::new(false);
 
 static TERMINAL_OPACITY: LazyLock<f32> =
     LazyLock::new(|| opacity_from(std::env::var("CORNERCASE_GPUI_OPACITY").ok().as_deref()));
@@ -78,7 +81,7 @@ pub(crate) mod colours {
         rgba(0x00_5f_ff_47)
     }
     pub(crate) fn glass() -> Rgba {
-        super::ground(super::Os::CURRENT)
+        super::ground(super::Os::CURRENT, super::BACKDROP.load(super::Ordering::Relaxed))
     }
     pub(crate) fn veil() -> Rgba {
         rgba(0x0a_0b_10_9e)
@@ -149,6 +152,12 @@ pub(crate) mod colours {
     pub(crate) fn merged() -> Rgba {
         rgb(0x87_5f_ff)
     }
+    pub(crate) fn caption_close() -> Rgba {
+        rgb(0xc4_2b_1c)
+    }
+    pub(crate) fn on_caption_close() -> Rgba {
+        rgb(0xff_ff_ff)
+    }
 }
 
 pub(crate) fn palette(index: u8) -> [u8; 3] {
@@ -177,10 +186,14 @@ pub(crate) fn terminal_opacity() -> f32 {
     *TERMINAL_OPACITY
 }
 
-pub(crate) fn ground(os: Os) -> Rgba {
-    match os {
-        Os::Mac => rgba(0x0b_0c_0e_8c),
-        Os::Linux => rgb(0x0b_0c_0e),
+pub(crate) fn backdrop_shown(shown: bool) {
+    BACKDROP.store(shown, Ordering::Relaxed);
+}
+
+pub(crate) fn ground(os: Os, backdrop: bool) -> Rgba {
+    match (os, backdrop) {
+        (Os::Mac, _) | (Os::Windows, true) => rgba(0x0b_0c_0e_8c),
+        (Os::Linux | Os::Windows, _) => rgb(0x0b_0c_0e),
     }
 }
 

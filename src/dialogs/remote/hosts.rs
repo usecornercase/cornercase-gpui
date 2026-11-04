@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use crate::platform::Os;
+
 const MAX_DEPTH: u8 = 8;
 const FORGES: [&str; 7] = [
     "github.com",
@@ -18,7 +20,7 @@ struct Parsed {
 }
 
 pub(super) fn read() -> Vec<String> {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return Vec::new() };
+    let Some(home) = crate::desktop::home() else { return Vec::new() };
     let mut hosts = Vec::new();
     read_file(&home.join(".ssh").join("config"), &home, 0, &mut hosts);
     hosts
@@ -35,7 +37,7 @@ fn read_file(path: &Path, home: &Path, depth: u8, hosts: &mut Vec<String>) {
     if depth == MAX_DEPTH {
         return;
     }
-    for file in parsed.includes.iter().flat_map(|pattern| included(pattern, home)) {
+    for file in parsed.includes.iter().flat_map(|pattern| included(pattern, home, Os::CURRENT)) {
         read_file(&file, home, depth + 1, hosts);
     }
 }
@@ -66,8 +68,12 @@ fn keyword_and_rest(line: &str) -> Option<(&str, &str)> {
     Some((keyword, rest.trim_start().trim_start_matches('=').trim_start()))
 }
 
-fn included(pattern: &str, home: &Path) -> Vec<PathBuf> {
-    let path = match pattern.strip_prefix("~/") {
+fn from_home(pattern: &str, os: Os) -> Option<&str> {
+    pattern.strip_prefix("~/").or_else(|| pattern.strip_prefix('~').filter(|_| os == Os::Windows)?.strip_prefix('\\'))
+}
+
+fn included(pattern: &str, home: &Path, os: Os) -> Vec<PathBuf> {
+    let path = match from_home(pattern, os) {
         Some(rest) => home.join(rest),
         None => home.join(".ssh").join(pattern),
     };

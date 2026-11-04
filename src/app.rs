@@ -172,6 +172,7 @@ impl Kept {
 
 impl Root {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        frame::show_backdrop(window);
         let missing = theme::missing_font();
         let mut root = Self::open(Kept::at_start(), window, cx);
         root.open_requested_panel(cx);
@@ -878,14 +879,6 @@ fn first_line(text: &str) -> &str {
 
 fn font_size_from_env() -> f32 {
     std::env::var("CORNERCASE_GPUI_FONT_SIZE").ok().and_then(|s| s.parse().ok()).unwrap_or(13.)
-}
-
-pub(crate) fn tilde(path: &str) -> String {
-    let home = std::env::var("HOME").unwrap_or_default();
-    match path.strip_prefix(&home) {
-        Some(rest) if !home.is_empty() => format!("~{rest}"),
-        _ => path.to_string(),
-    }
 }
 
 fn start_place() -> Vec<String> {

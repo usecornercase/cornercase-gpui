@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::{Parsed, glob, included, parse};
+use crate::platform::Os;
 
 fn words(list: &[&str]) -> Vec<String> {
     list.iter().map(ToString::to_string).collect()
@@ -29,9 +30,17 @@ fn includes_are_listed_in_order() {
 #[test]
 fn an_included_path_is_read_from_home_or_from_the_ssh_folder() {
     let home = Path::new("/Users/me");
-    assert_eq!(included("~/.colima/ssh_config", home), [PathBuf::from("/Users/me/.colima/ssh_config")]);
-    assert_eq!(included("work", home), [PathBuf::from("/Users/me/.ssh/work")]);
-    assert_eq!(included("/etc/ssh/extra", home), [PathBuf::from("/etc/ssh/extra")]);
+    assert_eq!(included("~/.colima/ssh_config", home, Os::Mac), [home.join(".colima/ssh_config")]);
+    assert_eq!(included("work", home, Os::Linux), [home.join(".ssh").join("work")]);
+    assert_eq!(included("/etc/ssh/extra", home, Os::Linux), [PathBuf::from("/etc/ssh/extra")]);
+}
+
+#[test]
+fn on_windows_a_backslash_after_the_tilde_is_home_too() {
+    let home = Path::new(r"C:\Users\me");
+    assert_eq!(included(r"~\.colima\ssh_config", home, Os::Windows), [home.join(r".colima\ssh_config")]);
+    assert_eq!(included("~/work", home, Os::Windows), [home.join("work")]);
+    assert_eq!(included(r"~\work", home, Os::Linux), [home.join(".ssh").join(r"~\work")]);
 }
 
 #[test]

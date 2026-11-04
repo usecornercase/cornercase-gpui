@@ -370,11 +370,7 @@ pub(crate) fn segment(id: impl Into<ElementId>, label: impl Into<SharedString>, 
 }
 
 pub(crate) fn home_relative(path: &str) -> String {
-    let home = std::env::var("HOME").unwrap_or_default();
-    match path.strip_prefix(&home) {
-        Some(rest) if !home.is_empty() => format!("~{rest}"),
-        _ => path.to_string(),
-    }
+    crate::platform::paths::home_relative(path, &crate::desktop::home_text())
 }
 
 pub(crate) fn title(text: impl Into<SharedString>) -> Div {

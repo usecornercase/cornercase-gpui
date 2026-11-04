@@ -5,7 +5,7 @@ use gpui::{Context, Pixels, Point, SharedString, Window};
 use super::actions::{into_group, ungroup};
 use super::workspace::plural;
 use super::{Fold, Target, cmd, forms};
-use crate::app::{Root, tilde};
+use crate::app::Root;
 use crate::cli;
 use crate::context_menu::{Entry, act, act_busy, danger, item, submenu};
 use crate::desktop;
@@ -15,6 +15,7 @@ use crate::panels::PanelKind;
 use crate::panels::flows::{FlowStart, start_flow};
 use crate::platform::Os;
 use crate::store::{self, Busy, ToastKind};
+use crate::ui;
 
 fn rename_item(label: &str, target: Target) -> Entry {
     item(label.to_string(), move |this, window, cx| this.start_rename(target, window, cx))
@@ -42,7 +43,7 @@ fn copy_item(label: &'static str, text: String, toast: String) -> Entry {
 }
 
 fn path_items(path: &str) -> Vec<Entry> {
-    let copy = copy_item("Copy path", path.to_string(), format!("Copied {}", tilde(path)));
+    let copy = copy_item("Copy path", path.to_string(), format!("Copied {}", ui::home_relative(path)));
     if cli::host().is_some() { vec![copy] } else { vec![file_manager_item(path.to_string()), copy] }
 }
 

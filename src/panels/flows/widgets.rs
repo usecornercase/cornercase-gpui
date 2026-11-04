@@ -10,6 +10,7 @@ use super::diagram::role_colour;
 use super::graph::float;
 use super::model::{FlowInfo, FlowSpec, Progress, Run};
 use crate::notify::tip;
+use crate::platform::paths::Style;
 use crate::store::{self, Busy, Store};
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, glass, glass::tint};
@@ -164,7 +165,7 @@ fn glyph_row(mini: Mini, stage: usize) -> Div {
 }
 
 pub(super) fn file_name(path: &str) -> String {
-    path.rsplit('/').next().unwrap_or(path).to_string()
+    Style::of_path(path).name(path).to_string()
 }
 
 pub(super) fn show_pane(pane: u64, cx: &mut App) {

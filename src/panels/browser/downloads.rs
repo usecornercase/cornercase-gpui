@@ -7,7 +7,12 @@ use gpui::{App, Context};
 use serde_json::{Value, json};
 
 use super::{Browser, chrome};
+use crate::platform::Os;
 use crate::store::{Busy, Store, ToastKind};
+
+const REFUSED_ON_WINDOWS: &[char] = &['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+const DEVICES: &[&str] = &["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"];
+const NUMBERED_DEVICES: &[&str] = &["COM", "LPT"];
 
 pub(crate) struct Download {
     name: String,
@@ -19,9 +24,26 @@ pub(crate) struct Downloads {
     list: HashMap<String, Download>,
 }
 
-pub(crate) fn safe_name(suggested: &str) -> String {
+pub(crate) fn safe_name(suggested: &str, os: Os) -> String {
     let name = suggested.rsplit(['/', '\\']).next().unwrap_or_default().trim();
-    if name.is_empty() || name == "." || name == ".." { "download".to_string() } else { name.to_string() }
+    let name = if os == Os::Windows { windows_name(name) } else { name.to_string() };
+    if name.is_empty() || name == "." || name == ".." { "download".to_string() } else { name }
+}
+
+fn windows_name(name: &str) -> String {
+    let kept: String =
+        name.chars().map(|c| if c.is_control() || REFUSED_ON_WINDOWS.contains(&c) { '_' } else { c }).collect();
+    let kept = kept.trim_end_matches(['.', ' ']);
+    if is_device(kept) { format!("_{kept}") } else { kept.to_string() }
+}
+
+fn is_device(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or_default().trim_end().to_uppercase();
+    let numbered = |prefix: &&str| {
+        stem.strip_prefix(prefix)
+            .is_some_and(|n| n.chars().count() == 1 && n.chars().all(|c| "0123456789¹²³".contains(c)))
+    };
+    DEVICES.contains(&stem.as_str()) || NUMBERED_DEVICES.iter().any(numbered)
 }
 
 fn split_name(name: &str) -> (&str, &str) {
@@ -39,20 +61,30 @@ pub(crate) fn free_path(dir: &Path, name: &str, taken: impl Fn(&Path) -> bool) -
 }
 
 fn home() -> PathBuf {
-    std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_default()
+    crate::desktop::home().unwrap_or_default()
 }
 
 fn downloads_dir() -> PathBuf {
-    home().join("Downloads")
+    known_downloads().unwrap_or_else(|| home().join("Downloads"))
+}
+
+#[cfg(windows)]
+fn known_downloads() -> Option<PathBuf> {
+    super::win32::downloads_folder()
+}
+
+#[cfg(not(windows))]
+fn known_downloads() -> Option<PathBuf> {
+    None
 }
 
 fn staging() -> PathBuf {
     chrome::profile().join("downloads")
 }
 
-pub(crate) fn shown_dir(dir: &Path, home: &Path) -> String {
+pub(crate) fn shown_dir(dir: &Path, home: &Path, os: Os) -> String {
     match dir.strip_prefix(home) {
-        Ok(rest) if !home.as_os_str().is_empty() => format!("~/{}", rest.display()),
+        Ok(rest) if !home.as_os_str().is_empty() && os != Os::Windows => format!("~/{}", rest.display()),
         _ => dir.display().to_string(),
     }
 }
@@ -81,7 +113,7 @@ fn finish(moved: io::Result<PathBuf>, download: &Download, cx: &mut App) {
     let toast = match moved {
         Ok(path) => {
             let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            let dir = path.parent().map(|d| shown_dir(d, &home())).unwrap_or_default();
+            let dir = path.parent().map(|d| shown_dir(d, &home(), Os::CURRENT)).unwrap_or_default();
             Some((format!("Downloaded {name} to {dir}"), ToastKind::Info))
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => None,
@@ -104,7 +136,7 @@ impl Browser {
 
     pub(super) fn download_begins(&mut self, p: &Value, cx: &mut Context<Self>) {
         let Some(guid) = p["guid"].as_str() else { return };
-        let name = safe_name(p["suggestedFilename"].as_str().unwrap_or_default());
+        let name = safe_name(p["suggestedFilename"].as_str().unwrap_or_default(), Os::CURRENT);
         let busy = Busy::new(format!("download:{guid}"), format!("Downloading {name}…"));
         let job = Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx));
         self.notices.downloads.list.insert(guid.to_string(), Download { name, job });

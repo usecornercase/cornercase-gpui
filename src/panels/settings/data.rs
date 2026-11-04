@@ -342,6 +342,10 @@ pub(super) const fn links_about(os: Os) -> &'static str {
             "Where web addresses in the terminal open, and the pages their card previews. Kept by this app on \
                   this computer, not in cornercase's settings."
         }
+        Os::Windows => {
+            "Where web addresses in the terminal open, and the pages their card previews. Kept by this app on \
+                  this PC, not in cornercase's settings."
+        }
     }
 }
 

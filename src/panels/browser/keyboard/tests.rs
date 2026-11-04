@@ -186,3 +186,39 @@ fn every_command_chord_lists_its_modifiers_in_order() {
         assert!(positions.windows(2).all(|w| w[0] < w[1]), "{chord} lists its modifiers out of order");
     }
 }
+
+fn ctrl_alt() -> Modifiers {
+    Modifiers { control: true, alt: true, ..Modifiers::default() }
+}
+
+#[test]
+fn on_windows_altgr_reported_as_ctrl_alt_types_its_character() {
+    assert_eq!(route(&stroke("e", Some("é"), ctrl_alt()), false, Os::Windows), Route::Text);
+    assert_eq!(route(&stroke("q", Some("@"), ctrl_alt()), false, Os::Windows), Route::Text);
+    assert_eq!(route(&stroke("e", Some("é"), ctrl_alt()), false, Os::Linux), Route::Key);
+}
+
+#[test]
+fn on_windows_a_ctrl_alt_key_that_types_nothing_of_its_own_stays_a_key() {
+    assert_eq!(route(&bare("e", ctrl_alt()), false, Os::Windows), Route::Key);
+    assert_eq!(route(&stroke("e", Some("E"), ctrl_alt()), false, Os::Windows), Route::Key);
+    assert_eq!(route(&stroke("e", Some("\u{5}"), ctrl_alt()), false, Os::Windows), Route::Key);
+}
+
+#[test]
+fn on_windows_a_held_key_waits_for_the_text_windows_types_for_it() {
+    assert_eq!(route(&plain("a", "a"), true, Os::Windows), Route::Text);
+    assert_eq!(route(&plain("a", "a"), true, Os::Linux), Route::Repeat("a".into()));
+}
+
+#[test]
+fn typed_text_names_its_key_by_what_it_typed() {
+    let event = typed(&plain("2", "2"), "@", false);
+    assert_eq!((event["key"].as_str(), event["code"].as_str()), (Some("@"), Some("Digit2")));
+}
+
+#[test]
+fn text_of_more_than_one_character_keeps_the_key_it_was_typed_with() {
+    let event = typed(&plain("a", "a"), "´a", false);
+    assert_eq!((event["key"].as_str(), event["text"].as_str()), (Some("a"), Some("´a")));
+}

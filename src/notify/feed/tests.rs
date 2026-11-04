@@ -113,8 +113,10 @@ fn reads_the_prefs() {
 #[test]
 fn a_sound_file_that_is_not_there_plays_the_system_sound() {
     let prefs = Prefs { sound_waiting: "~/ding.wav".into(), ..Prefs::default() };
-    assert_eq!(prefs.own_sound("needs-you", "/nowhere"), None);
-    assert_eq!(prefs.own_sound("finished", "/nowhere"), None);
+    for os in [Os::Mac, Os::Linux, Os::Windows] {
+        assert_eq!(prefs.own_sound(os, "needs-you", "/nowhere"), None);
+        assert_eq!(prefs.own_sound(os, "finished", "/nowhere"), None);
+    }
 }
 
 #[test]
@@ -124,12 +126,36 @@ fn plays_the_users_own_file() {
     std::fs::write(dir.join("ding.wav"), b"RIFF").expect("file");
     let prefs = Prefs { sound_waiting: "~/ding.wav".into(), ..Prefs::default() };
     let home = dir.to_string_lossy().to_string();
-    assert_eq!(prefs.own_sound("needs-you", &home), Some(format!("{home}/ding.wav")));
+    let played = prefs.own_sound(Os::CURRENT, "needs-you", &home).expect("the file is there");
+    assert_eq!(Path::new(&played), dir.join("ding.wav"));
     let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]
 fn a_relative_sound_path_plays_the_system_sound() {
     let prefs = Prefs { sound_waiting: "ding.wav".into(), ..Prefs::default() };
-    assert_eq!(prefs.own_sound("needs-you", "/tmp"), None);
+    assert_eq!(prefs.own_sound(Os::CURRENT, "needs-you", "/tmp"), None);
+    assert_eq!(sound_path(Os::Windows, "ding.wav", r"C:\Users\me"), None);
+}
+
+#[test]
+fn on_unix_a_sound_file_of_your_own_is_absolute_or_in_your_home() {
+    assert_eq!(sound_path(Os::Linux, "~/s/ding.wav", "/home/me").as_deref(), Some("/home/me/s/ding.wav"));
+    assert_eq!(sound_path(Os::Mac, "/s/ding.aiff", "/Users/me").as_deref(), Some("/s/ding.aiff"));
+    assert_eq!(sound_path(Os::Linux, "~/ding.wav", ""), None);
+    assert_eq!(sound_path(Os::Mac, r"C:\ding.wav", "/Users/me"), None);
+}
+
+#[test]
+fn on_windows_a_sound_file_of_your_own_is_on_a_drive_or_in_your_home() {
+    let home = r"C:\Users\me";
+    assert_eq!(sound_path(Os::Windows, "~/Music/ding.wav", home).as_deref(), Some(r"C:\Users\me\Music\ding.wav"));
+    assert_eq!(sound_path(Os::Windows, r"~\ding.wav", home).as_deref(), Some(r"C:\Users\me\ding.wav"));
+    assert_eq!(sound_path(Os::Windows, r"D:\sounds\ding.wav", home).as_deref(), Some(r"D:\sounds\ding.wav"));
+    assert_eq!(sound_path(Os::Windows, "d:/ding.wav", home).as_deref(), Some("d:/ding.wav"));
+    assert_eq!(sound_path(Os::Windows, r"\\server\share\ding.wav", home), None);
+    assert_eq!(sound_path(Os::Windows, "/ding.wav", home), None);
+    assert_eq!(sound_path(Os::Windows, "/home/me/ding.wav", home), None);
+    assert_eq!(sound_path(Os::Windows, "C:ding.wav", home), None);
+    assert_eq!(sound_path(Os::Windows, "~/ding.wav", ""), None);
 }

@@ -8,6 +8,7 @@ use gpui::{
 
 use crate::desktop;
 use crate::platform::Os;
+use crate::platform::paths::Style;
 use crate::store::{self, Busy, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
@@ -48,13 +49,15 @@ fn opener_label(opener: Opener, dir: bool) -> String {
 }
 
 fn opens(opener: Opener, menu: &Menu) -> bool {
-    opener != Opener::DefaultApp || open::default_app_opens(&menu.path, menu.target.dir)
+    opener != Opener::DefaultApp || menu.default_app
 }
 
 impl FilesPanel {
     pub(super) fn show_menu(&mut self, at: Point<Pixels>, target: Target, cx: &mut Context<Self>) {
         let Some(place) = self.place() else { return };
-        self.menu = Some(Menu { at, path: place.root.join(&target.rel), target });
+        let path = place.style.join(&place.root, &target.rel);
+        let default_app = open::default_app_opens(Os::CURRENT, &path, target.dir);
+        self.menu = Some(Menu { at, path, target, default_app });
         cx.notify();
     }
 
@@ -97,7 +100,7 @@ impl FilesPanel {
 
     fn copy_entries(menu: &Menu, cx: &mut Context<Self>) -> [AnyElement; 2] {
         let abs = menu.path.display().to_string();
-        let rel = menu.target.rel.display().to_string();
+        let rel = Style::of_path(&abs).shown(&menu.target.rel);
         [
             menu_entry("files-menu-copy", "Copy path")
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.copy(abs.clone(), "path", cx)))

@@ -47,14 +47,15 @@ fn flattens_open_folders_and_hides_dotfiles() {
         Listing { entries: vec![entry("lib", true), entry("main.rs", false)], truncated: false },
     );
     let mut expanded = HashSet::new();
-    let paths =
-        |rows: Vec<Row>| rows.into_iter().map(|r| (r.path.to_string_lossy().into_owned(), r.depth)).collect::<Vec<_>>();
-    assert_eq!(paths(rows(&listings, &expanded, true)), vec![("src".into(), 0), (".env".into(), 0), ("a".into(), 0)]);
+    let paths = |rows: Vec<Row>| rows.into_iter().map(|r| (r.path, r.depth)).collect::<Vec<_>>();
+    let at = |path: &str, depth: usize| (PathBuf::from(path), depth);
+    assert_eq!(paths(rows(&listings, &expanded, true)), vec![at("src", 0), at(".env", 0), at("a", 0)]);
     expanded.insert(PathBuf::from("src"));
     expanded.insert(PathBuf::from("src/lib"));
+    let src = Path::new("src");
     assert_eq!(
         paths(rows(&listings, &expanded, false)),
-        vec![("src".into(), 0), ("src/lib".into(), 1), ("src/main.rs".into(), 1), ("a".into(), 0)]
+        vec![at("src", 0), (src.join("lib"), 1), (src.join("main.rs"), 1), at("a", 0)]
     );
 }
 

@@ -1,6 +1,7 @@
 use gpui::{Keystroke, Modifiers};
 use serde_json::{Map, Value, json};
 
+use crate::keymap;
 use crate::platform::Os;
 
 const NAMED: &[(&str, &str, u16)] = &[
@@ -175,12 +176,15 @@ pub(crate) fn commands(ks: &Keystroke) -> Vec<&'static str> {
 
 pub(crate) fn route(ks: &Keystroke, held: bool, os: Os) -> Route {
     let m = ks.modifiers;
-    let meta = m.alt && os == Os::Linux;
+    let meta = m.alt && os != Os::Mac;
+    if keymap::typed_with_alt_gr(ks, os) {
+        return Route::Text;
+    }
     if m.platform || m.control || m.function || meta || named(&ks.key).is_some() {
         return Route::Key;
     }
     match ks.key_char.as_deref().filter(|t| !t.is_empty()) {
-        Some(text) if held => Route::Repeat(text.to_string()),
+        Some(text) if held && os != Os::Windows => Route::Repeat(text.to_string()),
         _ => Route::Text,
     }
 }
@@ -217,6 +221,9 @@ pub(crate) fn key_down(ks: &Keystroke, held: bool, os: Os) -> Value {
 
 pub(crate) fn typed(ks: &Keystroke, text: &str, held: bool) -> Value {
     let mut event = with_text(event("keyDown", ks), text);
+    if text.chars().nth(1).is_none() {
+        event.insert("key".into(), text.into());
+    }
     event.insert("autoRepeat".into(), held.into());
     Value::Object(event)
 }

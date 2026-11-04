@@ -8,10 +8,11 @@ use gpui::{
 };
 
 use crate::notify::tip;
+use crate::platform::paths::Style;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, glass};
 
-use super::style::{chevron, ellipsis, file_icon, home_relative, small_f32};
+use super::style::{chevron, ellipsis, file_icon, small_f32};
 use super::{FilesPanel, Target, tree};
 
 const INDENT: f32 = 18.;
@@ -21,7 +22,10 @@ fn truncated_note() -> impl IntoElement {
 }
 
 fn root_name(root: &Path) -> impl IntoElement + use<> {
-    let name = root.file_name().map_or_else(|| home_relative(root), |n| n.to_string_lossy().into_owned());
+    let root = root.to_string_lossy();
+    let shown = ui::home_relative(&root);
+    let name =
+        Some(Style::of_path(&root).name(&root)).filter(|n| !n.is_empty()).map_or_else(|| shown.clone(), str::to_string);
     div()
         .id("files-root")
         .min_w_0()
@@ -29,7 +33,7 @@ fn root_name(root: &Path) -> impl IntoElement + use<> {
         .text_size(px(12.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(colours::muted())
-        .tooltip(tip(home_relative(root)))
+        .tooltip(tip(shown))
         .child(ui::one_line(name))
 }
 

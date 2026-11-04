@@ -2,6 +2,7 @@ use serde::Deserialize;
 use url::{Host, Url};
 
 use super::{Grid, PaneGrid};
+use crate::platform::paths;
 
 const SCHEMES: [&str; 2] = ["https", "http"];
 const TRAILING: [&str; 3] = [".", ":", "?"];
@@ -43,9 +44,12 @@ impl Link {
         self.relative.as_deref().filter(|_| self.inside).unwrap_or(&self.path)
     }
 
+    pub(crate) fn style(&self) -> paths::Style {
+        paths::Style::of_path(&self.path)
+    }
+
     pub(crate) fn name(&self) -> &str {
-        let path = self.path.trim_end_matches('/');
-        path.rsplit('/').next().unwrap_or(path)
+        self.style().name(&self.path)
     }
 
     pub(crate) fn first_line(&self) -> Option<usize> {

@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use super::super::disk;
 use crate::desktop::Scratch;
+use crate::platform;
 
 const PIXELS: u32 = 900;
 const WITHIN: Duration = Duration::from_secs(8);
@@ -54,7 +55,7 @@ pub(super) fn picture(png: &Path, cap: u64) -> Result<Vec<u8>, String> {
 
 pub(super) fn thumbnail(path: &Path) -> Option<Vec<u8>> {
     let out = Scratch::folder(SCRATCH).ok()?;
-    let finished = finished_within(Command::new("qlmanage").args(args(path, out.path())), WITHIN).is_ok();
+    let finished = finished_within(platform::command("qlmanage").args(args(path, out.path())), WITHIN).is_ok();
     made(path, out.path()).filter(|_| finished).and_then(|png| picture(&png, disk::MAX_IMAGE_BYTES).ok())
 }
 

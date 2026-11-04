@@ -4,4 +4,5 @@ excessive-nesting-threshold = 4
 cognitive-complexity-threshold = 10
 disallowed-methods = [
     { path = "gpui::Styled::truncate", reason = "gpui 0.2.2 cuts it without an ellipsis; use ui::one_line (design/widgets.md)" },
+    { path = "std::process::Command::new", reason = "on Windows it opens a console window for each child; use platform::command (design/windows.md)" },
 ]

@@ -5,6 +5,8 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Window, div, px, uniform_list,
 };
 
+use crate::platform::Os;
+use crate::platform::paths::Style;
 use crate::theme::colours;
 use crate::ui;
 
@@ -66,7 +68,8 @@ impl Finder {
         let hit = self.pick.hits.get(ix)?;
         let row = ui::row(("finder-hit", ix), ix == self.pick.selected).w_full().h(px(ROW));
         let open = cx.listener(move |this, _: &ClickEvent, _, cx| this.open(ix, cx));
-        Some(name_hit(row, hit).on_click(open).into_any_element())
+        let style = self.spot.as_ref().map_or(Style::of(Os::CURRENT), |spot| spot.style);
+        Some(name_hit(row, hit, style).on_click(open).into_any_element())
     }
 
     pub(super) fn footer(&self, status: &Status) -> impl IntoElement + use<> {

@@ -122,6 +122,10 @@ impl Reader {
     pub(crate) fn message(&mut self) -> Result<Message> {
         read_message(&mut self.stream)
     }
+
+    pub(crate) fn wait_at_most(&self, limit: Duration) -> Result<()> {
+        Ok(self.stream.get_ref().set_read_timeout(Some(limit))?)
+    }
 }
 
 pub(crate) fn encode(opcode: u8, payload: &[u8], mask: Option<[u8; 4]>) -> Vec<u8> {

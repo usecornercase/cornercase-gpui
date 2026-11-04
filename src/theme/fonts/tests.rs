@@ -19,6 +19,18 @@ fn a_mac_keeps_menlo_and_the_system_font_whatever_is_installed() {
 }
 
 #[test]
+fn windows_takes_cascadia_mono_then_consolas_and_segoe_ui() {
+    let eleven = chosen(Os::Windows, &["Consolas", "Cascadia Mono", "Segoe UI", "Arial"]);
+    assert_eq!(eleven, Fonts { mono: "Cascadia Mono".into(), sans: "Segoe UI".into(), monospaced: true });
+    assert_eq!(chosen(Os::Windows, &["Courier New", "Consolas", "Segoe UI"]).mono, "Consolas");
+}
+
+#[test]
+fn windows_never_takes_a_linux_font_before_its_own() {
+    assert_eq!(chosen(Os::Windows, &["DejaVu Sans Mono", "Consolas", "Noto Sans", "Segoe UI"]).mono, "Consolas");
+}
+
+#[test]
 fn linux_takes_dejavu_sans_mono_first_as_menlo_grew_from_it() {
     let fonts = chosen(Os::Linux, &["JetBrains Mono", "Noto Sans Mono", "DejaVu Sans Mono"]);
     assert_eq!(fonts.mono, "DejaVu Sans Mono");

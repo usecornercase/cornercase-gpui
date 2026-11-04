@@ -7,6 +7,7 @@ mod player;
 #[path = "peek/no_player.rs"]
 mod player;
 mod quicklook;
+mod shell;
 mod thumbnailers;
 mod web;
 

@@ -6,7 +6,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
-use super::{Conn, GAP, Root, tilde};
+use super::{Conn, GAP, Root};
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::Session;
@@ -87,7 +87,7 @@ impl Root {
         pane.map(|p| {
             let program = p.agent.or(p.program).unwrap_or_else(|| "shell".into());
             match p.path {
-                Some(path) => format!("{program} · {}", tilde(&path)),
+                Some(path) => format!("{program} · {}", ui::home_relative(&path)),
                 None => program,
             }
         })

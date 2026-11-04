@@ -675,7 +675,7 @@ fn bindings(os: Os) -> Vec<KeyBinding> {
     ];
     keys.extend(match os {
         Os::Mac => mac_bindings(ctx),
-        Os::Linux => linux_bindings(ctx),
+        Os::Linux | Os::Windows => control_bindings(ctx),
     });
     keys
 }
@@ -694,7 +694,7 @@ fn mac_bindings(ctx: Option<&str>) -> Vec<KeyBinding> {
     ]
 }
 
-fn linux_bindings(ctx: Option<&str>) -> Vec<KeyBinding> {
+fn control_bindings(ctx: Option<&str>) -> Vec<KeyBinding> {
     vec![
         KeyBinding::new("ctrl-backspace", DeleteWordLeft, ctx),
         KeyBinding::new("ctrl-delete", DeleteWordRight, ctx),

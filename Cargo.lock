@@ -1144,6 +1144,7 @@ dependencies = [
  "base64",
  "core-foundation 0.10.0",
  "core-video",
+ "embed-resource",
  "futures",
  "gpui",
  "grep-matcher",
@@ -1155,11 +1156,13 @@ dependencies = [
  "nucleo-matcher",
  "objc2",
  "parking_lot",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "syntect",
  "unicode-segmentation",
  "url",
+ "windows 0.61.3",
 ]
 
 [[package]]
