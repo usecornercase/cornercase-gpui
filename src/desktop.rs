@@ -77,7 +77,7 @@ pub(crate) fn xdg_data_dirs() -> Vec<PathBuf> {
     data_dirs(home.as_deref(), std::env::var_os("XDG_DATA_HOME"), std::env::var_os("XDG_DATA_DIRS"))
 }
 
-fn lossy(path: &Path) -> String {
+pub(crate) fn lossy(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
