@@ -119,5 +119,5 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 Some parts come from other projects and keep their licences:
 
 - The text field (`src/ui/text_field.rs`) is adapted from gpui 0.2.2's `examples/input.rs`, copyright Zed Industries, under Apache-2.0 ([LICENSE-GPUI](LICENSE-GPUI)).
-- The icons in `assets/icons/` are [Lucide](https://lucide.dev)'s, under ISC ([assets/icons/LICENSE](assets/icons/LICENSE)), with thinner strokes and two of them filled; the `status-*` icons are this project's own.
+- The icons in `assets/icons/` are [Lucide](https://lucide.dev)'s, under ISC ([assets/icons/LICENSE](assets/icons/LICENSE)), with thinner strokes and two of them filled; the `status-*` and `window-*` icons are this project's own.
 - The file-type icons in `assets/file-icons/` are glyphs of [Seti UI](https://github.com/jesseweed/seti-ui) and [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts), under MIT ([assets/file-icons/LICENSE](assets/file-icons/LICENSE)).

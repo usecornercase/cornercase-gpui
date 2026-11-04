@@ -22,8 +22,8 @@ mod tour;
 mod ui;
 
 use gpui::{
-    App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowOptions, actions, point, px, size,
+    App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, Window, WindowBounds,
+    WindowOptions, actions, point, px,
 };
 
 use crate::platform::Os;
@@ -108,7 +108,7 @@ fn main() {
         })
         .detach();
 
-        let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
+        let bounds = Bounds::centered(None, app::frame::outer(Os::CURRENT, (1280., 800.)), cx);
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -117,8 +117,10 @@ fn main() {
                     appears_transparent: true,
                     traffic_light_position: Some(point(px(16.), px(16.))),
                 }),
-                window_background: WindowBackgroundAppearance::Blurred,
-                window_min_size: Some(size(px(640.), px(360.))),
+                window_background: app::frame::background(Os::CURRENT),
+                window_decorations: app::frame::decorations(Os::CURRENT),
+                app_id: Some(app::frame::APP_ID.into()),
+                window_min_size: Some(app::frame::outer(Os::CURRENT, (640., 360.))),
                 ..Default::default()
             },
             |window, cx| cx.new(|cx| app::Root::new(window, cx)),

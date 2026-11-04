@@ -1,11 +1,15 @@
+mod fonts;
+
 use std::sync::LazyLock;
 
 use gpui::{Hsla, Rgba, rgb, rgba};
 use serde_json::json;
 
 use crate::model::{Colour, Colours, Style};
+use crate::platform::Os;
 
-pub(crate) const FONT_FAMILY: &str = "Menlo";
+pub(crate) use fonts::{FONT_FAMILY, UI_FAMILY, settle as settle_fonts};
+
 const OPACITY: f32 = 0.65;
 const LEAST_OPACITY: f32 = 0.3;
 pub(crate) const INACTIVE: f32 = 0.55;
@@ -74,7 +78,7 @@ pub(crate) mod colours {
         rgba(0x00_5f_ff_47)
     }
     pub(crate) fn glass() -> Rgba {
-        rgba(0x0b_0c_0e_8c)
+        super::ground(super::Os::CURRENT)
     }
     pub(crate) fn veil() -> Rgba {
         rgba(0x0a_0b_10_9e)
@@ -173,7 +177,17 @@ pub(crate) fn terminal_opacity() -> f32 {
     *TERMINAL_OPACITY
 }
 
+pub(crate) fn ground(os: Os) -> Rgba {
+    match os {
+        Os::Mac => rgba(0x0b_0c_0e_8c),
+        Os::Linux => rgb(0x0b_0c_0e),
+    }
+}
+
 pub(crate) fn over_ground(wanted: Rgba, ground: Rgba) -> Rgba {
+    if ground.a >= 1. {
+        return wanted;
+    }
     let a = (1. - (1. - wanted.a) / (1. - ground.a)).clamp(0., 1.);
     if a <= 0. {
         return Rgba { a: 0., ..wanted };

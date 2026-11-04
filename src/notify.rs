@@ -18,7 +18,7 @@ use crate::desktop;
 use crate::model::Session;
 use crate::platform::Os;
 use crate::store::{self, Busy, Store, ToastKind, args};
-use crate::theme::{colours, radius};
+use crate::theme::{UI_FAMILY, colours, radius};
 use crate::ui::{self, glass};
 
 pub(crate) use feed::{AppState, Event, Notice, Prefs};
@@ -452,7 +452,7 @@ impl Render for Tip {
             .py(px(6.))
             .text_size(px(11.))
             .text_color(colours::text())
-            .font_family(".SystemUIFont")
+            .font_family(UI_FAMILY)
             .child(self.0.clone())
     }
 }
