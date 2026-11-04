@@ -172,9 +172,12 @@ impl Kept {
 
 impl Root {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        theme::settle_fonts(cx.text_system());
-        let root = Self::open(Kept::at_start(), window, cx);
+        let missing = theme::settle_fonts(cx.text_system());
+        let mut root = Self::open(Kept::at_start(), window, cx);
         root.open_requested_panel(cx);
+        if let Some(missing) = missing {
+            root.say(missing, cx);
+        }
         root
     }
 
