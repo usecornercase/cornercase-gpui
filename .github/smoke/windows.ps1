@@ -14,6 +14,9 @@ public static class W {
   public static RECT Bounds(IntPtr h) { RECT r; DwmGetWindowAttribute(h, 9, out r, 16); return r; }
   public static void Down() { mouse_event(2, 0, 0, 0, UIntPtr.Zero); }
   public static void Up() { mouse_event(4, 0, 0, 0, UIntPtr.Zero); }
+  public static void Right() { mouse_event(8, 0, 0, 0, UIntPtr.Zero); mouse_event(16, 0, 0, 0, UIntPtr.Zero); }
+  [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e);
+  public static void Ctrl(bool down) { keybd_event(0x11, 0, down ? 0u : 2u, UIntPtr.Zero); }
 }
 "@
 function Note($text) { $text | Add-Content (Join-Path $out notes.txt) }
@@ -47,6 +50,7 @@ $env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
 cornercase --version | Tee-Object (Join-Path $out version.txt)
 git init -q C:\demo
 Set-Content C:\demo\README.md "# demo"
+Set-Content C:\demo\notes.txt "notes from the smoke run"
 New-Item -ItemType Directory -Force C:\demo\src | Out-Null
 Set-Content C:\demo\src\main.rs "fn main() {`n    println!(""hello"");`n}"
 git -C C:\demo add -A; git -C C:\demo -c user.email=a@b -c user.name=ci commit -qm init
@@ -64,6 +68,15 @@ Start-Sleep 25
 State $app first
 Shot first
 Keys $app "echo hello from windows{ENTER}" typed
+Keys $app "cls{ENTER}" cleared 2
+Keys $app "echo C:\demo\notes.txt{ENTER}" echoed 2
+$r = Rect $app
+$px = $r.L + 377; $py = $r.T + 65 + 17 + 8
+[W]::SetCursorPos($px, $py); Start-Sleep 5
+Shot peek
+[W]::Ctrl($true); Click $px $py; [W]::Ctrl($false); Start-Sleep 5
+Shot ctrl-click
+Get-Process notepad -ErrorAction SilentlyContinue | Select-Object Id, MainWindowTitle | Format-Table | Out-String | Set-Content (Join-Path $out notepads.txt)
 Keys $app "^%+e" files 5
 Keys $app "^%+c" changes 5
 Keys $app "{ESC}" escape
@@ -92,8 +105,11 @@ $m = Mid $app
 for ($i = 1; $i -le 10; $i++) { [W]::SetCursorPos($m[0] - 15 * $i, $m[1] + 10 * $i); Start-Sleep -Milliseconds 50 }
 [W]::Up(); Start-Sleep 2
 State $app dragged; Shot dragged
-Keys $app "% " alt-space 2
-Keys $app "{ESC}" alt-space-closed 1
+$m = Mid $app
+Front $app
+[W]::SetCursorPos($m[0], $m[1]); Start-Sleep -Milliseconds 300; [W]::Right(); Start-Sleep 2
+Shot window-menu
+[System.Windows.Forms.SendKeys]::SendWait("{ESC}"); Start-Sleep 1
 Keys $app "^%+b" browser 15
 Get-Process msedge, chrome -ErrorAction SilentlyContinue | Select-Object Name, Id | Format-Table | Out-String | Set-Content (Join-Path $out browsers.txt)
 Keys $app "{ESC}" browser-closed
