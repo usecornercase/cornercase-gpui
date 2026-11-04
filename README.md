@@ -71,10 +71,10 @@ These environment variables change its defaults:
 | Variable | What it sets | Default |
 | --- | --- | --- |
 | `CORNERCASE_BIN` | The `cornercase` binary to drive | `cornercase` on the `PATH` |
-| `CORNERCASE_GPUI_FONT_SIZE` | The terminal's font size (Menlo) | `13` |
+| `CORNERCASE_GPUI_FONT_SIZE` | The terminal's font size (Menlo on macOS; on Linux the first monospace font installed of DejaVu Sans Mono, Noto Sans Mono and the like) | `13` |
 | `CORNERCASE_GPUI_OPACITY` | The opacity of the terminal's background; `1` makes it opaque | `0.65` |
 | `CORNERCASE_GPUI_CHROME` | The browser the Browser panel runs, headless | Chrome, Chromium, Edge or Brave |
-| `CORNERCASE_GPUI_BROWSER_PROFILE` | Where that browser keeps its profile | `~/Library/Application Support/cornercase-gpui/browser` |
+| `CORNERCASE_GPUI_BROWSER_PROFILE` | Where that browser keeps its profile | `~/Library/Application Support/cornercase-gpui/browser`; on Linux `~/.local/share/cornercase-gpui/browser`, or `~/snap/chromium/common/cornercase-gpui-browser` for a snap |
 
 ## Keys
 
