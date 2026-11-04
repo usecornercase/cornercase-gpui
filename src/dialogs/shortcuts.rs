@@ -14,11 +14,46 @@ pub(crate) struct Shortcuts {
     focus: FocusHandle,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Section {
+    Keys(Group),
+    System,
+    Elsewhere,
+}
+
 pub(crate) fn shortcuts(window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| Shortcuts { focus: cx.focus_handle() });
     let focus = view.read(cx).focus.clone();
     Store::get(cx).update(cx, |s, cx| s.show_dialog(view.into(), cx));
     window.focus(&focus);
+}
+
+fn columns(os: Os) -> [&'static [Section]; 3] {
+    use Section::{Elsewhere, Keys, System};
+    match os {
+        Os::Mac => [
+            &[Keys(Group::Panels), System],
+            &[Keys(Group::Window), Keys(Group::Terminal)],
+            &[Keys(Group::TabsAndPanes), Keys(Group::Browser), Elsewhere],
+        ],
+        Os::Linux => [
+            &[Keys(Group::Panels), System],
+            &[Keys(Group::Window), Keys(Group::Terminal), Keys(Group::Browser)],
+            &[Keys(Group::TabsAndPanes), Elsewhere],
+        ],
+    }
+}
+
+fn width(os: Os, window: f32) -> f32 {
+    let wanted: f32 = match os {
+        Os::Mac => 940.,
+        Os::Linux => 1120.,
+    };
+    wanted.min(window - 64.).max(480.)
+}
+
+fn body_height(window: f32) -> f32 {
+    (window - 240.).max(200.)
 }
 
 fn keys(label: impl Into<SharedString>) -> Div {
@@ -41,7 +76,7 @@ fn line(label: impl Into<SharedString>, what: &'static str) -> Div {
         .justify_between()
         .gap(px(12.))
         .py(px(2.))
-        .child(div().flex_1().min_w_0().text_color(colours::muted()).child(ui::one_line(what)))
+        .child(div().flex_1().min_w_0().text_color(colours::muted()).child(what))
         .child(keys(label))
 }
 
@@ -49,45 +84,49 @@ fn block(title: &'static str, lines: impl IntoIterator<Item = Div>) -> Div {
     div().flex().flex_col().child(ui::section(title)).children(lines)
 }
 
-fn group(group: Group) -> Div {
-    block(group.title(), keymap::in_group(group).map(|s| line(s.label(Os::CURRENT), s.command.describe(Os::CURRENT))))
-}
-
 fn listed(title: &'static str, entries: &'static [(&'static str, &'static str)]) -> Div {
     block(title, entries.iter().map(|&(label, what)| line(label, what)))
 }
 
-fn column() -> Div {
-    div().flex_1().min_w_0().flex().flex_col()
+fn section(section: Section, os: Os) -> Div {
+    match section {
+        Section::Keys(group) => {
+            block(group.title(), keymap::in_group(group).map(|s| line(s.label(os), s.command.describe(os))))
+        }
+        Section::System => listed("System", keymap::system_keys(os)),
+        Section::Elsewhere => listed("Everywhere else", keymap::other_keys(os)),
+    }
 }
 
-fn body() -> impl IntoElement {
+fn column(sections: &[Section], os: Os) -> Div {
+    div().flex_1().min_w_0().flex().flex_col().children(sections.iter().map(|&s| section(s, os)))
+}
+
+fn body(os: Os, height: f32) -> impl IntoElement {
     div()
         .id("shortcuts-body")
-        .max_h(px(480.))
+        .max_h(px(height))
         .overflow_y_scroll()
         .flex()
+        .items_start()
         .gap(px(24.))
         .text_size(px(12.))
-        .child(column().child(group(Group::Panels)).child(listed("System", keymap::system_keys(Os::CURRENT))))
-        .child(column().child(group(Group::Window)).child(group(Group::Terminal)))
-        .child(
-            column()
-                .child(group(Group::TabsAndPanes))
-                .child(group(Group::Browser))
-                .child(listed("Everywhere else", keymap::other_keys(Os::CURRENT))),
-        )
+        .children(columns(os).map(|sections| column(sections, os)))
 }
 
 impl Render for Shortcuts {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let (os, size) = (Os::CURRENT, window.viewport_size());
         div().track_focus(&self.focus).child(
             frame(
                 "Keyboard shortcuts",
-                body(),
+                body(os, body_height(f32::from(size.height))),
                 ui::primary_button("shortcuts-close", "Done").on_click(|_: &ClickEvent, _, cx| close(cx)),
             )
-            .w(px(940.)),
+            .w(px(width(os, f32::from(size.width)))),
         )
     }
 }
+
+#[cfg(test)]
+mod tests;
