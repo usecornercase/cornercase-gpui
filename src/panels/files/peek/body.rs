@@ -10,6 +10,7 @@ use super::super::style::image_label;
 use super::super::{Spans, highlight};
 use super::Peek;
 use super::player::Player;
+use super::thumbnailers::Missing;
 use super::{quicklook, thumbnailers};
 use crate::cli;
 use crate::model::Link;
@@ -89,23 +90,26 @@ pub(super) fn thumbnail_label(os: Os, media: Option<Media>) -> String {
     }
 }
 
-pub(super) fn no_preview(os: Os, media: Option<Media>) -> Still {
-    match (os, media) {
-        (Os::Mac, _) => note("No preview", "macOS has no preview for this kind of file."),
-        (Os::Linux, Some(_)) => note("Plays only on macOS", "Open it in its default app with the button above."),
-        (Os::Linux, None) => note("No preview", "No thumbnailer on this computer reads this kind of file."),
+pub(super) fn no_preview(os: Os, media: Option<Media>, missing: Missing) -> Still {
+    match (os, media, missing) {
+        (Os::Mac, _, _) => note("No preview", "macOS has no preview for this kind of file."),
+        (Os::Linux, Some(_), _) => note("Plays only on macOS", "Open it in its default app with the button above."),
+        (Os::Linux, None, Missing::NoReader) => {
+            note("No preview", "No thumbnailer on this computer reads this kind of file.")
+        }
+        (Os::Linux, None, Missing::Failed(why)) => note("No preview", format!("{why}.")),
     }
 }
 
 fn preview(path: &Path) -> Still {
     let (os, media) = (Os::CURRENT, media_of(path));
     let png = match os {
-        Os::Mac => quicklook::thumbnail(path),
+        Os::Mac => quicklook::thumbnail(path).ok_or(Missing::NoReader),
         Os::Linux => thumbnailers::thumbnail(path),
     };
     match png {
-        Some(png) => picture(Arc::new(Image::from_bytes(ImageFormat::Png, png)), thumbnail_label(os, media)),
-        None => no_preview(os, media),
+        Ok(png) => picture(Arc::new(Image::from_bytes(ImageFormat::Png, png)), thumbnail_label(os, media)),
+        Err(missing) => no_preview(os, media, missing),
     }
 }
 

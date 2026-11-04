@@ -113,3 +113,18 @@ fn the_first_thumbnailer_for_the_type_that_can_run_is_picked() {
     assert_eq!(pick(&all, "video/mp4", &|program| program != "ffmpegthumbnailer"), None);
     assert_eq!(pick(&all, "font/ttf", &|_| true), None);
 }
+
+fn thumbnailer(exec: &str) -> Thumbnailer {
+    Thumbnailer { try_exec: None, exec: exec.to_string(), types: vec!["video/mp4".into()] }
+}
+
+#[test]
+fn a_thumbnailer_that_fails_is_named_with_what_went_wrong() {
+    let file = Path::new("/w/a.mp4");
+    let made = made_by(&thumbnailer("sh -c 'printf picture > \"$0\"' %o"), file);
+    assert_eq!(made, Ok(b"picture".to_vec()));
+    let failed = made_by(&thumbnailer("/bin/sh -c 'exit 2'"), file);
+    assert_eq!(failed, Err(Missing::Failed("sh ended with exit status: 2".into())));
+    let silent = made_by(&thumbnailer("true %o"), file);
+    assert_eq!(silent, Err(Missing::Failed("true made no picture".into())));
+}

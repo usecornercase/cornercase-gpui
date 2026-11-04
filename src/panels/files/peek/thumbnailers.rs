@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-use super::quicklook::{SCRATCH, finished_within};
+use super::super::disk;
+use super::quicklook::{SCRATCH, finished_within, picture};
 use crate::desktop::{self, Scratch};
 
 const PIXELS: u32 = 900;
@@ -17,9 +18,20 @@ pub(super) struct Thumbnailer {
     types: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Missing {
+    NoReader,
+    Failed(String),
+}
+
 impl Thumbnailer {
     fn program(&self) -> String {
         self.try_exec.clone().or_else(|| words(&self.exec).into_iter().next()).unwrap_or_default()
+    }
+
+    fn name(&self) -> String {
+        let program = self.program();
+        Path::new(&program).file_name().map_or(program.clone(), |name| name.to_string_lossy().into_owned())
     }
 
     fn reads(&self, mime: &str) -> bool {
@@ -215,20 +227,28 @@ fn installed(data: &[PathBuf]) -> Vec<Thumbnailer> {
     found
 }
 
-pub(super) fn thumbnail(path: &Path) -> Option<Vec<u8>> {
+pub(super) fn thumbnail(path: &Path) -> Result<Vec<u8>, Missing> {
     let data = desktop::xdg_data_dirs();
-    let name = path.file_name()?.to_str()?;
+    let name = path.file_name().and_then(|name| name.to_str()).ok_or(Missing::NoReader)?;
     let globs: Vec<String> =
         data.iter().filter_map(|dir| std::fs::read_to_string(dir.join("mime/globs2")).ok()).collect();
-    let mime = mime_in(name, &globs)?;
+    let mime = mime_in(name, &globs).ok_or(Missing::NoReader)?;
     let all = installed(&data);
-    let chosen = pick(&all, &mime, &runs)?;
-    let out = Scratch::folder(SCRATCH).ok()?;
+    let chosen = pick(&all, &mime, &runs).ok_or(Missing::NoReader)?;
+    made_by(chosen, path)
+}
+
+fn made_by(chosen: &Thumbnailer, path: &Path) -> Result<Vec<u8>, Missing> {
+    make(chosen, path).map_err(|why| Missing::Failed(format!("{} {why}", chosen.name())))
+}
+
+fn make(chosen: &Thumbnailer, path: &Path) -> Result<Vec<u8>, String> {
+    let out = Scratch::folder(SCRATCH).map_err(|e| format!("got no temporary folder: {e}"))?;
     let png = out.path().join("thumbnail.png");
-    let argv = argv(&chosen.exec, path, &png, PIXELS)?;
-    let (program, rest) = argv.split_first()?;
-    let finished = finished_within(Command::new(program).args(rest), WITHIN);
-    std::fs::read(&png).ok().filter(|_| finished)
+    let argv = argv(&chosen.exec, path, &png, PIXELS).ok_or("cannot be given this file")?;
+    let (program, rest) = argv.split_first().ok_or("has no command")?;
+    finished_within(Command::new(program).args(rest), WITHIN)?;
+    picture(&png, disk::MAX_IMAGE_BYTES)
 }
 
 #[cfg(test)]
