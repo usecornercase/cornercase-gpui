@@ -17,19 +17,30 @@ fn an_active_port_file_without_a_path_is_not_ready() {
 #[test]
 fn chrome_runs_headless_on_its_own_profile_and_port_without_a_first_page() {
     let args = args(Os::CURRENT, Path::new("/tmp/profile"), 9333);
-    assert!(args.contains(&"--headless".to_string()));
-    assert!(args.contains(&"--user-data-dir=/tmp/profile".to_string()));
-    assert!(args.contains(&"--remote-debugging-port=9333".to_string()));
-    assert_eq!(args.last().map(String::as_str), Some("--no-startup-window"));
+    assert!(args.contains(&"--headless".into()));
+    assert!(args.contains(&"--user-data-dir=/tmp/profile".into()));
+    assert!(args.contains(&"--remote-debugging-port=9333".into()));
+    assert_eq!(args.last().and_then(|arg| arg.to_str()), Some("--no-startup-window"));
+}
+
+#[test]
+fn a_profile_whose_path_is_not_utf8_reaches_chrome_byte_for_byte() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt as _;
+
+    let profile = Path::new(OsStr::from_bytes(b"/home/caf\xe9/snap/chromium/common/cornercase-gpui-browser"));
+    let args = args(Os::Linux, profile, 9222);
+    let dir = args.iter().find(|arg| arg.as_bytes().starts_with(b"--user-data-dir="));
+    assert_eq!(dir.map(|arg| &arg.as_bytes()[16..]), Some(profile.as_os_str().as_bytes()));
 }
 
 #[test]
 fn chrome_never_asks_for_the_keychain_or_the_keyring() {
     let mac = args(Os::Mac, Path::new("/p"), 9222);
-    assert!(mac.contains(&"--use-mock-keychain".to_string()));
+    assert!(mac.contains(&"--use-mock-keychain".into()));
     let linux = args(Os::Linux, Path::new("/p"), 9222);
-    assert!(linux.contains(&"--password-store=basic".to_string()));
-    assert!(!linux.contains(&"--use-mock-keychain".to_string()));
+    assert!(linux.contains(&"--password-store=basic".into()));
+    assert!(!linux.contains(&"--use-mock-keychain".into()));
 }
 
 #[test]

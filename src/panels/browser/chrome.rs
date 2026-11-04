@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write as _};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -164,24 +165,26 @@ fn snap_name(command: &str, link: Option<&Path>) -> Option<String> {
     alias.unwrap_or(command).split('.').next().filter(|name| !name.is_empty()).map(str::to_string)
 }
 
-pub(crate) fn args(os: Os, profile: &Path, port: u16) -> Vec<String> {
-    let mut args = vec![
-        "--headless".to_string(),
-        format!("--user-data-dir={}", profile.display()),
-        format!("--remote-debugging-port={port}"),
-        "--remote-debugging-address=127.0.0.1".into(),
-        "--no-first-run".into(),
-        "--no-default-browser-check".into(),
-        "--hide-crash-restore-bubble".into(),
-        "--disable-features=Translate,MediaRouter".into(),
-        "--force-color-profile=srgb".into(),
-        "--window-size=1280,800".into(),
+pub(crate) fn args(os: Os, profile: &Path, port: u16) -> Vec<OsString> {
+    let mut user_data = OsString::from("--user-data-dir=");
+    user_data.push(profile);
+    let keyring = match os {
+        Os::Mac => "--use-mock-keychain",
+        Os::Linux => "--password-store=basic",
+    };
+    let flags = [
+        "--remote-debugging-address=127.0.0.1",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--hide-crash-restore-bubble",
+        "--disable-features=Translate,MediaRouter",
+        "--force-color-profile=srgb",
+        "--window-size=1280,800",
+        keyring,
+        "--no-startup-window",
     ];
-    args.push(match os {
-        Os::Mac => "--use-mock-keychain".into(),
-        Os::Linux => "--password-store=basic".into(),
-    });
-    args.push("--no-startup-window".into());
+    let mut args = vec!["--headless".into(), user_data, format!("--remote-debugging-port={port}").into()];
+    args.extend(flags.map(OsString::from));
     args
 }
 

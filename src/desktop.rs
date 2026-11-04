@@ -314,7 +314,7 @@ fn read(file: &mut File) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
-fn failure(name: &str, status: &str, said: &str) -> String {
+pub(crate) fn failure(name: &str, status: &str, said: &str) -> String {
     let line = said.lines().map(str::trim).rfind(|line| !line.is_empty());
     match line {
         Some(line) => {

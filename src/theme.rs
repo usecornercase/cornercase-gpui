@@ -8,7 +8,7 @@ use serde_json::json;
 use crate::model::{Colour, Colours, Style};
 use crate::platform::Os;
 
-pub(crate) use fonts::{FONT_FAMILY, UI_FAMILY, settle as settle_fonts};
+pub(crate) use fonts::{FONT_FAMILY, UI_FAMILY, missing as missing_font, settle as settle_fonts};
 
 const OPACITY: f32 = 0.65;
 const LEAST_OPACITY: f32 = 0.3;

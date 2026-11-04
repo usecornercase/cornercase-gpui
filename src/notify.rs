@@ -5,9 +5,9 @@ mod update;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use futures::channel::oneshot;
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
@@ -165,7 +165,7 @@ impl Notifier {
             }
             if behind && prefs.desktop {
                 let argv = alert::notification(Os::CURRENT, (&notice.headline(), &notice.message), &desktop::on_path);
-                this.run_or_tell(argv, cx);
+                this.run_or_tell(argv.map(|argv| vec![argv]), alert::NOTIFICATION_FAILED, cx);
             }
         });
     }
@@ -175,15 +175,25 @@ impl Notifier {
         let home = std::env::var("HOME").unwrap_or_default();
         let own = prefs.own_sound(cue, &home).map(PathBuf::from);
         let file = alert::cue_sound(os, cue, own, &desktop::xdg_data_dirs());
-        let argv = file.ok_or(alert::NO_THEME).and_then(|file| alert::sound(os, &file, &desktop::on_path));
-        self.run_or_tell(argv, cx);
+        let tries = file.ok_or(alert::NO_THEME).and_then(|file| alert::sound(os, &file, &desktop::on_path));
+        self.run_or_tell(tries, alert::SOUND_FAILED, cx);
     }
 
-    fn run_or_tell(&mut self, argv: Result<Vec<OsString>, &'static str>, cx: &mut Context<Self>) {
-        match argv {
-            Ok(argv) => spawn_quietly(argv),
-            Err(why) if self.told.insert(why) => self.store.update(cx, |s, cx| s.toast(why, ToastKind::Info, cx)),
-            Err(_) => {}
+    fn run_or_tell(
+        &mut self,
+        tries: Result<Vec<Vec<OsString>>, &'static str>,
+        failed: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        match tries {
+            Ok(tries) => run_helper(tries, failed, cx),
+            Err(why) => self.tell_once(why, why.to_string(), ToastKind::Info, cx),
+        }
+    }
+
+    fn tell_once(&mut self, key: &'static str, text: String, kind: ToastKind, cx: &mut Context<Self>) {
+        if self.told.insert(key) {
+            self.store.update(cx, |s, cx| s.toast(text, kind, cx));
         }
     }
 
@@ -458,12 +468,16 @@ impl Render for Tip {
     }
 }
 
-fn spawn_quietly(argv: Vec<OsString>) {
-    std::thread::spawn(move || {
-        let Some((program, rest)) = argv.split_first() else { return };
-        let _ =
-            Command::new(program).args(rest).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
-    });
+fn run_helper(tries: Vec<Vec<OsString>>, failed: &'static str, cx: &mut Context<Notifier>) {
+    let (tx, rx) = oneshot::channel();
+    std::thread::spawn(move || tx.send(alert::first_that_works(&tries, alert::run)));
+    cx.spawn(async move |this, cx| {
+        if let Ok(Err(why)) = rx.await {
+            let text = format!("{failed}: {why}");
+            let _ = this.update(cx, |this, cx| this.tell_once(failed, text, ToastKind::Error, cx));
+        }
+    })
+    .detach();
 }
 
 #[cfg(test)]

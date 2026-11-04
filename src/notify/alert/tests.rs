@@ -24,7 +24,7 @@ fn linux_notifies_through_notify_send_with_the_text_after_its_options() {
 fn a_mac_plays_its_system_sounds_with_afplay() {
     assert_eq!(system_sound(Os::Mac, "finished", &[]), Some("/System/Library/Sounds/Glass.aiff".into()));
     assert_eq!(system_sound(Os::Mac, "needs-you", &[]), Some("/System/Library/Sounds/Ping.aiff".into()));
-    assert_eq!(sound(Os::Mac, Path::new("/s/a.aiff"), &only(&[])).expect("afplay"), ["afplay", "/s/a.aiff"]);
+    assert_eq!(sound(Os::Mac, Path::new("/s/a.aiff"), &only(&[])).expect("afplay"), [["afplay", "/s/a.aiff"]]);
 }
 
 #[test]
@@ -40,16 +40,51 @@ fn linux_plays_the_freedesktop_theme_found_in_the_data_folders() {
 }
 
 #[test]
-fn linux_plays_with_paplay_then_pw_play_then_aplay_for_wav_only() {
+fn linux_tries_paplay_then_pw_play_then_aplay_for_wav_only() {
     let file = Path::new("/s/complete.oga");
-    let both = only(&["paplay", "pw-play", "aplay"]);
-    assert_eq!(sound(Os::Linux, file, &both).expect("a player"), ["/usr/bin/paplay", "/s/complete.oga"]);
+    let all = only(&["paplay", "pw-play", "aplay"]);
+    let both = [["/usr/bin/paplay", "/s/complete.oga"], ["/usr/bin/pw-play", "/s/complete.oga"]];
+    assert_eq!(sound(Os::Linux, file, &all).expect("a player"), both);
     let pipewire = only(&["pw-play", "aplay"]);
-    assert_eq!(sound(Os::Linux, file, &pipewire).expect("a player"), ["/usr/bin/pw-play", "/s/complete.oga"]);
+    assert_eq!(sound(Os::Linux, file, &pipewire).expect("a player"), [["/usr/bin/pw-play", "/s/complete.oga"]]);
     let alsa = only(&["aplay"]);
     assert_eq!(sound(Os::Linux, file, &alsa), Err(NO_PLAYER));
     let wav = Path::new("/s/ding.WAV");
-    assert_eq!(sound(Os::Linux, wav, &alsa).expect("aplay reads wav"), ["/usr/bin/aplay", "-q", "/s/ding.WAV"]);
+    let tries = sound(Os::Linux, wav, &all).expect("a player");
+    assert_eq!(tries.len(), 3);
+    assert_eq!(tries[2], ["/usr/bin/aplay", "-q", "/s/ding.WAV"]);
+}
+
+#[test]
+fn a_player_that_fails_hands_the_sound_to_the_next_and_one_that_plays_ends_the_tries() {
+    let tries = sound(Os::Linux, Path::new("/s/ding.wav"), &only(&["paplay", "pw-play", "aplay"])).expect("players");
+    let ran = std::cell::RefCell::new(Vec::new());
+    let pulse_is_down = |argv: &[OsString]| {
+        ran.borrow_mut().push(argv[0].clone());
+        if argv[0] == "/usr/bin/paplay" { Err("paplay: Connection refused".to_string()) } else { Ok(()) }
+    };
+    assert_eq!(first_that_works(&tries, pulse_is_down), Ok(()));
+    assert_eq!(*ran.borrow(), ["/usr/bin/paplay", "/usr/bin/pw-play"]);
+}
+
+#[test]
+fn when_every_helper_fails_each_says_why() {
+    let tries = [vec![OsString::from("paplay")], vec![OsString::from("pw-play")]];
+    let failing = |argv: &[OsString]| Err(format!("{} failed", argv[0].to_string_lossy()));
+    assert_eq!(first_that_works(&tries, failing), Err("paplay failed; pw-play failed".to_string()));
+}
+
+#[test]
+fn a_helper_that_fails_is_known_by_its_last_words_or_its_status() {
+    let sh = |script: &str| run(&["/bin/sh", "-c", script].map(OsString::from));
+    assert_eq!(sh("exit 0"), Ok(()));
+    assert_eq!(
+        sh("echo 'sh: Connection failure: Connection refused' >&2; exit 1"),
+        Err("sh: Connection failure: Connection refused".into())
+    );
+    assert_eq!(sh("exit 3"), Err("sh ended with exit status: 3".into()));
+    let missing = run(&[OsString::from("/nonexistent/pw-play")]).expect_err("there is no such program");
+    assert!(missing.starts_with("could not start pw-play: "), "{missing}");
 }
 
 #[test]
@@ -59,10 +94,10 @@ fn a_sound_or_a_player_whose_path_is_not_utf8_is_passed_as_it_is() {
 
     let file = Path::new(OsStr::from_bytes(b"/s/caf\xe9.oga"));
     let player = |name: &str| (name == "paplay").then(|| PathBuf::from(OsStr::from_bytes(b"/opt/b\xe9/paplay")));
-    let argv = sound(Os::Linux, file, &player).expect("a player");
+    let argv = &sound(Os::Linux, file, &player).expect("a player")[0];
     assert_eq!(argv[0].as_bytes(), b"/opt/b\xe9/paplay");
     assert_eq!(argv[1].as_bytes(), b"/s/caf\xe9.oga");
-    assert_eq!(sound(Os::Mac, file, &only(&[])).expect("afplay")[1].as_bytes(), b"/s/caf\xe9.oga");
+    assert_eq!(sound(Os::Mac, file, &only(&[])).expect("afplay")[0][1].as_bytes(), b"/s/caf\xe9.oga");
 }
 
 #[test]
