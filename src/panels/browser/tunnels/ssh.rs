@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use super::Event;
 use crate::desktop;
 use crate::panels::browser::chrome;
-use crate::platform;
+use crate::platform::{self, Os};
 
 const START_WAIT: Duration = Duration::from_secs(20);
 const PROBE_EVERY: Duration = Duration::from_millis(150);
@@ -64,6 +64,13 @@ fn with_options(forwards: &[String], destination: &str) -> Vec<String> {
     options.chain(forwards.iter().cloned()).chain(["--".to_string(), destination.to_string()]).collect()
 }
 
+pub(crate) fn not_started(os: Os) -> &'static str {
+    match os {
+        Os::Windows => "could not start ssh (Windows has it as the OpenSSH Client, in Settings › Optional features)",
+        Os::Mac | Os::Linux => "could not start ssh",
+    }
+}
+
 static RUNNING: Mutex<Vec<(u64, Child)>> = Mutex::new(Vec::new());
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
@@ -74,7 +81,7 @@ fn spawn(args: &[String]) -> Result<(u64, Option<ChildStderr>)> {
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-        .context("could not start ssh")?;
+        .context(not_started(Os::CURRENT))?;
     let stderr = child.stderr.take();
     let id = NEXT.fetch_add(1, Ordering::Relaxed);
     RUNNING.lock().push((id, child));

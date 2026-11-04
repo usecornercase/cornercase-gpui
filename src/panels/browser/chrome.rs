@@ -1,4 +1,4 @@
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write as _};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context as _, Result, bail};
 use parking_lot::Mutex;
 
+use super::socket::{self, Message};
 use crate::desktop;
 use crate::platform::{self, Os};
 
@@ -18,10 +19,14 @@ const ACTIVE_PORT: &str = "DevToolsActivePort";
 const OWNER: &str = "cornercase-owner";
 const PORT_FILE: &str = "cornercase-port";
 const SNAP_BIN: &str = "/snap/bin";
+const SINGLETON_LOCK: &str = "SingletonLock";
 const START_WAIT: Duration = Duration::from_secs(20);
 const POLL: Duration = Duration::from_millis(100);
 const LAST_WORDS: Duration = Duration::from_secs(1);
+const STOP_WAIT: Duration = Duration::from_millis(1500);
+const CLOSE_ANSWER: Duration = Duration::from_millis(500);
 const LINE_MAX: u64 = 4096;
+const CLOSE: &str = r#"{"id":1,"method":"Browser.close"}"#;
 
 pub(crate) const NO_CHROME: &str = "No Chrome, Chromium, Edge or Brave was found";
 
@@ -38,13 +43,20 @@ const NAMES: &[&str] = &[
     "chrome-headless-shell",
 ];
 
+const WINDOWS_NAMES: &[&str] = &["chrome.exe", "brave.exe", "msedge.exe", "chrome-headless-shell.exe"];
+
 const MAC_APPS: &[&str] = &["Google Chrome", "Chromium", "Microsoft Edge", "Brave Browser", "Google Chrome Canary"];
+
+const WINDOWS_ROOTS: &[&str] = &["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"];
 
 const WINDOWS_APPS: &[&str] = &[
     "Google\\Chrome\\Application\\chrome.exe",
-    "Microsoft\\Edge\\Application\\msedge.exe",
-    "BraveSoftware\\Brave-Browser\\Application\\brave.exe",
     "Chromium\\Application\\chrome.exe",
+    "BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+    "Google\\Chrome Beta\\Application\\chrome.exe",
+    "Google\\Chrome Dev\\Application\\chrome.exe",
+    "Google\\Chrome SxS\\Application\\chrome.exe",
+    "Microsoft\\Edge\\Application\\msedge.exe",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,8 +90,9 @@ pub(crate) fn find() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("CORNERCASE_GPUI_CHROME") {
         return Some(PathBuf::from(path)).filter(|p| p.is_file());
     }
-    let on_path = || NAMES.iter().find_map(|name| desktop::on_path(name));
-    candidates(&home()).into_iter().find(|p| p.is_file()).or_else(on_path)
+    let on_path = || path_names(Os::CURRENT).iter().find_map(|name| desktop::on_path(name));
+    let found = candidates(Os::CURRENT, &home(), &|name| std::env::var_os(name));
+    found.into_iter().find(|p| p.is_file()).or_else(on_path)
 }
 
 fn chosen_in(cell: &OnceLock<Chosen>, look: impl FnOnce() -> Option<PathBuf>) -> Option<&Chosen> {
@@ -87,7 +100,7 @@ fn chosen_in(cell: &OnceLock<Chosen>, look: impl FnOnce() -> Option<PathBuf>) ->
         return Some(chosen);
     }
     let exe = look()?;
-    let profile = profile_for(Some(&exe));
+    let profile = profile_for(Some(&exe), Os::CURRENT);
     Some(cell.get_or_init(|| Chosen { exe, profile }))
 }
 
@@ -95,20 +108,38 @@ fn home() -> PathBuf {
     desktop::home().unwrap_or_default()
 }
 
-pub(crate) fn candidates(home: &Path) -> Vec<PathBuf> {
-    if cfg!(target_os = "macos") {
-        let roots = [PathBuf::from("/Applications"), home.join("Applications")];
-        return roots
-            .iter()
-            .flat_map(|root| MAC_APPS.iter().map(move |app| root.join(format!("{app}.app/Contents/MacOS/{app}"))))
-            .collect();
+pub(crate) fn path_names(os: Os) -> &'static [&'static str] {
+    match os {
+        Os::Windows => WINDOWS_NAMES,
+        Os::Mac | Os::Linux => NAMES,
     }
-    if cfg!(windows) {
-        let bases = ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"];
-        let bases: Vec<PathBuf> = bases.iter().filter_map(std::env::var_os).map(PathBuf::from).collect();
-        return bases.iter().flat_map(|base| WINDOWS_APPS.iter().map(move |app| base.join(app))).collect();
+}
+
+pub(crate) fn candidates(os: Os, home: &Path, var: &dyn Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
+    match os {
+        Os::Mac => {
+            let roots = [PathBuf::from("/Applications"), home.join("Applications")];
+            roots
+                .iter()
+                .flat_map(|root| MAC_APPS.iter().map(move |app| root.join(format!("{app}.app/Contents/MacOS/{app}"))))
+                .collect()
+        }
+        Os::Windows => {
+            let roots: Vec<OsString> =
+                WINDOWS_ROOTS.iter().filter_map(|name| var(name)).filter(|r| !r.is_empty()).collect();
+            WINDOWS_APPS.iter().flat_map(|app| roots.iter().map(move |root| windows_join(root, app))).collect()
+        }
+        Os::Linux => Vec::new(),
     }
-    Vec::new()
+}
+
+fn windows_join(root: &OsStr, rest: &str) -> PathBuf {
+    let mut path = root.to_os_string();
+    if !root.as_encoded_bytes().ends_with(b"\\") && !root.as_encoded_bytes().ends_with(b"/") {
+        path.push("\\");
+    }
+    path.push(rest);
+    PathBuf::from(path)
 }
 
 pub(crate) fn profile() -> PathBuf {
@@ -116,14 +147,14 @@ pub(crate) fn profile() -> PathBuf {
 }
 
 fn profile_in(cell: &OnceLock<Chosen>) -> PathBuf {
-    cell.get().map_or_else(|| profile_for(None), |chosen| chosen.profile.clone())
+    cell.get().map_or_else(|| profile_for(None, Os::CURRENT), |chosen| chosen.profile.clone())
 }
 
-fn profile_for(exe: Option<&Path>) -> PathBuf {
+fn profile_for(exe: Option<&Path>, os: Os) -> PathBuf {
     if let Some(dir) = std::env::var_os("CORNERCASE_GPUI_BROWSER_PROFILE") {
         return PathBuf::from(dir);
     }
-    match exe.and_then(snap_of) {
+    match exe.filter(|_| os == Os::Linux).and_then(snap_of) {
         Some(snap) => snap_profile(&home(), &snap),
         None => crate::prefs::app_dir().join("browser"),
     }
@@ -165,14 +196,17 @@ fn snap_name(command: &str, link: Option<&Path>) -> Option<String> {
     alias.unwrap_or(command).split('.').next().filter(|name| !name.is_empty()).map(str::to_string)
 }
 
+fn own_flags(os: Os) -> &'static [&'static str] {
+    match os {
+        Os::Mac => &["--use-mock-keychain"],
+        Os::Linux => &["--password-store=basic"],
+        Os::Windows => &["--enable-logging=stderr", "--log-level=2"],
+    }
+}
+
 pub(crate) fn args(os: Os, profile: &Path, port: u16) -> Vec<OsString> {
     let mut user_data = OsString::from("--user-data-dir=");
     user_data.push(profile);
-    let keyring = match os {
-        Os::Mac => Some("--use-mock-keychain"),
-        Os::Linux => Some("--password-store=basic"),
-        Os::Windows => None,
-    };
     let flags = [
         "--remote-debugging-address=127.0.0.1",
         "--no-first-run",
@@ -184,7 +218,7 @@ pub(crate) fn args(os: Os, profile: &Path, port: u16) -> Vec<OsString> {
     ];
     let mut args = vec!["--headless".into(), user_data, format!("--remote-debugging-port={port}").into()];
     args.extend(flags.map(OsString::from));
-    args.extend(keyring.map(OsString::from));
+    args.extend(own_flags(os).iter().map(OsString::from));
     args.push("--no-startup-window".into());
     args
 }
@@ -218,6 +252,10 @@ fn running(profile: &Path) -> Option<Endpoint> {
     if !browser_pid(profile).is_some_and(alive) {
         return None;
     }
+    answering(profile)
+}
+
+fn answering(profile: &Path) -> Option<Endpoint> {
     let endpoint = version(known_port(profile)?)?;
     let _ = fs::write(profile.join(PORT_FILE), endpoint.port.to_string());
     Some(endpoint)
@@ -312,7 +350,7 @@ fn free(port: u16) -> bool {
 fn wait_for_port(profile: &Path, said: &Mutex<Said>) -> Result<Endpoint> {
     let started = Instant::now();
     while started.elapsed() < START_WAIT {
-        if let Some(endpoint) = running(profile) {
+        if let Some(endpoint) = answering(profile) {
             return Ok(endpoint);
         }
         let ended = OWNED.lock().child.as_mut().and_then(|c| c.try_wait().ok().flatten());
@@ -342,8 +380,20 @@ pub(crate) fn lock_pid(target: &str) -> Option<u32> {
 }
 
 fn browser_pid(profile: &Path) -> Option<u32> {
-    let target = fs::read_link(profile.join("SingletonLock")).ok()?;
-    lock_pid(&target.to_string_lossy())
+    match Os::CURRENT {
+        Os::Windows => singleton_window(profile),
+        Os::Mac | Os::Linux => lock_pid(&fs::read_link(profile.join(SINGLETON_LOCK)).ok()?.to_string_lossy()),
+    }
+}
+
+#[cfg(windows)]
+fn singleton_window(profile: &Path) -> Option<u32> {
+    super::win32::singleton_pid(profile)
+}
+
+#[cfg(not(windows))]
+fn singleton_window(_profile: &Path) -> Option<u32> {
+    None
 }
 
 #[cfg(unix)]
@@ -351,42 +401,69 @@ fn alive(pid: u32) -> bool {
     libc::pid_t::try_from(pid).is_ok_and(|pid| unsafe { libc::kill(pid, 0) } == 0)
 }
 
-#[cfg(not(unix))]
-fn alive(_pid: u32) -> bool {
-    true
+#[cfg(windows)]
+fn alive(pid: u32) -> bool {
+    super::win32::alive(pid)
 }
 
 #[cfg(unix)]
-fn stop(pid: u32) {
+fn terminate(pid: u32) {
     if let Ok(pid) = libc::pid_t::try_from(pid) {
         unsafe { libc::kill(pid, libc::SIGTERM) };
     }
 }
 
 #[cfg(not(unix))]
-fn stop(_pid: u32) {}
+fn terminate(_pid: u32) {}
+
+fn ask_to_stop(os: Os, pid: u32, profile: &Path) -> bool {
+    match os {
+        Os::Windows => known_port(profile).and_then(close_through_devtools).is_some(),
+        Os::Mac | Os::Linux => {
+            terminate(pid);
+            true
+        }
+    }
+}
+
+fn close_through_devtools(port: u16) -> Option<()> {
+    let endpoint = version(port)?;
+    let (mut writer, mut reader) = socket::connect(&endpoint.url).ok()?;
+    reader.wait_at_most(CLOSE_ANSWER).ok()?;
+    writer.text(CLOSE).ok()?;
+    matches!(reader.message(), Ok(Message::Text(_))).then_some(())
+}
 
 pub(crate) fn quit() {
     let owned = std::mem::take(&mut *OWNED.lock());
+    let profile = profile();
     match (owned.child, owned.pid) {
-        (Some(child), Some(pid)) => end(child, pid),
-        (None, Some(pid)) => stop(pid),
+        (Some(child), Some(pid)) => end(child, pid, &profile),
+        (None, Some(pid)) => {
+            ask_to_stop(Os::CURRENT, pid, &profile);
+        }
         _ => return,
     }
-    let _ = fs::remove_file(profile().join(OWNER));
+    let _ = fs::remove_file(profile.join(OWNER));
 }
 
-fn end(mut child: Child, pid: u32) {
-    stop(pid);
-    let started = Instant::now();
-    while started.elapsed() < Duration::from_millis(1500) {
-        if child.try_wait().ok().flatten().is_some() {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(50));
+fn end(mut child: Child, pid: u32, profile: &Path) {
+    if ask_to_stop(Os::CURRENT, pid, profile) && exits_within(&mut child, STOP_WAIT) {
+        return;
     }
     let _ = child.kill();
     let _ = child.wait();
+}
+
+fn exits_within(child: &mut Child, limit: Duration) -> bool {
+    let started = Instant::now();
+    while started.elapsed() < limit {
+        if child.try_wait().ok().flatten().is_some() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    false
 }
 
 #[cfg(test)]

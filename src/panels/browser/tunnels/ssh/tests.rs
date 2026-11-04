@@ -1,4 +1,5 @@
-use super::{REVERSE_PORTS, forward_args, reverse_args};
+use super::{REVERSE_PORTS, forward_args, not_started, reverse_args};
+use crate::platform::Os;
 
 fn has(args: &[String], pair: [&str; 2]) -> bool {
     args.windows(2).any(|w| w[0] == pair[0] && w[1] == pair[1])
@@ -37,4 +38,10 @@ fn the_reverse_tunnel_brings_the_browser_there_and_checks_it_through_itself() {
 #[test]
 fn agents_there_are_offered_the_usual_devtools_port_first() {
     assert_eq!(REVERSE_PORTS[0], 9222);
+}
+
+#[test]
+fn on_windows_a_missing_ssh_says_where_windows_keeps_it() {
+    assert!(not_started(Os::Windows).contains("OpenSSH Client"));
+    assert_eq!(not_started(Os::Linux), "could not start ssh");
 }

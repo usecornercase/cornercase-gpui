@@ -11,7 +11,7 @@ fn key(name: &str, typed: &str) -> Keystroke {
 #[test]
 fn a_key_and_the_text_it_typed_go_as_one_key_down() {
     let mut typing = Typing::default();
-    typing.pressed(&key("a", "a"));
+    typing.pressed(&key("a", "a"), false);
     let (method, params) = typing.commit("a").expect("sent");
     assert_eq!(method, "Input.dispatchKeyEvent");
     assert_eq!(
@@ -23,7 +23,7 @@ fn a_key_and_the_text_it_typed_go_as_one_key_down() {
 #[test]
 fn the_key_is_used_once() {
     let mut typing = Typing::default();
-    typing.pressed(&key("a", "a"));
+    typing.pressed(&key("a", "a"), false);
     typing.commit("a");
     assert_eq!(typing.commit("ö"), Some(("Input.insertText", json!({ "text": "ö" }))));
 }
@@ -37,7 +37,7 @@ fn text_without_a_key_is_inserted() {
 #[test]
 fn marked_text_becomes_a_composition() {
     let mut typing = Typing::default();
-    typing.pressed(&key("k", "k"));
+    typing.pressed(&key("k", "k"), false);
     let (method, params) = typing.compose("か", None);
     assert_eq!(
         (method, params),
@@ -50,7 +50,7 @@ fn marked_text_becomes_a_composition() {
 fn committing_a_composition_inserts_its_text_not_a_key() {
     let mut typing = Typing::default();
     typing.compose("´", None);
-    typing.pressed(&key("e", "e"));
+    typing.pressed(&key("e", "e"), false);
     assert_eq!(typing.commit("é"), Some(("Input.insertText", json!({ "text": "é" }))));
     assert_eq!(typing.marked_range(), None);
 }
@@ -120,4 +120,20 @@ fn on_linux_the_window_keeps_ctrl_shift_and_chrome_s_clipboard_keys() {
     assert!(!window_claims(&held("{", ctrl), false, Os::Linux));
     assert!(!window_claims(&held("a", ctrl), false, Os::Linux));
     assert!(!window_claims(&held("z", ctrl), false, Os::Linux));
+}
+
+#[test]
+fn a_held_key_whose_text_the_input_method_gives_goes_as_a_repeat() {
+    let mut typing = Typing::default();
+    typing.pressed(&key("a", "a"), true);
+    let (_, params) = typing.commit("A").expect("sent");
+    assert_eq!((params["text"].as_str(), params["autoRepeat"].as_bool()), (Some("A"), Some(true)));
+}
+
+#[test]
+fn on_windows_alt_f4_is_left_to_the_window_so_it_closes() {
+    let alt_f4 =
+        Keystroke { modifiers: Modifiers { alt: true, ..Modifiers::default() }, key: "f4".into(), key_char: None };
+    assert!(window_claims(&alt_f4, false, Os::Windows));
+    assert!(!window_claims(&alt_f4, false, Os::Linux));
 }
