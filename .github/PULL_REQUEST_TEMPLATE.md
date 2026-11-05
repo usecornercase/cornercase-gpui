@@ -24,5 +24,5 @@
 - [ ] `cargo-machete` and `npx -y jscpd@4.3.0` pass
 - [ ] No workaround for something cornercase lacks: an upstream issue instead, named in the UI
 - [ ] Code or assets taken from another project keep their licence: its licence file and a line under the README's License
-- [ ] Anything users see has a line under `## Unreleased` in `CHANGELOG.md`
+- [ ] If it changes the app: `version` bumped in `Cargo.toml`, and its `## <version>` section in `CHANGELOG.md` says what users see
 - [ ] The area's file in `design/` is updated if this changes a design decision, `design/architecture.md` if it adds a module, `AGENTS.md` if it changes a rule
