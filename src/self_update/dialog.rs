@@ -44,10 +44,16 @@ fn action(install: &InstallState, found: &Found) -> Action {
         (InstallState::Running, _) => Action::Busy,
         (InstallState::Done(_), _) => Action::Restart,
         _ if found.on_disk => Action::Restart,
-        (InstallState::Failed(_), Way::Replace { asset }) => Action::Download(asset.url.clone()),
         (_, Way::Replace { .. }) => Action::Install,
         (_, Way::Download { url, .. }) => Action::Download(url.clone()),
         (_, Way::Command(command)) => Action::Copy(command.clone()),
+    }
+}
+
+fn fallback(install: &InstallState, found: &Found) -> Option<String> {
+    match (install, &found.way) {
+        (InstallState::Failed(_), Way::Replace { asset }) => Some(asset.url.clone()),
+        _ => None,
     }
 }
 
@@ -123,11 +129,15 @@ impl Render for UpdateDialog {
             .when_some(how, |d, how| d.child(div().text_size(px(12.)).text_color(colours::muted()).child(how)))
             .when_some(done, |d, (text, colour)| d.child(div().text_size(px(12.)).text_color(colour).child(text)));
         let title = format!("cornercase-gpui {} is out", found.latest.version);
-        dialog.child(frame(title, body, buttons(self.updater.clone(), act, &found.latest.version)))
+        dialog.child(frame(
+            title,
+            body,
+            buttons(self.updater.clone(), act, fallback(&updater.install, &found), &found.latest.version),
+        ))
     }
 }
 
-fn buttons(updater: Entity<Updater>, act: Action, version: &str) -> impl IntoElement + use<> {
+fn buttons(updater: Entity<Updater>, act: Action, fallback: Option<String>, version: &str) -> impl IntoElement + use<> {
     let action = match act {
         Action::Busy => ui::busy_button("installing", "Installing…", ui::Tone::Primary),
         Action::Restart => ui::danger_button("restart", "Restart window")
@@ -146,6 +156,9 @@ fn buttons(updater: Entity<Updater>, act: Action, version: &str) -> impl IntoEle
         .flex()
         .gap(px(8.))
         .child(ui::button("close", "Later").on_click(|_: &ClickEvent, _, cx| close(cx)))
+        .when_some(fallback, |d, url| {
+            d.child(ui::button("download", "Download").on_click(move |_: &ClickEvent, _, cx| cx.open_url(&url)))
+        })
         .child(action)
 }
 

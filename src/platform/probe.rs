@@ -20,7 +20,7 @@ pub(crate) fn lines_within(
         thread::spawn(move || forward(stdout.take(OUTPUT_BUDGET), &tx));
     }
     let lines = gather(&rx, deadline, done);
-    let status = exited_by(&mut child, deadline);
+    let status = if lines.is_empty() { exited_by(&mut child, deadline) } else { None };
     let _ = child.kill();
     let _ = child.wait();
     silence(lines, status, limit)
