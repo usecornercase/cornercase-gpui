@@ -15,7 +15,7 @@ fn asset() -> Asset {
 #[test]
 fn each_way_says_how_it_updates() {
     let replace = how(&Way::Replace { asset: asset() }, Os::Windows);
-    assert!(replace.contains("opens it again"));
+    assert!(replace.contains("Restart window then opens it again"));
     let bundle = how(&Way::Download { url: "u".into(), why: Why::Bundle }, Os::Mac);
     assert!(bundle.contains("drag cornercase to Applications"));
     let folder = how(&Way::Download { url: "u".into(), why: Why::Folder(PathBuf::from("/opt/apps")) }, Os::Linux);

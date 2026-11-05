@@ -12,6 +12,8 @@ use crate::platform::{self, Os, probe::lines_within};
 const VERSION_WAIT: Duration = Duration::from_secs(5);
 const OLD_COPIES: u32 = 100;
 const PROGRAM: &str = "cornercase-gpui";
+const STAGE_PREFIX: &str = ".cornercase-gpui-update-";
+const STALE_STAGE: Duration = Duration::from_hours(1);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Why {
@@ -66,7 +68,7 @@ struct Stage(PathBuf);
 impl Stage {
     fn beside(exe: &Path) -> Result<Self> {
         let folder = exe.parent().context("the program has no folder")?;
-        let path = folder.join(format!(".{PROGRAM}-update-{}", std::process::id()));
+        let path = folder.join(format!("{STAGE_PREFIX}{}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir(&path).with_context(|| format!("could not make {}", path.display()))?;
         Ok(Self(path))
@@ -195,10 +197,24 @@ fn free_after_removal(path: &Path) -> bool {
     !path.exists() || fs::remove_file(path).is_ok()
 }
 
-pub(crate) fn remove_old_copies(exe: &Path) {
+pub(crate) fn is_stage(file_name: &OsStr) -> bool {
+    file_name.to_string_lossy().starts_with(STAGE_PREFIX)
+}
+
+fn stale(path: &Path) -> bool {
+    let age = fs::metadata(path).and_then(|meta| meta.modified()).ok().and_then(|time| time.elapsed().ok());
+    age.is_some_and(|age| age >= STALE_STAGE)
+}
+
+pub(crate) fn sweep(exe: &Path) {
     let Some(entries) = exe.parent().and_then(|folder| fs::read_dir(folder).ok()) else { return };
-    for entry in entries.flatten().filter(|entry| is_old_copy(&entry.file_name(), exe)) {
-        let _ = fs::remove_file(entry.path());
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if is_old_copy(&name, exe) {
+            let _ = fs::remove_file(entry.path());
+        } else if is_stage(&name) && stale(&entry.path()) {
+            let _ = fs::remove_dir_all(entry.path());
+        }
     }
 }
 

@@ -74,9 +74,10 @@ fn an_unreadable_config_still_checks() {
 }
 
 #[test]
-fn only_release_builds_and_an_asked_url_check() {
+fn release_builds_ask_github_and_only_debug_builds_ask_another_url() {
     assert_eq!(releases_url(None, true), None);
     assert_eq!(releases_url(None, false).as_deref(), Some(RELEASES_URL));
     assert_eq!(releases_url(Some("http://127.0.0.1:8765/x".into()), true).as_deref(), Some("http://127.0.0.1:8765/x"));
+    assert_eq!(releases_url(Some("http://127.0.0.1:8765/x".into()), false).as_deref(), Some(RELEASES_URL));
     assert_eq!(releases_url(Some("  ".into()), true), None);
 }

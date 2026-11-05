@@ -72,10 +72,10 @@ impl ChipState {
 }
 
 fn releases_url(asked: Option<String>, debug_build: bool) -> Option<String> {
-    match asked.filter(|url| !url.trim().is_empty()) {
-        Some(url) => Some(url),
-        None => (!debug_build).then(|| RELEASES_URL.to_string()),
+    if !debug_build {
+        return Some(RELEASES_URL.to_string());
     }
+    asked.filter(|url| !url.trim().is_empty())
 }
 
 fn wants_check(config: Option<&Value>) -> bool {
@@ -87,10 +87,8 @@ fn wants_check(config: Option<&Value>) -> bool {
 
 pub(crate) fn start(cx: &mut App) {
     let exe = std::env::current_exe().ok();
-    if Os::CURRENT == Os::Windows
-        && let Some(exe) = exe.clone()
-    {
-        cx.background_spawn(async move { install::remove_old_copies(&exe) }).detach();
+    if let Some(exe) = exe.clone() {
+        cx.background_spawn(async move { install::sweep(&exe) }).detach();
     }
     let Some(url) = releases_url(std::env::var(URL_VARIABLE).ok(), cfg!(debug_assertions)) else { return };
     let updater = cx.new(|_| Updater::new(url, exe));

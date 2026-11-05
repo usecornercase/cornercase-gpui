@@ -53,7 +53,7 @@ fn action(install: &InstallState, found: &Found) -> Action {
 fn how(way: &Way, os: Os) -> String {
     match way {
         Way::Replace { .. } => {
-            "Installing replaces this window's program and opens it again; the terminals and agents keep running."
+            "Installing replaces this window's program; Restart window then opens it again, and the terminals and agents keep running."
                 .to_string()
         }
         Way::Download { why: Why::Bundle, .. } => "Open the download and drag cornercase to Applications, replacing \

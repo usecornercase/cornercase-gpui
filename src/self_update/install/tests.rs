@@ -164,6 +164,18 @@ fn old_copies_beside_the_program_are_removed() {
     let (exe, _) = pair(scratch.path());
     fs::write(old_copy(&exe, 0), "x").expect("a file");
     fs::write(old_copy(&exe, 3), "x").expect("a file");
-    remove_old_copies(&exe);
+    sweep(&exe);
     assert!(exe.exists() && !old_copy(&exe, 0).exists() && !old_copy(&exe, 3).exists());
+}
+
+#[test]
+fn a_fresh_staging_folder_is_left_to_the_window_using_it() {
+    let scratch = Scratch::folder("stage").expect("a folder");
+    let (exe, _) = pair(scratch.path());
+    let stage = scratch.path().join(format!("{STAGE_PREFIX}1234"));
+    fs::create_dir(&stage).expect("a folder");
+    sweep(&exe);
+    assert!(stage.exists());
+    assert!(is_stage(OsStr::new(".cornercase-gpui-update-1234")));
+    assert!(!is_stage(OsStr::new("cornercase-gpui.exe")));
 }
