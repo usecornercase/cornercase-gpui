@@ -1,0 +1,36 @@
+---
+import Keys from './Keys.astro';
+import { SHEETS } from '../data/session';
+
+const pictures = import.meta.glob<{ default: ImageMetadata }>('../assets/sheets/*.webp', { eager: true });
+const sheets = SHEETS.map((sheet) => ({ ...sheet, picture: pictures[`../assets/sheets/${sheet.file}.webp`].default }));
+---
+
+<section class="sheets" id="sheets" data-section="sheets">
+  <div class="sheets__pin">
+    <div class="sheets__head" data-sheets-head>
+      <h2>One shortcut away.</h2>
+      <p>The rest of cornercase, each in a sheet of its own. Real screens, from the real window.</p>
+    </div>
+    <div class="ring" data-ring>
+      <div class="ring__spin" data-ring-spin>
+        {
+          sheets.map((sheet) => (
+            <figure class="sheet" data-sheet data-name={sheet.name} data-line={sheet.line}>
+              <img src={sheet.picture.src} width={sheet.picture.width} height={sheet.picture.height} loading="lazy" decoding="async" alt={`The ${sheet.name} sheet of cornercase-gpui.`} />
+              <figcaption>
+                <b>{sheet.name}</b>
+                <Keys keys={sheet.keys} usage={sheet.name === 'Usage'} />
+                <span>{sheet.line}</span>
+              </figcaption>
+            </figure>
+          ))
+        }
+      </div>
+    </div>
+    <div class="sheets__now" aria-hidden="true">
+      <div class="sheets__label"><b data-sheet-name>Search</b><span data-sheet-line></span></div>
+      <div class="sheets__caps" data-sheet-caps></div>
+    </div>
+  </div>
+</section>

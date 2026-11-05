@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { test } from 'node:test';
+import { FILES, INSTALLS } from '../src/data/links';
+import { SHEETS } from '../src/data/session';
+
+const KEYMAP = readFileSync('../src/keymap.rs', 'utf8');
+const PANELS = readFileSync('../src/panels/mod.rs', 'utf8');
+
+const PANEL_KEYS: Record<string, string> = {
+  Search: 'Search',
+  Issues: 'Issues',
+  Queue: 'Queue',
+  Flows: 'Flows',
+  Usage: 'Usage',
+  Accounts: 'Accounts',
+  Processes: 'Processes',
+  Ports: 'Ports',
+  Worktrees: 'Worktrees',
+  Plugins: 'Plugins',
+  Settings: 'Settings',
+};
+
+test('every sheet has a picture', () => {
+  const pictures = readdirSync('src/assets/sheets');
+  for (const sheet of SHEETS) assert.ok(pictures.includes(`${sheet.file}.webp`), sheet.name);
+});
+
+test('every sheet is a panel of the app', () => {
+  for (const sheet of SHEETS) assert.ok(PANELS.includes(`"${sheet.name}"`), sheet.name);
+});
+
+test('every sheet shows the key the app gives it', () => {
+  for (const sheet of SHEETS) {
+    const last = (sheet.keys[sheet.keys.length - 1] ?? '').toLowerCase();
+    const shift = sheet.keys.includes('shift');
+    const expected = `key(&["${last}"], ${shift}, Command::Panel(PanelKind::${PANEL_KEYS[sheet.name]}))`;
+    assert.ok(KEYMAP.includes(expected), `${sheet.name}: ${expected}`);
+  }
+});
+
+test('the downloads are the files a release publishes', () => {
+  const release = readFileSync('../README.md', 'utf8');
+  for (const file of Object.values(FILES)) assert.ok(release.includes(file), file);
+});
+
+test('the install lines are cornercase own', () => {
+  assert.equal(INSTALLS.length, 3);
+  for (const [, command] of INSTALLS) assert.ok(command.includes('cornercase'), command);
+});

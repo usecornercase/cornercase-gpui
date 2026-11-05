@@ -1,0 +1,33 @@
+---
+import Icon from '../Icon.astro';
+import { DIFF } from '../../data/session';
+---
+
+<div class="w-dockpage js-page-changes">
+  <header class="w-dockhead"><Icon name="git-compare" size={16} class="accent" /><b>Changes</b><Icon name="x" size={14} class="w-dockhead__x" /></header>
+  <div class="w-segs"><span class="is-on">Uncommitted</span><span>Commits</span><span>All</span><span>Every project</span></div>
+  <div class="w-crumb"><span>web-shop › feat/dark-mode</span><span>3 files <b class="add">+33</b> <b class="del">−7</b></span></div>
+  <div class="w-files">
+    <div class="w-file is-lit"><b class="yellow">M</b><span>checkout.tsx</span><i>src/</i><span class="w-file__n"><b class="add">+7</b> <b class="del">−5</b></span><span class="w-check js-check-1"></span></div>
+    <div class="w-file"><b class="yellow">M</b><span>theme.ts</span><i>src/</i><span class="w-file__n"><b class="add">+10</b> <b class="del">−2</b></span><span class="w-check js-check-2"></span></div>
+    <div class="w-file"><b class="green">U</b><span>theme.test.ts</span><i>tests/</i><span class="w-file__n"><b class="add">+16</b> <b class="del">−0</b></span><span class="w-check js-check-3"></span></div>
+  </div>
+  <div class="w-open">
+    <div class="w-open__name"><b class="yellow">M</b><b>checkout.tsx</b><i>src/</i><span class="w-file__n"><b class="add">+7</b> <b class="del">−5</b></span></div>
+    <div class="w-open__acts"><span class="w-btn w-btn--sm js-viewed">Mark viewed</span><span class="w-btn w-btn--sm js-stage">+ Stage</span><span class="w-btn w-btn--sm w-btn--danger"><Icon name="rotate-ccw" size={11} /> Discard</span><span class="w-btn w-btn--sm">Open in editor</span></div>
+  </div>
+  <div class="w-hunk"><span>@@ -1,19 +1,21 @@</span><span class="w-hunk__acts"><i>Open</i><i class="js-ask">Ask agent</i><i>Copy</i></span></div>
+  <div class="w-diff">
+    {
+      DIFF.map((row) => (
+        <div class:list={['w-dl', `w-dl--${row.kind}`]}>
+          <span class="w-dl__n">{row.old ?? ''}</span>
+          <span class="w-dl__n">{row.now ?? ''}</span>
+          <span class="w-dl__s">{row.kind === 'add' ? '+' : row.kind === 'del' ? '−' : ''}</span>
+          <span class="w-dl__t">{row.text.map(([kind, text]) => (kind ? <span class={kind}>{text}</span> : text))}</span>
+        </div>
+      ))
+    }
+  </div>
+  <footer class="w-dockfoot"><span class="js-viewed-count">0 of 3 viewed</span><span class="w-live"><i></i>live</span></footer>
+</div>

@@ -1,0 +1,34 @@
+---
+import Badge from './stage/Badge.astro';
+import stillAgent from '../assets/stills/agent.webp';
+
+const agents = [
+  { key: 'dark', title: 'Dark mode for the checkout', where: 'web-shop · feat/dark-mode', agent: 'claude · Opus 5.5' },
+  { key: 'gift', title: 'Gift cards at checkout', where: 'web-shop · feat/gift-cards', agent: 'codex · gpt-5.4' },
+  { key: 'empty', title: 'Empty address on step two', where: 'web-shop · fix/empty-address', agent: 'claude · Opus 5.5' },
+  { key: 'pages', title: 'Paginate GET /orders', where: 'orders-api · fix/pagination', agent: 'claude · Opus 5.5' },
+];
+---
+
+<section class="close" id="close" data-section="close">
+  <div class="close__pin">
+    <div class="close__head" data-close-head>
+      <h2 data-title aria-label="Close it. Nothing stops."><span class="cap__line" aria-hidden="true">Close it.</span><span class="cap__line" aria-hidden="true">Nothing</span><span class="cap__line" aria-hidden="true">stops.</span></h2>
+      <p>cornercase's server owns the shells, agents and worktrees; this app is only a window on them. Close it and the work goes on. Open it again, or the terminal's own window: both show the same session.</p>
+    </div>
+    <div class="agents" data-agents aria-hidden="true">
+      {
+        agents.map((agent) => (
+          <div class={`agent js-agent-${agent.key}`}>
+            <Badge status="working" size={16} class={`js-agent-badge-${agent.key}`} />
+            <div class="agent__text"><b>{agent.title}</b><span>{agent.where}</span></div>
+            <span class="agent__model">{agent.agent}</span>
+            <span class="agent__bar"><i class={`js-agent-bar-${agent.key}`}></i></span>
+          </div>
+        ))
+      }
+      <div class="agents__clock"><span class="agents__dot"></span>window closed <b data-close-clock>0:00</b> ago</div>
+    </div>
+    <img class="ch__still" src={stillAgent.src} width={stillAgent.width} height={stillAgent.height} loading="lazy" decoding="async" alt="An agent at work in the feat/dark-mode worktree, with the projects and workspaces in the sidebar." />
+  </div>
+</section>

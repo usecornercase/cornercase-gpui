@@ -1,0 +1,137 @@
+---
+import '@fontsource-variable/archivo/wdth.css';
+import '@fontsource-variable/jetbrains-mono';
+import '../styles/base.css';
+import '../styles/page.css';
+import '../styles/stage.css';
+import archivo from '@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2?url';
+import jetbrains from '@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2?url';
+import Chapter from '../components/Chapter.astro';
+import Close from '../components/Close.astro';
+import Download from '../components/Download.astro';
+import Footer from '../components/Footer.astro';
+import Hero from '../components/Hero.astro';
+import Keys from '../components/Keys.astro';
+import Nav from '../components/Nav.astro';
+import Remote from '../components/Remote.astro';
+import Sheets from '../components/Sheets.astro';
+import Badge from '../components/stage/Badge.astro';
+import Stage from '../components/stage/Stage.astro';
+import stillAgent from '../assets/stills/agent.webp';
+import stillBrowser from '../assets/stills/browser.webp';
+import stillChanges from '../assets/stills/changes.webp';
+import stillFlow from '../assets/stills/flow.webp';
+
+const title = 'cornercase gpui · All your agents, one native window';
+const description =
+  'A native window for cornercase, the terminal multiplexer for running coding agents in parallel. Drawn on the GPU with GPUI, on macOS, Linux and Windows.';
+const origin = (Astro.site?.toString() ?? '').replace(/\/$/, '');
+const base = (import.meta.env.SITE_BASE ?? '').replace(/\/$/, '');
+const site = `${origin}${base}`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={`${site}/`} />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href={archivo} />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href={jetbrains} />
+    <meta name="theme-color" content="#0b0c0e" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={`${site}/`} />
+    <meta property="og:image" content={`${site}/og.png`} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={`${site}/og.png`} />
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        root.classList.add('js');
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && window.WebGL2RenderingContext) {
+          root.classList.add('motion', 'intro');
+          setTimeout(function () {
+            if (!window.cornercaseAlive) root.classList.remove('motion', 'intro');
+          }, 4000);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <canvas class="field" data-field aria-hidden="true"></canvas>
+    <Nav />
+    <Hero />
+    <Stage />
+    <main id="main">
+      <Chapter id="layers" title="Drawn on|the GPU." side="left">
+        <p>GPUI, the framework behind the Zed editor, draws every card, glyph and shadow. The window is glass in layers, and where your system can blur it, your desktop shows through.</p>
+        <ol class="layers" data-layers>
+          <li data-layer-name="ground"><b>Ground</b><span>one sheet of glass</span></li>
+          <li data-layer-name="rail"><b>Rail</b><span>every panel, a click away</span></li>
+          <li data-layer-name="side"><b>Sidebar</b><span>projects, workspaces, agents</span></li>
+          <li data-layer-name="panes"><b>Panes</b><span>a floating card each</span></li>
+          <li data-layer-name="dock"><b>Dock</b><span>the work beside the terminal</span></li>
+        </ol>
+      </Chapter>
+
+      <Chapter id="status" title="Know who|needs you." side="right" still={stillAgent} alt="The sidebar, with each agent's status, model and context.">
+        <p>Every agent's status, model and context in the sidebar, beside each workspace's pull request and how its checks went. When one needs you, a toast, a notification and a sound say so.</p>
+        <ul class="statuses" data-statuses>
+          <li data-status="working"><Badge status="working" size={22} /><b>Working</b></li>
+          <li data-status="waiting"><Badge status="waiting" size={22} /><b>Waiting</b></li>
+          <li data-status="failed"><Badge status="failed" size={22} /><b>Failed</b></li>
+          <li data-status="done"><Badge status="done" size={22} /><b>Done</b></li>
+        </ul>
+      </Chapter>
+
+      <Chapter id="panes" title="Every pane,|a floating|card." side="left">
+        <p>Split with a key, drag the gap between cards to resize, and drag a pane by its handle onto another to move it. Drop a file to paste it. Paste a screenshot, and the agent can open it.</p>
+        <p class="cap__keys"><Keys keys={['cmd', 'D']} /> split right <Keys keys={['shift', 'cmd', 'D']} /> split down</p>
+      </Chapter>
+
+      <Chapter id="preview" title="Rest on a|path. See|the file." side="right">
+        <p>Rest the pointer on a path a program printed and the file shows beside it: code at its lines, images, PDFs and documents. Rest it on a web address and the page shows.</p>
+        <ul class="beats" data-preview-beats>
+          <li>Code, at its lines</li>
+          <li>The page of a local address</li>
+          <li>Images and documents</li>
+        </ul>
+      </Chapter>
+
+      <Chapter id="review" title="Review|beside|the agent." side="left" still={stillChanges} alt="The Changes panel docked right of the terminal.">
+        <p>The workspace's diff, to stage, discard and review. Files has the tree, a viewer and search. TODO holds what you still have to do, one click from an agent.</p>
+        <p class="cap__keys"><Keys keys={['shift', 'cmd', 'C']} /> Changes <Keys keys={['shift', 'cmd', 'E']} /> Files <Keys keys={['shift', 'cmd', 'L']} /> TODO</p>
+      </Chapter>
+
+      <Chapter id="browser" title="A browser|beside|the agent." side="left" still={stillBrowser} alt="The Browser panel showing a checkout page from a local dev server, beside a terminal.">
+        <p>A real Chrome on the workspace's dev servers, with device sizes and the console. Pick an element or take a screenshot and hand it to the agent. When the agent finishes, the page reloads.</p>
+        <p class="cap__keys"><Keys keys={['shift', 'cmd', 'B']} /> Browser</p>
+      </Chapter>
+
+      <Chapter id="flow" title="A team,|lit up." side="left" still={stillFlow} alt="The Flow panel: a run called Full issue, with its task and its team of five agents.">
+        <p>A flow is a team of agents run by an orchestrator. Its plan lights up where the work stands, beside the agents at work, with the messages they send each other.</p>
+        <p class="cap__keys"><Keys keys={['shift', 'cmd', 'F']} /> Flow</p>
+      </Chapter>
+
+      <Sheets />
+      <Close />
+      <Remote />
+      <Download />
+    </main>
+    <Footer />
+    <script>
+      import '../client/main';
+    </script>
+  </body>
+</html>

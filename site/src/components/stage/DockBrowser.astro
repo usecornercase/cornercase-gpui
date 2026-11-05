@@ -1,0 +1,42 @@
+---
+import Icon from '../Icon.astro';
+---
+
+<div class="w-dockpage js-page-browser">
+  <header class="w-dockhead"><Icon name="globe" size={16} class="accent" /><b>Browser</b><Icon name="x" size={14} class="w-dockhead__x" /></header>
+  <div class="w-browserbar">
+    <Icon name="arrow-left" size={14} class="faint" />
+    <Icon name="arrow-right" size={14} class="faint" />
+    <Icon name="rotate-cw" size={14} class="js-reload" />
+    <div class="w-address"><span>http://localhost:5173/</span><Icon name="external-link" size={11} class="faint" /></div>
+    <span class="w-tool js-tool-device"><Icon name="monitor-smartphone" size={15} /></span>
+    <span class="w-tool js-tool-pick"><Icon name="mouse-pointer-click" size={15} /></span>
+    <span class="w-tool"><Icon name="camera" size={15} /></span>
+    <span class="w-tool"><Icon name="bot" size={15} /></span>
+    <span class="w-tool"><Icon name="panel-bottom" size={15} /></span>
+    <span class="w-tool"><Icon name="plus" size={15} /></span>
+  </div>
+  <div class="w-viewport js-viewport">
+    <div class="w-site js-site">
+      <div class="w-site__page">
+        <h4>Checkout</h4>
+        <ul>
+          <li>Linen shirt <span>× 1</span></li>
+          <li>Canvas tote <span>× 2</span></li>
+          <li>Gift card <span>× 1</span></li>
+        </ul>
+        <div class="w-site__total"><span>Total</span><span>$148.00</span></div>
+        <div class="w-site__pay js-pay">Pay now</div>
+      </div>
+      <div class="w-pickbox js-pickbox"><span class="w-pickbox__tip"><b>button.pay</b> 420 × 46</span></div>
+    </div>
+    <div class="w-reloaded js-reloaded"><Icon name="rotate-cw" size={11} /> Reloaded: claude finished</div>
+    <div class="w-device js-device"><Icon name="smartphone" size={12} /> iPhone 15 · 393 × 852</div>
+    <div class="w-banner js-pickbanner"><Icon name="mouse-pointer-click" size={12} /> Click an element to hand it to an agent <span class="w-btn w-btn--sm">Cancel</span></div>
+    <div class="w-picked js-picked">
+      <div class="w-picked__head"><b>button.pay</b><span class="dim2">Checkout · src/checkout.tsx:14</span></div>
+      <div class="w-picked__field"><span class="js-picked-text"></span><i class="w-caret"></i></div>
+      <div class="w-picked__foot"><span class="w-chipbtn"><Icon name="bot" size={12} /> Dark mode for the checkout</span><span class="w-btn w-btn--sm w-btn--primary js-picked-send"><Icon name="send" size={11} /> Send to agent</span></div>
+    </div>
+  </div>
+</div>

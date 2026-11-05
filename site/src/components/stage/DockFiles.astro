@@ -1,0 +1,37 @@
+---
+import Icon from '../Icon.astro';
+import Term from './Term.astro';
+import { THEME_TS } from '../../data/session';
+
+const tree: [string, string, number, string?][] = [
+  ['docs', 'folder', 0],
+  ['src', 'folder-open', 0],
+  ['checkout.tsx', 'react', 1, 'M'],
+  ['cart.ts', 'typescript', 1],
+  ['theme.ts', 'typescript', 1, 'M'],
+  ['tests', 'folder', 0],
+  ['package.json', 'npm', 0],
+  ['README.md', 'markdown', 0],
+];
+---
+
+<div class="w-dockpage js-page-files">
+  <header class="w-dockhead"><Icon name="folder-tree" size={16} class="accent" /><b>Files</b><Icon name="x" size={14} class="w-dockhead__x" /></header>
+  <div class="w-field"><Icon name="search" size={12} /><span>Search files…</span><div class="w-segs w-segs--sm"><span class="is-on">Name</span><span>Text</span></div></div>
+  <div class="w-crumb"><span>feat-dark-mode</span></div>
+  <div class="w-tree-files">
+    {
+      tree.map(([name, icon, depth, mark]) => (
+        <div class:list={['w-fileline', `depth-${depth}`, name === 'theme.ts' && 'is-lit js-file-theme']}>
+          <Icon name={icon} file size={15} class={icon.startsWith('folder') ? 'accent' : icon === 'react' ? 'cyan' : icon === 'typescript' ? 'blue' : icon === 'npm' ? 'red' : 'soft'} />
+          <span>{name}</span>
+          {mark && <b class="yellow">{mark}</b>}
+        </div>
+      ))
+    }
+  </div>
+  <div class="w-viewer">
+    <div class="w-viewer__head"><Icon name="typescript" file size={14} class="blue" /><span>src/theme.ts</span></div>
+    <Term lines={THEME_TS.slice(16)} numbered from={17} class="w-term--code" />
+  </div>
+</div>

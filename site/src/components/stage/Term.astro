@@ -1,0 +1,23 @@
+---
+import type { Line } from '../../data/session';
+
+interface Props {
+  lines: Line[];
+  numbered?: boolean;
+  from?: number;
+  class?: string;
+}
+
+const { lines, numbered = false, from = 1, class: className } = Astro.props;
+---
+
+<div class:list={['w-term', className]}>
+  {
+    lines.map((line, i) => (
+      <div class="w-line">
+        {numbered && <span class="w-num">{from + i}</span>}
+        {line.map(([kind, text]) => (kind ? <span class={kind}>{text}</span> : text))}
+      </div>
+    ))
+  }
+</div>

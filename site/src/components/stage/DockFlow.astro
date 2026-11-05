@@ -1,0 +1,68 @@
+---
+import Icon from '../Icon.astro';
+import { ROLES } from '../../data/session';
+
+type Key = keyof typeof ROLES;
+const box = (key: Key, x: number, y: number) => ({ key, ...ROLES[key], x, y });
+const nodes = [box('coder', 196, 116), box('reviewer', 76, 216), box('security', 316, 216), box('tester', 196, 316)];
+const wires = [
+  { id: 'b', d: 'M286 166 C286 192 166 190 166 216', from: '#7aa2f7', to: '#bb9af7' },
+  { id: 'c', d: 'M286 166 C286 192 406 190 406 216', from: '#7aa2f7', to: '#7dcfff' },
+  { id: 'd', d: 'M166 266 C166 292 286 290 286 316', from: '#bb9af7', to: '#9ece6a' },
+  { id: 'e', d: 'M406 266 C406 292 286 290 286 316', from: '#7dcfff', to: '#9ece6a' },
+  { id: 'f', d: 'M286 366 C286 384 286 388 286 406', from: '#9ece6a', to: '#005fff' },
+];
+---
+
+<div class="w-dockpage js-page-flow">
+  <header class="w-dockhead"><Icon name="waypoints" size={16} class="accent" /><b>Flow</b><Icon name="x" size={14} class="w-dockhead__x" /></header>
+  <div class="w-flowscroll">
+    <div class="w-flowhead">
+      <span class="w-flowhead__glyph"><i></i><i></i><i></i><i></i></span>
+      <div class="w-flowhead__text">
+        <b>Full issue</b>
+        <span>web-shop › fix/empty-address · run 31 · <span class="js-flow-count">0</span> messages</span>
+      </div>
+      <span class="w-pill js-flow-pill"><i></i><span class="js-flow-state">running</span></span>
+      <div class="w-stages"><i class="js-stage-1"></i><i class="js-stage-2"></i><i class="js-stage-3"></i><span class="js-stage-word">not started</span></div>
+    </div>
+    <div class="w-sectionlabel"><Icon name="workflow" size={13} /> PLAN</div>
+    <div class="w-plan">
+      <svg class="w-plan__wires" viewBox="0 0 572 452" width="572" height="452" aria-hidden="true">
+        <defs>
+          {
+            wires.map((w) => (
+              <linearGradient id={`wire-${w.id}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color={w.from} />
+                <stop offset="1" stop-color={w.to} />
+              </linearGradient>
+            ))
+          }
+        </defs>
+        {wires.map((w) => <path class="w-wire__base" d={w.d} />)}
+        {wires.map((w) => <path class={`w-wire js-wire-${w.id}`} d={w.d} stroke={`url(#wire-${w.id})`} pathLength="1" />)}
+        <path class="w-wire__loop js-loop" d="M496 232 C540 232 540 141 376 141" pathLength="1" />
+        <circle class="w-spark js-spark" r="4" />
+      </svg>
+      <div class="w-plan__rail"><i class="js-rail-fill"></i></div>
+      <span class="w-plan__num" style="top:130px">1</span>
+      <span class="w-plan__num" style="top:230px">2</span>
+      <span class="w-plan__num" style="top:330px">3</span>
+      <div class="w-role w-role--boss js-role-orchestrator" style="left:196px;top:10px">
+        <span class="w-face w-face--boss"><Icon name="waypoints" size={14} /></span>
+        <span class="w-role__text"><b>orchestrator</b><i>claude</i></span>
+      </div>
+      <div class="w-plan__moves"><span>moves the work between the stages</span></div>
+      {
+        nodes.map((n) => (
+          <div class={`w-role js-role-${n.key}`} style={`left:${n.x}px;top:${n.y}px;--role:${n.colour}`}>
+            <span class="w-face">{n.name[0].toUpperCase()}</span>
+            <span class="w-role__text"><b>{n.name}</b><i>{n.agent}</i></span>
+          </div>
+        ))
+      }
+      <span class="w-plan__looplabel js-loop-label">findings ≤ 3 · <span class="js-loop-count">0</span>/3</span>
+      <div class="w-endpill js-end"><i></i> open a pull request</div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,21 @@
+---
+interface Props {
+  id: string;
+  title: string;
+  side?: 'left' | 'right';
+  still?: ImageMetadata;
+  alt?: string;
+}
+
+const { id, title, side = 'left', still, alt = '' } = Astro.props;
+---
+
+<section class:list={['ch', `ch--${side}`, `ch--${id}`]} id={id} data-section={id}>
+  <div class="ch__pin">
+    <div class="cap" data-cap>
+      <h2 data-title aria-label={title.replaceAll('|', ' ')}>{title.split('|').map((line) => <span class="cap__line" aria-hidden="true">{line}</span>)}</h2>
+      <slot />
+    </div>
+  </div>
+  {still && <img class="ch__still" src={still.src} width={still.width} height={still.height} loading="lazy" decoding="async" alt={alt} />}
+</section>

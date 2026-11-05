@@ -1,0 +1,29 @@
+---
+import Icon from '../Icon.astro';
+
+const items = [
+  'fix the 500 on /returns when the address has no second line',
+  'add a test for Address::first_line',
+  'reply to the design review',
+  'update the release notes',
+];
+---
+
+<div class="w-dockpage js-page-todo">
+  <header class="w-dockhead"><Icon name="list-checks" size={16} class="accent" /><b>TODO</b><Icon name="x" size={14} class="w-dockhead__x" /></header>
+  <div class="w-todohead"><span>4 to do · 1 done</span><span class="w-btn w-btn--sm">Clear done</span></div>
+  <div class="w-todos">
+    {
+      items.map((text, i) => (
+        <div class:list={['w-todo', i === 1 && 'js-todo-send']}>
+          <span class="w-todo__dot" />
+          <span class="w-todo__text">{text}</span>
+          {i === 1 && <span class="w-todo__send js-todo-go"><Icon name="send" size={12} /></span>}
+        </div>
+      ))
+    }
+    <div class="w-todo__label">Done</div>
+    <div class="w-todo is-done"><Icon name="check" size={13} /><span class="w-todo__text">book the dentist</span></div>
+  </div>
+  <div class="w-todonew"><Icon name="plus" size={13} /> New TODO</div>
+</div>
