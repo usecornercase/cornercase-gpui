@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::process::Command;
 
 pub(crate) mod paths;
+pub(crate) mod probe;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Os {
