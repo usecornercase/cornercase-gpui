@@ -6,10 +6,15 @@ The landing page for this window, asked for on 2026-11-05 ("ultra mega impactant
 
 ## Stack and hosting
 
-- **Astro, as cornercase's own site**, so both repositories build alike, with no framework on the client. The animation has **no runtime dependency**: GSAP's licence is not compatible with this project's rule on licences (it is a no-charge licence with restrictions, not an open one), and what the page needs (a value per frame from the scroll) is small. `lib/` holds the plain logic, tested without a browser (`npm test`, `node:test` bundled with esbuild); `client/` the DOM and WebGL.
-- **Every URL is relative** (`assetsPrefix: '.'`, stylesheets inlined, so a font's `url()` is relative to the page and not to a CSS file). The same build works at `usecornercase.github.io/cornercase-gpui/` and at `gui.usecornercase.dev/`, so changing the domain needs no rebuild. cornercase's site uses an absolute `SITE_BASE`, which breaks the assets until the next build after a domain change. Only the canonical and `og:` addresses take `SITE_ORIGIN` and `SITE_BASE` from `actions/configure-pages`.
+- **Astro, as cornercase's own site**, so both repositories build alike, with no framework on the client. The animation has **no runtime dependency**: what the page needs (a value per frame from the scroll) is small. `lib/` holds the plain logic, tested without a browser (`npm test`, `node:test` bundled with esbuild); `client/` the DOM and WebGL.
+- **Every URL is relative** (`assetsPrefix: '.'`, stylesheets inlined, so a font's `url()` is relative to the page and not to a CSS file). The same build works at `usecornercase.github.io/cornercase-gpui/` and at `gui.usecornercase.dev/`, so a change of domain breaks nothing while it settles; cornercase's site uses an absolute `SITE_BASE`, which breaks the assets until the next build. Only the canonical and `og:` addresses take `SITE_ORIGIN` and `SITE_BASE` from `actions/configure-pages`, so they catch up at the next deployment: run the Pages workflow by hand after changing the domain.
 - **The domain** is `gui.usecornercase.dev`: a `CNAME` from `gui` to `usecornercase.github.io` at DigitalOcean, where `usecornercase.dev` is (cornercase's `design/website.md`), and the custom domain in this repository's Settings › Pages. A deployment from Actions needs no `CNAME` file. GitHub redirects the github.io address once it is set.
 - **`og.png`** is a shot of the page's hero at 1200×630, made by hand with a headless Chrome: retake it when the hero's words change.
+- **A capture leaves a headless Chrome behind** when the Browser panel opened and the app is stopped with `kill`, as AGENTS.md asks: the panel ends it only on a normal quit. Look for its `--user-data-dir` under the fake home, and stop it.
+
+## The look
+
+- **This app's look, not `usecornercase.dev`'s**: the same colours, type and mark as that site (cornercase's `design/website.md`, "The brand"), with this window's glass, rounded shapes and cobalt glow instead of its square, flat surfaces, which it keeps for a page of its own that reads as documentation. The page is asked to be spectacular and its subject is how this window looks, so it takes the window's language (`design/widgets.md`).
 
 ## The field
 
@@ -22,6 +27,7 @@ The landing page for this window, asked for on 2026-11-05 ("ultra mega impactant
 
 - **Drawn in HTML at the app's real size** (`components/stage/`, 1280×800, the app's default), from `src/theme.rs`'s colours, `assets/icons/` and the measures of a real capture, then moved as one object by a camera. Vector text stays sharp at any zoom, and glass shows the live field through it, which a picture could not do. It is an illustration, not a simulation: the terminal's own site simulates its app, at the cost of a rule to keep them in step, and this page shows one scripted story. The cast is the README screenshot's and cornercase's site's (web-shop, dark mode, gift cards, the empty address), so all the pictures tell one session.
 - **A camera, not a layout, makes it responsive** (`lib/track.ts`): each shot names a rectangle of the window and the side left free for the caption, and the pose is worked out for the viewport. On a phone the same window is framed tighter above a caption sheet, so the text in it stays readable instead of a 390 px wide miniature.
+- **Very large screens** scale the captions (`zoom`, from 1900 px wide) and let the camera use the room; a phone on its side (under 480 px tall) drops what does not fit, not the headings.
 - **Everything is a function of the scroll**, smoothed once (`client/scroll.ts`), and writes are cached (`client/paint.ts`), so scrolling back, a jump to an anchor and a reload midway need no special code. Native scrolling stays: the page does not hijack the wheel. Short state changes (a toast, a dock page) are CSS transitions set by a class, at the app's own 180 ms in, 120 ms out.
 - **What stays true to the app**: labels, keys, statuses, the Browser's picked card and its "Reloaded: claude finished", the Flow panel's plan, and the panel widths. **What is simplified**: panes that do not fit beside the dock stack instead of shrinking; the conversation's look follows Claude Code as cornercase's simulated agent does.
 
@@ -32,15 +38,16 @@ The landing page for this window, asked for on 2026-11-05 ("ultra mega impactant
 
 ## Without motion
 
-- **The plain page comes first**: without JavaScript, with reduced motion, without WebGL2, or if the script has not run after 4 s, the sections flow as ordinary text with real pictures (`html:not(.motion)`). The inline script adds `.motion` before the first paint, so the show has no flash of the plain page. The window and the field are `aria-hidden`; the captions and headings are the page's text.
+- **The plain page comes first**: without JavaScript, with reduced motion, without WebGL2, if the script has not run after 4 s or if it throws, the sections flow as ordinary text with real pictures (`html:not(.motion)`). The inline script adds `.motion` before the first paint, so the show has no flash of the plain page. The window and the field are `aria-hidden`; the captions and headings are the page's text.
 - **`.motion` keeps the semantic order**: titles are split in lines and letters only inside `aria-hidden` spans, with the whole text as the heading's `aria-label`.
 
 ## What the page claims
 
 - Keep claims to what the README and these notes back: GPUI, the platforms and their requirements, signing, updates. The download's size and version come from GitHub's API at load, and the page says nothing of them if that fails. Nothing is compared with another app, and no frame rate is promised: the counter in the corner measures the visitor's own page.
 - A visitor on Linux or Windows reads the keys as they are there (`lib/os.ts`, the README's rules).
+- The landing is in English only (`AGENTS.md`), unlike cornercase's, which also has Spanish and Brazilian Portuguese.
 - `tests/copy.test.ts` checks the sheets' keys against `src/keymap.rs`, their names against `src/panels/mod.rs` and the downloads against the README.
 
 ## Checked
 
-Checked live on 2026-11-05 on an M5, headless, with Playwright: Chrome (GPU through ANGLE Metal) at 1440×900 and 390×844, every section at several scroll positions, the intro frame by frame, the built page served under `/cornercase-gpui/`, a reload midway, the anchors, reduced motion and no JavaScript; a whole scroll with the wheel held 60 fps, the most headless Chrome draws, with a worst frame of 33 ms. WebKit and Firefox at 1440×900, every section: WebKit ignored a perspective set two levels up and drew the ring from outside until each card took its own (`Sheets::placeCards`); headless Firefox ran slowly enough to fall back to `.lite`, which also proved the fallback. Not checked: Safari itself, a real phone, or a weak GPU.
+Checked live on 2026-11-05 on an M5, headless, with Playwright: Chrome (GPU through ANGLE Metal) at 1440×900 and 390×844, every section at several scroll positions, the intro frame by frame, the built page served under `/cornercase-gpui/`, a reload midway, the anchors, reduced motion and no JavaScript; a whole scroll with the wheel held 60 fps, the most headless Chrome draws, with a worst frame of 33 ms; also 2560×1440, 1100×700, 844×390 and 820×1180. WebKit and Firefox at 1440×900, every section: WebKit ignored a perspective set two levels up and drew the ring from outside until each card took its own (`Sheets::placeCards`); headless Firefox ran slowly enough to fall back to `.lite`, which also proved the fallback. Not checked: Safari itself, a real phone, or a weak GPU.

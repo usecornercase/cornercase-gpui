@@ -3,6 +3,7 @@ import { backOut, clamp, damp, easeExpo, mix, span } from '../lib/math';
 
 const REST = 112;
 const NEAR = 125;
+const ENTERED = 1.6;
 
 interface Letter {
   el: HTMLElement;
@@ -33,7 +34,7 @@ export class Hero {
     for (const letter of this.letters) {
       const box = letter.el.getBoundingClientRect();
       letter.x = box.left + box.width / 2;
-      letter.y = box.top + box.height / 2 + window.scrollY;
+      letter.y = box.top + box.height / 2;
     }
   }
 
@@ -48,22 +49,22 @@ export class Hero {
     this.measure();
   }
 
-  update(time: number, dt: number, progress: number, scrolled: number): void {
+  update(time: number, dt: number, progress: number): void {
     paint(this.title, 'visibility', progress >= 1 ? 'hidden' : 'visible');
     if (this.shownAt < 0) return;
-    this.fadeRest(progress);
+    this.fadeRest(progress, time - this.shownAt);
     if (progress >= 1) return;
     const since = time - this.shownAt;
     const count = this.letters.length;
     const squeeze = span(progress, 0.02, 0.62);
-    this.letters.forEach((letter, i) => this.letter(letter, i, count, since, squeeze, time, dt, scrolled));
+    this.letters.forEach((letter, i) => this.letter(letter, i, count, since, squeeze, time, dt));
   }
 
-  private letter(letter: Letter, i: number, count: number, since: number, squeeze: number, time: number, dt: number, scrolled: number): void {
+  private letter(letter: Letter, i: number, count: number, since: number, squeeze: number, time: number, dt: number): void {
     const local = clamp((since - i * 0.024) / 1.05);
     const rise = easeExpo(local);
     const dx = letter.x - this.pointerX;
-    const dy = letter.y - scrolled - this.pointerY;
+    const dy = letter.y - this.pointerY;
     const close = Math.exp(-(dx * dx + dy * dy) / (2 * 150 * 150));
     letter.bump = damp(letter.bump, close, 10, dt);
     const wave = Math.sin(time * 0.9 - i * 0.34) * 2.6;
@@ -79,12 +80,13 @@ export class Hero {
     paint(letter.el, 'opacity', opacity.toFixed(3));
   }
 
-  private fadeRest(progress: number): void {
+  private fadeRest(progress: number, since: number): void {
     const out = span(progress, 0, 0.3);
     paint(this.glow, 'translate', `0 ${(-progress * 40).toFixed(1)}vh`);
     paint(this.glow, 'scale', (1 + progress * 0.4).toFixed(3));
     for (const rise of this.rises) {
-      paint(rise, 'opacity', this.shownAt < 0 ? '0' : (1 - out).toFixed(3));
+      if (since > ENTERED) paint(rise, 'transition', 'none');
+      paint(rise, 'opacity', (1 - out).toFixed(3));
       paint(rise, 'translate', `0 ${(-out * 46).toFixed(1)}px`);
     }
     paint(this.hint, 'opacity', progress > 0.02 ? '0' : '1');

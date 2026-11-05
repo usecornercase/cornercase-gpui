@@ -142,7 +142,7 @@ export const SHEETS: { name: string; file: string; keys: string[]; line: string 
   { name: 'Issues', file: 'issues', keys: ['cmd', 'I'], line: 'Your trackers, and an agent on any issue.' },
   { name: 'Queue', file: 'queue', keys: ['shift', 'cmd', 'S'], line: 'Agents that start later, on their own.' },
   { name: 'Flows', file: 'flows', keys: ['shift', 'cmd', 'G'], line: 'Teams of agents, their plans and runs.' },
-  { name: 'Usage', file: 'usage', keys: ['cmd', 'U'], line: 'Plan limits, and what your agents cost you.' },
+  { name: 'Usage', file: 'usage', keys: ['cmd', 'U'], line: 'Plan limits, and the numbers of your agents.' },
   { name: 'Accounts', file: 'accounts', keys: ['shift', 'cmd', 'A'], line: 'Agent logins and profiles.' },
   { name: 'Processes', file: 'processes', keys: ['shift', 'cmd', 'M'], line: 'What every pane runs, its CPU and memory.' },
   { name: 'Ports', file: 'ports', keys: ['shift', 'cmd', 'O'], line: 'What listens, to open it or stop it.' },

@@ -146,8 +146,7 @@ function bootstrap(field: Field): void {
 
   size();
   addEventListener('resize', size);
-  const fontsReady = document.fonts?.ready ?? Promise.resolve();
-  void fontsReady.then(() => {
+  void Promise.all([document.fonts.load('16px "JetBrains Mono Variable"'), document.fonts.ready]).finally(() => {
     field.refreshGlyphs();
     size();
   });
@@ -162,7 +161,6 @@ function bootstrap(field: Field): void {
   );
 
   const intro = scroll.now < 60;
-  const started = performance.now();
   let burst = !intro;
   let heroShown = intro ? Number.POSITIVE_INFINITY : -10;
   if (intro) {
@@ -176,13 +174,19 @@ function bootstrap(field: Field): void {
     life.awake = true;
   }
 
-  let last = started;
+  let started = -1;
+  let last = 0;
   let simDebt = 0;
   let frames = 0;
-  let framesAt = started;
+  let framesAt = 0;
   let slowSpell = 0;
 
   const tick = (now: number) => {
+    if (started < 0) {
+      started = now;
+      last = now;
+      framesAt = now;
+    }
     const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
     last = now;
     const time = (now - started) / 1000;
@@ -210,7 +214,7 @@ function bootstrap(field: Field): void {
     const finaleP = burst ? finale.update() : 0;
     if (finaleP > 0) life.mood.gain = mix(life.mood.gain, 0.66, finaleP);
 
-    hero.update(time, dt, heroP, scroll.now);
+    hero.update(time, dt, heroP);
     stage.entrance = clamp((time - heroShown) / 1.15);
     stage.update(time, dt);
     captions(time);
@@ -220,7 +224,7 @@ function bootstrap(field: Field): void {
     if (scroll.seen('remote')) remote.update(time);
 
     simDebt += dt;
-    if (simDebt >= 1 / 72 || quality >= 3) {
+    if (simDebt >= 1 / 72) {
       field.frame(simDebt, time);
       simDebt = 0;
     }
@@ -237,18 +241,29 @@ function bootstrap(field: Field): void {
       frames = 0;
       framesAt = now;
     }
-    requestAnimationFrame(tick);
+    requestAnimationFrame(guarded);
   };
-  requestAnimationFrame(tick);
+  const guarded = (now: number) => {
+    try {
+      tick(now);
+    } catch {
+      fallback();
+    }
+  };
+  requestAnimationFrame(guarded);
 }
 
 function fallback(): void {
-  document.documentElement.classList.remove('motion', 'intro');
+  document.documentElement.classList.remove('motion', 'intro', 'lite');
+  for (const el of all('main [style], .hero [style], .nav [style], .scene')) el.removeAttribute('style');
 }
 
 if (document.documentElement.classList.contains('motion')) {
-  const canvas = one<HTMLCanvasElement>('[data-field]');
-  const field = Field.start(canvas);
-  if (field) bootstrap(field);
-  else fallback();
+  const field = Field.start(one<HTMLCanvasElement>('[data-field]'));
+  try {
+    if (field) bootstrap(field);
+    else fallback();
+  } catch {
+    fallback();
+  }
 }

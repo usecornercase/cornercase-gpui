@@ -44,7 +44,7 @@ export function freeArea(free: Free, width: number, height: number): Rect {
   const margin = 24;
   const inner: Rect = [margin, top, width - margin * 2, height - top - margin];
   if (free === 'all') return inner;
-  const caption = Math.max(380, Math.min(width * 0.36, 620));
+  const caption = Math.max(380, width * 0.36);
   return free === 'right' ? [caption, top, width - caption - margin, inner[3]] : [margin, top, width - caption - margin, inner[3]];
 }
 

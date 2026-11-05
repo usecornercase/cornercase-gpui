@@ -172,6 +172,12 @@ export class Stage {
   private readonly loopCount = one('.js-loop-count');
 
   entrance = 1;
+  private readonly chapterKeys = {
+    panes: all('#panes .keys'),
+    review: all('#review .keys'),
+    browser: all('#browser .keys'),
+    flow: all('#flow .keys'),
+  };
   private dockLift = 0;
   private previous = { status: 0, layers: 0, browser: 0, flow: 0 };
   private spots = { code: { x: 0, y: 0 }, url: { x: 0, y: 0 }, image: { x: 0, y: 0 } };
@@ -228,7 +234,18 @@ export class Stage {
     this.browsing(browser);
     this.flowing(flow);
     this.pointer(panes, preview, review, browser, close, rect);
+    this.pressKeys(panes, review, browser, flow);
     this.previous = { status, layers, browser, flow };
+  }
+
+  private pressKeys(panes: number, review: number, browser: number, flow: number): void {
+    const { chapterKeys: keys } = this;
+    flag(keys.panes[0] ?? null, 'is-down', panes > 0.74 && panes < 0.8);
+    flag(keys.review[0] ?? null, 'is-down', review > 0.02 && review < 0.09);
+    flag(keys.review[1] ?? null, 'is-down', review > 0.52 && review < 0.57);
+    flag(keys.review[2] ?? null, 'is-down', review > 0.76 && review < 0.81);
+    flag(keys.browser[0] ?? null, 'is-down', browser > 0.005 && browser < 0.06);
+    flag(keys.flow[0] ?? null, 'is-down', flow > 0.005 && flow < 0.06);
   }
 
   private camera(at: number): void {
@@ -581,8 +598,8 @@ export class Stage {
         [0.42, bX, oy + 16],
         [0.5, bX - 6, oy + 330],
         [0.56, bX - 6, oy + 330],
-        [0.74, 980, 300],
-        [0.86, 980, 300],
+        [0.72, 1000, 180],
+        [0.86, 1000, 180],
       ]);
       const x = panes >= 0.09 && panes < 0.33 ? gapX : point[0];
       return [x, point[1], false];

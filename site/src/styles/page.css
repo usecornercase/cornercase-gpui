@@ -7,7 +7,7 @@
   position: fixed;
   left: 0;
   top: 0;
-  width: 100vw;
+  width: 100%;
   height: 100lvh;
   z-index: 0;
   pointer-events: none;
@@ -844,9 +844,9 @@ main {
 
 .motion .agents {
   position: absolute;
-  left: calc(max(380px, min(36vw, 620px)) + (100vw - max(380px, min(36vw, 620px))) / 2);
+  left: calc(max(380px, 36vw) + (100vw - max(380px, 36vw)) / 2);
   top: 50%;
-  width: min(640px, calc(100vw - max(380px, min(36vw, 620px)) - 48px));
+  width: min(640px, calc(100vw - max(380px, 36vw) - 48px));
   display: grid;
   gap: 8px;
   transform: translate(-50%, -50%);
@@ -1609,6 +1609,10 @@ main {
     font-size: min(11.2vw, 17vh);
   }
 
+  html:not(.motion) .hero__title {
+    font-size: min(10vw, 17vh);
+  }
+
   .motion .remote__cmd {
     display: block;
     white-space: normal;
@@ -1663,4 +1667,73 @@ main {
 .motion .download__mark {
   width: clamp(190px, 34vh, 320px);
   height: clamp(190px, 34vh, 320px);
+}
+
+@media (min-width: 1900px) {
+  .motion .agents {
+    width: min(880px, calc(100vw - max(380px, 36vw) - 48px));
+  }
+
+  .hero__pitch,
+  .hero__cta,
+  .hero__note,
+  .cap,
+  .close__head,
+  .remote__head,
+  .link,
+  .sheets__head,
+  .sheets__now {
+    --bigger: 1.25;
+    zoom: var(--bigger);
+  }
+}
+
+@media (min-width: 2400px) {
+  .hero__pitch,
+  .hero__cta,
+  .hero__note,
+  .cap,
+  .close__head,
+  .remote__head,
+  .link,
+  .sheets__head,
+  .sheets__now {
+    --bigger: 1.6;
+  }
+}
+
+@media (max-height: 480px) {
+  .hero__note,
+  .sheets__head p,
+  .motion .close__head p,
+  .motion .agents {
+    display: none;
+  }
+
+  .motion .cap {
+    padding: 12px 16px;
+  }
+
+  .cap h2 {
+    font-size: 26px;
+  }
+
+  .cap__line {
+    display: inline;
+  }
+
+  .cap__line::after {
+    content: ' ';
+    white-space: pre;
+  }
+
+  .cap__keys,
+  .statuses {
+    display: none !important;
+  }
+
+  .cap p {
+    font-size: 14px;
+    margin-top: 5px;
+  }
 }

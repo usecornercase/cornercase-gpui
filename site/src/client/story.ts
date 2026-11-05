@@ -35,6 +35,10 @@ export class Sheets {
   constructor(scroll: Scroll, life: Life, os: Os) {
     this.scroll = scroll;
     this.life = life;
+    for (const picture of all<HTMLImageElement>('img', this.ring)) {
+      picture.loading = 'eager';
+      void picture.decode().catch(() => undefined);
+    }
     this.keysets = this.cards.map((card) => {
       const shown = card.querySelector<HTMLElement>('[data-keys]');
       const keys = shown?.dataset.keys?.split(' ') ?? [];
@@ -58,7 +62,7 @@ export class Sheets {
   update(time: number): void {
     const p = this.scroll.progress('sheets');
     const seen = p > 0 && p < 1;
-    paint(this.ring, 'visibility', seen ? 'visible' : 'hidden');
+    paint(this.ring, 'display', seen ? 'block' : 'none');
     paint(this.head, 'visibility', seen ? 'visible' : 'hidden');
     paint(this.now, 'visibility', seen ? 'visible' : 'hidden');
     if (!seen) return;
