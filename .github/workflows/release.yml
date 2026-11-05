@@ -83,13 +83,12 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  macos:
-    name: macOS (universal)
-    needs: [version, notices]
+  macos-build:
+    name: macOS (build)
+    needs: [version]
     runs-on: macos-15
     timeout-minutes: 60
     env:
-      VERSION: ${{ needs.version.outputs.version }}
       CORNERCASE_GPUI_RELEASE: "1"
     steps:
       - uses: actions/checkout@v7
@@ -105,13 +104,58 @@ jobs:
       - name: build (x86_64)
         run: cargo build --release --locked --target x86_64-apple-darwin
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-binaries
+          path: |
+            target/aarch64-apple-darwin/release/cornercase-gpui
+            target/x86_64-apple-darwin/release/cornercase-gpui
+          retention-days: 1
+          if-no-files-found: error
+
+  macos:
+    name: macOS (sign and notarize)
+    needs: [version, notices, macos-build]
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && 'release' || '' }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: macos-binaries
+          path: target
+
       - uses: actions/download-artifact@v8
         with:
           name: notices
           path: target/notices
 
+      - name: signing identity
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: .github/release/keychain.sh create
+
       - name: bundle
         run: tools/macos/bundle.sh "$VERSION" target/notices/THIRD-PARTY-NOTICES.txt target/dist
+
+      - name: notarize
+        if: ${{ env.MACOS_SIGNING_IDENTITY != '' }}
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: tools/macos/notarize.sh target/dist/cornercase-gpui-universal-apple-darwin.dmg
+
+      - name: forget the certificate
+        if: ${{ always() }}
+        run: .github/release/keychain.sh delete
 
       - uses: actions/upload-artifact@v7
         with:
