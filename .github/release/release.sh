@@ -13,16 +13,19 @@ version() {
 }
 
 latest() {
-  git tag --list 'v*' --sort=-v:refname | head -n 1 | sed 's/^v//'
+  git -c versionsort.suffix=- tag --list 'v*' --sort=-v:refname | head -n 1 | sed 's/^v//'
 }
 
 newer() {
-  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
+  a=$(printf '%s' "$1" | tr - '~')
+  b=$(printf '%s' "$2" | tr - '~')
+  [ "$a" != "$b" ] && [ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -n 1)" = "$a" ]
 }
 
 app_changed() {
   range=$1
-  set -- src assets build.rs Cargo.toml Cargo.lock rust-toolchain.toml .cargo tools/macos .github/release .github/workflows/release.yml
+  set -- src assets build.rs Cargo.toml Cargo.lock rust-toolchain.toml .cargo tools/macos .github/release \
+    .github/workflows/release.yml LICENSE-MIT LICENSE-APACHE LICENSE-GPUI
   [ -n "$(git diff --name-only "$range" -- "$@")" ]
 }
 
@@ -39,7 +42,7 @@ pull_request() {
   fi
   current=$(version)
   above_latest "$current"
-  grep -Fqx "## $current" CHANGELOG.md \
+  [ -n "$(section "$current")" ] \
     || fail "add a '## $current' section to CHANGELOG.md with what changed, written for users"
   echo "this pull request releases $current"
 }
@@ -50,6 +53,12 @@ tag() {
   if git rev-parse -q --verify "refs/tags/$name" > /dev/null; then
     if app_changed "$name..HEAD"; then
       fail "$name is already released, but the app changed since: bump the version in a new pull request"
+    fi
+    if ! gh release view "$name" > /dev/null 2>&1 \
+      && [ "$(gh run list --workflow release.yml --branch "$name" --limit 1 --json databaseId --jq length)" = 0 ]; then
+      gh workflow run release.yml --ref "$name"
+      echo "$name was tagged but never released: releasing it"
+      return
     fi
     echo "$name is already released"
     return
@@ -67,11 +76,11 @@ check() {
   [ "$tag" = "v$current" ] || fail "the tag $tag does not match Cargo.toml's version $current: tag v$current, or change the version"
   git merge-base --is-ancestor HEAD origin/main \
     || fail "the tagged commit is not on main: merge it first, then tag"
-  grep -Fqx "## $current" CHANGELOG.md \
-    || fail "CHANGELOG.md has no '## $current' section: add it with what changed, written for users"
+  [ -n "$(section "$current")" ] \
+    || fail "CHANGELOG.md has no '## $current' section with text: add what changed, written for users"
 }
 
-notes() {
+section() {
   wanted=$1
   awk -v heading="## $wanted" '
     $0 == heading { inside = 1; next }
@@ -85,6 +94,10 @@ notes() {
       for (i = first; i <= last; i++) print lines[i]
     }
   ' CHANGELOG.md
+}
+
+notes() {
+  section "$1"
   printf '\nDownloads, how to open an unsigned build and how to check the checksums: https://github.com/usecornercase/cornercase-gpui#install\n'
 }
 
