@@ -28,5 +28,21 @@
 	<string>12.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>A program running in cornercase wants to control another app.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>A program running in cornercase wants to use your calendars.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>A program running in cornercase wants to use the camera.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>A program running in cornercase wants to use your contacts.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>A program running in cornercase wants to use your location.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>A program running in cornercase wants to use the microphone.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>A program running in cornercase wants to use your photos.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>A program running in cornercase wants to use your reminders.</string>
 </dict>
 </plist>

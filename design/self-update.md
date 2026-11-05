@@ -34,7 +34,7 @@ On the background executor, in this order: the archive and its `.sha256` downloa
 - **Windows** cannot overwrite or delete a running exe but can rename it, as cornercase's updater does: the exe becomes `cornercase-gpui.old.exe` (`.old.1.exe`… when an older copy still runs, say in another window), the new file takes its name, and if that fails the old one is moved back. Each start removes the old copies nothing runs any more; a delete that fails means one still runs.
 - **HTTP is `ureq` 3**, blocking, on the background executor like every other job. Rejected: gpui's `http_client` (a trait without a client in 0.2.2; Zed's needs tokio), `curl` as a child (not on every Linux desktop, and tests could not run without it), the `self_update` crate (no DMG, its own HTTP stack, and we need our own states), Sparkle and WinSparkle (a tool per platform, appcasts and keys we do not have).
 - **TLS**: rustls with the **ring** provider and the system's roots (`RootCerts::PlatformVerifier`: the Keychain, Windows' store, `/etc/ssl`), so corporate roots work. Not ureq's default `rustls` feature, which brings `webpki-roots` under CDLA-Permissive-2.0, a licence the notices check does not accept; not `aws-lc-rs`, which needs cmake and NASM on Windows. `Cargo.lock` lists `webpki-root-certs` through `rustls-platform-verifier`, but only for wasm32, which no target builds. `HTTPS_PROXY` and `ALL_PROXY` are honoured by ureq.
-- **The checksum comes from the same release**, so it catches a broken or cut download, not a bad release. A file the window downloads itself carries no Mark of the Web or quarantine flag, so SmartScreen and Gatekeeper do not ask again: until signatures (#23, #24) the checksum is the only gate. It is not a signature: whoever can publish the release can publish a matching checksum. This is the trust model of cornercase's updater.
+- **The checksum comes from the same release**, so it catches a broken or cut download, not a bad release. A file the window downloads itself carries no Mark of the Web or quarantine flag, so SmartScreen and Gatekeeper do not ask again: what installs in place (Windows and Linux) is not signed, so the checksum is the only gate there until Windows is signed (#24). It is not a signature: whoever can publish the release can publish a matching checksum. This is the trust model of cornercase's updater.
 
 ## Relaunch
 
@@ -45,12 +45,12 @@ On the background executor, in this order: the archive and its `.sha256` downloa
 - The window's size and place are not kept across the relaunch. What only the window holds (open panels and dialogs, the Browser panel's Chrome) starts again.
 - A relaunch that fails to start ends the window with a message box and standard error (the server and its programs keep running).
 - The asset names are a contract (`design/releases.md`): renaming one breaks the update of every installed copy.
-- Nothing is signed. The checksum is the only check.
+- What installs in place is not signed: the checksum is the only check. The macOS DMG is signed and notarized (`design/releases.md`), but the window only downloads it.
 
 ## Waits on
 
-- **Replacing `cornercase.app` on macOS**: mounting the DMG, copying the bundle, checking its signature, swapping and relaunching with `open`. It cannot be checked from Windows, and the condition "signed with the same identity" cannot hold while builds are ad-hoc signed, whose identity changes with every build (#23). Until then the dialog downloads the DMG. A follow-up issue.
-- **Signatures** (#23 macOS, #24 Windows).
+- **Replacing `cornercase.app` on macOS**: mounting the DMG, copying the bundle, checking its signature, swapping and relaunching with `open`. It cannot be checked from Windows. Releases are signed by one Developer ID team now (#23), so the condition "signed by the same team" can hold, but the swap waits on a follow-up issue; until then the dialog downloads the DMG.
+- **Signing Windows** (#24).
 - **Package managers and installers** (#24, #25, #26): a package's folder that cannot be written (`/usr/bin`, a mounted AppImage) falls back to Download already. Scoop and winget put the zip's exe in a folder the user can write, so #26 must add their paths and commands before they ship, or the window would replace a file their manager owns. An AppImage (#25) would replace `$APPIMAGE`.
 
 ## Checked
