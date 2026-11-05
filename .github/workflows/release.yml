@@ -54,7 +54,7 @@ jobs:
         run: echo "version=$(.github/release/release.sh version)" >> "$GITHUB_OUTPUT"
 
       - name: tag
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: .github/release/release.sh check "$GITHUB_REF_NAME"
 
   notices:
@@ -277,7 +277,7 @@ jobs:
 
   publish:
     name: publish
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     needs: [version, macos, windows, linux]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
