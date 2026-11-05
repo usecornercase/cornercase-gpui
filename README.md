@@ -11,7 +11,7 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 ![cornercase-gpui showing the web-shop project's feat/dark-mode worktree: its theme open in Neovim, its tests passing below, the Changes panel with the checkout's diff, and agents at work in the other worktrees listed in the sidebar.](docs/screenshot.png)
 
-**[Download](https://github.com/usecornercase/cornercase-gpui/releases/latest)** · **[usecornercase.dev](https://usecornercase.dev)** · [cornercase](https://github.com/usecornercase/cornercase-terminal) · [Discord](https://discord.gg/aYqCa4xC4R)
+**[Download](https://github.com/usecornercase/cornercase-gpui/releases/latest)** · **[Website](https://usecornercase.github.io/cornercase-gpui/)** · **[usecornercase.dev](https://usecornercase.dev)** · [cornercase](https://github.com/usecornercase/cornercase-terminal) · [Discord](https://discord.gg/aYqCa4xC4R)
 
 ## Features
 
@@ -150,3 +150,4 @@ Some parts come from other projects and keep their licences:
 - The text field (`src/ui/text_field.rs`) is adapted from gpui 0.2.2's `examples/input.rs`, copyright Zed Industries, under Apache-2.0 ([LICENSE-GPUI](LICENSE-GPUI)).
 - The icons in `assets/icons/` are [Lucide](https://lucide.dev)'s, under ISC ([assets/icons/LICENSE](assets/icons/LICENSE)), with thinner strokes and two of them filled; the `status-*` and `window-*` icons are this project's own.
 - The file-type icons in `assets/file-icons/` are glyphs of [Seti UI](https://github.com/jesseweed/seti-ui) and [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts), under MIT ([assets/file-icons/LICENSE](assets/file-icons/LICENSE)).
+- The website in `site/` is set in [Archivo](https://github.com/Omnibus-Type/Archivo) and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), under the SIL Open Font License, which the site's npm packages carry.

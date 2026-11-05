@@ -1,0 +1,35 @@
+---
+import Term from './Term.astro';
+import { AGENT, ORCHESTRATOR, TESTS, THEME_TS } from '../../data/session';
+---
+
+<div class="w-panes" data-layer="panes">
+  <section class="w-pane js-pane-agent is-focused">
+    <span class="w-pane__handle"></span>
+    <Term lines={AGENT} class="js-agent-lines" />
+    <Term lines={ORCHESTRATOR} class="js-orch-lines" />
+    <div class="w-agentfoot">
+      <div class="w-handed js-handed">
+        <span class="dim">&gt; </span><span class="w-chip">[Image #1]</span> button.pay · src/checkout.tsx:14 Use the brand colour here
+      </div>
+      <div class="w-spin js-spin"><span class="orange">✻</span> <span class="orange">Churning…</span> <span class="dim">(esc to interrupt · <span class="js-spin-time">19</span>s)</span></div>
+      <div class="w-rule"></div>
+      <div class="w-prompt"><span class="dim">›</span> <span class="w-caret"></span></div>
+      <div class="w-mode"><span class="magenta">⏵⏵ accept edits on</span> <span class="dim">(shift+tab to cycle)</span></div>
+    </div>
+  </section>
+  <section class="w-pane js-pane-code">
+    <span class="w-pane__handle"></span>
+    <Term lines={THEME_TS} numbered class="w-term--code" />
+  </section>
+  <section class="w-pane js-pane-tests">
+    <span class="w-pane__handle"></span>
+    <Term lines={TESTS} />
+  </section>
+  <section class="w-pane js-pane-shell">
+    <span class="w-pane__handle"></span>
+    <div class="w-term"><div class="w-line"><span class="soft">feat-dark-mode</span> <span class="green">feat/dark-mode ❯</span> <span class="w-caret"></span></div></div>
+  </section>
+  <div class="w-drop js-drop"></div>
+  <div class="w-gap js-gap"><span></span></div>
+</div>

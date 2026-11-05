@@ -24,3 +24,17 @@ updates:
     ignore:
       - dependency-name: gpui
         update-types: ["version-update:semver-minor"]
+
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      site:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]

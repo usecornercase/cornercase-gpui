@@ -2,7 +2,7 @@
 
 A native window for [cornercase](https://github.com/usecornercase/cornercase-terminal), drawn with GPUI (gpui 0.2.2 from crates.io), on macOS, Linux (`design/linux.md`) and Windows (`design/windows.md`). **It is only a UI**: cornercase's server owns the shells, agents, worktrees and state, and this app drives it only through the `cornercase` command line, the contract cornercase documents for programs that draw it (#345 upstream). The goal is to reach the TUI's features in a GUI with a polished, consistent look.
 
-These rules apply to every contributor and coding agent, in `src/` and `tests/`. The design decisions and their reasons are in `design/`, one file per area, listed in [DESIGN.md](DESIGN.md): read the files for the areas you touch before changing them, and update them in the same change when a decision changes. How these files are loaded is under [Instruction files](#instruction-files).
+These rules apply to every contributor and coding agent, in `src/` and `tests/`, and the conventions that are not about Rust to `site/` too. The design decisions and their reasons are in `design/`, one file per area, listed in [DESIGN.md](DESIGN.md): read the files for the areas you touch before changing them, and update them in the same change when a decision changes. How these files are loaded is under [Instruction files](#instruction-files).
 
 ## Commands
 
@@ -17,6 +17,7 @@ cargo-machete                               # unused dependencies
 npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.json
 ```
 
+- **The website** is in `site/`, its decisions in `design/website.md`: `cd site && npm ci && npm run dev`, and `npm run check` (types and its tests) before calling a change to it done. It deploys by itself from `main` (`.github/workflows/pages.yml`). A change to a feature, a key or a download updates what the page says of it in the same change.
 - **Running needs `cornercase` where the window finds it** (`design/connection.md`: the `PATH`, the login shell's, the installers' folders, or `CORNERCASE_BIN`); the app starts its server if none runs. `docs/cornercase-cli.txt` holds every command's help; `cornercase <cmd> --help` is the source of truth. The cornercase sources are in `../cornercase-terminal`, a clone of `usecornercase/cornercase-terminal` beside this checkout (read its `design/` and `src/` to understand behaviour; never edit it from here).
 - **The toolchain is pinned** in `rust-toolchain.toml` (version and components), so a new Rust release cannot bring new lints by surprise. Bump it by hand: change the version, then fix what clippy reports. `.cargo/config.toml` builds for macOS 12 and links Windows' C runtime statically, for every build; never set `RUSTFLAGS`, which replaces it.
 - **Dependencies are optimised even in debug builds** (`[profile.dev.package."*"]` in `Cargo.toml`); this crate is not, so it still rebuilds fast. Unoptimised, gpui lays the window out too slowly to scroll smoothly: a flow's page drew at about 45 fps in a debug build, and at about 120 fps with this, as in release (2026-10-31). A clean build compiles every dependency optimised (about 2 minutes here).

@@ -1,0 +1,67 @@
+---
+import Icon from '../Icon.astro';
+import Badge from './Badge.astro';
+---
+
+<aside class="w-card w-side" data-layer="side">
+  <div class="w-side__list">
+    <div class="w-side__head"><span>Projects</span><Icon name="plus" size={13} /></div>
+    <div class="w-group"><span class="w-group__dot"></span><span class="w-group__name">work</span><Icon name="chevron-down" size={9} /></div>
+    <div class="w-row is-lit"><span>web-shop</span><em>4</em></div>
+    <div class="w-row">
+      <span>orders-api</span><em>2</em><Badge status="waiting" size={13} class="js-orders-badge" />
+    </div>
+    <div class="w-row"><span>payments</span><em>1</em></div>
+    <div class="w-group w-group--green"><span class="w-group__gem"></span><span class="w-group__name">personal</span><Icon name="chevron-down" size={9} /></div>
+    <div class="w-row"><span>blog</span><em>1</em><Badge status="done" size={13} class="js-blog-badge" /></div>
+    <div class="w-row"><span>dotfiles</span><em>1</em></div>
+  </div>
+  <div class="w-side__rule"></div>
+  <div class="w-side__list w-side__list--grow">
+    <div class="w-side__head"><span>Workspaces</span><Icon name="plus" size={13} /></div>
+    <div class="w-tree">
+      <div class="w-ws"><Icon name="chevron-down" size={9} class="w-ws__fold" /><span>main</span></div>
+      <div class="w-tab"><span class="w-tab__gap"></span><span>zsh</span></div>
+      <div class="w-add">+ Tab</div>
+
+      <div class="w-ws w-ws--tall js-ws-dark">
+        <Icon name="chevron-down" size={9} class="w-ws__fold" />
+        <span class="w-ws__name"><span class="w-ws__tree">⎇</span> feat/dark-mode</span>
+        <span class="w-pr w-pr--pending js-pr-dark">#483<i>•</i></span>
+        <span class="w-ws__diff"><b>+33</b> <u>−7</u></span>
+      </div>
+      <div class="w-tab is-lit js-tab-dark">
+        <Badge status="working" class="js-dark-badge" />
+        <span class="w-tab__title">Dark mode for the checkout</span>
+        <span class="w-tab__meta js-dark-meta">claude · Opus 5.5 · 7%</span>
+      </div>
+      <div class="w-add">+ Tab</div>
+
+      <div class="w-ws">
+        <Icon name="chevron-down" size={9} class="w-ws__fold" />
+        <span class="w-ws__name"><span class="w-ws__tree">⎇</span> feat/gift-cards</span>
+        <span class="w-pr w-pr--failed js-pr-gift">#485<i>✕</i></span>
+      </div>
+      <div class="w-tab">
+        <Badge status="working" class="js-gift-badge" />
+        <span class="w-tab__title">Gift cards at checkout</span>
+        <span class="w-tab__meta">codex · gpt-5.4 · 20%</span>
+      </div>
+      <div class="w-add">+ Tab</div>
+
+      <div class="w-ws js-ws-empty">
+        <Icon name="chevron-down" size={9} class="w-ws__fold" />
+        <span class="w-ws__name"><span class="w-ws__tree">⎇</span> fix/empty-address</span>
+      </div>
+      <div class="w-tab js-tab-empty">
+        <Badge status="waiting" class="js-empty-badge" />
+        <span class="w-tab__title">Empty address on step two</span>
+        <span class="w-tab__meta">claude · Opus 5.5 · 31%</span>
+      </div>
+    </div>
+  </div>
+  <div class="w-side__foot">
+    <div class="w-btn"><Icon name="plus" size={13} />Workspace</div>
+    <div class="w-btn w-btn--primary"><Icon name="bot" size={14} />Agent</div>
+  </div>
+</aside>

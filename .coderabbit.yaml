@@ -27,6 +27,8 @@ reviews:
     - "!docs/cornercase-cli.txt"
     - "!assets/icons/*.svg"
     - "!assets/file-icons/*.svg"
+    - "!site/package-lock.json"
+    - "!site/dist/**"
 
   path_instructions:
     - path: "src/**/*.rs"
@@ -45,6 +47,10 @@ reviews:
       instructions: |
         DESIGN.md is the index of design/, one line per area. Check new notes against its
         "What goes in an area file".
+    - path: "site/**"
+      instructions: |
+        The landing page: design/website.md holds its decisions. Flag claims about the app the code or README.md does not back,
+        and a change that breaks the page without JavaScript or with reduced motion. Its window is an illustration, not a simulation: do not ask for it to mirror every behaviour of the app.
     - path: "assets/**"
       instructions: |
         Anything taken from another project keeps its licence: its licence file beside it and a line under the README's License.

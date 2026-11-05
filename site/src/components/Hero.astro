@@ -1,0 +1,38 @@
+---
+import Icon from './Icon.astro';
+import stillWindow from '../assets/stills/window.webp';
+import { RELEASES, REPO } from '../data/links';
+
+const lines = ['All your agents.', 'One window.'];
+---
+
+<section class="hero" id="top" data-section="hero">
+  <div class="hero__pin">
+    <div class="hero__glow" data-hero-glow aria-hidden="true"></div>
+    <h1 class="hero__title" aria-label={lines.join(' ')} data-hero-title>
+      {
+        lines.map((line) => (
+          <span class="hero__line" aria-hidden="true">
+            {line.split(' ').map((word) => (
+              <span class="hero__word">
+                {[...word].map((ch) => (
+                  <span class="hero__ch" data-ch>
+                    {ch}
+                  </span>
+                ))}
+              </span>
+            ))}
+          </span>
+        ))
+      }
+    </h1>
+    <p class="hero__pitch" data-hero-rise>A native window for <a href="https://usecornercase.dev">cornercase</a>, the terminal multiplexer for running coding agents in parallel. Drawn on the GPU with GPUI, on macOS, Linux and Windows.</p>
+    <div class="hero__cta" data-hero-rise>
+      <a class="btn btn--primary" href={RELEASES} data-download data-magnet><Icon name="download" size={17} /> <span data-download-label>Download</span></a>
+      <a class="btn" href={REPO} data-magnet>View on GitHub</a>
+    </div>
+    <p class="hero__note" data-hero-rise>Free and open source. Your agents keep running in cornercase, with or without it.</p>
+    <img class="hero__still" src={stillWindow.src} width={stillWindow.width} height={stillWindow.height} decoding="async" alt="cornercase-gpui showing the web-shop project's feat/dark-mode worktree: its theme open in Neovim, its tests passing, the Changes panel with the diff, and agents at work in the other worktrees listed in the sidebar." />
+  </div>
+  <span class="hero__scroll" data-hero-scroll aria-hidden="true"><i></i></span>
+</section>

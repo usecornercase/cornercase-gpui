@@ -1,0 +1,19 @@
+---
+import Icon from '../Icon.astro';
+
+interface Props {
+  status?: 'working' | 'waiting' | 'failed' | 'done' | 'idle';
+  size?: number;
+  class?: string;
+}
+
+const { status = 'working', size = 14, class: className } = Astro.props;
+---
+
+<span class:list={['w-badge', `is-${status}`, className]}>
+  <Icon name="status-working" size={size} class="w-badge__i w-badge__working" />
+  <Icon name="status-waiting" size={size} class="w-badge__i w-badge__waiting" />
+  <Icon name="status-failed" size={size} class="w-badge__i w-badge__failed" />
+  <Icon name="status-done" size={size} class="w-badge__i w-badge__done" />
+  <Icon name="status-idle" size={size} class="w-badge__i w-badge__idle" />
+</span>

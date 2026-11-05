@@ -1,0 +1,78 @@
+---
+import Icon from '../Icon.astro';
+import Mark from '../Mark.astro';
+import Rail from './Rail.astro';
+import Sidebar from './Sidebar.astro';
+import Panes from './Panes.astro';
+import DockChanges from './DockChanges.astro';
+import DockFiles from './DockFiles.astro';
+import DockTodo from './DockTodo.astro';
+import DockBrowser from './DockBrowser.astro';
+import DockFlow from './DockFlow.astro';
+import checkout from '../../assets/checkout.webp';
+import { PREVIEW_CODE } from '../../data/session';
+---
+
+<div class="scene" aria-hidden="true" data-scene>
+  <div class="rig" data-rig>
+    <div class="win" data-win>
+      <div class="win__ground" data-layer="ground"></div>
+      <header class="win__title" data-layer="title">
+        <span class="win__lights"><i class="js-light-close"></i><i></i><i></i></span>
+        <Mark size={14} />
+        <b>cornercase</b>
+        <span class="win__tools"><Icon name="columns-2" size={15} /><Icon name="rows-2" size={15} /></span>
+      </header>
+      <Rail />
+      <Sidebar />
+      <Panes />
+      <aside class="w-card w-dock" data-layer="dock" data-dock>
+        <DockChanges />
+        <DockFiles />
+        <DockTodo />
+        <DockBrowser />
+        <DockFlow />
+      </aside>
+      <footer class="win__status" data-layer="status">
+        <span class="win__dot js-link-dot"></span>
+        <span class="faint js-status-server">cornercase 0.13.0</span>
+        <span class="soft js-status-path">claude · ~/.cornercase/worktrees/web-shop/feat-dark-mode</span>
+        <span class="win__size faint">118×41</span>
+      </footer>
+
+      <div class="w-preview js-preview-code">
+        <div class="w-preview__head"><Icon name="typescript" file size={14} class="blue" /><span>src/theme.ts</span><i>25</i></div>
+        <div class="w-term w-term--code w-preview__code">
+          {
+            PREVIEW_CODE.map((row) => (
+              <div class:list={['w-line', row.here && 'is-here']}>
+                <span class="w-num">{row.at}</span>
+                {row.text.map(([kind, text]) => (kind ? <span class={kind}>{text}</span> : text))}
+              </div>
+            ))
+          }
+        </div>
+      </div>
+      <div class="w-preview w-preview--page js-preview-url">
+        <div class="w-preview__head"><Icon name="globe" size={13} class="accent" /><span>web-shop · checkout</span><i>localhost:5173</i></div>
+        <img class="w-preview__shot" src={checkout.src} width={checkout.width} height={checkout.height} alt="" decoding="async" />
+        <div class="w-preview__foot"><span>Open in the Browser panel</span><span>Open in your default browser</span></div>
+      </div>
+      <div class="w-preview w-preview--image js-preview-image">
+        <div class="w-preview__head"><Icon name="image" file size={13} class="magenta" /><span>checkout.png</span><i>1280 × 800</i></div>
+        <img class="w-preview__shot" src={checkout.src} width={checkout.width} height={checkout.height} alt="" decoding="async" />
+      </div>
+
+      <div class="w-toast js-toast">
+        <span class="w-toast__badge"><span class="w-badge is-waiting"><Icon name="status-waiting" size={15} /></span></span>
+        <div><b>Empty address on step two</b><span>web-shop · fix/empty-address needs you</span></div>
+        <span class="w-btn w-btn--sm w-btn--primary">Go</span>
+      </div>
+      <div class="w-flyer js-flyer"><Icon name="mouse-pointer-click" size={12} /> button.pay</div>
+      <div class="w-ptr js-ptr">
+        <svg viewBox="0 0 22 28" width="22" height="28" aria-hidden="true"><path d="M3 2v20l5.2-4.6 3.6 8 3.4-1.5-3.6-7.9h7z" fill="#fff" stroke="#0b0c0e" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+        <span class="w-ptr__tap js-ptr-tap"></span>
+      </div>
+    </div>
+  </div>
+</div>

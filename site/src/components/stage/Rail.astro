@@ -1,0 +1,15 @@
+---
+import Icon from '../Icon.astro';
+
+const docked = ['git-compare', 'folder-tree', 'list-checks', 'globe', 'waypoints'];
+const sheets = ['search', 'circle-dot', 'calendar-clock', 'workflow', 'gauge', 'users', 'activity', 'plug', 'hard-drive', 'puzzle'];
+const bottom = ['circle-help', 'keyboard', 'settings'];
+---
+
+<nav class="w-card w-rail" data-layer="rail" aria-hidden="true">
+  {docked.map((name) => <span class:list={['w-rail__i', `js-rail-${name}`]}><Icon name={name} size={18} /></span>)}
+  <span class="w-rail__rule"></span>
+  {sheets.map((name) => <span class="w-rail__i"><Icon name={name} size={18} /></span>)}
+  <span class="w-rail__gap"></span>
+  {bottom.map((name) => <span class="w-rail__i"><Icon name={name} size={18} /></span>)}
+</nav>

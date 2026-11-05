@@ -1,0 +1,13 @@
+---
+interface Props {
+  keys: string[];
+  usage?: boolean;
+}
+
+const glyph: Record<string, string> = { cmd: '⌘', shift: '⇧' };
+const { keys, usage = false } = Astro.props;
+---
+
+<span class="keys" data-keys={keys.join(' ')} data-usage={usage ? '' : undefined}>
+  {keys.map((key) => <kbd>{glyph[key] ?? key}</kbd>)}
+</span>

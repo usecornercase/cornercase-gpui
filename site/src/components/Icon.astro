@@ -1,0 +1,40 @@
+---
+interface Props {
+  name: string;
+  size?: number;
+  class?: string;
+  file?: boolean;
+}
+
+const icons = import.meta.glob<string>('../../../assets/icons/*.svg', { query: '?raw', import: 'default', eager: true });
+const files = import.meta.glob<string>('../../../assets/file-icons/*.svg', { query: '?raw', import: 'default', eager: true });
+
+const { name, size = 16, class: className, file = false } = Astro.props;
+const source = file ? files[`../../../assets/file-icons/${name}.svg`] : icons[`../../../assets/icons/${name}.svg`];
+if (!source) throw new Error(`no icon named ${name}`);
+const inner = source
+  .replace(/<!--[\s\S]*?-->/g, '')
+  .replace(/<svg[\s\S]*?>/, '')
+  .replace('</svg>', '')
+  .replaceAll('id="cut"', `id="cut-${name}"`)
+  .replaceAll('url(#cut)', `url(#cut-${name})`);
+const open = source.match(/<svg[\s\S]*?>/)?.[0] ?? '';
+const box = open.match(/viewBox="([^"]+)"/)?.[1] ?? '0 0 24 24';
+const fill = open.match(/\bfill="([^"]+)"/)?.[1] ?? 'currentColor';
+const stroke = open.match(/\bstroke="([^"]+)"/)?.[1];
+const width = open.match(/stroke-width="([^"]+)"/)?.[1];
+---
+
+<svg
+  class:list={['icon', className]}
+  viewBox={box}
+  width={size}
+  height={size}
+  fill={fill}
+  stroke={stroke}
+  stroke-width={width}
+  stroke-linecap={stroke ? 'round' : undefined}
+  stroke-linejoin={stroke ? 'round' : undefined}
+  aria-hidden="true"
+  set:html={inner}
+/>
