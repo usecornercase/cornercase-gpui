@@ -82,8 +82,9 @@ impl Drop for Stage {
 }
 
 pub(crate) fn install(latest: &Latest, asset: &Asset, exe: &Path, os: Os, https_only: bool) -> Result<String> {
+    let archive = download_checked(latest, asset, https_only)?;
     let stage = Stage::beside(exe)?;
-    let new = staged_binary(latest, asset, os, https_only, &stage.0)?;
+    let new = staged_binary(os, &archive, &stage.0)?;
     check_binary(&new, &latest.version)?;
     swap(os, &new, exe)?;
     Ok(latest.version.clone())
@@ -92,17 +93,17 @@ pub(crate) fn install(latest: &Latest, asset: &Asset, exe: &Path, os: Os, https_
 fn download_checked(latest: &Latest, asset: &Asset, https_only: bool) -> Result<Vec<u8>> {
     let sums_name = release::sums_name(&asset.name);
     let sums = latest.asset(&sums_name).with_context(|| format!("the release has no {sums_name}"))?;
-    let sums = fetch::download(&sums.url, fetch::NOTES_LIMIT, https_only)?;
-    let archive = fetch::download(&asset.url, ARCHIVE_LIMIT, https_only)?;
+    let sums = fetch::download(&sums.url, fetch::NOTES_LIMIT, https_only, Some(fetch::NOTES_WAIT))?;
+    let archive = fetch::download(&asset.url, ARCHIVE_LIMIT, https_only, None)?;
     if !release::matches(&archive, &String::from_utf8_lossy(&sums)) {
         bail!("the download does not match its checksum, so it was not installed");
     }
     Ok(archive)
 }
 
-fn staged_binary(latest: &Latest, asset: &Asset, os: Os, https_only: bool, stage: &Path) -> Result<PathBuf> {
+fn staged_binary(os: Os, bytes: &[u8], stage: &Path) -> Result<PathBuf> {
     let archive = stage.join("download");
-    fs::write(&archive, download_checked(latest, asset, https_only)?).context("could not save the download")?;
+    fs::write(&archive, bytes).context("could not save the download")?;
     let into = stage.join("unpacked");
     fs::create_dir(&into).context("could not make a folder to unpack in")?;
     unpack(os, &archive, &into)?;

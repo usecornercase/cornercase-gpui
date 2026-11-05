@@ -208,27 +208,32 @@ fn look(url: &str, exe: Option<&Path>, known: Option<&Found>) -> anyhow::Result<
     if !release::newer(&latest.version, CURRENT) {
         return Ok(None);
     }
-    let notes = match known.filter(|found| found.latest.version == latest.version) {
-        Some(found) => found.notes.clone(),
+    let kept = known.filter(|found| found.changelog && found.latest.version == latest.version);
+    let (notes, changelog) = match kept {
+        Some(found) => (found.notes.clone(), true),
         None => notes_of(&latest, fetch::secure(url)),
     };
-    Ok(Some(found_for(latest, notes, exe)))
+    Ok(Some(found_for(latest, (notes, changelog), exe)))
 }
 
-fn notes_of(latest: &Latest, https_only: bool) -> Vec<Notes> {
-    let changelog =
-        latest.asset("CHANGELOG.md").and_then(|asset| fetch::download(&asset.url, fetch::NOTES_LIMIT, https_only).ok());
+fn notes_of(latest: &Latest, https_only: bool) -> (Vec<Notes>, bool) {
+    let download = |asset: &release::Asset| {
+        fetch::download(&asset.url, fetch::NOTES_LIMIT, https_only, Some(fetch::NOTES_WAIT)).ok()
+    };
+    let changelog = latest.asset("CHANGELOG.md").and_then(download);
+    let downloaded = changelog.is_some();
     let notes = changelog
         .map(|bytes| release::notes_since(&String::from_utf8_lossy(&bytes), CURRENT, &latest.version))
         .unwrap_or_default();
-    if notes.is_empty() { release::body_notes(&latest.version, &latest.body) } else { notes }
+    let notes = if notes.is_empty() { release::body_notes(&latest.version, &latest.body) } else { notes };
+    (notes, downloaded)
 }
 
-fn found_for(latest: Latest, notes: Vec<Notes>, exe: Option<&Path>) -> Found {
+fn found_for(latest: Latest, (notes, changelog): (Vec<Notes>, bool), exe: Option<&Path>) -> Found {
     let machine = (Os::CURRENT, std::env::consts::ARCH);
     let way = install::way(RELEASED, machine, exe, &latest, install::writable);
     let on_disk = exe.and_then(install::installed_version).is_some_and(|version| version == latest.version);
-    Found { latest, notes, way, on_disk }
+    Found { latest, notes, way, on_disk, changelog }
 }
 
 #[cfg(test)]

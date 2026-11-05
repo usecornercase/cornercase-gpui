@@ -44,6 +44,7 @@ fn action(install: &InstallState, found: &Found) -> Action {
         (InstallState::Running, _) => Action::Busy,
         (InstallState::Done(_), _) => Action::Restart,
         _ if found.on_disk => Action::Restart,
+        (InstallState::Failed(_), Way::Replace { asset }) => Action::Download(asset.url.clone()),
         (_, Way::Replace { .. }) => Action::Install,
         (_, Way::Download { url, .. }) => Action::Download(url.clone()),
         (_, Way::Command(command)) => Action::Copy(command.clone()),

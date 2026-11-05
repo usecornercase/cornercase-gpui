@@ -5,7 +5,7 @@ use crate::self_update::release::{Asset, Latest};
 
 fn found(way: Way, on_disk: bool) -> Found {
     let latest = Latest { version: "0.2.0".into(), page: "page".into(), body: String::new(), assets: Vec::new() };
-    Found { latest, notes: Vec::new(), way, on_disk }
+    Found { latest, notes: Vec::new(), way, on_disk, changelog: true }
 }
 
 fn asset() -> Asset {
@@ -58,6 +58,8 @@ fn the_button_follows_the_way_and_the_install() {
     let replace = found(Way::Replace { asset: asset() }, false);
     assert_eq!(action(&InstallState::Idle, &replace), Action::Install);
     assert_eq!(action(&InstallState::Running, &replace), Action::Busy);
+    let failed = InstallState::Failed("no".into());
+    assert_eq!(action(&failed, &replace), Action::Download("https://example.test/a.zip".into()));
     assert_eq!(action(&InstallState::Done("0.2.0".into()), &replace), Action::Restart);
     let download = found(Way::Download { url: "u".into(), why: Why::Bundle }, false);
     assert_eq!(action(&InstallState::Idle, &download), Action::Download("u".into()));

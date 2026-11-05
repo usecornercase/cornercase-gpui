@@ -15,13 +15,14 @@ pub(crate) fn relaunch_args(flags: &[String], tab: Option<u64>) -> Vec<String> {
 }
 
 impl Relaunch {
-    pub(crate) fn start(&self) {
-        let _ = platform::command(&self.program)
+    pub(crate) fn start(&self) -> std::io::Result<()> {
+        platform::command(&self.program)
             .args(&self.args)
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
-            .spawn();
+            .spawn()
+            .map(drop)
     }
 }
 

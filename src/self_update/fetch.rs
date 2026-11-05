@@ -7,6 +7,7 @@ use ureq::Agent;
 use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
 pub(crate) const NOTES_LIMIT: u64 = 1024 * 1024;
+pub(crate) const NOTES_WAIT: Duration = Duration::from_secs(20);
 pub(crate) const ARCHIVE_LIMIT: u64 = 256 * 1024 * 1024;
 
 const ANSWER_LIMIT: u64 = 4 * 1024 * 1024;
@@ -36,11 +37,13 @@ fn agent(overall: Option<Duration>, https_only: bool) -> Agent {
         .into()
 }
 
-pub(crate) fn read_status(status: u16) -> Result<bool, String> {
+pub(crate) fn read_status(status: u16, limited: bool) -> Result<bool, String> {
     match status {
         200..=299 => Ok(true),
         404 => Ok(false),
-        403 | 429 => Err(LIMIT_REACHED.to_string()),
+        429 => Err(LIMIT_REACHED.to_string()),
+        403 if limited => Err(LIMIT_REACHED.to_string()),
+        403 => Err("GitHub refused the request (403)".to_string()),
         other => Err(format!("GitHub answered {other}")),
     }
 }
@@ -52,10 +55,16 @@ fn unreachable(error: &ureq::Error, wait: Duration, what: &str) -> anyhow::Error
     }
 }
 
+fn hit_limit(headers: &ureq::http::HeaderMap) -> bool {
+    let remaining = headers.get("x-ratelimit-remaining").and_then(|v| v.to_str().ok());
+    remaining == Some("0") || headers.contains_key("retry-after")
+}
+
 pub(crate) fn latest(url: &str) -> Result<Option<Value>> {
     let request = agent(Some(CHECK_WAIT), secure(url)).get(url).header("Accept", "application/vnd.github+json");
     let mut response = request.call().map_err(|e| unreachable(&e, CHECK_WAIT, "GitHub"))?;
-    if !read_status(response.status().as_u16()).map_err(anyhow::Error::msg)? {
+    let limited = hit_limit(response.headers());
+    if !read_status(response.status().as_u16(), limited).map_err(anyhow::Error::msg)? {
         return Ok(None);
     }
     let body =
@@ -63,9 +72,9 @@ pub(crate) fn latest(url: &str) -> Result<Option<Value>> {
     Ok(Some(serde_json::from_slice(&body).context("GitHub's answer is not JSON")?))
 }
 
-pub(crate) fn download(url: &str, limit: u64, https_only: bool) -> Result<Vec<u8>> {
-    let mut response =
-        agent(None, https_only).get(url).call().map_err(|e| unreachable(&e, STALL_WAIT, "the download"))?;
+pub(crate) fn download(url: &str, limit: u64, https_only: bool, overall: Option<Duration>) -> Result<Vec<u8>> {
+    let wait = overall.unwrap_or(STALL_WAIT);
+    let mut response = agent(overall, https_only).get(url).call().map_err(|e| unreachable(&e, wait, "the download"))?;
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         bail!("the download answered {status}");

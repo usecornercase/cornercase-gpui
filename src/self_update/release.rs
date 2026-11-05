@@ -30,6 +30,7 @@ pub(crate) struct Found {
     pub notes: Vec<Notes>,
     pub way: Way,
     pub on_disk: bool,
+    pub changelog: bool,
 }
 
 impl Found {

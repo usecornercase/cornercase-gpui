@@ -127,7 +127,9 @@ fn leave(relaunch: Option<self_update::Relaunch>) {
     match relaunch {
         Some(relaunch) => {
             cli::kill_all();
-            relaunch.start();
+            if let Err(why) = relaunch.start() {
+                fail(&format!("could not restart the window: {why}"), 1);
+            }
         }
         None => cli::quit(),
     }

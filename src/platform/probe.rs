@@ -1,10 +1,11 @@
 use std::io::{BufRead, BufReader, Read};
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 const OUTPUT_BUDGET: u64 = 256 * 1024;
+const POLL: Duration = Duration::from_millis(10);
 
 pub(crate) fn lines_within(
     cmd: &mut Command,
@@ -19,11 +20,22 @@ pub(crate) fn lines_within(
         thread::spawn(move || forward(stdout.take(OUTPUT_BUDGET), &tx));
     }
     let lines = gather(&rx, deadline, done);
-    let timed_out = Instant::now() >= deadline;
-    let status = if timed_out { None } else { child.wait().ok() };
+    let status = exited_by(&mut child, deadline);
     let _ = child.kill();
     let _ = child.wait();
     silence(lines, status, limit)
+}
+
+fn exited_by(child: &mut Child, deadline: Instant) -> Option<ExitStatus> {
+    loop {
+        if let Ok(Some(status)) = child.try_wait() {
+            return Some(status);
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        thread::sleep(POLL);
+    }
 }
 
 fn silence(lines: Vec<String>, status: Option<ExitStatus>, limit: Duration) -> Result<Vec<String>, String> {

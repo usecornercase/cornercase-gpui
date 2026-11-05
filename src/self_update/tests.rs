@@ -7,7 +7,7 @@ fn found(version: &str, on_disk: bool) -> Found {
     let answer: Value = serde_json::from_str(fixture!("releases/latest.json")).expect("the fixture is JSON");
     let mut latest = release::parse(&answer).expect("a release");
     latest.version = version.to_string();
-    Found { latest, notes: Vec::new(), way: Way::Command("cargo install".into()), on_disk }
+    Found { latest, notes: Vec::new(), way: Way::Command("cargo install".into()), on_disk, changelog: true }
 }
 
 fn updater(found: Option<Found>, install: InstallState) -> Updater {
