@@ -26,7 +26,7 @@ create() {
   identity=$(security find-identity -v -p codesigning "$keychain" \
     | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p' | head -n 1)
   [ -n "$identity" ] || fail "MACOS_CERTIFICATE holds no valid Developer ID Application identity"
-  echo "MACOS_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+  printf 'MACOS_SIGNING_IDENTITY=%s\nMACOS_NOTARIZE=1\n' "$identity" >> "$GITHUB_ENV"
 }
 
 delete() {

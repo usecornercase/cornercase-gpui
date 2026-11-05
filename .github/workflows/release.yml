@@ -142,16 +142,12 @@ jobs:
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: .github/release/keychain.sh create
 
-      - name: bundle
-        run: tools/macos/bundle.sh "$VERSION" target/notices/THIRD-PARTY-NOTICES.txt target/dist
-
-      - name: notarize
-        if: ${{ env.MACOS_SIGNING_IDENTITY != '' }}
+      - name: bundle, sign and notarize
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: tools/macos/notarize.sh target/dist/cornercase-gpui-universal-apple-darwin.dmg
+        run: tools/macos/bundle.sh "$VERSION" target/notices/THIRD-PARTY-NOTICES.txt target/dist
 
       - name: forget the certificate
         if: ${{ always() }}
