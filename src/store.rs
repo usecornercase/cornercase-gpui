@@ -395,6 +395,17 @@ pub(crate) fn run_local(cx: &mut App, busy: Busy, work: impl FnOnce() -> anyhow:
     .detach();
 }
 
+pub(crate) fn run_local_busy<T: 'static, R: Send + 'static>(
+    cx: &mut Context<T>,
+    busy: Busy,
+    work: impl FnOnce() -> anyhow::Result<R> + Send + 'static,
+    then: impl FnOnce(&mut T, anyhow::Result<R>, &mut Context<T>) + 'static,
+) {
+    let id = Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx));
+    let job = (Store::get(cx), id);
+    run_with(cx, Some(job), work, then);
+}
+
 fn run_job<T: 'static>(
     cx: &mut Context<T>,
     id: u64,
@@ -405,11 +416,11 @@ fn run_job<T: 'static>(
     run_with(cx, Some(job), move || cli::run(&args), then);
 }
 
-fn run_with<T: 'static>(
+fn run_with<T: 'static, R: Send + 'static>(
     cx: &mut Context<T>,
     job: Option<(Entity<Store>, u64)>,
-    work: impl FnOnce() -> anyhow::Result<String> + Send + 'static,
-    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+    work: impl FnOnce() -> anyhow::Result<R> + Send + 'static,
+    then: impl FnOnce(&mut T, anyhow::Result<R>, &mut Context<T>) + 'static,
 ) {
     let task = cx.background_spawn(async move { work() });
     cx.spawn(async move |this, cx| {

@@ -24,6 +24,7 @@ use crate::platform::Os;
 use crate::render::Metrics;
 use crate::render::layout::{Along, Layout};
 use crate::render::moving::Moves;
+use crate::self_update;
 use crate::sidebar::{Arrangement, Fold, SideState};
 use crate::store::{Store, Toast, ToastKind};
 use crate::terminal::Pointer;
@@ -195,6 +196,9 @@ impl Root {
         let store = Store::init(queue.clone(), cx);
         let notifier = cx.new(|cx| Notifier::new(store.clone(), window, cx));
         cx.observe(&notifier, |_, _, cx| cx.notify()).detach();
+        if let Some(updater) = self_update::entity(cx) {
+            cx.observe(&updater, |_, _, cx| cx.notify()).detach();
+        }
         cx.spawn(async move |this, cx| {
             while let Some(msg) = rx.next().await
                 && this.update(cx, |this, cx| this.handle(msg, cx)).is_ok()

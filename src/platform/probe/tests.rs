@@ -2,12 +2,15 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use super::gather;
-use crate::cli::locate::closed;
+
+fn closed(lines: &[String]) -> bool {
+    lines.iter().filter(|line| line.trim() == "mark").count() >= 2
+}
 
 #[test]
 fn gathering_stops_at_the_closing_mark() {
     let (tx, rx) = mpsc::channel();
-    for line in ["noise", "cornercase-gpui-path-mark", "/bin", "cornercase-gpui-path-mark", "later"] {
+    for line in ["noise", "mark", "/bin", "mark", "later"] {
         tx.send(line.to_string()).expect("the channel is open");
     }
     let lines = gather(&rx, Instant::now() + Duration::from_secs(60), closed);

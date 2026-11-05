@@ -11,11 +11,11 @@ use crate::store::{Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
 
-fn close(cx: &mut App) {
+pub(crate) fn close(cx: &mut App) {
     Store::get(cx).update(cx, Store::close_dialog);
 }
 
-fn show<V: Render>(make: impl FnOnce(FocusHandle, &mut Context<V>) -> V, window: &mut Window, cx: &mut App) {
+pub(crate) fn show<V: Render>(make: impl FnOnce(FocusHandle, &mut Context<V>) -> V, window: &mut Window, cx: &mut App) {
     let focus = cx.focus_handle();
     let view = cx.new(|cx| make(focus.clone(), cx));
     Store::get(cx).update(cx, |s, cx| s.show_dialog(view.into(), cx));
@@ -67,7 +67,7 @@ impl Render for UpdateDialog {
     }
 }
 
-fn release_notes(release: &Release) -> impl IntoElement + use<> {
+pub(crate) fn release_notes(release: &Release) -> impl IntoElement + use<> {
     div()
         .id("update-notes")
         .max_h(px(300.))

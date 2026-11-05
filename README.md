@@ -38,6 +38,10 @@ None of the downloads is signed yet, so each system asks before it runs the app 
 
 To check a download: `shasum -a 256 -c <file>.sha256` on macOS, `sha256sum -c <file>.sha256` on Linux, or `Get-FileHash -Algorithm SHA256 <file>` on Windows, compared with the `.sha256`. Every download carries the licences of the code and the icons in it (`THIRD-PARTY-NOTICES.txt` lists the crates).
 
+### Updates
+
+A downloaded build asks GitHub for the latest release when it starts and every hour, and shows `↑ window X.Y.Z` in the status bar when a newer one is out; the dialog lists what changed. On Windows and Linux, Install downloads the release, checks its checksum and replaces the program; Restart window then opens it again on the same tab; the terminals and agents keep running, since cornercase's server owns them. This needs a folder the window can write. On macOS it downloads the DMG, and a build from source shows the `cargo install` line to copy. Turn the check off with cornercase's `check_updates` setting. `cornercase-gpui --version` prints the version; on Windows the program has no console, so pipe it: `cornercase-gpui --version | Out-String`.
+
 ### Build from source
 
 You need:

@@ -13,6 +13,7 @@ mod panels;
 mod platform;
 mod prefs;
 mod render;
+mod self_update;
 mod sidebar;
 mod store;
 mod tabs;
@@ -122,6 +123,18 @@ fn open_window(cx: &mut App) {
     }
 }
 
+fn leave(relaunch: Option<self_update::Relaunch>) {
+    match relaunch {
+        Some(relaunch) => {
+            cli::kill_all();
+            if let Err(why) = relaunch.start() {
+                fail(&format!("could not restart the window: {why}"), 1);
+            }
+        }
+        None => cli::quit(),
+    }
+}
+
 fn fail(why: &str, code: i32) -> ! {
     eprintln!("cornercase-gpui: {why}");
     alert(why);
@@ -139,8 +152,12 @@ fn alert(why: &str) {
 fn alert(_: &str) {}
 
 fn main() {
-    let target =
-        cli::Target::from_args(&std::env::args().collect::<Vec<_>>()).unwrap_or_else(|e| fail(&e.to_string(), 2));
+    let args = std::env::args().collect::<Vec<_>>();
+    if args.get(1).is_some_and(|a| a == "--version") {
+        println!("{}", self_update::version_line());
+        return;
+    }
+    let target = cli::Target::from_args(&args).unwrap_or_else(|e| fail(&e.to_string(), 2));
     cli::connect(target);
     let app = Application::new().with_assets(ui::icons::Assets);
     if let Err(why) = theme::settle_fonts(&app.text_system()) {
@@ -149,9 +166,12 @@ fn main() {
     app.run(|cx: &mut App| {
         system_keys(cx);
         ui::text_field::bind_keys(cx);
-        cx.on_app_quit(|_| async {
-            panels::browser::quit();
-            cli::quit();
+        cx.on_app_quit(|cx| {
+            let relaunch = self_update::take_relaunch(cx);
+            async move {
+                panels::browser::quit();
+                leave(relaunch);
+            }
         })
         .detach();
         cx.on_window_closed(|cx| {
@@ -161,6 +181,7 @@ fn main() {
         })
         .detach();
 
+        self_update::start(cx);
         open_window(cx);
         cx.activate(true);
     });

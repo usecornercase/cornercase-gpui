@@ -124,12 +124,17 @@ pub(crate) const fn minimum(os: Os) -> Version {
     }
 }
 
+impl Version {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
+        let numbers = text.trim().split(['-', '+']).next()?;
+        let mut parts = numbers.trim().split('.').map(|part| part.parse::<u64>().ok());
+        let version = Self { major: parts.next()??, minor: parts.next()??, patch: parts.next()?? };
+        parts.next().is_none().then_some(version)
+    }
+}
+
 pub(crate) fn parse_version(line: &str) -> Option<Version> {
-    let rest = line.trim().strip_prefix("cornercase ")?;
-    let numbers = rest.split(['-', '+']).next()?;
-    let mut parts = numbers.trim().split('.').map(|part| part.parse::<u64>().ok());
-    let version = Version { major: parts.next()??, minor: parts.next()??, patch: parts.next()?? };
-    parts.next().is_none().then_some(version)
+    Version::parse(line.trim().strip_prefix("cornercase ")?)
 }
 
 fn verdict(answer: Result<Vec<String>, String>, os: Os) -> Result<(), Problem> {
