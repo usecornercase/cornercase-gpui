@@ -123,6 +123,16 @@ fn open_window(cx: &mut App) {
     }
 }
 
+fn leave(relaunch: Option<self_update::Relaunch>) {
+    match relaunch {
+        Some(relaunch) => {
+            cli::kill_all();
+            relaunch.start();
+        }
+        None => cli::quit(),
+    }
+}
+
 fn fail(why: &str, code: i32) -> ! {
     eprintln!("cornercase-gpui: {why}");
     alert(why);
@@ -154,9 +164,12 @@ fn main() {
     app.run(|cx: &mut App| {
         system_keys(cx);
         ui::text_field::bind_keys(cx);
-        cx.on_app_quit(|_| async {
-            panels::browser::quit();
-            cli::quit();
+        cx.on_app_quit(|cx| {
+            let relaunch = self_update::take_relaunch(cx);
+            async move {
+                panels::browser::quit();
+                leave(relaunch);
+            }
         })
         .detach();
         cx.on_window_closed(|cx| {
@@ -166,6 +179,7 @@ fn main() {
         })
         .detach();
 
+        self_update::start(cx);
         open_window(cx);
         cx.activate(true);
     });

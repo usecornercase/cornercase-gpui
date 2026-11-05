@@ -1,6 +1,6 @@
 mod alert;
 mod feed;
-mod update;
+pub(crate) mod update;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -21,7 +21,7 @@ use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::{UI_FAMILY, colours, radius};
 use crate::ui::{self, glass};
 
-pub(crate) use feed::{AppState, Event, Notice, Prefs};
+pub(crate) use feed::{AppState, Event, Notes, Notice, Prefs, Release};
 
 const FLASH: Duration = Duration::from_millis(160);
 const BELL_TOAST_EVERY: Duration = Duration::from_secs(30);
@@ -304,8 +304,11 @@ impl Notifier {
         cx.notify();
     }
 
-    pub(crate) fn status_items(&self, this: &Entity<Self>) -> Vec<AnyElement> {
-        [self.update_item(this), self.away_item(), self.awake_item()].into_iter().flatten().collect()
+    pub(crate) fn status_items(&self, this: &Entity<Self>, cx: &App) -> Vec<AnyElement> {
+        [self.update_item(this), crate::self_update::status_item(cx), self.away_item(), self.awake_item()]
+            .into_iter()
+            .flatten()
+            .collect()
     }
 
     fn update_item(&self, this: &Entity<Self>) -> Option<AnyElement> {
@@ -425,7 +428,7 @@ fn dot(colour: Option<Rgba>) -> Option<AnyElement> {
     Some(div().size(px(6.)).rounded_full().bg(colour).shadow(glass::glow(colour, 0.8, 5.)).into_any_element())
 }
 
-fn chip(
+pub(crate) fn chip(
     id: &'static str,
     label: impl Into<SharedString>,
     lead: Option<AnyElement>,

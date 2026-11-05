@@ -18,7 +18,7 @@ use parking_lot::Mutex;
 
 #[cfg(test)]
 pub(crate) use locate::parse_version;
-pub(crate) use locate::{Binary, INSTALL_GUIDE, Missing, Origin, Problem, minimum};
+pub(crate) use locate::{Binary, INSTALL_GUIDE, Missing, Origin, Problem, Version, minimum};
 pub(crate) use partial::run_partial;
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
@@ -43,6 +43,13 @@ impl Target {
         }
     }
 
+    pub(crate) fn flags(&self) -> Vec<String> {
+        match self {
+            Self::Local => Vec::new(),
+            Self::Remote(remote) => remote.flags(),
+        }
+    }
+
     fn command<S: AsRef<str>>(&self, args: &[S]) -> Command {
         self.command_with(&binary(), args)
     }
@@ -52,9 +59,7 @@ impl Target {
         if let Some(path) = &binary.path_env {
             cmd.env("PATH", path);
         }
-        if let Self::Remote(remote) = self {
-            cmd.args(remote.flags());
-        }
+        cmd.args(self.flags());
         cmd.args(args.iter().map(AsRef::as_ref));
         for name in CALLER {
             cmd.env_remove(name);

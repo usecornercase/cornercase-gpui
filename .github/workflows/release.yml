@@ -90,6 +90,7 @@ jobs:
     timeout-minutes: 60
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      CORNERCASE_GPUI_RELEASE: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -124,6 +125,8 @@ jobs:
     needs: [version, notices]
     runs-on: windows-2025
     timeout-minutes: 60
+    env:
+      CORNERCASE_GPUI_RELEASE: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -177,6 +180,7 @@ jobs:
     timeout-minutes: 45
     env:
       DEBIAN_FRONTEND: noninteractive
+      CORNERCASE_GPUI_RELEASE: "1"
     steps:
       - name: system libraries
         run: |

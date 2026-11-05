@@ -16,7 +16,7 @@ use crate::ui::{self, motion};
 
 impl Root {
     pub(super) fn render_status(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let items = self.notifier.read(cx).status_items(&self.notifier);
+        let items = self.notifier.read(cx).status_items(&self.notifier, cx);
         let jobs = self.store.read(cx).jobs.summary(Instant::now());
         let separator = || div().w(px(1.)).h(px(12.)).flex_none().bg(colours::edge());
         div()

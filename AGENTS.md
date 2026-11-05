@@ -71,7 +71,7 @@ What each file of `src/` holds, `Store` and its helpers, panels and widgets are 
 
 ### Manual check
 
-- Run the app on a throwaway tab: `./target/debug/cornercase-gpui --tab <id> & echo $!`, and stop only that pid, with `kill`: quitting runs `theme --clear`, which also takes back the colours the user's own window gave the terminals. `CORNERCASE_GPUI_OPEN=<panel>` opens a panel at start; `CORNERCASE_GPUI_FONT_SIZE` sets the terminal's font size.
+- Run the app on a throwaway tab: `./target/debug/cornercase-gpui --tab <id> & echo $!`, and stop only that pid, with `kill`: quitting runs `theme --clear`, which also takes back the colours the user's own window gave the terminals. `CORNERCASE_GPUI_OPEN=<panel>` opens a panel at start; `CORNERCASE_GPUI_RELEASES_URL=<url>` asks that fake release instead of GitHub (debug builds never ask GitHub otherwise); `CORNERCASE_GPUI_FONT_SIZE` sets the terminal's font size.
 - Screenshot it: `screencapture -x -o -l <window id> <file>.png`, the window id from `CGWindowListCopyWindowInfo` for that pid; it needs no focus. Never focus or type through System Events (`first process whose unix id is <pid>`): it finds the process by name, so with another cornercase-gpui open (often the user's own) it raises and types into that one. Focus by pid with the accessibility API (`kAXFrontmostAttribute`) and post keys with `CGEvent.postToPid`.
 - Never act on real data: create a throwaway project (`cornercase open /tmp/…`) to try closing, discarding or removing, and clean it up.
 
