@@ -13,6 +13,7 @@ mod panels;
 mod platform;
 mod prefs;
 mod render;
+mod self_update;
 mod sidebar;
 mod store;
 mod tabs;
@@ -139,8 +140,12 @@ fn alert(why: &str) {
 fn alert(_: &str) {}
 
 fn main() {
-    let target =
-        cli::Target::from_args(&std::env::args().collect::<Vec<_>>()).unwrap_or_else(|e| fail(&e.to_string(), 2));
+    let args = std::env::args().collect::<Vec<_>>();
+    if args.get(1).is_some_and(|a| a == "--version") {
+        println!("{}", self_update::version_line());
+        return;
+    }
+    let target = cli::Target::from_args(&args).unwrap_or_else(|e| fail(&e.to_string(), 2));
     cli::connect(target);
     let app = Application::new().with_assets(ui::icons::Assets);
     if let Err(why) = theme::settle_fonts(&app.text_system()) {
