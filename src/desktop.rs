@@ -179,7 +179,7 @@ impl Lookup {
 
     pub(crate) fn is_program(&self, path: &Path) -> bool {
         match self.os {
-            Os::Windows => self.listed(path) && path.is_file(),
+            Os::Windows => (self.listed(path) || has_exe_extension(path)) && path.is_file(),
             Os::Mac | Os::Linux => has_execute_bit(path),
         }
     }
@@ -204,6 +204,10 @@ impl Lookup {
         let extension = path.extension().and_then(OsStr::to_str).map(|e| format!(".{}", e.to_ascii_lowercase()));
         extension.is_some_and(|extension| self.extensions.contains(&extension))
     }
+}
+
+fn has_exe_extension(path: &Path) -> bool {
+    path.extension().and_then(OsStr::to_str).is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
 }
 
 pub(crate) fn executable(path: &Path) -> bool {

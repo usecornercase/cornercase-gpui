@@ -355,3 +355,13 @@ fn a_finished_selection_is_copied_on_a_mac_and_kept_in_the_primary_selection_on_
     assert_eq!(selection_board(Os::Linux), Board::Primary);
     assert_eq!(selection_board(Os::Windows), Board::Clipboard);
 }
+
+#[test]
+fn an_exe_is_a_program_on_windows_even_when_pathext_leaves_it_out() {
+    let root = temp("exe-pathext");
+    std::fs::create_dir_all(&root).expect("a folder");
+    std::fs::write(root.join("cornercase.EXE"), "").expect("a file");
+    let windows = Lookup::new(Os::Windows, Some(".CMD;.BAT"));
+    assert!(windows.is_program(&root.join("cornercase.EXE")));
+    assert_eq!(windows.find_in(std::slice::from_ref(&root), "cornercase"), None);
+}

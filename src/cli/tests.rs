@@ -4,7 +4,7 @@ use std::sync::mpsc;
 
 use serde_json::json;
 
-use super::{CALLER, Job, Remote, Target, gather_input, gather_scroll};
+use super::{BINARY, Binary, CALLER, Job, Remote, Target, gather_input, gather_scroll, spawn_failure, use_binary};
 
 fn args(cmd: &Command) -> Vec<&str> {
     cmd.get_args().filter_map(OsStr::to_str).collect()
@@ -94,4 +94,34 @@ fn a_reason_loses_the_command_name() {
     let e = anyhow::anyhow!("cornercase config: Error: the token was refused");
     assert_eq!(super::reason(&e), "the token was refused");
     assert_eq!(super::reason(&anyhow::anyhow!("could not run")), "could not run");
+}
+
+fn path_of(cmd: &Command) -> Option<&OsStr> {
+    cmd.get_envs().find(|(name, _)| *name == OsStr::new("PATH")).and_then(|(_, value)| value)
+}
+
+#[test]
+fn a_binary_found_through_the_login_shell_runs_with_that_path() {
+    let binary =
+        Binary { path: "/opt/homebrew/bin/cornercase".into(), path_env: Some("/opt/homebrew/bin:/usr/bin".into()) };
+    let cmd = Target::Local.command_with(&binary, &["status"]);
+    assert_eq!(cmd.get_program(), "/opt/homebrew/bin/cornercase");
+    assert_eq!(path_of(&cmd), Some(OsStr::new("/opt/homebrew/bin:/usr/bin")));
+}
+
+#[test]
+fn a_binary_found_on_the_path_leaves_the_environment_alone() {
+    let cmd = Target::Local.command_with(&Binary::plain("/usr/bin/cornercase".into()), &["status"]);
+    assert_eq!(path_of(&cmd), None);
+}
+
+#[test]
+fn a_binary_that_cannot_start_is_named_and_forgotten_only_if_it_is_still_the_cached_one() {
+    use_binary(Binary::plain("/opt/new/cornercase".into()));
+    let old = spawn_failure(OsStr::new("/opt/old/cornercase"), std::io::Error::other("gone"));
+    assert_eq!(old.to_string(), "could not run `/opt/old/cornercase`");
+    assert!(BINARY.lock().is_some());
+    let new = spawn_failure(OsStr::new("/opt/new/cornercase"), std::io::Error::other("gone"));
+    assert_eq!(new.to_string(), "could not run `/opt/new/cornercase`");
+    assert!(BINARY.lock().is_none());
 }

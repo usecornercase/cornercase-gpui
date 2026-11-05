@@ -17,7 +17,7 @@ The rules for every change are in [AGENTS.md](AGENTS.md), and the design decisio
 
 ## Setup
 
-You need macOS with the Xcode Command Line Tools (`xcode-select --install`), [rustup](https://rustup.rs) (it installs the pinned Rust version by itself) and [cornercase](https://github.com/usecornercase/cornercase-terminal) 0.12.234 or newer on your `PATH` (or named by `CORNERCASE_BIN`). Clone cornercase-terminal next to this checkout too: its `design/` and `src/` explain the behaviour this window draws. `docs/cornercase-cli.txt` holds the help of every `cornercase` command. On Linux or Windows, the README's Install says what else to install; from a Mac, [`design/linux.md`](design/linux.md) shows how to build and run the Linux window in Docker, and [`design/windows.md`](design/windows.md) how to check the Windows code with `cargo xwin`.
+You need macOS with the Xcode Command Line Tools (`xcode-select --install`), [rustup](https://rustup.rs) (it installs the pinned Rust version by itself) and [cornercase](https://github.com/usecornercase/cornercase-terminal) 0.12.234 or newer where the window finds it (`design/connection.md`; `CORNERCASE_BIN` names one). Clone cornercase-terminal next to this checkout too: its `design/` and `src/` explain the behaviour this window draws. `docs/cornercase-cli.txt` holds the help of every `cornercase` command. On Linux or Windows, the README's Install says what else to install; from a Mac, [`design/linux.md`](design/linux.md) shows how to build and run the Linux window in Docker, and [`design/windows.md`](design/windows.md) how to check the Windows code with `cargo xwin`.
 
 ```sh
 cargo run                  # the first build compiles every dependency optimised, a couple of minutes

@@ -26,7 +26,7 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 ## Install
 
-You need [cornercase](https://usecornercase.dev/docs/installation/) 0.12.234 or newer on your `PATH` (0.12.287 or newer on Windows, its first release there).
+You need [cornercase](https://usecornercase.dev/docs/installation/) 0.12.234 or newer (0.12.287 or newer on Windows, its first release there). The window finds it on the `PATH`, in your login shell's `PATH` or where its installers put it, and says so, with the way to install it, when it is missing.
 
 ### Download
 
@@ -67,7 +67,7 @@ sed "s|^Exec=.*|Exec=\"$HOME/.cargo/bin/cornercase-gpui\"|" assets/linux/cornerc
 install -Dm644 assets/linux/cornercase-gpui.svg ~/.local/share/icons/hicolor/scalable/apps/cornercase-gpui.svg
 ```
 
-An app started from the menu sees your session's `PATH`, not your shell's: if `cornercase` lives somewhere only your shell adds, put its path in `CORNERCASE_BIN` on the `Exec` line (`Exec=env CORNERCASE_BIN=/path/to/cornercase …`).
+An app started from the menu sees your session's `PATH`, not your shell's: the window asks your login shell for it, and looks where cornercase's installers put it. If it still cannot find `cornercase`, it says so and lets you choose the file.
 
 On Windows, run the same three lines in PowerShell after installing cornercase (`powershell -ExecutionPolicy Bypass -c "irm https://usecornercase.dev/install.ps1 | iex"`); the build puts `cornercase-gpui.exe` in `%USERPROFILE%\.cargo\bin`. A release build compiles gpui's shaders with `fxc.exe` from the Windows SDK, which the Build Tools install; if it is not found, set `GPUI_FXC_PATH` to it. To start it from the Start menu as well:
 
@@ -93,7 +93,7 @@ These environment variables change its defaults:
 
 | Variable | What it sets | Default |
 | --- | --- | --- |
-| `CORNERCASE_BIN` | The `cornercase` binary to drive | `cornercase` on the `PATH` |
+| `CORNERCASE_BIN` | The `cornercase` binary to drive | found on the `PATH`, in the login shell's `PATH` or in the installers' folders |
 | `CORNERCASE_GPUI_FONT_SIZE` | The terminal's font size (Menlo on macOS; on Linux the first monospace font installed of DejaVu Sans Mono, Noto Sans Mono and the like; Cascadia Mono, else Consolas, on Windows) | `13` |
 | `CORNERCASE_GPUI_OPACITY` | The opacity of the terminal's background; `1` makes it opaque | `0.65` |
 | `CORNERCASE_GPUI_CHROME` | The browser the Browser panel runs, headless (on Windows, set it for good with `setx`) | Chrome, Chromium, Edge or Brave; on Windows Edge comes last |

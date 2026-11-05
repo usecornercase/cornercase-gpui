@@ -50,6 +50,7 @@ const RETRY: Duration = Duration::from_millis(1500);
 
 pub(crate) enum Msg {
     Started(Result<String, String>),
+    Missing(cli::Missing),
     Session(u64, Box<Session>),
     ViewEnded(u64, String),
     Frame(u64, Box<Frame>),
@@ -65,6 +66,7 @@ pub(crate) enum Conn {
     Starting,
     Connected,
     Lost(String),
+    Missing(cli::Missing),
 }
 
 pub(crate) enum Drag {
@@ -207,7 +209,7 @@ impl Root {
         .detach();
         let mut root = Self::fresh((focus, cx.focus_handle()), store, tx, queue, notifier);
         kept.apply(&mut root);
-        root.start();
+        root.start(cx);
         root
     }
 
@@ -333,16 +335,13 @@ impl Root {
         }
     }
 
-    fn start(&mut self) {
+    pub(crate) fn start(&mut self, cx: &App) {
         self.conn = Conn::Starting;
         let tx = self.tx.clone();
         let (cols, rows) = self.size.unwrap_or((160, 48));
-        let (cols, rows) = (cols.max(90), rows.max(10));
-        std::thread::spawn(move || {
-            let args = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-"];
-            let result = cli::run_with_stdin(&args, Some(&theme::theme_json())).map_err(|e| e.to_string());
-            let _ = tx.unbounded_send(Msg::Started(result));
-        });
+        let size = (cols.max(90), rows.max(10));
+        let chosen = self.store.read(cx).prefs.cornercase_bin.clone();
+        std::thread::spawn(move || start_server(&tx, size, chosen));
     }
 
     fn open_view(&mut self, cx: &mut Context<Self>) {
@@ -378,11 +377,15 @@ impl Root {
     }
 
     fn lost(&mut self, why: String, cx: &mut Context<Self>) {
+        self.drop_connection(Conn::Lost(why), cx);
+    }
+
+    fn drop_connection(&mut self, conn: Conn, cx: &mut Context<Self>) {
         self.surface_stream = Feed::Off;
         self.view_stream = None;
         self.view_id = None;
         self.has_frame = false;
-        self.conn = Conn::Lost(why);
+        self.conn = conn;
         self.store.update(cx, |s, cx| {
             s.view_id = None;
             cx.notify();
@@ -393,6 +396,7 @@ impl Root {
         let current = self.generation;
         match msg {
             Msg::Started(Ok(_)) => self.open_view(cx),
+            Msg::Missing(missing) => self.drop_connection(Conn::Missing(missing), cx),
             Msg::Started(Err(e)) => {
                 self.lost(e, cx);
                 self.retry(cx);
@@ -450,7 +454,7 @@ impl Root {
 
     fn restart_if_lost(&mut self, cx: &mut Context<Self>) {
         if matches!(self.conn, Conn::Lost(_)) {
-            self.start();
+            self.start(cx);
             cx.notify();
         }
     }
@@ -879,6 +883,21 @@ fn first_line(text: &str) -> &str {
 
 fn font_size_from_env() -> f32 {
     std::env::var("CORNERCASE_GPUI_FONT_SIZE").ok().and_then(|s| s.parse().ok()).unwrap_or(13.)
+}
+
+fn start_server(tx: &UnboundedSender<Msg>, (cols, rows): (u16, u16), chosen: Option<String>) {
+    let msg = start_message(cli::ensure_binary(chosen), || {
+        let args = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-"];
+        cli::run_with_stdin(&args, Some(&theme::theme_json())).map_err(|e| e.to_string())
+    });
+    let _ = tx.unbounded_send(msg);
+}
+
+fn start_message(found: Result<(), cli::Missing>, start: impl FnOnce() -> Result<String, String>) -> Msg {
+    match found {
+        Ok(()) => Msg::Started(start()),
+        Err(missing) => Msg::Missing(missing),
+    }
 }
 
 fn start_place() -> Vec<String> {

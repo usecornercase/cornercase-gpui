@@ -1,18 +1,24 @@
+mod locate;
 mod partial;
 mod remote;
 mod requests;
 mod typist;
 
+use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Output, Stdio};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
 
 use anyhow::{Context as _, Result, bail};
+use locate::{Inputs, System};
 use parking_lot::Mutex;
 
+#[cfg(test)]
+pub(crate) use locate::parse_version;
+pub(crate) use locate::{Binary, INSTALL_GUIDE, Missing, Origin, Problem, minimum};
 pub(crate) use partial::run_partial;
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
@@ -38,7 +44,14 @@ impl Target {
     }
 
     fn command<S: AsRef<str>>(&self, args: &[S]) -> Command {
-        let mut cmd = crate::platform::command(bin());
+        self.command_with(&binary(), args)
+    }
+
+    fn command_with<S: AsRef<str>>(&self, binary: &Binary, args: &[S]) -> Command {
+        let mut cmd = crate::platform::command(&binary.path);
+        if let Some(path) = &binary.path_env {
+            cmd.env("PATH", path);
+        }
         if let Self::Remote(remote) = self {
             cmd.args(remote.flags());
         }
@@ -77,8 +90,50 @@ fn generation() -> u64 {
     CURRENT.lock().generation
 }
 
-pub(crate) fn bin() -> String {
-    std::env::var("CORNERCASE_BIN").unwrap_or_else(|_| "cornercase".to_string())
+static BINARY: Mutex<Option<Binary>> = Mutex::new(None);
+
+fn binary() -> Binary {
+    BINARY.lock().clone().unwrap_or_else(|| {
+        Binary::plain(std::env::var("CORNERCASE_BIN").unwrap_or_else(|_| "cornercase".to_string()).into())
+    })
+}
+
+fn forget_binary(program: &OsStr) {
+    let mut cached = BINARY.lock();
+    if cached.as_ref().is_some_and(|binary| binary.path.as_os_str() == program) {
+        *cached = None;
+    }
+}
+
+fn spawn(cmd: &mut Command) -> Result<Child> {
+    let program = cmd.get_program().to_owned();
+    cmd.spawn().map_err(|e| spawn_failure(&program, e))
+}
+
+pub(crate) fn output(cmd: &mut Command) -> Result<Output> {
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    Ok(spawn(cmd)?.wait_with_output()?)
+}
+
+fn spawn_failure(program: &OsStr, e: std::io::Error) -> anyhow::Error {
+    forget_binary(program);
+    anyhow::Error::new(e).context(format!("could not run `{}`", program.to_string_lossy()))
+}
+
+pub(crate) fn use_binary(binary: Binary) {
+    *BINARY.lock() = Some(binary);
+}
+
+pub(crate) fn ensure_binary(chosen: Option<String>) -> Result<(), Missing> {
+    if BINARY.lock().is_some() {
+        return Ok(());
+    }
+    use_binary(locate::locate(&Inputs::here(chosen), &System::here())?);
+    Ok(())
+}
+
+pub(crate) fn check_chosen(path: std::path::PathBuf) -> Result<Binary, Missing> {
+    locate::chosen(path, crate::platform::Os::CURRENT, &System::here())
 }
 
 pub(crate) fn command<S: AsRef<str>>(args: &[S]) -> Command {
@@ -97,7 +152,7 @@ fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&[u8]>) -> R
     let mut cmd = target.command(args);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() });
-    let mut child = cmd.spawn().with_context(|| format!("could not run `{}`", bin()))?;
+    let mut child = spawn(&mut cmd)?;
     if let Some(text) = stdin
         && let Some(mut pipe) = child.stdin.take()
     {
@@ -176,7 +231,7 @@ pub(crate) fn stream<S: AsRef<str>>(
     let target = target();
     let mut cmd = target.command(args);
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = cmd.spawn().with_context(|| format!("could not run `{}`", bin()))?;
+    let mut child = spawn(&mut cmd)?;
     let stdout = child.stdout.take().context("no stdout")?;
     let stderr = child.stderr.take().context("no stderr")?;
     let stream = keep(child);

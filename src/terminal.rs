@@ -26,6 +26,7 @@ use crate::ui;
 mod browser;
 mod input;
 mod links;
+mod missing;
 mod mouse;
 mod no_tab;
 mod pane_drag;
@@ -316,6 +317,9 @@ impl Root {
     }
 
     fn cover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if let Conn::Missing(missing) = &self.conn {
+            return Some(Self::missing_page(missing, cx).into_any_element());
+        }
         if self.conn == Conn::Connected && self.shows_no_tab() {
             return self.empty_page(cx).map(IntoElement::into_any_element);
         }
@@ -468,6 +472,7 @@ fn note_text(conn: &Conn, surface_error: Option<&str>, host: Option<&str>) -> (S
         (Conn::Connected, None) => ("Waiting for the terminal…".to_string(), None),
         (Conn::Connected, Some(why)) => ("The terminal cannot be shown".to_string(), Some(why.to_string())),
         (Conn::Lost(why), _) => (format!("Lost {server}"), Some(why.clone())),
+        (Conn::Missing(missing), _) => (format!("cornercase {}", missing.label()), None),
     }
 }
 

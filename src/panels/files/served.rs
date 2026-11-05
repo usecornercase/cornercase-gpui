@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Result, bail};
@@ -106,7 +105,7 @@ fn files_args(command: &str, workspace: u64, flags: &[&str], rest: impl IntoIter
 }
 
 fn answer(args: &[String]) -> Result<String> {
-    let out = cli::command(args).stdin(Stdio::null()).output()?;
+    let out = cli::output(&mut cli::command(args))?;
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     if stdout.trim_start().starts_with('{') {
         return Ok(stdout);

@@ -30,6 +30,7 @@ pub(crate) enum PreviewPages {
 pub(crate) struct Prefs {
     pub open_links: OpenLinks,
     pub preview_pages: PreviewPages,
+    pub cornercase_bin: Option<String>,
 }
 
 impl Prefs {
