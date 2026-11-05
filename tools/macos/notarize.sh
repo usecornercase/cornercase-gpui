@@ -34,10 +34,8 @@ result=$(xcrun notarytool submit "$dmg" "$@" --wait --timeout 45m --output-forma
 echo "$result"
 id=$(printf '%s' "$result" | plutil -extract id raw -o - - 2>/dev/null) || fail "notarytool did not take the submission"
 status=$(printf '%s' "$result" | plutil -extract status raw -o - -)
-if [ "$status" != Accepted ]; then
-  xcrun notarytool log "$id" "$@" || true
-  fail "notarization ended $status"
-fi
+xcrun notarytool log "$id" "$@" || true
+[ "$status" = Accepted ] || fail "notarization ended $status"
 
 xcrun stapler staple "$dmg"
 xcrun stapler validate "$dmg"

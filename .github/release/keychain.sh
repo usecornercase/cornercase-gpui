@@ -7,7 +7,9 @@ keychain=$RUNNER_TEMP/signing.keychain-db
 
 create() {
   if [ -z "${MACOS_CERTIFICATE:-}" ]; then
-    [ "$GITHUB_EVENT_NAME" != push ] || fail "a release is signed, and the release environment has no MACOS_CERTIFICATE"
+    case "$GITHUB_REF" in
+      refs/heads/main | refs/tags/v*) fail "$GITHUB_REF is signed, and the release environment has no MACOS_CERTIFICATE" ;;
+    esac
     echo "no certificate: the bundle is signed ad hoc"
     return
   fi
