@@ -25,27 +25,34 @@ function markDownloads(os: Os): void {
   for (const card of all('[data-platform]')) card.classList.toggle('is-yours', card.dataset.platform === os);
 }
 
-function installBox(): void {
-  const box = one('[data-install]');
-  const shown = one('[data-shown]', box);
-  const copy = one<HTMLButtonElement>('[data-copy]', box);
-  const ways = all<HTMLButtonElement>('[data-command]', box);
-  for (const way of ways) {
-    way.addEventListener('click', () => {
-      ways.forEach((other) => other.setAttribute('aria-pressed', String(other === way)));
-      shown.textContent = way.dataset.command ?? '';
-      copy.dataset.copy = way.dataset.command ?? '';
-    });
-  }
+function copyButton(line: HTMLElement, status: HTMLElement): void {
+  const copy = one<HTMLButtonElement>('[data-copy]', line);
   copy.addEventListener('click', async () => {
+    status.textContent = '';
     try {
       await navigator.clipboard.writeText(copy.dataset.copy ?? '');
       copy.classList.add('is-done');
       setTimeout(() => copy.classList.remove('is-done'), 1600);
     } catch {
-      copy.classList.remove('is-done');
+      window.getSelection()?.selectAllChildren(one('code', line));
+      status.textContent = 'Your browser did not let the page copy it. The command is selected: copy it from there.';
     }
   });
+}
+
+function installBox(): void {
+  const box = one('[data-install]');
+  const status = one('[data-copy-status]', box);
+  const ways = all<HTMLButtonElement>('[data-way]', box);
+  const lines = all('[data-line]', box);
+  ways.forEach((way, i) => {
+    way.addEventListener('click', () => {
+      ways.forEach((other) => other.setAttribute('aria-pressed', String(other === way)));
+      lines.forEach((line, j) => line.classList.toggle('is-on', j === i));
+      status.textContent = '';
+    });
+  });
+  for (const line of lines) copyButton(line, status);
 }
 
 interface Release {
@@ -94,7 +101,7 @@ function magnets(): void {
 }
 
 export function preparePage(): Os {
-  const os = osOf(navigator.userAgent, navigator.platform);
+  const os = osOf(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
   renameKeys(os);
   markDownloads(os);
   installBox();

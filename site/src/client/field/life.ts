@@ -59,7 +59,7 @@ export class Life {
     this.field.burst(x, y, power, [colour[0] * 0.045, colour[1] * 0.045, colour[2] * 0.045]);
   }
 
-  tick(dt: number, time: number, velocity: number, height: number): void {
+  tick(dt: number, velocity: number, height: number): void {
     const { now, mood, field } = this;
     now.gain = damp(now.gain, mood.gain, 3, dt);
     now.glow = damp(now.glow, mood.glow, 3, dt);
@@ -69,13 +69,13 @@ export class Life {
     field.gain = now.gain;
     field.glow = now.glow;
     field.driftY = Math.max(-1.4, Math.min(1.4, (velocity / height) * 0.4));
-    if (!this.awake) return;
-    this.walk(dt, time);
   }
 
-  private walk(dt: number, time: number): void {
+  walk(elapsed: number, time: number): void {
+    if (!this.awake) return;
     const { now, field } = this;
-    const dose = 0.06 * now.emit * Math.min(dt * 60, 2);
+    const share = Math.min(elapsed * 60, 2);
+    const dose = 0.06 * now.emit * share;
     const hue = now.hue;
     const colour: Colour = [hue[0] * dose, hue[1] * dose, hue[2] * dose];
     for (const walker of WALKERS) {
@@ -85,7 +85,7 @@ export class Life {
       const y = 0.5 - now.low * 0.22 + walker.reach * Math.sin(ay) * (1 - now.low * 0.45);
       const vx = walker.reach * walker.a * Math.cos(ax) * 1500 + Math.sin(time * 1.9 + walker.phase) * 330;
       const vy = walker.reach * walker.b * Math.cos(ay) * 1500 + Math.cos(time * 2.3 + walker.phase) * 330;
-      field.splat(x, y, vx, vy, colour, 0.0026);
+      field.splat(x, y, vx * share, vy * share, colour, 0.0026);
     }
   }
 }

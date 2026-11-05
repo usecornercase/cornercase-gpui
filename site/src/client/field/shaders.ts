@@ -231,7 +231,7 @@ void main() {
   vec3 halo = soft / (1.0 + 0.8 * soft) * glow * gain;
   vec2 from = uv - 0.5;
   from.x *= pixels.x / pixels.y;
-  float edge = smoothstep(1.28, 0.34, length(from));
+  float edge = 1.0 - smoothstep(0.34, 1.28, length(from));
 
   vec3 colour = ground + halo * edge + ink * tone * mix(0.62, 1.0, edge);
   result = vec4(colour, 1.0);

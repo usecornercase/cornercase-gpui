@@ -44,5 +44,6 @@ test('a pulse comes and goes', () => {
 test('damping moves the same way whatever the frame rate', () => {
   const once = damp(0, 1, 8, 1 / 30);
   const twice = damp(damp(0, 1, 8, 1 / 60), 1, 8, 1 / 60);
+  assert.ok(once > 0 && once < 1);
   assert.ok(Math.abs(once - twice) < 1e-9);
 });

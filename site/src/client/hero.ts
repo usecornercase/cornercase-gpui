@@ -14,7 +14,6 @@ interface Letter {
 
 export class Hero {
   private readonly letters: Letter[];
-  private readonly title: HTMLElement;
   private readonly rises: HTMLElement[];
   private readonly hint: HTMLElement;
   private readonly glow: HTMLElement;
@@ -23,7 +22,6 @@ export class Hero {
   private pointerY = -9999;
 
   constructor() {
-    this.title = one('[data-hero-title]');
     this.rises = all('[data-hero-rise]');
     this.hint = one('[data-hero-scroll]');
     this.glow = one('[data-hero-glow]');
@@ -50,7 +48,6 @@ export class Hero {
   }
 
   update(time: number, dt: number, progress: number): void {
-    paint(this.title, 'visibility', progress >= 1 ? 'hidden' : 'visible');
     if (this.shownAt < 0) return;
     this.fadeRest(progress, time - this.shownAt);
     if (progress >= 1) return;

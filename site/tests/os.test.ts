@@ -10,6 +10,12 @@ test('each system is told from its browser', () => {
   assert.equal(osOf('Mozilla/5.0 (Linux; Android 15; Pixel 8)'), 'phone');
 });
 
+test('an iPad that says it is a Mac is told apart by its touch screen', () => {
+  const desktopSafari = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15';
+  assert.equal(osOf(desktopSafari, 'MacIntel', 5), 'phone');
+  assert.equal(osOf(desktopSafari, 'MacIntel', 0), 'mac');
+});
+
 test('the download names the system it is for', () => {
   assert.equal(downloadLabel('windows'), 'Download for Windows');
   assert.equal(downloadLabel('phone'), 'Download for your computer');

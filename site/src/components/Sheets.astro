@@ -12,6 +12,15 @@ const sheets = SHEETS.map((sheet) => ({ ...sheet, picture: pictures[`../assets/s
       <h2>One shortcut away.</h2>
       <p>The rest of cornercase, each in a sheet of its own. Real screens, from the real window.</p>
     </div>
+    <ul class="sr-only sheets__list">
+      {
+        sheets.map((sheet) => (
+          <li>
+            {sheet.name}: {sheet.line} <Keys keys={sheet.keys} usage={sheet.name === 'Usage'} />
+          </li>
+        ))
+      }
+    </ul>
     <div class="ring" data-ring>
       <div class="ring__spin" data-ring-spin>
         {

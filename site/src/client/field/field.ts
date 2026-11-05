@@ -57,8 +57,8 @@ export class Field {
 
   private readonly gl: WebGL2RenderingContext;
   private readonly canvas: HTMLCanvasElement;
-  private readonly kinds: Formats;
-  private readonly programs: Programs;
+  private kinds: Formats;
+  private programs: Programs;
   private buffers: Buffers | null = null;
   private atlas: WebGLTexture | null = null;
   private cell: [number, number] = [18, 36];
@@ -87,7 +87,12 @@ export class Field {
     this.canvas = canvas;
     this.gl = gl;
     this.kinds = kinds;
-    this.programs = {
+    this.programs = Field.compileAll(gl);
+    Field.prepare(gl);
+  }
+
+  private static compileAll(gl: WebGL2RenderingContext): Programs {
+    return {
       advect: program(gl, ADVECT),
       divergence: program(gl, DIVERGENCE),
       curl: program(gl, CURL),
@@ -98,9 +103,25 @@ export class Field {
       stamp: program(gl, STAMP),
       show: program(gl, SHOW),
     };
+  }
+
+  private static prepare(gl: WebGL2RenderingContext): void {
     quad(gl);
     gl.disable(gl.BLEND);
     gl.disable(gl.DEPTH_TEST);
+  }
+
+  restore(): void {
+    const kinds = formats(this.gl);
+    if (!kinds) throw new Error('no float targets');
+    this.kinds = kinds;
+    this.programs = Field.compileAll(this.gl);
+    Field.prepare(this.gl);
+    this.buffers = null;
+    this.atlas = null;
+    this.bound = null;
+    this.queue.length = 0;
+    this.stamps = 0;
   }
 
   resize(width: number, height: number, dpr: number): void {

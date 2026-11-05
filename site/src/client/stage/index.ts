@@ -11,6 +11,7 @@ import { cameraKeys } from './camera';
 const PANES_WIDTH = 948;
 const PANES_HEIGHT = 728;
 const DOCK_RIGHT = 1272;
+const CLOSED_WORK = 0.5;
 const NARROW = 420;
 const WIDE = 640;
 
@@ -227,7 +228,7 @@ export class Stage {
     this.dockState(layers, review, browser, flow, close);
     const rect = this.paneRects(panes, review, close);
     this.layoutPanes(rect, panes);
-    this.agent(time, dt, hero, status, browser, flow, close);
+    this.agent(time, dt, hero, [status, browser, close], flow);
     this.statuses(status, browser, flow, close);
     this.preview(preview);
     this.reviewing(review);
@@ -362,7 +363,8 @@ export class Stage {
     paint(this.drop, 'opacity', dropOn ? '1' : '0');
   }
 
-  private agent(time: number, dt: number, hero: number, status: number, browser: number, flow: number, close: number): void {
+  private agent(time: number, dt: number, hero: number, moments: [number, number, number], flow: number): void {
+    const [, browser, close] = moments;
     this.streamClock += dt;
     if (this.streamClock > 0.34 && this.streamed < this.agentLines.length) {
       this.streamClock = 0;
@@ -376,7 +378,7 @@ export class Stage {
     paint(this.orchTerm, 'visibility', ownsFlow ? 'visible' : 'hidden');
     const handedOn = browser >= 0.8 && !ownsFlow && close <= 0.001;
     flag(this.handed, 'is-on', handedOn);
-    const working = this.darkWorking(status, browser);
+    const working = this.darkWorking(...moments);
     paint(this.spin, 'display', working && !ownsFlow ? 'block' : 'none');
     text(this.spinTime, String(19 + Math.floor(time) % 240));
     const paneHeight = this.panes.a.offsetHeight;
@@ -389,8 +391,20 @@ export class Stage {
     paint(this.agentFoot, 'transform', `translate3d(0,${(12 + content + shift + 8).toFixed(0)}px,0)`);
   }
 
-  private darkWorking(status: number, browser: number): boolean {
+  private darkWorking(status: number, browser: number, close: number): boolean {
+    if (close > 0.001) return close < CLOSED_WORK;
     return status < 0.74 || (browser > 0 && browser < 0.11) || (browser >= 0.8 && browser < 0.91);
+  }
+
+  private emptyStatus(waiting: boolean, flow: number, close: number): Status {
+    if (close > 0.001) return close < CLOSED_WORK ? 'working' : 'waiting';
+    if (flow > 0.88) return 'done';
+    return waiting && flow <= 0.001 ? 'waiting' : 'working';
+  }
+
+  private giftStatus(failed: boolean, close: number): Status {
+    if (close > 0.001) return close < CLOSED_WORK ? 'working' : 'done';
+    return failed ? 'failed' : 'working';
   }
 
   private orchVisible(flow: number): number {
@@ -408,10 +422,9 @@ export class Stage {
     const waiting = p >= 0.27;
     const failed = p >= 0.5;
     const done = p >= 0.74;
-    const gift: Status = close > 0.62 ? 'done' : failed && close <= 0.001 ? 'failed' : 'working';
-    badge(this.darkBadge, this.darkWorking(p, browser) ? 'working' : 'done');
-    badge(this.giftBadge, gift);
-    badge(this.emptyBadge, flow > 0.88 ? 'done' : flow > 0.001 ? 'working' : waiting ? 'waiting' : 'working');
+    badge(this.darkBadge, this.darkWorking(p, browser, close) ? 'working' : 'done');
+    badge(this.giftBadge, this.giftStatus(failed, close));
+    badge(this.emptyBadge, this.emptyStatus(waiting, flow, close));
     flag(this.toast, 'is-on', p > 0.3 && p < 0.47);
     flag(this.prDark, 'w-pr--done', done);
     flag(this.prDark, 'w-pr--pending', !done);

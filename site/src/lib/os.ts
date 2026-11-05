@@ -1,9 +1,9 @@
 export type Os = 'mac' | 'windows' | 'linux' | 'phone';
 
-export function osOf(agent: string, platform = ''): Os {
+export function osOf(agent: string, platform = '', touchPoints = 0): Os {
   const text = `${agent} ${platform}`;
   if (/iPhone|iPad|iPod|Android/i.test(text)) return 'phone';
-  if (/Mac/i.test(text)) return 'mac';
+  if (/Mac/i.test(text)) return touchPoints > 1 ? 'phone' : 'mac';
   if (/Win/i.test(text)) return 'windows';
   if (/Linux|X11|CrOS/i.test(text)) return 'linux';
   return 'mac';

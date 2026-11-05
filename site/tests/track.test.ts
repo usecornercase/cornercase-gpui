@@ -33,6 +33,12 @@ test('a phone frames above the caption whatever the side', () => {
   assert.ok(390 < WIDE_SCREEN);
 });
 
+test('the camera never turns the window inside out on a very short screen', () => {
+  for (const [width, height] of [[900, 120], [1440, 60], [390, 90]] as const) {
+    assert.ok(pose(front, width, height).scale > 0, `${width}x${height}`);
+  }
+});
+
 test('the track holds its first and last poses beyond its ends', () => {
   const keys = placeKeys([{ at: 100, shot: front }, { at: 200, shot: { focus: WINDOW, free: 'all', zoom: 0.5 } }], 1440, 900);
   assert.deepEqual(poseAt(keys, 0), keys[0]?.pose);

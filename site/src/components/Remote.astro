@@ -8,7 +8,8 @@ const command = 'cornercase-gpui --remote devbox';
       <h2>Or another machine.</h2>
       <p>Connect the window to cornercase on another machine over your own <code>ssh</code>. Your config, keys, agent and jump hosts apply, and it reconnects by itself when the link drops.</p>
     </div>
-    <p class="remote__cmd" aria-label={command}>
+    <p class="remote__cmd">
+      <span class="sr-only">{command}</span>
       <span class="remote__ps" aria-hidden="true">$</span>
       <span aria-hidden="true">{[...command].map((ch) => <span class="remote__c" data-cmd-ch>{ch}</span>)}</span>
       <span class="remote__caret" aria-hidden="true"></span>

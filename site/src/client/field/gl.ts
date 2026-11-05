@@ -111,6 +111,7 @@ export function target(gl: WebGL2RenderingContext, size: [number, number], forma
   gl.texImage2D(gl.TEXTURE_2D, 0, format.internal, size[0], size[1], 0, format.format, type, null);
   gl.bindFramebuffer(gl.FRAMEBUFFER, frame);
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('no room for a target');
   gl.viewport(0, 0, size[0], size[1]);
   gl.clearColor(0, 0, 0, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);

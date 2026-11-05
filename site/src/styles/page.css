@@ -514,7 +514,7 @@ main {
   display: flex;
   align-items: center;
   gap: 14px;
-  color: var(--text-4);
+  color: var(--text-3);
   transition: color 0.3s, transform 0.5s var(--expo);
 }
 
@@ -646,6 +646,10 @@ main {
 }
 
 .sheets__now {
+  display: none;
+}
+
+html:not(.motion) .sheets__list {
   display: none;
 }
 
@@ -894,7 +898,7 @@ main {
 }
 
 .agent__model {
-  color: var(--text-4);
+  color: var(--text-3);
   font-size: 12.5px;
   white-space: nowrap;
 }
@@ -1222,7 +1226,7 @@ main {
 
 .platform__asks {
   flex: 1;
-  color: var(--text-4);
+  color: var(--text-3);
   font-size: 14px;
 }
 
@@ -1345,6 +1349,41 @@ main {
   color: var(--text);
 }
 
+.js .install__line:not(.is-on),
+html:not(.js) .install__ways,
+html:not(.js) .install__copy {
+  display: none;
+}
+
+.install__name {
+  flex: 0 0 auto;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.js .install__name {
+  display: none;
+}
+
+html:not(.js) .install__line {
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+html:not(.js) .install__line code {
+  flex-basis: 70%;
+}
+
+.install__status {
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.install__status:empty {
+  display: none;
+}
+
 .install__line {
   display: flex;
   align-items: center;
@@ -1357,7 +1396,7 @@ main {
   font-size: 13.5px;
 }
 
-.install__line > span {
+.install__ps {
   color: var(--brand-light);
   font-family: var(--mono);
 }
@@ -1438,12 +1477,12 @@ main {
 
 .foot__small {
   max-width: 78ch;
-  color: var(--text-4);
+  color: var(--text-3);
   font-size: 14px;
 }
 
 .foot__small a {
-  color: var(--text-3);
+  color: var(--text-2);
   text-underline-offset: 3px;
 }
 
@@ -1728,7 +1767,9 @@ main {
   }
 
   .cap__keys,
-  .statuses {
+  .statuses,
+  .layers,
+  .beats {
     display: none !important;
   }
 

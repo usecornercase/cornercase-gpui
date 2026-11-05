@@ -7,8 +7,10 @@ import { Scroll } from './scroll';
 import { Stage } from './stage';
 import { Close, Finale, Remote, Sheets } from './story';
 import { beat, clamp, easeOut, mix, span } from '../lib/math';
+import { SHORTEST_SCREEN } from '../lib/track';
 
 const os = preparePage();
+let stopped = false;
 (window as unknown as { cornercaseAlive: boolean }).cornercaseAlive = true;
 
 function bootstrap(field: Field): void {
@@ -33,14 +35,27 @@ function bootstrap(field: Field): void {
   const canvas = one<HTMLCanvasElement>('[data-field]');
   const root = document.documentElement;
 
+  const guard = (work: () => void) => () => {
+    if (stopped) return;
+    try {
+      work();
+    } catch {
+      fallback();
+    }
+  };
+  let contextLost = false;
   let lastWidth = 0;
   let lastHeight = 0;
   let quality = 0;
   let scale = Math.min(window.devicePixelRatio || 1, 2);
   const size = () => {
+    if (window.innerHeight < SHORTEST_SCREEN) {
+      fallback();
+      return;
+    }
     const width = root.clientWidth;
     const height = canvas.clientHeight || window.innerHeight;
-    if (width !== lastWidth || Math.abs(height - lastHeight) > 2) {
+    if (!contextLost && (width !== lastWidth || Math.abs(height - lastHeight) > 2)) {
       field.resize(width, height, scale);
       lastWidth = width;
       lastHeight = height;
@@ -124,8 +139,11 @@ function bootstrap(field: Field): void {
     for (const { id, pin, cap, title, side } of caps) {
       const p = scroll.progress(id);
       const on = p > 0 && p < 1;
-      paint(cap, 'visibility', on ? 'visible' : 'hidden');
-      if (!on) continue;
+      if (!on) {
+        paint(cap, 'opacity', '0');
+        paint(pin, '--scrim', '0');
+        continue;
+      }
       const enter = easeOut(span(p, 0.03, 0.14));
       const leave = span(p, 0.9, 0.99);
       const float = Math.sin(time * 0.8) * 3;
@@ -145,15 +163,34 @@ function bootstrap(field: Field): void {
   };
 
   size();
-  addEventListener('resize', size);
-  void Promise.all([document.fonts.load('16px "JetBrains Mono Variable"'), document.fonts.ready]).finally(() => {
-    field.refreshGlyphs();
-    size();
+  addEventListener('resize', guard(size));
+  void Promise.all([document.fonts.load('16px "JetBrains Mono Variable"'), document.fonts.ready]).finally(
+    guard(() => {
+      if (!contextLost) field.refreshGlyphs();
+      size();
+    }),
+  );
+  canvas.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    contextLost = true;
+  });
+  canvas.addEventListener(
+    'webglcontextrestored',
+    guard(() => {
+      field.restore();
+      contextLost = false;
+      lastWidth = 0;
+      size();
+    }),
+  );
+  matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (event) => {
+    if (event.matches) fallback();
   });
 
   addEventListener(
     'pointermove',
     (event) => {
+      if (stopped) return;
       life.pointer(event.clientX, event.clientY, root.clientWidth, canvas.clientHeight || innerHeight);
       hero.pointer(event.clientX, event.clientY);
     },
@@ -210,9 +247,9 @@ function bootstrap(field: Field): void {
     }
 
     mood();
-    life.tick(dt, time, scroll.velocity, Math.max(1, scroll.height));
     const finaleP = burst ? finale.update() : 0;
     if (finaleP > 0) life.mood.gain = mix(life.mood.gain, 0.66, finaleP);
+    life.tick(dt, scroll.velocity, Math.max(1, scroll.height));
 
     hero.update(time, dt, heroP);
     stage.entrance = clamp((time - heroShown) / 1.15);
@@ -224,7 +261,8 @@ function bootstrap(field: Field): void {
     if (scroll.seen('remote')) remote.update(time);
 
     simDebt += dt;
-    if (simDebt >= 1 / 72) {
+    if (simDebt >= 1 / 72 && !contextLost) {
+      life.walk(simDebt, time);
       field.frame(simDebt, time);
       simDebt = 0;
     }
@@ -244,6 +282,7 @@ function bootstrap(field: Field): void {
     requestAnimationFrame(guarded);
   };
   const guarded = (now: number) => {
+    if (stopped) return;
     try {
       tick(now);
     } catch {
@@ -254,13 +293,15 @@ function bootstrap(field: Field): void {
 }
 
 function fallback(): void {
+  stopped = true;
   document.documentElement.classList.remove('motion', 'intro', 'lite');
   for (const el of all('main [style], .hero [style], .nav [style], .scene')) el.removeAttribute('style');
+  one('[data-ring]').removeAttribute('aria-hidden');
 }
 
 if (document.documentElement.classList.contains('motion')) {
-  const field = Field.start(one<HTMLCanvasElement>('[data-field]'));
   try {
+    const field = Field.start(one<HTMLCanvasElement>('[data-field]'));
     if (field) bootstrap(field);
     else fallback();
   } catch {

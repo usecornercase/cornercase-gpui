@@ -33,13 +33,26 @@ const platforms = [
   <div class="need">
     <div class="need__text">
       <h3>It needs cornercase</h3>
-      <p>cornercase 0.12.234 or newer, which keeps your agents running. The window finds it by itself, and says so if it is missing. <a href={DOCS}>Installation guide</a></p>
+      <p>cornercase 0.12.234 or newer (0.12.287 or newer on Windows), which keeps your agents running. The window finds it by itself, and says so if it is missing. <a href={DOCS}>Installation guide</a></p>
     </div>
     <div class="install" data-install>
       <div class="install__ways" role="group" aria-label="How to install cornercase">
-        {INSTALLS.map(([label, command], i) => <button type="button" class="install__way" aria-pressed={i === 0 ? 'true' : 'false'} data-command={command}>{label}</button>)}
+        {INSTALLS.map(([label], i) => <button type="button" class="install__way" aria-pressed={i === 0 ? 'true' : 'false'} data-way={i}>{label}</button>)}
       </div>
-      <div class="install__line"><span aria-hidden="true">$</span><code data-shown>{INSTALLS[0][1]}</code><button type="button" class="install__copy" data-copy={INSTALLS[0][1]}><span class="install__idle">copy</span><span class="install__done">copied</span></button></div>
+      {
+        INSTALLS.map(([label, command], i) => (
+          <div class:list={['install__line', i === 0 && 'is-on']} data-line={i}>
+            <span class="install__name">{label}</span>
+            <span class="install__ps" aria-hidden="true">$</span>
+            <code>{command}</code>
+            <button type="button" class="install__copy" data-copy={command}>
+              <span class="install__idle">copy</span>
+              <span class="install__done">copied</span>
+            </button>
+          </div>
+        ))
+      }
+      <p class="install__status" role="status" data-copy-status></p>
     </div>
   </div>
 </section>

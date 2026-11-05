@@ -58,7 +58,7 @@ const site = `${origin}${base}`;
       (function () {
         var root = document.documentElement;
         root.classList.add('js');
-        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && window.WebGL2RenderingContext) {
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && window.WebGL2RenderingContext && window.innerHeight >= 300) {
           root.classList.add('motion', 'intro');
           setTimeout(function () {
             if (!window.cornercaseAlive) root.classList.remove('motion', 'intro');

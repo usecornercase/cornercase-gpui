@@ -5,6 +5,9 @@ export type Free = 'all' | 'left' | 'right';
 
 export const WINDOW: Rect = [0, 0, 1280, 800];
 export const WIDE_SCREEN = 980;
+export const SHORTEST_SCREEN = 300;
+
+const LEAST_ROOM = 40;
 
 export interface Shot {
   focus: Rect;
@@ -39,10 +42,10 @@ export function freeArea(free: Free, width: number, height: number): Rect {
   const top = 72;
   if (width < WIDE_SCREEN) {
     const sheet = Math.min(height * 0.46, 330);
-    return [8, top - 8, width - 16, height - top - sheet];
+    return [8, top - 8, width - 16, Math.max(LEAST_ROOM, height - top - sheet)];
   }
   const margin = 24;
-  const inner: Rect = [margin, top, width - margin * 2, height - top - margin];
+  const inner: Rect = [margin, top, width - margin * 2, Math.max(LEAST_ROOM, height - top - margin)];
   if (free === 'all') return inner;
   const caption = Math.max(380, width * 0.36);
   return free === 'right' ? [caption, top, width - caption - margin, inner[3]] : [margin, top, width - caption - margin, inner[3]];

@@ -35,6 +35,7 @@ export class Sheets {
   constructor(scroll: Scroll, life: Life, os: Os) {
     this.scroll = scroll;
     this.life = life;
+    this.ring.setAttribute('aria-hidden', 'true');
     for (const picture of all<HTMLImageElement>('img', this.ring)) {
       picture.loading = 'eager';
       void picture.decode().catch(() => undefined);
@@ -63,14 +64,12 @@ export class Sheets {
     const p = this.scroll.progress('sheets');
     const seen = p > 0 && p < 1;
     paint(this.ring, 'display', seen ? 'block' : 'none');
-    paint(this.head, 'visibility', seen ? 'visible' : 'hidden');
-    paint(this.now, 'visibility', seen ? 'visible' : 'hidden');
-    if (!seen) return;
-    const shown = veil(p, 0.02, 0.1, 0.92, 0.99);
     paint(this.head, 'opacity', veil(p, 0.03, 0.1, 0.9, 0.97).toFixed(3));
     paint(this.head, 'transform', `translate3d(0,${((1 - easeOut(span(p, 0.03, 0.12))) * 30).toFixed(1)}px,0)`);
-    paint(this.ring, 'opacity', shown.toFixed(3));
     paint(this.now, 'opacity', veil(p, 0.08, 0.14, 0.9, 0.97).toFixed(3));
+    if (!seen) return;
+    const shown = veil(p, 0.02, 0.1, 0.92, 0.99);
+    paint(this.ring, 'opacity', shown.toFixed(3));
     const count = this.cards.length;
     const travel = span(p, 0.1, 0.92) * (count - 1);
     const whole = Math.floor(travel);
@@ -147,15 +146,14 @@ export class Close {
   update(): void {
     const p = this.scroll.progress('close');
     const seen = p > 0 && p < 1;
-    paint(this.head, 'visibility', seen ? 'visible' : 'hidden');
+    const headOn = veil(p, 0.0, 0.05, 0.92, 0.985);
+    paint(this.head, 'opacity', headOn.toFixed(3));
+    paint(this.pin, '--scrim', headOn.toFixed(3));
     paint(this.agents, 'visibility', seen ? 'visible' : 'hidden');
     if (!seen) {
       this.before = p;
       return;
     }
-    const headOn = veil(p, 0.0, 0.05, 0.92, 0.985);
-    paint(this.head, 'opacity', headOn.toFixed(3));
-    paint(this.pin, '--scrim', headOn.toFixed(3));
     const wide = this.scroll.width >= 980 ? '-50%' : '0px';
     paint(this.head, 'transform', `translate3d(0,calc(${wide} + ${((1 - easeOut(span(p, 0, 0.07))) * 40).toFixed(1)}px),0)`);
     const shown = veil(p, 0.3, 0.37, 0.71, 0.77);
