@@ -8,6 +8,8 @@ version=$1
 notices=$2
 out=$3
 identity=${MACOS_SIGNING_IDENTITY:--}
+notarize=${MACOS_NOTARIZE:-}
+[ -z "$notarize" ] || [ "$identity" != - ] || fail "MACOS_NOTARIZE needs MACOS_SIGNING_IDENTITY: Apple notarizes only Developer ID signatures"
 
 sign() {
   if [ "$identity" = - ]; then
@@ -49,6 +51,7 @@ cp "$root/assets/macos/cornercase-gpui.icns" "$app/Contents/Resources/"
 sign --options runtime --entitlements "$root/assets/macos/cornercase-gpui.entitlements" "$app"
 codesign --verify --strict --verbose=2 "$app"
 codesign --display --verbose=2 "$app"
+[ -z "$notarize" ] || "$root/tools/macos/notarize.sh" "$app"
 
 ln -s /Applications "$stage/Applications"
 dmg=$out/cornercase-gpui-universal-apple-darwin.dmg
@@ -64,5 +67,6 @@ if [ "$identity" != - ]; then
   sign "$dmg"
   codesign --verify --strict --verbose=2 "$dmg"
 fi
+[ -z "$notarize" ] || "$root/tools/macos/notarize.sh" "$dmg"
 hdiutil verify "$dmg"
 rm -rf "$stage"

@@ -3,9 +3,9 @@ set -eu
 
 fail() { echo "::error::$*"; exit 1; }
 
-[ "$#" -eq 1 ] || fail "usage: notarize.sh DMG"
-dmg=$1
-[ -f "$dmg" ] || fail "missing $dmg"
+[ "$#" -eq 1 ] || fail "usage: notarize.sh APP_OR_DMG"
+target=$1
+[ -e "$target" ] || fail "missing $target"
 
 work=$(mktemp -d)
 mount=$work/mount
@@ -30,16 +30,31 @@ assess() {
   case "$verdict" in *"source=Notarized Developer ID"*) ;; *) fail "not notarized: $verdict" ;; esac
 }
 
-result=$(xcrun notarytool submit "$dmg" "$@" --wait --timeout 45m --output-format json) || true
+case "$target" in
+  *.app)
+    upload=$work/$(basename "$target").zip
+    ditto -c -k --keepParent "$target" "$upload"
+    ;;
+  *.dmg) upload=$target ;;
+  *) fail "notarize.sh takes an .app or a .dmg, not $target" ;;
+esac
+
+result=$(xcrun notarytool submit "$upload" "$@" --wait --timeout 45m --output-format json) || true
 echo "$result"
 id=$(printf '%s' "$result" | plutil -extract id raw -o - - 2>/dev/null) || fail "notarytool did not take the submission"
 status=$(printf '%s' "$result" | plutil -extract status raw -o - -)
 xcrun notarytool log "$id" "$@" || true
 [ "$status" = Accepted ] || fail "notarization ended $status"
 
-xcrun stapler staple "$dmg"
-xcrun stapler validate "$dmg"
-assess --type open --context context:primary-signature "$dmg"
-mkdir "$mount"
-hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mount" "$dmg"
-assess --type execute "$mount/cornercase.app"
+xcrun stapler staple "$target"
+xcrun stapler validate "$target"
+case "$target" in
+  *.app) assess --type execute "$target" ;;
+  *.dmg)
+    assess --type open --context context:primary-signature "$target"
+    mkdir "$mount"
+    hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mount" "$target"
+    xcrun stapler validate "$mount/cornercase.app"
+    assess --type execute "$mount/cornercase.app"
+    ;;
+esac
