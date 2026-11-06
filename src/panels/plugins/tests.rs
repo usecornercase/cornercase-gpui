@@ -36,6 +36,23 @@ fn assert_installed(b: &Plugin) {
 }
 
 #[test]
+fn a_plugin_with_window_processes_says_what_running_them_here_waits_on() {
+    let plugin: Plugin = serde_json::from_str(
+        r#"{"id": "acme.panel", "manifest": {"name": "Panel", "window": [{"id": "panel", "command": ["bin/panel"]}]}}"#,
+    )
+    .expect("the plugin parses");
+    let note = plugin.window_note().expect("a note");
+    assert!(note.ends_with("needs usecornercase/cornercase-terminal#674."), "{note}");
+}
+
+#[test]
+fn a_plugin_without_window_processes_has_nothing_to_say_about_them() {
+    let plugin: Plugin = serde_json::from_str(r#"{"id": "acme.notes", "manifest": {"name": "Notes", "window": []}}"#)
+        .expect("the plugin parses");
+    assert_eq!(plugin.window_note(), None);
+}
+
+#[test]
 fn a_finished_action_says_how_long_it_took() {
     let ok: Ran = serde_json::from_str(r#"{"plugin": "p", "error": null, "ms": 380, "ended": "exited", "code": 0}"#)
         .expect("the outcome parses");

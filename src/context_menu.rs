@@ -12,7 +12,7 @@ use crate::platform::Os;
 use crate::store::Busy;
 use crate::theme::{colours, radius};
 use crate::ui::motion::{self, Way};
-use crate::ui::{Icon, glass, icon};
+use crate::ui::{self, Icon, glass, icon};
 
 const MENU_DROP: f32 = 4.;
 const ROW_HEIGHT: f32 = 29.5;
@@ -27,6 +27,7 @@ pub(crate) enum Entry {
     Item { label: SharedString, action: Action, danger: bool, chosen: bool },
     Submenu { label: SharedString, entries: Vec<Entry> },
     Heading(SharedString),
+    Note(SharedString),
     Separator,
 }
 pub(crate) fn item(
@@ -61,6 +62,10 @@ pub(crate) fn act_busy(label: impl Into<SharedString>, busy: Busy, args: Vec<Str
 
 pub(crate) fn submenu(label: impl Into<SharedString>, entries: Vec<Entry>) -> Entry {
     Entry::Submenu { label: label.into(), entries }
+}
+
+pub(crate) fn note(text: impl Into<SharedString>) -> Entry {
+    Entry::Note(text.into())
 }
 
 pub(crate) struct Menu {
@@ -170,7 +175,7 @@ impl Root {
                     menu.highlight = step(&menu.entries, None, true);
                 }
             }
-            Entry::Heading(_) | Entry::Separator => {}
+            Entry::Heading(_) | Entry::Note(_) | Entry::Separator => {}
         }
     }
 
@@ -215,6 +220,7 @@ fn menu_entry(index: usize, entry: Entry, highlighted: bool, cx: &mut Context<Ro
     match entry {
         Entry::Separator => div().mx(px(10.)).my(px(4.)).h(px(1.)).bg(colours::border()).into_any_element(),
         Entry::Heading(label) => menu_heading(label).into_any_element(),
+        Entry::Note(text) => ui::dim(text).px(px(10.)).py(px(5.)).into_any_element(),
         Entry::Item { label, action, danger, chosen } => menu_row(id, label, false, (highlighted, danger))
             .when(chosen, |d| d.child(icon(Icon::Check, 12.).text_color(colours::text())))
             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {

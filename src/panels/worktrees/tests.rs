@@ -1,5 +1,6 @@
 use super::data::{
-    Freed, List, Order, Tone, Worktree, free_command, free_message, list_command, scope_note, shown, total,
+    Freed, List, Order, Tone, Worktree, free_command, free_message, list_command, remove_message, scope_note, shown,
+    total,
 };
 use crate::panels::flows::model::epoch;
 use crate::test_util::fixture;
@@ -108,6 +109,13 @@ fn freeing_warns_about_what_runs_in_the_worktree() {
     let text = free_message(&freed);
     assert!(text.starts_with("Frees 296.0 KB: node_modules 296.0 KB."));
     assert!(text.ends_with("Python runs in it and may still use them."));
+}
+
+#[test]
+fn removing_ends_by_saying_what_deleting_the_branch_waits_on() {
+    let list = worktrees();
+    let text = remove_message(&[named(&list, "feat/merged")]);
+    assert!(text.ends_with("Deleting branches here needs usecornercase/cornercase-terminal#671."), "{text}");
 }
 
 #[test]

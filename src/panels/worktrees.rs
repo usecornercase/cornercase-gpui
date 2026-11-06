@@ -22,7 +22,8 @@ use rows::activity;
 const NO_WORKTREES: &str = "No worktrees on disk. Workspaces made with a worktree of their own show here.";
 const NO_MATCH: &str = "No worktree matches the filter.";
 const CLOSED_NOTE: &str = "Worktrees of closed projects, and leftovers git no longer knows, are listed to show what \
-                           they take; removing them here needs a `worktrees remove` command in cornercase.";
+                           they take; removing them here needs usecornercase/cornercase-terminal#671.";
+pub(crate) const BRANCH_NOTE: &str = "Deleting branches here needs usecornercase/cornercase-terminal#671.";
 
 pub(crate) struct WorktreesPanel {
     project: Option<u64>,

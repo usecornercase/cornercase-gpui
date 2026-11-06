@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.14
+
+- The window now says what only cornercase's own window can do for now, where you would look for it, and which cornercase issue it waits on: pairing a phone's browser or a Telegram or Discord chat (Settings › Remote), removing the worktrees of closed projects and deleting branches (the Worktrees sheet and the Remove questions), **Run setup** (a worktree's menu), importing a VS Code workspace (the `+` beside Projects) and a plugin's window processes (its card in Plugins).
+
 ## 0.1.13
 
 - **Select lines and characters in the Files viewer and the Changes diff.** A click selects a line, a drag or ⇧-click a range of lines (a drag on the numbers keeps to whole lines), a drag on the text selects characters and a double click a word. Open, Ask agent and Copy float beside the selection: ask the workspace's agent about `path:12-30`, copy the text, or open it at that line. In Files, Copy keeps the file's own tabs and a long line's hidden end; in a diff, tabs may come as spaces until cornercase gives the window a line's own text. ⌘C (Ctrl+Shift+C on Linux and Windows) copies the selection too, and Esc clears it.
