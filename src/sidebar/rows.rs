@@ -6,9 +6,9 @@ use gpui::{
     prelude::FluentBuilder as _, px, relative,
 };
 
-use super::{Dragged, Fold, Target, draggable, forms, order};
+use super::{Dragged, Fold, Renaming, Target, draggable, forms, order};
 use crate::app::Root;
-use crate::model::{Group, Project, Session, Shown};
+use crate::model::{Group, MachinePlace, Project, Session, Shown};
 use crate::theme::{colours, radius};
 use crate::ui::{self, badge, glass};
 
@@ -24,6 +24,8 @@ pub(super) struct Listing {
     pub groups: Rc<Vec<u64>>,
     pub tree: bool,
     pub tabs: bool,
+    pub place: Option<MachinePlace>,
+    pub now: i64,
 }
 
 fn id_prefix(target: Target) -> &'static str {
@@ -114,7 +116,10 @@ pub(super) fn hover_listener(
 }
 
 pub(super) fn row_base(target: Target, lit: bool) -> Stateful<Div> {
-    let gid = row_group_id(target);
+    row_frame(row_group_id(target), lit)
+}
+
+pub(super) fn row_frame(gid: SharedString, lit: bool) -> Stateful<Div> {
     let row = div()
         .id(gid.clone())
         .group(gid)
@@ -226,7 +231,11 @@ impl Root {
     }
 
     pub(super) fn name_or_rename(&self, target: Target, label: Div) -> AnyElement {
-        let Some(rename) = self.side.rename.as_ref().filter(|r| r.target == target) else {
+        self.name_or_field(&Renaming::Here(target), label)
+    }
+
+    pub(super) fn name_or_field(&self, what: &Renaming, label: Div) -> AnyElement {
+        let Some(rename) = self.side.rename.as_ref().filter(|r| r.what == *what) else {
             return label.into_any_element();
         };
         div().flex_1().min_w(px(0.)).child(ui::input_box(rename.field.clone(), true).py(px(1.))).into_any_element()
@@ -312,6 +321,7 @@ impl Root {
         for ws in &project.workspaces {
             children.push(self.render_workspace(ws, listing, workspaces.clone(), cx));
         }
+        children.extend(self.there_rows_under(project.id, listing, cx));
         col.child(nested(children)).into_any_element()
     }
 
@@ -341,10 +351,11 @@ impl Root {
     fn project_end(&self, project: &Project, collapsed: bool, cx: &mut Context<Self>) -> Div {
         let id = project.id;
         let target = Target::Project(id);
+        let session = self.session.as_ref();
+        let count = session.map_or(project.workspaces.len(), |s| s.workspaces_under(project));
+        let attention = session.map_or_else(|| project.attention(), |s| s.attention_under(project));
         self.row_end(target, End { gap: 4., buttons: 2, figures: collapsed }, cx)
-            .when(collapsed, |d| {
-                d.child(ui::dim(format!("{}", project.workspaces.len()))).child(badge(project.attention()))
-            })
+            .when(collapsed, |d| d.child(ui::dim(format!("{count}"))).child(badge(attention)))
             .child(
                 hover_button(SharedString::from(format!("project-add-{id}")), row_group_id(target), "+", 1)
                     .on_mouse_down(

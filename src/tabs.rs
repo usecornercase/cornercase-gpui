@@ -12,7 +12,7 @@ use crate::context_menu::{Entry, act, danger, item};
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::{PaneInfo, Tab};
-use crate::sidebar::{Dragged, Target, cmd, draggable, order, tip};
+use crate::sidebar::{Dragged, Renaming, Target, cmd, draggable, order, tip};
 use crate::store::Busy;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, badge};
@@ -167,7 +167,7 @@ impl Root {
             return strip;
         }
         let Some((_, ws)) = self.shown_workspace() else { return strip };
-        let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab);
+        let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab).filter(|_| self.side.machine_place.is_none());
         let siblings: Rc<Vec<u64>> = Rc::new(ws.tabs.iter().map(|t| t.id).collect());
         strip.children(ws.tabs.iter().map(|tab| self.tab(tab, Some(tab.id) == shown_tab, &siblings, cx)))
     }
@@ -222,7 +222,7 @@ impl Root {
     }
 
     fn tab_name(&self, tab: &Tab) -> AnyElement {
-        match self.side.rename.as_ref().filter(|r| r.target == Target::Tab(tab.id)) {
+        match self.side.rename.as_ref().filter(|r| r.what == Renaming::Here(Target::Tab(tab.id))) {
             Some(r) => div().w(px(140.)).child(ui::input_box(r.field.clone(), true).py(px(0.))).into_any_element(),
             None => div().whitespace_nowrap().child(tab.name.clone()).into_any_element(),
         }

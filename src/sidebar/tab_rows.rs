@@ -13,11 +13,11 @@ use crate::model::{PaneInfo, Shown, Tab, Workspace};
 use crate::theme::colours;
 use crate::ui::{self, badge};
 
-pub(super) fn tab_title(tab: &Tab) -> String {
+pub(super) fn tab_title<Id>(tab: &Tab<Id>) -> String {
     tab.agent_pane().and_then(PaneInfo::agent_title).unwrap_or_else(|| tab.name.clone())
 }
 
-pub(super) fn tab_details(tab: &Tab, mark: Option<&str>) -> String {
+pub(super) fn tab_details<Id>(tab: &Tab<Id>, mark: Option<&str>) -> String {
     let mut details = match tab.agent_pane() {
         Some(agent) => vec![agent_details(agent, mark)],
         None => tab.panes.first().and_then(|p| p.program.clone()).into_iter().collect(),
@@ -28,7 +28,7 @@ pub(super) fn tab_details(tab: &Tab, mark: Option<&str>) -> String {
     details.join(" · ")
 }
 
-fn tab_text(title: AnyElement, details: Option<String>) -> Div {
+pub(super) fn tab_text(title: AnyElement, details: Option<String>) -> Div {
     div().flex_1().min_w(px(0.)).flex().items_center().gap(px(6.)).child(title).children(details.map(|details| {
         div().flex_1().min_w(px(0.)).text_size(px(11.)).text_color(colours::faint()).child(ui::one_line(details))
     }))

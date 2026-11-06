@@ -79,3 +79,33 @@ fn a_running_job_says_what_it_does_under_its_key() {
     assert_eq!(jobs.doing("changes-file:3:a.rs"), Some("Staging a.rs…"));
     assert_eq!(jobs.doing("changes-file:3:b.rs"), None);
 }
+
+fn aim() -> crate::model::Aim {
+    crate::model::Aim { machine: "vps".into(), boot: "b".into(), workspace: crate::model::ThereId::heard(7) }
+}
+
+#[test]
+fn a_workspace_being_closed_on_a_machine_is_leaving_while_its_job_runs() {
+    let mut jobs = Jobs::default();
+    let id = jobs.start(Busy::new(super::leaving_key(&aim()), "Closing notes on vps…"));
+    assert!(jobs.leaving_there(&aim()));
+    jobs.end(id);
+    assert!(!jobs.leaving_there(&aim()));
+}
+
+#[test]
+fn a_workspace_closed_on_a_machine_stays_leaving_until_the_snapshot_drops_it() {
+    let mut jobs = Jobs::default();
+    jobs.left_there(aim());
+    jobs.keep_leaving_there(|_| true);
+    assert!(jobs.leaving_there(&aim()));
+    jobs.keep_leaving_there(|_| false);
+    assert!(!jobs.leaving_there(&aim()));
+}
+
+#[test]
+fn a_rename_on_a_machine_is_not_leaving() {
+    let mut jobs = Jobs::default();
+    jobs.start(Busy::new(super::renaming_key(&aim()), "Renaming notes on vps…"));
+    assert!(!jobs.leaving_there(&aim()));
+}

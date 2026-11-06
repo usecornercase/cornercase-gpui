@@ -1,0 +1,531 @@
+{
+  "boot": "100-1793933863829750025",
+  "caller": null,
+  "config": {
+    "revision": 1
+  },
+  "groups": [],
+  "home": "/home/me",
+  "machines": [
+    {
+      "boot": "200-1793933863758856668",
+      "icon": "☁",
+      "name": "vps",
+      "projects": [
+        {
+          "active": true,
+          "collapsed": false,
+          "custom_name": null,
+          "group": null,
+          "id": 4,
+          "machine": "vps",
+          "name": "work",
+          "paired": null,
+          "path": "/home/me/work",
+          "workspaces": [
+            {
+              "active": true,
+              "behind": 0,
+              "branch": null,
+              "collapsed": false,
+              "custom_name": null,
+              "id": 3,
+              "machine": "vps",
+              "name": "default",
+              "path": "/home/me/work",
+              "pull_request": null,
+              "run_dir": null,
+              "setup": null,
+              "tabs": [
+                {
+                  "active": true,
+                  "custom_name": null,
+                  "id": 2,
+                  "layout": {
+                    "leaf": 1
+                  },
+                  "name": "zsh",
+                  "panes": [
+                    {
+                      "active": true,
+                      "agent": null,
+                      "at_prompt": true,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_sends": 0,
+                      "id": 1,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/me/work",
+                      "pid": 1095,
+                      "program": "zsh",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": null,
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": null
+                }
+              ],
+              "worktree": false
+            }
+          ]
+        },
+        {
+          "active": false,
+          "collapsed": false,
+          "custom_name": null,
+          "group": null,
+          "id": 8,
+          "machine": "vps",
+          "name": "shop",
+          "paired": 8,
+          "path": "/home/ana/code/shop",
+          "remotes": [
+            {
+              "name": "origin",
+              "url": "https://github.com/acme/shop.git"
+            }
+          ],
+          "repo": "github.com/acme/shop",
+          "workspaces": [
+            {
+              "active": true,
+              "behind": 0,
+              "branch": "main",
+              "collapsed": false,
+              "custom_name": null,
+              "id": 7,
+              "machine": "vps",
+              "name": "main",
+              "path": "/home/ana/code/shop",
+              "pull_request": null,
+              "run_dir": null,
+              "setup": null,
+              "tabs": [
+                {
+                  "active": true,
+                  "custom_name": null,
+                  "id": 6,
+                  "layout": {
+                    "leaf": 5
+                  },
+                  "name": "zsh",
+                  "panes": [
+                    {
+                      "active": true,
+                      "agent": null,
+                      "at_prompt": true,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_sends": 0,
+                      "id": 5,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/code/shop",
+                      "pid": 1091,
+                      "program": "zsh",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": null,
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": null
+                }
+              ],
+              "worktree": false
+            },
+            {
+              "active": false,
+              "behind": 0,
+              "branch": "main",
+              "collapsed": false,
+              "custom_name": "notes",
+              "id": 11,
+              "machine": "vps",
+              "name": "notes",
+              "path": "/home/ana/code/shop",
+              "pull_request": null,
+              "run_dir": null,
+              "setup": null,
+              "tabs": [
+                {
+                  "active": true,
+                  "custom_name": null,
+                  "id": 10,
+                  "layout": {
+                    "leaf": 9
+                  },
+                  "name": "zsh",
+                  "panes": [
+                    {
+                      "active": true,
+                      "agent": null,
+                      "at_prompt": true,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_sends": 0,
+                      "id": 9,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/code/shop",
+                      "pid": 1064,
+                      "program": "zsh",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": null,
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": null
+                },
+                {
+                  "active": false,
+                  "custom_name": null,
+                  "id": 16,
+                  "layout": {
+                    "leaf": 15
+                  },
+                  "name": "fake-agent",
+                  "panes": [
+                    {
+                      "account": "custom",
+                      "active": true,
+                      "agent": "claude",
+                      "at_prompt": false,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_sends": 0,
+                      "id": 15,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/code/shop",
+                      "pid": 1094,
+                      "program": "fake-agent",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": "working",
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": "working"
+                }
+              ],
+              "worktree": false
+            },
+            {
+              "active": false,
+              "behind": 0,
+              "branch": "feat/rows",
+              "collapsed": false,
+              "custom_name": null,
+              "id": 12,
+              "machine": "vps",
+              "name": "feat/rows",
+              "path": "/home/ana/.cornercase/worktrees/shop/feat-rows",
+              "pull_request": null,
+              "run_dir": null,
+              "setup": null,
+              "tabs": [
+                {
+                  "active": true,
+                  "custom_name": null,
+                  "id": 14,
+                  "layout": {
+                    "leaf": 13
+                  },
+                  "name": "zsh",
+                  "panes": [
+                    {
+                      "active": true,
+                      "agent": null,
+                      "at_prompt": true,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_sends": 0,
+                      "id": 13,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/.cornercase/worktrees/shop/feat-rows",
+                      "pid": 1084,
+                      "program": "zsh",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": null,
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": null
+                }
+              ],
+              "worktree": true
+            }
+          ]
+        },
+        {
+          "active": false,
+          "collapsed": false,
+          "custom_name": null,
+          "group": null,
+          "id": 20,
+          "machine": "vps",
+          "name": "solo",
+          "paired": null,
+          "path": "/home/ana/code/solo",
+          "workspaces": [
+            {
+              "active": true,
+              "behind": 0,
+              "branch": "main",
+              "collapsed": false,
+              "custom_name": null,
+              "id": 19,
+              "machine": "vps",
+              "name": "main",
+              "path": "/home/ana/code/solo",
+              "pull_request": null,
+              "run_dir": null,
+              "setup": null,
+              "tabs": [
+                {
+                  "active": true,
+                  "custom_name": null,
+                  "id": 18,
+                  "layout": {
+                    "leaf": 17
+                  },
+                  "name": "zsh",
+                  "panes": [
+                    {
+                      "active": true,
+                      "agent": null,
+                      "at_prompt": true,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_sends": 0,
+                      "id": 17,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/code/solo",
+                      "pid": 1072,
+                      "program": "zsh",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": null,
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": null
+                }
+              ],
+              "worktree": false
+            }
+          ]
+        }
+      ],
+      "seen": "2026-11-06T03:02:07.000Z",
+      "state": "linked"
+    }
+  ],
+  "projects": [
+    {
+      "active": true,
+      "collapsed": false,
+      "custom_name": null,
+      "group": null,
+      "id": 4,
+      "name": "work",
+      "path": "/home/me/work",
+      "workspaces": [
+        {
+          "active": true,
+          "behind": 0,
+          "branch": null,
+          "collapsed": false,
+          "custom_name": null,
+          "id": 3,
+          "name": "default",
+          "path": "/home/me/work",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "tabs": [
+            {
+              "active": true,
+              "controller": 9,
+              "custom_name": null,
+              "id": 2,
+              "layout": {
+                "leaf": 1
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_sends": 0,
+                  "id": 1,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/me/work",
+                  "pid": 1030,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            }
+          ],
+          "worktree": false
+        }
+      ]
+    },
+    {
+      "active": false,
+      "collapsed": false,
+      "custom_name": null,
+      "group": null,
+      "id": 8,
+      "name": "shop",
+      "path": "/home/me/code/shop",
+      "remotes": [
+        {
+          "name": "origin",
+          "url": "https://github.com/acme/shop.git"
+        }
+      ],
+      "repo": "github.com/acme/shop",
+      "workspaces": [
+        {
+          "active": true,
+          "behind": 0,
+          "branch": "main",
+          "collapsed": false,
+          "custom_name": null,
+          "id": 7,
+          "name": "main",
+          "path": "/home/me/code/shop",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 6,
+              "layout": {
+                "leaf": 5
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_sends": 0,
+                  "id": 5,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/me/code/shop",
+                  "pid": 1063,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            }
+          ],
+          "worktree": false
+        }
+      ]
+    }
+  ],
+  "revision": 1,
+  "shown": {
+    "pane": 1,
+    "project": 4,
+    "tab": 2,
+    "workspace": 3
+  },
+  "theme": {
+    "from": "default",
+    "scheme": null
+  },
+  "version": "0.13.1",
+  "view": {
+    "active": true,
+    "cols": 100,
+    "controls": true,
+    "id": 9,
+    "projection": 1,
+    "rows": 30,
+    "shown": {
+      "pane": 1,
+      "project": 4,
+      "tab": 2,
+      "workspace": 3
+    },
+    "visible": true
+  }
+}

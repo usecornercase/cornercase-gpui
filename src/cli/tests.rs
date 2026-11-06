@@ -1,13 +1,21 @@
 use std::ffi::OsStr;
 use std::process::Command;
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, mpsc};
 
 use serde_json::json;
 
-use super::{BINARY, Binary, CALLER, Job, Remote, Target, gather_input, gather_scroll, spawn_failure, use_binary};
+use super::{
+    BINARY, Binary, CALLER, Job, Queue, Remote, Target, gather_input, gather_scroll, moves_view, spawn_failure,
+    use_binary,
+};
 
 fn args(cmd: &Command) -> Vec<&str> {
     cmd.get_args().filter_map(OsStr::to_str).collect()
+}
+
+fn queue(tx: mpsc::Sender<Job>) -> Queue {
+    Queue { tx, view_moves: Arc::new(|| {}) }
 }
 
 fn remote(program: &str) -> Target {
@@ -57,7 +65,7 @@ fn keys_for_several_panes_go_in_one_batch_in_order() {
 fn a_command_after_keys_ends_their_batch_and_runs_next() {
     let (tx, rx) = mpsc::channel();
     tx.send(Job::Input { pane: 3, event: json!({ "text": "b" }) }).expect("queued");
-    super::Queue { tx: tx.clone() }.cmd(vec!["focus".into()]);
+    queue(tx.clone()).cmd(vec!["focus".into()]);
     tx.send(Job::Input { pane: 3, event: json!({ "text": "c" }) }).expect("queued");
     let (events, pending) = gather_input(&rx, (3, json!({ "text": "a" })));
     assert_eq!(events.len(), 2);
@@ -67,7 +75,7 @@ fn a_command_after_keys_ends_their_batch_and_runs_next() {
 #[test]
 fn wheel_turns_on_one_pane_add_up_to_one_scroll() {
     let (tx, rx) = mpsc::channel();
-    let queue = super::Queue { tx };
+    let queue = queue(tx);
     queue.scroll(3, 4);
     queue.scroll(3, -1);
     queue.scroll(3, 5);
@@ -79,7 +87,7 @@ fn wheel_turns_on_one_pane_add_up_to_one_scroll() {
 #[test]
 fn a_scroll_of_another_pane_ends_the_sum_and_runs_next() {
     let (tx, rx) = mpsc::channel();
-    let queue = super::Queue { tx };
+    let queue = queue(tx);
     queue.scroll(4, 1);
     queue.scroll(3, 1);
     let (rows, pending) = gather_scroll(&rx, 3, 2);
@@ -124,4 +132,43 @@ fn a_binary_that_cannot_start_is_named_and_forgotten_only_if_it_is_still_the_cac
     let new = spawn_failure(OsStr::new("/opt/new/cornercase"), std::io::Error::other("gone"));
     assert_eq!(new.to_string(), "could not run `/opt/new/cornercase`");
     assert!(BINARY.lock().is_none());
+}
+
+#[test]
+fn a_command_on_a_machine_asks_its_destination_and_not_the_windows_server() {
+    let machine = Target::Remote(Remote::new("ana@vps.example.com", "").expect("a destination"));
+    let cmd = machine.command_with(&Binary::plain("cornercase".into()), &["close", "--workspace", "7"]);
+    let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect();
+    assert_eq!(args, ["--remote", "ana@vps.example.com", "close", "--workspace", "7"]);
+}
+
+#[test]
+fn what_shows_a_place_moves_the_view() {
+    assert!(moves_view(&["focus", "--tab", "3"]));
+    assert!(moves_view(&["go", "cc-1"]));
+    assert!(moves_view(&["new-tab", "--workspace", "2", "--focus"]));
+    assert!(moves_view(&["open", "/p", "--focus", "--json"]));
+}
+
+#[test]
+fn what_only_changes_things_does_not_move_the_view() {
+    assert!(!moves_view(&["rename", "--workspace", "2", "focus"]));
+    assert!(!moves_view(&["collapse", "--workspace", "2"]));
+    assert!(!moves_view::<&str>(&[]));
+}
+
+#[test]
+fn a_command_through_the_queue_that_moves_the_view_tells_the_window() {
+    let (tx, _rx) = mpsc::channel();
+    let told = Arc::new(AtomicUsize::new(0));
+    let counted = told.clone();
+    let view_moves = Arc::new(move || {
+        counted.fetch_add(1, Ordering::Relaxed);
+    });
+    let queue = Queue { tx, view_moves };
+    queue.cmd(vec!["rename".into(), "--workspace".into(), "2".into(), "x".into()]);
+    assert_eq!(told.load(Ordering::Relaxed), 0);
+    queue.cmd(vec!["focus".into(), "--tab".into(), "3".into()]);
+    queue.cmd_then(vec!["new-tab".into(), "--focus".into()], |_| {});
+    assert_eq!(told.load(Ordering::Relaxed), 2);
 }

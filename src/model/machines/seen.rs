@@ -1,0 +1,277 @@
+use serde::Deserialize;
+
+use super::{LinkState, MachineIcon, seen_ago};
+use crate::model::{Project, Session, Tab, loudest_of, needs_you, status_rank, works};
+use crate::store::args;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize)]
+#[serde(transparent)]
+pub(crate) struct ThereId(u64);
+
+impl ThereId {
+    pub(crate) fn heard(id: u64) -> Self {
+        Self(id)
+    }
+
+    pub(crate) fn key(self) -> String {
+        format!("there-{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct MachineSeen {
+    pub name: String,
+    pub icon: MachineIcon,
+    pub state: LinkState,
+    pub seen: Option<String>,
+    pub boot: String,
+    pub projects: Vec<ThereProject>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct ThereProject {
+    pub id: ThereId,
+    pub name: String,
+    pub path: String,
+    pub paired: Option<u64>,
+    pub workspaces: Vec<ThereWorkspace>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct ThereWorkspace {
+    pub id: ThereId,
+    pub name: String,
+    pub custom_name: Option<String>,
+    pub path: String,
+    pub branch: Option<String>,
+    pub worktree: bool,
+    pub closed_agents: Option<usize>,
+    pub tabs: Vec<Tab<ThereId>>,
+}
+
+impl ThereWorkspace {
+    pub(crate) fn loudest(&self) -> Option<&str> {
+        loudest_of(&self.tabs)
+    }
+
+    pub(crate) fn active_tab(&self) -> Option<ThereId> {
+        self.tabs.iter().find(|tab| tab.active).or_else(|| self.tabs.first()).map(|tab| tab.id)
+    }
+
+    pub(crate) fn given_name(&self) -> &str {
+        self.custom_name.as_deref().unwrap_or(&self.name)
+    }
+
+    pub(crate) fn tab(&self, id: Option<ThereId>) -> Option<&Tab<ThereId>> {
+        self.tabs.iter().find(|tab| Some(tab.id) == id)
+    }
+
+    fn has_pane(&self, pane: ThereId) -> Option<ThereId> {
+        self.tabs.iter().find(|tab| tab.panes.iter().any(|p| p.id == pane)).map(|tab| tab.id)
+    }
+}
+
+impl ThereProject {
+    pub(crate) fn attention(&self) -> Option<&str> {
+        let loudest = self.workspaces.iter().filter_map(ThereWorkspace::loudest);
+        loudest.max_by_key(|status| status_rank(Some(status))).filter(|status| needs_you(status))
+    }
+}
+
+impl MachineSeen {
+    pub(crate) fn linked(&self) -> bool {
+        self.state == LinkState::Linked
+    }
+
+    pub(crate) fn works(&self) -> bool {
+        self.linked() && self.workspaces().flat_map(|ws| &ws.tabs).any(works)
+    }
+
+    pub(crate) fn counts_up(&self) -> bool {
+        !self.linked() && self.seen.is_some()
+    }
+
+    pub(crate) fn link_note(&self) -> String {
+        let name = &self.name;
+        match self.state {
+            LinkState::Linked => format!("{name} is linked"),
+            LinkState::Unreachable => format!("{name} unreachable"),
+            LinkState::Older => format!("{name} runs an older cornercase"),
+            LinkState::Connecting => format!("{name} is connecting"),
+        }
+    }
+
+    pub(crate) fn tab_note(&self, tab: &Tab<ThereId>, now: i64) -> Option<String> {
+        if self.linked() {
+            return None;
+        }
+        tab.agent_pane()?;
+        let status = tab.loudest().unwrap_or("idle");
+        Some(seen_ago(self.seen.as_deref(), now).map_or_else(|| status.to_string(), |ago| format!("{status} · {ago}")))
+    }
+
+    pub(crate) fn workspaces(&self) -> impl Iterator<Item = &ThereWorkspace> + Clone {
+        self.projects.iter().flat_map(|project| &project.workspaces)
+    }
+
+    pub(crate) fn workspace(&self, id: ThereId) -> Option<&ThereWorkspace> {
+        self.workspaces().find(|ws| ws.id == id)
+    }
+
+    pub(crate) fn aim_at(&self, ws: &ThereWorkspace) -> Aim {
+        Aim { machine: self.name.clone(), boot: self.boot.clone(), workspace: ws.id }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct Aim {
+    pub machine: String,
+    pub boot: String,
+    pub workspace: ThereId,
+}
+
+impl Aim {
+    fn id(&self) -> String {
+        self.workspace.0.to_string()
+    }
+
+    pub(crate) fn key(&self) -> String {
+        format!("{}:{}:{}", self.machine, self.boot, self.workspace.0)
+    }
+
+    pub(crate) fn rename_args(&self, name: &str) -> Vec<String> {
+        args(&["rename", "--workspace", &self.id(), "--", name])
+    }
+
+    pub(crate) fn close_args(&self) -> Vec<String> {
+        args(&["close", "--workspace", &self.id()])
+    }
+
+    pub(crate) fn check_args(&self) -> Vec<String> {
+        args(&["close", "--workspace", &self.id(), "--remove-worktree", "--check", "--json"])
+    }
+
+    pub(crate) fn remove_args(&self, force: bool, unlock: bool) -> Vec<String> {
+        let mut command = args(&["close", "--workspace", &self.id(), "--remove-worktree"]);
+        command.extend(force.then(|| "--force".to_string()));
+        command.extend(unlock.then(|| "--unlock".to_string()));
+        command
+    }
+}
+
+pub(crate) fn sighted<'a>(
+    machines: &'a [MachineSeen],
+    aim: &Aim,
+) -> Result<(&'a MachineSeen, &'a ThereWorkspace), String> {
+    let name = &aim.machine;
+    let seen = machines.iter().find(|m| m.name == *name).ok_or_else(|| format!("{name} is no longer listed"))?;
+    if seen.boot != aim.boot {
+        return Err(format!("{name} restarted"));
+    }
+    let ws = seen.workspace(aim.workspace).ok_or_else(|| format!("that workspace is no longer on {name}"))?;
+    Ok((seen, ws))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MachinePlace {
+    pub machine: String,
+    pub boot: String,
+    pub workspace: ThereId,
+    pub tab: Option<ThereId>,
+    path: String,
+    name: String,
+}
+
+impl MachinePlace {
+    pub(crate) fn at(seen: &MachineSeen, ws: &ThereWorkspace, tab: Option<ThereId>) -> Self {
+        let tab = tab.filter(|id| ws.tabs.iter().any(|t| t.id == *id)).or_else(|| ws.active_tab());
+        Self {
+            machine: seen.name.clone(),
+            boot: seen.boot.clone(),
+            workspace: ws.id,
+            tab,
+            path: ws.path.clone(),
+            name: ws.name.clone(),
+        }
+    }
+
+    pub(crate) fn followed(&self, machines: &[MachineSeen]) -> Option<Self> {
+        let seen = machines.iter().find(|m| m.name == self.machine)?;
+        if seen.boot == self.boot {
+            return Some(Self::at(seen, seen.workspace(self.workspace)?, self.tab));
+        }
+        let at_path = seen.workspaces().filter(|ws| ws.path == self.path);
+        let ws = at_path.clone().find(|ws| ws.name == self.name).or_else(|| at_path.clone().next())?;
+        Some(Self::at(seen, ws, None))
+    }
+
+    pub(crate) fn is_at(&self, seen: &MachineSeen, ws: &ThereWorkspace) -> bool {
+        self.machine == seen.name && self.boot == seen.boot && self.workspace == ws.id
+    }
+
+    pub(crate) fn same_workspace(&self, other: &Self) -> bool {
+        self.machine == other.machine && self.boot == other.boot && self.workspace == other.workspace
+    }
+
+    pub(crate) fn path(&self) -> &str {
+        &self.path
+    }
+}
+
+fn pairs_here(session: &Session, project: &ThereProject) -> bool {
+    project.paired.is_some_and(|id| session.projects.iter().any(|ours| ours.id == id))
+}
+
+impl Session {
+    pub(crate) fn machine(&self, name: &str) -> Option<&MachineSeen> {
+        self.machines.iter().find(|machine| machine.name == name)
+    }
+
+    pub(crate) fn paired_with(&self, project: u64) -> impl Iterator<Item = (&MachineSeen, &ThereWorkspace)> {
+        self.machines.iter().flat_map(move |seen| {
+            let paired = seen.projects.iter().filter(move |there| there.paired == Some(project));
+            paired.flat_map(|there| &there.workspaces).map(move |ws| (seen, ws))
+        })
+    }
+
+    pub(crate) fn alone(&self) -> impl Iterator<Item = (&MachineSeen, &ThereProject)> {
+        self.machines.iter().flat_map(move |seen| {
+            seen.projects.iter().filter(|there| !pairs_here(self, there)).map(move |there| (seen, there))
+        })
+    }
+
+    pub(crate) fn workspaces_under(&self, project: &Project) -> usize {
+        project.workspaces.len() + self.paired_with(project.id).count()
+    }
+
+    pub(crate) fn attention_under<'a>(&'a self, project: &'a Project) -> Option<&'a str> {
+        let theirs = self.paired_with(project.id).filter_map(|(_, ws)| ws.loudest());
+        let all = project.attention().into_iter().chain(theirs.filter(|status| needs_you(status)));
+        all.max_by_key(|status| status_rank(Some(status)))
+    }
+
+    pub(crate) fn place_holding_panes(&self, (machine, boot): (&str, &str), panes: &[ThereId]) -> Option<MachinePlace> {
+        let seen = self.machine(machine).filter(|seen| seen.boot == boot)?;
+        panes.iter().find_map(|pane| {
+            seen.workspaces().find_map(|ws| ws.has_pane(*pane).map(|tab| MachinePlace::at(seen, ws, Some(tab))))
+        })
+    }
+
+    pub(crate) fn pair_of(&self, place: &MachinePlace) -> Option<u64> {
+        let seen = self.machine(&place.machine)?;
+        let there = seen.projects.iter().find(|there| there.workspaces.iter().any(|ws| ws.id == place.workspace))?;
+        there.paired.filter(|_| pairs_here(self, there))
+    }
+
+    pub(crate) fn alone_of(&self, place: &MachinePlace) -> Option<(&MachineSeen, &ThereProject)> {
+        self.alone().find(|(seen, there)| {
+            seen.name == place.machine && there.workspaces.iter().any(|ws| ws.id == place.workspace)
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests;

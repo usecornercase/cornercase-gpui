@@ -26,6 +26,7 @@ use crate::ui;
 mod browser;
 mod input;
 mod links;
+mod machine_card;
 mod missing;
 mod mouse;
 mod no_tab;
@@ -99,7 +100,7 @@ impl Root {
     fn type_in(&mut self, event: serde_json::Value, cx: &mut Context<Self>) {
         self.dismiss_link(cx);
         let popup = Popup::get(&self.focus, cx);
-        if popup.read(cx).is_open() {
+        if popup.read(cx).is_open() && self.side.machine_place.is_none() {
             popup.read(cx).send(&event, cx);
         } else {
             self.input(event);
@@ -188,6 +189,12 @@ impl Root {
     }
 
     fn clipboard_shortcut(&mut self, command: Command, terminal: bool, cx: &mut Context<Self>) {
+        if self.side.machine_place.is_some() {
+            if terminal && command == Command::Paste {
+                self.typed_on_machine(cx);
+            }
+            return;
+        }
         if let Some(popup) = self.open_popup(cx) {
             if terminal && command == Command::Paste {
                 popup.read(cx).paste(cx);
@@ -237,6 +244,9 @@ impl Root {
     }
 
     fn close_shown_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.side.machine_place.is_some() {
+            return;
+        }
         let session = self.session.as_ref();
         let tab = session.and_then(|s| s.tab(s.shown().tab?)).cloned();
         if let Some(tab) = tab {
@@ -314,7 +324,7 @@ impl Root {
             .child(self.surface(metrics.clone(), window, cx))
             .children(handle)
             .children(self.cover(cx))
-            .child(popup)
+            .when(self.side.machine_place.is_none(), |d| d.child(popup))
             .child(files::Peek::get(cx))
             .children(self.render_ghost(&metrics))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| this.left_terminal(*hovered, cx)))
@@ -327,6 +337,11 @@ impl Root {
     fn cover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if let Conn::Missing(missing) = &self.conn {
             return Some(Self::missing_page(missing, cx).into_any_element());
+        }
+        if self.conn == Conn::Connected
+            && let Some(area) = self.machine_tab_area(cx)
+        {
+            return Some(area);
         }
         if self.conn == Conn::Connected && self.shows_no_tab() {
             return self.empty_page(cx).map(IntoElement::into_any_element);
@@ -377,8 +392,9 @@ impl Root {
         let grid = shown.then(|| self.grid.clone());
         let (layout, moves) = (self.layout.clone(), self.moves.clone());
         let chips = self.pane_chips(cx);
-        let fit =
-            Fit { layout, moves: moves.clone(), wanted: self.size, root: entity.downgrade(), metrics, grid, chips };
+        let sizes = self.side.machine_place.is_none();
+        let root = entity.downgrade();
+        let fit = Fit { layout, moves: moves.clone(), wanted: self.size, sizes, root, metrics, grid, chips };
         let focused = self.focus.is_focused(window) && window.is_window_active();
         let (grid, has_frame, focus) = (self.grid.clone(), shown, self.focus.clone());
         let link = self.shown_link().filter(|_| self.drag.is_none() || matches!(self.drag, Some(Drag::Link { .. })));
@@ -397,6 +413,7 @@ struct Fit {
     layout: Rc<RefCell<Layout>>,
     moves: Rc<RefCell<Moves>>,
     wanted: Option<(u16, u16)>,
+    sizes: bool,
     root: WeakEntity<Root>,
     metrics: Metrics,
     grid: Option<Rc<Grid>>,
@@ -424,7 +441,7 @@ impl Fit {
             .collect();
         let cols = cells_across(f32::from(bounds.size.width) - extra.0, self.metrics.cell_width, 1000.);
         let rows = cells_across(f32::from(bounds.size.height) - extra.1, self.metrics.line_height, 500.);
-        if self.wanted != Some((cols, rows)) {
+        if self.sizes && self.wanted != Some((cols, rows)) {
             request_size(self.root.clone(), cols, rows, cx);
         }
         let settled = !self.moves.borrow().busy(Instant::now()) && !self.moves.borrow().lifted();

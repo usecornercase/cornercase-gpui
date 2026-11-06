@@ -1,6 +1,7 @@
 pub(crate) mod frame;
 mod status;
 mod surface;
+mod toasts;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -11,7 +12,7 @@ use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClickEvent, ClipboardItem, Context, Div, ElementId, Entity, FocusHandle,
-    Focusable, InteractiveElement, IntoElement, MouseButton, ParentElement, Render, Rgba, SharedString, Stateful,
+    Focusable, InteractiveElement, IntoElement, MouseButton, ParentElement, Render, SharedString, Stateful,
     StatefulInteractiveElement as _, Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 
@@ -26,7 +27,7 @@ use crate::render::layout::{Along, Layout};
 use crate::render::moving::Moves;
 use crate::self_update;
 use crate::sidebar::{Arrangement, Fold, SideState};
-use crate::store::{Store, Toast, ToastKind};
+use crate::store::{Store, ToastKind};
 use crate::terminal::Pointer;
 use crate::theme::{self, colours, radius};
 use crate::ui;
@@ -46,7 +47,6 @@ const TERMINAL_KEEP: f32 = 240.;
 const DOCK_SLIDE: f32 = 24.;
 const SHEET_RISE: f32 = 14.;
 const DIALOG_RISE: f32 = 10.;
-const TOAST_SLIDE: f32 = 28.;
 const RETRY: Duration = Duration::from_millis(1500);
 
 pub(crate) enum Msg {
@@ -60,6 +60,8 @@ pub(crate) enum Msg {
     Copied(Board, String),
     Elsewhere(String),
     Folded(Fold, bool, Option<String>),
+    ViewMoved,
+    TypedThere,
 }
 
 #[derive(Clone, PartialEq)]
@@ -190,9 +192,15 @@ impl Root {
         window.focus(&focus);
         let (tx, mut rx) = unbounded::<Msg>();
         let errors = tx.clone();
-        let queue = Queue::new(move |e| {
-            let _ = errors.unbounded_send(Msg::Error(e));
-        });
+        let moved = tx.clone();
+        let queue = Queue::new(
+            move |e| {
+                let _ = errors.unbounded_send(Msg::Error(e));
+            },
+            move || {
+                let _ = moved.unbounded_send(Msg::ViewMoved);
+            },
+        );
         let store = Store::init(queue.clone(), cx);
         let notifier = cx.new(|cx| Notifier::new(store.clone(), window, cx));
         cx.observe(&notifier, |_, _, cx| cx.notify()).detach();
@@ -214,6 +222,7 @@ impl Root {
         let mut root = Self::fresh((focus, cx.focus_handle()), store, tx, queue, notifier);
         kept.apply(&mut root);
         root.start(cx);
+        Self::keep_seen_counting(cx);
         root
     }
 
@@ -223,6 +232,10 @@ impl Root {
             return;
         }
         let to_terminal = store.update(cx, |s, _| std::mem::take(&mut s.keys_to_terminal));
+        let place = store.read(cx).machine_place.clone();
+        if place != self.side.machine_place {
+            self.machine_place_changed(place, window, cx);
+        }
         let s = store.read(cx);
         let now = Overlays { open: s.dialog.is_some() || s.sheet.is_some(), sheet: s.sheet };
         let in_dock = self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx);
@@ -322,16 +335,17 @@ impl Root {
         .detach();
     }
 
-    fn activation_changed(&mut self, active: bool, cx: &mut Context<Self>) {
-        if active == self.visible {
+    pub(crate) fn activation_changed(&mut self, active: bool, cx: &mut Context<Self>) {
+        let visible = active && self.side.machine_place.is_none();
+        if visible == self.visible {
             return;
         }
-        self.visible = active;
-        if active && self.conn == Conn::Connected {
+        self.visible = visible;
+        if visible && self.conn == Conn::Connected {
             self.store.update(cx, Store::list_accounts);
         }
         if let Some(id) = self.view_id {
-            let flag = if active { "--visible" } else { "--hidden" };
+            let flag = if visible { "--visible" } else { "--hidden" };
             self.queue.cmd(vec!["view-set".into(), "--view".into(), id.to_string(), flag.into()]);
         }
     }
@@ -426,6 +440,8 @@ impl Root {
             Msg::Copied(Board::Primary, text) => desktop::write_primary(&text, cx),
             Msg::Elsewhere(path) => self.store.update(cx, |s, cx| s.copy_elsewhere(path, cx)),
             Msg::Folded(fold, collapsed, error) => self.fold_answered(fold, collapsed, error.as_deref(), cx),
+            Msg::ViewMoved => self.store.update(cx, Store::leave_machine_place),
+            Msg::TypedThere => self.typed_on_machine(cx),
             _ => return,
         }
         cx.notify();
@@ -442,6 +458,7 @@ impl Root {
             s.jobs.keep_leaving(|workspace| shared.workspace(workspace).is_some());
             s.follow_accounts(&shared, cx);
             s.session = Some(shared);
+            s.follow_machines();
             s.view_id = view_id;
             cx.notify();
         });
@@ -518,7 +535,9 @@ impl Root {
     }
 
     pub(crate) fn input(&self, event: serde_json::Value) {
-        if let Some(pane) = self.active_pane() {
+        if self.side.machine_place.is_some() {
+            let _ = self.tx.unbounded_send(Msg::TypedThere);
+        } else if let Some(pane) = self.active_pane() {
             self.queue.input(pane, event);
         }
     }
@@ -607,17 +626,6 @@ impl Root {
             overlay(("dialog-out-veil", serial), Way::Out, window_frame, card).into_any_element()
         });
         sheet.into_iter().chain(dialog).collect()
-    }
-
-    fn render_toasts(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let toasts: Vec<_> = self.store.read(cx).toasts.iter().filter(|t| !t.expired()).cloned().collect();
-        let store = self.store.clone();
-        div().absolute().bottom(px(40.)).right(px(16.)).flex().flex_col().gap(px(8.)).children(toasts.into_iter().map(
-            move |t| {
-                let id = t.id;
-                motion::slide(toast_view(&store, t), ("toast-in", id), Way::In, (TOAST_SLIDE, 0.))
-            },
-        ))
     }
 
     fn update_title(&mut self, window: &mut Window) {
@@ -745,60 +753,6 @@ fn sheet_gave_way(before: Option<PanelKind>, now: Option<PanelKind>) -> bool {
 
 fn wide_default(window_width: f32) -> f32 {
     (window_width / 2.).clamp(DOCK.size(), WIDE_DOCK.size())
-}
-
-fn toast_colour(kind: ToastKind) -> Rgba {
-    match kind {
-        ToastKind::Info => colours::accent(),
-        ToastKind::Error => colours::failed(),
-        ToastKind::NeedsYou => colours::waiting(),
-        ToastKind::Done => colours::done(),
-    }
-}
-
-fn toast_view(store: &Entity<Store>, toast: Toast) -> Stateful<Div> {
-    let id = toast.id;
-    let (go, dismiss) = (store.clone(), store.clone());
-    let colour = toast_colour(toast.kind);
-    ui::glass::card(radius::CARD)
-        .id(SharedString::from(format!("toast-{id}")))
-        .w(px(348.))
-        .flex()
-        .items_center()
-        .gap(px(10.))
-        .px(px(14.))
-        .py(px(10.))
-        .occlude()
-        .child(
-            div().w(px(3.)).h(px(18.)).rounded_full().bg(colour).shadow(ui::glass::glow(colour, 0.6, 8.)).flex_none(),
-        )
-        .child(div().flex_1().min_w_0().text_size(px(12.)).child(toast.text))
-        .when(toast.count > 1, |d| d.child(toast_count(toast.count)))
-        .when_some(toast.action, move |d, (label, args)| {
-            d.child(ui::primary_button(SharedString::from(format!("toast-go-{id}")), label).on_click(
-                move |_: &ClickEvent, _, cx| {
-                    go.update(cx, |s, cx| {
-                        s.act(args.clone());
-                        s.dismiss_toast(id, cx);
-                    });
-                },
-            ))
-        })
-        .child(
-            ui::icon_button(SharedString::from(format!("toast-x-{id}")), "✕")
-                .on_click(move |_: &ClickEvent, _, cx| dismiss.update(cx, |s, cx| s.dismiss_toast(id, cx))),
-        )
-}
-
-fn toast_count(count: u32) -> impl IntoElement {
-    div()
-        .flex_none()
-        .px(px(6.))
-        .rounded(px(radius::CHIP))
-        .bg(colours::selected())
-        .text_size(px(11.))
-        .text_color(colours::muted())
-        .child(format!("×{count}"))
 }
 
 fn bell_flash() -> Div {
