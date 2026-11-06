@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.6
+
+- **See what fills an agent's context.** Right-click a tab running an agent, or an agent's row in the sidebar, and pick **View context**. For Claude Code a dialog shows how full its window is and how that splits between the system prompt, the tools, MCP servers, memory files such as a long `AGENTS.md`, skills and the conversation, with each memory file and MCP server, the skill count and the tools that took the most. Nothing is typed into your agent and no tokens are spent, though its MCP servers start a second time while it reads; **Refresh** reads again. The other agents show their model and how full their context is.
+
 ## 0.1.5
 
 - **Machines, a new sheet** (⇧⌘N; Ctrl+Alt+Shift+N on Linux and Windows): the other computers your agents can run on, which cornercase links to through your own `ssh`. It shows this computer and each machine with its link in words, live: `connecting…`, `linked · 0.13.1`, `unreachable · seen 2 min ago` with what `ssh` said under it, or `older` with **Update…**. **Add machine** opens a form that says at once what it would refuse and offers the hosts of your `~/.ssh/config`. Each machine can be edited, its link tried again, or removed, which leaves its server running there. To move the whole window to another server, ⇧⌘K still does that.
