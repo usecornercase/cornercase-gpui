@@ -8,11 +8,13 @@ use crate::store::{self, Busy, Store, args};
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
+mod context;
 mod merge_check;
 mod pull_request;
 mod remote;
 mod shortcuts;
 
+pub(crate) use context::{VIEW_CONTEXT, context_choices, view_context};
 pub(crate) use merge_check::merge_check;
 pub(crate) use pull_request::{pull_request, pull_tag, shown_pull_request, stack_tag};
 pub(crate) use remote::{PathQuestion, ask_path, connect, ssh_hosts};

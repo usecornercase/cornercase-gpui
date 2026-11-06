@@ -1,0 +1,14 @@
+{
+  "age": null,
+  "agent": "claude",
+  "breakdown": null,
+  "compacted": false,
+  "error": "Claude Code has not said yet which conversation it is in",
+  "loading": false,
+  "model": null,
+  "notice": null,
+  "pane": 15,
+  "percent": null,
+  "read_at": null,
+  "title": "Claude Code"
+}
