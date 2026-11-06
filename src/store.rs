@@ -22,11 +22,13 @@ use crate::panels::settings::FoundSetting;
 use crate::prefs::{self, Prefs};
 
 mod jobs;
+mod machine_read;
 mod machines_there;
 mod run_on;
 
 pub(crate) use jobs::Busy;
 use jobs::Jobs;
+pub(crate) use machine_read::{MachineRead, Reach};
 use machines_there::Homes;
 pub(crate) use machines_there::{MachineAct, NoticeThere};
 pub(crate) use run_on::{CloneThere, StartThere};
@@ -507,6 +509,7 @@ impl Store {
     }
 
     pub(crate) fn read_run_file(&mut self, path: String, cx: &mut Context<Self>) {
+        self.leave_machine_place(cx);
         self.run_file = Some(path);
         self.open(PanelKind::Files, cx);
     }

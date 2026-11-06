@@ -5,6 +5,7 @@ pub(crate) mod files;
 pub(crate) mod flows;
 pub(crate) mod issues;
 pub(crate) mod machines;
+pub(crate) mod on_machine;
 pub(crate) mod plugins;
 pub(crate) mod poll;
 pub(crate) mod ports;

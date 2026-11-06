@@ -79,3 +79,9 @@ fn reads_a_gap_and_bases() {
     assert_eq!(base.default.as_deref(), Some("main"));
     assert_eq!(base.branches, vec!["feature", "main"]);
 }
+
+#[test]
+fn a_summary_names_the_run_of_the_server_it_came_from() {
+    let s = summary(crate::test_util::fixture!("changes/list.json")).expect("parses");
+    assert_eq!(s.boot, "28257-1793303771316290000");
+}

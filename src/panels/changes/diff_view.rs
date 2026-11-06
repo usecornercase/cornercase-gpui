@@ -14,7 +14,7 @@ use crate::ui::selection::{self, Fit, Laid, Lit, Selecting, Selection, Styles, o
 use super::diff::{Part, Spot};
 use super::pieces::{plural, toast};
 use super::wire::{FileStatus, Hunk, LineKind, Segment};
-use super::{ChangesPanel, DiffData, Look, Row, diff};
+use super::{ChangesPanel, DiffData, Look, Row, Whose, diff};
 
 struct Picked {
     selection: Option<Selection<Spot>>,
@@ -141,10 +141,13 @@ fn copy_hunk(patch_text: &str, cx: &mut App) {
 }
 
 fn hunk_actions(data: &DiffData, i: usize, hunk: &Hunk) -> Vec<AnyElement> {
-    let (workspace, path) = (data.selected.workspace, data.patch.file.path.clone());
+    let patch_text = diff::patch(hunk);
+    let copy =
+        selection::action(("hunk-copy", i), "Copy").on_click(move |_: &ClickEvent, _, cx| copy_hunk(&patch_text, cx));
+    let Whose::Here(workspace) = data.selected.workspace else { return vec![copy.into_any_element()] };
+    let path = data.patch.file.path.clone();
     let changed = diff::changed(hunk);
     let reference = selection::reference(&path, changed);
-    let patch_text = diff::patch(hunk);
     let mut actions = Vec::new();
     if data.patch.file.status != FileStatus::Deleted {
         let open = selection::action(("hunk-open", i), "Open").on_click(move |_: &ClickEvent, _, cx| {
@@ -155,8 +158,6 @@ fn hunk_actions(data: &DiffData, i: usize, hunk: &Hunk) -> Vec<AnyElement> {
     let ask = selection::action(("hunk-ask", i), "Ask agent").on_click(move |_: &ClickEvent, _, cx| {
         Store::get(cx).update(cx, |s, cx| s.ask_about(workspace, &reference, cx));
     });
-    let copy =
-        selection::action(("hunk-copy", i), "Copy").on_click(move |_: &ClickEvent, _, cx| copy_hunk(&patch_text, cx));
     actions.extend([ask.into_any_element(), copy.into_any_element()]);
     actions
 }

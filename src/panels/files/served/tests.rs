@@ -35,7 +35,7 @@ fn a_listing_keeps_the_git_mark_of_each_entry() {
 
 #[test]
 fn a_file_s_changes_are_asked_by_its_path_in_the_workspace() {
-    let args = changes_args(7, &Path::new("src").join("-odd.rs"));
+    let args = changes_args("7", &Path::new("src").join("-odd.rs"));
     assert_eq!(args, ["changes", "file", "--workspace", "7", "--json", "--", "src/-odd.rs"]);
 }
 
@@ -148,7 +148,7 @@ fn a_search_that_fails_says_why() {
 
 #[test]
 fn paths_are_passed_after_the_options_and_never_as_home_or_flags() {
-    let args = files_args("list", 3, &[], [arg(Path::new("")), arg(Path::new("~x/-y"))]);
+    let args = files_args("list", "3", &[], [arg(Path::new("")), arg(Path::new("~x/-y"))]);
     assert_eq!(args, ["files", "list", "--workspace", "3", "--json", "--", ".", "./~x/-y"]);
 }
 

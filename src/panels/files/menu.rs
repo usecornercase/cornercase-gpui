@@ -21,7 +21,7 @@ impl FilesPanel {
     pub(super) fn show_menu(&mut self, at: Point<Pixels>, target: Target, cx: &mut Context<Self>) {
         let Some(place) = self.place() else { return };
         let path = place.style.join(&place.root, &target.rel);
-        let default_app = open::default_app_opens(Os::CURRENT, &path, target.dir);
+        let default_app = place.source.on_this_disk() && open::default_app_opens(Os::CURRENT, &path, target.dir);
         self.menu = Some(Menu { at, path, target, default_app });
         cx.notify();
     }
@@ -79,7 +79,7 @@ impl FilesPanel {
     pub(super) fn render_menu(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let menu = self.menu.as_ref()?;
         let mut entries = Vec::new();
-        if !self.remote {
+        if self.place().is_some_and(|place| place.source.on_this_disk()) {
             entries = self.opener_entries(menu, cx);
             entries.push(div().my(px(4.)).h(px(1.)).bg(colours::border()).into_any_element());
         }

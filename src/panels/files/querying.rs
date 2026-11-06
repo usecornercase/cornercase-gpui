@@ -1,13 +1,15 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use gpui::{AppContext as _, Context, ScrollStrategy};
+use gpui::{AsyncApp, Context, ScrollStrategy};
 
 use super::source::Source;
 use super::viewer::OpenAt;
-use super::{FilesPanel, INDEX_FRESH, Mode, Results, TextRow, search, served};
+use super::{FilesPanel, INDEX_FRESH, Mode, Results, TextRow, search};
+
+const QUIET: Duration = Duration::from_millis(200);
 
 pub(super) struct Job {
     pub(super) root: PathBuf,
@@ -32,18 +34,30 @@ impl Job {
         cx: &mut Context<T>,
         then: impl FnOnce(&mut T, Answer, &mut Context<T>) + 'static,
     ) {
-        let task = cx.background_spawn(async move { answer(self) });
+        let (quiet, cancel) = (quiet_first(&self.source), self.cancel.clone());
         cx.spawn(async move |this, cx| {
-            let answer = task.await;
+            if !still_wanted(quiet, &cancel, cx).await {
+                return;
+            }
+            let answer = cx.background_executor().spawn(async move { answer(self) }).await;
             let _ = this.update(cx, |this, cx| then(this, answer, cx));
         })
         .detach();
     }
 }
 
+fn quiet_first(source: &Source) -> Option<Duration> {
+    (!source.on_this_disk()).then_some(QUIET)
+}
+
+async fn still_wanted(quiet: Option<Duration>, cancel: &AtomicBool, cx: &AsyncApp) -> bool {
+    let Some(quiet) = quiet else { return true };
+    cx.background_executor().timer(quiet).await;
+    !cancel.load(Ordering::Relaxed)
+}
+
 fn answer(job: Job) -> Answer {
-    if let Source::Server(workspace) = job.source {
-        let results = served::search(workspace, &job.query, job.mode);
+    if let Some(results) = job.source.search(&job.query, job.mode) {
         return Answer { root: job.root, paths: Arc::default(), fresh: false, query: job.query, results };
     }
     let (paths, fresh) = match job.index {
@@ -115,10 +129,17 @@ impl FilesPanel {
             running.store(true, Ordering::Relaxed);
         }
         self.search.generation += 1;
+        self.search.refused = false;
         let query = self.place().map(|p| p.query.trim().to_string()).unwrap_or_default();
         let Some((root, source)) = self.place().map(|p| (p.root.clone(), p.source.clone())) else { return };
         if query.is_empty() {
             self.search.clear();
+            cx.notify();
+            return;
+        }
+        if let Some(why) = self.refuses_asking(cx) {
+            self.search.results = Results::Failed(why);
+            self.search.refused = true;
             cx.notify();
             return;
         }

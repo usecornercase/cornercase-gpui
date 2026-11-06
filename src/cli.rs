@@ -50,7 +50,7 @@ impl Target {
         }
     }
 
-    fn command<S: AsRef<str>>(&self, args: &[S]) -> Command {
+    pub(crate) fn command<S: AsRef<str>>(&self, args: &[S]) -> Command {
         self.command_with(&binary(), args)
     }
 

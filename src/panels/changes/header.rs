@@ -3,6 +3,8 @@ use gpui::{
     SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
+use crate::cli::{self, Target};
+use crate::desktop;
 use crate::model::Session;
 use crate::store::Store;
 use crate::theme::{FONT_FAMILY, colours, radius};
@@ -11,7 +13,7 @@ use crate::ui::{self, Icon, TextField};
 use super::filter::files_label;
 use super::selection::switching_base;
 use super::wire::{Base, Mode, State};
-use super::{ChangesPanel, Scope};
+use super::{ChangesPanel, Scope, Whose};
 
 struct Totals {
     files: String,
@@ -39,6 +41,13 @@ fn place_label(scope: Scope, shown: Option<u64>, session: Option<&Session>) -> S
         (_, Some((p, w))) if p.workspaces.len() > 1 => format!("{} › {}", p.name, w.name),
         (_, Some((p, _))) => p.name.clone(),
         (_, None) => String::new(),
+    }
+}
+
+fn every_project_on(window: &Target) -> String {
+    match window.host() {
+        Some(host) => format!("uncommitted changes of every project on {host}"),
+        None => format!("uncommitted changes of every project on this {}", desktop::here()),
     }
 }
 
@@ -119,23 +128,41 @@ impl ChangesPanel {
             return None;
         }
         let base = self.summary.as_ref().and_then(|s| s.workspaces.first()).and_then(|w| w.base.clone());
-        Some(format!("vs {} ▾", base.unwrap_or_else(|| "…".into())))
+        Some(format!("vs {}", base.unwrap_or_else(|| "…".into())))
     }
 
-    fn base_button(&self, label: String, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let workspace = self.follow.and_then(|f| f.workspace);
-        if workspace.is_some_and(|w| Store::get(cx).read(cx).busy(&switching_base(w))) {
-            return ui::busy_button("base", "switching…", ui::Tone::Plain).py(px(1.)).text_size(px(11.));
+    fn base_button(&self, label: &str, workspace: u64, cx: &mut Context<Self>) -> AnyElement {
+        if Store::get(cx).read(cx).busy(&switching_base(workspace)) {
+            return ui::busy_button("base", "switching…", ui::Tone::Plain)
+                .py(px(1.))
+                .text_size(px(11.))
+                .into_any_element();
         }
-        ui::button("base", label)
+        ui::button("base", format!("{label} ▾"))
             .py(px(1.))
             .text_size(px(11.))
             .when(self.base_open, |b| b.border_color(colours::accent()))
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.open_base(cx)))
+            .into_any_element()
+    }
+
+    fn base_view(&self, label: String, cx: &mut Context<Self>) -> AnyElement {
+        match self.followed_here() {
+            Some(workspace) => self.base_button(&label, workspace, cx),
+            None => div().flex_none().text_color(colours::muted()).child(label).into_any_element(),
+        }
+    }
+
+    fn place_text(&self, session: Option<&Session>) -> String {
+        match (&self.on_machine, self.scope) {
+            (Some(_), Scope::Project(_)) => String::new(),
+            (Some(_), Scope::Every) => every_project_on(&cli::target()),
+            (None, _) => place_label(self.scope, self.shown.as_ref().and_then(Whose::here), session),
+        }
     }
 
     fn summary_line(&self, session: Option<&Session>, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let place = place_label(self.scope, self.shown, session);
+        let place = self.place_text(session);
         div()
             .flex()
             .items_center()
@@ -143,7 +170,7 @@ impl ChangesPanel {
             .text_size(px(11.))
             .child(div().flex_1().min_w(px(0.)).text_color(colours::muted()).child(ui::one_line(place)))
             .when_some(self.totals(cx), |d, totals| d.child(totals_view(&totals)))
-            .when_some(self.base_label(), |d, label| d.child(self.base_button(label, cx)))
+            .when_some(self.base_label(), |d, label| d.child(self.base_view(label, cx)))
     }
 
     fn render_bases(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -184,3 +211,6 @@ impl ChangesPanel {
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.choose_base(Some(name.clone()), cx)))
     }
 }
+
+#[cfg(test)]
+mod tests;

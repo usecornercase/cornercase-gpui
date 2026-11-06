@@ -14,6 +14,7 @@ mod search;
 mod served;
 mod source;
 mod style;
+mod there;
 mod tree;
 mod tree_view;
 mod viewer;
@@ -23,7 +24,7 @@ mod workspace;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use gpui::{
@@ -34,10 +35,11 @@ use gpui::{
 
 use crate::cli;
 use crate::panels::PanelKind;
+use crate::panels::on_machine::Retry;
 use crate::platform::Os;
 use crate::platform::paths::Style;
 use crate::prefs::LongLines;
-use crate::store::Store;
+use crate::store::{MachineRead, Store};
 use crate::theme::colours;
 use crate::ui::selection::Selecting;
 use crate::ui::{self, TextField, TextFieldEvent};
@@ -136,6 +138,7 @@ struct Search {
     running: Option<Arc<AtomicBool>>,
     generation: u64,
     enter: bool,
+    refused: bool,
     index: Option<(PathBuf, Arc<Vec<String>>, Instant)>,
 }
 
@@ -149,6 +152,7 @@ impl Search {
             running: None,
             generation: 0,
             enter: false,
+            refused: false,
             index: None,
         }
     }
@@ -157,6 +161,16 @@ impl Search {
         self.results = Results::None;
         self.rows.clear();
         self.answered.clear();
+    }
+
+    fn forget(&mut self) {
+        self.clear();
+        self.generation += 1;
+        self.enter = false;
+        self.refused = false;
+        if let Some(running) = self.running.take() {
+            running.store(true, Ordering::Relaxed);
+        }
     }
 }
 
@@ -177,6 +191,8 @@ struct Menu {
 pub(crate) struct FilesPanel {
     store: Entity<Store>,
     remote: bool,
+    machine: Option<MachineRead>,
+    retry: Retry,
     current: Option<u64>,
     places: HashMap<u64, Place>,
     query: Entity<TextField>,
@@ -230,6 +246,8 @@ impl FilesPanel {
         let mut panel = Self {
             store,
             remote,
+            machine: None,
+            retry: Retry::default(),
             current: None,
             places: HashMap::new(),
             query,
@@ -322,7 +340,15 @@ impl Render for FilesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.settle_focus(window, cx);
         let Some(place) = self.place() else {
-            return div().size_full().track_focus(&self.focus).child(ui::note("No workspace shown")).into_any_element();
+            let note = self.no_place_note();
+            return div()
+                .size_full()
+                .track_focus(&self.focus)
+                .flex()
+                .flex_col()
+                .children(self.machine_strip())
+                .child(ui::note(note))
+                .into_any_element();
         };
         let viewing = place.viewer.is_some();
         let searching = !place.query.trim().is_empty();
@@ -339,6 +365,7 @@ impl Render for FilesPanel {
             .track_focus(&self.focus)
             .flex()
             .flex_col()
+            .children(self.machine_strip())
             .when(!viewing, |d| d.child(self.render_bar(window, cx)))
             .child(body)
             .children(menu)

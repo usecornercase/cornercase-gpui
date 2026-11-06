@@ -135,7 +135,7 @@ pub(super) fn described(content: Content, path: &Path, remote: bool) -> Still {
             note("Too large to preview", format!("Files over {} are not read.", disk::human_size(disk::MAX_BYTES)))
         }
         Content::NotRegular => note("Not a regular file", "Devices, sockets and pipes are not read."),
-        Content::Gone(why) => note("Cannot read this file", why),
+        Content::Gone(why) | Content::Lost(why) => note("Cannot read this file", why),
     }
 }
 

@@ -1,11 +1,12 @@
 use std::path::{Path, PathBuf};
+use std::process::Output;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Result, bail};
 use base64::Engine as _;
 use serde::Deserialize;
 
-use crate::cli;
+use crate::cli::{self, Target};
 use crate::panels::changes::FileStatus;
 use crate::platform::paths::{self, Style};
 
@@ -77,7 +78,7 @@ struct Line {
     ranges: Vec<(u32, u32)>,
 }
 
-fn arg(rel: &Path) -> String {
+pub(super) fn arg(rel: &Path) -> String {
     let text = rel.to_string_lossy();
     if text.is_empty() {
         ".".to_string()
@@ -88,7 +89,7 @@ fn arg(rel: &Path) -> String {
     }
 }
 
-fn folder_and_name(rel: &Path) -> Option<(String, String)> {
+pub(super) fn folder_and_name(rel: &Path) -> Option<(String, String)> {
     let text = rel.to_string_lossy();
     if paths::rooted(&text) {
         let (folder, name) = Style::of_path(&text).split(&text);
@@ -98,7 +99,12 @@ fn folder_and_name(rel: &Path) -> Option<(String, String)> {
     Some((arg(rel.parent().unwrap_or(Path::new(""))), name))
 }
 
-fn files_args(command: &str, workspace: u64, flags: &[&str], rest: impl IntoIterator<Item = String>) -> Vec<String> {
+pub(super) fn files_args(
+    command: &str,
+    workspace: &str,
+    flags: &[&str],
+    rest: impl IntoIterator<Item = String>,
+) -> Vec<String> {
     let mut args = vec!["files".to_string(), command.to_string(), "--workspace".to_string(), workspace.to_string()];
     args.extend(flags.iter().map(|f| (*f).to_string()));
     args.push("--json".to_string());
@@ -108,7 +114,14 @@ fn files_args(command: &str, workspace: u64, flags: &[&str], rest: impl IntoIter
 }
 
 fn answer(args: &[String]) -> Result<String> {
-    let out = cli::output(&mut cli::command(args))?;
+    answer_of(&cli::output(&mut cli::command(args))?)
+}
+
+pub(super) fn answer_on(target: &Target, args: &[String]) -> Result<String> {
+    answer_of(&cli::output(&mut target.command(args))?)
+}
+
+fn answer_of(out: &Output) -> Result<String> {
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     if stdout.trim_start().starts_with('{') {
         return Ok(stdout);
@@ -168,7 +181,7 @@ pub(super) fn listings(folders: Vec<PathBuf>, json: Result<String>) -> Listed {
 }
 
 pub(super) fn list(workspace: u64, folders: Vec<PathBuf>) -> Listed {
-    let json = answer(&files_args("list", workspace, &[], folders.iter().map(|rel| arg(rel))));
+    let json = answer(&files_args("list", &workspace.to_string(), &[], folders.iter().map(|rel| arg(rel))));
     listings(folders, json)
 }
 
@@ -180,17 +193,17 @@ pub(super) fn stamp_in(json: &str, name: &str) -> Option<Stamp> {
 
 pub(super) fn stamp(workspace: u64, rel: &Path) -> Option<Stamp> {
     let (folder, name) = folder_and_name(rel)?;
-    let json = answer(&files_args("list", workspace, &[], [folder])).ok()?;
+    let json = answer(&files_args("list", &workspace.to_string(), &[], [folder])).ok()?;
     stamp_in(&json, &name)
 }
 
-fn changes_args(workspace: u64, rel: &Path) -> Vec<String> {
+pub(super) fn changes_args(workspace: &str, rel: &Path) -> Vec<String> {
     let path = Style::Unix.shown(rel);
-    ["changes", "file", "--workspace", &workspace.to_string(), "--json", "--", &path].map(str::to_string).to_vec()
+    ["changes", "file", "--workspace", workspace, "--json", "--", &path].map(str::to_string).to_vec()
 }
 
 pub(super) fn gutter(workspace: u64, rel: &Path) -> Option<Gutter> {
-    Gutter::parse(&answer(&changes_args(workspace, rel)).ok()?)
+    Gutter::parse(&answer(&changes_args(&workspace.to_string(), rel)).ok()?)
 }
 
 fn bytes_of(read: Read) -> std::result::Result<Vec<u8>, String> {
@@ -225,7 +238,7 @@ pub(super) fn content(path: &Path, json: Result<String>) -> (Content, Option<Sta
 }
 
 pub(super) fn read(workspace: u64, rel: &Path) -> (Content, Option<Stamp>) {
-    content(rel, answer(&files_args("read", workspace, &[], [arg(rel)])))
+    content(rel, answer(&files_args("read", &workspace.to_string(), &[], [arg(rel)])))
 }
 
 fn line_hit(line: Line) -> LineHit {
@@ -262,12 +275,16 @@ pub(super) fn results(mode: Mode, json: Result<String>) -> Results {
     }
 }
 
-pub(super) fn search(workspace: u64, query: &str, mode: Mode) -> Results {
-    let flag = match mode {
+pub(super) fn mode_flag(mode: Mode) -> &'static str {
+    match mode {
         Mode::Names => "--names",
         Mode::Text => "--text",
-    };
-    results(mode, answer(&files_args("search", workspace, &[flag], [query.to_string()])))
+    }
+}
+
+pub(super) fn search(workspace: u64, query: &str, mode: Mode) -> Results {
+    let flag = mode_flag(mode);
+    results(mode, answer(&files_args("search", &workspace.to_string(), &[flag], [query.to_string()])))
 }
 
 #[cfg(test)]

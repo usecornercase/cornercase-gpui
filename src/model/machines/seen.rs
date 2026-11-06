@@ -129,6 +129,14 @@ impl MachineSeen {
     pub(crate) fn aim_at(&self, ws: &ThereWorkspace) -> Aim {
         Aim { machine: self.name.clone(), boot: self.boot.clone(), workspace: ws.id }
     }
+
+    pub(crate) fn place_name(&self, workspace: ThereId) -> Option<String> {
+        self.projects.iter().find_map(|project| {
+            let ws = project.workspaces.iter().find(|ws| ws.id == workspace)?;
+            let several = project.workspaces.len() > 1;
+            Some(if several { format!("{} › {}", project.name, ws.name) } else { project.name.clone() })
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -145,6 +153,10 @@ impl Aim {
 
     pub(crate) fn key(&self) -> String {
         format!("{}:{}:{}", self.machine, self.boot, self.workspace.0)
+    }
+
+    pub(crate) fn workspace_arg(&self) -> String {
+        self.id()
     }
 
     pub(crate) fn rename_args(&self, name: &str) -> Vec<String> {
@@ -261,6 +273,10 @@ impl MachinePlace {
 
     pub(crate) fn path(&self) -> &str {
         &self.path
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        &self.name
     }
 }
 
