@@ -40,6 +40,12 @@ fn a_compacted_conversation_reads_after_the_model() {
 }
 
 #[test]
+fn a_compacted_conversation_reads_without_a_model_too() {
+    let pane = PaneInfo { compacted: true, ..agent(None, None) };
+    assert_eq!(detail(pane, None).as_deref(), Some("compacted"));
+}
+
+#[test]
 fn a_tab_ends_with_the_memory_of_its_panes() {
     let shell = PaneInfo { memory: Some(1024 * 1024 * 1024), ..Default::default() };
     let pane = PaneInfo { memory: Some(288 * 1024 * 1024), ..agent(Some("Opus 5.5"), Some(23)) };

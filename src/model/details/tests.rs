@@ -45,10 +45,12 @@ fn a_pane_reads_as_compacted_only_when_the_view_says_so() {
 fn memory_is_in_whole_megabytes_below_a_gigabyte() {
     assert_eq!(memory_size(2_437_120), "2 MB");
     assert_eq!(memory_size(1023 * MB), "1023 MB");
+    assert_eq!(memory_size(1023 * MB + MB / 2 - 1), "1023 MB");
 }
 
 #[test]
 fn memory_is_in_gigabytes_with_one_decimal_from_there() {
+    assert_eq!(memory_size(1023 * MB + MB / 2), "1.0 GB");
     assert_eq!(memory_size(1024 * MB), "1.0 GB");
     assert_eq!(memory_size(1229 * MB), "1.2 GB");
 }

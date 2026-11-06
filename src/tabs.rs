@@ -29,7 +29,7 @@ fn faint(text: String) -> Div {
 
 fn tab_detail(tab: &Tab, mark: Option<&str>, look: &Look) -> Option<String> {
     let agent = tab.agent_pane();
-    let share = agent.filter(|agent| agent.model.is_some()).and_then(|agent| look.share_of(agent));
+    let share = agent.filter(|a| a.model.is_some() || a.context.is_none()).and_then(|a| look.share_of(a));
     let model = agent.and_then(|agent| look.model_of(agent));
     let memory = tab.memory().map(memory_size);
     let parts: Vec<String> = model.into_iter().chain(mark.map(str::to_string)).chain(share).chain(memory).collect();

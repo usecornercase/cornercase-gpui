@@ -70,7 +70,7 @@ pub(super) fn band_bounds(card: Bounds<Pixels>, taken: Pixels) -> Bounds<Pixels>
 }
 
 pub(super) fn more_origin(last_row: Bounds<Pixels>, button: Size<Pixels>) -> Point<Pixels> {
-    point(last_row.right() - button.width, last_row.top())
+    point((last_row.right() - button.width).max(last_row.left()), last_row.top())
 }
 
 fn band(pane: u64, (text, waits): (String, Option<&'static str>), width: Pixels, metrics: &Metrics) -> Stateful<Div> {
@@ -95,13 +95,15 @@ fn band(pane: u64, (text, waits): (String, Option<&'static str>), width: Pixels,
         .when_some(waits, |d, waits| d.child(div().text_color(colours::faint()).child(waits)))
 }
 
-fn more_button(pane: u64, below: u64, metrics: &Metrics, root: &WeakEntity<Root>) -> Stateful<Div> {
+fn more_button((pane, below): (u64, u64), widest: Pixels, metrics: &Metrics, root: &WeakEntity<Root>) -> Stateful<Div> {
     let root = root.clone();
     div()
         .id(SharedString::from(format!("pane-more-{pane}")))
         .flex()
         .flex_none()
         .items_center()
+        .max_w(widest)
+        .overflow_hidden()
         .h(metrics.line_height)
         .px(px(6.))
         .rounded(px(radius::CHIP))
@@ -135,7 +137,8 @@ impl PaneNotes {
         let below = Some(self.below).filter(|below| *below > 0)?;
         let row = card.rect.rows.saturating_sub(1);
         let last_row = room.layout.span(self.pane, row, (0, card.rect.cols))?;
-        let button = more_button(self.pane, below, room.metrics, room.root).opacity(self.opacity).into_any_element();
+        let button = more_button((self.pane, below), last_row.size.width, room.metrics, room.root);
+        let button = button.opacity(self.opacity).into_any_element();
         Some(laid_out(button, |button| more_origin(last_row, button), window, cx).0)
     }
 }

@@ -2,10 +2,11 @@ use gpui::Context;
 
 use super::cycled;
 use crate::app::Root;
+use crate::cli;
 use crate::keymap::Command;
 use crate::model::{PaneInfo, Session};
 use crate::sidebar::cmd;
-use crate::store::ToastKind;
+use crate::store::{self, Store, ToastKind};
 
 const NO_AGENT_WAITS: &str = "No agent needs you";
 const NO_AGENT_HERE: &str = "No agent in this pane to mark";
@@ -32,6 +33,13 @@ pub(super) fn mark_args(pane: &PaneInfo) -> Option<(Vec<String>, &'static str)> 
     } else {
         (cmd(&["mark", "--pane", &id]), MARKED)
     })
+}
+
+pub(super) fn mark_answer(result: &anyhow::Result<String>, said: &str) -> (String, ToastKind) {
+    match result {
+        Ok(_) => (said.to_string(), ToastKind::Info),
+        Err(e) => (cli::reason(e), ToastKind::Error),
+    }
 }
 
 impl Root {
@@ -71,13 +79,14 @@ impl Root {
 
     fn mark_active_pane(&mut self, cx: &mut Context<Self>) {
         let pane = self.active_pane().and_then(|id| self.session.as_ref()?.pane(id));
-        match pane.and_then(mark_args) {
-            Some((args, said)) => {
-                self.queue.cmd(args);
-                self.tell(said, cx);
-            }
-            None => self.tell(NO_AGENT_HERE, cx),
-        }
+        let Some((args, said)) = pane.and_then(mark_args) else {
+            self.tell(NO_AGENT_HERE, cx);
+            return;
+        };
+        store::queued(cx, args, move |result, cx| {
+            let (text, kind) = mark_answer(&result, said);
+            Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
+        });
     }
 
     fn tell(&self, text: &str, cx: &mut Context<Self>) {

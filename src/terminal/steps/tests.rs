@@ -80,6 +80,20 @@ fn an_agent_pending_review_is_marked_as_reviewed() {
 }
 
 #[test]
+fn the_mark_is_told_once_cornercase_took_it() {
+    let (text, kind) = mark_answer(&Ok(String::new()), MARKED);
+    assert_eq!(text, MARKED);
+    assert!(matches!(kind, ToastKind::Info));
+}
+
+#[test]
+fn a_refused_mark_says_why_and_not_that_it_was_marked() {
+    let (text, kind) = mark_answer(&Err(anyhow::anyhow!("no such pane")), MARKED);
+    assert!(text.contains("no such pane"), "{text}");
+    assert!(matches!(kind, ToastKind::Error));
+}
+
+#[test]
 fn a_pane_without_an_agent_has_nothing_to_mark() {
     assert!(mark_args(&PaneInfo::default()).is_none());
 }

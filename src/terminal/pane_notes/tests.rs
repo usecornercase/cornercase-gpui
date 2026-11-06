@@ -111,3 +111,9 @@ fn the_button_sits_at_the_end_of_the_last_row() {
     let at = more_origin(rect(10., 500., 600., 17.), size(px(80.), px(17.)));
     assert_eq!(at, point(px(530.), px(500.)));
 }
+
+#[test]
+fn a_button_wider_than_its_pane_stays_at_the_pane_s_start() {
+    let at = more_origin(rect(10., 500., 60., 17.), size(px(80.), px(17.)));
+    assert_eq!(at, point(px(10.), px(500.)));
+}
