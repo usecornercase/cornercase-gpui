@@ -49,6 +49,10 @@ impl Jobs {
         self.running.iter().any(|(_, _, busy)| busy.key == key)
     }
 
+    pub(crate) fn shown(&self, key: &str, now: Instant) -> bool {
+        self.running.iter().any(|(_, at, busy)| busy.key == key && now.duration_since(*at) >= SHOW_AFTER)
+    }
+
     pub(crate) fn doing(&self, key: &str) -> Option<&str> {
         self.running.iter().rev().find(|(_, _, busy)| busy.key == key).map(|(_, _, busy)| busy.label.as_str())
     }

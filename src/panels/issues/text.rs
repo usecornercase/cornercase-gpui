@@ -1,11 +1,16 @@
+use std::rc::Rc;
+
 use gpui::{
-    AnyElement, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText, IntoElement, ParentElement as _,
-    SharedString, StrikethroughStyle, Styled as _, StyledText, UnderlineStyle, div, prelude::FluentBuilder as _, px,
+    AnyElement, App, ElementId, FontStyle, FontWeight, HighlightStyle, InteractiveText, IntoElement,
+    ParentElement as _, SharedString, StrikethroughStyle, Styled as _, StyledText, UnderlineStyle, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::markdown::{Block, Inline, Mark};
 use crate::theme::FONT_FAMILY;
 use crate::theme::{colours, radius};
+
+pub(crate) type OnLink = Rc<dyn Fn(&str, &mut App)>;
 
 pub(super) fn blocks(id: &str, blocks: &[Block]) -> Vec<AnyElement> {
     blocks.iter().enumerate().map(|(i, b)| block(SharedString::from(format!("{id}-{i}")), b)).collect()
@@ -16,16 +21,21 @@ pub(super) fn raw(source: &str) -> AnyElement {
 }
 
 pub(super) fn block(id: SharedString, block: &Block) -> AnyElement {
+    let opens_the_address: OnLink = Rc::new(|url, cx| cx.open_url(url));
+    linked_block(id, block, &opens_the_address)
+}
+
+pub(crate) fn linked_block(id: SharedString, block: &Block, on_link: &OnLink) -> AnyElement {
     match block {
-        Block::Heading(level, text) => heading(*level, inline((id, 0), text)),
-        Block::Paragraph(text) => div().child(inline((id, 0), text)).into_any_element(),
-        Block::Item(depth, marker, text) => item(*depth, marker, inline((id, 0), text)),
+        Block::Heading(level, text) => heading(*level, inline((id, 0), text, on_link)),
+        Block::Paragraph(text) => div().child(inline((id, 0), text, on_link)).into_any_element(),
+        Block::Item(depth, marker, text) => item(*depth, marker, inline((id, 0), text, on_link)),
         Block::Quote(text) => div()
             .pl(px(10.))
             .border_l_2()
             .border_color(colours::selected())
             .text_color(colours::muted())
-            .child(inline((id, 0), text))
+            .child(inline((id, 0), text, on_link))
             .into_any_element(),
         Block::Code(text) => code_box(text),
         Block::Table(rows) => table(rows),
@@ -111,17 +121,18 @@ fn table(rows: &[Vec<String>]) -> AnyElement {
         .into_any_element()
 }
 
-pub(super) fn inline(id: impl Into<ElementId>, text: &Inline) -> AnyElement {
+fn inline(id: impl Into<ElementId>, text: &Inline, on_link: &OnLink) -> AnyElement {
     let highlights: Vec<_> = text.runs().into_iter().map(|(range, marks)| (range, style(&marks))).collect();
     let styled = StyledText::new(text.text.clone()).with_highlights(highlights);
     if text.links.is_empty() {
         return styled.into_any_element();
     }
     let (ranges, urls): (Vec<_>, Vec<_>) = text.links.iter().cloned().unzip();
+    let on_link = on_link.clone();
     InteractiveText::new(id, styled)
         .on_click(ranges, move |i, _, cx| {
             if let Some(url) = urls.get(i) {
-                cx.open_url(url);
+                on_link(url, cx);
             }
         })
         .into_any_element()

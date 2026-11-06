@@ -16,6 +16,15 @@ fn a_job_is_busy_until_it_ends() {
 }
 
 #[test]
+fn a_job_shows_only_after_a_moment_and_under_its_key() {
+    let mut jobs = Jobs::default();
+    jobs.start(Busy::new("recap:now", "Writing the recap…"));
+    assert!(!jobs.shown("recap:now", Instant::now()));
+    assert!(jobs.shown("recap:now", later()));
+    assert!(!jobs.shown("recap:week", later()));
+}
+
+#[test]
 fn ending_one_job_keeps_another_with_the_same_key() {
     let mut jobs = Jobs::default();
     let first = jobs.start(Busy::new("plugin:git", "Updating git…"));

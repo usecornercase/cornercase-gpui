@@ -1,0 +1,111 @@
+{
+  "account": null,
+  "age": 0,
+  "agent": "claude",
+  "conversations": 3,
+  "day": null,
+  "dossier": null,
+  "effort": "low",
+  "empty": null,
+  "error": null,
+  "from": "2026-11-05T01:40:04.000Z",
+  "label": "fri 6 nov 01:40",
+  "language": "auto",
+  "loading": false,
+  "model": "claude-sonnet-4-5",
+  "places": {
+    "c1": {
+      "agent": "claude",
+      "boot": "1-earlier-server",
+      "branch": "fix/login",
+      "conversation": "conv-login",
+      "kind": "conversation",
+      "number": null,
+      "pane": 4243,
+      "project": {
+        "label": "api",
+        "path": "/home/ana/code/api"
+      },
+      "state": null,
+      "tab": "claude",
+      "url": null,
+      "workspace": {
+        "label": "login",
+        "path": "/home/ana/code/api-login"
+      }
+    },
+    "c2": {
+      "agent": "claude",
+      "boot": "1-earlier-server",
+      "branch": "main",
+      "conversation": "conv-checkout",
+      "kind": "conversation",
+      "number": null,
+      "pane": 4242,
+      "project": {
+        "label": "shop",
+        "path": "/home/ana/code/shop"
+      },
+      "state": null,
+      "tab": "checkout",
+      "url": null,
+      "workspace": {
+        "label": "main",
+        "path": "/home/ana/code/shop"
+      }
+    },
+    "c3": {
+      "agent": "claude",
+      "boot": "2640531-1793928893554110246",
+      "branch": "main",
+      "conversation": "conv-rate-limit",
+      "kind": "conversation",
+      "number": null,
+      "pane": 9,
+      "project": {
+        "label": "shop",
+        "path": "/home/ana/code/shop"
+      },
+      "state": null,
+      "tab": "claude",
+      "url": null,
+      "workspace": {
+        "label": "main",
+        "path": "/home/ana/code/shop"
+      }
+    },
+    "p1": {
+      "agent": null,
+      "boot": null,
+      "branch": null,
+      "conversation": null,
+      "kind": "pull",
+      "number": 212,
+      "pane": null,
+      "project": {
+        "label": "shop",
+        "path": "/home/ana/code/shop"
+      },
+      "state": "open",
+      "tab": null,
+      "url": "https://github.com/acme/shop/pull/212",
+      "workspace": {
+        "label": "main",
+        "path": "/home/ana/code/shop"
+      }
+    }
+  },
+  "progress": null,
+  "range": "now",
+  "text": "## On you\n- [c3] asked \"add a rate limit\" and waits on you: **Redis or in memory?** ([p1])\n- [c9] was never in the dossier\n\n## In progress\n- [c2] asked \"split the checkout\", still reading `src/cart.rs`\n\n## Done\n- [c1] asked \"fix the login page\" and closed it, see the [notes](https://example.com/notes)\n\n> A quoted prompt, with [c3] inside it.",
+  "title": "Claude Code",
+  "to": "2026-11-06T01:40:04.000Z",
+  "tokens": {
+    "cache_read": 26000,
+    "cache_write": 5100,
+    "input": 1200,
+    "output": 410
+  },
+  "written_at": "2026-11-06T01:40:04.000Z",
+  "zone": "Europe/Madrid"
+}
