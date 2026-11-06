@@ -18,13 +18,14 @@ impl FlowsPanel {
     pub(super) fn flow_page(&self, flow: &FlowInfo, hidden: bool, cx: &Context<Self>) -> Div {
         let spec = &flow.flow;
         let key = flow.key();
-        let plan = Plan { flow: spec, run: None, focus: self.prompt.as_deref(), key: &key };
+        let panel = cx.entity().downgrade();
+        let plan = Plan { flow: spec, run: None, focus: self.prompt.as_deref(), key: &key, panel: Some(&panel) };
         div()
             .flex()
             .flex_col()
             .gap(px(22.))
             .child(flow_hero(flow, hidden, cx))
-            .child(block(Icon::Flows, "Plan").child(self.diagram(plan, cx)))
+            .child(block(Icon::Flows, "Plan").child(self.diagram(plan)))
             .child(block(Icon::Accounts, "Roles").child(self.roles(spec, cx)))
             .when(!spec.notes.is_empty(), |d| d.child(block(Icon::File, "Notes").child(notes(&spec.notes))))
     }

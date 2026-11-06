@@ -2,6 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.3
+
+- Editing a flow in the Flows sheet: a prompt or the notes now take several lines, and a long one scrolls inside its field.
+- Stages move up and down with ↑ and ↓, and moving or removing one keeps every loop pointing at the same stage. A loop that would no longer go back to an earlier stage is dropped, and a message says which.
+- Removing a role also removes a stage it leaves empty.
+- A role's and the orchestrator's arguments and variables can be edited in the form.
+- The form ends with the plan of what you are editing, redrawn as you change it.
+- A click past the end of a token typed in Settings, followed by a key, no longer closes the window.
+
 ## 0.1.2
 
 - **Recap: an agent sums up what your agents did**, in every project, in a panel beside the terminal: the new icon on the rail, or ⇧⌘H (Ctrl+Alt+Shift+H on Linux and Windows). **Now** says where things stand and what waits on you first, **Yesterday** is for your daily (the last day you worked with agents, so on Monday it is Friday) and **7 days** goes through the week, project by project. Every conversation and pull request it names is a link: to the agent's pane, ready for you to answer, or to the pull request on the web. An agent writes it in the background, which can take a minute or more, so you can close the panel meanwhile; ↻ writes it again. Settings › Agents › Recap chooses the agent, its model and the language.

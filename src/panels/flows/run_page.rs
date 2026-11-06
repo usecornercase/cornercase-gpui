@@ -20,7 +20,7 @@ const TWO_COLUMNS: f32 = 480.;
 impl FlowsPanel {
     pub(super) fn run_top(&self, run: &Run, cx: &Context<Self>) -> Div {
         let key = format!("run-{}", run.id);
-        let plan = Plan { flow: &run.flow, run: Some(run), focus: None, key: &key };
+        let plan = Plan { flow: &run.flow, run: Some(run), focus: None, key: &key, panel: None };
         div()
             .flex()
             .flex_col()
@@ -28,7 +28,7 @@ impl FlowsPanel {
             .child(run_hero(run, cx))
             .child(task(&run.task))
             .child(block(Icon::Accounts, "Team").child(team(run, team_columns(self.board.get()))))
-            .child(block(Icon::Flows, "Plan").child(self.diagram(plan, cx)))
+            .child(block(Icon::Flows, "Plan").child(self.diagram(plan)))
     }
 }
 
