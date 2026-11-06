@@ -17,7 +17,7 @@ use crate::notify::tip;
 use crate::platform::paths;
 use crate::store::{self, Busy, StartThere, Store};
 use crate::theme::colours;
-use crate::ui::{self, Icon};
+use crate::ui::{self, Icon, Tone};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RunOnEvent {
@@ -70,8 +70,8 @@ impl RunOn {
         self.chosen.as_deref()
     }
 
-    pub(crate) fn offered(cx: &App) -> bool {
-        !Store::get(cx).read(cx).machines.is_empty()
+    pub(crate) fn offered(&self, cx: &App) -> bool {
+        self.chosen.is_some() || !Store::get(cx).read(cx).machines.is_empty()
     }
 
     pub(crate) fn flows_asking(&self) -> bool {
@@ -190,6 +190,9 @@ impl RunOn {
 
     fn open_login(&mut self, note: &AgentNote, cx: &mut Context<Self>) {
         let Some(There::Ready(spot)) = self.there(cx) else { return };
+        if Store::get(cx).read(cx).shown_dialog_starts() {
+            return;
+        }
         let command = self.checks.accounts.read().and_then(|info| info.command_of(&note.agent)).map(str::to_string);
         let tab = LoginTab { agent: &note.agent, account: note.account.as_deref(), command: command.as_deref() };
         let Some(command) = spot.login_tab_args(tab) else {
@@ -218,7 +221,7 @@ impl RunOn {
                 let folder = home.map_or_else(|| spot.path.clone(), |home| paths::home_relative(&spot.path, home));
                 line(format!("{how} on {machine}, in {folder}"))
             }
-            There::NotCloned => line(format!("Not on {machine}: Start clones it there first")),
+            There::NotCloned => line(format!("Not on {machine} yet: it is cloned there first")),
             There::Cloning => ui::busy("run-on-cloning", format!("Cloning on {machine}…")),
             There::Listing => ui::busy("run-on-listing", format!("Cloned: waiting for {machine} to list it…")),
             There::NoRemote => return None,
@@ -319,17 +322,22 @@ pub(crate) fn agent_line(run_on: &Entity<RunOn>, agents: &[String], picks: &[Acc
     let picked = |agent: &str| picks.iter().find(|pick| pick.agent == agent).map(|pick| pick.folder.clone());
     let note = this.checks.accounts.read()?.agent_note(agents, picked)?;
     let text = note.text(machine);
-    let label = note.button();
     let ready = matches!(this.there(cx), Some(There::Ready(_)));
-    let run_on = run_on.clone();
-    let open = ui::button("run-on-login", label)
-        .on_click(move |_: &ClickEvent, _, cx| run_on.update(cx, |run_on, cx| run_on.open_login(&note, cx)));
+    let open = ready.then(|| login_button(run_on.clone(), note, cx));
     Some(
         div()
             .flex()
             .items_center()
             .gap(px(8.))
             .child(div().flex_1().min_w_0().child(ui::warning_line(text)))
-            .children(ready.then_some(open)),
+            .children(open),
     )
+}
+
+fn login_button(run_on: Entity<RunOn>, note: AgentNote, cx: &App) -> Stateful<Div> {
+    if Store::get(cx).read(cx).shown_dialog_starts() {
+        return ui::busy_button("run-on-login", "Opening…", Tone::Plain);
+    }
+    ui::button("run-on-login", note.button())
+        .on_click(move |_: &ClickEvent, _, cx| run_on.update(cx, |run_on, cx| run_on.open_login(&note, cx)))
 }

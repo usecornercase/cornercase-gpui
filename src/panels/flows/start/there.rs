@@ -72,11 +72,9 @@ impl StartFlow {
     }
 
     pub(super) fn run_on_rows(&self, cx: &App) -> Vec<Div> {
-        if !RunOn::offered(cx) {
-            return Vec::new();
-        }
-        let row = div().child(self.run_on.clone());
-        std::iter::once(row).chain(self.run_on.read(cx).where_line("In its own worktree", cx)).collect()
+        let run_on = self.run_on.read(cx);
+        let row = run_on.offered(cx).then(|| div().child(self.run_on.clone()));
+        row.into_iter().chain(run_on.where_line("In its own worktree", cx)).collect()
     }
 
     pub(super) fn agent_note(&self, cx: &App) -> Option<Div> {

@@ -197,7 +197,7 @@ impl Render for NewWorkspace {
                             cx.notify();
                         })),
                 )
-                .when(RunOn::offered(cx), |d| d.child(self.run_on.clone()))
+                .when(self.run_on.read(cx).offered(cx), |d| d.child(self.run_on.clone()))
                 .children(self.where_line(cx)),
             cancel_and(Self::create_button(cx)),
         )

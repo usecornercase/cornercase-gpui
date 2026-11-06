@@ -1,6 +1,5 @@
 use super::*;
-use crate::model::Session;
-use crate::test_util::fixture;
+use crate::test_util::{fixture, shop_on_vps};
 
 fn info() -> AccountsInfo {
     serde_json::from_str(fixture!("machines/there_accounts.json")).expect("what the machine answered")
@@ -8,12 +7,6 @@ fn info() -> AccountsInfo {
 
 fn trackers() -> Trackers {
     serde_json::from_str(fixture!("machines/there_sources.json")).expect("what the machine answered")
-}
-
-fn spot() -> Spot {
-    let session: Session = serde_json::from_str(fixture!("machines/view.json")).expect("a view line");
-    let seen = session.machine("vps").expect("vps");
-    seen.spot(seen.project(ThereId::heard(8)).expect("shop there"))
 }
 
 fn all() -> Wanted {
@@ -122,7 +115,7 @@ fn an_answer_about_another_project_is_dropped_but_the_accounts_are_kept() {
 
 #[test]
 fn the_commands_ask_the_machines_project() {
-    let spot = spot();
+    let spot = shop_on_vps();
     assert_eq!(Check::Accounts.args(Some(&spot)), ["account", "list", "--check", "--json"]);
     assert_eq!(Check::Trackers.args(Some(&spot)), ["issue", "sources", "--json", "--project", "8"]);
     assert_eq!(Check::Flows.args(Some(&spot)), ["flow", "list", "--json", "--project", "8"]);

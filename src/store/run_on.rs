@@ -75,6 +75,10 @@ impl Store {
         self.dialog.as_ref().map(|dialog| dialog.entity_id().as_u64())
     }
 
+    pub(crate) fn shown_dialog_starts(&self) -> bool {
+        self.shown_dialog().is_some_and(|dialog| self.starting_there(dialog))
+    }
+
     pub(crate) fn start_there(&mut self, start: StartThere, cx: &mut Context<Self>) {
         let dialog = self.shown_dialog();
         let early = start.select && start.starting.waits_for_its_agent();

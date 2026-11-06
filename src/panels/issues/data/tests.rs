@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use crate::test_util::shop_on_vps;
 
 const SOURCES: &str = r#"{
   "closed": false,
@@ -22,13 +23,6 @@ const SOURCES: &str = r#"{
   ]
 }"#;
 
-fn spot_of_shop() -> Spot {
-    let session: crate::model::Session =
-        serde_json::from_str(crate::test_util::fixture!("machines/view.json")).expect("a view line");
-    let seen = session.machine("vps").expect("vps");
-    seen.spot(seen.projects.iter().find(|there| there.name == "shop").expect("shop there"))
-}
-
 #[test]
 fn starting_on_a_machine_names_its_project_and_moves_no_window() {
     let plan = StartPlan {
@@ -40,7 +34,7 @@ fn starting_on_a_machine_names_its_project_and_moves_no_window() {
         ..StartPlan::default()
     };
     assert_eq!(
-        plan.start_args_there(&spot_of_shop()),
+        plan.start_args_there(&shop_on_vps()),
         [
             "start",
             "claude",

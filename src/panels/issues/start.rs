@@ -452,7 +452,7 @@ impl Render for StartForm {
             .gap(px(12.))
             .child(self.issue_heading())
             .children(self.now_or_later(cx))
-            .when(RunOn::offered(cx), |d| d.child(self.run_on.clone()))
+            .when(self.run_on.read(cx).offered(cx), |d| d.child(self.run_on.clone()))
             .when(schedule, |d| d.child(self.when_field(window, cx)))
             .children(self.agent_fields(cx))
             .when(!schedule, |d| d.child(self.model_fields(window, cx)))
