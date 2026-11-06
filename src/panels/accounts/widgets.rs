@@ -4,13 +4,21 @@ use crate::notify::tip;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, glass};
 
-pub(super) const LEAD: f32 = 18.;
-pub(super) const GAP: f32 = 12.;
-pub(super) const ROW_X: f32 = 10.;
-pub(super) const STATUS: f32 = 300.;
+pub(crate) const LEAD: f32 = 18.;
+pub(crate) const GAP: f32 = 12.;
+pub(crate) const ROW_X: f32 = 10.;
+pub(crate) const STATUS: f32 = 300.;
 const ACTION_GAP: f32 = 4.;
 
-pub(super) fn card() -> Div {
+pub(crate) fn page() -> Div {
+    div().flex().flex_col().gap(px(12.)).px(px(16.)).pt(px(14.)).pb(px(24.))
+}
+
+pub(crate) fn could_not_read(text: impl Into<SharedString>, try_again: impl IntoElement) -> Div {
+    div().flex().flex_col().items_start().gap(px(10.)).p(px(16.)).child(ui::error_line(text)).child(try_again)
+}
+
+pub(crate) fn card() -> Div {
     div()
         .flex()
         .flex_col()
@@ -21,7 +29,7 @@ pub(super) fn card() -> Div {
         .border_color(colours::border())
 }
 
-pub(super) fn header(glyph: Icon, title: impl Into<SharedString>) -> Div {
+pub(crate) fn header(glyph: Icon, title: impl Into<SharedString>) -> Div {
     div()
         .flex()
         .items_center()
@@ -32,11 +40,11 @@ pub(super) fn header(glyph: Icon, title: impl Into<SharedString>) -> Div {
         .child(div().flex_none().text_size(px(13.5)).font_weight(FontWeight::SEMIBOLD).child(title.into()))
 }
 
-pub(super) fn rule() -> Div {
+pub(crate) fn rule() -> Div {
     div().h(px(1.)).mx(px(ROW_X)).mb(px(4.)).bg(colours::border())
 }
 
-pub(super) fn row(id: impl Into<ElementId>, hover: bool) -> Stateful<Div> {
+pub(crate) fn row(id: impl Into<ElementId>, hover: bool) -> Stateful<Div> {
     div()
         .id(id)
         .flex()
@@ -49,15 +57,15 @@ pub(super) fn row(id: impl Into<ElementId>, hover: bool) -> Stateful<Div> {
         .when(hover, |d| d.hover(|s| s.bg(colours::hover())))
 }
 
-pub(super) fn lead(control: impl IntoElement) -> Div {
+pub(crate) fn lead(control: impl IntoElement) -> Div {
     div().w(px(LEAD)).flex_none().flex().justify_center().child(control)
 }
 
-pub(super) fn under_row(line: impl IntoElement) -> Div {
+pub(crate) fn under_row(line: impl IntoElement) -> Div {
     div().pl(px(ROW_X + LEAD + GAP)).pr(px(ROW_X)).pb(px(8.)).child(line)
 }
 
-pub(super) fn radio(id: impl Into<ElementId>, selected: bool, hint: &'static str, live: bool) -> Stateful<Div> {
+pub(crate) fn radio(id: impl Into<ElementId>, selected: bool, hint: &'static str, live: bool) -> Stateful<Div> {
     let base = div()
         .id(id)
         .size(px(16.))
@@ -82,7 +90,7 @@ pub(super) fn radio(id: impl Into<ElementId>, selected: bool, hint: &'static str
     base.cursor_pointer().hover(|s| s.border_color(colours::accent()).bg(glass::tint(colours::brand(), 0.18)))
 }
 
-pub(super) fn name_column(title: Div, detail: impl Into<SharedString>) -> Div {
+pub(crate) fn name_column(title: Div, detail: impl Into<SharedString>) -> Div {
     div()
         .flex_1()
         .min_w_0()
@@ -93,7 +101,7 @@ pub(super) fn name_column(title: Div, detail: impl Into<SharedString>) -> Div {
         .child(div().text_size(px(11.5)).text_color(colours::faint()).child(ui::one_line(detail)))
 }
 
-pub(super) fn title(name: impl Into<SharedString>) -> Div {
+pub(crate) fn title(name: impl Into<SharedString>) -> Div {
     div().flex().items_center().gap(px(8.)).child(
         div()
             .flex_none()
@@ -104,23 +112,23 @@ pub(super) fn title(name: impl Into<SharedString>) -> Div {
     )
 }
 
-pub(super) fn actions() -> Div {
+pub(crate) fn actions() -> Div {
     div().w(px(ui::ROW_ACTION * 2. + ACTION_GAP)).flex_none().flex().justify_end().gap(px(ACTION_GAP))
 }
 
-pub(super) fn slot() -> Div {
+pub(crate) fn slot() -> Div {
     div().size(px(ui::ROW_ACTION)).flex_none()
 }
 
-pub(super) fn note(text: impl Into<SharedString>) -> Div {
+pub(crate) fn note(text: impl Into<SharedString>) -> Div {
     div().text_size(px(12.)).text_color(colours::muted()).child(text.into())
 }
 
-pub(super) fn hint(text: impl Into<SharedString>) -> Div {
+pub(crate) fn hint(text: impl Into<SharedString>) -> Div {
     div().text_size(px(11.5)).text_color(colours::faint()).child(text.into())
 }
 
-pub(super) fn form() -> Div {
+pub(crate) fn form() -> Div {
     div()
         .flex()
         .flex_col()
@@ -133,6 +141,6 @@ pub(super) fn form() -> Div {
         .border_color(colours::border())
 }
 
-pub(super) fn form_line() -> Div {
+pub(crate) fn form_line() -> Div {
     div().flex().flex_wrap().items_center().gap(px(10.))
 }

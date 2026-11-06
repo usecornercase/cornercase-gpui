@@ -14,17 +14,19 @@ use crate::ui::{self, Icon};
 
 const RAIL_WIDTH: f32 = 44.;
 const RING: f32 = 3.;
+const BUTTON_GAP: f32 = 4.;
 pub(super) const COLUMN: f32 = RAIL_WIDTH + 2. * GAP;
 
 const DOCKED: [PanelKind; 5] =
     [PanelKind::Changes, PanelKind::Files, PanelKind::Todo, PanelKind::Recap, PanelKind::Browser];
-const SHEETS: [PanelKind; 10] = [
+const SHEETS: [PanelKind; 11] = [
     PanelKind::Search,
     PanelKind::Issues,
     PanelKind::Queue,
     PanelKind::Flows,
     PanelKind::Usage,
     PanelKind::Accounts,
+    PanelKind::Machines,
     PanelKind::Processes,
     PanelKind::Ports,
     PanelKind::Worktrees,
@@ -50,8 +52,8 @@ impl Root {
                 .w(px(RAIL_WIDTH))
                 .min_h_0()
                 .items_center()
-                .gap(px(6.))
-                .pb(px(10.))
+                .gap(px(BUTTON_GAP))
+                .pb(px(8.))
                 .child(self.rail_panels(cx))
                 .child(tours_button())
                 .child(shortcuts_button())
@@ -68,12 +70,12 @@ impl Root {
             .flex()
             .flex_col()
             .items_center()
-            .gap(px(6.))
+            .gap(px(BUTTON_GAP))
             .pt(px(5.))
             .pb(px(RING))
             .overflow_y_scroll()
             .children(self.rail_buttons(&self.docked_kinds(cx), cx))
-            .child(div().w(px(18.)).h(px(1.)).my(px(6.)).flex_none().rounded_full().bg(colours::edge()))
+            .child(div().w(px(18.)).h(px(1.)).my(px(4.)).flex_none().rounded_full().bg(colours::edge()))
             .children(self.rail_buttons(&SHEETS, cx))
     }
 

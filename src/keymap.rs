@@ -69,6 +69,7 @@ pub(crate) const SHORTCUTS: &[Shortcut] = &[
     key(&["s"], true, Command::Panel(PanelKind::Queue)),
     key(&["g"], true, Command::Panel(PanelKind::Flows)),
     key(&["a"], true, Command::Panel(PanelKind::Accounts)),
+    key(&["n"], true, Command::Panel(PanelKind::Machines)),
     key(&["u"], false, Command::Panel(PanelKind::Usage)),
     key(&["x"], true, Command::Panel(PanelKind::Plugins)),
     key(&["m"], true, Command::Panel(PanelKind::Processes)),

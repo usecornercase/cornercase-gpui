@@ -17,7 +17,7 @@ mod shortcuts;
 pub(crate) use context::{VIEW_CONTEXT, context_choices, view_context};
 pub(crate) use merge_check::merge_check;
 pub(crate) use pull_request::{pull_request, pull_tag, shown_pull_request, stack_tag};
-pub(crate) use remote::{PathQuestion, ask_path, connect};
+pub(crate) use remote::{PathQuestion, ask_path, connect, ssh_hosts};
 pub(crate) use shortcuts::shortcuts;
 
 pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> Div {

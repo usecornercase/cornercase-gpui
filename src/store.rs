@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::Session;
+use crate::model::machines::{self, Machine};
 use crate::panels::PanelKind;
 use crate::prefs::{self, Prefs};
 
@@ -23,6 +24,7 @@ pub(crate) struct Store {
     pub view_id: Option<u64>,
     pub queue: Queue,
     pub app: Option<Value>,
+    pub machines: Vec<Machine>,
     pub dock: Option<PanelKind>,
     pub sheet: Option<PanelKind>,
     pub dialog: Option<AnyView>,
@@ -90,6 +92,7 @@ impl Store {
             view_id: None,
             queue,
             app: None,
+            machines: Vec::new(),
             dock: None,
             sheet: None,
             dialog: None,
@@ -114,10 +117,16 @@ impl Store {
     pub(crate) fn follow_app(&mut self, cx: &mut Context<Self>) {
         self.app_stream = follow(cx, args(&["status", "--app", "--follow"]), |this, line, cx| {
             if let Ok(value) = serde_json::from_str::<Value>(&line) {
+                this.machines = machines::in_app(&value);
                 this.app = Some(value);
                 cx.notify();
             }
         });
+    }
+
+    pub(crate) fn take_machines(&mut self, machines: Vec<Machine>, cx: &mut Context<Self>) {
+        self.machines = machines;
+        cx.notify();
     }
 
     pub(crate) fn with_view(&self, mut args: Vec<String>) -> Vec<String> {

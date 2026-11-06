@@ -7,6 +7,7 @@ use crate::platform::paths;
 mod agent_context;
 mod grid;
 pub(crate) mod link;
+pub(crate) mod machines;
 mod pull_request;
 mod shared;
 mod surface;

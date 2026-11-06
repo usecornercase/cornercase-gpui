@@ -1,0 +1,34 @@
+{
+  "here": {
+    "icon": "▭",
+    "version": "0.13.1"
+  },
+  "machines": [
+    {
+      "destination": "ana@vps.example.com",
+      "error": null,
+      "folder": "~/code",
+      "icon": "☁",
+      "name": "vps",
+      "problem": null,
+      "seen": "2026-11-06T01:23:55.000Z",
+      "server_version": "0.13.1",
+      "state": "linked",
+      "updating": false,
+      "version": "0.13.1"
+    },
+    {
+      "destination": "homelab.example.com",
+      "error": "ssh: connect to host homelab.example.com port 22: Connection refused",
+      "folder": "~/code",
+      "icon": "▣",
+      "name": "homelab",
+      "problem": null,
+      "seen": null,
+      "server_version": null,
+      "state": "unreachable",
+      "updating": false,
+      "version": null
+    }
+  ]
+}
