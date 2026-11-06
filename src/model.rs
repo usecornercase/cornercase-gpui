@@ -1,9 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use serde::Deserialize;
 
 use crate::platform::paths;
 
+pub(crate) mod accounts;
 mod grid;
 pub(crate) mod link;
 pub(crate) mod machines;
@@ -120,6 +121,10 @@ pub(crate) struct PaneInfo {
     pub role: Option<String>,
     pub collapsed: bool,
     pub resuming: bool,
+    pub at_prompt: bool,
+    pub account: Option<String>,
+    pub accounts: BTreeMap<String, String>,
+    pub account_restart: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

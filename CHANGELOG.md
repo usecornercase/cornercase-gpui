@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.6
+
+- Once an agent has more than one login, the window says which account each agent runs on: after its model in the sidebar and the tab bar, and on a small button at the bottom of its pane. That button, or Switch account in a tab's or a pane's menu, moves the agent to another account in the same conversation, after its turn if it is busy, and tells you what happened. On a shell, the buttons say which account an agent typed there would start on. If you never added an account, nothing changes.
+
 ## 0.1.5
 
 - **Machines, a new sheet** (⇧⌘N; Ctrl+Alt+Shift+N on Linux and Windows): the other computers your agents can run on, which cornercase links to through your own `ssh`. It shows this computer and each machine with its link in words, live: `connecting…`, `linked · 0.13.1`, `unreachable · seen 2 min ago` with what `ssh` said under it, or `older` with **Update…**. **Add machine** opens a form that says at once what it would refuse and offers the hosts of your `~/.ssh/config`. Each machine can be edited, its link tried again, or removed, which leaves its server running there. To move the whole window to another server, ⇧⌘K still does that.

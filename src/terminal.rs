@@ -29,6 +29,7 @@ mod links;
 mod missing;
 mod mouse;
 mod no_tab;
+mod pane_accounts;
 mod pane_drag;
 mod pane_menu;
 mod pasting;
@@ -36,6 +37,7 @@ mod popup;
 mod selection;
 
 pub(crate) use links::Pointer;
+use pane_accounts::PaneChips;
 use popup::Popup;
 
 #[derive(Clone, Copy)]
@@ -374,15 +376,17 @@ impl Root {
         let shown = self.frame_shown();
         let grid = shown.then(|| self.grid.clone());
         let (layout, moves) = (self.layout.clone(), self.moves.clone());
-        let fit = Fit { layout, moves: moves.clone(), wanted: self.size, root: entity.downgrade(), metrics, grid };
+        let chips = self.pane_chips(cx);
+        let fit =
+            Fit { layout, moves: moves.clone(), wanted: self.size, root: entity.downgrade(), metrics, grid, chips };
         let focused = self.focus.is_focused(window) && window.is_window_active();
         let (grid, has_frame, focus) = (self.grid.clone(), shown, self.focus.clone());
         let link = self.shown_link().filter(|_| self.drag.is_none() || matches!(self.drag, Some(Drag::Link { .. })));
         let painting = Painting { grid, has_frame, focus, focused, entity, moves, link };
         canvas(
             move |bounds, window, cx| fit.prepaint(bounds, window, cx),
-            move |bounds, placed, window, cx| {
-                painting.paint(bounds, &placed, window, cx);
+            move |bounds, mut placed, window, cx| {
+                painting.paint(bounds, &mut placed, window, cx);
             },
         )
         .size_full()
@@ -396,12 +400,14 @@ struct Fit {
     root: WeakEntity<Root>,
     metrics: Metrics,
     grid: Option<Rc<Grid>>,
+    chips: Vec<PaneChips>,
 }
 
 struct Placed {
     layout: Layout,
     metrics: Metrics,
     grips: Vec<(Hitbox, CursorStyle)>,
+    chips: Vec<AnyElement>,
 }
 
 impl Fit {
@@ -419,9 +425,12 @@ impl Fit {
         let cols = cells_across(f32::from(bounds.size.width) - extra.0, self.metrics.cell_width, 1000.);
         let rows = cells_across(f32::from(bounds.size.height) - extra.1, self.metrics.line_height, 500.);
         if self.wanted != Some((cols, rows)) {
-            request_size(self.root, cols, rows, cx);
+            request_size(self.root.clone(), cols, rows, cx);
         }
-        Placed { layout, metrics: self.metrics, grips }
+        let settled = !self.moves.borrow().busy(Instant::now()) && !self.moves.borrow().lifted();
+        let wanted_chips = if settled { self.chips } else { Vec::new() };
+        let chips = pane_accounts::place(wanted_chips, (&layout, &self.metrics), &self.root, window, cx);
+        Placed { layout, metrics: self.metrics, grips, chips }
     }
 }
 
@@ -445,7 +454,7 @@ struct Painting {
 }
 
 impl Painting {
-    fn paint(self, bounds: Bounds<Pixels>, placed: &Placed, window: &mut Window, cx: &mut App) {
+    fn paint(self, bounds: Bounds<Pixels>, placed: &mut Placed, window: &mut Window, cx: &mut App) {
         window.handle_input(&self.focus, ElementInputHandler::new(bounds, self.entity.clone()), cx);
         for (hitbox, cursor) in &placed.grips {
             window.set_cursor_style(*cursor, hitbox);
@@ -466,6 +475,9 @@ impl Painting {
         render::paint(&self.grid, &surface, window, cx);
         if let Some(link) = self.link.as_ref().filter(|_| !moving) {
             render::paint_link(&placed.layout, link, window);
+        }
+        for chip in &mut placed.chips {
+            chip.paint(window, cx);
         }
         pane_drag::follow(&self.moves, &self.entity, moving, window);
     }

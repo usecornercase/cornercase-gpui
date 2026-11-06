@@ -28,3 +28,32 @@ fn a_row_that_shares_files_has_a_tag() {
     let ws = Workspace { shared, ..Workspace::default() };
     assert!(shared_tag(&ws, Some(&Session::default())).is_some());
 }
+
+fn agent() -> PaneInfo {
+    PaneInfo {
+        agent: Some("claude".into()),
+        role: Some("coder".into()),
+        model: Some("Opus 5.5".into()),
+        context: Some(12),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn an_agent_row_without_an_account_reads_as_before() {
+    assert_eq!(agent_details(&agent(), None), "claude · coder · Opus 5.5 · 12%");
+}
+
+#[test]
+fn an_agent_row_names_its_account_after_the_model() {
+    assert_eq!(agent_details(&agent(), Some("work")), "claude · coder · Opus 5.5 · work · 12%");
+}
+
+#[test]
+fn an_agent_row_says_a_restart_waits_for_its_turn() {
+    let waiting = PaneInfo { account_restart: Some("waiting".into()), ..agent() };
+    assert_eq!(
+        agent_details(&waiting, Some("work")),
+        "claude · coder · Opus 5.5 · work · 12% · restarts after this turn"
+    );
+}
