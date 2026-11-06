@@ -6,8 +6,8 @@ use std::sync::{Arc, mpsc};
 use serde_json::json;
 
 use super::{
-    BINARY, Binary, CALLER, Job, Queue, Remote, Target, gather_input, gather_scroll, moves_view, spawn_failure,
-    use_binary,
+    BINARY, Binary, CALLER, Job, Queue, QueueTap, Remote, Target, Worker, gather_input, gather_scroll, moves_view,
+    spawn_failure, use_binary,
 };
 
 fn args(cmd: &Command) -> Vec<&str> {
@@ -171,4 +171,25 @@ fn a_command_through_the_queue_that_moves_the_view_tells_the_window() {
     queue.cmd(vec!["focus".into(), "--tab".into(), "3".into()]);
     queue.cmd_then(vec!["new-tab".into(), "--focus".into()], |_| {});
     assert_eq!(told.load(Ordering::Relaxed), 2);
+}
+
+#[test]
+fn a_queue_made_for_a_machine_keeps_that_machine() {
+    let worker = Worker::new(Some(remote("")), Arc::new(|_| {}));
+    assert_eq!(worker.target, remote(""));
+}
+
+#[test]
+fn a_queue_going_nowhere_takes_everything_and_sends_nothing() {
+    let queue = Queue::nowhere();
+    queue.input(3, json!({ "text": "a" }));
+    queue.cmd(vec!["focus".into(), "--tab".into(), "3".into()]);
+    queue.scroll(3, 1);
+}
+
+#[test]
+fn what_a_machines_queue_is_asked_to_show_does_not_leave_its_place() {
+    let (queue, tap) = QueueTap::new();
+    queue.cmd(vec!["focus".into(), "--tab".into(), "3".into()]);
+    assert_eq!(tap.commands(), [["focus", "--tab", "3"]]);
 }

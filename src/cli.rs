@@ -228,14 +228,6 @@ pub(crate) fn kill_all() {
     list.clear();
 }
 
-pub(crate) fn stream<S: AsRef<str>>(
-    args: &[S],
-    on_line: impl FnMut(String) + Send + 'static,
-    on_end: impl FnOnce(String) + Send + 'static,
-) -> Result<Stream> {
-    stream_on(&target(), args, on_line, on_end)
-}
-
 pub(crate) fn stream_on<S: AsRef<str>>(
     target: &Target,
     args: &[S],
@@ -336,19 +328,23 @@ impl Queue {
         on_error: impl Fn(String) + Send + Sync + 'static,
         on_view_move: impl Fn() + Send + Sync + 'static,
     ) -> Self {
+        Self::start(None, Arc::new(on_error), Arc::new(on_view_move))
+    }
+
+    pub(crate) fn on(target: Target, on_error: impl Fn(String) + Send + Sync + 'static) -> Self {
+        Self::start(Some(target), Arc::new(on_error), Arc::new(|| {}))
+    }
+
+    pub(crate) fn nowhere() -> Self {
+        let (tx, _) = mpsc::channel();
+        Self { tx, view_moves: Arc::new(|| {}) }
+    }
+
+    fn start(target: Option<Target>, on_error: OnError, view_moves: Arc<dyn Fn() + Send + Sync>) -> Self {
         let (tx, rx) = mpsc::channel::<Job>();
-        let mut worker = {
-            let current = CURRENT.lock();
-            Worker {
-                target: current.target.clone(),
-                generation: current.generation,
-                on_error: Arc::new(on_error),
-                typist: None,
-                requests: None,
-            }
-        };
+        let mut worker = Worker::new(target, on_error);
         thread::spawn(move || worker.work(&rx));
-        Self { tx, view_moves: Arc::new(on_view_move) }
+        Self { tx, view_moves }
     }
 
     fn send(&self, cmd: Cmd) {
@@ -396,6 +392,17 @@ struct Worker {
 }
 
 impl Worker {
+    fn new(target: Option<Target>, on_error: OnError) -> Self {
+        let current = CURRENT.lock();
+        Self {
+            target: target.unwrap_or_else(|| current.target.clone()),
+            generation: current.generation,
+            on_error,
+            typist: None,
+            requests: None,
+        }
+    }
+
     fn work(&mut self, rx: &mpsc::Receiver<Job>) {
         let mut pending: Option<Job> = None;
         loop {
@@ -544,6 +551,27 @@ pub(crate) fn reason(error: &anyhow::Error) -> String {
     };
     let text = text.strip_prefix("Error: ").or_else(|| text.strip_prefix("error: ")).unwrap_or(&text);
     text.trim().to_string()
+}
+
+#[cfg(test)]
+pub(crate) struct QueueTap(mpsc::Receiver<Job>);
+
+#[cfg(test)]
+impl QueueTap {
+    pub(crate) fn new() -> (Queue, Self) {
+        let (tx, rx) = mpsc::channel();
+        (Queue { tx, view_moves: Arc::new(|| {}) }, Self(rx))
+    }
+
+    pub(crate) fn inputs(&self) -> Vec<(u64, serde_json::Value)> {
+        let jobs = self.0.try_iter();
+        jobs.filter_map(|job| if let Job::Input { pane, event } = job { Some((pane, event)) } else { None }).collect()
+    }
+
+    pub(crate) fn commands(&self) -> Vec<Vec<String>> {
+        let jobs = self.0.try_iter();
+        jobs.filter_map(|job| if let Job::Cmd(cmd) = job { Some(cmd.args) } else { None }).collect()
+    }
 }
 
 #[cfg(test)]

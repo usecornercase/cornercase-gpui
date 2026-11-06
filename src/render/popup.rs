@@ -27,7 +27,8 @@ pub(crate) fn paint_popup(
     cx: &mut App,
 ) -> Layout {
     let layout = Layout::new(grid, metrics.cell(), bounds);
-    let surface = Surface { layout: &layout, metrics, focused, dim_inactive: false, stage: &Stage::default() };
+    let surface =
+        Surface { layout: &layout, metrics, focused, dim_inactive: false, stage: &Stage::default(), dimmed: false };
     window.with_content_mask(Some(ContentMask { bounds }), |window| paint(grid, &surface, window, cx));
     layout
 }

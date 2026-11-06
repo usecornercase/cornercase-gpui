@@ -37,7 +37,7 @@ fn move_places(pane: u64, target: u64) -> Vec<Entry> {
 fn pass_right_click(pane: u64, (x, y): (u16, u16)) -> Entry {
     item("Send the right click to the program", move |this, _, _| {
         for kind in ["down", "up"] {
-            this.queue.input(pane, json!({ "mouse": { "kind": kind, "button": "right", "x": x, "y": y } }));
+            this.own.queue.input(pane, json!({ "mouse": { "kind": kind, "button": "right", "x": x, "y": y } }));
         }
     })
 }
@@ -47,7 +47,7 @@ impl Root {
         let info = self.session.as_ref().and_then(|s| s.pane(pane));
         let args = cmd(&["close", "--pane", &pane.to_string()]);
         if info.is_none_or(|i| i.agent.is_none()) {
-            self.queue.cmd(args);
+            self.own.queue.cmd(args);
             return;
         }
         let what = program_of(info).unwrap_or_else(|| "its shell".into());
@@ -64,10 +64,10 @@ impl Root {
     pub(super) fn pane_menu(&self, pane: u64, cell: (u16, u16), cx: &App) -> Vec<Entry> {
         let p = pane.to_string();
         let info = self.session.as_ref().and_then(|s| s.pane(pane)).cloned();
-        let mouse = self.grid.pane(pane).is_some_and(|g| g.modes.mouse != MouseMode::None);
+        let mouse = self.own.grid.pane(pane).is_some_and(|g| g.modes.mouse != MouseMode::None);
         let mut entries = vec![
             item("Copy", move |this, _, _| this.copy_selection(pane)),
-            item("Paste", move |this, _, cx| this.paste(pane, cx)),
+            item("Paste", move |this, _, cx| this.paste(Some(pane), cx)),
             Entry::Separator,
             act("Split right", cmd(&["split", "--pane", &p, "--focus"])),
             act("Split down", cmd(&["split", "--pane", &p, "--down", "--focus"])),

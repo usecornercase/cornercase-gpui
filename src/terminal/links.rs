@@ -95,14 +95,18 @@ fn plain_click(event: &MouseDownEvent) -> bool {
 
 impl Root {
     fn spot_under(&self, at: Point<Pixels>) -> Option<(Spot, (u16, u16))> {
+        if self.machine.is_some() {
+            return None;
+        }
         let Some(Hit::Pane(id, raw)) = self.hit(at) else { return None };
-        let pane = self.grid.pane(id)?;
+        let pane = self.own.grid.pane(id)?;
         let cell = inside(pane, raw)?;
         Some((spot_at(pane, cell, self.pointer.links.style)?, cell))
     }
 
     pub(super) fn path_style(&self, cx: &App) -> Style {
-        self.store.read(cx).session.as_ref().map_or_else(Style::default, Session::path_style)
+        let session = if self.machine.is_some() { self.shown_session() } else { self.store.read(cx).session.as_ref() };
+        session.map_or_else(Style::default, Session::path_style)
     }
 
     pub(super) fn hover_link(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
@@ -122,7 +126,7 @@ impl Root {
     fn enter_spot(&mut self, spot: Spot, cell: (u16, u16), window: &mut Window, cx: &mut Context<Self>) {
         self.pointer.links.spot = Some(spot.clone());
         self.pointer.links.answer = None;
-        let Some(pane) = self.grid.pane(spot.pane) else { return };
+        let Some(pane) = self.own.grid.pane(spot.pane) else { return };
         match web_under(pane, &spot) {
             Some((span, url)) => {
                 let hovered = Hovered::new(pane, span, Target::Web(url));
@@ -177,7 +181,7 @@ impl Root {
         let next = self.pointer.links.next.take();
         if self.pointer.links.spot.as_ref() == Some(spot) {
             let link = out.and_then(Link::parse).filter(|link| link.row == spot.row);
-            self.pointer.links.answer = link.and_then(|link| Some(Hovered::file(self.grid.pane(spot.pane)?, link)));
+            self.pointer.links.answer = link.and_then(|link| Some(Hovered::file(self.own.grid.pane(spot.pane)?, link)));
             self.settle_link(window, cx);
         } else if let Some((next, cell)) = next.filter(|(next, _)| self.pointer.links.spot.as_ref() == Some(next)) {
             self.ask_link(next, cell, window, cx);
@@ -186,7 +190,7 @@ impl Root {
 
     fn settle_link(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let cell = self.pointer.links.cell;
-        let on = self.pointer.links.answer.as_ref().is_some_and(|h| h.span.covers(cell) && h.shown_in(&self.grid));
+        let on = self.pointer.links.answer.as_ref().is_some_and(|h| h.span.covers(cell) && h.shown_in(&self.own.grid));
         if on == self.pointer.links.on {
             return;
         }
@@ -239,9 +243,11 @@ impl Root {
     }
 
     pub(super) fn link_under(&self, pane: u64, cell: (u16, u16)) -> Option<Target> {
-        let hovered = self.pointer.links.hovered().filter(|h| h.at(pane, cell) && h.shown_in(&self.grid))?;
+        let hovered = self.pointer.links.hovered().filter(|h| h.at(pane, cell) && h.shown_in(&self.own.grid))?;
         match &hovered.target {
-            Target::Web(url) if web_at(self.grid.pane(pane)?, cell, self.pointer.links.style).as_ref() != Some(url) => {
+            Target::Web(url)
+                if web_at(self.own.grid.pane(pane)?, cell, self.pointer.links.style).as_ref() != Some(url) =>
+            {
                 None
             }
             target => Some(target.clone()),
@@ -257,7 +263,7 @@ impl Root {
     }
 
     pub(super) fn drag_from_link(&mut self, pane: u64, from: (u16, u16), to: (u16, u16)) {
-        let Some(shown) = self.grid.pane(pane).cloned().filter(|_| to != from) else { return };
+        let Some(shown) = self.own.grid.pane(pane).cloned().filter(|_| to != from) else { return };
         self.drag = None;
         if shown.modes.mouse == MouseMode::None {
             self.drag = Some(Drag::Select { pane, from, to: from });

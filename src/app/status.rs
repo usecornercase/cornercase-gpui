@@ -11,6 +11,7 @@ use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::Session;
 use crate::notify;
+use crate::platform::paths;
 use crate::theme::{colours, radius};
 use crate::ui::{self, motion};
 
@@ -37,7 +38,7 @@ impl Root {
             .when(!items.is_empty(), |d| {
                 d.child(div().flex_none().flex().items_center().gap(px(2.)).children(items)).child(separator())
             })
-            .child(div().flex_none().child(self.size.map(|(c, r)| format!("{c}×{r}")).unwrap_or_default()))
+            .child(div().flex_none().child(self.shown().size.map(|(c, r)| format!("{c}×{r}")).unwrap_or_default()))
     }
 
     fn connection_status(&self) -> impl IntoElement + use<> {
@@ -84,12 +85,18 @@ impl Root {
     }
 
     fn active_pane_summary(&self) -> String {
-        let pane = self.active_pane().and_then(|id| self.session.as_ref()?.pane(id).cloned());
+        let session = self.shown_session();
+        let pane = self.active_pane().and_then(|id| session?.pane(id).cloned());
+        let there = self.machine.as_ref().map(|tab| format!("{} · ", tab.machine)).unwrap_or_default();
+        let folder = |path: &str| match session.and_then(|s| s.home.as_deref()).filter(|_| self.machine.is_some()) {
+            Some(home) => paths::home_relative(path, home),
+            None => ui::home_relative(path),
+        };
         pane.map(|p| {
             let program = p.agent.or(p.program).unwrap_or_else(|| "shell".into());
             match p.path {
-                Some(path) => format!("{program} · {}", ui::home_relative(&path)),
-                None => program,
+                Some(path) => format!("{there}{program} · {}", folder(&path)),
+                None => format!("{there}{program}"),
             }
         })
         .unwrap_or_default()

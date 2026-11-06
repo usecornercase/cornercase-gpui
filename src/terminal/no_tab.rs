@@ -141,20 +141,24 @@ fn no_tab_page(no_tab: &NoTab, reopen_busy: bool, cx: &mut Context<Root>) -> Div
 
 impl Root {
     pub(super) fn shows_no_tab(&self) -> bool {
-        let frame = self.has_frame.then_some(self.grid.projection).flatten();
-        self.session.as_ref().is_some_and(|s| s.shows_no_tab(frame))
+        let shown = self.shown();
+        let frame = shown.has_frame.then_some(shown.grid.projection).flatten();
+        self.shown_session().is_some_and(|s| s.shows_no_tab(frame))
     }
 
     pub(crate) fn frame_shown(&self) -> bool {
-        self.has_frame && !self.shows_no_tab() && self.side.machine_place.is_none()
+        self.shown().has_frame && !self.shows_no_tab()
     }
 
     pub(crate) fn drop_drags_without_tab(&mut self) {
-        if !self.shows_no_tab() {
-            return;
+        if self.shows_no_tab() {
+            self.drop_drags();
         }
+    }
+
+    pub(crate) fn drop_drags(&mut self) {
         if let Some(Drag::Program { pane, button, cell, .. }) = self.drag.take() {
-            self.queue.input(pane, mouse("up", button_name(button), cell));
+            self.shown().queue.input(pane, mouse("up", button_name(button), cell));
         }
         self.moves.replace(Moves::default());
     }

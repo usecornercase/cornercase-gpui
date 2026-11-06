@@ -70,7 +70,7 @@ impl Root {
     }
 
     fn go_to_agent_needing_you(&mut self, cx: &mut Context<Self>) {
-        let here = self.active_pane();
+        let here = self.active_pane().filter(|_| self.machine.is_none());
         match self.session.as_ref().and_then(|s| s.agent_needing_you(here)) {
             Some(pane) => self.focus_item("pane", pane),
             None => self.tell(NO_AGENT_WAITS, cx),
@@ -78,6 +78,10 @@ impl Root {
     }
 
     fn mark_active_pane(&mut self, cx: &mut Context<Self>) {
+        if self.machine.is_some() {
+            self.not_offered_there("Marking an agent", cx);
+            return;
+        }
         let pane = self.active_pane().and_then(|id| self.session.as_ref()?.pane(id));
         let Some((args, said)) = pane.and_then(mark_args) else {
             self.tell(NO_AGENT_HERE, cx);
