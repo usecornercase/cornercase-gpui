@@ -87,9 +87,9 @@ impl Reads {
         !self.running && !self.too_old
     }
 
-    pub(super) fn read_follows(&self) -> bool {
+    pub(super) fn read_follows(&self, shown: bool) -> bool {
         let more_to_say = self.answer().is_some_and(|a| a.notice.is_none() || a.breakdown.is_some());
-        more_to_say && self.failed.is_none() && self.can_read()
+        shown && more_to_say && self.failed.is_none() && self.can_read()
     }
 
     pub(super) fn waits_for_numbers(&self) -> bool {

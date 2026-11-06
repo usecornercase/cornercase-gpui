@@ -28,21 +28,26 @@ fn only_the_first_command_asks_for_the_cached_answer() {
 
 #[test]
 fn a_read_follows_the_cached_answer() {
-    assert!(settled(fixture!("context/cached-none.json")).read_follows());
-    assert!(settled(fixture!("context/read.json")).read_follows());
-    assert!(settled(fixture!("context/failed.json")).read_follows());
+    assert!(settled(fixture!("context/cached-none.json")).read_follows(true));
+    assert!(settled(fixture!("context/read.json")).read_follows(true));
+    assert!(settled(fixture!("context/failed.json")).read_follows(true));
+}
+
+#[test]
+fn no_read_follows_once_the_dialog_has_closed() {
+    assert!(!settled(fixture!("context/cached-none.json")).read_follows(false));
 }
 
 #[test]
 fn no_read_follows_an_agent_that_says_nothing_more() {
-    assert!(!settled(fixture!("context/other-agent.json")).read_follows());
+    assert!(!settled(fixture!("context/other-agent.json")).read_follows(true));
 }
 
 #[test]
 fn no_read_follows_a_command_that_failed() {
     let mut reads = Reads::default();
     reads.settle(outcome_of(Err(anyhow!("cornercase context: pane 1 runs no agent cornercase reads"))), Instant::now());
-    assert!(!reads.read_follows());
+    assert!(!reads.read_follows(true));
     assert_eq!(reads.failure(), Some("pane 1 runs no agent cornercase reads"));
 }
 
@@ -130,7 +135,7 @@ fn an_older_server_or_command_line_reads_as_too_old() {
 fn a_server_too_old_is_not_asked_again() {
     let mut reads = Reads::default();
     reads.settle(Outcome::TooOld, Instant::now());
-    assert!(reads.too_old() && !reads.can_read() && !reads.read_follows());
+    assert!(reads.too_old() && !reads.can_read() && !reads.read_follows(true));
     assert_eq!(reads.failure(), None);
 }
 

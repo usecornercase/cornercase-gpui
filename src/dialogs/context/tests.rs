@@ -39,6 +39,24 @@ fn several_agents_in_a_tab_are_told_apart_in_pane_order() {
     assert_eq!(said, [(1, "View context · claude"), (3, "View context · codex"), (4, "View context · claude 2")]);
 }
 
+fn slice(fill: Fill) -> Slice {
+    Slice { label: "x".into(), fraction: 0.1, tokens: "1".into(), share: "0.1%".into(), fill }
+}
+
+#[test]
+fn only_the_free_slice_gives_up_its_width_to_the_bars_gaps() {
+    assert_eq!(bar_slice(&slice(Fill::Free)).style().flex_shrink, Some(GIVES_WAY));
+    assert_eq!(bar_slice(&slice(Fill::Used(0))).style().flex_shrink, None);
+    assert_eq!(bar_slice(&slice(Fill::Buffer)).style().flex_shrink, None);
+}
+
+#[test]
+fn a_long_file_name_can_shrink_inside_its_cell() {
+    let mut part = path_part("a-file-name-wider-than-its-cell.md");
+    assert_eq!(part.style().flex_shrink, None);
+    assert_eq!(part.style().min_size.width, Some(px(0.).into()));
+}
+
 #[test]
 fn the_dialog_stays_while_its_pane_runs_an_agent() {
     assert!(!agent_gone(Some(&session(ONE_AGENT)), 4));

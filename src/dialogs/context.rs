@@ -28,6 +28,7 @@ const SWATCH: f32 = 9.;
 const TOKENS_WIDTH: f32 = 52.;
 const SHARE_WIDTH: f32 = 44.;
 const REFRESH_WIDTH: f32 = 100.;
+const GIVES_WAY: f32 = 1_000.;
 const NOTHING_SPENT: &str = "Nothing is typed into the agent and no tokens are spent. \
                              While it reads, the agent's MCP servers start a second time.";
 
@@ -80,11 +81,13 @@ fn agent_gone(session: Option<&Session>, pane: u64) -> bool {
     session.is_some_and(|s| s.pane(pane).is_none_or(|p| p.agent.is_none()))
 }
 
+fn shown(cx: &Context<ContextDialog>) -> bool {
+    Store::get(cx).read(cx).dialog.as_ref().is_some_and(|d| d.entity_id() == cx.entity_id())
+}
+
 impl ContextDialog {
     fn follow(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
-        let s = store.read(cx);
-        let mine = s.dialog.as_ref().is_some_and(|d| d.entity_id() == cx.entity_id());
-        if mine && agent_gone(s.session.as_ref(), self.pane) {
+        if shown(cx) && agent_gone(store.read(cx).session.as_ref(), self.pane) {
             store.update(cx, Store::close_dialog);
         }
     }
@@ -93,7 +96,7 @@ impl ContextDialog {
         self.reads.start();
         store::run_partial(cx, read::cached_args(self.pane), |this, result, cx| {
             this.reads.settle(outcome_of(result), Instant::now());
-            if this.reads.read_follows() {
+            if this.reads.read_follows(shown(cx)) {
                 this.read(cx);
             }
             cx.notify();
@@ -211,13 +214,19 @@ fn ink(fill: Fill) -> Hsla {
     }
 }
 
+fn gives_way(mut part: Div) -> Div {
+    part.style().flex_shrink = Some(GIVES_WAY);
+    part
+}
+
+fn bar_slice(slice: &Slice) -> Div {
+    let part = div().h_full().min_w(px(2.)).rounded(px(3.)).bg(ink(slice.fill)).w(relative(slice.fraction));
+    if slice.fill == Fill::Free { gives_way(part) } else { part }
+}
+
 fn bar(slices: &[Slice]) -> Div {
-    div().flex().w_full().h(px(BAR_HEIGHT)).gap(px(2.)).children(
-        slices
-            .iter()
-            .filter(|s| s.fraction > 0.)
-            .map(|slice| div().h_full().min_w(px(2.)).rounded(px(3.)).bg(ink(slice.fill)).w(relative(slice.fraction))),
-    )
+    let parts = slices.iter().filter(|s| s.fraction > 0.).map(bar_slice);
+    div().flex().w_full().h(px(BAR_HEIGHT)).gap(px(2.)).children(parts)
 }
 
 fn figure(text: impl Into<SharedString>, width: f32) -> Div {
@@ -261,9 +270,11 @@ fn left_cell(row: &Row) -> Div {
     if row.folder.is_empty() {
         return cell.child(ui::one_line(row.left.clone()));
     }
-    cell.flex()
-        .child(div().flex().min_w_0().text_color(colours::muted()).child(ui::one_line(row.folder.clone())))
-        .child(div().flex_none().child(row.left.clone()))
+    cell.flex().child(gives_way(path_part(&row.folder)).text_color(colours::muted())).child(path_part(&row.left))
+}
+
+fn path_part(text: &str) -> Div {
+    div().flex().min_w_0().child(ui::one_line(text.to_string()))
 }
 
 fn footer(reads: &Reads, cx: &mut Context<ContextDialog>) -> Div {
