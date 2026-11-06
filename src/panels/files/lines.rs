@@ -1,6 +1,5 @@
 use gpui::{
-    AnyElement, ClickEvent, ClipboardItem, Context, IntoElement, Pixels, Point, ScrollStrategy,
-    StatefulInteractiveElement as _,
+    AnyElement, ClickEvent, ClipboardItem, Context, IntoElement, Pixels, Point, StatefulInteractiveElement as _,
 };
 
 use crate::ui::selection::{self, Edge, Selecting, Selection, Selects};
@@ -35,11 +34,9 @@ impl Selects for FilesPanel {
         self.place_mut()?.viewer.as_mut().map(|viewer| &mut viewer.selecting)
     }
 
-    fn scroll_a_row(&mut self, edge: Edge, (first, last): (usize, usize)) {
-        let Some(lines) = self.shown_viewer().and_then(Viewer::text).map(|text| text.lines.len()) else { return };
-        match edge {
-            Edge::Top => self.code_scroll.scroll_to_item(first.saturating_sub(1), ScrollStrategy::Top),
-            Edge::Bottom => self.code_scroll.scroll_to_item((last + 1).min(lines - 1), ScrollStrategy::Bottom),
+    fn scroll_a_row(&mut self, edge: Edge) {
+        if let Some(viewer) = self.shown_viewer() {
+            viewer.list.scroll_by(edge.a_row());
         }
     }
 

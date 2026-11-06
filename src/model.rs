@@ -151,7 +151,7 @@ pub(crate) struct ViewInfo {
     pub controls: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(crate) struct Shown {
     pub project: Option<u64>,

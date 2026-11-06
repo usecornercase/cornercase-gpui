@@ -15,14 +15,17 @@ use crate::theme::{colours, radius};
 use crate::ui::glass;
 use crate::ui::one_line::LaidOut;
 
-use super::{Caret, Edge, Lit, Press, Selection, Zone, bar_origin, edge_at, host, row_at, row_near, word_at};
+use super::code::past_the_cut;
+use super::{
+    Caret, Edge, Lit, Press, Selection, Zone, bar_origin, edge_at, host, off_centre, row_at, row_near, word_at,
+};
 
 const DRAG_AFTER: f32 = 3.;
 const SCROLL_EVERY: Duration = Duration::from_millis(50);
 
 enum DrawnText {
     Line(Box<LaidOut>),
-    Wrapped(TextLayout),
+    Wrapped(TextLayout, Option<usize>),
 }
 
 struct Drawn {
@@ -46,10 +49,27 @@ impl Drawn {
         }
         let index = match &self.text {
             DrawnText::Line(line) => line.index_at(at.x),
-            DrawnText::Wrapped(layout) => wrapped_index(layout, at),
+            DrawnText::Wrapped(layout, kept) => past_the_cut(wrapped_index(layout, at), *kept, self.len),
         };
         index.min(self.len)
     }
+
+    fn top_of(&self, at: usize) -> Pixels {
+        match &self.text {
+            DrawnText::Line(_) => self.bounds.top(),
+            DrawnText::Wrapped(layout, kept) => {
+                let at = kept.map_or(at, |kept| at.min(kept));
+                layout.position_for_index(at).map_or(self.bounds.top(), |spot| spot.y)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum Off {
+    Gone,
+    InView,
+    By(Pixels),
 }
 
 struct Frame<S> {
@@ -81,12 +101,22 @@ impl<S: Copy + Ord> Laid<S> {
         self.0.borrow_mut().rows.insert(spot, drawn);
     }
 
-    fn add_wrapped(&self, spot: S, len: usize, bounds: Bounds<Pixels>, layout: TextLayout) {
-        self.0.borrow_mut().rows.insert(spot, Drawn { bounds, len, text: DrawnText::Wrapped(layout) });
+    fn add_wrapped(&self, (spot, len, kept): (S, usize, Option<usize>), bounds: Bounds<Pixels>, layout: TextLayout) {
+        self.0.borrow_mut().rows.insert(spot, Drawn { bounds, len, text: DrawnText::Wrapped(layout, kept) });
     }
 
     fn set_body(&self, body: Bounds<Pixels>) {
         self.0.borrow_mut().body = body;
+    }
+
+    pub(crate) fn body(&self) -> Bounds<Pixels> {
+        self.0.borrow().body
+    }
+
+    pub(crate) fn off(&self, spot: S, at: usize, inset: f32) -> Off {
+        let frame = self.0.borrow();
+        let Some(drawn) = frame.rows.get(&spot) else { return Off::Gone };
+        off_centre(drawn.top_of(at), frame.body, px(inset)).map_or(Off::InView, Off::By)
     }
 
     fn pressed(&self, at: Point<Pixels>) -> Option<(Caret<S>, Zone)> {
@@ -177,7 +207,7 @@ pub(crate) trait Selects: Sized + 'static {
     type Spot: Copy + Ord + 'static;
 
     fn selecting(&mut self) -> Option<&mut Selecting<Self::Spot>>;
-    fn scroll_a_row(&mut self, edge: Edge, drawn: (Self::Spot, Self::Spot));
+    fn scroll_a_row(&mut self, edge: Edge);
     fn line_text(&self, spot: Self::Spot) -> Option<&str>;
     fn selected_text(&self) -> Option<String>;
 }
@@ -248,10 +278,8 @@ fn ticked<T: Selects>(this: &mut T, cx: &mut Context<T>) -> bool {
     if !pressing.dragging {
         return true;
     }
-    let edge = selecting.laid.edge(pressing.pointer);
-    let drawn = selecting.laid.drawn_ends();
-    if let (Some(edge), Some(drawn)) = (edge, drawn) {
-        this.scroll_a_row(edge, drawn);
+    if let Some(edge) = selecting.laid.edge(pressing.pointer) {
+        this.scroll_a_row(edge);
         cx.notify();
     }
     if this.selecting().is_some_and(Selecting::follow) {
@@ -338,13 +366,13 @@ pub(crate) fn layer<T: Selects>(
     .size_full()
 }
 
-pub(crate) fn row_probe<S: Copy + Ord + 'static>(
+pub(super) fn row_probe<S: Copy + Ord + 'static>(
     laid: &Laid<S>,
-    (spot, len): (S, usize),
+    line: (S, usize, Option<usize>),
     layout: TextLayout,
 ) -> impl IntoElement + use<S> {
     let laid = laid.clone();
-    canvas(move |bounds, _, _| laid.add_wrapped(spot, len, bounds, layout), |_, (), _, _| {})
+    canvas(move |bounds, _, _| laid.add_wrapped(line, bounds, layout), |_, (), _, _| {})
         .absolute()
         .top_0()
         .left_0()

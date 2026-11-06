@@ -1,6 +1,8 @@
 pub(crate) mod disk;
 mod find;
 mod finder;
+mod gutter;
+mod gutter_view;
 mod highlight;
 mod lines;
 mod menu;
@@ -26,14 +28,15 @@ use std::time::{Duration, Instant};
 
 use gpui::{
     AnyView, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Pixels, Point, Render, StatefulInteractiveElement as _, Styled as _, Subscription,
-    Task, UniformListScrollHandle, Window, div, prelude::FluentBuilder as _, px,
+    IntoElement, ListState, ParentElement as _, Pixels, Point, Render, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Task, UniformListScrollHandle, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::cli;
 use crate::panels::PanelKind;
 use crate::platform::Os;
 use crate::platform::paths::Style;
+use crate::prefs::LongLines;
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::selection::Selecting;
@@ -47,6 +50,7 @@ pub(crate) use viewer::open_link;
 
 const CHECK_EVERY: Duration = Duration::from_secs(1);
 const LIST_EVERY: u32 = 2;
+const CHANGES_EVERY: u32 = 10;
 const INDEX_FRESH: Duration = Duration::from_secs(10);
 const CODE_SIZE: f32 = 12.;
 
@@ -63,12 +67,14 @@ struct Place {
     style: Style,
     source: Source,
     listings: HashMap<PathBuf, tree::Listing>,
+    marks: tree::Marks,
     error: Option<String>,
     expanded: HashSet<PathBuf>,
     viewer: Option<Viewer>,
     last: Option<PathBuf>,
     query: String,
     listing: bool,
+    marking: bool,
 }
 
 impl Place {
@@ -78,12 +84,14 @@ impl Place {
             root,
             source,
             listings: HashMap::new(),
+            marks: HashMap::new(),
             error: None,
             expanded: HashSet::new(),
             viewer: None,
             last: None,
             query: String::new(),
             listing: false,
+            marking: false,
         }
     }
 }
@@ -96,6 +104,10 @@ struct Viewer {
     language: Option<&'static str>,
     stamp: Option<disk::Stamp>,
     selecting: Selecting<usize>,
+    list: ListState,
+    long_lines: LongLines,
+    margin: gutter::Margin,
+    reveal: Option<viewer::Reveal>,
     scroll_to: Option<usize>,
     find: Option<find::Find>,
     checking: bool,
@@ -175,7 +187,6 @@ pub(crate) struct FilesPanel {
     rows: Vec<tree::Row>,
     menu: Option<Menu>,
     tree_scroll: UniformListScrollHandle,
-    code_scroll: UniformListScrollHandle,
     results_scroll: UniformListScrollHandle,
     _subscriptions: Vec<Subscription>,
     _tick: Task<()>,
@@ -187,8 +198,8 @@ fn ticker(cx: &mut Context<FilesPanel>) -> Task<()> {
         loop {
             cx.background_executor().timer(CHECK_EVERY).await;
             n = n.wrapping_add(1);
-            let list = n.is_multiple_of(LIST_EVERY);
-            if this.update(cx, |this, cx| this.tick(list, cx)).is_err() {
+            let (list, again) = (n.is_multiple_of(LIST_EVERY), n.is_multiple_of(CHANGES_EVERY));
+            if this.update(cx, |this, cx| this.tick(list, again, cx)).is_err() {
                 break;
             }
         }
@@ -229,7 +240,6 @@ impl FilesPanel {
             rows: Vec::new(),
             menu: None,
             tree_scroll: UniformListScrollHandle::new(),
-            code_scroll: UniformListScrollHandle::new(),
             results_scroll: UniformListScrollHandle::new(),
             _subscriptions: subscriptions,
             _tick: tick,

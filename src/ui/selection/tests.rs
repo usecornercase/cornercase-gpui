@@ -3,8 +3,8 @@ use std::ops::Range;
 use gpui::{Bounds, HighlightStyle, Hsla, point, px, size};
 
 use super::{
-    Caret, Edge, Lit, Press, Selection, Zone, bar_origin, edge_at, host, lines_label, overlay, reference, row_at,
-    row_near, word_at,
+    Caret, Edge, Lit, Press, Selection, Zone, bar_origin, edge_at, host, lines_label, off_centre, overlay, reference,
+    row_at, row_near, word_at,
 };
 
 fn caret(spot: usize, at: usize) -> Caret<usize> {
@@ -350,4 +350,25 @@ fn overlay_keeps_a_gap_between_styles_unstyled() {
     let out = overlay(vec![(0..1, red()), (5..6, red())], &only(8..9), lit_white());
     let ranges: Vec<_> = out.iter().map(|(r, _)| r.clone()).collect();
     assert_eq!(ranges, vec![0..1, 5..6, 8..9]);
+}
+
+#[test]
+fn a_row_inside_the_body_needs_no_scroll() {
+    assert_eq!(off_centre(px(100.), row(0., 400.), px(0.)), None);
+}
+
+#[test]
+fn a_row_cut_by_the_bottom_of_the_body_is_as_far_as_the_centre_says() {
+    assert_eq!(off_centre(px(390.), row(0., 400.), px(0.)), Some(px(190.)));
+}
+
+#[test]
+fn a_row_above_the_body_scrolls_back() {
+    assert_eq!(off_centre(px(-50.), row(0., 400.), px(0.)), Some(px(-250.)));
+}
+
+#[test]
+fn a_row_under_the_find_field_counts_as_out_of_view() {
+    assert_eq!(off_centre(px(30.), row(0., 400.), px(56.)), Some(px(-198.)));
+    assert_eq!(off_centre(px(56.), row(0., 400.), px(56.)), None);
 }

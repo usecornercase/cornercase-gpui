@@ -1,0 +1,31 @@
+{
+  "added": 1,
+  "digest": "32e59e40cac54393",
+  "fold": "open",
+  "hunks": [
+    {
+      "context": "",
+      "lines": [
+        {
+          "kind": "added",
+          "new": 1,
+          "old": null,
+          "text": "new"
+        }
+      ],
+      "new_start": 1,
+      "old_start": 0
+    }
+  ],
+  "mode": "uncommitted",
+  "old_path": null,
+  "path": "tools/new.txt",
+  "removed": 0,
+  "staged": "no",
+  "status": "untracked",
+  "styles": [
+    {}
+  ],
+  "viewed": false,
+  "workspace": 7
+}

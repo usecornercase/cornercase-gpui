@@ -6,9 +6,11 @@ use base64::Engine as _;
 use serde::Deserialize;
 
 use crate::cli;
+use crate::panels::changes::FileStatus;
 use crate::platform::paths::{self, Style};
 
 use super::disk::{self, Content, Stamp};
+use super::gutter::Gutter;
 use super::search::{self, FileHits, LineHit, NameHit, TextResults};
 use super::{Mode, Results, tree};
 
@@ -32,6 +34,7 @@ struct Entry {
     kind: String,
     bytes: Option<u64>,
     modified: Option<String>,
+    status: Option<FileStatus>,
 }
 
 #[derive(Deserialize)]
@@ -147,8 +150,8 @@ fn folder_listing(folder: Folder) -> std::io::Result<tree::Listing> {
     if let Some(error) = folder.error {
         return Err(std::io::Error::other(error));
     }
-    let mut entries: Vec<tree::Entry> =
-        folder.entries.into_iter().map(|e| tree::Entry { dir: e.kind == "folder", name: e.name }).collect();
+    let entry = |e: Entry| tree::Entry { dir: e.kind == "folder", name: e.name, status: e.status };
+    let mut entries: Vec<tree::Entry> = folder.entries.into_iter().map(entry).collect();
     tree::sort(&mut entries);
     Ok(tree::Listing { entries, truncated: folder.more })
 }
@@ -179,6 +182,15 @@ pub(super) fn stamp(workspace: u64, rel: &Path) -> Option<Stamp> {
     let (folder, name) = folder_and_name(rel)?;
     let json = answer(&files_args("list", workspace, &[], [folder])).ok()?;
     stamp_in(&json, &name)
+}
+
+fn changes_args(workspace: u64, rel: &Path) -> Vec<String> {
+    let path = Style::Unix.shown(rel);
+    ["changes", "file", "--workspace", &workspace.to_string(), "--json", "--", &path].map(str::to_string).to_vec()
+}
+
+pub(super) fn gutter(workspace: u64, rel: &Path) -> Option<Gutter> {
+    Gutter::parse(&answer(&changes_args(workspace, rel)).ok()?)
 }
 
 fn bytes_of(read: Read) -> std::result::Result<Vec<u8>, String> {
