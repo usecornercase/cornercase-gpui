@@ -22,9 +22,9 @@ fn truncated_note() -> impl IntoElement {
     ui::dim(format!("Some folders hold more than {} entries; the rest are not listed", tree::MAX_ENTRIES)).px(px(12.))
 }
 
-fn root_name(root: &Path) -> impl IntoElement + use<> {
+fn root_name(root: &Path, folder: Option<String>) -> impl IntoElement + use<> {
     let root = root.to_string_lossy();
-    let shown = ui::home_relative(&root);
+    let shown = folder.unwrap_or_else(|| ui::home_relative(&root));
     let name =
         Some(Style::of_path(&root).name(&root)).filter(|n| !n.is_empty()).map_or_else(|| shown.clone(), str::to_string);
     div()
@@ -65,7 +65,7 @@ impl FilesPanel {
             .pr(px(8.))
             .pt(px(6.))
             .pb(px(2.))
-            .child(root_name(root))
+            .child(root_name(root, self.machine.as_ref().map(|read| read.folder.clone())))
             .child(self.tree_tools(any_open, cx))
     }
 

@@ -20,6 +20,7 @@ pub(super) enum Content {
     TooLarge,
     NotRegular,
     Gone(String),
+    Lost(String),
 }
 
 #[derive(Debug, Clone, Default)]

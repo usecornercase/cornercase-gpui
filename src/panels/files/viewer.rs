@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Instant;
 
 use gpui::{
     AnyView, App, AppContext as _, Context, ListAlignment, ListOffset, ListState, ScrollStrategy, WeakEntity, Window,
@@ -215,6 +216,9 @@ impl FilesPanel {
     }
 
     pub(super) fn open_file(&mut self, rel: PathBuf, mut at: OpenAt, cx: &mut Context<Self>) {
+        if self.refuses_asking(cx).is_some() {
+            return;
+        }
         let Some(id) = self.current else { return };
         let Some(place) = self.places.get_mut(&id) else { return };
         let path = place.style.join(&place.root, &rel);
@@ -248,7 +252,16 @@ impl FilesPanel {
         if viewer.path != reading.path {
             return;
         }
+        if let Some(Content::Lost(why)) = &content {
+            viewer.checking = false;
+            self.retry.failed(why.clone(), Instant::now());
+            cx.notify();
+            return;
+        }
         let fresh = content.is_some();
+        if fresh {
+            self.retry.heard();
+        }
         if let Some(content) = content {
             viewer.set_content(content, reading);
         }
@@ -290,6 +303,9 @@ impl FilesPanel {
     }
 
     pub(super) fn check_file(&mut self, cx: &mut Context<Self>) {
+        if !self.may_poll(cx) {
+            return;
+        }
         let Some(id) = self.current else { return };
         let Some(place) = self.places.get_mut(&id) else { return };
         let source = place.source.clone();
@@ -299,11 +315,12 @@ impl FilesPanel {
         }
         viewer.checking = true;
         let fetch = Fetch { id, path: viewer.path.clone(), rel: viewer.rel.clone(), source };
-        let known = viewer.stamp;
+        let known = viewer.content.is_some().then_some(viewer.stamp);
         let asked = fetch.clone();
         let stamp = cx.background_spawn(async move { asked.source.stamp(&asked.rel) });
         cx.spawn(async move |this, cx| {
-            let unchanged = stamp.await == known;
+            let stamp = stamp.await;
+            let unchanged = known.is_some_and(|known| known == stamp);
             let _ = this.update(cx, |this, cx| this.checked(fetch, unchanged, cx));
         })
         .detach();

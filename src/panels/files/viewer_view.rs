@@ -103,7 +103,7 @@ fn other_body(content: &Content) -> AnyElement {
         Content::NotRegular => {
             centered_note("Not a regular file", "Devices, sockets and pipes are not read.").into_any_element()
         }
-        Content::Gone(e) => centered_note("Cannot read this file", e.clone()).into_any_element(),
+        Content::Gone(e) | Content::Lost(e) => centered_note("Cannot read this file", e.clone()).into_any_element(),
         Content::Text(_) => div().into_any_element(),
     }
 }
@@ -142,7 +142,7 @@ impl FilesPanel {
             .child(Self::viewer_tools(heading, cx))
     }
 
-    fn viewer_actions(heading: &Heading, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn viewer_actions(heading: &Heading, opens: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let target = heading.target.clone();
         let path = heading.path.display().to_string();
         div()
@@ -157,16 +157,18 @@ impl FilesPanel {
                         .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_find(window, cx))),
                 )
             })
-            .child(ui::button("files-open-in", "Open in…").on_click(
-                cx.listener(move |this, e: &ClickEvent, _, cx| this.show_menu(e.position(), target.clone(), cx)),
-            ))
+            .when(opens, |d| {
+                d.child(ui::button("files-open-in", "Open in…").on_click(
+                    cx.listener(move |this, e: &ClickEvent, _, cx| this.show_menu(e.position(), target.clone(), cx)),
+                ))
+            })
             .child(
                 ui::button("files-copy-path", "Copy path")
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.copy(path.clone(), "path", cx))),
             )
     }
 
-    fn viewer_header(heading: &Heading, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn viewer_header(heading: &Heading, opens: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         div()
             .flex_none()
             .flex()
@@ -177,7 +179,7 @@ impl FilesPanel {
             .border_b_1()
             .border_color(colours::border())
             .child(Self::viewer_title(heading, cx))
-            .child(Self::viewer_actions(heading, cx))
+            .child(Self::viewer_actions(heading, opens, cx))
     }
 
     fn code_list(list: &ListState, cx: &mut Context<Self>) -> AnyElement {
@@ -224,7 +226,7 @@ impl FilesPanel {
             .min_h_0()
             .flex()
             .flex_col()
-            .child(Self::viewer_header(&heading, cx))
+            .child(Self::viewer_header(&heading, self.machine.is_none(), cx))
             .child(code)
             .into_any_element()
     }

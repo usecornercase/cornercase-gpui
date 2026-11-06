@@ -7,7 +7,7 @@ use gpui::{AppContext as _, Context, ScrollStrategy};
 
 use super::source::Source;
 use super::viewer::OpenAt;
-use super::{FilesPanel, INDEX_FRESH, Mode, Results, TextRow, search, served};
+use super::{FilesPanel, INDEX_FRESH, Mode, Results, TextRow, search};
 
 pub(super) struct Job {
     pub(super) root: PathBuf,
@@ -42,8 +42,7 @@ impl Job {
 }
 
 fn answer(job: Job) -> Answer {
-    if let Source::Server(workspace) = job.source {
-        let results = served::search(workspace, &job.query, job.mode);
+    if let Some(results) = job.source.search(&job.query, job.mode) {
         return Answer { root: job.root, paths: Arc::default(), fresh: false, query: job.query, results };
     }
     let (paths, fresh) = match job.index {
@@ -119,6 +118,11 @@ impl FilesPanel {
         let Some((root, source)) = self.place().map(|p| (p.root.clone(), p.source.clone())) else { return };
         if query.is_empty() {
             self.search.clear();
+            cx.notify();
+            return;
+        }
+        if let Some(why) = self.refuses_asking(cx) {
+            self.search.results = Results::Failed(why);
             cx.notify();
             return;
         }

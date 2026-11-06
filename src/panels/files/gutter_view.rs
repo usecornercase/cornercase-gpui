@@ -117,6 +117,9 @@ impl FilesPanel {
     }
 
     pub(super) fn follow_changes(&mut self, id: u64, again: bool, cx: &mut Context<Self>) {
+        if !self.may_poll(cx) {
+            return;
+        }
         let Some(place) = self.places.get_mut(&id) else { return };
         let source = place.source.clone();
         let Some(viewer) = place.viewer.as_mut() else { return };
@@ -145,8 +148,11 @@ impl FilesPanel {
     }
 
     fn apply_gutter(&mut self, asked: &Asked, gutter: Option<Gutter>, cx: &mut Context<Self>) {
-        let viewer = self.places.get_mut(&asked.id).and_then(|place| place.viewer.as_mut());
-        let Some(viewer) = viewer.filter(|viewer| viewer.path == asked.path) else { return };
+        let Some(place) = self.places.get_mut(&asked.id) else { return };
+        if gutter.is_none() && place.source.is_there() {
+            return;
+        }
+        let Some(viewer) = place.viewer.as_mut().filter(|viewer| viewer.path == asked.path) else { return };
         let unfolded = !viewer.margin.unfolded.is_empty();
         if viewer.margin.answered(asked.generation, gutter) {
             if unfolded {

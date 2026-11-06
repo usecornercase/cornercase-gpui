@@ -4,7 +4,7 @@ use crate::ui::selection::{Caret, Selection};
 
 use super::super::diff::{self, Part, Spot};
 use super::super::wire::{Gap, GapLine, Hunk, Line, LineKind, Mode, Patch};
-use super::super::{DiffData, Selected};
+use super::super::{DiffData, Selected, Whose};
 use super::copied_toast;
 
 fn line(kind: LineKind, old: Option<u32>, new: Option<u32>, text: &str) -> Line {
@@ -38,7 +38,7 @@ fn data() -> DiffData {
     let gaps = HashMap::from([(1, (gap.clone(), Vec::new()))]);
     let gap_lines = HashMap::from([(1, gap)]);
     let rows = diff::rows(&hunks, &gap_lines);
-    let selected = Selected { workspace: 7, path: "src/a.rs".into(), mode: Mode::Uncommitted };
+    let selected = Selected { workspace: Whose::Here(7), path: "src/a.rs".into(), mode: Mode::Uncommitted };
     DiffData { selected, patch: Patch { hunks, ..Patch::default() }, looks: Vec::new(), gaps, rows }
 }
 

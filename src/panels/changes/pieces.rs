@@ -6,11 +6,11 @@ use crate::store::{Store, ToastKind};
 use crate::theme::{FONT_FAMILY, Painter, colours};
 use crate::ui;
 
-use super::Look;
 use super::wire::{FileInfo, FileStatus, Summary};
+use super::{Look, Whose};
 
-pub(super) fn find<'a>(summary: &'a Summary, workspace: u64, path: &str) -> Option<&'a FileInfo> {
-    summary.workspaces.iter().filter(|w| w.workspace == workspace).flat_map(|w| &w.files).find(|f| f.path == path)
+pub(super) fn find<'a>(summary: &'a Summary, workspace: &Whose, path: &str) -> Option<&'a FileInfo> {
+    summary.workspaces.iter().filter(|w| workspace.holds(w.workspace)).flat_map(|w| &w.files).find(|f| f.path == path)
 }
 
 pub(super) fn find_mut<'a>(summary: &'a mut Summary, workspace: u64, path: &str) -> Option<&'a mut FileInfo> {

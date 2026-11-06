@@ -20,9 +20,10 @@ use gpui::{
     prelude::FluentBuilder as _, px, relative,
 };
 
-use crate::cli::Stream;
-use crate::model::Session;
-use crate::store::Store;
+use crate::cli::{Stream, Target};
+use crate::model::{Aim, Session};
+use crate::panels::on_machine::{self, Retry};
+use crate::store::{MachineRead, Store};
 use crate::ui::selection::Selecting;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{TextField, TextFieldEvent};
@@ -53,15 +54,44 @@ impl Scope {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Whose {
+    Here(u64),
+    There(Aim),
+}
+
+impl Whose {
+    fn arg(&self) -> String {
+        match self {
+            Self::Here(id) => id.to_string(),
+            Self::There(aim) => aim.workspace_arg(),
+        }
+    }
+
+    fn holds(&self, listed: u64) -> bool {
+        match self {
+            Self::Here(id) => *id == listed,
+            Self::There(_) => true,
+        }
+    }
+
+    fn here(&self) -> Option<u64> {
+        match self {
+            Self::Here(id) => Some(*id),
+            Self::There(_) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Follow {
     scope: Scope,
-    workspace: Option<u64>,
+    workspace: Option<Whose>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Selected {
-    workspace: u64,
+    workspace: Whose,
     path: String,
     mode: Mode,
 }
@@ -96,9 +126,12 @@ struct Open {
 pub(crate) struct ChangesPanel {
     scope: Scope,
     project_mode: Mode,
-    shown: Option<u64>,
+    shown: Option<Whose>,
+    on_machine: Option<MachineRead>,
+    retry: Retry,
     follow: Option<Follow>,
     stream: Option<Stream>,
+    stream_on: Option<Target>,
     stream_generation: u64,
     summary: Option<Summary>,
     ended: Option<String>,
@@ -123,8 +156,11 @@ impl ChangesPanel {
             scope: Scope::Project(Mode::Uncommitted),
             project_mode: Mode::Uncommitted,
             shown: None,
+            on_machine: None,
+            retry: Retry::default(),
             follow: None,
             stream: None,
+            stream_on: None,
             stream_generation: 0,
             summary: None,
             ended: None,
@@ -164,6 +200,22 @@ impl ChangesPanel {
         let top = self.diff_list.logical_scroll_top();
         self.diff_list.reset(self.open.data.as_ref().map_or(0, |data| data.rows.len()));
         self.diff_list.scroll_to(ListOffset { item_ix: top.item_ix, offset_in_item: px(0.) });
+    }
+
+    fn reads_machine(&self) -> bool {
+        matches!(self.follow, Some(Follow { workspace: Some(Whose::There(_)), .. }))
+    }
+
+    fn machine_shown(&self) -> Option<&MachineRead> {
+        self.on_machine.as_ref().filter(|_| matches!(self.scope, Scope::Project(_)))
+    }
+
+    fn machine_note(&self) -> Option<on_machine::Note> {
+        on_machine::note(self.machine_shown()?, &self.retry)
+    }
+
+    fn whose_row(&self, listed: u64) -> Whose {
+        follow::whose_listed(self.follow.as_ref(), listed)
     }
 }
 
@@ -205,6 +257,7 @@ impl Render for ChangesPanel {
             .flex()
             .flex_col()
             .text_size(px(12.))
+            .children(self.machine_shown().map(|read| on_machine::strip(read, &self.retry)))
             .child(self.render_header(session, window, cx))
             .child(self.render_body(session, cx))
             .child(self.render_footer())

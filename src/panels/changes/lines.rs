@@ -6,7 +6,7 @@ use crate::ui::selection::{self, Edge, Selecting, Selection, Selects};
 use super::diff::{self, Part, Spot};
 use super::pieces::toast;
 use super::wire::FileStatus;
-use super::{ChangesPanel, DiffData};
+use super::{ChangesPanel, DiffData, Whose};
 
 const NO_OWN_TEXT: &str = "tabs may have become spaces: needs usecornercase/cornercase-terminal#667";
 
@@ -120,7 +120,7 @@ impl ChangesPanel {
         let Some(data) = self.open.data.clone() else { return };
         let Some(lines) = data.selected_lines(selection) else { return };
         let reference = selection::reference(&data.patch.file.path, lines);
-        let workspace = data.selected.workspace;
+        let Whose::Here(workspace) = data.selected.workspace else { return };
         Store::get(cx).update(cx, |s, cx| s.ask_about(workspace, &reference, cx));
     }
 
@@ -128,13 +128,26 @@ impl ChangesPanel {
         let Some(selection) = self.open.selecting.selection else { return };
         let Some(data) = self.open.data.clone() else { return };
         let Some((first, _)) = data.selected_lines(selection) else { return };
-        Store::get(cx).read(cx).open_in_editor(data.selected.workspace, &data.patch.file.path, first);
+        let Whose::Here(workspace) = data.selected.workspace else { return };
+        Store::get(cx).read(cx).open_in_editor(workspace, &data.patch.file.path, first);
     }
 
     pub(super) fn line_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let selection = self.open.selecting.selection?;
         let data = self.open.data.as_ref()?;
         let label = data.selection_label(selection)?;
+        let mut actions = Vec::new();
+        if matches!(data.selected.workspace, Whose::Here(_)) {
+            actions = Self::line_acts(data, cx);
+        }
+        let copy = selection::action("diff-copy", "Copy").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            this.copy_selection(cx);
+        }));
+        actions.push(copy.into_any_element());
+        Some(selection::action_bar(label, actions).into_any_element())
+    }
+
+    fn line_acts(data: &DiffData, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let mut actions = Vec::new();
         if data.patch.file.status != FileStatus::Deleted {
             let open = selection::action("diff-open", "Open")
@@ -143,11 +156,8 @@ impl ChangesPanel {
         }
         let ask = selection::action("diff-ask", "Ask agent")
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.ask_about_selection(cx)));
-        let copy = selection::action("diff-copy", "Copy").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-            this.copy_selection(cx);
-        }));
-        actions.extend([ask.into_any_element(), copy.into_any_element()]);
-        Some(selection::action_bar(label, actions).into_any_element())
+        actions.push(ask.into_any_element());
+        actions
     }
 }
 

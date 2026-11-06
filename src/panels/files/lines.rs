@@ -86,22 +86,28 @@ impl FilesPanel {
         self.show_menu(at, target, cx);
     }
 
-    pub(super) fn line_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        self.shown_viewer()?.text()?;
-        let label = selection::lines_label(one_based(self.covered()?));
-        let actions = vec![
+    fn line_acts(cx: &mut Context<Self>) -> [AnyElement; 2] {
+        [
             selection::action("viewer-open", "Open")
                 .on_click(cx.listener(|this, e: &ClickEvent, _, cx| this.open_selection(e.position(), cx)))
                 .into_any_element(),
             selection::action("viewer-ask", "Ask agent")
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.ask_about_selection(cx)))
                 .into_any_element(),
-            selection::action("viewer-copy", "Copy")
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.copy_selection(cx);
-                }))
-                .into_any_element(),
-        ];
+        ]
+    }
+
+    pub(super) fn line_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.shown_viewer()?.text()?;
+        let label = selection::lines_label(one_based(self.covered()?));
+        let mut actions = Vec::new();
+        if self.machine.is_none() {
+            actions.extend(Self::line_acts(cx));
+        }
+        let copy = selection::action("viewer-copy", "Copy").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            this.copy_selection(cx);
+        }));
+        actions.push(copy.into_any_element());
         Some(selection::action_bar(label, actions).into_any_element())
     }
 }

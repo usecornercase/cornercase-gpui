@@ -1,6 +1,6 @@
 mod view;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -13,7 +13,7 @@ use gpui::{
 use crate::cli;
 use crate::model::{Project, Workspace};
 use crate::platform::paths::Style;
-use crate::store::Store;
+use crate::store::{MachineRead, Store};
 use crate::theme::radius;
 use crate::ui::{TextField, TextFieldEvent, glass};
 
@@ -21,6 +21,7 @@ use super::querying::{Answer, Job};
 use super::results_view::names_summary;
 use super::search::{self, NameHit};
 use super::source::Source;
+use super::there::{place_key, source_of};
 use super::viewer::dock_files;
 use super::workspace::shown_workspace;
 use super::{FilesPanel, Mode, Results};
@@ -43,6 +44,20 @@ impl Spot {
         let source = Source::new(workspace.id, root.clone(), cli::host().is_some());
         let style = Style::of_path(&workspace.path);
         Self { id: workspace.id, root, style, source, label: place_label(project, workspace) }
+    }
+
+    fn on_machine(read: &MachineRead) -> Option<Self> {
+        Some(Self {
+            id: place_key(&read.aim),
+            root: PathBuf::from(&read.path),
+            style: Style::of_path(&read.path),
+            source: source_of(read)?,
+            label: format!("{} on {}", read.place, read.aim.machine),
+        })
+    }
+
+    fn same_place(&self, other: &Self) -> bool {
+        self.id == other.id && self.root == other.root && self.source == other.source
     }
 }
 
@@ -168,6 +183,7 @@ pub(crate) struct Finder {
     panel: WeakEntity<FilesPanel>,
     field: Entity<TextField>,
     spot: Option<Spot>,
+    refused: Option<String>,
     index: Option<Arc<Vec<String>>>,
     warming: Option<Arc<AtomicBool>>,
     running: Option<Arc<AtomicBool>>,
@@ -201,6 +217,7 @@ impl Finder {
             panel,
             field,
             spot: None,
+            refused: None,
             index: None,
             warming: None,
             running: None,
@@ -230,12 +247,25 @@ impl Finder {
 
     fn follow(&mut self, cx: &mut Context<Self>) {
         let store = Store::get(cx);
-        let shown = shown_workspace(store.read(cx).session.as_ref());
-        let here = self.spot.as_ref().map(|s| (s.id, s.root.as_path()));
-        if here == shown.map(|(_, ws)| (ws.id, Path::new(&ws.path))) {
+        let store = store.read(cx);
+        let read = store.machine_read();
+        let spot = match &read {
+            Some(read) => Spot::on_machine(read),
+            None => shown_workspace(store.session.as_ref()).map(|(project, ws)| Spot::new(project, ws)),
+        };
+        let refused = read.and_then(|read| read.reach.why_not().map(str::to_string));
+        if refused != self.refused {
+            self.refused = refused;
+            cx.notify();
+        }
+        let same = match (&self.spot, &spot) {
+            (Some(old), Some(new)) => old.same_place(new),
+            (None, None) => true,
+            _ => false,
+        };
+        if same {
             return;
         }
-        let spot = shown.map(|(project, ws)| Spot::new(project, ws));
         self.stop();
         self.index = None;
         self.spot = spot;
@@ -350,7 +380,10 @@ impl Finder {
     }
 
     fn status(&self, cx: &App) -> Status {
-        status(self.spot.is_some(), &self.query(cx), self.warming.is_some(), &self.pick)
+        match &self.refused {
+            Some(why) => Status::Failed(why.clone()),
+            None => status(self.spot.is_some(), &self.query(cx), self.warming.is_some(), &self.pick),
+        }
     }
 }
 

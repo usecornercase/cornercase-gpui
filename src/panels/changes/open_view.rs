@@ -3,6 +3,7 @@ use gpui::{
     Styled as _, div, prelude::FluentBuilder as _, px, relative,
 };
 
+use crate::panels::on_machine;
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui;
@@ -12,7 +13,7 @@ use crate::ui::split::{self, Edge};
 use super::actions::file_busy;
 use super::pieces::{counts, faint_detail, find, split_path, status_letter};
 use super::wire::{FileInfo, FileStatus, FoldClass, Staging, State};
-use super::{ChangesPanel, FilesGrip, Selected, diff, diff_view, files_height};
+use super::{ChangesPanel, FilesGrip, Selected, Whose, diff, diff_view, files_height};
 
 fn empty_diff_text(file: &FileInfo) -> &'static str {
     match file.fold {
@@ -48,7 +49,7 @@ impl ChangesPanel {
     fn open_file_info(&self, selected: &Selected) -> FileInfo {
         self.summary
             .as_ref()
-            .and_then(|s| find(s, selected.workspace, &selected.path))
+            .and_then(|s| find(s, &selected.workspace, &selected.path))
             .cloned()
             .or_else(|| self.open.data.as_ref().map(|d| d.patch.file.clone()))
             .unwrap_or_else(|| FileInfo { path: selected.path.clone(), ..FileInfo::default() })
@@ -63,13 +64,18 @@ impl ChangesPanel {
         self.open.data.as_ref().and_then(|d| d.patch.hunks.first()).map_or(1, |h| diff::changed(h).0)
     }
 
-    fn open_actions(&self, selected: &Selected, file: &FileInfo, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let workspace = selected.workspace;
+    fn open_actions(
+        &self,
+        selected: &Selected,
+        file: &FileInfo,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement + use<>> {
+        let Whose::Here(workspace) = selected.workspace else { return None };
         let first_line = self.first_changed_line();
         let shown = self.shown_file(selected, file);
         let (viewed_file, open_path) = (shown.clone(), file.path.clone());
         let can_open = file.status != FileStatus::Deleted;
-        div()
+        let actions = div()
             .flex()
             .flex_wrap()
             .gap(px(6.))
@@ -85,7 +91,8 @@ impl ChangesPanel {
                 d.child(ui::button("open-editor", "Open in editor").on_click(move |_: &ClickEvent, _, cx| {
                     Store::get(cx).read(cx).open_in_editor(workspace, &open_path, first_line);
                 }))
-            })
+            });
+        Some(actions)
     }
 
     fn open_title(&self, file: &FileInfo, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -134,7 +141,7 @@ impl ChangesPanel {
             .border_y_1()
             .border_color(colours::border())
             .child(self.open_title(&file, cx))
-            .child(self.open_actions(selected, &file, cx));
+            .children(self.open_actions(selected, &file, cx));
         div()
             .flex_1()
             .min_h(px(0.))
@@ -175,7 +182,9 @@ impl ChangesPanel {
             let files = s.workspaces.iter().flat_map(|w| &w.files);
             (files.clone().filter(|f| f.viewed).count(), files.count())
         });
+        let reconnecting = matches!(self.machine_note(), Some(on_machine::Note::Reconnecting(_)));
         let (dot, state) = match (&self.ended, &self.summary, self.stream.is_some()) {
+            _ if reconnecting => (colours::working(), "reconnecting…"),
             (Some(_), _, _) => (colours::failed(), "stopped"),
             (_, Some(s), true) if s.state == State::Ready => (colours::done(), "live"),
             (_, Some(s), _) if s.state == State::Failed => (colours::failed(), "failed"),

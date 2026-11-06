@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.19
+
+- **Changes and Files read a machine's workspace.** With a machine's workspace picked in the sidebar, these two panels show what is on that machine, and say `on vps` at the top. Changes follows its diff live in Uncommitted, Commits and All, with the filter, the gaps and selecting and copying lines. Files browses its tree, opens its files, searches names and text, and ⇧⌘P finds a file there. Nothing on your computer is read for them, even where the same path exists here.
+- **They only read.** Staging, discarding, marking viewed, choosing the base, Ask agent and opening in an editor are not offered on a machine's workspace. Every project stays this computer's and says so.
+- **When the machine goes down** the panels keep what they show and say `vps unreachable · reconnecting…`; opening another file there sends nothing and tells you so, and they pick up by themselves when the link is back. If the server there restarted, they start over, since what they showed may no longer be that workspace.
+
 ## 0.1.18
 
 - **Files shows what changed.** The tree's rows end in git's letter, in the colours of the Changes panel, for a changed file and for a folder holding one. In an open file the margin marks added lines in green, changed ones in blue and where lines were removed in red; a click on a mark shows the old lines, and another hides them.

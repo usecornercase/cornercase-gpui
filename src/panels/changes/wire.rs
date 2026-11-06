@@ -108,6 +108,7 @@ pub(super) struct WorkspaceChanges {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(super) struct Summary {
+    pub boot: String,
     pub revision: u64,
     pub scope: String,
     pub mode: Mode,

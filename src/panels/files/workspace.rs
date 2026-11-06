@@ -7,6 +7,7 @@ use crate::store::Store;
 
 use super::served::Listed;
 use super::source::Source;
+use super::there::is_lost;
 use super::{FilesPanel, Place, tree};
 
 pub(super) fn shown_workspace(session: Option<&Session>) -> Option<(&Project, &Workspace)> {
@@ -15,9 +16,10 @@ pub(super) fn shown_workspace(session: Option<&Session>) -> Option<(&Project, &W
 }
 
 impl Place {
-    fn apply_listing(&mut self, rel: PathBuf, listing: std::io::Result<tree::Listing>) -> bool {
+    pub(super) fn apply_listing(&mut self, rel: PathBuf, listing: std::io::Result<tree::Listing>) -> bool {
         let root = rel.as_os_str().is_empty();
         match listing {
+            Err(e) if self.source.is_there() && is_lost(&e) => false,
             Ok(listing) => {
                 let cleared = root && self.error.take().is_some();
                 if self.source.lists_marks() {
@@ -43,6 +45,7 @@ impl FilesPanel {
         self.follow_workspace(cx);
         if self.showing(cx) {
             self.take_run_file(cx);
+            self.list_machine_on_opening(cx);
         } else {
             self.forget_flow();
             self.store.update(cx, Store::leave_file_full_screen);
@@ -50,6 +53,16 @@ impl FilesPanel {
     }
 
     pub(super) fn follow_workspace(&mut self, cx: &mut Context<Self>) {
+        let read = self.store.read(cx).machine_read();
+        if read != self.machine {
+            self.machine.clone_from(&read);
+            cx.notify();
+        }
+        if let Some(read) = &read {
+            self.follow_machine(read, cx);
+            return;
+        }
+        self.leave_machine(cx);
         let shown =
             shown_workspace(self.store.read(cx).session.as_ref()).map(|(_, ws)| (ws.id, PathBuf::from(&ws.path)));
         let Some((id, root)) = shown else {
@@ -61,10 +74,11 @@ impl FilesPanel {
         if self.current == Some(id) && self.places.get(&id).is_some_and(|p| p.root == root) {
             return;
         }
-        self.switch_to(id, root, cx);
+        let source = Source::new(id, root.clone(), self.remote);
+        self.switch_to(id, root, source, cx);
     }
 
-    fn switch_to(&mut self, id: u64, root: PathBuf, cx: &mut Context<Self>) {
+    pub(super) fn switch_to(&mut self, id: u64, root: PathBuf, source: Source, cx: &mut Context<Self>) {
         let old_query = self.query.read(cx).text();
         if let Some(place) = self.current.and_then(|id| self.places.get_mut(&id)) {
             place.query.clone_from(&old_query);
@@ -75,11 +89,10 @@ impl FilesPanel {
         self.current = Some(id);
         self.menu = None;
         self.left_place = true;
-        let source = Source::new(id, root.clone(), self.remote);
         let place = self.places.entry(id).or_insert_with(|| Place::new(root, source));
         let query = place.query.clone();
         self.search.index = None;
-        self.search.clear();
+        self.search.forget();
         if query != old_query {
             self.query.update(cx, |f, cx| f.set_text(query, cx));
         } else if !query.trim().is_empty() {
@@ -103,6 +116,9 @@ impl FilesPanel {
     }
 
     pub(super) fn relist(&mut self, cx: &mut Context<Self>) {
+        if !self.may_poll(cx) {
+            return;
+        }
         let Some(id) = self.current else { return };
         let Some(place) = self.places.get_mut(&id) else { return };
         if place.listing {
@@ -126,6 +142,7 @@ impl FilesPanel {
     }
 
     fn apply_listings(&mut self, id: u64, listed: Listed, cx: &mut Context<Self>) {
+        self.machine_answered(&listed, cx);
         let Some(place) = self.places.get_mut(&id) else { return };
         place.listing = false;
         let mut changed = false;
@@ -147,10 +164,19 @@ impl FilesPanel {
         let Some(id) = self.current else { return };
         let Some(place) = self.places.get_mut(&id) else { return };
         if !place.expanded.remove(&rel) {
-            place.expanded.insert(rel.clone());
-            self.list(id, vec![rel], cx);
+            self.open_folder(id, rel, cx);
         }
         cx.notify();
+    }
+
+    fn open_folder(&mut self, id: u64, rel: PathBuf, cx: &mut Context<Self>) {
+        if self.refuses_asking(cx).is_some() {
+            return;
+        }
+        if let Some(place) = self.places.get_mut(&id) {
+            place.expanded.insert(rel.clone());
+        }
+        self.list(id, vec![rel], cx);
     }
 
     pub(super) fn collapse_all(&mut self, cx: &mut Context<Self>) {

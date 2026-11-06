@@ -3,16 +3,17 @@ use std::rc::Rc;
 
 use gpui::{Context, ListOffset, px};
 
+use crate::cli::{self, Target};
 use crate::store::{self, Busy, Store, ToastKind, args};
 
 use super::pieces::{find, looks, parse, toast};
 use super::wire::{Base, Gap, Patch};
-use super::{ChangesPanel, DiffData, Gaps, Open, Scope, Selected, diff};
+use super::{ChangesPanel, DiffData, Gaps, Open, Scope, Selected, Whose, diff};
 
 fn file_command(verb: &str, selected: &Selected, extra: &[String]) -> Vec<String> {
     let mut a = args(&["changes", verb, &selected.path]);
     a.extend(extra.iter().cloned());
-    a.extend(args(&["--workspace", &selected.workspace.to_string(), "--mode", selected.mode.name(), "--json"]));
+    a.extend(args(&["--workspace", &selected.workspace.arg(), "--mode", selected.mode.name(), "--json"]));
     a
 }
 
@@ -21,6 +22,20 @@ pub(super) fn switching_base(workspace: u64) -> String {
 }
 
 impl ChangesPanel {
+    fn read_target(&self, workspace: &Whose) -> Result<Target, String> {
+        if matches!(workspace, Whose::Here(_)) {
+            return Ok(cli::target());
+        }
+        let Some(read) = &self.on_machine else { return Err("that machine is no longer shown".to_string()) };
+        read.reach.target().cloned().ok_or_else(|| read.reach.why_not().unwrap_or_default().to_string())
+    }
+
+    pub(super) fn refuses_reading(&self, workspace: &Whose, cx: &mut Context<Self>) -> bool {
+        let Err(why) = self.read_target(workspace) else { return false };
+        Store::get(cx).update(cx, |s, cx| s.not_sent(&why, cx));
+        true
+    }
+
     pub(super) fn set_scope(&mut self, scope: Scope, cx: &mut Context<Self>) {
         if scope == self.scope {
             return;
@@ -50,7 +65,7 @@ impl ChangesPanel {
         let digest = self
             .summary
             .as_ref()
-            .and_then(|s| find(s, selected.workspace, &selected.path))
+            .and_then(|s| find(s, &selected.workspace, &selected.path))
             .map(|f| f.digest.clone())
             .unwrap_or_default();
         self.load_patch(digest, cx);
@@ -58,12 +73,20 @@ impl ChangesPanel {
 
     pub(super) fn load_patch(&mut self, digest: String, cx: &mut Context<Self>) {
         let Some(selected) = self.selected.clone() else { return };
+        let target = match self.read_target(&selected.workspace) {
+            Ok(target) => target,
+            Err(why) => {
+                self.open.error = Some(why);
+                cx.notify();
+                return;
+            }
+        };
         self.open.digest = digest;
         self.open.loading = true;
         self.open.generation += 1;
         let generation = self.open.generation;
         let a = file_command("file", &selected, &[]);
-        store::run(cx, a, move |this: &mut Self, result, cx| {
+        store::run_on(cx, target, a, move |this: &mut Self, result, cx| {
             if this.open.generation != generation {
                 return;
             }
@@ -106,9 +129,13 @@ impl ChangesPanel {
 
     pub(super) fn load_gap(&mut self, hunk: usize, cx: &mut Context<Self>) {
         let Some(data) = self.open.data.clone() else { return };
+        if self.refuses_reading(&data.selected.workspace, cx) {
+            return;
+        }
+        let Ok(target) = self.read_target(&data.selected.workspace) else { return };
         let a = file_command("gap", &data.selected, &args(&["--hunk", &hunk.to_string()]));
         let generation = self.open.generation;
-        store::run(cx, a, move |this: &mut Self, result, cx| {
+        store::run_on(cx, target, a, move |this: &mut Self, result, cx| {
             if this.open.generation != generation {
                 return;
             }
@@ -128,9 +155,13 @@ impl ChangesPanel {
         self.set_data(data.selected.clone(), data.patch.clone(), gaps, true);
     }
 
+    pub(super) fn followed_here(&self) -> Option<u64> {
+        self.follow.as_ref()?.workspace.as_ref()?.here()
+    }
+
     pub(super) fn open_base(&mut self, cx: &mut Context<Self>) {
+        let Some(workspace) = self.followed_here() else { return };
         self.base_open = !self.base_open;
-        let Some(workspace) = self.follow.and_then(|f| f.workspace) else { return };
         if self.base_open {
             let a = args(&["changes", "base", "--workspace", &workspace.to_string(), "--json"]);
             store::run(cx, a, |this: &mut Self, result, cx| {
@@ -151,7 +182,7 @@ impl ChangesPanel {
 
     pub(super) fn choose_base(&mut self, branch: Option<String>, cx: &mut Context<Self>) {
         self.base_open = false;
-        let Some(workspace) = self.follow.and_then(|f| f.workspace) else { return };
+        let Some(workspace) = self.followed_here() else { return };
         let mut a = args(&["changes", "base", "--workspace", &workspace.to_string()]);
         let label = branch
             .as_ref()
@@ -165,3 +196,6 @@ impl ChangesPanel {
         cx.notify();
     }
 }
+
+#[cfg(test)]
+mod tests;

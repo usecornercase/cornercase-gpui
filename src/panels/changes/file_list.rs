@@ -5,6 +5,7 @@ use gpui::{
 
 use crate::model::Session;
 use crate::notify::tip;
+use crate::panels::on_machine;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui;
@@ -12,7 +13,7 @@ use crate::ui;
 use super::actions::file_busy;
 use super::pieces::{counts, faint_detail, plural, split_path, status_letter};
 use super::wire::{FileInfo, FoldClass, Mode, Staging, State, Summary, WorkspaceChanges};
-use super::{ChangesPanel, Scope, Selected};
+use super::{ChangesPanel, Scope, Selected, Whose};
 
 const NO_MATCH: &str = "No file matches the filter.";
 
@@ -92,12 +93,21 @@ fn tag_badge(text: &'static str) -> impl IntoElement {
         .child(text)
 }
 
+fn stage_glyph(staged: Option<Staging>) -> &'static str {
+    match staged {
+        Some(Staging::Yes) => "●",
+        Some(Staging::Partly) => "◐",
+        _ => "+",
+    }
+}
+
 fn stage_button(group: &SharedString, staged: Option<Staging>) -> gpui::Stateful<gpui::Div> {
     let all = staged == Some(Staging::Yes);
-    let (glyph, colour) = match staged {
-        Some(Staging::Yes) => ("●", colours::done()),
-        Some(Staging::Partly) => ("◐", colours::done()),
-        _ => ("+", Rgba { a: 0., ..colours::faint() }),
+    let glyph = stage_glyph(staged);
+    let colour = if matches!(staged, Some(Staging::Yes | Staging::Partly)) {
+        colours::done()
+    } else {
+        Rgba { a: 0., ..colours::faint() }
     };
     let unstaged = !matches!(staged, Some(Staging::Yes | Staging::Partly));
     div()
@@ -129,6 +139,29 @@ fn viewed_box(workspace: u64, path: &str, viewed: bool) -> gpui::Stateful<gpui::
         .cursor_pointer()
         .when(viewed, |d| d.bg(colours::done()).border_color(colours::done()).text_color(colours::ink()).child("✓"))
         .when(!viewed, |d| d.border_color(colours::faint()).hover(|s| s.border_color(colours::text())))
+}
+
+fn marks_there(file: &FileInfo, mode: Mode) -> Vec<AnyElement> {
+    let stage = match file.staged {
+        Some(Staging::Yes | Staging::Partly) => stage_glyph(file.staged),
+        _ => "",
+    };
+    let staged = div().w(px(18.)).flex_none().flex().justify_center().text_color(colours::done()).child(stage);
+    let viewed = div()
+        .size(px(15.))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(px(10.))
+        .text_color(colours::done())
+        .child(if file.viewed { "✓" } else { "" });
+    let mut marks = Vec::new();
+    if mode.uncommitted() {
+        marks.push(staged.into_any_element());
+    }
+    marks.push(viewed.into_any_element());
+    marks
 }
 
 fn is_muted(file: &FileInfo) -> bool {
@@ -242,8 +275,13 @@ impl ChangesPanel {
         if let Some(err) = &self.ended {
             return Some(centred("The changes are not available".into(), Some(err.clone()), colours::failed()));
         }
-        let Some(summary) = &self.summary else { return Some(reading()) };
+        let Some(summary) = &self.summary else { return Some(self.nothing_yet().unwrap_or_else(reading)) };
         summary_note(summary, self.scope)
+    }
+
+    fn nothing_yet(&self) -> Option<AnyElement> {
+        self.machine_note()?;
+        Some(centred(on_machine::nothing_read(self.machine_shown()?), None, colours::muted()))
     }
 
     fn render_file(
@@ -253,10 +291,13 @@ impl ChangesPanel {
         mode: Mode,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let selected = self.selected.as_ref().is_some_and(|s| s.workspace == workspace && s.path == file.path);
+        let whose = self.whose_row(workspace);
+        let selected = self.selected.as_ref().is_some_and(|s| s.workspace == whose && s.path == file.path);
         let id = SharedString::from(format!("file-{workspace}-{}", file.path));
         let group = SharedString::from(format!("row-{workspace}-{}", file.path));
-        let pick = Selected { workspace, path: file.path.clone(), mode };
+        let hint = whose.here().and_then(|here| shared_hint(here, file, cx));
+        let marks = Self::row_marks(&group, &whose, file, mode, cx);
+        let pick = Selected { workspace: whose, path: file.path.clone(), mode };
         ui::row(id, selected)
             .group(group.clone())
             .gap(px(6.))
@@ -264,15 +305,33 @@ impl ChangesPanel {
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_selected(&pick, cx)))
             .child(status_letter(file.status).w(px(12.)).flex_none())
             .child(file_name(file))
-            .when_some(shared_hint(workspace, file, cx), |d, hint| d.child(shared_mark(workspace, file, hint)))
+            .when_some(hint, |d, hint| d.child(shared_mark(workspace, file, hint)))
             .when_some(fold_tag(file.fold), |d, tag| d.child(tag_badge(tag)))
             .child(counts(file.added, file.removed))
-            .when(mode.uncommitted(), |d| d.child(Self::row_stage_button(&group, workspace, file, cx)))
-            .child(Self::row_viewed_box(workspace, file, cx))
+            .children(marks)
+    }
+
+    fn row_marks(
+        group: &SharedString,
+        whose: &Whose,
+        file: &FileInfo,
+        mode: Mode,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let Whose::Here(workspace) = *whose else { return marks_there(file, mode) };
+        let mut marks = Vec::new();
+        if mode.uncommitted() {
+            marks.push(Self::row_stage_button(group, workspace, file, cx));
+        }
+        marks.push(Self::row_viewed_box(workspace, file, cx).into_any_element());
+        marks
     }
 
     fn toggle_selected(&mut self, pick: &Selected, cx: &mut Context<Self>) {
         let same = self.selected.as_ref() == Some(pick);
+        if !same && self.refuses_reading(&pick.workspace, cx) {
+            return;
+        }
         self.select((!same).then(|| pick.clone()), cx);
     }
 
