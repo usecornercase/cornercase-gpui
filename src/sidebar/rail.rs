@@ -10,8 +10,8 @@ use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
 use crate::context_menu::Entry;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
-use crate::panels::PanelKind;
 use crate::panels::plugins::{Button, Run, run_action};
+use crate::panels::{PanelKind, todo};
 use crate::theme::colours;
 use crate::ui::glass::ring;
 use crate::ui::{self, Icon};
@@ -20,6 +20,8 @@ const RAIL_WIDTH: f32 = 44.;
 const SLOT: f32 = 34.;
 const RING: f32 = 3.;
 const BUTTON_GAP: f32 = 4.;
+const COUNT: f32 = 13.;
+const DOT: f32 = 6.;
 pub(super) const COLUMN: f32 = RAIL_WIDTH + 2. * GAP;
 
 const DOCKED: [PanelKind; 5] =
@@ -119,22 +121,82 @@ impl Root {
         DOCKED.into_iter().chain(Some(PanelKind::Flow).filter(|kind| kind.shows(session))).collect()
     }
 
+    fn rail_notes(&self, cx: &Context<Self>) -> Notes {
+        let app = self.store.read(cx).app.as_ref();
+        Notes {
+            changed: self.shown_workspace().map_or(0, |(_, ws)| ws.changed_files()),
+            todo: self.side.look.current.todo_dot && todo::any_pending(app),
+        }
+    }
+
     fn rail_buttons(&self, kinds: &[PanelKind], cx: &mut Context<Self>) -> Vec<impl IntoElement + use<>> {
         let (dock, sheet) = {
             let s = self.store.read(cx);
             (s.shown_dock(), s.sheet)
         };
         let pointed = crate::tour::Guide::pointed(cx);
+        let notes = self.rail_notes(cx);
         kinds
             .iter()
             .map(|&kind| {
                 let store = self.store.clone();
                 let active = dock == Some(kind) || sheet == Some(kind);
                 ui::tool_button(SharedString::from(format!("rail-{}", kind.title())), kind.icon(), SLOT, active)
-                    .tooltip(tip(with_keys(kind.title(), Command::Panel(kind))))
+                    .relative()
+                    .tooltip(tip(with_keys(&notes.named(kind), Command::Panel(kind))))
                     .on_click(move |_: &ClickEvent, _, cx| store.update(cx, |s, cx| s.toggle(kind, cx)))
                     .when(pointed == Some(kind), |b| b.shadow(ring(colours::brand())))
+                    .children(notes.mark(kind))
             })
             .collect()
     }
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct Notes {
+    changed: u64,
+    todo: bool,
+}
+
+fn count_text(files: u64) -> Option<String> {
+    match files {
+        0 => None,
+        1..=9 => Some(files.to_string()),
+        _ => Some("9+".to_string()),
+    }
+}
+
+fn corner() -> Div {
+    div().absolute().right(px(2.)).bottom(px(2.)).flex().items_center().justify_center().rounded_full()
+}
+
+impl Notes {
+    fn named(self, kind: PanelKind) -> String {
+        match (kind, self.changed) {
+            (PanelKind::Changes, 1) => format!("{} · 1 file", kind.title()),
+            (PanelKind::Changes, files) if files > 1 => format!("{} · {files} files", kind.title()),
+            _ => kind.title().to_string(),
+        }
+    }
+
+    fn mark(self, kind: PanelKind) -> Option<Div> {
+        match kind {
+            PanelKind::Changes => count_text(self.changed).map(|text| {
+                corner()
+                    .min_w(px(COUNT))
+                    .h(px(COUNT))
+                    .px(px(2.))
+                    .bg(colours::raised_hover())
+                    .text_size(px(9.))
+                    .line_height(px(COUNT))
+                    .text_color(colours::text())
+                    .child(text)
+            }),
+            PanelKind::Todo if self.todo => Some(corner().size(px(DOT)).m(px(2.)).bg(colours::muted())),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

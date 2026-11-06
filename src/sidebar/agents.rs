@@ -31,8 +31,7 @@ impl Root {
             return None;
         }
         let session = self.session.as_ref()?;
-        let order: Vec<u64> = session.sections().into_iter().flat_map(|(_, ids)| ids).collect();
-        let rows = session.agent_rows(&order);
+        let rows = session.agent_rows(&session.project_order());
         let count = ui::dim(rows.len().to_string());
         let list = self.agent_list(session, &rows, cx);
         Some(

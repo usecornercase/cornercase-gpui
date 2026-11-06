@@ -213,6 +213,10 @@ pub(crate) fn faded(colour: Hsla, by: f32) -> Hsla {
     Hsla { a: colour.a * by, ..colour }
 }
 
+pub(crate) fn fades(dim_inactive: bool, several: bool, active: bool) -> bool {
+    dim_inactive && several && !active
+}
+
 pub(crate) fn theme_json() -> String {
     let palette: Vec<[u8; 3]> = (0..=255u8).map(palette).collect();
     json!({ "foreground": FOREGROUND, "background": BACKGROUND, "palette": palette }).to_string()

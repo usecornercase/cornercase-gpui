@@ -18,11 +18,11 @@ use crate::store::Store;
 use crate::theme::{INACTIVE, colours, radius};
 use crate::ui::{self, Icon, icon};
 
-const TEXT: f32 = 10.;
-const HEIGHT: f32 = 12.;
-const LIFT: f32 = 1.;
-const SIDE: f32 = 12.;
-const GAP: f32 = 4.;
+pub(super) const TEXT: f32 = 10.;
+pub(super) const HEIGHT: f32 = 12.;
+pub(super) const LIFT: f32 = 1.;
+pub(super) const SIDE: f32 = 12.;
+pub(super) const GAP: f32 = 4.;
 const DIM: f32 = 0.6;
 const AROUND: usize = 4;
 const LEAST_NAME: usize = 3;
@@ -58,7 +58,7 @@ fn fitting(texts: impl Iterator<Item = String>, room: usize) -> Vec<String> {
     kept
 }
 
-fn cut(text: &str, chars: usize) -> String {
+pub(super) fn cut(text: &str, chars: usize) -> String {
     if text.chars().count() <= chars {
         return text.to_string();
     }
@@ -83,10 +83,25 @@ pub(super) fn chips_origin(card: Bounds<Pixels>, row: Size<Pixels>) -> Point<Pix
     point(card.right() - px(SIDE) - row.width, card.bottom() - px(LIFT) - row.height)
 }
 
-#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a card's width in characters, floored")]
-pub(super) fn room_in(card: Bounds<Pixels>, metrics: &Metrics) -> usize {
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a width in characters, floored")]
+pub(super) fn chars_across(width: f32, metrics: &Metrics) -> usize {
     let char_width = f32::from(metrics.cell_width) / f32::from(metrics.font_size) * TEXT;
-    ((f32::from(card.size.width) - SIDE * 2.) / char_width).floor().max(0.) as usize
+    (width / char_width).floor().max(0.) as usize
+}
+
+pub(super) fn room_in(card: Bounds<Pixels>, metrics: &Metrics) -> usize {
+    chars_across(f32::from(card.size.width) - SIDE * 2., metrics)
+}
+
+pub(super) fn laid_out(
+    mut element: AnyElement,
+    at: impl FnOnce(Size<Pixels>) -> Point<Pixels>,
+    window: &mut Window,
+    cx: &mut App,
+) -> (AnyElement, Size<Pixels>) {
+    let size = element.layout_as_root(AvailableSpace::min_size(), window, cx);
+    element.prepaint_at(at(size), window, cx);
+    (element, size)
 }
 
 pub(super) fn place(
@@ -95,16 +110,17 @@ pub(super) fn place(
     root: &WeakEntity<Root>,
     window: &mut Window,
     cx: &mut App,
-) -> Vec<AnyElement> {
+) -> (Vec<AnyElement>, Vec<(u64, Pixels)>) {
     let mut placed = Vec::new();
+    let mut taken = Vec::new();
     for pane in chips {
         let Some(card) = layout.card(pane.pane).map(|card| card.bounds) else { continue };
-        let Some(mut row) = pane.row(room_in(card, metrics), metrics, root) else { continue };
-        let size = row.layout_as_root(AvailableSpace::min_size(), window, cx);
-        row.prepaint_at(chips_origin(card, size), window, cx);
+        let Some(row) = pane.row(room_in(card, metrics), metrics, root) else { continue };
+        let (row, size) = laid_out(row, |size| chips_origin(card, size), window, cx);
         placed.push(row);
+        taken.push((pane.pane, size.width));
     }
-    placed
+    (placed, taken)
 }
 
 fn face(metrics: &Metrics) -> Div {
@@ -193,10 +209,11 @@ fn manage_item() -> Entry {
 impl Root {
     pub(super) fn pane_chips(&self, cx: &App) -> Vec<PaneChips> {
         let store = self.store.read(cx);
-        let wanted = self.side.look.current.account_switcher && store.accounts.any();
+        let look = &self.side.look.current;
+        let wanted = look.account_switcher && store.accounts.any();
         let Some(session) = self.session.as_ref().filter(|_| wanted) else { return Vec::new() };
         let (several, menu_open) = (self.grid.panes.len() > 1, self.side.menu.is_some());
-        let shown = self.grid.panes.iter().filter_map(|p| Some((session.pane(p.pane)?, several && !p.active)));
+        let shown = self.grid.panes.iter().filter_map(|p| Some((session.pane(p.pane)?, look.fades(several, p.active))));
         shown.filter_map(|(pane, faded)| chips_of(pane, faded, menu_open, store)).collect()
     }
 

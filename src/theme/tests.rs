@@ -111,6 +111,14 @@ fn panes_and_cards_read_lighter_than_the_opaque_ground() {
 }
 
 #[test]
+fn only_an_inactive_pane_of_several_fades_while_the_setting_is_on() {
+    assert!(fades(true, true, false));
+    assert!(!fades(true, true, true));
+    assert!(!fades(true, false, false));
+    assert!(!fades(false, true, false));
+}
+
+#[test]
 fn an_inactive_pane_fades_its_colours_without_darkening_them() {
     let colour = hsla(RED);
     let dim = faded(colour, INACTIVE);

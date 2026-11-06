@@ -285,7 +285,7 @@ impl Root {
     fn group_end(&self, target: Target, count: usize, collapsed: bool, cx: &mut Context<Self>) -> Div {
         let fold = div().text_size(px(13.)).text_color(colours::faint()).child(if collapsed { "▸" } else { "▾" });
         self.row_end(target, End { gap: 6., buttons: 1, figures: true }, cx)
-            .when(collapsed, |d| d.child(ui::dim(format!("{count}"))))
+            .when(collapsed && self.side.look.current.counts, |d| d.child(ui::dim(format!("{count}"))))
             .child(fold)
     }
 
@@ -343,7 +343,8 @@ impl Root {
         let target = Target::Project(id);
         self.row_end(target, End { gap: 4., buttons: 2, figures: collapsed }, cx)
             .when(collapsed, |d| {
-                d.child(ui::dim(format!("{}", project.workspaces.len()))).child(badge(project.attention()))
+                d.when(self.side.look.current.counts, |d| d.child(ui::dim(format!("{}", project.workspaces.len()))))
+                    .child(badge(project.attention()))
             })
             .child(
                 hover_button(SharedString::from(format!("project-add-{id}")), row_group_id(target), "+", 1)

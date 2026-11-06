@@ -33,12 +33,15 @@ mod no_tab;
 mod pane_accounts;
 mod pane_drag;
 mod pane_menu;
+mod pane_notes;
 mod pasting;
 mod popup;
 mod selection;
+mod steps;
 
 pub(crate) use links::Pointer;
 use pane_accounts::PaneChips;
+use pane_notes::PaneNotes;
 use popup::Popup;
 
 #[derive(Clone, Copy)]
@@ -226,7 +229,7 @@ impl Root {
             Command::ZoomIn => self.zoom(1., cx),
             Command::ZoomOut => self.zoom(-1., cx),
             Command::ZoomReset => self.set_font_size(DEFAULT_FONT_SIZE, cx),
-            _ => {}
+            _ => self.step_shortcut(command, cx),
         }
     }
 
@@ -387,13 +390,14 @@ impl Root {
         let shown = self.frame_shown();
         let grid = shown.then(|| self.grid.clone());
         let (layout, moves) = (self.layout.clone(), self.moves.clone());
-        let chips = self.pane_chips(cx);
-        let fit =
-            Fit { layout, moves: moves.clone(), wanted: self.size, root: entity.downgrade(), metrics, grid, chips };
+        let (chips, notes) = (self.pane_chips(cx), self.pane_notes());
+        let root = entity.downgrade();
+        let fit = Fit { layout, moves: moves.clone(), wanted: self.size, root, metrics, grid, chips, notes };
         let focused = self.focus.is_focused(window) && window.is_window_active();
         let (grid, has_frame, focus) = (self.grid.clone(), shown, self.focus.clone());
         let link = self.shown_link().filter(|_| self.drag.is_none() || matches!(self.drag, Some(Drag::Link { .. })));
-        let painting = Painting { grid, has_frame, focus, focused, entity, moves, link };
+        let dim_inactive = self.side.look.current.dim_inactive_panes;
+        let painting = Painting { grid, has_frame, focus, focused, entity, moves, link, dim_inactive };
         canvas(
             move |bounds, window, cx| fit.prepaint(bounds, window, cx),
             move |bounds, mut placed, window, cx| {
@@ -412,13 +416,14 @@ struct Fit {
     metrics: Metrics,
     grid: Option<Rc<Grid>>,
     chips: Vec<PaneChips>,
+    notes: Vec<PaneNotes>,
 }
 
 struct Placed {
     layout: Layout,
     metrics: Metrics,
     grips: Vec<(Hitbox, CursorStyle)>,
-    chips: Vec<AnyElement>,
+    over: Vec<AnyElement>,
 }
 
 impl Fit {
@@ -439,9 +444,11 @@ impl Fit {
             request_size(self.root.clone(), cols, rows, cx);
         }
         let settled = !self.moves.borrow().busy(Instant::now()) && !self.moves.borrow().lifted();
-        let wanted_chips = if settled { self.chips } else { Vec::new() };
-        let chips = pane_accounts::place(wanted_chips, (&layout, &self.metrics), &self.root, window, cx);
-        Placed { layout, metrics: self.metrics, grips, chips }
+        let (chips, notes) = if settled { (self.chips, self.notes) } else { (Vec::new(), Vec::new()) };
+        let (mut over, taken) = pane_accounts::place(chips, (&layout, &self.metrics), &self.root, window, cx);
+        let room = pane_notes::Room { layout: &layout, metrics: &self.metrics, taken: &taken, root: &self.root };
+        over.extend(pane_notes::place(notes, &room, window, cx));
+        Placed { layout, metrics: self.metrics, grips, over }
     }
 }
 
@@ -462,6 +469,7 @@ struct Painting {
     entity: Entity<Root>,
     moves: Rc<RefCell<Moves>>,
     link: Option<Hovered>,
+    dim_inactive: bool,
 }
 
 impl Painting {
@@ -481,14 +489,19 @@ impl Painting {
             moves.tick(now);
             (moves.stage(&placed.layout, now), was || moves.busy(now))
         };
-        let surface =
-            Surface { layout: &placed.layout, metrics: &placed.metrics, focused: self.focused, stage: &stage };
+        let surface = Surface {
+            layout: &placed.layout,
+            metrics: &placed.metrics,
+            focused: self.focused,
+            dim_inactive: self.dim_inactive,
+            stage: &stage,
+        };
         render::paint(&self.grid, &surface, window, cx);
         if let Some(link) = self.link.as_ref().filter(|_| !moving) {
             render::paint_link(&placed.layout, link, window);
         }
-        for chip in &mut placed.chips {
-            chip.paint(window, cx);
+        for element in &mut placed.over {
+            element.paint(window, cx);
         }
         pane_drag::follow(&self.moves, &self.entity, moving, window);
     }

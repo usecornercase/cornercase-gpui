@@ -2,6 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.15
+
+- **Tabs past the edge can be reached.** When a workspace has more tabs than the bar holds, `‹` and `›` appear at its ends, the wheel scrolls it, and the tab you are on stays in view.
+- **`↓ n more`.** A pane scrolled up says how many lines are below it. A click on it goes back to the bottom.
+- **A message that waits for you says so.** When a script or another agent sends a message to the pane you are typing in, cornercase holds it until you are done. The pane's card now reads `1 message waiting · goes after yours`. Send now and Wait turn wait on cornercase (usecornercase/cornercase-terminal#676), and the card says that too.
+- **New keys to get around**: ⌘J and ⇧⌘J go to the next and previous workspace, ⌘Y and ⇧⌘Y to the next and previous project, ⌘B to the agent that needs you, and ⌘R marks the agent in the pane for review, or as reviewed. On Linux and Windows ⌘ is Ctrl+Shift and ⇧⌘ is Ctrl+Alt+Shift.
+- A tab reads `Opus 5.5 · compacted` after its conversation was compacted, and with Settings › UI › memory on it ends with the memory its panes use.
+- The rail counts the changed files on Changes' icon and puts a dot on TODO's while items wait.
+- The window now follows Settings › UI's model, context, counts, TODO dot and inactive panes, as cornercase's own does.
+
 ## 0.1.14
 
 - The window now says what only cornercase's own window can do for now, where you would look for it, and which cornercase issue it waits on: pairing a phone's browser or a Telegram or Discord chat (Settings › Remote), removing the worktrees of closed projects and deleting branches (the Worktrees sheet and the Remove questions), **Run setup** (a worktree's menu), importing a VS Code workspace (the `+` beside Projects) and a plugin's window processes (its card in Plugins).

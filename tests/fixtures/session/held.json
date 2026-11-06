@@ -1,0 +1,150 @@
+{
+ "boot": "boot",
+ "caller": null,
+ "config": {
+  "revision": 2
+ },
+ "groups": [],
+ "home": "/home/ana",
+ "machines": [],
+ "projects": [
+  {
+   "active": true,
+   "collapsed": false,
+   "custom_name": null,
+   "group": null,
+   "id": 8,
+   "name": "shop",
+   "path": "/home/ana/code/shop",
+   "remotes": [
+    {
+     "name": "origin",
+     "url": "https://github.com/acme/shop.git"
+    }
+   ],
+   "repo": "github.com/acme/shop",
+   "workspaces": [
+    {
+     "active": true,
+     "behind": 0,
+     "branch": "main",
+     "changes": {
+      "added": 0,
+      "files": 0,
+      "mode": "uncommitted",
+      "removed": 0
+     },
+     "collapsed": false,
+     "custom_name": null,
+     "id": 7,
+     "name": "main",
+     "path": "/home/ana/code/shop",
+     "pull_request": null,
+     "run_dir": null,
+     "setup": null,
+     "tabs": [
+      {
+       "active": false,
+       "custom_name": null,
+       "id": 6,
+       "layout": {
+        "leaf": 5
+       },
+       "name": "zsh",
+       "panes": [
+        {
+         "active": true,
+         "agent": null,
+         "at_prompt": true,
+         "background_shell": false,
+         "caller": false,
+         "context": null,
+         "dialog": false,
+         "draft": false,
+         "held_sends": 0,
+         "id": 5,
+         "memory": 2220032,
+         "model": null,
+         "parent": null,
+         "path": "/home/ana/code/shop",
+         "pid": 3575645,
+         "program": "zsh",
+         "resumes": false,
+         "resuming": false,
+         "role": null,
+         "status": null,
+         "subagents": 0,
+         "survey": false,
+         "title": null
+        }
+       ],
+       "status": null
+      },
+      {
+       "active": true,
+       "controller": 11,
+       "custom_name": null,
+       "id": 10,
+       "layout": {
+        "leaf": 9
+       },
+       "name": "zsh",
+       "panes": [
+        {
+         "active": true,
+         "agent": null,
+         "at_prompt": true,
+         "background_shell": false,
+         "caller": false,
+         "context": null,
+         "dialog": false,
+         "draft": true,
+         "held_sends": 1,
+         "id": 9,
+         "memory": 2437120,
+         "model": null,
+         "parent": null,
+         "path": "/home/ana/code/shop",
+         "pid": 3613483,
+         "program": "zsh",
+         "resumes": false,
+         "resuming": false,
+         "role": null,
+         "status": null,
+         "subagents": 0,
+         "survey": false,
+         "title": null
+        }
+       ],
+       "status": null
+      }
+     ],
+     "worktree": false
+    }
+   ]
+  }
+ ],
+ "revision": 1,
+ "shown": {
+  "pane": 9,
+  "project": 8,
+  "tab": 10,
+  "workspace": 7
+ },
+ "version": "0.13.1",
+ "view": {
+  "active": true,
+  "cols": 100,
+  "controls": true,
+  "id": 11,
+  "projection": 1,
+  "rows": 30,
+  "shown": {
+   "pane": 9,
+   "project": 8,
+   "tab": 10,
+   "workspace": 7
+  },
+  "visible": true
+ }
+}

@@ -5,11 +5,12 @@ use gpui::{
     StatefulInteractiveElement, Styled, div, px,
 };
 
+use super::look::Look;
 use super::rows::{End, drop_target, name_label, row_actions, row_base};
 use super::workspace::{agent_details, plural};
 use super::{Target, draggable};
 use crate::app::Root;
-use crate::model::{PaneInfo, Shown, Tab, Workspace};
+use crate::model::{PaneInfo, Shown, Tab, Workspace, memory_size};
 use crate::theme::colours;
 use crate::ui::{self, badge};
 
@@ -17,11 +18,12 @@ pub(super) fn tab_title(tab: &Tab) -> String {
     tab.agent_pane().and_then(PaneInfo::agent_title).unwrap_or_else(|| tab.name.clone())
 }
 
-pub(super) fn tab_details(tab: &Tab, mark: Option<&str>) -> String {
+pub(super) fn tab_details(tab: &Tab, mark: Option<&str>, look: &Look) -> String {
     let mut details = match tab.agent_pane() {
-        Some(agent) => vec![agent_details(agent, mark)],
-        None => tab.panes.first().and_then(|p| p.program.clone()).into_iter().collect(),
+        Some(agent) => vec![agent_details(agent, mark, look)],
+        None => tab.panes.first().and_then(|p| p.program.clone()).filter(|p| *p != tab.name).into_iter().collect(),
     };
+    details.extend(tab.memory().map(memory_size));
     if tab.panes.len() > 1 {
         details.push(plural(tab.panes.len(), "pane"));
     }
@@ -68,7 +70,8 @@ impl Root {
         let target = Target::Tab(id);
         let title = tab_title(tab);
         let mark = tab.agent_pane().and_then(|agent| self.account_mark(agent, cx));
-        let details = Some(tab_details(tab, mark.as_deref())).filter(|d| !d.is_empty() && *d != title);
+        let details = tab_details(tab, mark.as_deref(), &self.side.look.current);
+        let details = Some(details).filter(|d| !d.is_empty() && *d != title);
         let name = name_label(title.clone()).flex_initial().min_w(px(0.)).text_color(if selected {
             colours::text()
         } else {

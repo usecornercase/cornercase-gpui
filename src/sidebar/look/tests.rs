@@ -28,6 +28,68 @@ fn missing_settings_keep_the_tree_with_tabs_on_top() {
 }
 
 #[test]
+fn what_the_rows_show_is_on_until_a_setting_says_otherwise() {
+    let look = parse(r#"{"settings":[]}"#).expect("a look");
+    assert!(look.model && look.context && look.counts && look.todo_dot && look.dim_inactive_panes);
+    let default = Look::default();
+    assert!(default.model && default.context && default.counts && default.todo_dot && default.dim_inactive_panes);
+}
+
+#[test]
+fn each_switch_turns_off_on_its_own() {
+    let text = r#"{"settings":[{"key":"model","value":false},{"key":"counts","value":false},
+        {"key":"dim_inactive_panes","value":false}]}"#;
+    let look = parse(text).expect("a look");
+    assert!(!look.model && !look.counts && !look.dim_inactive_panes);
+    assert!(look.context && look.todo_dot);
+}
+
+#[test]
+fn the_settings_are_read_from_a_real_answer() {
+    let look = parse(crate::test_util::fixture!("settings/config-ui.json")).expect("a look");
+    assert!(!look.model && !look.context && !look.counts && !look.todo_dot && !look.dim_inactive_panes);
+    assert_eq!(look.arrangement, Arrangement::ProjectsOnTop);
+}
+
+fn opus() -> PaneInfo {
+    PaneInfo { model: Some("Opus 5.5".into()), context: Some(23), ..Default::default() }
+}
+
+#[test]
+fn the_model_and_its_share_follow_their_switches() {
+    let look = Look::default();
+    assert_eq!(look.model_of(&opus()).as_deref(), Some("Opus 5.5"));
+    assert_eq!(look.share_of(&opus()).as_deref(), Some("23%"));
+    let off = Look { model: false, context: false, ..Look::default() };
+    assert_eq!(off.model_of(&opus()), None);
+    assert_eq!(off.share_of(&opus()), None);
+}
+
+#[test]
+fn a_compacted_conversation_reads_where_the_percentage_goes() {
+    let pane = PaneInfo { compacted: true, context: None, ..opus() };
+    assert_eq!(Look::default().share_of(&pane).as_deref(), Some("compacted"));
+}
+
+#[test]
+fn compacted_follows_the_context_switch() {
+    let pane = PaneInfo { compacted: true, context: None, ..opus() };
+    assert_eq!(Look { context: false, ..Look::default() }.share_of(&pane), None);
+}
+
+#[test]
+fn a_figure_wins_over_compacted() {
+    let pane = PaneInfo { compacted: true, ..opus() };
+    assert_eq!(Look::default().share_of(&pane).as_deref(), Some("23%"));
+}
+
+#[test]
+fn inactive_panes_fade_only_with_their_switch_on() {
+    assert!(Look::default().fades(true, false));
+    assert!(!Look { dim_inactive_panes: false, ..Look::default() }.fades(true, false));
+}
+
+#[test]
 fn the_account_switches_are_on_unless_turned_off() {
     let look = parse(r#"{"settings":[]}"#).expect("a look");
     assert!(look.account_mark && look.account_switcher);

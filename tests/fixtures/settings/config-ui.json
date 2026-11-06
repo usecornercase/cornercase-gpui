@@ -1,0 +1,420 @@
+{
+ "revision": 7,
+ "settings": [
+  {
+   "choices": [
+    {
+     "dangerous": false,
+     "note": "projects and workspaces in two columns",
+     "value": "side_by_side"
+    },
+    {
+     "dangerous": false,
+     "note": "one column, workspaces below projects",
+     "value": "projects_on_top"
+    },
+    {
+     "dangerous": false,
+     "note": "one column, projects below workspaces",
+     "value": "workspaces_on_top"
+    },
+    {
+     "dangerous": false,
+     "note": "one list: projects, workspaces and tabs",
+     "value": "tree"
+    }
+   ],
+   "dangerous": false,
+   "default": "projects_on_top",
+   "key": "sidebar",
+   "label": "sidebar",
+   "note": "how projects, workspaces and tabs are laid out",
+   "page": "UI",
+   "question": "How should projects, workspaces and tabs be laid out?",
+   "restart": false,
+   "section": "",
+   "shown": "projects_on_top",
+   "type": "choice",
+   "value": "projects_on_top"
+  },
+  {
+   "choices": [
+    {
+     "dangerous": false,
+     "note": "under their workspace in the sidebar",
+     "value": "sidebar"
+    },
+    {
+     "dangerous": false,
+     "note": "in a bar above the pane, only the active workspace's",
+     "value": "top"
+    }
+   ],
+   "dangerous": false,
+   "default": "sidebar",
+   "key": "tabs",
+   "label": "tabs",
+   "note": "where a workspace's tabs are listed",
+   "page": "UI",
+   "question": "Where should a workspace's tabs go?",
+   "restart": false,
+   "section": "",
+   "shown": "sidebar",
+   "type": "choice",
+   "value": "sidebar"
+  },
+  {
+   "dangerous": false,
+   "default": false,
+   "key": "icon_bar",
+   "label": "icon bar",
+   "note": "the buttons under the lists, as icons; needs a Nerd Font",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[ ] off",
+   "type": "switch",
+   "value": false
+  },
+  {
+   "choices": [
+    {
+     "dangerous": false,
+     "note": "where the window's terminal has them, or with the icon bar",
+     "value": "auto"
+    },
+    {
+     "dangerous": false,
+     "note": "in every window; other terminals need a Nerd Font",
+     "value": "on"
+    },
+    {
+     "dangerous": false,
+     "note": "plain symbols in every window",
+     "value": "off"
+    }
+   ],
+   "dangerous": false,
+   "default": "auto",
+   "key": "icons",
+   "label": "icons",
+   "note": "Nerd Font icons for files and buttons, per window",
+   "page": "UI",
+   "question": "Which windows should draw Nerd Font icons?",
+   "restart": false,
+   "section": "",
+   "shown": "auto",
+   "type": "choice",
+   "value": "auto"
+  },
+  {
+   "dangerous": false,
+   "default": false,
+   "key": "agents_section",
+   "label": "agents section",
+   "note": "every running agent in the sidebar",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[ ] hidden",
+   "type": "switch",
+   "value": false
+  },
+  {
+   "choices": [
+    {
+     "dangerous": false,
+     "note": "◐, still while the agent works",
+     "value": "moon"
+    },
+    {
+     "dangerous": false,
+     "note": "⠋, turning ten times a second",
+     "value": "spinner"
+    }
+   ],
+   "dangerous": false,
+   "default": "moon",
+   "key": "working_icon",
+   "label": "working icon",
+   "note": "on the tab of an agent that is working",
+   "page": "UI",
+   "question": "What should a working agent's tab show?",
+   "restart": false,
+   "section": "",
+   "shown": "moon",
+   "type": "choice",
+   "value": "moon"
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "counts",
+   "label": "counts",
+   "note": "what a project or collapsed group holds, such as (3)",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[ ] hidden",
+   "type": "switch",
+   "value": false
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "todo_dot",
+   "label": "TODO dot",
+   "note": "while items are pending",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[ ] hidden",
+   "type": "switch",
+   "value": false
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "dim_inactive_panes",
+   "label": "inactive panes",
+   "note": "in a split tab",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[ ] as bright as the active one",
+   "type": "switch",
+   "value": false
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "model",
+   "label": "model",
+   "note": "under an agent's tab, such as Opus 5.5",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[ ] hidden",
+   "type": "switch",
+   "value": false
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "context",
+   "label": "context",
+   "note": "how full its context is, such as 23%",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[ ] hidden",
+   "type": "switch",
+   "value": false
+  },
+  {
+   "dangerous": false,
+   "default": false,
+   "key": "memory",
+   "label": "memory",
+   "note": "the RAM its processes use, such as 1.2 GB",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] shown",
+   "type": "switch",
+   "value": true
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "account_mark",
+   "label": "account",
+   "note": "the account an agent uses; only once you add an account",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] shown",
+   "type": "switch",
+   "value": true
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "account_switcher",
+   "label": "account switcher",
+   "note": "a row under each pane; only once you add an account",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] shown",
+   "type": "switch",
+   "value": true
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "account_picker",
+   "label": "account picker",
+   "note": "in issues, flows and the queue; only once you add an account",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] shown",
+   "type": "switch",
+   "value": true
+  },
+  {
+   "choices": [
+    {
+     "dangerous": false,
+     "note": "what your terminal understands",
+     "value": "auto"
+    },
+    {
+     "dangerous": false,
+     "note": "Ghostty, WezTerm, Warp, Rio, foot before 1.18, Konsole before 24.12",
+     "value": "osc777"
+    },
+    {
+     "dangerous": false,
+     "note": "iTerm2",
+     "value": "osc9"
+    },
+    {
+     "dangerous": false,
+     "note": "kitty, Contour, VS Code, foot 1.18+, Konsole 24.12+",
+     "value": "osc99"
+    },
+    {
+     "dangerous": false,
+     "note": "a beep or a mark on the window, in any terminal",
+     "value": "bell"
+    },
+    {
+     "dangerous": false,
+     "note": "only the toast and the marks in cornercase",
+     "value": "off"
+    }
+   ],
+   "dangerous": false,
+   "default": "auto",
+   "key": "desktop_notifications",
+   "label": "desktop notifications",
+   "note": "when an agent in another tab needs you or finishes",
+   "page": "UI",
+   "question": "How should your terminal notify you?",
+   "restart": false,
+   "section": "",
+   "shown": "auto",
+   "type": "choice",
+   "value": "auto"
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "sound",
+   "label": "sound",
+   "note": "also while you look at cornercase, on the window's computer",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] on",
+   "type": "switch",
+   "value": true
+  },
+  {
+   "dangerous": false,
+   "default": "",
+   "field": "sound when it needs you (an absolute or ~/ path on the window's computer; empty: built-in)",
+   "key": "sound_waiting",
+   "label": "sound when it needs you",
+   "note": "an absolute or ~/ path on the window's computer; empty: built-in",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "built-in",
+   "type": "text",
+   "value": ""
+  },
+  {
+   "dangerous": false,
+   "default": "",
+   "field": "sound when it finishes (an absolute or ~/ path on the window's computer; empty: built-in)",
+   "key": "sound_done",
+   "label": "sound when it finishes",
+   "note": "an absolute or ~/ path on the window's computer; empty: built-in",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "built-in",
+   "type": "text",
+   "value": ""
+  },
+  {
+   "dangerous": false,
+   "default": false,
+   "key": "sound_subagents",
+   "label": "sound for subagents",
+   "note": "agents started by another agent or by a flow",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[ ] off",
+   "type": "switch",
+   "value": false
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "check_updates",
+   "label": "check for updates",
+   "note": "asks GitHub for the latest release",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] every hour",
+   "type": "switch",
+   "value": true
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "star_prompt",
+   "label": "star prompt",
+   "note": "asks for a GitHub star once, after your 5th prompt",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] once",
+   "type": "switch",
+   "value": true
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "tour",
+   "label": "guided tour",
+   "note": "the first steps, shown once on a new install",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] on a new install",
+   "type": "switch",
+   "value": true
+  },
+  {
+   "dangerous": false,
+   "default": "",
+   "field": "press the key, or write it such as ctrl+] or f12; empty turns it off",
+   "key": "prefix_key",
+   "label": "prefix key",
+   "note": "opens a menu of keyboard shortcuts",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "off",
+   "type": "key",
+   "value": ""
+  }
+ ]
+}

@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::data::{Item, drop_on, items, sent_message, short, step, targets, undo_number};
+use super::data::{Item, any_pending, drop_on, items, sent_message, short, step, targets, undo_number};
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::store::ToastKind;
 
@@ -10,6 +10,20 @@ fn item(id: u64, done: bool) -> Item {
 
 fn moved(command: Option<Vec<String>>) -> Option<String> {
     command.map(|c| c[2..].join(" "))
+}
+
+#[test]
+fn an_item_left_to_do_counts_as_pending() {
+    let app = json!({ "todos": [{ "id": 1, "text": "ship", "done": true }, { "id": 2, "text": "review" }] });
+    assert!(any_pending(Some(&app)));
+}
+
+#[test]
+fn only_done_or_malformed_items_are_nothing_pending() {
+    let app = json!({ "todos": [{ "id": 1, "text": "ship", "done": true }, { "text": "no id" }] });
+    assert!(!any_pending(Some(&app)));
+    assert!(!any_pending(Some(&json!({}))));
+    assert!(!any_pending(None));
 }
 
 #[test]
