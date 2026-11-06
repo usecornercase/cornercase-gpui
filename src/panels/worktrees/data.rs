@@ -3,6 +3,7 @@ use std::fmt::Write as _;
 use serde::Deserialize;
 use serde_json::Value;
 
+use super::BRANCH_NOTE;
 use crate::panels::files::disk::human_size;
 use crate::panels::flows::model::{ago, epoch};
 
@@ -247,7 +248,8 @@ pub(super) fn remove_message(worktrees: &[&Worktree]) -> String {
         })
         .collect();
     format!(
-        "Their tabs stop and the project's teardown runs, then git removes each folder. The branches stay. {}",
+        "Their tabs stop and the project's teardown runs, then git removes each folder. The branches stay. {} \
+         {BRANCH_NOTE}",
         lines.join(" ")
     )
 }

@@ -393,6 +393,7 @@ impl PluginsPanel {
             .children(description.map(|d| div().text_size(px(12.)).text_color(colours::muted()).child(d)))
             .children(plugin.error.clone().map(|e| div().text_size(px(12.)).text_color(colours::failed()).child(e)))
             .child(ui::dim(plugin.facts()))
+            .children(plugin.window_note().filter(|_| cli::host().is_none()).map(ui::dim))
             .children(self.services_row(plugin))
             .children(self.action_buttons(plugin, cx))
             .when(cli::host().is_none(), |d| d.child(self.plugin_buttons(plugin, cx)))

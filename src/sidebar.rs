@@ -19,7 +19,7 @@ use gpui::{
 
 use crate::app::frame::{self, Frame};
 use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
-use crate::context_menu::{Menu, item};
+use crate::context_menu::Menu;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::platform::Os;
@@ -201,11 +201,7 @@ fn sidebar_header(cx: &mut Context<Root>) -> Div {
                 MouseButton::Left,
                 cx.listener(|this, e: &MouseDownEvent, window, cx| {
                     cx.stop_propagation();
-                    let entries = vec![
-                        item("Open project…", Root::open_project),
-                        item("New group…", |_, window, cx| forms::new_group(None, window, cx)),
-                    ];
-                    this.open_menu(e.position, entries, window, cx);
+                    this.open_menu(e.position, menus::projects_menu(), window, cx);
                 }),
             ),
     )

@@ -9,6 +9,8 @@ use crate::theme::colours;
 use crate::ui::{self, Icon};
 
 const TOKEN: f32 = 230.;
+const BROWSER_PAIRING: &str = "Pair one from cornercase's own window, More › remote… › open in your phone's browser. \
+                               Pairing here needs usecornercase/cornercase-terminal#669.";
 
 fn tone_dot(tone: Tone) -> (Option<Rgba>, Rgba) {
     match tone {
@@ -19,12 +21,17 @@ fn tone_dot(tone: Tone) -> (Option<Rgba>, Rgba) {
 }
 
 fn pairing_note(c: &Connection) -> Option<String> {
-    let paired = c.state == data::State::Connected;
-    if c.kind != ConnectionKind::Chat || paired {
-        return None;
+    match c.kind {
+        ConnectionKind::Browsers => Some(BROWSER_PAIRING.to_string()),
+        ConnectionKind::Chat if c.state != data::State::Connected => {
+            let what = c.note.strip_prefix("enter ").unwrap_or("shows a code to scan");
+            Some(format!(
+                "Pair it from cornercase's own window, Settings › Remote: it {what}. Pairing here needs \
+                 usecornercase/cornercase-terminal#670."
+            ))
+        }
+        _ => None,
     }
-    let what = c.note.strip_prefix("enter ").unwrap_or("shows a code to scan");
-    Some(format!("Pair it from cornercase's own window, Settings › Remote: it {what}."))
 }
 
 fn connection_label(c: &Connection) -> Div {
@@ -100,3 +107,6 @@ impl SettingsPanel {
             .into_any_element()
     }
 }
+
+#[cfg(test)]
+mod tests;

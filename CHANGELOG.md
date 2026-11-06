@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.11
+
+- The window now says what only cornercase's own window can do for now, where you would look for it, and which cornercase issue it waits on: pairing a phone's browser or a Telegram or Discord chat (Settings › Remote), removing the worktrees of closed projects and deleting branches (the Worktrees sheet and the Remove questions), **Run setup** (a worktree's menu), importing a VS Code workspace (the `+` beside Projects) and a plugin's window processes (its card in Plugins).
+
 ## 0.1.10
 
 - **Usage of every machine.** Once you have machines, the Usage sheet has a row that picks this computer, one machine or all of them, for Limits, Stats and By agent alike.

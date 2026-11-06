@@ -24,7 +24,7 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 - [Connection](design/connection.md) (`main.rs`, `cli.rs`, `store.rs`): the command line as the only contract, streams, the ordered queue, `Store`.
 - [Remote servers](design/remote.md) (`cli/remote.rs`, `dialogs/remote.rs`): another machine's server over ssh, the shared connection, quoting, streams that stop there, switching servers, what only works on this Mac.
 - [Code layout](design/code-layout.md) (`tests/layers.rs`, `clippy.toml`): no comments, where code goes, 1,000 lines per file, small functions, `pub(crate)`.
-- [Upstream gaps](design/upstream-gaps.md): no workarounds, filing issues upstream, stopgaps until a fix lands.
+- [Upstream gaps](design/upstream-gaps.md): no workarounds, filing issues upstream, what only cornercase's own window can do, stopgaps until a fix lands.
 - [Notifications](design/notifications.md) (`notify/`): agent notices, toasts, macOS notifications, sounds, bells, updates.
 - [Widgets](design/widgets.md) (`ui/`, `theme.rs`, `dialogs.rs`): shared widgets, the text field, dialogs, the look (usecornercase.dev's colours, glass on one ground, rounded shapes and air, cobalt, the mark), motion.
 - [Session model](design/session-model.md) (`model.rs`, `model/`): the `view` and `surface` JSON, applying frames and patches.
