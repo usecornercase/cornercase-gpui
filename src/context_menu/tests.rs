@@ -37,6 +37,13 @@ fn the_keys_skip_a_note() {
 }
 
 #[test]
+fn the_keys_skip_a_plugins_name() {
+    let entries = vec![item("Close", |_, _, _| {}), Entry::Heading("Notes".into()), item("Say", |_, _, _| {})];
+    assert_eq!(step(&entries, Some(0), true), Some(2));
+    assert_eq!(step(&entries, Some(2), false), Some(0));
+}
+
+#[test]
 fn the_keys_reach_a_choice_whether_it_is_chosen_or_not() {
     let entries = [choice("work", true, |_, _, _| {}), Entry::Separator, choice("home", false, |_, _, _| {})];
     assert_eq!(step(&entries, Some(0), true), Some(2));

@@ -147,10 +147,9 @@ pub(crate) fn icon_button(id: impl Into<ElementId>, icon: impl Into<SharedString
         .child(icon.into())
 }
 
-pub(crate) fn tool_button(id: impl Into<ElementId>, glyph: Icon, size: f32, active: bool) -> Stateful<Div> {
+fn tool_frame(id: impl Into<ElementId>, size: f32) -> (Stateful<Div>, SharedString) {
     let id: ElementId = id.into();
     let group = SharedString::from(format!("{id}"));
-    let glyph = icon(glyph, (size * 0.5).round());
     let el = div()
         .id(id)
         .group(group.clone())
@@ -161,6 +160,27 @@ pub(crate) fn tool_button(id: impl Into<ElementId>, glyph: Icon, size: f32, acti
         .size(px(size))
         .rounded(px(radius::CONTROL))
         .cursor_pointer();
+    (el, group)
+}
+
+pub(crate) fn letter_button(id: impl Into<ElementId>, letter: impl Into<SharedString>, size: f32) -> Stateful<Div> {
+    let (el, group) = tool_frame(id, size);
+    let letter = div()
+        .text_size(px((size * 0.5).round()))
+        .text_color(colours::muted())
+        .group_hover(group, |s| s.text_color(colours::text()))
+        .child(letter.into());
+    el.hover(|s| s.bg(colours::hover())).child(letter)
+}
+
+pub(crate) fn busy_tool(id: impl Into<ElementId>, size: f32) -> Stateful<Div> {
+    let (el, _) = tool_frame(id, size);
+    el.cursor_default().child(spinner("spinner", (size * 0.5).round(), colours::muted()))
+}
+
+pub(crate) fn tool_button(id: impl Into<ElementId>, glyph: Icon, size: f32, active: bool) -> Stateful<Div> {
+    let (el, group) = tool_frame(id, size);
+    let glyph = icon(glyph, (size * 0.5).round());
     if active {
         return el.bg(colours::accent_soft()).child(glyph.text_color(colours::accent()));
     }

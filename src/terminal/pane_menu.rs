@@ -5,6 +5,7 @@ use crate::app::Root;
 use crate::context_menu::{Entry, act, danger, item, submenu};
 use crate::dialogs;
 use crate::model::{MouseMode, PaneInfo};
+use crate::panels::plugins::Spot;
 use crate::render::moving::{Aim, Place};
 use crate::sidebar::{cmd, path_items};
 use crate::store::Busy;
@@ -85,6 +86,7 @@ impl Root {
         entries.extend(info.and_then(|i| i.path).map(|path| path_items(&path, &openers)).unwrap_or_default());
         entries.push(Entry::Separator);
         entries.push(danger("Close pane", move |this, window, cx| this.close_pane(pane, window, cx)));
+        entries.extend(self.plugin_entries(Spot::Pane(pane), cx));
         entries
     }
 

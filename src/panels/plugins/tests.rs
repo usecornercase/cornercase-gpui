@@ -1,5 +1,4 @@
-use super::data::{ActionList, List, Manifest, Plugin, Ran, duration, target};
-use crate::model::Shown;
+use super::data::{List, Manifest, Plugin, Ran, duration};
 use crate::store::ToastKind;
 
 #[test]
@@ -54,32 +53,27 @@ fn a_plugin_without_window_processes_has_nothing_to_say_about_them() {
 }
 
 #[test]
-fn reads_actions_and_outcomes() {
-    let actions: ActionList = serde_json::from_str(
-        r#"{"actions": [{"action": "hello", "contexts": ["workspace", "button"], "name": "GPUI test",
-            "placement": "popup", "plugin": "gpui.test", "title": "say hello", "width": 80}], "revision": 2}"#,
-    )
-    .expect("the actions parse");
-    assert_eq!(actions.revision, 2);
-    assert_eq!(actions.actions[0].placement, "popup");
+fn a_finished_action_says_how_long_it_took() {
     let ok: Ran = serde_json::from_str(r#"{"plugin": "p", "error": null, "ms": 380, "ended": "exited", "code": 0}"#)
         .expect("the outcome parses");
-    let (text, kind) = ok.say("say hello");
+    let (text, kind) = ok.say("say hello").expect("it says so");
     assert_eq!(text, "say hello: done in 380 ms");
     assert!(kind == ToastKind::Info);
-    let failed: Ran =
-        serde_json::from_str(r#"{"plugin": "p", "error": "exit status: 3", "ms": 1500}"#).expect("the failure parses");
-    assert_eq!(failed.say("x").0, "x: exit status: 3; `cornercase plugin logs p` says more");
     assert_eq!(duration(1500), "1.5 s");
 }
 
 #[test]
-fn runs_on_the_most_precise_place_shown() {
-    let shown = Shown { project: Some(1), workspace: Some(2), tab: Some(3), pane: Some(4) };
-    let ctx = |c: &[&str]| c.iter().map(ToString::to_string).collect::<Vec<_>>();
-    assert_eq!(target(&ctx(&["workspace", "pane"]), shown), Some(vec!["--pane".into(), "4".into()]));
-    assert_eq!(target(&ctx(&["project", "tab"]), shown), Some(vec!["--tab".into(), "3".into()]));
-    assert_eq!(target(&ctx(&["pane", "button"]), shown), Some(vec![]));
-    assert_eq!(target(&ctx(&["pane"]), Shown::default()), None);
-    assert_eq!(target(&ctx(&[]), shown), None);
+fn a_failed_action_points_at_its_log() {
+    let failed: Ran =
+        serde_json::from_str(crate::test_util::fixture!("plugins/run-failed.json")).expect("the failure parses");
+    let (text, kind) = failed.say("Fail on purpose").expect("it says so");
+    assert_eq!(text, "Fail on purpose: exit status: 3; `cornercase plugin logs acme.notes` says more");
+    assert!(kind == ToastKind::Error);
+}
+
+#[test]
+fn a_popup_closed_by_hand_says_nothing() {
+    let closed: Ran =
+        serde_json::from_str(crate::test_util::fixture!("plugins/run-closed.json")).expect("the outcome parses");
+    assert!(closed.say("Open board").is_none());
 }

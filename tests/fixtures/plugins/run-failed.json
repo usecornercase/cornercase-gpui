@@ -1,0 +1,13 @@
+{
+  "action": "fail",
+  "code": 3,
+  "context": "workspace",
+  "ended": "exited",
+  "error": "exit status: 3",
+  "log": "/home/ana/.local/state/cornercase/plugins/state/acme.notes/plugin.log",
+  "ms": 54,
+  "plugin": "acme.notes",
+  "project": 4,
+  "signal": null,
+  "workspace": 3
+}

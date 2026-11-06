@@ -13,6 +13,7 @@ use crate::model::accounts::{AccountsInfo, RestartAnswer, Selection, Stamp, Swit
 use crate::model::machines::{self, Machine};
 use crate::panels::PanelKind;
 use crate::panels::files::open::{self, Found};
+use crate::panels::plugins::Offers;
 use crate::panels::settings::FoundSetting;
 use crate::prefs::{self, Prefs};
 
@@ -42,6 +43,7 @@ pub(crate) struct Store {
     pub run_file: Option<String>,
     pub openers: Arc<Vec<Found>>,
     pub jobs: Jobs,
+    pub plugins: Offers,
     pub keys_to_terminal: bool,
     pub accounts: AccountsInfo,
     pub selection: Selection,
@@ -118,6 +120,7 @@ impl Store {
             run_file: None,
             openers: Arc::default(),
             jobs: Jobs::default(),
+            plugins: Offers::default(),
             keys_to_terminal: false,
             accounts: AccountsInfo::default(),
             selection: Selection::default(),

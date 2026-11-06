@@ -1,9 +1,9 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::model::Shown;
 use crate::store::ToastKind;
 
+const CLOSED: &str = "closed";
 const WINDOW_NOTE: &str = "Window processes run only beside cornercase's own window; running them beside this one \
                            needs usecornercase/cornercase-terminal#674.";
 
@@ -144,46 +144,22 @@ impl Manifest {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
-pub(super) struct ActionList {
-    pub(super) actions: Vec<Action>,
-    pub(super) revision: u64,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
-pub(super) struct Action {
-    pub(super) plugin: String,
-    #[serde(rename = "action")]
-    pub(super) name: String,
-    pub(super) title: String,
-    pub(super) contexts: Vec<String>,
-    pub(super) placement: String,
-}
-
-impl Action {
-    pub(super) fn key(&self) -> String {
-        format!("{}/{}", self.plugin, self.name)
-    }
-
-    pub(super) fn popup(&self) -> bool {
-        self.placement == "popup"
-    }
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
 pub(super) struct Ran {
     pub(super) plugin: String,
+    pub(super) ended: String,
     pub(super) error: Option<String>,
     pub(super) ms: u64,
 }
 
 impl Ran {
-    pub(super) fn say(&self, title: &str) -> (String, ToastKind) {
-        match &self.error {
+    pub(super) fn say(&self, title: &str) -> Option<(String, ToastKind)> {
+        if self.ended == CLOSED {
+            return None;
+        }
+        Some(match &self.error {
             None => (format!("{title}: done in {}", duration(self.ms)), ToastKind::Info),
             Some(e) => (format!("{title}: {e}; `cornercase plugin logs {}` says more", self.plugin), ToastKind::Error),
-        }
+        })
     }
 }
 
@@ -192,16 +168,6 @@ pub(super) fn duration(ms: u64) -> String {
         return format!("{ms} ms");
     }
     format!("{:.1} s", f64::from(u32::try_from(ms).unwrap_or(u32::MAX)) / 1000.)
-}
-
-pub(super) fn target(contexts: &[String], shown: Shown) -> Option<Vec<String>> {
-    if contexts.iter().any(|c| c == "button") {
-        return Some(Vec::new());
-    }
-    [("pane", shown.pane), ("tab", shown.tab), ("workspace", shown.workspace), ("project", shown.project)]
-        .into_iter()
-        .find_map(|(kind, id)| id.filter(|_| contexts.iter().any(|c| c == kind)).map(|id| (kind, id)))
-        .map(|(kind, id)| vec![format!("--{kind}"), id.to_string()])
 }
 
 pub(super) fn first_line(text: &str) -> String {

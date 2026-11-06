@@ -2,6 +2,7 @@ mod ask;
 mod data;
 mod fetch;
 mod install;
+mod offers;
 mod status;
 
 use std::collections::HashMap;
@@ -21,10 +22,15 @@ use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::{colours, radius};
 use crate::ui::{self, TextField, TextFieldEvent};
 use ask::{Question, text_box};
-use data::{Action, ActionList, List, Plugin, Ran, first_line, target};
+use data::{List, Plugin, first_line};
 use fetch::Checked;
 use install::{FETCHING, INSTALLING, LINKING, UPDATING_ALL, checking};
-use status::{Health, Status};
+use offers::{Action, VIEW_WAITS, target};
+use status::Health;
+
+#[cfg(test)]
+pub(crate) use offers::listed_offers;
+pub(crate) use offers::{Button, Group, Offers, Run, Spot, read_offers, run_action};
 
 const LOG_LINES: &str = "60";
 const WARNING: &str = "A plugin runs as you and can do anything you can, including typing into every terminal. \
@@ -36,8 +42,6 @@ const NO_STATUS: &str = "What its services are doing needs the server, which did
 pub(crate) struct PluginsPanel {
     plugins: Option<Vec<Plugin>>,
     error: Option<String>,
-    actions: ActionList,
-    status: Option<Status>,
     logs: HashMap<String, String>,
     checks: HashMap<String, Checked>,
     source: Entity<TextField>,
@@ -114,16 +118,8 @@ impl PluginsPanel {
             this.open = open;
         })
         .detach();
-        let mut this = Self {
-            plugins: None,
-            error: None,
-            actions: ActionList::default(),
-            status: None,
-            logs: HashMap::new(),
-            checks: HashMap::new(),
-            source,
-            open: true,
-        };
+        let mut this =
+            Self { plugins: None, error: None, logs: HashMap::new(), checks: HashMap::new(), source, open: true };
         this.reload(cx);
         this
     }
@@ -140,14 +136,7 @@ impl PluginsPanel {
             }
             cx.notify();
         });
-        store::run_json(cx, args(&["plugin", "actions", "--json"]), |this, result, cx| {
-            this.actions = result.ok().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
-            cx.notify();
-        });
-        store::run_json(cx, args(&["plugin", "status", "--json"]), |this, result, cx| {
-            this.status = result.ok().and_then(|v| serde_json::from_value(v).ok());
-            cx.notify();
-        });
+        Store::get(cx).update(cx, read_offers);
         if cli::host().is_none() {
             for id in self.logs.keys().cloned().collect::<Vec<_>>() {
                 Self::read_log(id, cx);
@@ -252,25 +241,10 @@ impl PluginsPanel {
         }
     }
 
-    fn run_action(&mut self, action: &Action, cx: &mut Context<Self>) {
-        let Some(target) = target(&action.contexts, shown(cx)) else { return };
-        let key = action.key();
-        let mut command = args(&["plugin", "run", &action.plugin, &action.name, "--json"]);
-        command.extend(["--revision".to_string(), self.actions.revision.to_string()]);
-        command.extend(target);
-        if action.popup() {
-            Store::get(cx).update(cx, Store::close_sheet);
-        }
-        let title = action.title.clone();
-        store::run_busy(cx, job(&key, format!("{title}…")), command, move |this, result, cx| {
-            let (text, kind) = match result.map(|out| serde_json::from_str::<Ran>(&out)) {
-                Ok(Ok(ran)) => ran.say(&title),
-                Ok(Err(e)) => (format!("{title}: {e}"), ToastKind::Error),
-                Err(e) => (format!("{title}: {e}"), ToastKind::Error),
-            };
-            Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
-            this.reload(cx);
-        });
+    fn run_shown(action: Action, cx: &mut Context<Self>) {
+        let Some(spot) = target(&action.contexts, shown(cx)) else { return };
+        let revision = Store::get(cx).read(cx).plugins.list.revision;
+        run_action(&Run::new(action, spot, revision), cx, Self::reload);
     }
 
     fn plugin_header(plugin: &Plugin, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -307,11 +281,12 @@ impl PluginsPanel {
             .child(chip)
     }
 
-    fn services_row(&self, plugin: &Plugin) -> Option<Div> {
+    fn services_row(plugin: &Plugin, cx: &App) -> Option<Div> {
         if !plugin.enabled || !plugin.has_service() {
             return None;
         }
-        let Some(status) = &self.status else { return Some(ui::dim(NO_STATUS)) };
+        let store = Store::get(cx);
+        let Some(status) = &store.read(cx).plugins.status else { return Some(ui::dim(NO_STATUS)) };
         let chips: Vec<Div> =
             status.services(&plugin.id).iter().map(|s| chip(s.describe(), health_colour(s.health()))).collect();
         Some(div().flex().flex_wrap().items_center().gap(px(6.)).child(ui::dim("Services")).children(chips))
@@ -327,13 +302,15 @@ impl PluginsPanel {
         ui::button(id, format!("▶ {}", action.title))
             .when(!runnable, |b| b.opacity(0.45).cursor_default())
             .when(runnable, |b| {
-                b.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.run_action(&action, cx)))
+                b.on_click(cx.listener(move |_, _: &ClickEvent, _, cx| Self::run_shown(action.clone(), cx)))
             })
             .into_any_element()
     }
 
-    fn action_buttons(&self, plugin: &Plugin, cx: &mut Context<Self>) -> Option<Div> {
-        let actions: Vec<Action> = self.actions.actions.iter().filter(|a| a.plugin == plugin.id).cloned().collect();
+    fn action_buttons(plugin: &Plugin, cx: &mut Context<Self>) -> Option<Div> {
+        let store = Store::get(cx);
+        let listed = store.read(cx).plugins.list.actions.iter();
+        let actions: Vec<Action> = listed.filter(|a| a.plugin == plugin.id).cloned().collect();
         if actions.is_empty() {
             return None;
         }
@@ -341,6 +318,12 @@ impl PluginsPanel {
         let buttons: Vec<AnyElement> =
             actions.into_iter().map(|action| Self::action_button(action, shown, cx)).collect();
         Some(div().flex().flex_wrap().items_center().gap(px(6.)).pt(px(2.)).child(ui::dim("Actions")).children(buttons))
+    }
+
+    fn view_note(cx: &App) -> Option<Div> {
+        let store = Store::get(cx);
+        let waits = store.read(cx).plugins.list.actions.iter().any(Action::waits_on_the_view);
+        waits.then(|| div().text_size(px(12.)).text_color(colours::muted()).child(VIEW_WAITS))
     }
 
     fn plugin_buttons(&self, plugin: &Plugin, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -394,8 +377,8 @@ impl PluginsPanel {
             .children(plugin.error.clone().map(|e| div().text_size(px(12.)).text_color(colours::failed()).child(e)))
             .child(ui::dim(plugin.facts()))
             .children(plugin.window_note().filter(|_| cli::host().is_none()).map(ui::dim))
-            .children(self.services_row(plugin))
-            .children(self.action_buttons(plugin, cx))
+            .children(Self::services_row(plugin, cx))
+            .children(Self::action_buttons(plugin, cx))
             .when(cli::host().is_none(), |d| d.child(self.plugin_buttons(plugin, cx)))
             .children(self.logs.get(&plugin.id).map(|text| log_view(&plugin.id, text)))
             .into_any_element()
@@ -452,8 +435,8 @@ impl PluginsPanel {
         }))
     }
 
-    fn problem(&self) -> Option<Div> {
-        let problem = self.status.as_ref().and_then(|s| s.problem.clone())?;
+    fn problem(cx: &App) -> Option<Div> {
+        let problem = Store::get(cx).read(cx).plugins.status.as_ref().and_then(|s| s.problem.clone())?;
         Some(ui::note(problem).text_color(colours::failed()))
     }
 
@@ -496,9 +479,10 @@ impl Render for PluginsPanel {
             .flex_col()
             .gap(px(10.))
             .child(div().text_size(px(12.)).text_color(colours::muted()).child(WARNING))
+            .children(Self::view_note(cx))
             .child(install)
             .child(ui::section("Installed"))
-            .children(self.problem())
+            .children(Self::problem(cx))
             .children(list)
     }
 }

@@ -19,7 +19,7 @@ use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop::{self, Board};
 use crate::model::{Frame, Grid, Project, Session, Workspace};
 use crate::notify::{self, Notifier};
-use crate::panels::PanelKind;
+use crate::panels::{PanelKind, plugins};
 use crate::platform::Os;
 use crate::render::Metrics;
 use crate::render::layout::{Along, Layout};
@@ -385,6 +385,7 @@ impl Root {
         self.store.update(cx, |s, cx| {
             s.follow_app(cx);
             s.list_accounts(cx);
+            plugins::read_offers(s, cx);
         });
     }
 
