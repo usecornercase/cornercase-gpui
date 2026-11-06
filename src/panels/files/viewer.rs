@@ -2,15 +2,16 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gpui::{AnyView, App, AppContext as _, Context, ScrollStrategy, WeakEntity};
-use grep_regex::RegexMatcher;
 
 use super::disk::{self, Content};
+use super::find::Find;
 use super::source::Source;
 use super::{FilesPanel, Spans, Viewer, highlight, tree};
 use crate::model::Link;
 use crate::panels::PanelKind;
 use crate::platform::paths::{self, Style};
 use crate::store::Store;
+use crate::ui::selection::{Selecting, Selection};
 
 #[derive(Clone)]
 struct Fetch {
@@ -23,9 +24,17 @@ struct Fetch {
 #[derive(Default)]
 pub(super) struct OpenAt {
     pub(super) line: Option<usize>,
-    pub(super) lit: Option<RegexMatcher>,
+    pub(super) through: Option<usize>,
+    pub(super) query: Option<String>,
     pub(super) from_search: bool,
     pub(super) from_flow: bool,
+}
+
+impl OpenAt {
+    fn selection(&self) -> Option<Selection<usize>> {
+        let anchor = self.line?;
+        Some(Selection::Lines { anchor, head: self.through.unwrap_or(anchor) })
+    }
 }
 
 struct Reading {
@@ -35,7 +44,7 @@ struct Reading {
     language: Option<&'static str>,
 }
 
-fn text_lines(content: &Content) -> Option<Vec<String>> {
+fn text_lines(content: &Content) -> Option<Arc<Vec<String>>> {
     match content {
         Content::Text(text) => Some(text.lines.clone()),
         _ => None,
@@ -43,7 +52,7 @@ fn text_lines(content: &Content) -> Option<Vec<String>> {
 }
 
 impl Viewer {
-    fn new(path: PathBuf, rel: PathBuf, at: OpenAt) -> Self {
+    fn new(path: PathBuf, rel: PathBuf, at: &OpenAt) -> Self {
         Self {
             path,
             rel,
@@ -51,9 +60,9 @@ impl Viewer {
             spans: None,
             language: None,
             stamp: None,
-            selected: at.line,
+            selecting: Selecting::new(at.selection()),
             scroll_to: Some(at.line.unwrap_or(0)),
-            lit: at.lit,
+            find: None,
             checking: true,
             from_search: at.from_search,
             from_flow: at.from_flow,
@@ -61,10 +70,8 @@ impl Viewer {
     }
 
     fn set_content(&mut self, content: Content, reading: &Reading) {
-        if let Content::Text(text) = &content
-            && self.selected.is_some_and(|l| l >= text.lines.len())
-        {
-            self.selected = None;
+        if let Content::Text(text) = &content {
+            self.selecting.selection = self.selecting.selection.and_then(|s| s.fit(text.lines.len()));
         }
         self.content = Some(content);
         self.stamp = reading.stamp;
@@ -101,12 +108,13 @@ fn link_path(link: &Link, shown: Option<u64>) -> PathBuf {
 impl FilesPanel {
     fn open_link(&mut self, link: &Link, at: Option<usize>, cx: &mut Context<Self>) {
         let from_search = self.place().is_some_and(|p| !p.query.trim().is_empty());
-        let target = OpenAt { line: at.or_else(|| link.first_line()), from_search, ..OpenAt::default() };
+        let through = at.is_none().then(|| link.last_line()).flatten();
+        let target = OpenAt { line: at.or_else(|| link.first_line()), through, from_search, ..OpenAt::default() };
         self.menu = None;
         self.open_file(link_path(link, self.current), target, cx);
     }
 
-    pub(super) fn open_file(&mut self, rel: PathBuf, at: OpenAt, cx: &mut Context<Self>) {
+    pub(super) fn open_file(&mut self, rel: PathBuf, mut at: OpenAt, cx: &mut Context<Self>) {
         let Some(id) = self.current else { return };
         let Some(place) = self.places.get_mut(&id) else { return };
         let path = place.style.join(&place.root, &rel);
@@ -114,7 +122,8 @@ impl FilesPanel {
         let opened =
             if paths::rooted(&rel.to_string_lossy()) { Vec::new() } else { tree::reveal(&mut place.expanded, &rel) };
         let fetch = Fetch { id, path: path.clone(), rel: rel.clone(), source: place.source.clone() };
-        place.viewer = Some(Viewer::new(path, rel, at));
+        let find = at.query.take().map(|query| Find::new(&query, cx));
+        place.viewer = Some(Viewer { find, ..Viewer::new(path, rel, &at) });
         if !opened.is_empty() {
             self.list(id, opened, cx);
         }
@@ -139,6 +148,7 @@ impl FilesPanel {
         if viewer.path != reading.path {
             return;
         }
+        let fresh = content.is_some();
         if let Some(content) = content {
             viewer.set_content(content, reading);
         }
@@ -146,6 +156,9 @@ impl FilesPanel {
         viewer.checking = false;
         if let (Some(line), Some(Content::Text(_))) = (viewer.scroll_to.take(), &viewer.content) {
             self.code_scroll.scroll_to_item(line.saturating_sub(3), ScrollStrategy::Top);
+        }
+        if fresh {
+            self.find_again(reading.id, cx);
         }
         cx.notify();
     }
@@ -238,13 +251,6 @@ impl FilesPanel {
         }
         if from_flow {
             self.back_to_flow(cx);
-        }
-        cx.notify();
-    }
-
-    pub(super) fn select_line(&mut self, line: usize, cx: &mut Context<Self>) {
-        if let Some(viewer) = self.place_mut().and_then(|p| p.viewer.as_mut()) {
-            viewer.selected = if viewer.selected == Some(line) { None } else { Some(line) };
         }
         cx.notify();
     }

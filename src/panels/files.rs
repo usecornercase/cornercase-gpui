@@ -1,6 +1,8 @@
 pub(crate) mod disk;
+mod find;
 mod finder;
 mod highlight;
+mod lines;
 mod menu;
 pub(crate) mod open;
 mod peek;
@@ -23,11 +25,10 @@ use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyView, AppContext as _, ClickEvent, Context, Entity, Focusable as _, IntoElement, ParentElement as _, Pixels,
-    Point, Render, StatefulInteractiveElement as _, Styled as _, Subscription, Task, UniformListScrollHandle, Window,
-    div, prelude::FluentBuilder as _, px,
+    AnyView, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
+    IntoElement, ParentElement as _, Pixels, Point, Render, StatefulInteractiveElement as _, Styled as _, Subscription,
+    Task, UniformListScrollHandle, Window, div, prelude::FluentBuilder as _, px,
 };
-use grep_regex::RegexMatcher;
 
 use crate::cli;
 use crate::panels::PanelKind;
@@ -35,6 +36,7 @@ use crate::platform::Os;
 use crate::platform::paths::Style;
 use crate::store::Store;
 use crate::theme::colours;
+use crate::ui::selection::Selecting;
 use crate::ui::{self, TextField, TextFieldEvent};
 
 use disk::Content;
@@ -93,9 +95,9 @@ struct Viewer {
     spans: Option<Spans>,
     language: Option<&'static str>,
     stamp: Option<disk::Stamp>,
-    selected: Option<usize>,
+    selecting: Selecting<usize>,
     scroll_to: Option<usize>,
-    lit: Option<RegexMatcher>,
+    find: Option<find::Find>,
     checking: bool,
     from_search: bool,
     from_flow: bool,
@@ -166,6 +168,8 @@ pub(crate) struct FilesPanel {
     current: Option<u64>,
     places: HashMap<u64, Place>,
     query: Entity<TextField>,
+    focus: FocusHandle,
+    left_place: bool,
     search: Search,
     show_hidden: bool,
     rows: Vec<tree::Row>,
@@ -218,6 +222,8 @@ impl FilesPanel {
             current: None,
             places: HashMap::new(),
             query,
+            focus: cx.focus_handle(),
+            left_place: false,
             search: Search::new(),
             show_hidden: true,
             rows: Vec::new(),
@@ -260,6 +266,29 @@ impl FilesPanel {
             .into_any_element()
     }
 
+    fn focus_lost_with_a_field(&mut self, window: &Window, cx: &mut Context<Self>) -> bool {
+        let viewer = self.place().and_then(|p| p.viewer.as_ref());
+        let query_hidden = viewer.is_some() && self.query.read(cx).focus_handle(cx).is_focused(window);
+        let find_hidden = viewer
+            .and_then(|v| v.find.as_ref())
+            .filter(|_| !self.can_find())
+            .is_some_and(|find| find.field.read(cx).focus_handle(cx).is_focused(window));
+        let left_place = std::mem::take(&mut self.left_place) && self.focus.contains_focused(window, cx);
+        query_hidden || find_hidden || left_place
+    }
+
+    fn settle_focus(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if !self.focus_lost_with_a_field(window, cx) {
+            return;
+        }
+        cx.defer_in(window, |this, window, cx| {
+            let viewer = this.place().and_then(|p| p.viewer.as_ref());
+            let field = viewer.and_then(|v| v.find.as_ref()).filter(|_| this.can_find());
+            let focus = field.map_or_else(|| this.focus.clone(), |find| find.field.read(cx).focus_handle(cx));
+            window.focus(&focus);
+        });
+    }
+
     fn render_bar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let focused = self.query.read(cx).focus_handle(cx).is_focused(window);
         div()
@@ -281,13 +310,14 @@ impl FilesPanel {
 
 impl Render for FilesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.settle_focus(window, cx);
         let Some(place) = self.place() else {
-            return div().size_full().child(ui::note("No workspace shown")).into_any_element();
+            return div().size_full().track_focus(&self.focus).child(ui::note("No workspace shown")).into_any_element();
         };
         let viewing = place.viewer.is_some();
         let searching = !place.query.trim().is_empty();
         let body = if viewing {
-            self.render_viewer(cx)
+            self.render_viewer(window, cx)
         } else if searching {
             self.render_results(cx)
         } else {
@@ -296,6 +326,7 @@ impl Render for FilesPanel {
         let menu = self.render_menu(cx);
         div()
             .size_full()
+            .track_focus(&self.focus)
             .flex()
             .flex_col()
             .when(!viewing, |d| d.child(self.render_bar(window, cx)))

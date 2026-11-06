@@ -66,14 +66,6 @@ fn references_the_changed_lines() {
     let hunks = sample();
     assert_eq!(changed(&hunks[0]), (4, 5));
     assert_eq!(changed(&hunks[1]), (12, 12));
-    assert_eq!(reference("src/a.rs", (4, 5)), "src/a.rs:4-5 ");
-    assert_eq!(reference("src/a.rs", (12, 12)), "src/a.rs:12 ");
-}
-
-#[test]
-fn quotes_the_path_for_the_editor() {
-    assert_eq!(editor_command("src/a b.rs", 7), "${VISUAL:-${EDITOR:-vi}} +7 'src/a b.rs'");
-    assert_eq!(editor_command("it's.txt", 1), r"${VISUAL:-${EDITOR:-vi}} +1 'it'\''s.txt'");
 }
 
 #[test]

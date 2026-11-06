@@ -6,6 +6,7 @@ use gpui::{
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui;
+use crate::ui::selection;
 use crate::ui::split::{self, Edge};
 
 use super::actions::file_busy;
@@ -82,7 +83,7 @@ impl ChangesPanel {
             .when(selected.mode.uncommitted(), |d| d.children(uncommitted_buttons(workspace, &shown, cx)))
             .when(can_open, |d| {
                 d.child(ui::button("open-editor", "Open in editor").on_click(move |_: &ClickEvent, _, cx| {
-                    Self::open_in_editor(workspace, &open_path, first_line, cx);
+                    Store::get(cx).read(cx).open_in_editor(workspace, &open_path, first_line);
                 }))
             })
     }
@@ -138,8 +139,19 @@ impl ChangesPanel {
             .flex()
             .flex_col()
             .child(header)
-            .child(div().flex_1().min_h(px(0.)).bg(colours::terminal()).child(self.render_diff(&file, cx)))
+            .child(self.render_diff_area(&file, cx))
             .child(split::handle("changes-split", FilesGrip, (Edge::Bottom, 0.), files_height, cx))
+    }
+
+    fn render_diff_area(&self, file: &FileInfo, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        self.open.selecting.laid().clear();
+        let bar = self.line_bar(cx);
+        selection::body(cx).child(self.render_diff(file, cx)).child(selection::layer(
+            cx.weak_entity(),
+            &self.open.selecting,
+            bar,
+            0.,
+        ))
     }
 
     fn render_diff(&self, file: &FileInfo, cx: &mut Context<Self>) -> AnyElement {
@@ -152,7 +164,7 @@ impl ChangesPanel {
         if data.rows.is_empty() {
             return ui::note(empty_diff_text(file)).into_any_element();
         }
-        diff_view::diff_list(&self.diff_list, data, cx.entity().downgrade())
+        diff_view::diff_list(&self.diff_list, data, cx.entity().downgrade(), &self.open.selecting)
     }
 
     pub(super) fn render_footer(&self) -> impl IntoElement + use<> {

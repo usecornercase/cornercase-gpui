@@ -1,19 +1,17 @@
 use std::ops::Range;
 
 use gpui::{
-    Div, ElementId, FontStyle, HighlightStyle, Hsla, ImageFormat, InteractiveElement as _, IntoElement,
+    CursorStyle, Div, ElementId, FontStyle, HighlightStyle, Hsla, ImageFormat, InteractiveElement as _, IntoElement,
     ParentElement as _, Pixels, SharedString, Stateful, Styled as _, div, prelude::FluentBuilder as _, px,
 };
-use grep_matcher::Matcher as _;
-use grep_regex::RegexMatcher;
 
 use crate::theme::{ANSI, FONT_FAMILY, colours, hsla, radius};
+use crate::ui::one_line::LaidOut;
+use crate::ui::selection::Styles;
 use crate::ui::{self, Icon, OneLine, file_icons};
 
 use super::highlight::Kind;
 use super::{CODE_SIZE, Spans};
-
-pub(super) type Styles = Vec<(Range<usize>, HighlightStyle)>;
 
 pub(super) struct CodeRow {
     pub ix: usize,
@@ -21,12 +19,18 @@ pub(super) struct CodeRow {
     pub styles: Styles,
     pub selected: bool,
     pub width: Pixels,
+    pub on_laid: Option<Box<dyn FnOnce(LaidOut)>>,
 }
 
 impl CodeRow {
     pub(super) fn new(ix: usize, line: &str, styles: Styles, selected: bool, width: Pixels) -> Self {
         let shown = if line.is_empty() { " ".to_string() } else { line.to_string() };
-        Self { ix, shown, styles, selected, width }
+        Self { ix, shown, styles, selected, width, on_laid: None }
+    }
+
+    pub(super) fn on_laid(mut self, report: impl FnOnce(LaidOut) + 'static) -> Self {
+        self.on_laid = Some(Box::new(report));
+        self
     }
 }
 
@@ -47,10 +51,13 @@ pub(super) fn span_styles(spans: Option<&Spans>, ix: usize) -> Styles {
 }
 
 pub(super) fn code_row(row: CodeRow) -> Div {
+    let selectable = row.on_laid.is_some();
+    let text = ui::one_line(row.shown).highlights(row.styles).when_some(row.on_laid, OneLine::on_laid);
     div()
         .flex()
         .w_full()
         .h(px(18.))
+        .line_height(px(18.))
         .font_family(FONT_FAMILY)
         .text_size(px(CODE_SIZE))
         .items_center()
@@ -65,7 +72,7 @@ pub(super) fn code_row(row: CodeRow) -> Div {
                 .text_color(if row.selected { colours::accent() } else { colours::faint() })
                 .child((row.ix + 1).to_string()),
         )
-        .child(div().flex_1().min_w_0().pr(px(8.)).child(ui::one_line(row.shown).highlights(row.styles)))
+        .child(div().flex_1().min_w_0().pr(px(8.)).when(selectable, |d| d.cursor(CursorStyle::IBeam)).child(text))
 }
 
 pub(super) fn clip(ranges: &[Range<usize>], within: Range<usize>) -> Vec<Range<usize>> {
@@ -76,42 +83,6 @@ pub(super) fn clip(ranges: &[Range<usize>], within: Range<usize>) -> Vec<Range<u
             (start < end).then(|| start - within.start..end - within.start)
         })
         .collect()
-}
-
-pub(super) fn matches(matcher: &RegexMatcher, line: &str) -> Vec<Range<usize>> {
-    let mut found = Vec::new();
-    let _ = matcher.find_iter(line.as_bytes(), |m| {
-        found.push(m.start()..m.end());
-        true
-    });
-    found
-}
-
-fn covers(range: &Range<usize>, piece: &Range<usize>) -> bool {
-    range.start <= piece.start && piece.end <= range.end
-}
-
-pub(super) fn overlay(styles: Styles, lit: &[Range<usize>], bg: Hsla) -> Styles {
-    if lit.is_empty() {
-        return styles;
-    }
-    let mut cuts: Vec<usize> =
-        styles.iter().flat_map(|(r, _)| [r.start, r.end]).chain(lit.iter().flat_map(|r| [r.start, r.end])).collect();
-    cuts.sort_unstable();
-    cuts.dedup();
-    let mut out: Styles = Vec::new();
-    for pair in cuts.windows(2) {
-        let piece = pair[0]..pair[1];
-        let base = styles.iter().find(|(r, _)| covers(r, &piece)).map(|(_, s)| *s);
-        let in_lit = lit.iter().any(|r| covers(r, &piece));
-        let style = match (base, in_lit) {
-            (None, false) => continue,
-            (Some(s), false) => s,
-            (base, true) => HighlightStyle { background_color: Some(bg), ..base.unwrap_or_default() },
-        };
-        out.push((piece, style));
-    }
-    out
 }
 
 pub(super) fn kind_style(kind: Kind) -> HighlightStyle {
