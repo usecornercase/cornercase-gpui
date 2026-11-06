@@ -38,7 +38,7 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 - [Browser panel](design/browser.md) (`panels/browser.rs`, `panels/browser/`, `assets/browser/`): a headless Chrome drawn in the dock, why not a native web view, its profile and port, tabs per workspace, input, devices, the console, handing elements and screenshots to agents, agents driving it, ports and ssh tunnels.
 - [TODO panel](design/todo-panel.md) (`panels/todo.rs`, `panels/todo/`): the TODO list and sending an item to an agent.
 - [Recap](design/recap.md) (`panels/recap.rs`, `panels/recap/`): an agent's summary of what your agents did, its three ranges, a run beside the queue, naming ids, what a link goes to, what waits on #664.
-- [Queue](design/queue.md) (`panels/queue.rs`, `panels/queue/`): scheduled agent starts, their times and form.
+- [Queue](design/queue.md) (`panels/queue.rs`, `panels/queue/`): scheduled agent starts, their times and form, routines and their runs.
 - [Issues](design/issues.md) (`panels/issues.rs`, `panels/issues/`): the issues browser, starting an agent on an issue, the #461 and #472 stopgaps.
 - [Accounts](design/accounts.md) (`panels/accounts.rs`, `panels/accounts/`): agent logins and profiles.
 - [Machines](design/machines.md) (`model/machines.rs`, `panels/machines.rs`, `panels/machines/`): the computers the server links to, the list in `Store`, each link's state in words, adding, editing, removing, retrying and updating them, why ⇧⌘K is another thing.

@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.7
+
+- Routines in the Queue: schedule an agent or a flow to start again and again, every so many minutes, hours, days or weeks, every day, every weekday or on a day of the week. Each run gets a fresh worktree from the up-to-date default branch and can remove its workspace when it finishes, if nothing would be lost. A routine shows its next time and its last runs, with why a run failed or kept its workspace, and you can pause it, resume it, start it now, edit it, or remove it with its runs and undo that. It only runs while cornercase's server runs, and only git repositories can have routines.
+
 ## 0.1.6
 
 - **See what fills an agent's context.** Right-click a tab running an agent, or an agent's row in the sidebar, and pick **View context**. For Claude Code a dialog shows how full its window is and how that splits between the system prompt, the tools, MCP servers, memory files such as a long `AGENTS.md`, skills and the conversation, with each memory file and MCP server, the skill count and the tools that took the most. Nothing is typed into your agent and no tokens are spent, though its MCP servers start a second time while it reads; **Refresh** reads again. The other agents show their model and how full their context is.

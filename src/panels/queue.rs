@@ -4,7 +4,9 @@ mod empty;
 mod form;
 mod form_view;
 mod list;
+mod repeat;
 mod rows;
+mod runs;
 mod time;
 mod undo;
 
@@ -17,13 +19,14 @@ use gpui::{
 };
 use serde_json::Value;
 
+use crate::cli;
 use crate::model::Session;
 use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::colours;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{self, TextField, TextFieldEvent};
 use data::{Body, Entry, entries};
-use form::{Form, Spot};
+use form::{FlowChoices, Form, Spot};
 use rows::Snapshot;
 pub(crate) use time::{days, now};
 use undo::{Removal, UNDO_FOR};
@@ -38,6 +41,7 @@ pub(crate) struct QueuePanel {
     filter: Entity<TextField>,
     form: Option<Form>,
     config: Option<Value>,
+    flows: FlowChoices,
     form_width: Split,
     removal: Option<Removal>,
     _subscriptions: Vec<Subscription>,
@@ -67,8 +71,16 @@ pub(crate) fn toast_outcome<T>(result: anyhow::Result<T>, done: impl FnOnce(T) -
     Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
 }
 
+fn toast_error(error: &anyhow::Error, cx: &mut App) {
+    Store::get(cx).update(cx, |s, cx| s.toast(cli::reason(error), ToastKind::Error, cx));
+}
+
 fn starting(entry: u64) -> String {
     format!("queue-run:{entry}")
+}
+
+fn pausing(entry: u64) -> String {
+    format!("queue-pause:{entry}")
 }
 
 fn scrolled(content: impl IntoElement) -> AnyElement {
@@ -83,7 +95,15 @@ impl QueuePanel {
             cx.subscribe_in(&filter, window, |_, _, _: &TextFieldEvent, _, cx| cx.notify()),
         ];
         cx.spawn(async move |this, cx| tick(this, cx).await).detach();
-        Self { filter, form: None, config: None, form_width: FORM, removal: None, _subscriptions: subscriptions }
+        Self {
+            filter,
+            form: None,
+            config: None,
+            flows: FlowChoices::default(),
+            form_width: FORM,
+            removal: None,
+            _subscriptions: subscriptions,
+        }
     }
 
     fn filter_text(&self, cx: &App) -> String {
@@ -91,9 +111,24 @@ impl QueuePanel {
     }
 
     fn run_now(entry: &Entry, cx: &mut Context<Self>) {
-        let busy = Busy::new(starting(entry.id), format!("Starting {} on {}…", entry.agent, entry.label));
+        let busy = Busy::new(starting(entry.id), format!("Starting {} on {}…", entry.who(), entry.label));
+        let text = if entry.is_routine() {
+            format!("Starting a run of “{}”", entry.label)
+        } else {
+            "Starting the queued entry".to_string()
+        };
         store::run_busy(cx, busy, args(&["queue", "run", &entry.id.to_string()]), |_: &mut Self, result, cx| {
-            toast_outcome(result, |_| ("Starting the queued entry".to_string(), ToastKind::Info), cx);
+            toast_outcome(result, |_| (text, ToastKind::Info), cx);
+        });
+    }
+
+    fn set_paused(entry: &Entry, paused: bool, cx: &mut Context<Self>) {
+        let (command, doing) = if paused { ("pause", "Pausing") } else { ("resume", "Resuming") };
+        let busy = Busy::new(pausing(entry.id), format!("{doing} {}…", entry.label));
+        store::run_busy(cx, busy, args(&["queue", command, &entry.id.to_string()]), |_: &mut Self, result, cx| {
+            if let Err(e) = result {
+                toast_error(&e, cx);
+            }
         });
     }
 
@@ -111,7 +146,7 @@ impl QueuePanel {
     fn take_out(command: Vec<String>, cx: &mut Context<Self>) {
         store::run(cx, command, |this: &mut Self, result, cx| match result {
             Ok(out) => this.offer_undo(Removal::from_answer(&out), cx),
-            Err(e) => Store::get(cx).update(cx, |s, cx| s.toast(e.to_string(), ToastKind::Error, cx)),
+            Err(e) => toast_error(&e, cx),
         });
     }
 
@@ -138,7 +173,7 @@ impl QueuePanel {
         cx.notify();
         store::run(cx, args(&["queue", "restore", &removal.undo.to_string()]), |_: &mut Self, result, cx| {
             if let Err(e) = result {
-                Store::get(cx).update(cx, |s, cx| s.toast(e.to_string(), ToastKind::Error, cx));
+                toast_error(&e, cx);
             }
         });
     }
@@ -163,6 +198,9 @@ impl QueuePanel {
         {
             form.project = shown.project;
             form.spot = Spot::from(shown.workspace);
+        }
+        if let (Some(form), Some(session)) = (self.form.as_mut(), session) {
+            form.fit_repository(session);
         }
     }
 
@@ -197,6 +235,7 @@ impl Render for QueuePanel {
         };
         let entries = entries(app.as_ref());
         self.sync_form(&entries, session.as_ref());
+        self.sync_flows(cx);
         let snapshot = Snapshot::new(app.as_ref(), session);
         let main = self.main(&entries, &snapshot, window, cx);
         let at = (Edge::Left, self.form_width.size());
