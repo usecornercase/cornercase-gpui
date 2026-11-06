@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::panels::PanelKind;
+use crate::store::args;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -52,6 +53,10 @@ pub(crate) struct Step {
     pub(crate) done: Value,
     pub(crate) show: Option<Value>,
     pub(crate) offer: Option<String>,
+}
+
+pub(crate) fn reset_command() -> Vec<String> {
+    args(&["tour", "reset"])
 }
 
 fn field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {

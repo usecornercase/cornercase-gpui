@@ -3,8 +3,10 @@ use gpui::{
 };
 
 use super::data::{self, Connection, ConnectionKind, Tone};
+use super::forum::{self, Forum, Stage};
 use super::pages::Slot;
 use super::{Role, SettingsPanel, widgets};
+use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, Icon};
 
@@ -46,7 +48,32 @@ fn connection_label(c: &Connection) -> Div {
     widgets::labelled(title, note).children(pairing_note(c).map(|n| ui::dim(n).text_size(px(11.5))))
 }
 
+fn forum_status(forum: &Forum) -> Div {
+    let text = forum.words();
+    match forum.stage() {
+        Stage::Off => widgets::status(text, None, colours::muted()),
+        Stage::Ready => widgets::status(text, Some(colours::done()), colours::done()),
+        Stage::Waiting => widgets::status(text, Some(colours::waiting()), colours::waiting()),
+    }
+}
+
+fn forum_lines(forum: &Forum) -> Div {
+    let opening = forum.address().map(|address| {
+        ui::row_action("forum-open", Icon::External, "Open the forum in Discord", false)
+            .on_click(move |_, _, cx| cx.open_url(&address))
+    });
+    let picking = (forum.stage() == Stage::Waiting).then(|| ui::dim(forum::PICKING).text_size(px(11.5)));
+    let line = div().flex().items_center().gap(px(6.)).child(forum_status(forum)).children(opening);
+    widgets::under(div().flex().flex_col().gap(px(4.)).child(line).children(picking))
+}
+
 impl SettingsPanel {
+    pub(super) fn forum_under(&self, key: &str, cx: &Context<Self>) -> Option<Div> {
+        let place = if self.setting(forum::SETTING).is_some() { forum::SETTING } else { forum::BOT };
+        let forum = forum::of_app(Store::get(cx).read(cx).app.as_ref()).filter(|_| key == place)?;
+        Some(forum_lines(&forum))
+    }
+
     pub(super) fn render_connection(&self, c: &Connection, slot: Slot<'_>, cx: &mut Context<Self>) -> AnyElement {
         let role = Role::Secret(c.key.clone());
         let control = if c.takes_secret() { self.token_control(c, slot.window, cx) } else { div() };
@@ -56,6 +83,7 @@ impl SettingsPanel {
             .child(widgets::row(slot.first, connection_label(c), control, self.connection_slot(c, cx)))
             .children(self.hint_of(&role, c.hint(), slot.window, cx))
             .children(self.error_of(&role))
+            .children(self.forum_under(&c.key, cx))
             .into_any_element()
     }
 

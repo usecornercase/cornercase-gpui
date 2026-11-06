@@ -196,12 +196,19 @@ pub(super) fn free_command(path: &str, check: bool, force: bool) -> Vec<String> 
     command
 }
 
-pub(super) fn list_command(sizes: bool) -> Vec<String> {
+pub(super) fn list_command(sizes: bool, project: Option<u64>) -> Vec<String> {
     let mut command: Vec<String> = ["worktrees", "list", "--json"].map(str::to_string).to_vec();
     if !sizes {
         command.push("--no-sizes".into());
     }
+    if let Some(project) = project {
+        command.extend(["--project".to_string(), project.to_string()]);
+    }
     command
+}
+
+pub(super) fn scope_note(project: Option<&str>) -> String {
+    format!("Only the worktrees of {}.", project.unwrap_or("this project"))
 }
 
 pub(super) fn shown(worktrees: &[Worktree], filter: &str, order: Order) -> Vec<usize> {

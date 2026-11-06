@@ -1,7 +1,11 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use anyhow::Context as _;
-use gpui::{AppContext as _, Context, Div, PathPromptOptions, Stateful, div, prelude::*, px};
+use gpui::{
+    AnyElement, AppContext as _, Context, Div, FontWeight, PathPromptOptions, SharedString, Stateful, div, prelude::*,
+    px,
+};
 use serde::Deserialize;
 
 use super::{SettingsPanel, widgets};
@@ -47,16 +51,25 @@ impl Note {
 }
 
 impl Preview {
-    pub(super) fn changes(&self) -> usize {
-        self.sections.iter().map(|s| s.changes.len()).sum()
+    pub(super) fn changes(&self, unticked: &HashSet<String>) -> usize {
+        self.chosen(unticked).map(|s| s.changes.len()).sum()
     }
 
-    pub(super) fn risky(&self) -> bool {
-        self.notes.iter().chain(self.sections.iter().flat_map(|s| &s.notes)).any(Note::warns)
+    pub(super) fn risky(&self, unticked: &HashSet<String>) -> bool {
+        self.notes.iter().chain(self.chosen(unticked).flat_map(|s| &s.notes)).any(Note::warns)
     }
 
     pub(super) fn shown(&self) -> impl Iterator<Item = &Section> {
         self.sections.iter().filter(|s| !s.changes.is_empty() || !s.notes.is_empty())
+    }
+
+    pub(super) fn only(&self, unticked: &HashSet<String>) -> Option<String> {
+        let ticked: Vec<&str> = self.chosen(unticked).map(|s| s.id.as_str()).collect();
+        self.sections.iter().any(|s| unticked.contains(&s.id)).then(|| ticked.join(","))
+    }
+
+    fn chosen<'a>(&'a self, unticked: &'a HashSet<String>) -> impl Iterator<Item = &'a Section> {
+        self.sections.iter().filter(|s| !unticked.contains(&s.id))
     }
 }
 
@@ -64,21 +77,26 @@ pub(super) fn parse_preview(text: &str) -> anyhow::Result<Preview> {
     Ok(serde_json::from_str(text)?)
 }
 
-pub(super) fn import_args(preview: bool) -> Vec<String> {
-    args(&["config", "import", "-", if preview { "--preview" } else { "--yes" }, "--json"])
+pub(super) fn import_args(preview: bool, only: Option<&str>) -> Vec<String> {
+    let mut command = args(&["config", "import", "-", if preview { "--preview" } else { "--yes" }, "--json"]);
+    if let Some(only) = only {
+        command.push(format!("--only={only}"));
+    }
+    command
 }
 
 pub(super) struct Import {
     name: String,
     text: String,
     preview: Option<Preview>,
+    unticked: HashSet<String>,
     error: Option<String>,
     busy: bool,
 }
 
 impl Import {
     fn new(name: String, text: String) -> Self {
-        Self { name, text, preview: None, error: None, busy: true }
+        Self { name, text, preview: None, unticked: HashSet::new(), error: None, busy: true }
     }
 }
 
@@ -111,7 +129,25 @@ fn change_row(change: &Change) -> Div {
         )
 }
 
-fn section_block(section: &Section) -> Div {
+fn section_heading(section: &Section, ticked: bool, cx: &mut Context<SettingsPanel>) -> AnyElement {
+    if section.changes.is_empty() {
+        return widgets::caption(section.id.clone()).pb(px(4.)).into_any_element();
+    }
+    let id = section.id.clone();
+    div()
+        .pb(px(4.))
+        .pl(px(2.))
+        .text_size(px(11.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(colours::muted())
+        .child(
+            ui::checkbox(SharedString::from(format!("import-section-{id}")), ticked, section.id.to_uppercase())
+                .on_click(cx.listener(move |this, _, _, cx| this.toggle_section(&id, cx))),
+        )
+        .into_any_element()
+}
+
+fn section_block(section: &Section, ticked: bool, cx: &mut Context<SettingsPanel>) -> Div {
     div()
         .flex()
         .flex_col()
@@ -120,27 +156,30 @@ fn section_block(section: &Section) -> Div {
         .pb(px(6.))
         .border_t_1()
         .border_color(colours::border())
-        .child(widgets::caption(widgets::capitalised(&section.id)).pb(px(4.)))
-        .children(section.changes.iter().map(change_row))
-        .children(section.notes.iter().map(note_line))
+        .child(section_heading(section, ticked, cx))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .when(!ticked, |d| d.opacity(0.4))
+                .children(section.changes.iter().map(change_row))
+                .children(section.notes.iter().map(note_line)),
+        )
 }
 
-fn preview_body(preview: &Preview) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(4.))
-        .pb(px(10.))
-        .children(preview.notes.iter().map(note_line))
-        .children(preview.shown().map(section_block))
+fn preview_body(preview: &Preview, unticked: &HashSet<String>, cx: &mut Context<SettingsPanel>) -> Div {
+    let sections: Vec<Div> = preview.shown().map(|s| section_block(s, !unticked.contains(&s.id), cx)).collect();
+    div().flex().flex_col().gap(px(4.)).pb(px(10.)).children(preview.notes.iter().map(note_line)).children(sections)
 }
 
 fn summary(import: &Import) -> String {
-    match import.preview.as_ref().map(Preview::changes) {
-        None => String::new(),
-        Some(0) => "Nothing would change: this setup matches yours.".to_string(),
-        Some(1) => "1 setting would change".to_string(),
-        Some(n) => format!("{n} settings would change"),
+    let Some(preview) = &import.preview else { return String::new() };
+    match (preview.changes(&HashSet::new()), preview.changes(&import.unticked)) {
+        (0, _) => "Nothing would change: this setup matches yours.".to_string(),
+        (_, 0) => "No section ticked: nothing would change".to_string(),
+        (_, 1) => "1 setting would change".to_string(),
+        (_, n) => format!("{n} settings would change"),
     }
 }
 
@@ -172,15 +211,15 @@ impl SettingsPanel {
         match read_setup(path) {
             Ok((name, text)) => {
                 self.import = Some(Import::new(name, text.clone()));
-                Self::ask_import(true, text, cx);
+                Self::ask_import(import_args(true, None), true, text, cx);
             }
             Err(e) => Store::get(cx).update(cx, |s, cx| s.toast(e.to_string(), ToastKind::Error, cx)),
         }
         cx.notify();
     }
 
-    fn ask_import(preview: bool, text: String, cx: &mut Context<Self>) {
-        let task = cx.background_spawn(async move { cli::run_with_stdin(&import_args(preview), Some(&text)) });
+    fn ask_import(command: Vec<String>, preview: bool, text: String, cx: &mut Context<Self>) {
+        let task = cx.background_spawn(async move { cli::run_with_stdin(&command, Some(&text)) });
         crate::panels::flows::deliver(cx, task, move |this: &mut Self, result, cx| {
             if preview {
                 this.previewed(result.and_then(|out| parse_preview(&out)));
@@ -203,7 +242,8 @@ impl SettingsPanel {
     fn imported(&mut self, result: anyhow::Result<String>, cx: &mut Context<Self>) {
         match result {
             Ok(_) => {
-                let changes = self.import.take().and_then(|i| i.preview).map_or(0, |p| p.changes());
+                let import = self.import.take();
+                let changes = import.and_then(|i| i.preview.map(|p| p.changes(&i.unticked))).unwrap_or(0);
                 self.load(cx);
                 let text = format!("Imported {changes} {}", if changes == 1 { "setting" } else { "settings" });
                 Store::get(cx).update(cx, |s, cx| s.toast(text, ToastKind::Done, cx));
@@ -221,15 +261,24 @@ impl SettingsPanel {
         let Some(import) = self.import.as_mut().filter(|i| !i.busy) else { return };
         import.busy = true;
         import.error = None;
+        let only = import.preview.as_ref().and_then(|p| p.only(&import.unticked));
         let text = import.text.clone();
-        Self::ask_import(false, text, cx);
+        Self::ask_import(import_args(false, only.as_deref()), false, text, cx);
+        cx.notify();
+    }
+
+    fn toggle_section(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(import) = self.import.as_mut().filter(|i| !i.busy) else { return };
+        if !import.unticked.remove(id) {
+            import.unticked.insert(id.to_string());
+        }
         cx.notify();
     }
 
     pub(super) fn import_preview(import: &Import, cx: &mut Context<Self>) -> Div {
         let body = match (&import.preview, &import.error) {
             (_, Some(e)) => widgets::under(ui::error_line(e.clone())),
-            (Some(preview), None) => preview_body(preview),
+            (Some(preview), None) => preview_body(preview, &import.unticked, cx),
             (None, None) => div().pb(px(10.)).child(ui::busy("import-reading", "Reading what would change…")),
         };
         let header = div()
@@ -239,7 +288,7 @@ impl SettingsPanel {
             .pt(px(12.))
             .pb(px(8.))
             .child(ui::icon(Icon::File, 14.).text_color(colours::accent()))
-            .child(div().flex_none().font_weight(gpui::FontWeight::SEMIBOLD).child(import.name.clone()))
+            .child(div().flex_none().font_weight(FontWeight::SEMIBOLD).child(import.name.clone()))
             .child(div().flex_1().min_w_0().text_size(px(12.)).text_color(colours::muted()).child(summary(import)));
         div()
             .flex()
@@ -257,18 +306,22 @@ fn import_buttons(import: &Import, cx: &mut Context<SettingsPanel>) -> Div {
         this.import = None;
         cx.notify();
     }));
-    let preview = import.preview.as_ref().filter(|p| p.changes() > 0);
+    let preview = import.preview.as_ref().filter(|p| p.changes(&HashSet::new()) > 0);
     let go = match (preview, import.busy) {
         (Some(_), true) => Some(ui::busy_button("import-go", "Importing…", ui::Tone::Primary)),
-        (Some(p), false) => Some(import_button(p, cx)),
+        (Some(p), false) => Some(import_button(p, &import.unticked, cx)),
         (None, _) => None,
     };
     div().flex().justify_end().gap(px(8.)).pb(px(14.)).child(cancel).children(go)
 }
 
-fn import_button(preview: &Preview, cx: &mut Context<SettingsPanel>) -> Stateful<Div> {
-    let button = if preview.risky() { ui::danger_button } else { ui::primary_button };
-    let label = format!("Import {}", if preview.changes() == 1 { "this setting" } else { "these settings" });
+fn import_button(preview: &Preview, unticked: &HashSet<String>, cx: &mut Context<SettingsPanel>) -> Stateful<Div> {
+    let changes = preview.changes(unticked);
+    let label = format!("Import {}", if changes == 1 { "this setting" } else { "these settings" });
+    if changes == 0 {
+        return ui::resting_button("import-go", label, ui::Tone::Primary);
+    }
+    let button = if preview.risky(unticked) { ui::danger_button } else { ui::primary_button };
     button("import-go", label).on_click(cx.listener(|this, _, _, cx| this.confirm_import(cx)))
 }
 

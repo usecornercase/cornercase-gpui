@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use serde::Deserialize;
 
 use crate::model::Session;
@@ -86,6 +88,35 @@ pub(super) fn stop_warning(port: &Port) -> String {
     }
     if port.pane.is_none() {
         text.push_str(" No tab started it: it was found by its folder.");
+    }
+    text
+}
+
+pub(super) fn to_stop<'a>(ports: &'a [Port], ticked: &HashSet<String>, every_port: bool) -> Vec<&'a Port> {
+    let stoppable = ports.iter().filter(|p| p.stoppable());
+    if ticked.is_empty() && !every_port {
+        return stoppable.collect();
+    }
+    stoppable.filter(|p| ticked.contains(&p.key())).collect()
+}
+
+pub(super) fn stop_label(count: usize, ticked: bool) -> String {
+    if ticked { format!("Stop {count}…") } else { "Stop all…".to_string() }
+}
+
+pub(super) fn stop_many_warning(ports: &[&Port]) -> String {
+    let named: Vec<String> =
+        ports.iter().map(|p| format!("{} on port {} (pid {})", p.program, p.number, p.pid)).collect();
+    let mut text = format!(
+        "{} each get SIGTERM, then SIGKILL if the port is still held after 3 s. Only those processes are signalled; \
+         the shells and agents that started them stay.",
+        named.join(", ")
+    );
+    if ports.iter().any(|p| p.by_agent()) {
+        text.push_str(" An agent started some of them.");
+    }
+    if ports.iter().any(|p| p.pane.is_none()) {
+        text.push_str(" No tab started some of them: they were found by their folder.");
     }
     text
 }

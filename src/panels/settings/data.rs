@@ -108,6 +108,7 @@ pub(super) struct ProjectEntry {
     pub repository: bool,
     pub setup: String,
     pub teardown: String,
+    pub builds: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -242,10 +243,17 @@ pub(super) fn project_args(entry: &ProjectEntry, which: Script, text: &str) -> V
     a
 }
 
+pub(super) fn shown_projects(projects: &[ProjectEntry], first: Option<u64>) -> Vec<&ProjectEntry> {
+    let mut shown: Vec<&ProjectEntry> = projects.iter().collect();
+    shown.sort_by_key(|entry| first.is_none() || entry.project != first);
+    shown
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Script {
     Setup,
     Teardown,
+    Builds,
 }
 
 impl Script {
@@ -253,14 +261,20 @@ impl Script {
         match self {
             Self::Setup => "setup",
             Self::Teardown => "teardown",
+            Self::Builds => "builds",
         }
     }
 
-    pub(super) fn of(self, entry: &ProjectEntry) -> &str {
+    pub(super) fn of(self, entry: &ProjectEntry) -> String {
         match self {
-            Self::Setup => &entry.setup,
-            Self::Teardown => &entry.teardown,
+            Self::Setup => entry.setup.clone(),
+            Self::Teardown => entry.teardown.clone(),
+            Self::Builds => entry.builds.join(" "),
         }
+    }
+
+    pub(super) fn all_of(entry: &ProjectEntry) -> &'static [Self] {
+        if entry.repository { &[Self::Setup, Self::Teardown, Self::Builds] } else { &[Self::Setup, Self::Teardown] }
     }
 }
 
@@ -357,7 +371,10 @@ pub(super) fn about(page: &str) -> &'static str {
         "UI" => "How the sidebar, tabs and notifications look and sound.",
         "Remote" => "Reaching this computer's cornercase from a phone or a browser.",
         LINKS => links_about(Os::CURRENT),
-        PROJECTS => "Setup and teardown: the commands a repository runs in a new worktree, and before removing it.",
+        PROJECTS => {
+            "Setup and teardown: the commands a repository runs in a new worktree, and before removing it. Build \
+             folders: what Free builds deletes in its worktrees."
+        }
         SHARE => {
             "Export your setup for a colleague, or import theirs: agents, issues, worktrees, the interface \
                   and each repository's commands."

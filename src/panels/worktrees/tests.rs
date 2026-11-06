@@ -1,5 +1,6 @@
 use super::data::{
-    Freed, List, Order, Tone, Worktree, free_command, free_message, list_command, remove_message, shown, total,
+    Freed, List, Order, Tone, Worktree, free_command, free_message, list_command, remove_message, scope_note, shown,
+    total,
 };
 use crate::panels::flows::model::epoch;
 use crate::test_util::fixture;
@@ -97,7 +98,7 @@ fn the_total_names_builds_left_idle_for_a_week() {
 
 #[test]
 fn the_commands_ask_for_json() {
-    assert_eq!(list_command(false), ["worktrees", "list", "--json", "--no-sizes"]);
+    assert_eq!(list_command(false, None), ["worktrees", "list", "--json", "--no-sizes"]);
     assert_eq!(free_command("/w", true, false), ["worktrees", "free-builds", "--path", "/w", "--json", "--check"]);
     assert_eq!(free_command("/w", false, true), ["worktrees", "free-builds", "--path", "/w", "--json", "--force"]);
 }
@@ -115,4 +116,16 @@ fn removing_ends_by_saying_what_deleting_the_branch_waits_on() {
     let list = worktrees();
     let text = remove_message(&[named(&list, "feat/merged")]);
     assert!(text.ends_with("Deleting branches here needs usecornercase/cornercase-terminal#671."), "{text}");
+}
+
+#[test]
+fn one_project_is_listed_by_its_id() {
+    assert_eq!(list_command(true, Some(7)), ["worktrees", "list", "--json", "--project", "7"]);
+    assert_eq!(list_command(false, Some(7)), ["worktrees", "list", "--json", "--no-sizes", "--project", "7"]);
+}
+
+#[test]
+fn the_sheet_names_the_project_it_shows() {
+    assert_eq!(scope_note(Some("shop")), "Only the worktrees of shop.");
+    assert_eq!(scope_note(None), "Only the worktrees of this project.");
 }

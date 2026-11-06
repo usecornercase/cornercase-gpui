@@ -2,6 +2,7 @@ mod actions;
 mod diff;
 mod diff_view;
 mod file_list;
+mod filter;
 mod follow;
 mod header;
 mod open_view;
@@ -13,16 +14,19 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use gpui::{
-    AnyView, App, AppContext as _, Context, Div, Hsla, InteractiveElement as _, IntoElement, ListAlignment, ListState,
-    ParentElement as _, Render, Styled as _, Window, div, prelude::FluentBuilder as _, px, relative,
+    AnyView, App, AppContext as _, Context, Div, Entity, Hsla, InteractiveElement as _, IntoElement, ListAlignment,
+    ListState, ParentElement as _, Render, ScrollHandle, Styled as _, Window, div, point, prelude::FluentBuilder as _,
+    px, relative,
 };
 
 use crate::cli::Stream;
 use crate::model::Session;
 use crate::store::Store;
 use crate::ui::split::{self, Edge, Split};
+use crate::ui::{TextField, TextFieldEvent};
 
 use diff::Row;
+use filter::Query;
 use wire::{Base, Gap, Mode, Patch, Summary};
 
 const FILES: Split = Split::new(60., 60., f32::INFINITY);
@@ -99,12 +103,16 @@ pub(crate) struct ChangesPanel {
     base_open: bool,
     diff_list: ListState,
     files_height: Split,
+    filter: Entity<TextField>,
+    files_scroll: ScrollHandle,
 }
 
 impl ChangesPanel {
     pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         cx.observe(&store, |this: &mut Self, _, cx| this.sync(cx)).detach();
+        let filter = cx.new(|cx| TextField::new("Filter by path: order, *.test.js, !*.lock", cx).clears_on_escape());
+        cx.subscribe(&filter, |this, _, event: &TextFieldEvent, cx| this.filter_event(event, cx)).detach();
         let mut panel = Self {
             scope: Scope::Project(Mode::Uncommitted),
             project_mode: Mode::Uncommitted,
@@ -120,9 +128,24 @@ impl ChangesPanel {
             base_open: false,
             diff_list: ListState::new(0, ListAlignment::Top, px(400.)),
             files_height: FILES,
+            filter,
+            files_scroll: ScrollHandle::new(),
         };
         panel.sync(cx);
         panel
+    }
+
+    fn filter_event(&mut self, event: &TextFieldEvent, cx: &mut Context<Self>) {
+        match event {
+            TextFieldEvent::Changed => self.files_scroll.set_offset(point(px(0.), px(0.))),
+            TextFieldEvent::Submit => Store::get(cx).update(cx, Store::give_keys_back),
+            TextFieldEvent::Cancel => {}
+        }
+        cx.notify();
+    }
+
+    fn query(&self, cx: &App) -> Query {
+        Query::parse(&self.filter.read(cx).text())
     }
 }
 
@@ -155,7 +178,7 @@ impl ChangesPanel {
 }
 
 impl Render for ChangesPanel {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let session = Store::get(cx).read(cx).session.clone();
         let session = session.as_ref();
         div()
@@ -163,7 +186,7 @@ impl Render for ChangesPanel {
             .flex()
             .flex_col()
             .text_size(px(12.))
-            .child(self.render_header(session, cx))
+            .child(self.render_header(session, window, cx))
             .child(self.render_body(session, cx))
             .child(self.render_footer())
     }

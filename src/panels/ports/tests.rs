@@ -1,4 +1,6 @@
-use super::data::{List, Port, list_command, stop_warning};
+use std::collections::HashSet;
+
+use super::data::{List, Port, list_command, stop_label, stop_many_warning, stop_warning, to_stop};
 use crate::test_util::fixture;
 
 fn ports() -> Vec<Port> {
@@ -47,4 +49,55 @@ fn the_stop_warning_names_an_agent_and_a_program_no_tab_started() {
     let text = stop_warning(&p);
     assert!(text.contains("An agent started it"));
     assert!(text.contains("No tab started it"));
+}
+
+fn port(number: u16, workspace: Option<u64>) -> Port {
+    Port { number, pid: u64::from(number) + 1, program: "vite".into(), workspace, pane: Some(4), ..Port::default() }
+}
+
+fn numbers(ports: &[&Port]) -> Vec<u16> {
+    ports.iter().map(|p| p.number).collect()
+}
+
+#[test]
+fn with_nothing_ticked_stop_all_takes_every_port_of_the_workspace() {
+    let ports = [port(1, Some(2)), port(3, None), port(5, Some(2))];
+    assert_eq!(numbers(&to_stop(&ports, &HashSet::new(), false)), [1, 5]);
+}
+
+#[test]
+fn the_ticked_ports_are_the_ones_stopped() {
+    let ports = [port(1, Some(2)), port(5, Some(2))];
+    let ticked = HashSet::from([ports[1].key()]);
+    assert_eq!(numbers(&to_stop(&ports, &ticked, false)), [5]);
+}
+
+#[test]
+fn every_port_stops_only_what_is_ticked() {
+    let ports = [port(1, Some(2)), port(5, Some(3))];
+    assert!(to_stop(&ports, &HashSet::new(), true).is_empty());
+    let ticked = HashSet::from([ports[0].key()]);
+    assert_eq!(numbers(&to_stop(&ports, &ticked, true)), [1]);
+}
+
+#[test]
+fn a_port_of_no_workspace_is_never_stopped_even_ticked() {
+    let ports = [port(1, None)];
+    let ticked = HashSet::from([ports[0].key()]);
+    assert!(to_stop(&ports, &ticked, false).is_empty());
+}
+
+#[test]
+fn the_button_says_how_many_it_stops() {
+    assert_eq!(stop_label(3, false), "Stop all…");
+    assert_eq!(stop_label(2, true), "Stop 2…");
+}
+
+#[test]
+fn the_question_names_each_program_and_warns_once() {
+    let (a, b) = (port(1, Some(2)), Port { via: Some("agent".into()), pane: None, ..port(5, Some(2)) });
+    let text = stop_many_warning(&[&a, &b]);
+    assert!(text.contains("vite on port 1 (pid 2), vite on port 5 (pid 6)"));
+    assert!(text.contains("An agent started some of them."));
+    assert!(text.contains("No tab started some of them"));
 }

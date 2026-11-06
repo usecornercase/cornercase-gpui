@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use gpui::{App, Context, Pixels, Point, SharedString, Window};
 
 use super::actions::{into_group, ungroup};
@@ -8,12 +6,11 @@ use super::{Fold, Target, cmd, forms};
 use crate::app::Root;
 use crate::cli;
 use crate::context_menu::{Entry, act, act_busy, danger, item, note, submenu};
-use crate::desktop;
 use crate::dialogs;
 use crate::model::{PaneInfo, Project, PullRequest, Session, Workspace};
 use crate::panels::PanelKind;
+use crate::panels::files::open::{self, Found, Opening};
 use crate::panels::flows::{FlowStart, start_flow};
-use crate::platform::Os;
 use crate::store::{self, Busy, ToastKind};
 use crate::ui;
 
@@ -28,13 +25,17 @@ fn fold_item(fold: Fold, collapsed: bool) -> Entry {
     item(if collapsed { "Expand" } else { "Collapse" }, move |this, _, _| this.set_folded(fold, !collapsed))
 }
 
-fn file_manager_item(path: String) -> Entry {
-    let os = Os::CURRENT;
-    item(desktop::show_label(os, true), move |_, _, cx| {
-        let path = PathBuf::from(&path);
-        let busy = Busy::new("file-manager", format!("Opening in {}…", desktop::file_manager(os)));
-        store::run_local(cx, busy, move || desktop::reveal(&path, true));
+fn opening_item(found: &Found, path: &str) -> Entry {
+    let opening = Opening::folder(found, path);
+    item(open::opener_label(found.0, true), move |_, _, cx| {
+        let opening = opening.clone();
+        store::run_local(cx, opening.busy(), move || opening.run());
     })
+}
+
+fn open_in_item(path: &str, openers: &[Found]) -> Option<Entry> {
+    let mut items: Vec<Entry> = open::for_folders(openers).map(|found| opening_item(found, path)).collect();
+    if items.len() > 1 { Some(submenu("Open in…", items)) } else { items.pop() }
 }
 
 fn copy_item(label: &'static str, text: String, toast: String) -> Entry {
@@ -45,9 +46,10 @@ fn copy_item(label: &'static str, text: String, toast: String) -> Entry {
     })
 }
 
-fn path_items(path: &str) -> Vec<Entry> {
+pub(crate) fn path_items(path: &str, openers: &[Found]) -> Vec<Entry> {
     let copy = copy_item("Copy path", path.to_string(), format!("Copied {}", ui::home_relative(path)));
-    if cli::host().is_some() { vec![copy] } else { vec![file_manager_item(path.to_string()), copy] }
+    let open_in = open_in_item(path, openers).filter(|_| cli::host().is_none());
+    open_in.into_iter().chain([copy]).collect()
 }
 
 fn panel_item(label: &'static str, kind: PanelKind, focus: Option<(&'static str, u64)>) -> Entry {
@@ -59,6 +61,10 @@ fn panel_item(label: &'static str, kind: PanelKind, focus: Option<(&'static str,
             s.open(kind, cx);
         });
     })
+}
+
+fn project_sheet_item(label: &'static str, kind: PanelKind, project: u64) -> Entry {
+    item(label, move |this, _, cx| this.store.update(cx, |s, cx| s.open_on_project(kind, project, cx)))
 }
 
 fn command_item(label: impl Into<SharedString>, args: Vec<String>) -> Entry {
@@ -114,7 +120,7 @@ fn move_to_group_items(session: &Session, project: &Project) -> Vec<Entry> {
     groups
 }
 
-fn project_menu(session: &Session, id: u64) -> Vec<Entry> {
+fn project_menu(session: &Session, id: u64, openers: &[Found]) -> Vec<Entry> {
     let Some(project) = session.projects.iter().find(|p| p.id == id) else { return Vec::new() };
     let target = Target::Project(id);
     let name = project.name.clone();
@@ -128,8 +134,9 @@ fn project_menu(session: &Session, id: u64) -> Vec<Entry> {
         fold_item(Fold::Project(id), project.collapsed),
         Entry::Separator,
     ];
-    entries.extend(path_items(&project.path));
-    entries.push(panel_item("Worktrees…", PanelKind::Worktrees, None));
+    entries.extend(path_items(&project.path, openers));
+    entries.push(project_sheet_item("Worktrees…", PanelKind::Worktrees, id));
+    entries.push(project_sheet_item("Project settings…", PanelKind::Settings, id));
     entries.push(Entry::Separator);
     entries.push(danger("Close project…", move |_, window, cx| {
         dialogs::confirm(
@@ -223,7 +230,7 @@ fn run_setup_note(ws: &Workspace) -> Option<Entry> {
     (ws.worktree && ws.setup.as_deref() != Some("running")).then(|| note(RUN_SETUP_NOTE))
 }
 
-fn workspace_menu(session: &Session, id: u64) -> Vec<Entry> {
+fn workspace_menu(session: &Session, id: u64, openers: &[Found]) -> Vec<Entry> {
     let Some((_, ws)) = session.workspace(id) else { return Vec::new() };
     let ids = id.to_string();
     let mut entries = vec![
@@ -242,7 +249,7 @@ fn workspace_menu(session: &Session, id: u64) -> Vec<Entry> {
         entries.push(fold_item(Fold::Workspace(id), ws.collapsed));
     }
     entries.push(Entry::Separator);
-    entries.extend(path_items(&ws.path));
+    entries.extend(path_items(&ws.path, openers));
     entries.push(panel_item("Ports…", PanelKind::Ports, Some(("workspace", id))));
     entries.extend(run_setup_note(ws));
     entries.push(Entry::Separator);
@@ -293,10 +300,11 @@ impl Root {
 
     fn menu_for(&self, target: Target, cx: &App) -> Vec<Entry> {
         let Some(session) = &self.session else { return Vec::new() };
+        let openers = self.store.read(cx).openers.clone();
         match target {
             Target::Group(id) => group_menu(session, id),
-            Target::Project(id) => project_menu(session, id),
-            Target::Workspace(id) => workspace_menu(session, id),
+            Target::Project(id) => project_menu(session, id, &openers),
+            Target::Workspace(id) => workspace_menu(session, id, &openers),
             Target::Tab(id) => self.tab_menu(id, cx),
         }
     }

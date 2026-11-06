@@ -16,7 +16,7 @@ use crate::panels::queue::now;
 use crate::store::{self, Store, ToastKind};
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
-use data::{List, Order, Worktree, list_command, shown, total};
+use data::{List, Order, Worktree, list_command, scope_note, shown, total};
 use rows::activity;
 
 const NO_WORKTREES: &str = "No worktrees on disk. Workspaces made with a worktree of their own show here.";
@@ -26,6 +26,7 @@ const CLOSED_NOTE: &str = "Worktrees of closed projects, and leftovers git no lo
 pub(crate) const BRANCH_NOTE: &str = "Deleting branches here needs usecornercase/cornercase-terminal#671.";
 
 pub(crate) struct WorktreesPanel {
+    project: Option<u64>,
     worktrees: Option<Vec<Worktree>>,
     error: Option<String>,
     measuring: bool,
@@ -43,13 +44,16 @@ impl WorktreesPanel {
         let store = Store::get(cx);
         cx.observe(&store, |this, store, cx| {
             let open = store.read(cx).sheet == Some(PanelKind::Worktrees);
-            if open && !this.open {
-                this.reload(cx);
+            let asked = store.update(cx, |s, _| s.take_project_sheet(PanelKind::Worktrees));
+            if (open && !this.open) || asked.is_some() {
+                this.show_project(asked, cx);
             }
             this.open = open;
         })
         .detach();
+        let project = store.update(cx, |s, _| s.take_project_sheet(PanelKind::Worktrees));
         let mut this = Self {
+            project,
             worktrees: None,
             error: None,
             measuring: false,
@@ -63,6 +67,16 @@ impl WorktreesPanel {
         this
     }
 
+    fn show_project(&mut self, project: Option<u64>, cx: &mut Context<Self>) {
+        if self.project != project {
+            self.project = project;
+            self.worktrees = None;
+            self.error = None;
+            self.ticked.clear();
+        }
+        self.reload(cx);
+    }
+
     fn reload(&mut self, cx: &mut Context<Self>) {
         self.generation += 1;
         self.measuring = true;
@@ -73,7 +87,7 @@ impl WorktreesPanel {
 
     fn load(&mut self, sizes: bool, cx: &mut Context<Self>) {
         let generation = self.generation;
-        store::run_partial(cx, list_command(sizes), move |this, result, cx| {
+        store::run_partial(cx, list_command(sizes, self.project), move |this, result, cx| {
             if this.generation != generation || (!sizes && !this.measuring) {
                 return;
             }
@@ -132,6 +146,18 @@ impl WorktreesPanel {
             )
     }
 
+    fn scope_line(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
+        let project = self.project?;
+        let session = Store::get(cx).read(cx).session.clone();
+        let name = session.as_ref().and_then(|s| s.projects.iter().find(|p| p.id == project)).map(|p| p.name.clone());
+        Some(
+            div().flex().items_center().gap(px(10.)).child(ui::dim(scope_note(name.as_deref()))).child(
+                ui::button("worktrees-every", "Show every worktree")
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.show_project(None, cx))),
+            ),
+        )
+    }
+
     fn footer(&self, worktrees: &[Worktree], cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let store = Store::get(cx);
         let ticked: Vec<Worktree> = worktrees
@@ -183,6 +209,7 @@ impl WorktreesPanel {
 impl Render for WorktreesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let toolbar = self.toolbar(window, cx);
+        let scope = self.scope_line(cx);
         let body = self.body(cx);
         div()
             .id("worktrees")
@@ -193,6 +220,7 @@ impl Render for WorktreesPanel {
             .flex_col()
             .gap(px(8.))
             .child(toolbar)
+            .children(scope)
             .children(body)
             .child(ui::dim(CLOSED_NOTE))
     }
