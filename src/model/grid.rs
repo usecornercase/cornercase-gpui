@@ -78,6 +78,10 @@ fn clamp_axis(at: i32, start: u16, len: u16) -> u16 {
 }
 
 impl PaneGrid {
+    pub(crate) fn below(&self) -> u64 {
+        self.scroll.total.saturating_sub(self.scroll.offset.saturating_add(self.scroll.rows))
+    }
+
     pub(crate) fn cell(&self, x: u16, y: u16) -> Option<(&str, &Run)> {
         let line = self.lines.get(usize::from(y))?;
         let x = usize::from(x);

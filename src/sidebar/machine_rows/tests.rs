@@ -87,8 +87,25 @@ fn a_row_says_how_many_agents_were_closed() {
 
 #[test]
 fn a_tab_on_a_linked_machine_is_detailed_as_ours() {
-    assert_eq!(there_tab_details(&agent_tab(), "claude").as_deref(), Some("claude · Opus 5.5 · 40%"));
+    let details = there_tab_details(&agent_tab(), "claude", &Look::default());
+    assert_eq!(details.as_deref(), Some("claude · Opus 5.5 · 40%"));
     assert_eq!(machine(LinkState::Linked).tab_note(&agent_tab(), now()), None);
+}
+
+#[test]
+fn a_tab_on_a_machine_says_it_was_compacted_and_what_it_uses() {
+    let mut tab = agent_tab();
+    tab.panes[0].context = None;
+    tab.panes[0].compacted = true;
+    tab.panes[0].memory = Some(12 * 1024 * 1024);
+    let details = there_tab_details(&tab, "claude", &Look::default());
+    assert_eq!(details.as_deref(), Some("claude · Opus 5.5 · compacted · 12 MB"));
+}
+
+#[test]
+fn a_tab_on_a_machine_follows_the_model_and_context_switches() {
+    let off = Look { model: false, context: false, ..Look::default() };
+    assert_eq!(there_tab_details(&agent_tab(), "there", &off).as_deref(), Some("claude"));
 }
 
 #[test]
@@ -101,7 +118,7 @@ fn a_tab_with_an_agent_on_a_machine_that_is_down_says_when_it_was_seen() {
 fn details_that_repeat_the_title_are_left_out() {
     let pane = PaneInfo { program: Some("zsh".into()), ..PaneInfo::default() };
     let tab = Tab { name: "zsh".into(), panes: vec![pane], ..Tab::default() };
-    assert_eq!(there_tab_details(&tab, "zsh"), None);
+    assert_eq!(there_tab_details(&tab, "zsh", &Look::default()), None);
 }
 
 #[test]

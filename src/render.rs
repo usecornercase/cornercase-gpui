@@ -12,7 +12,7 @@ use gpui::{
 
 use crate::model::link::Hovered;
 use crate::model::{Cursor, CursorShape, Grid, PaneGrid, Run, UnderlineKind};
-use crate::theme::{INACTIVE, Painter, colours, faded, hsla, radius};
+use crate::theme::{INACTIVE, Painter, colours, faded, fades, hsla, radius};
 pub(crate) use ghost::paint_ghost;
 use layout::{Card, Layout, PADDING};
 use moving::{Look, Stage, shrunk};
@@ -68,6 +68,7 @@ pub(crate) struct Surface<'a> {
     pub layout: &'a Layout,
     pub metrics: &'a Metrics,
     pub focused: bool,
+    pub dim_inactive: bool,
     pub stage: &'a Stage,
 }
 
@@ -110,7 +111,7 @@ fn paint_pane(pane: &PaneGrid, card: &Card, surface: &Surface<'_>, window: &mut 
     let several = surface.layout.cards.len() > 1;
     let painter = Painter { colours: &pane.colours };
     let edge = if several && pane.active { colours::edge() } else { colours::border() };
-    let fade = if several && !pane.active { INACTIVE } else { 1. } * look.shown;
+    let fade = if fades(surface.dim_inactive, several, pane.active) { INACTIVE } else { 1. } * look.shown;
     let fill_colour = painter.pane_fill().unwrap_or_else(|| colours::pane().into());
     pane_card(at.bounds, (faded(fill_colour, fade), edge), look, window);
     let (cw, lh) = (surface.metrics.cell_width, surface.metrics.line_height);

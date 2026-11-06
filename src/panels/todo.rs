@@ -48,6 +48,8 @@ pub(crate) struct TodoPanel {
     _subscriptions: Vec<Subscription>,
 }
 
+pub(crate) use data::any_pending;
+
 fn sending(id: u64) -> String {
     format!("todo-send:{id}")
 }

@@ -14,9 +14,9 @@ fn every_section_shows_once_on_each_platform() {
 }
 
 #[test]
-fn on_linux_the_browser_moves_beside_the_terminal_to_balance_the_columns() {
-    assert_eq!(columns(Os::Mac)[1][..2], [Section::Keys(Group::Window), Section::Keys(Group::Terminal)]);
-    assert_eq!(columns(Os::Linux)[1].last(), Some(&Section::Keys(Group::Browser)));
+fn on_linux_window_and_tabs_swap_columns_to_make_room_for_its_longer_everywhere_else() {
+    assert_eq!(columns(Os::Mac)[2][0], Section::Keys(Group::TabsAndPanes));
+    assert_eq!(columns(Os::Linux)[2][0], Section::Keys(Group::Window));
 }
 
 #[test]
@@ -29,7 +29,7 @@ fn linux_takes_a_wider_dialog_for_its_longer_keys_within_the_window() {
 
 #[test]
 fn the_list_grows_with_the_window_and_scrolls_past_it() {
-    assert!((body_height(800.) - 584.).abs() < f32::EPSILON);
-    assert!((body_height(1000.) - 784.).abs() < f32::EPSILON);
+    assert!((body_height(800.) - 640.).abs() < f32::EPSILON);
+    assert!((body_height(1000.) - 840.).abs() < f32::EPSILON);
     assert!((body_height(300.) - 200.).abs() < f32::EPSILON);
 }

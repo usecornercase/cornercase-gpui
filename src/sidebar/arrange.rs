@@ -150,6 +150,7 @@ impl Root {
             tabs: look.tabs_in_sidebar,
             place,
             now: crate::panels::queue::now(),
+            counts: look.counts,
         }
     }
 

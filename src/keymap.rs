@@ -25,6 +25,12 @@ pub(crate) enum Command {
     Tab,
     PreviousPane,
     NextPane,
+    NextWorkspace,
+    PreviousWorkspace,
+    NextProject,
+    PreviousProject,
+    AgentNeedingYou,
+    Mark,
     ZoomIn,
     ZoomOut,
     ZoomReset,
@@ -40,6 +46,7 @@ pub(crate) enum Command {
 pub(crate) enum Group {
     Panels,
     Window,
+    GettingAround,
     TabsAndPanes,
     Terminal,
     Browser,
@@ -93,6 +100,12 @@ pub(crate) const SHORTCUTS: &[Shortcut] = &[
     key(&["g"], false, Command::StartAgent),
     key(&["w"], false, Command::Close),
     key(&["/", "?"], false, Command::Shortcuts),
+    key(&["j"], false, Command::NextWorkspace),
+    key(&["j"], true, Command::PreviousWorkspace),
+    key(&["y"], false, Command::NextProject),
+    key(&["y"], true, Command::PreviousProject),
+    key(&["b"], false, Command::AgentNeedingYou),
+    key(&["r"], false, Command::Mark),
     key(&["t"], false, Command::NewTab),
     key(&["w"], true, Command::CloseTab),
     key(DIGITS, false, Command::Tab),
@@ -300,6 +313,18 @@ impl Command {
             Self::ZoomIn => "Bigger text",
             Self::ZoomOut => "Smaller text",
             Self::ZoomReset => "Text back to its size",
+            _ => self.describe_getting_around(),
+        }
+    }
+
+    fn describe_getting_around(self) -> &'static str {
+        match self {
+            Self::NextWorkspace => "Next workspace",
+            Self::PreviousWorkspace => "Previous workspace",
+            Self::NextProject => "Next project",
+            Self::PreviousProject => "Previous project",
+            Self::AgentNeedingYou => "The agent that needs you",
+            Self::Mark => "Mark for review, or as reviewed",
             _ => self.describe_browser(),
         }
     }
@@ -327,6 +352,12 @@ impl Command {
             | Self::SplitDown
             | Self::PreviousPane
             | Self::NextPane => Group::TabsAndPanes,
+            Self::NextWorkspace
+            | Self::PreviousWorkspace
+            | Self::NextProject
+            | Self::PreviousProject
+            | Self::AgentNeedingYou
+            | Self::Mark => Group::GettingAround,
             Self::Copy | Self::Paste | Self::ZoomIn | Self::ZoomOut | Self::ZoomReset => Group::Terminal,
             Self::Back | Self::Forward | Self::Reload | Self::FocusAddress | Self::Cut => Group::Browser,
             Self::FindInFile => Group::Viewer,
@@ -337,13 +368,21 @@ impl Command {
 
 impl Group {
     #[cfg(test)]
-    pub(crate) const ALL: [Group; 6] =
-        [Group::Panels, Group::Window, Group::TabsAndPanes, Group::Terminal, Group::Browser, Group::Viewer];
+    pub(crate) const ALL: [Group; 7] = [
+        Group::Panels,
+        Group::Window,
+        Group::GettingAround,
+        Group::TabsAndPanes,
+        Group::Terminal,
+        Group::Browser,
+        Group::Viewer,
+    ];
 
     pub(crate) fn title(self) -> &'static str {
         match self {
             Self::Panels => "Panels",
             Self::Window => "Window",
+            Self::GettingAround => "Getting around",
             Self::TabsAndPanes => "Tabs and panes",
             Self::Terminal => "Terminal",
             Self::Browser => "Browser",
