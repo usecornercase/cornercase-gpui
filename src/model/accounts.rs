@@ -1,3 +1,5 @@
+pub(crate) mod pick;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;

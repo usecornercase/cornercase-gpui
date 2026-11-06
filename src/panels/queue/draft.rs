@@ -1,3 +1,4 @@
+use crate::model::accounts::pick::{AccountPick, account_args};
 use crate::store::args;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,6 +94,7 @@ pub(crate) struct Draft {
     pub flow: Option<String>,
     pub cleanup: Option<bool>,
     pub name: Option<String>,
+    pub accounts: Vec<AccountPick>,
 }
 
 fn push(a: &mut Vec<String>, flag: &str, value: &str) {
@@ -223,5 +225,6 @@ impl Draft {
         if let Some(cleanup) = self.cleanup {
             a.push(if cleanup { "--cleanup" } else { "--no-cleanup" }.to_string());
         }
+        a.extend(account_args(&self.accounts));
     }
 }

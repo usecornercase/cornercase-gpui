@@ -35,3 +35,22 @@ fn the_account_switches_are_on_unless_turned_off() {
     let look = parse(text).expect("a look");
     assert!(!look.account_mark && !look.account_switcher);
 }
+
+#[test]
+fn the_account_picker_is_on_unless_turned_off() {
+    assert!(parse(r#"{"settings":[]}"#).expect("a look").account_picker);
+    let text = r#"{"settings":[{"key":"account_picker","value":false}]}"#;
+    assert!(!parse(text).expect("a look").account_picker);
+}
+
+#[test]
+fn an_agent_chosen_in_the_settings_is_the_default() {
+    let text = r#"{"settings":[{"key":"agent","value":"claude"}]}"#;
+    assert_eq!(parse(text).expect("a look").default_agent.as_deref(), Some("claude"));
+}
+
+#[test]
+fn auto_names_no_default_agent() {
+    let text = r#"{"settings":[{"key":"agent","value":"auto"}]}"#;
+    assert_eq!(parse(text).expect("a look").default_agent, None);
+}

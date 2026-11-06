@@ -388,7 +388,12 @@ impl TodoPanel {
     }
 
     fn targets_menu(id: u64, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let targets = Store::get(cx).read(cx).session.as_ref().map(targets).unwrap_or_default();
+        let targets = {
+            let store = Store::get(cx);
+            let s = store.read(cx);
+            let accounts = s.account_settings.mark.then_some(&s.accounts);
+            s.session.as_ref().map(|session| targets(session, accounts)).unwrap_or_default()
+        };
         let list = div()
             .ml(px(24.))
             .mr(px(6.))
@@ -413,6 +418,7 @@ impl TodoPanel {
             .text_size(px(12.))
             .child(ui::badge(target.status.as_deref()))
             .child(div().flex_1().min_w(px(0.)).child(ui::one_line(target.label.clone())))
+            .children(target.account.clone().map(ui::quiet_chip))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.send(id, target.clone(), cx)))
             .into_any_element()
     }

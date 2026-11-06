@@ -10,6 +10,7 @@ use serde_json::Value;
 use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::Session;
+use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, RestartAnswer, Selection, Stamp, Switch, switching_key};
 use crate::model::machines::{self, Machine};
 use crate::panels::PanelKind;
@@ -56,6 +57,7 @@ pub(crate) struct Store {
     pub keys_to_terminal: bool,
     pub accounts: AccountsInfo,
     pub selection: Selection,
+    pub account_settings: AccountSettings,
     accounts_asked: u64,
     accounts_stamp: Option<Stamp>,
     next_toast: u64,
@@ -133,6 +135,7 @@ impl Store {
             keys_to_terminal: false,
             accounts: AccountsInfo::default(),
             selection: Selection::default(),
+            account_settings: AccountSettings::default(),
             accounts_asked: 0,
             accounts_stamp: None,
             next_toast: 1,
@@ -182,6 +185,17 @@ impl Store {
                 cx.notify();
             }
             Err(e) => self.toast(format!("Could not list the accounts: {}", cli::reason(&e)), ToastKind::Error, cx),
+        }
+    }
+
+    pub(crate) fn account_choices(&self) -> Vec<AgentChoices> {
+        self.account_settings.offered(&self.accounts)
+    }
+
+    pub(crate) fn take_account_settings(&mut self, settings: AccountSettings, cx: &mut Context<Self>) {
+        if self.account_settings != settings {
+            self.account_settings = settings;
+            cx.notify();
         }
     }
 

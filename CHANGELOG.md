@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.15
+
+- **Choose the account an agent starts on.** Once an agent has more than one login, whatever starts it offers a dropdown of its accounts: an issue's Start and Schedule, the Agent button, the Queue's form and Start a flow, one for each agent of the team. It rests on the account in use, named as such; pick another and it applies to that start only. A queued entry you leave alone takes whichever account is in use when it starts, and one whose account has since been removed says so rather than moving to another. If you never pick, nothing changes, and without a second login nothing shows. Settings › UI's account picker turns it off.
+- The TODO panel's send menu says which account each agent runs on.
+- In the Accounts sheet, the Escape after the one that closes the add form, a rename or a new profile closes the sheet. It used to do nothing until a click.
+
 ## 0.1.14
 
 - The window now says what only cornercase's own window can do for now, where you would look for it, and which cornercase issue it waits on: pairing a phone's browser or a Telegram or Discord chat (Settings › Remote), removing the worktrees of closed projects and deleting branches (the Worktrees sheet and the Remove questions), **Run setup** (a worktree's menu), importing a VS Code workspace (the `+` beside Projects) and a plugin's window processes (its card in Plugins).

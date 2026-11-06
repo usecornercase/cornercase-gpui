@@ -4,8 +4,10 @@ use gpui::{
     Window, div, px,
 };
 
+use crate::model::accounts::pick::{AccountPick, account_args};
 use crate::store::{self, Busy, Store, args};
 use crate::theme::{colours, radius};
+use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
 mod context;
@@ -165,6 +167,23 @@ pub(crate) struct StartAgent {
     agent: Entity<TextField>,
     prompt: Entity<TextField>,
     worktree: Entity<TextField>,
+    accounts: AccountPickers,
+}
+
+fn start_args(agent: &str, prompt: &str, worktree: &str, picks: &[AccountPick]) -> Vec<String> {
+    let mut a = args(&["start"]);
+    if !agent.is_empty() {
+        a.push(agent.to_string());
+    }
+    a.push("--focus".into());
+    if !prompt.is_empty() {
+        a.extend(args(&["--prompt", prompt]));
+    }
+    if !worktree.is_empty() {
+        a.extend(args(&["--worktree", worktree]));
+    }
+    a.extend(account_args(picks));
+    a
 }
 
 pub(crate) fn start_agent(window: &mut Window, cx: &mut App) {
@@ -172,36 +191,32 @@ pub(crate) fn start_agent(window: &mut Window, cx: &mut App) {
     if store.read(cx).view_id.is_none() {
         return;
     }
+    store.update(cx, Store::list_accounts);
     let view = cx.new(|cx| {
         let submit = |this: &mut StartAgent, _: &mut Window, cx: &mut Context<StartAgent>| this.submit(cx);
         let agent = text_field("the default agent (settings → agents)", cx, submit, window);
         let prompt = text_field("what it should do (optional)", cx, submit, window);
         let worktree = text_field("a branch, to work in its own worktree (optional)", cx, submit, window);
-        StartAgent { agent, prompt, worktree }
+        cx.observe(&store, |_, _, cx| cx.notify()).detach();
+        StartAgent { agent, prompt, worktree, accounts: AccountPickers::default() }
     });
     let focus = view.read(cx).prompt.read(cx).focus_handle(cx);
     show(view.into(), &focus, window, cx);
 }
 
 impl StartAgent {
+    fn agents(&self, cx: &App) -> Vec<String> {
+        let typed = self.agent.read(cx).text().trim().to_string();
+        let default = Store::get(cx).read(cx).account_settings.default_agent.clone();
+        Some(typed).filter(|agent| !agent.is_empty()).or(default).into_iter().collect()
+    }
+
     fn submit(&mut self, cx: &mut Context<Self>) {
         let agent = self.agent.read(cx).text().trim().to_string();
         let prompt = self.prompt.read(cx).text().trim().to_string();
         let worktree = self.worktree.read(cx).text().trim().to_string();
         let busy = starting(&agent);
-        let mut a = args(&["start"]);
-        if !agent.is_empty() {
-            a.push(agent);
-        }
-        a.push("--focus".into());
-        if !prompt.is_empty() {
-            a.push("--prompt".into());
-            a.push(prompt);
-        }
-        if !worktree.is_empty() {
-            a.push("--worktree".into());
-            a.push(worktree);
-        }
+        let a = start_args(&agent, &prompt, &worktree, &self.accounts.picks(&self.agents(cx), cx));
         Store::get(cx).update(cx, |s, cx| {
             s.act_busy(busy, a, cx);
             s.close_dialog(cx);
@@ -211,6 +226,8 @@ impl StartAgent {
 
 impl Render for StartAgent {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let choices = Store::get(cx).read(cx).account_choices();
+        self.accounts.follow(choices, |_, _| {}, cx);
         frame(
             "Start an agent in a new tab",
             div()
@@ -218,6 +235,7 @@ impl Render for StartAgent {
                 .flex_col()
                 .gap(px(10.))
                 .child(ui::field("Agent", ui::boxed(&self.agent, window, cx)))
+                .children(self.accounts.fields(&self.agents(cx), cx))
                 .child(ui::field("Prompt", ui::boxed(&self.prompt, window, cx)))
                 .child(ui::field("Worktree", ui::boxed(&self.worktree, window, cx))),
             cancel_and(

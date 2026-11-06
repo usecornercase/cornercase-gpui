@@ -1,0 +1,46 @@
+{
+  "profile": "",
+  "profiles": [],
+  "providers": [
+    {
+      "accounts": [
+        {
+          "label": "Home",
+          "name": "personal",
+          "path": "/home/ana/.local/state/cornercase/accounts/claude/personal",
+          "unshared": []
+        },
+        {
+          "name": "work",
+          "path": "/home/ana/.local/state/cornercase/accounts/claude/work",
+          "unshared": []
+        }
+      ],
+      "active": "work",
+      "env": "CLAUDE_CONFIG_DIR",
+      "provider": "claude",
+      "system_path": "/home/ana/.claude",
+      "title": "Claude Code"
+    },
+    {
+      "accounts": [
+        {
+          "name": "team",
+          "path": "/home/ana/.local/state/cornercase/accounts/codex/team",
+          "unshared": []
+        }
+      ],
+      "env": "CODEX_HOME",
+      "provider": "codex",
+      "system_path": "/home/ana/.codex",
+      "title": "Codex"
+    },
+    {
+      "accounts": [],
+      "env": "GEMINI_CLI_HOME",
+      "provider": "gemini",
+      "system_path": "/home/ana",
+      "title": "Gemini CLI"
+    }
+  ]
+}

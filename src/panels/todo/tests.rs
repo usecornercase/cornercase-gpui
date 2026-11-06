@@ -1,8 +1,10 @@
 use serde_json::json;
 
 use super::data::{Item, drop_on, items, sent_message, short, step, targets, undo_number};
+use crate::model::accounts::AccountsInfo;
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::store::ToastKind;
+use crate::test_util::fixture;
 
 fn item(id: u64, done: bool) -> Item {
     Item { id, text: format!("item {id}"), done }
@@ -93,7 +95,7 @@ fn labels_agents_like_the_tui() {
     );
     let api = project("api", vec![workspace("", vec![tab("", vec![pane(6, Some("claude"))])])]);
     let session = Session { projects: vec![shop, api], ..Default::default() };
-    let labels: Vec<(u64, String)> = targets(&session).into_iter().map(|t| (t.pane, t.label)).collect();
+    let labels: Vec<(u64, String)> = targets(&session, None).into_iter().map(|t| (t.pane, t.label)).collect();
     assert_eq!(
         labels,
         vec![
@@ -117,4 +119,26 @@ fn says_how_a_send_went() {
 fn shortens_long_texts() {
     assert_eq!(short("short", 10), "short");
     assert_eq!(short("a rather long item text", 10), "a rather…");
+}
+
+fn session_with(pane: PaneInfo) -> Session {
+    let shop = project("web-shop", vec![workspace("", vec![tab("", vec![pane])])]);
+    Session { projects: vec![shop], ..Default::default() }
+}
+
+fn accounts() -> AccountsInfo {
+    serde_json::from_str(fixture!("accounts/pickable.json")).expect("a list")
+}
+
+#[test]
+fn a_target_names_the_account_it_runs_on() {
+    let on_work = PaneInfo { account: Some("personal".into()), ..pane(7, Some("claude")) };
+    let found = targets(&session_with(on_work), Some(&accounts()));
+    assert_eq!(found[0].account.as_deref(), Some("Home"));
+}
+
+#[test]
+fn a_target_names_no_account_when_the_mark_is_off() {
+    let on_work = PaneInfo { account: Some("personal".into()), ..pane(7, Some("claude")) };
+    assert_eq!(targets(&session_with(on_work), None)[0].account, None);
 }

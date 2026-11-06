@@ -183,12 +183,7 @@ pub(crate) fn dropdown(
     open: bool,
 ) -> Stateful<Div> {
     let ink = if risky { colours::failed() } else { colours::text() };
-    let edge = match (open, risky) {
-        (true, _) => colours::accent(),
-        (false, true) => glass::tint(colours::failed(), 0.45),
-        (false, false) => colours::border(),
-    };
-    ui::menu::dropdown(id, edge)
+    ui::menu::dropdown(id, ui::menu::edge(open, risky))
         .min_w(px(120.))
         .max_w(px(260.))
         .text_color(ink)
