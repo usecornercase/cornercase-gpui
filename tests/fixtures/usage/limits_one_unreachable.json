@@ -1,0 +1,55 @@
+{
+  "agents": [
+    {
+      "age": 0,
+      "agent": "claude",
+      "error": null,
+      "extra": null,
+      "identity": "fb7d2488e2805f6ffb5c66df3d51c0a7",
+      "limited": true,
+      "limits": [
+        {
+          "kind": "session",
+          "label": "session (5h)",
+          "percent": 55,
+          "resets_at": "2026-11-06T05:04:53.000Z",
+          "scope": null,
+          "severity": "normal"
+        },
+        {
+          "kind": "weekly_all",
+          "label": "week",
+          "percent": 78,
+          "resets_at": "2026-11-09T14:28:13.000Z",
+          "scope": null,
+          "severity": "warning"
+        }
+      ],
+      "loading": false,
+      "notice": null,
+      "plan": "team",
+      "read_at": "2026-11-06T03:08:16.947Z",
+      "title": "Claude Code"
+    },
+    {
+      "age": null,
+      "agent": "codex",
+      "error": "codex exited without answering",
+      "extra": null,
+      "limited": null,
+      "limits": [],
+      "loading": false,
+      "notice": null,
+      "plan": null,
+      "read_at": null,
+      "title": "Codex"
+    }
+  ],
+  "machine": {
+    "error": "ssh: connect to host vps port 22: Connection refused",
+    "name": "vps",
+    "read_at": "2026-11-06T03:08:16.947Z",
+    "seen": "2026-11-06T03:08:42.000Z",
+    "state": "unreachable"
+  }
+}

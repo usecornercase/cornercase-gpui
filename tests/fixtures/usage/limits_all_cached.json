@@ -1,0 +1,48 @@
+{
+  "agents": [
+    {
+      "age": null,
+      "agent": "claude",
+      "error": null,
+      "extra": null,
+      "limited": null,
+      "limits": [],
+      "loading": false,
+      "notice": null,
+      "plan": null,
+      "read_at": null,
+      "title": "Claude Code"
+    },
+    {
+      "age": null,
+      "agent": "codex",
+      "error": null,
+      "extra": null,
+      "limited": null,
+      "limits": [],
+      "loading": false,
+      "notice": null,
+      "plan": null,
+      "read_at": null,
+      "title": "Codex"
+    }
+  ],
+  "machines": [
+    {
+      "agents": [],
+      "error": "not read yet",
+      "name": "vps",
+      "read_at": null,
+      "seen": "2026-11-06T03:07:25.000Z",
+      "state": "linked"
+    },
+    {
+      "agents": [],
+      "error": "ssh: connect to host down port 22: Connection refused",
+      "name": "down",
+      "read_at": null,
+      "seen": null,
+      "state": "unreachable"
+    }
+  ]
+}

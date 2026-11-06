@@ -23,8 +23,12 @@ pub(super) fn stale(error: Option<&String>) -> Option<Div> {
     error.map(|e| error_line(format!("could not refresh: {e}")))
 }
 
-pub(super) fn loading(text: &'static str) -> Div {
+pub(super) fn loading(text: String) -> Div {
     card().child(ui::busy("usage-loading", text).text_size(px(13.)))
+}
+
+pub(super) fn notes(lines: Vec<String>) -> Option<Div> {
+    (!lines.is_empty()).then(|| div().flex().flex_col().gap(px(2.)).children(lines.into_iter().map(ui::dim)))
 }
 
 pub(super) fn failure(title: &'static str, error: &str, cx: &Context<UsagePanel>) -> Div {
@@ -35,7 +39,7 @@ pub(super) fn failure(title: &'static str, error: &str, cx: &Context<UsagePanel>
         .child(div().text_color(colours::failed()).font_weight(FontWeight::SEMIBOLD).child(title))
         .child(div().text_size(px(12.)).text_color(colours::muted()).child(error.to_string()))
         .child(
-            div().child(
+            div().flex().child(
                 ui::button("usage-retry", "Try again")
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.refresh(true, cx))),
             ),

@@ -24,12 +24,12 @@ fn parses_usage() {
     assert!((claude.limits[1].fraction() - 0.83).abs() < 1e-6);
     let read = parse_utc("2026-10-23T18:09:59.530Z").expect("stamp");
     assert_eq!(
-        (claude.status(read + 30), claude.status(read + 300)),
+        (claude.status(Some(read), read + 30), claude.status(Some(read), read + 300)),
         ("updated just now".into(), "updated 5m ago".into())
     );
     let codex = &plans.agents[1];
     assert_eq!(
-        (codex.heading().as_str(), codex.error.as_deref(), codex.status(read).as_str(), codex.unasked()),
+        (codex.heading().as_str(), codex.error.as_deref(), codex.status(None, read).as_str(), codex.unasked()),
         ("● Codex · Work", Some("Invalid request"), "", false)
     );
 }
@@ -39,7 +39,7 @@ fn parses_partial_usage() {
     let plans: Plans =
         serde_json::from_str(r#"{"agents": [{"agent": "claude", "title": "Claude Code", "loading": true}]}"#)
             .expect("parses");
-    assert_eq!(plans.agents[0].status(0), "loading…");
+    assert_eq!(plans.agents[0].status(None, 0), "loading…");
     let plans: Plans = serde_json::from_str(r#"{"agents": [{"agent": "codex", "title": "Codex"}]}"#).expect("parses");
     assert!(plans.agents[0].unasked());
 }
@@ -139,6 +139,12 @@ fn formats_like_the_tui() {
         (until(2 * 3600 + 13 * 60), "resets in 2h 13m"),
         (until(3 * 86_400 + 4 * 3600), "resets in 3d 4h"),
         (updated(7200), "updated 2h ago"),
+        (ago(59), "just now"),
+        (ago(300), "5 min ago"),
+        (ago(7200), "2h ago"),
+        (ago(86_400), "1 day ago"),
+        (ago(3 * 86_400), "3 days ago"),
+        (asked(300), "asked 5 min ago"),
         (counting(1), "counting for 1 day"),
         (counting(0), "counting for 0 days"),
         (agent_title("claude"), "Claude Code"),
