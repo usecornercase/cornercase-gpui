@@ -1,15 +1,16 @@
 use gpui::{
-    AnyElement, ClickEvent, ClipboardItem, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
-    px, rgba,
+    AnyElement, App, ClickEvent, ClipboardItem, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
+    ParentElement as _, Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px, rgba,
 };
 
-use super::FlowsPanel;
 use super::cards::{avatar, conductor, ground};
 use super::diagram::role_colour;
 use super::flow_page::block;
 use super::model::{self, Edge, FlowSpec, Message, Run, RunFile};
 use super::widgets::{chip, error_small, open_path, panel_box};
+use super::{FlowsPanel, Place};
+use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, Tone, glass};
 
@@ -93,7 +94,8 @@ impl FlowsPanel {
             }
             Some(Ok(files)) => {
                 let now = model::now();
-                list.children(files.entries.iter().enumerate().map(|(i, file)| file_row(i, file, now)))
+                let docked = self.place == Place::Dock;
+                list.children(files.entries.iter().enumerate().map(|(i, file)| file_row(i, file, now, docked)))
                     .when(files.more, |d| d.child(quiet("Only the newest 200 files are listed.")))
             }
         }
@@ -184,6 +186,13 @@ fn body(shown: String, whole: bool) -> Div {
     text.text_size(px(12.5)).text_color(colours::soft()).child(shown)
 }
 
+fn read_in_files(path: String) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+    move |_: &ClickEvent, _, cx| {
+        let path = path.clone();
+        Store::get(cx).update(cx, |s, cx| s.read_run_file(path, cx));
+    }
+}
+
 fn folder_line(dir: String) -> Div {
     div()
         .flex()
@@ -201,11 +210,15 @@ fn folder_line(dir: String) -> Div {
         )
 }
 
-fn file_row(i: usize, file: &RunFile, now: i64) -> Stateful<Div> {
+fn file_row(i: usize, file: &RunFile, now: i64, docked: bool) -> Stateful<Div> {
     let age = file.modified.as_deref().map(|m| model::ago(m, now)).unwrap_or_default();
-    ui::row(("run-file", i), false)
-        .on_click(open_path(file.path.clone()))
-        .child(ui::icon(Icon::File, 14.).text_color(colours::muted()))
+    let row = ui::row(("run-file", i), false);
+    let row = if docked {
+        row.on_click(read_in_files(file.path.clone()))
+    } else {
+        row.on_click(open_path(file.path.clone()))
+    };
+    row.child(ui::icon(Icon::File, 14.).text_color(colours::muted()))
         .child(div().flex_1().min_w_0().text_size(px(12.)).child(ui::one_line(file.name.clone())))
         .child(ui::dim(model::size(file.bytes)).w(px(64.)).flex_none())
         .child(ui::dim(age).w(px(36.)).flex_none())

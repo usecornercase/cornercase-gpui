@@ -25,6 +25,7 @@ pub(super) struct OpenAt {
     pub(super) line: Option<usize>,
     pub(super) lit: Option<RegexMatcher>,
     pub(super) from_search: bool,
+    pub(super) from_flow: bool,
 }
 
 struct Reading {
@@ -55,6 +56,7 @@ impl Viewer {
             lit: at.lit,
             checking: true,
             from_search: at.from_search,
+            from_flow: at.from_flow,
         }
     }
 
@@ -99,7 +101,7 @@ fn link_path(link: &Link, shown: Option<u64>) -> PathBuf {
 impl FilesPanel {
     fn open_link(&mut self, link: &Link, at: Option<usize>, cx: &mut Context<Self>) {
         let from_search = self.place().is_some_and(|p| !p.query.trim().is_empty());
-        let target = OpenAt { line: at.or_else(|| link.first_line()), lit: None, from_search };
+        let target = OpenAt { line: at.or_else(|| link.first_line()), from_search, ..OpenAt::default() };
         self.menu = None;
         self.open_file(link_path(link, self.current), target, cx);
     }
@@ -204,15 +206,38 @@ impl FilesPanel {
         }
     }
 
+    pub(super) fn take_run_file(&mut self, cx: &mut Context<Self>) {
+        let store = self.store.clone();
+        if let Some(path) = store.update(cx, |s, _| s.run_file.take()) {
+            self.open_file(PathBuf::from(path), OpenAt { from_flow: true, ..OpenAt::default() }, cx);
+        }
+    }
+
+    pub(super) fn forget_flow(&mut self) {
+        let viewers = self.places.values_mut().filter_map(|place| place.viewer.as_mut());
+        viewers.for_each(|viewer| viewer.from_flow = false);
+    }
+
+    fn back_to_flow(&self, cx: &mut Context<Self>) {
+        self.store.update(cx, |s, cx| {
+            if PanelKind::Flow.shows(s.session.as_ref()) {
+                s.open(PanelKind::Flow, cx);
+            }
+        });
+    }
+
     pub(super) fn close_file(&mut self, cx: &mut Context<Self>) {
         self.menu = None;
         let show_hidden = self.show_hidden;
         let Some(place) = self.place_mut() else { return };
-        place.viewer = None;
+        let from_flow = place.viewer.take().is_some_and(|viewer| viewer.from_flow);
         let last = place.last.clone();
         let rows = tree::rows(&place.listings, &place.expanded, show_hidden);
         if let Some(ix) = last.and_then(|last| rows.iter().position(|r| r.path == last)) {
             self.tree_scroll.scroll_to_item(ix, ScrollStrategy::Center);
+        }
+        if from_flow {
+            self.back_to_flow(cx);
         }
         cx.notify();
     }

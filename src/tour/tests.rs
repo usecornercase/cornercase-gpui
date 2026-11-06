@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::model::{Catalogue, State, Step, state_of};
+use super::model::{Catalogue, State, Step, reset_command, state_of};
 use crate::panels::PanelKind;
 use crate::test_util::fixture;
 
@@ -71,4 +71,9 @@ fn the_state_comes_from_the_app_feed() {
     let state = state_of(Some(&app));
     assert_eq!(state.active.map(|a| a.step), Some("tabs".to_string()));
     assert_eq!(state_of(None), State::default());
+}
+
+#[test]
+fn resetting_forgets_every_tour() {
+    assert_eq!(reset_command(), ["tour", "reset"]);
 }

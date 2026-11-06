@@ -35,6 +35,15 @@ impl Place {
 }
 
 impl FilesPanel {
+    pub(super) fn store_changed(&mut self, cx: &mut Context<Self>) {
+        self.follow_workspace(cx);
+        if self.showing(cx) {
+            self.take_run_file(cx);
+        } else {
+            self.forget_flow();
+        }
+    }
+
     pub(super) fn follow_workspace(&mut self, cx: &mut Context<Self>) {
         let shown =
             shown_workspace(self.store.read(cx).session.as_ref()).map(|(_, ws)| (ws.id, PathBuf::from(&ws.path)));

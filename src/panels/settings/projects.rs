@@ -1,7 +1,7 @@
 use gpui::{AnyElement, Context, Div, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px};
 
 use super::controls::Look;
-use super::data::{Described, ProjectEntry, Script};
+use super::data::{self, Described, ProjectEntry, Script};
 use super::{Role, SettingsPanel, role_id, widgets};
 use crate::platform::paths::Style;
 use crate::theme::{FONT_FAMILY, colours, radius};
@@ -50,11 +50,15 @@ fn script_lines(text: &str) -> Div {
 }
 
 fn script_label(script: Script) -> Div {
-    let note = match script {
-        Script::Setup => "Runs in a new worktree, once it is made",
-        Script::Teardown => "Runs in a worktree, before it is removed",
+    let (name, note) = match script {
+        Script::Setup => ("Setup", "Runs in a new worktree, once it is made"),
+        Script::Teardown => ("Teardown", "Runs in a worktree, before it is removed"),
+        Script::Builds => (
+            "Build folders",
+            "What Free builds deletes in its worktrees, separated by spaces. Type default for the usual list",
+        ),
     };
-    widgets::label(widgets::capitalised(script.name()), note)
+    widgets::label(name, note)
 }
 
 fn no_projects() -> Div {
@@ -74,7 +78,8 @@ impl SettingsPanel {
         if d.projects.is_empty() {
             return vec![no_projects()];
         }
-        d.projects.iter().map(|project| self.project_card(project, window, cx)).collect()
+        let shown = data::shown_projects(&d.projects, self.first_project);
+        shown.into_iter().map(|project| self.project_card(project, window, cx)).collect()
     }
 
     fn project_card(&self, project: &ProjectEntry, window: &Window, cx: &mut Context<Self>) -> Div {
@@ -84,7 +89,7 @@ impl SettingsPanel {
             ))
         });
         let scripts: Vec<AnyElement> =
-            [Script::Setup, Script::Teardown].into_iter().map(|s| self.render_script(project, s, window, cx)).collect();
+            Script::all_of(project).iter().map(|s| self.render_script(project, *s, window, cx)).collect();
         widgets::card().child(project_header(project)).children(warning).children(scripts)
     }
 
@@ -96,9 +101,9 @@ impl SettingsPanel {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let role = Role::Script(project.folder.clone(), script);
-        let multiline = script.of(project).contains('\n');
-        let (control, slot) = if multiline {
-            (script_lines(script.of(project)).into_any_element(), self.clear_action(project, script, cx))
+        let text = script.of(project);
+        let (control, slot) = if text.contains('\n') {
+            (script_lines(&text).into_any_element(), self.clear_action(project, script, cx))
         } else {
             (self.render_text(&role, Look::SCRIPT, window, cx).into_any_element(), div().into_any_element())
         };

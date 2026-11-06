@@ -35,7 +35,7 @@ const SHEETS: [PanelKind; 11] = [
 
 fn tours_button() -> impl IntoElement {
     ui::tool_button("rail-tours", Icon::Help, 34., false)
-        .tooltip(tip("Tours".to_string()))
+        .tooltip(tip("Help".to_string()))
         .on_click(|_: &ClickEvent, window, cx| crate::tour::open_catalogue(window, cx))
 }
 

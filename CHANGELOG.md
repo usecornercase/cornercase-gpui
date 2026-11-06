@@ -2,6 +2,18 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.10
+
+- **Changes filters by path.** A field over the file list keeps the files you name: a piece of a path (`order`), a pattern as in `.gitignore` (`*.test.js`, `src/api/**`), `!` to leave files out (`!*.lock`). The summary says how many are left (`3 of 31 files`); Enter gives your keys back to the pane, Escape clears it.
+- **Open in…** on a project, a workspace or a pane takes its folder to your file manager, VS Code, Cursor, Zed or Sublime Text, whichever you have. A pane opens the folder its program is in.
+- **A project's menu reaches more of the project.** Project settings… opens Settings on it, where a repository can now change the folders Free builds deletes, and Worktrees… lists that project's alone, with a button for every worktree.
+- **Import only what you want.** Each section of a shared setup has a tick in the preview; what you untick stays as it is.
+- **Processes closes a pane.** It asks first when a program runs there, and an agent's pane goes through Close agent.
+- **Ports stops several at once.** Tick the ones to stop, or use Stop all for a workspace's; it asks once, naming each program.
+- **A file of a run opens beside the Flow panel.** In the Flow panel a click shows the file in the Files panel, and ‹ Flow goes back, scrolled where you left it.
+- **Help.** The rail's `?` now has the docs and the bug report beside the tours, and can reset the tours' progress.
+- **The Discord forum's state in Settings › Remote**: ready, or the step it waits for. Choosing among several servers still takes cornercase's own window.
+
 ## 0.1.9
 
 - Once an agent has more than one login, the window says which account each agent runs on: after its model in the sidebar and the tab bar, and on a small button at the bottom of its pane. That button, or Switch account in a tab's or a pane's menu, moves the agent to another account in the same conversation, after its turn if it is busy, and tells you what happened. On a shell, the buttons say which account an agent typed there would start on. If you never added an account, nothing changes.

@@ -13,6 +13,13 @@ The Flows sheet shows teams of agents run by an orchestrator (`cornercase flow`)
 - **After a start, the new run is selected once `flow runs` lists it**: the panel retries every 500 ms for 10 s, since `flow run` answers before the runs stream reports it.
 - **Selection falls back** to the first run, else the default flow, else the first flow, whenever what was selected disappears.
 
+## A run's files
+
+- **In the Flow panel a file opens in the Files panel, and its back button goes back** (0.12.240): the viewer's back button says `‹ Flow`, and the Flow panel comes back as it was left, since it is alive behind the dock and its list keeps its place. The request goes through the Store (`Store::read_run_file`), as a panel cannot reach `Root`, and the Files panel takes it even when this builds it. Until 2026-11-06 a click opened the default app there, which left the agents' answers one window away; on another machine it only copied the path, and `files read` takes an absolute path on the server's machine, so now it reads there too. **Open folder** stays with the file manager.
+- **Where it came from is forgotten** when the Files panel closes or another file opens in it (`‹ Files` then, the tree behind it), and once the run is gone the button says `‹ Files` and shows the tree.
+- **The Flows sheet keeps the default app**: it may show a run of another workspace, and a sheet that closes itself to open a file in the dock would lose the page the user was on.
+- Checked live on 2026-11-06 (debug build, cornercase 0.13.1, Linux x86_64 under Xvfb with lavapipe, a private server whose agents are a fake script; no macOS, no Windows): the Quick flow, the panel scrolled to its files, a file opened, `‹ Flow` back at the same scroll; closing the panel, then `‹ Files`; the run ended with its file open, then the tree. Over ssh it was not tried.
+
 ## The model
 
 - **A flow's key is origin, name and path**: a project's flow may share a name with yours, so the name alone does not tell listed flows apart.

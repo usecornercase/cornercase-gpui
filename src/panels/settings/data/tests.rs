@@ -249,3 +249,38 @@ fn a_section_holding_one_setting_of_its_name_has_no_caption() {
     let jira = &sections(&d, "Issues")[1];
     assert_eq!(caption(&d, jira), "Jira");
 }
+
+#[test]
+fn a_project_reads_its_build_folders_as_one_text() {
+    let d = sample();
+    assert_eq!(Script::Builds.of(&d.projects[0]), "node_modules target");
+    assert_eq!(Script::Builds.of(&d.projects[1]), "");
+}
+
+#[test]
+fn the_build_folders_are_saved_like_a_script() {
+    let d = sample();
+    assert_eq!(
+        project_args(&d.projects[0], Script::Builds, "default"),
+        ["config", "project", "--json", "--project", "4", "--builds=default"]
+    );
+}
+
+#[test]
+fn only_a_repository_has_build_folders() {
+    let d = sample();
+    assert_eq!(Script::all_of(&d.projects[0]), [Script::Setup, Script::Teardown, Script::Builds]);
+    assert_eq!(Script::all_of(&d.projects[1]), [Script::Setup, Script::Teardown]);
+}
+
+#[test]
+fn the_project_asked_for_comes_first_and_the_others_keep_their_order() {
+    let projects: Vec<ProjectEntry> = [Some(1), None, Some(3), Some(4)]
+        .into_iter()
+        .map(|project| ProjectEntry { project, ..ProjectEntry::default() })
+        .collect();
+    let order = |first| -> Vec<Option<u64>> { shown_projects(&projects, first).iter().map(|e| e.project).collect() };
+    assert_eq!(order(Some(3)), [Some(3), Some(1), None, Some(4)]);
+    assert_eq!(order(None), [Some(1), None, Some(3), Some(4)]);
+    assert_eq!(order(Some(9)), [Some(1), None, Some(3), Some(4)]);
+}

@@ -1,6 +1,7 @@
 pub(crate) mod data;
 mod rows;
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use gpui::{
@@ -15,7 +16,7 @@ use crate::panels::poll::{Polled, Watch, parse};
 use crate::store::{self, Store};
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
-use data::{List, Port, list_command};
+use data::{List, Port, list_command, stop_label, to_stop};
 
 const NO_PORTS: &str = "Nothing in this workspace listens on a TCP port.";
 const NO_WORKSPACE: &str = "No workspace on screen. Show one, or list every port.";
@@ -26,6 +27,7 @@ pub(crate) struct PortsPanel {
     error: Option<String>,
     all: bool,
     workspace: Option<u64>,
+    ticked: HashSet<String>,
     watch: Watch,
 }
 
@@ -63,7 +65,7 @@ impl Polled for PortsPanel {
                 return;
             }
             match parse::<List>(result) {
-                Ok(list) => (this.ports, this.error) = (Some(list.ports), None),
+                Ok(list) => this.listed(list.ports),
                 Err(e) => this.error = Some(e),
             }
             cx.notify();
@@ -74,9 +76,37 @@ impl Polled for PortsPanel {
 impl PortsPanel {
     fn new(cx: &mut Context<Self>) -> Self {
         let watch = Watch::start(cx);
-        let mut this = Self { ports: None, error: None, all: false, workspace: None, watch };
+        let mut this = Self { ports: None, error: None, all: false, workspace: None, ticked: HashSet::new(), watch };
         this.measure(cx);
         this
+    }
+
+    fn listed(&mut self, ports: Vec<Port>) {
+        self.ticked.retain(|key| ports.iter().any(|p| p.key() == *key));
+        self.ports = Some(ports);
+        self.error = None;
+    }
+
+    fn toggle(&mut self, key: &str, cx: &mut Context<Self>) {
+        if !self.ticked.remove(key) {
+            self.ticked.insert(key.to_string());
+        }
+        cx.notify();
+    }
+
+    fn stop_many(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
+        let (ports, store) = (self.ports.as_ref()?, Store::get(cx));
+        let listed: Vec<Port> = to_stop(ports, &self.ticked, self.all)
+            .into_iter()
+            .filter(|p| !rows::busy_stopping(p, &self.watch, store.read(cx)))
+            .cloned()
+            .collect();
+        (!listed.is_empty()).then(|| {
+            let label = stop_label(listed.len(), !self.ticked.is_empty());
+            ui::danger_button("ports-stop-many", label).on_click(cx.listener(move |_, _: &ClickEvent, window, cx| {
+                rows::ask_stop_many(&listed.iter().collect::<Vec<_>>(), window, cx);
+            }))
+        })
     }
 
     fn set_all(&mut self, all: bool, cx: &mut Context<Self>) {
@@ -104,6 +134,7 @@ impl PortsPanel {
             .child(ui::segments(tabs))
             .child(div().flex_1())
             .children(count.map(ui::dim))
+            .children(self.stop_many(cx))
     }
 
     fn list(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -112,7 +143,7 @@ impl PortsPanel {
             (None, None) => vec![ui::loading("Looking for ports…").into_any_element()],
             (Some(_), None) if !self.all && self.workspace.is_none() => vec![ui::note(NO_WORKSPACE).into_any_element()],
             (Some(ports), None) if ports.is_empty() => vec![ui::note(NO_PORTS).into_any_element()],
-            (Some(ports), None) => rows::rows(ports, self.all, &self.watch, cx),
+            (Some(ports), None) => rows::rows(ports, (self.all, &self.ticked), &self.watch, cx),
         }
     }
 }
