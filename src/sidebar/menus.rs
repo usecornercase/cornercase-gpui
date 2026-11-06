@@ -5,7 +5,7 @@ use super::workspace::plural;
 use super::{Fold, Target, cmd, forms};
 use crate::app::Root;
 use crate::cli;
-use crate::context_menu::{Entry, act, act_busy, danger, item, submenu};
+use crate::context_menu::{Entry, act, act_busy, danger, item, note, submenu};
 use crate::dialogs;
 use crate::model::{PaneInfo, Project, PullRequest, Session, Workspace};
 use crate::panels::PanelKind;
@@ -14,6 +14,9 @@ use crate::panels::flows::{FlowStart, start_flow};
 use crate::panels::plugins::{Group, Run, Spot, run_action};
 use crate::store::{self, Busy, ToastKind};
 use crate::ui;
+
+const VS_CODE_NOTE: &str = "Importing a VS Code workspace\nneeds usecornercase/cornercase-terminal#673";
+const RUN_SETUP_NOTE: &str = "Run setup\nneeds usecornercase/cornercase-terminal#672";
 
 fn rename_item(label: &str, target: Target) -> Entry {
     item(label.to_string(), move |this, window, cx| this.start_rename(target, window, cx))
@@ -75,6 +78,15 @@ fn new_workspace_item(project: Option<u64>) -> Entry {
 
 fn start_flow_item(project: Option<u64>) -> Entry {
     item("Start a flow…", move |_, window, cx| start_flow(FlowStart::in_project(project), window, cx))
+}
+
+pub(super) fn projects_menu() -> Vec<Entry> {
+    vec![
+        item("Open project…", Root::open_project),
+        item("New group…", |_, window, cx| forms::new_group(None, window, cx)),
+        Entry::Separator,
+        note(VS_CODE_NOTE),
+    ]
 }
 
 pub(super) fn run_item(run: Run) -> Entry {
@@ -238,6 +250,10 @@ fn agent_items(ws: &Workspace) -> Vec<Entry> {
     entries
 }
 
+fn run_setup_note(ws: &Workspace) -> Option<Entry> {
+    (ws.worktree && ws.setup.as_deref() != Some("running")).then(|| note(RUN_SETUP_NOTE))
+}
+
 fn workspace_menu(session: &Session, id: u64, openers: &[Found]) -> Vec<Entry> {
     let Some((_, ws)) = session.workspace(id) else { return Vec::new() };
     let ids = id.to_string();
@@ -259,6 +275,7 @@ fn workspace_menu(session: &Session, id: u64, openers: &[Found]) -> Vec<Entry> {
     entries.push(Entry::Separator);
     entries.extend(path_items(&ws.path, openers));
     entries.push(panel_item("Ports…", PanelKind::Ports, Some(("workspace", id))));
+    entries.extend(run_setup_note(ws));
     entries.push(Entry::Separator);
     if ws.worktree {
         let name = ws.name.clone();

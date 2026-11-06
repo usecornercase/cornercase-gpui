@@ -8,6 +8,7 @@ use super::{Check, Checked, bullet, buttons, keyed, line, load_check, show, warn
 use crate::cli::{self, Target};
 use crate::dialogs::frame;
 use crate::model::Aim;
+use crate::panels::worktrees::BRANCH_NOTE;
 use crate::platform::paths;
 use crate::store::{self, Busy, MachineAct, Store, ToastKind, args};
 use crate::theme::colours;
@@ -184,7 +185,9 @@ impl RemoveWorktree {
             .flex_col()
             .gap(px(6.))
             .child(line(format!("Folder: {}", self.folder(&check.path, cx))))
-            .when(!check.branch.is_empty(), |d| d.child(line(format!("Branch {} stays.", check.branch))))
+            .when(!check.branch.is_empty(), |d| {
+                d.child(line(format!("Branch {} stays.", check.branch))).child(ui::dim(BRANCH_NOTE))
+            })
             .child(if check.changed {
                 warning("Changes not committed: removing the worktree deletes them.")
             } else {

@@ -1,4 +1,4 @@
-use super::{context_item, open_in_item, plugin_items, spot_of, workspace_menu};
+use super::{context_item, open_in_item, plugin_items, projects_menu, spot_of, workspace_menu};
 use crate::context_menu::Entry;
 use crate::model::{PaneInfo, Session};
 use crate::panels::files::open::{Found, Launch, Opener};
@@ -9,16 +9,31 @@ const PROJECT: &str = r#"{"projects":[{"id":1,"name":"shop","workspaces":[
     {"id":2,"name":"plain","path":"/home/ana/notes"},
     {"id":3,"name":"main","path":"/home/ana/code/shop","branch":"main"},
     {"id":4,"name":"dark","path":"/home/ana/code/dark","branch":"dark","worktree":true,
-        "pull_request":{"number":485,"url":"https://x/485","state":"open"}}]}]}"#;
+        "pull_request":{"number":485,"url":"https://x/485","state":"open"}},
+    {"id":5,"name":"fresh","path":"/home/ana/code/fresh","branch":"fresh","worktree":true,"setup":"running"},
+    {"id":6,"name":"broken","path":"/home/ana/code/broken","branch":"broken","worktree":true,"setup":"failed"}]}]}"#;
+
+fn menu(workspace: u64) -> Vec<Entry> {
+    let session: Session = serde_json::from_str(PROJECT).expect("a view line");
+    workspace_menu(&session, workspace, &[])
+}
 
 fn labels(workspace: u64) -> Vec<String> {
-    let session: Session = serde_json::from_str(PROJECT).expect("a view line");
-    let entries = workspace_menu(&session, workspace, &[]);
-    entries
+    menu(workspace)
         .iter()
         .filter_map(|entry| match entry {
             Entry::Item { label, .. } | Entry::Submenu { label, .. } => Some(label.to_string()),
-            Entry::Heading(_) | Entry::Resting { .. } | Entry::Separator => None,
+            Entry::Heading(_) | Entry::Note(_) | Entry::Resting { .. } | Entry::Separator => None,
+        })
+        .collect()
+}
+
+fn notes(entries: &[Entry]) -> Vec<String> {
+    entries
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::Note(text) => Some(text.to_string()),
+            _ => None,
         })
         .collect()
 }
@@ -45,6 +60,31 @@ fn the_merge_check_comes_after_the_pull_request() {
 }
 
 #[test]
+fn a_worktree_says_what_running_its_setup_again_waits_on() {
+    assert_eq!(notes(&menu(4)), ["Run setup\nneeds usecornercase/cornercase-terminal#672"]);
+}
+
+#[test]
+fn a_worktree_whose_setup_failed_says_what_retrying_it_waits_on() {
+    assert_eq!(notes(&menu(6)), ["Run setup\nneeds usecornercase/cornercase-terminal#672"]);
+}
+
+#[test]
+fn a_worktree_still_running_its_setup_has_nothing_to_say_about_it() {
+    assert_eq!(notes(&menu(5)), Vec::<String>::new());
+}
+
+#[test]
+fn a_workspace_without_a_worktree_has_no_setup_to_run() {
+    assert_eq!(notes(&menu(3)), Vec::<String>::new());
+}
+
+#[test]
+fn the_projects_menu_says_what_importing_a_vs_code_workspace_waits_on() {
+    assert_eq!(notes(&projects_menu()), ["Importing a VS Code workspace\nneeds usecornercase/cornercase-terminal#673"]);
+}
+
+#[test]
 fn a_pane_running_an_agent_offers_its_context() {
     let pane = PaneInfo { id: 1, agent: Some("claude".into()), ..PaneInfo::default() };
     assert!(context_item(&pane).is_some());
@@ -57,7 +97,7 @@ fn a_pane_whose_agent_left_offers_no_context() {
 
 fn plugin_row(entry: &Entry) -> String {
     match entry {
-        Entry::Item { label, .. } | Entry::Submenu { label, .. } => label.to_string(),
+        Entry::Item { label, .. } | Entry::Submenu { label, .. } | Entry::Note(label) => label.to_string(),
         Entry::Heading(name) => format!("[{name}]"),
         Entry::Resting { label } => format!("({label})"),
         Entry::Separator => "---".to_string(),
@@ -91,7 +131,7 @@ fn a_group_offers_no_actions() {
 fn opener_labels(openers: &[Found]) -> Option<(String, Vec<String>)> {
     let label = |entry: &Entry| match entry {
         Entry::Item { label, .. } | Entry::Submenu { label, .. } => label.to_string(),
-        Entry::Heading(_) | Entry::Resting { .. } | Entry::Separator => String::new(),
+        Entry::Heading(_) | Entry::Note(_) | Entry::Resting { .. } | Entry::Separator => String::new(),
     };
     open_in_item("/work/shop", openers).map(|entry| match &entry {
         Entry::Submenu { entries, .. } => (label(&entry), entries.iter().map(label).collect()),

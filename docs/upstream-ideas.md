@@ -9,7 +9,7 @@ Things that would make UIs on top of cornercase easier, found while building cor
    - Idea: `--follow` on both, printing one JSON line per sample (processes: every `--interval`; ports: when the set changes), like `changes list --follow`.
 2. **Removing worktrees that are not an open workspace**
    - Problem: the TUI's Worktrees dialog removes closed projects' worktrees (with their teardown), prunable entries and orphans after a rescan. `cornercase close --remove-worktree` covers only an open workspace, so an external client cannot clean up the rest. upstream design/worktrees-dialog.md already says this is left to an issue.
-   - Idea: `cornercase worktrees remove --path PATH [--check] [--force] --json`, with the same rescan, the risks and the outcome per path.
+   - Idea: `cornercase worktrees remove --path PATH [--check] [--force] --json`, with the same rescan, the risks and the outcome per path. Filed as usecornercase/cornercase-terminal#671, with deleting the branch.
 3. **`worktrees list` that streams rows as each scan answers**
    - Problem: `worktrees list --json` answers only once every worktree is measured, which takes a while with big trees. A client has to ask twice (`--no-sizes`, then with sizes) to show something at once.
    - Idea: `worktrees list --follow --json`: one line per worktree as its scan and its size answer, then an end line.
@@ -86,4 +86,4 @@ Things that would make UIs on top of cornercase easier, found while building cor
 
 48. **The UI page has no sections**: its 24 settings come with `section: ""`, so a client draws one long list (the TUI does too). Sections in `config --json` (the sidebar, tabs, an agent's tab, notifications, sounds, updates, keys) would let every client group them without a table of its own.
 49. **A number's unit only shows inside `shown`** (`5 min`, but `off` at 0): a `unit` field on number settings would let a client label the field whatever its value.
-50. **Chat pairing needs cornercase's own window**: the code to scan (Telegram) or the link (Discord) is only drawn by the TUI. `config pair KEY --json` answering the code's text or the link would let a GUI draw it.
+50. **Chat pairing needs cornercase's own window**: the code to scan (Telegram) or the link (Discord) is only drawn by the TUI. `config pair KEY --json` answering the code's text or the link would let a GUI draw it. Filed as usecornercase/cornercase-terminal#670, and #669 for a phone's browser.

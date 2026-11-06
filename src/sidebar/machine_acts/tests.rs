@@ -11,7 +11,7 @@ fn labels(entries: &[Entry]) -> Vec<(String, bool)> {
         .iter()
         .map(|entry| match entry {
             Entry::Item { label, .. } | Entry::Submenu { label, .. } => (label.to_string(), true),
-            Entry::Resting { label } | Entry::Heading(label) => (label.to_string(), false),
+            Entry::Resting { label } | Entry::Heading(label) | Entry::Note(label) => (label.to_string(), false),
             Entry::Separator => (String::new(), false),
         })
         .collect()
