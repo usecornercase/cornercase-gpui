@@ -44,13 +44,21 @@ pub(super) fn selection_args(pane: u64, from: (u16, u16), to: (u16, u16)) -> Vec
     ]
 }
 
-pub(super) fn read_args(pane: u64, board: Board) -> Vec<String> {
+pub(super) fn read_args(pane: u64, board: Board, on_machine: bool) -> Vec<String> {
     let mut args = vec!["selection".into(), "--pane".into(), pane.to_string()];
-    if board == Board::Clipboard {
+    if board == Board::Clipboard && !on_machine {
         args.push("--copy".into());
     }
     args.push("--json".into());
     args
+}
+
+pub(crate) fn cleaned(text: &str) -> String {
+    text.chars().filter(|c| matches!(c, '\n' | '\t') || !(c.is_control() || is_hidden(*c))).collect()
+}
+
+fn is_hidden(c: char) -> bool {
+    matches!(c, '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{2069}' | '\u{feff}')
 }
 
 pub(super) fn column(index: usize) -> u16 {
@@ -62,12 +70,15 @@ struct Selected {
     text: Option<String>,
 }
 
-pub(super) fn kept(board: Board, read: anyhow::Result<String>) -> Option<Msg> {
+pub(super) fn kept(board: Board, read: anyhow::Result<String>, on_machine: bool) -> Option<Msg> {
     let selected = read.and_then(|out| {
         serde_json::from_str::<Selected>(&out).context("could not read the selection cornercase answered with")
     });
     match selected {
-        Ok(Selected { text: Some(text) }) if !text.is_empty() => Some(Msg::Copied(board, text)),
+        Ok(Selected { text: Some(text) }) => {
+            let text = if on_machine { cleaned(&text) } else { text };
+            (!text.is_empty()).then_some(Msg::Copied(board, text))
+        }
         Ok(_) => None,
         Err(e) => Some(Msg::Error(format!("{e:#}"))),
     }
@@ -84,15 +95,16 @@ impl Root {
 
     fn keep_selection(&self, pane: u64, board: Board) {
         let tx = self.tx.clone();
-        self.queue.cmd_then(read_args(pane, board), move |read| {
-            if let Some(msg) = kept(board, read) {
+        let on_machine = self.machine.is_some();
+        self.shown().queue.cmd_then(read_args(pane, board, on_machine), move |read| {
+            if let Some(msg) = kept(board, read, on_machine) {
                 let _ = tx.unbounded_send(msg);
             }
         });
     }
 
     fn select(&self, pane: u64, from: (u16, u16), to: (u16, u16)) {
-        self.queue.cmd(selection_args(pane, from, to));
+        self.shown().queue.cmd(selection_args(pane, from, to));
         self.selection_made(pane);
     }
 

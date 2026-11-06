@@ -335,3 +335,62 @@ fn a_place_in_a_project_alone_names_no_project_here() {
     assert_eq!(session.pair_of(&place), None);
     assert_eq!(session.alone_of(&place).map(|(_, there)| there.name.as_str()), Some("solo"));
 }
+
+#[test]
+fn a_place_opens_a_view_on_its_tab_at_the_size_wanted() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace::at(seen, named(seen, "notes"), Some(ThereId(16)));
+    assert_eq!(place.open_args((80, 24), false), ["view", "--cols", "80", "--rows", "24", "--tab", "16"]);
+}
+
+#[test]
+fn a_place_on_a_workspace_with_no_tab_opens_a_view_on_the_workspace() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace { tab: None, ..MachinePlace::at(seen, named(seen, "notes"), None) };
+    assert_eq!(place.open_args((80, 24), false), ["view", "--cols", "80", "--rows", "24", "--workspace", "11"]);
+}
+
+#[test]
+fn a_view_opened_behind_other_windows_starts_hidden() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace::at(seen, named(seen, "notes"), Some(ThereId(16)));
+    assert_eq!(place.open_args((80, 24), true).last().map(String::as_str), Some("--hidden"));
+}
+
+#[test]
+fn a_place_moves_a_view_to_its_tab() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace::at(seen, named(seen, "notes"), Some(ThereId(16)));
+    assert_eq!(place.focus_args(40), ["focus", "--tab", "16", "--view", "40"]);
+}
+
+#[test]
+fn a_place_is_kept_while_its_machine_is_down_even_when_its_workspace_cannot_be_seen() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace::at(seen, named(seen, "notes"), None);
+    let down = MachineSeen { name: seen.name.clone(), state: LinkState::Connecting, ..MachineSeen::default() };
+    assert_eq!(place.followed(&[down]), Some(place));
+}
+
+#[test]
+fn two_places_on_one_tab_show_the_same() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace::at(seen, named(seen, "notes"), Some(ThereId(16)));
+    let active = MachinePlace::at(seen, named(seen, "notes"), None);
+    assert!(place.shows_the_same(&place.clone()));
+    assert!(!place.shows_the_same(&active));
+}
+
+#[test]
+fn a_place_says_when_it_is_gone() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace::at(seen, named(seen, "notes"), None);
+    assert_eq!(place.gone_note(), "notes is no longer on vps");
+}

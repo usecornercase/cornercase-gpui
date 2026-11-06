@@ -17,6 +17,8 @@ pub(crate) use ghost::paint_ghost;
 use layout::{Card, Layout, PADDING};
 use moving::{Look, Stage, shrunk};
 
+const DIMMED: f32 = 0.4;
+
 #[derive(Clone)]
 pub(crate) struct Metrics {
     pub family: SharedString,
@@ -70,6 +72,7 @@ pub(crate) struct Surface<'a> {
     pub focused: bool,
     pub dim_inactive: bool,
     pub stage: &'a Stage,
+    pub dimmed: bool,
 }
 
 pub(crate) fn card(bounds: Bounds<Pixels>, colour: impl Into<Hsla>, edge: Rgba, window: &mut Window) {
@@ -111,7 +114,8 @@ fn paint_pane(pane: &PaneGrid, card: &Card, surface: &Surface<'_>, window: &mut 
     let several = surface.layout.cards.len() > 1;
     let painter = Painter { colours: &pane.colours };
     let edge = if several && pane.active { colours::edge() } else { colours::border() };
-    let fade = if fades(surface.dim_inactive, several, pane.active) { INACTIVE } else { 1. } * look.shown;
+    let dim = if surface.dimmed { DIMMED } else { 1. };
+    let fade = if fades(surface.dim_inactive, several, pane.active) { INACTIVE } else { 1. } * look.shown * dim;
     let fill_colour = painter.pane_fill().unwrap_or_else(|| colours::pane().into());
     pane_card(at.bounds, (faded(fill_colour, fade), edge), look, window);
     let (cw, lh) = (surface.metrics.cell_width, surface.metrics.line_height);
@@ -124,7 +128,7 @@ fn paint_pane(pane: &PaneGrid, card: &Card, surface: &Surface<'_>, window: &mut 
         default_bg: hsla(painter.default_bg()),
         painter,
         top_left: at.cells,
-        cursor: pane.cursor.filter(|_| pane.active || !several),
+        cursor: pane.cursor.filter(|_| !surface.dimmed && (pane.active || !several)),
         focused: surface.focused,
         fade: fade * (1. - 0.8 * look.hollow),
     };

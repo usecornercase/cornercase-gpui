@@ -133,7 +133,7 @@ impl Root {
             self.finish_rename(false, window, cx);
         }
         window.focus(&self.focus);
-        if !self.frame_shown() {
+        if !self.takes_input() {
             return;
         }
         match self.hit(event.position) {
@@ -142,7 +142,7 @@ impl Root {
                 cx.notify();
             }
             Some(Hit::Pane(id, (x, y))) => {
-                let Some(pane) = self.grid.pane(id).cloned() else { return };
+                let Some(pane) = self.shown().grid.pane(id).cloned() else { return };
                 self.press_pane(&pane, pane.clamp_cell(x, y), event, cx);
             }
             _ => {}
@@ -150,30 +150,32 @@ impl Root {
     }
 
     fn press_divider(&mut self, gap: Gap, clicks: usize) {
-        let tab = self.grid.tab;
+        let tab = self.shown().grid.tab;
         if clicks == 2 {
-            self.queue.cmd(ratio_args(tab, &gap.path, "0.5".into()));
+            self.shown().queue.cmd(ratio_args(tab, &gap.path, "0.5".into()));
             return;
         }
         self.drag = Some(Drag::Divider { tab, path: gap.path, down: gap.down, along: gap.along });
     }
 
     fn press_pane(&mut self, pane: &PaneGrid, cell: (u16, u16), event: &MouseDownEvent, cx: &mut Context<Self>) {
-        if event.button == MouseButton::Right {
+        let here = self.machine.is_none();
+        if here && event.button == MouseButton::Right {
             self.press_right(pane.pane, cell, event.position);
             return;
         }
-        if !pane.active {
-            self.focus_item("pane", pane.pane);
+        let press = press_for(event.button, pane.modes.mouse != MouseMode::None, event.modifiers.shift);
+        if !pane.active && (here || press != Press::Nothing) {
+            self.focus_on_shown("pane", pane.pane);
         }
-        if event.button == MouseButton::Left && keymap::opens_with_system(event.modifiers, Os::CURRENT) {
+        if here && event.button == MouseButton::Left && keymap::opens_with_system(event.modifiers, Os::CURRENT) {
             self.open_link(pane, cell.0, cell.1, cx);
             return;
         }
         if self.press_link(pane.pane, cell, event) {
             return;
         }
-        match press_for(event.button, pane.modes.mouse != MouseMode::None, event.modifiers.shift) {
+        match press {
             Press::Program => self.press_program(pane, cell, event.button),
             Press::Select => {
                 self.pointer.links.style = self.path_style(cx);
@@ -185,7 +187,7 @@ impl Root {
     }
 
     pub(super) fn press_program(&mut self, pane: &PaneGrid, cell: (u16, u16), button: MouseButton) {
-        self.queue.input(pane.pane, mouse("down", button_name(button), cell));
+        self.shown().queue.input(pane.pane, mouse("down", button_name(button), cell));
         let motion = matches!(pane.modes.mouse, MouseMode::ButtonMotion | MouseMode::AnyMotion);
         self.drag = Some(Drag::Program { pane: pane.pane, button, motion, cell });
     }
@@ -210,28 +212,29 @@ impl Root {
     }
 
     fn drag_to(&mut self, at: Point<Pixels>) {
+        let (grid, queue) = (self.shown().grid.clone(), self.shown().queue.clone());
         if let Some(Drag::Link { pane, cell }) = self.drag {
-            let Some(to) = drag_cell(&self.grid, &self.layout.borrow(), pane, at) else { return };
+            let Some(to) = drag_cell(&grid, &self.layout.borrow(), pane, at) else { return };
             self.drag_from_link(pane, cell, to);
         }
         let layout = self.layout.clone();
         let layout = layout.borrow();
         match &mut self.drag {
             Some(Drag::Program { pane, button, motion: true, cell: last }) => {
-                let Some(cell) = drag_cell(&self.grid, &layout, *pane, at) else { return };
+                let Some(cell) = drag_cell(&grid, &layout, *pane, at) else { return };
                 *last = cell;
-                self.queue.input(*pane, mouse("drag", button_name(*button), cell));
+                queue.input(*pane, mouse("drag", button_name(*button), cell));
             }
             Some(Drag::Select { pane, from, to }) => {
-                let Some(cell) = drag_cell(&self.grid, &layout, *pane, at) else { return };
+                let Some(cell) = drag_cell(&grid, &layout, *pane, at) else { return };
                 if cell != *to {
                     *to = cell;
-                    self.queue.coalesced("selection", selection_args(*pane, *from, cell));
+                    queue.coalesced("selection", selection_args(*pane, *from, cell));
                 }
             }
             Some(Drag::Divider { tab, path, down, along }) => {
                 let ratio = along.ratio(f32::from(if *down { at.y } else { at.x })).clamp(0.1, 0.9);
-                self.queue.coalesced("ratio", ratio_args(*tab, path, format!("{ratio:.3}")));
+                queue.coalesced("ratio", ratio_args(*tab, path, format!("{ratio:.3}")));
             }
             _ => {}
         }
@@ -246,13 +249,13 @@ impl Root {
             self.release_pane(event, window, cx);
             return;
         }
-        if event.button == MouseButton::Right {
+        if event.button == MouseButton::Right && self.machine.is_none() {
             return;
         }
         match self.drag.take() {
             Some(Drag::Program { pane, button, cell, .. }) => self.release_program(pane, button, cell, event.position),
             Some(Drag::Select { pane, from, to }) if from == to => {
-                self.queue.cmd(vec!["selection".into(), "--pane".into(), pane.to_string(), "--clear".into()]);
+                self.shown().queue.cmd(vec!["selection".into(), "--pane".into(), pane.to_string(), "--clear".into()]);
             }
             Some(Drag::Select { pane, .. }) => self.selection_made(pane),
             Some(Drag::Divider { .. }) => cx.notify(),
@@ -269,8 +272,8 @@ impl Root {
     }
 
     fn release_program(&self, pane: u64, button: MouseButton, last: (u16, u16), at: Point<Pixels>) {
-        let cell = drag_cell(&self.grid, &self.layout.borrow(), pane, at).unwrap_or(last);
-        self.queue.input(pane, mouse("up", button_name(button), cell));
+        let cell = drag_cell(&self.shown().grid, &self.layout.borrow(), pane, at).unwrap_or(last);
+        self.shown().queue.input(pane, mouse("up", button_name(button), cell));
     }
 
     pub(crate) fn on_scroll(&mut self, event: &ScrollWheelEvent, _window: &mut Window, cx: &mut Context<Self>) {
@@ -283,15 +286,18 @@ impl Root {
             return;
         }
         self.pointer.scroll_rest -= whole_lines;
+        if !self.takes_input() {
+            return;
+        }
         let Some((pane, at)) = self.wheel_target(event.position) else { return };
         self.scroll_pane(&pane, at, whole_lines);
     }
 
     fn wheel_target(&self, position: Point<Pixels>) -> Option<(PaneGrid, (i32, i32))> {
         if let Some(Hit::Pane(id, at)) = self.hit(position) {
-            return self.grid.pane(id).map(|pane| (pane.clone(), at));
+            return self.shown().grid.pane(id).map(|pane| (pane.clone(), at));
         }
-        let pane = self.grid.active_pane()?.clone();
+        let pane = self.shown().grid.active_pane()?.clone();
         let at = self.cell_in(pane.pane, position)?;
         Some((pane, at))
     }
@@ -302,12 +308,12 @@ impl Root {
         let rows = if up { i64::from(steps) } else { -i64::from(steps) };
         let Some(event) = wheel_event(pane, at, up) else {
             if !pane.modes.alternate_screen {
-                self.queue.scroll(pane.pane, rows);
+                self.shown().queue.scroll(pane.pane, rows);
             }
             return;
         };
         for _ in 0..steps {
-            self.queue.input(pane.pane, event.clone());
+            self.shown().queue.input(pane.pane, event.clone());
         }
     }
 
@@ -328,7 +334,7 @@ impl Root {
             return;
         }
         let (tx, remote) = (self.tx.clone(), self.host.is_some());
-        self.queue.cmd_then(link_args(pane.pane, (x, y)), move |r| {
+        self.own.queue.cmd_then(link_args(pane.pane, (x, y)), move |r| {
             let Some(path) = r.ok().and_then(|out| Link::parse(&out)).map(|link| link.path) else {
                 let _ = tx.unbounded_send(Msg::Error("No link under the pointer".into()));
                 return;

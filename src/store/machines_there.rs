@@ -100,7 +100,7 @@ impl Store {
         self.ask_machine_home(&place.machine, cx);
         self.machine_place = Some(place);
         self.file_full_screen = false;
-        cx.notify();
+        self.give_keys_back(cx);
     }
 
     pub(crate) fn leave_machine_place(&mut self, cx: &mut Context<Self>) {
@@ -110,10 +110,21 @@ impl Store {
         }
     }
 
-    pub(crate) fn follow_machines(&mut self) {
+    pub(crate) fn follow_machines(&mut self, cx: &mut Context<Self>) {
         let Some(session) = &self.session else { return };
-        self.machine_place = self.machine_place.as_ref().and_then(|place| place.followed(&session.machines));
-        self.jobs.keep_leaving_there(|aim| sighted(&session.machines, aim).is_ok());
+        let followed = self.machine_place.as_ref().and_then(|place| place.followed(&session.machines));
+        let gone = self
+            .machine_place
+            .as_ref()
+            .filter(|_| followed.is_none())
+            .map(|place| (!self.machine_leaving(&place.aim())).then(|| place.gone_note()));
+        self.machine_place = followed;
+        if let Some(session) = &self.session {
+            self.jobs.keep_leaving_there(|aim| sighted(&session.machines, aim).is_ok());
+        }
+        if let Some(text) = gone.flatten() {
+            self.toast(text, ToastKind::Info, cx);
+        }
     }
 
     fn place_of_notice(&self, there: &NoticeThere) -> Option<MachinePlace> {

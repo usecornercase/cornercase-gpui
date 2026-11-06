@@ -89,7 +89,8 @@ fn listen(root: &Entity<Root>, window: &mut Window) {
 
 impl Root {
     pub(super) fn hover_handle(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
-        let near = if self.frame_shown() { moving::near_top(&self.layout.borrow(), at) } else { None };
+        let here = self.frame_shown() && self.machine.is_none();
+        let near = if here { moving::near_top(&self.layout.borrow(), at) } else { None };
         if self.moves.borrow_mut().hover(near) {
             cx.notify();
         }
@@ -138,7 +139,7 @@ impl Root {
         let release = {
             let mut moves = self.moves.borrow_mut();
             moves.drag(event.position, &self.layout.borrow(), now);
-            moves.release(self.grid.layout.clone(), now)
+            moves.release(self.own.grid.layout.clone(), now)
         };
         match release {
             Release::Click(press) => self.pane_clicked(press, event.position, window, cx),
@@ -162,13 +163,13 @@ impl Root {
                 let entries = self.pane_menu(press.pane, press.cell, cx);
                 self.open_menu(at, entries, window, cx);
             }
-        } else if self.grid.pane(press.pane).is_some_and(|pane| !pane.active) {
+        } else if self.own.grid.pane(press.pane).is_some_and(|pane| !pane.active) {
             self.focus_item("pane", press.pane);
         }
     }
 
     pub(super) fn move_pane(&mut self, pane: u64, aim: Aim, cx: &mut Context<Self>) {
-        self.moves.borrow_mut().expect(pane, self.grid.layout.clone(), Instant::now());
+        self.moves.borrow_mut().expect(pane, self.own.grid.layout.clone(), Instant::now());
         send_move(pane, aim, cx);
     }
 
@@ -193,7 +194,7 @@ impl Root {
             return None;
         }
         let (moves, layout, grid, metrics) =
-            (self.moves.clone(), self.layout.clone(), self.grid.clone(), metrics.clone());
+            (self.moves.clone(), self.layout.clone(), self.own.grid.clone(), metrics.clone());
         let ghost = canvas(
             |_, _, _| {},
             move |_, (), window, cx| {

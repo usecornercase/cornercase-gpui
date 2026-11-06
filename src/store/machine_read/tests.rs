@@ -87,3 +87,26 @@ fn without_the_machines_home_the_folder_shows_whole() {
     let read = read_of(&MachinePlace::at(&seen, ws, None), &seen, &Target::Local, &listed(), None);
     assert_eq!(read.folder, "/home/ana/code/main");
 }
+
+fn place_then(later: &MachineSeen) -> MachineRead {
+    let picked = seen(LinkState::Linked);
+    let ws = picked.workspace(ThereId::heard(7)).expect("a workspace");
+    read_of(&MachinePlace::at(&picked, ws, None), later, &Target::Local, &listed(), None)
+}
+
+#[test]
+fn a_place_the_snapshot_no_longer_lists_keeps_its_own_name() {
+    let emptied = MachineSeen { projects: Vec::new(), ..seen(LinkState::Connecting) };
+    assert_eq!(place_then(&emptied).place, "main");
+}
+
+#[test]
+fn the_numbers_of_another_run_do_not_name_a_place_kept_while_the_link_is_down() {
+    let projects = vec![ThereProject {
+        name: "other".into(),
+        workspaces: vec![workspace(7, "another")],
+        ..ThereProject::default()
+    }];
+    let restarted = MachineSeen { boot: "b2".into(), projects, ..seen(LinkState::Unreachable) };
+    assert_eq!(place_then(&restarted).place, "main");
+}

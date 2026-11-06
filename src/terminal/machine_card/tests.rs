@@ -27,7 +27,7 @@ fn machine(state: LinkState, panes: Vec<PaneInfo<ThereId>>) -> MachineSeen {
 
 fn text_of(seen: &MachineSeen, home: Option<&str>) -> CardText {
     let ws = seen.workspace(ThereId::heard(1)).expect("the workspace");
-    card_text(&MachinePlace::at(seen, ws, None), seen, home)
+    card_text(&MachinePlace::at(seen, ws, None), seen, home, &Standing::Connecting)
 }
 
 #[test]
@@ -78,4 +78,53 @@ fn while_down_the_card_says_the_agent_keeps_working_there() {
 fn while_down_the_card_of_a_shell_says_its_shells_keep_running() {
     let text = text_of(&machine(LinkState::Unreachable, Vec::new()), None);
     assert_eq!(text.line, "its shells keep running there");
+}
+
+fn standing_on(state: LinkState, standing: &Standing) -> CardText {
+    let seen = machine(state, vec![agent(3, Some("working"), true)]);
+    let ws = seen.workspace(ThereId::heard(1)).expect("the workspace");
+    card_text(&MachinePlace::at(&seen, ws, None), &seen, None, standing)
+}
+
+#[test]
+fn the_card_says_it_connects_until_the_first_frame() {
+    let text = standing_on(LinkState::Linked, &Standing::Connecting);
+    assert_eq!(text.state, Some(CardState::Running("connecting…".to_string())));
+}
+
+#[test]
+fn the_card_over_a_link_that_fell_says_it_reconnects() {
+    let text = standing_on(LinkState::Unreachable, &Standing::Reconnecting);
+    assert_eq!(text.title, "vps unreachable");
+    assert_eq!(text.line, "claude keeps working there");
+    assert_eq!(text.state, Some(CardState::Running("reconnecting…".to_string())));
+}
+
+#[test]
+fn the_card_over_a_stream_that_fell_counts_down() {
+    let text = standing_on(LinkState::Linked, &Standing::RetryIn(4, Some("ssh: refused".to_string())));
+    assert_eq!(text.title, "runs on vps");
+    assert_eq!(text.state, Some(CardState::Said("reconnecting in 4 s".to_string())));
+    assert_eq!(text.why.as_deref(), Some("ssh: refused"));
+}
+
+#[test]
+fn the_card_says_when_no_tab_is_open_there() {
+    let text = standing_on(LinkState::Linked, &Standing::NoTab);
+    assert_eq!(text.line, "no tab is open there");
+    assert_eq!(text.state, None);
+}
+
+#[test]
+fn the_card_of_a_window_on_another_server_says_what_it_needs() {
+    let text = standing_on(LinkState::Linked, &Standing::Elsewhere("why".to_string()));
+    assert_eq!(text.line, format!("its tab needs this window on this {}", desktop::here()));
+    assert_eq!(text.state, Some(CardState::Said("why".to_string())));
+}
+
+#[test]
+fn the_card_of_an_older_machine_waits_on_a_person_and_promises_nothing() {
+    let text = standing_on(LinkState::Older, &Standing::Reconnecting);
+    assert_eq!(text.title, "vps runs an older cornercase");
+    assert_eq!(text.state, None);
 }

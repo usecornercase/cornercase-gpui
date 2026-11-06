@@ -55,10 +55,11 @@ fn read_of(
     list: &[Machine],
     home: Option<&str>,
 ) -> MachineRead {
+    let listed = seen.place_name(place.workspace).filter(|_| seen.boot == place.boot);
     MachineRead {
         aim: place.aim(),
         icon: seen.icon,
-        place: seen.place_name(place.workspace).unwrap_or_default(),
+        place: listed.unwrap_or_else(|| place.name().to_string()),
         path: place.path().to_string(),
         folder: home.map_or_else(|| place.path().to_string(), |home| paths::home_relative(place.path(), home)),
         reach: reach(window, list, seen),
