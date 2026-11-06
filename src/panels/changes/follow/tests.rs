@@ -131,3 +131,79 @@ fn another_destination_is_another_place_to_read() {
     let read = MachineRead { destination: "ana@other.example.com".into(), ..read(Reach::Up(on_machine())) };
     assert_ne!(shown_whose(None, Some(&read)), Some(on_vps()));
 }
+
+fn up() -> MachineRead {
+    read(Reach::Up(on_machine()))
+}
+
+fn not_yet() -> Result<Target, String> {
+    Err("vps has not answered yet".to_string())
+}
+
+fn hearing_the_machine() -> Hearing {
+    let mut hearing = Hearing::default();
+    hearing.start_over();
+    hearing.opened(Some(on_machine()));
+    hearing.believed();
+    hearing
+}
+
+#[test]
+fn a_stream_that_said_its_boot_lets_the_machine_be_read() {
+    assert_eq!(hearing_the_machine().may_read(&up()), Ok(on_machine()));
+}
+
+#[test]
+fn a_new_stream_has_said_nothing_yet() {
+    let mut hearing = Hearing::default();
+    hearing.start_over();
+    hearing.opened(Some(on_machine()));
+    assert_eq!(hearing.may_read(&up()), not_yet());
+}
+
+#[test]
+fn a_machine_down_and_back_is_not_read_before_it_says_its_boot() {
+    let mut hearing = hearing_the_machine();
+    hearing.start_over();
+    hearing.opened(None);
+    assert_eq!(hearing.may_read(&read(Reach::Down("vps unreachable".into()))), Err("vps unreachable".to_string()));
+    hearing.start_over();
+    hearing.opened(Some(on_machine()));
+    assert_eq!(hearing.may_read(&up()), not_yet());
+    hearing.believed();
+    assert_eq!(hearing.may_read(&up()), Ok(on_machine()));
+}
+
+#[test]
+fn closing_and_opening_the_panel_is_not_read_before_it_says_its_boot() {
+    let mut hearing = hearing_the_machine();
+    hearing.start_over();
+    hearing.opened(None);
+    hearing.start_over();
+    hearing.opened(Some(on_machine()));
+    assert_eq!(hearing.may_read(&up()), not_yet());
+    hearing.believed();
+    assert_eq!(hearing.may_read(&up()), Ok(on_machine()));
+}
+
+#[test]
+fn a_restart_seen_before_closing_the_panel_still_holds_after_opening_it() {
+    let mut hearing = hearing_the_machine();
+    hearing.ended("vps restarted".into(), Instant::now());
+    hearing.start_over();
+    hearing.opened(None);
+    hearing.start_over();
+    hearing.opened(Some(on_machine()));
+    assert!(hearing.may_read(&up()).is_err());
+}
+
+#[test]
+fn a_stream_that_ended_is_not_read_until_another_says_its_boot() {
+    let mut hearing = hearing_the_machine();
+    hearing.ended("ssh: connection refused".into(), Instant::now());
+    assert_eq!(hearing.may_read(&up()), Err("vps did not answer".to_string()));
+    hearing.opened(Some(on_machine()));
+    assert_eq!(hearing.may_read(&up()), Err("vps did not answer".to_string()));
+    hearing.believed();
+    assert_eq!(hearing.may_read(&up()), Ok(on_machine()));
+}

@@ -35,6 +35,14 @@ impl Machine {
         assert_eq!(asked.len(), 1, "one command per question");
         asked[0].clone()
     }
+
+    fn asked_which_run_first(&self) -> (Target, Vec<String>) {
+        let asked = self.asked.borrow();
+        assert_eq!(asked.len(), 2, "which run, then the question");
+        assert_eq!(asked[0].1[..4], ["files", "list", "--workspace", "7"]);
+        assert_eq!(asked[0].1.last().map(String::as_str), Some("."));
+        asked[1].clone()
+    }
 }
 
 fn down(_: &Target, _: &[String]) -> Result<String> {
@@ -118,7 +126,7 @@ fn the_margin_of_a_machines_file_is_asked_of_the_machine() {
     let machine = Machine::answering(fixture!("changes/file.json"));
     let gutter = there().gutter_with(&|t, a| Ok(machine.ask(t, a)), Path::new("a.txt"));
     assert!(gutter.is_some());
-    let (asked_on, args) = machine.only_request();
+    let (asked_on, args) = machine.asked_which_run_first();
     assert_eq!(asked_on, target());
     assert_eq!(args, ["changes", "file", "--workspace", "7", "--json", "--", "a.txt"]);
 }
@@ -138,7 +146,7 @@ fn a_search_goes_to_the_machine_with_its_mode_and_never_walks_here() {
     let machine = Machine::answering(fixture!("files/search-names.json"));
     let results = there().search_with(&|t, a| Ok(machine.ask(t, a)), "main", Mode::Names);
     assert!(matches!(results, Results::Names(_)));
-    let (asked_on, args) = machine.only_request();
+    let (asked_on, args) = machine.asked_which_run_first();
     assert_eq!(asked_on, target());
     assert_eq!(args[..5], ["files", "search", "--workspace", "7", "--names"]);
 }
@@ -274,4 +282,19 @@ fn a_search_left_behind_is_not_asked_again_when_the_machine_comes_back() {
     search.refused = true;
     search.forget();
     assert!(!search.refused);
+}
+
+#[test]
+fn a_search_is_not_asked_of_a_server_that_restarted_since_its_answer_could_not_say() {
+    let machine = Machine::answering(r#"{"boot":"99-1","folders":[]}"#);
+    let results = there().search_with(&|t, a| Ok(machine.ask(t, a)), "main", Mode::Names);
+    assert!(matches!(&results, Results::Failed(why) if why == "vps restarted"));
+    assert_eq!(machine.only_request().1[1], "list");
+}
+
+#[test]
+fn a_margin_is_not_asked_of_a_server_that_restarted_since_its_answer_could_not_say() {
+    let machine = Machine::answering(r#"{"boot":"99-1","folders":[]}"#);
+    assert!(there().gutter_with(&|t, a| Ok(machine.ask(t, a)), Path::new("a.txt")).is_none());
+    assert_eq!(machine.only_request().1[1], "list");
 }

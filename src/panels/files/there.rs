@@ -102,13 +102,19 @@ impl There {
         served::stamp_in(&self.asked(ask, &args).ok()?, &name)
     }
 
+    fn same_run(&self, ask: Ask<'_>) -> Result<()> {
+        let root = served::arg(Path::new(""));
+        self.asked(ask, &served::files_args("list", &self.workspace, &[], [root])).map(drop)
+    }
+
     fn gutter_with(&self, ask: Ask<'_>, rel: &Path) -> Option<Gutter> {
+        self.same_run(ask).ok()?;
         Gutter::parse(&self.asked(ask, &served::changes_args(&self.workspace, rel)).ok()?)
     }
 
     fn search_with(&self, ask: Ask<'_>, query: &str, mode: Mode) -> Results {
         let args = served::files_args("search", &self.workspace, &[served::mode_flag(mode)], [query.to_string()]);
-        served::results(mode, self.asked(ask, &args))
+        served::results(mode, self.same_run(ask).and_then(|()| self.asked(ask, &args)))
     }
 
     pub(super) fn list(&self, folders: Vec<PathBuf>) -> Listed {

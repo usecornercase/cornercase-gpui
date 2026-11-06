@@ -4,7 +4,6 @@ use std::rc::Rc;
 use gpui::{Context, ListOffset, px};
 
 use crate::cli::{self, Target};
-use crate::panels::on_machine;
 use crate::store::{self, Busy, Store, ToastKind, args};
 
 use super::pieces::{find, looks, parse, toast};
@@ -42,7 +41,7 @@ impl ChangesPanel {
             return Ok(cli::target());
         }
         let Some(read) = &self.on_machine else { return Err("that machine is no longer shown".to_string()) };
-        on_machine::may_ask(read, &self.retry)
+        self.hearing.may_read(read)
     }
 
     fn patch_failed(&mut self, error: &anyhow::Error, cx: &mut Context<Self>) {

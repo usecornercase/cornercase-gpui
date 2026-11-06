@@ -1,16 +1,49 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gpui::Context;
 
 use crate::cli::{self, Stream, Target};
 use crate::model::Session;
 use crate::panels::PanelKind;
-use crate::panels::on_machine::Retry;
+use crate::panels::on_machine::{self, Retry};
 use crate::store::{self, MachineRead, Store, args};
 
 use super::pieces::find;
 use super::wire::{self, State, Summary};
 use super::{ChangesPanel, Follow, Scope, Whose};
+
+#[derive(Debug, Default)]
+pub(super) struct Hearing {
+    on: Option<Target>,
+    pub(super) retry: Retry,
+    boot_heard: bool,
+}
+
+impl Hearing {
+    fn start_over(&mut self) {
+        self.retry = Retry::default();
+    }
+
+    fn opened(&mut self, on: Option<Target>) {
+        self.on = on;
+        self.boot_heard = false;
+    }
+
+    fn ended(&mut self, why: String, now: Instant) -> Duration {
+        self.boot_heard = false;
+        self.retry.failed(why, now)
+    }
+
+    fn believed(&mut self) -> bool {
+        self.boot_heard = true;
+        self.retry.heard()
+    }
+
+    pub(super) fn may_read(&self, read: &MachineRead) -> Result<Target, String> {
+        let target = on_machine::may_ask(read, &self.retry)?;
+        if self.boot_heard { Ok(target) } else { Err(format!("{} has not answered yet", read.aim.machine)) }
+    }
+}
 
 fn list_args(follow: &Follow) -> Vec<String> {
     let mut a = args(&["changes", "list", "--follow"]);
@@ -80,8 +113,8 @@ impl ChangesPanel {
         let want = if docked { self.wanted_follow(shown) } else { None };
         if want != self.follow {
             self.restart(want, cx);
-        } else if self.wanted_target() != self.stream_on {
-            self.retry = Retry::default();
+        } else if self.wanted_target() != self.hearing.on {
+            self.hearing.start_over();
             self.open_stream(cx);
         }
     }
@@ -101,20 +134,20 @@ impl ChangesPanel {
         self.follow = follow;
         self.summary = None;
         self.ended = None;
-        self.retry = Retry::default();
+        self.hearing.start_over();
         self.open_stream(cx);
     }
 
     fn open_stream(&mut self, cx: &mut Context<Self>) {
         self.stream = None;
         self.stream_generation += 1;
-        self.stream_on = self.wanted_target();
+        self.hearing.opened(self.wanted_target());
         self.stream = self.follow_now(cx);
         cx.notify();
     }
 
     fn follow_now(&self, cx: &mut Context<Self>) -> Option<Stream> {
-        let (follow, target) = (self.follow.as_ref()?, self.stream_on.as_ref()?);
+        let (follow, target) = (self.follow.as_ref()?, self.hearing.on.as_ref()?);
         let generation = self.stream_generation;
         store::follow_on(
             cx,
@@ -146,7 +179,7 @@ impl ChangesPanel {
 
     fn try_again_later(&mut self, why: String, cx: &mut Context<Self>) {
         let generation = self.stream_generation;
-        let wait = self.retry.failed(why, Instant::now());
+        let wait = self.hearing.ended(why, Instant::now());
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(wait).await;
             let _ = this.update(cx, |this, cx| this.reopen(generation, cx));
@@ -166,7 +199,7 @@ impl ChangesPanel {
             self.server_moved_on(cx);
             return;
         }
-        let heard = self.retry.heard();
+        let heard = self.hearing.believed();
         if self.reads_machine() && self.summary.is_some() && only_starting(&summary) {
             if heard {
                 cx.notify();

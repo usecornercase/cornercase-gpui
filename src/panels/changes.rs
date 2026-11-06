@@ -20,9 +20,9 @@ use gpui::{
     prelude::FluentBuilder as _, px, relative,
 };
 
-use crate::cli::{Stream, Target};
+use crate::cli::Stream;
 use crate::model::{Aim, Session};
-use crate::panels::on_machine::{self, Retry};
+use crate::panels::on_machine;
 use crate::store::{MachineRead, Store};
 use crate::ui::selection::Selecting;
 use crate::ui::split::{self, Edge, Split};
@@ -128,10 +128,9 @@ pub(crate) struct ChangesPanel {
     project_mode: Mode,
     shown: Option<Whose>,
     on_machine: Option<MachineRead>,
-    retry: Retry,
+    hearing: follow::Hearing,
     follow: Option<Follow>,
     stream: Option<Stream>,
-    stream_on: Option<Target>,
     stream_generation: u64,
     summary: Option<Summary>,
     ended: Option<String>,
@@ -157,10 +156,9 @@ impl ChangesPanel {
             project_mode: Mode::Uncommitted,
             shown: None,
             on_machine: None,
-            retry: Retry::default(),
+            hearing: follow::Hearing::default(),
             follow: None,
             stream: None,
-            stream_on: None,
             stream_generation: 0,
             summary: None,
             ended: None,
@@ -211,7 +209,7 @@ impl ChangesPanel {
     }
 
     fn machine_note(&self) -> Option<on_machine::Note> {
-        on_machine::note(self.machine_shown()?, &self.retry)
+        on_machine::note(self.machine_shown()?, &self.hearing.retry)
     }
 
     fn whose_row(&self, listed: u64) -> Whose {
@@ -257,7 +255,7 @@ impl Render for ChangesPanel {
             .flex()
             .flex_col()
             .text_size(px(12.))
-            .children(self.machine_shown().map(|read| on_machine::strip(read, &self.retry)))
+            .children(self.machine_shown().map(|read| on_machine::strip(read, &self.hearing.retry)))
             .child(self.render_header(session, window, cx))
             .child(self.render_body(session, cx))
             .child(self.render_footer())
