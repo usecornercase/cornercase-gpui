@@ -147,6 +147,7 @@ Code: `src/terminal/pane_drag.rs` (the handle, pressing, dragging, dropping), `s
 
 - **One menu for the whole window**: a right click or a row's `⋯` opens it at the pointer, drawn over everything (deferred, snapped inside the window). Escape, a click outside or any entry closes it, and focus returns to the terminal.
 - **A submenu takes the menu's place**, as the TUI's *move to group* does, instead of opening beside it: no hover timing, and it fits a narrow window.
+- **A heading names what follows** (`Entry::Heading`, a plugin's name over its entries, `design/plugins.md`): the keys skip it, as they do a line, and it takes no click.
 - **Separators come from optional entries left out**, so the menu drops separators at either end and doubled ones rather than every caller checking.
 - **An entry runs on the window after the menu has closed**, so it can open a dialog or another menu.
 - Entries that stop or remove something are red (`danger`).

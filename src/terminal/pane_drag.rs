@@ -159,7 +159,7 @@ impl Root {
     fn pane_clicked(&mut self, press: Press, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         if press.grip == Grip::Right {
             if matches!(self.hit(at), Some(Hit::Pane(pane, _)) if pane == press.pane) {
-                let entries = self.pane_menu(press.pane, press.cell);
+                let entries = self.pane_menu(press.pane, press.cell, cx);
                 self.open_menu(at, entries, window, cx);
             }
         } else if self.grid.pane(press.pane).is_some_and(|pane| !pane.active) {

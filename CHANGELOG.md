@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.8
+
+- **Plugins reach the menus and the rail.** What a plugin offers for a project, a workspace, a tab or a pane shows at the bottom of that row's `⋯` and right-click menu, and of a pane's right-click menu, under the plugin's name. A plugin with a button gets a slot in the rail, after the docked panels: with one action a click runs it, with several it opens a menu of them. How it ended comes back as a toast and a popup opens over the terminal, as from the Plugins sheet. For now a button acts on what cornercase's own window shows and a popup needs that window open (usecornercase/cornercase-terminal#666); the slot's tooltip and the sheet say so.
+- A plugin's action that fails now says how (`exit status: 3`) and points at its log, where it only said `cornercase plugin: failed`. Closing a plugin's popup with its `✕` no longer shows an error.
+
 ## 0.1.7
 
 - Routines in the Queue: schedule an agent or a flow to start again and again, every so many minutes, hours, days or weeks, every day, every weekday or on a day of the week. Each run gets a fresh worktree from the up-to-date default branch and can remove its workspace when it finishes, if nothing would be lost. A routine shows its next time and its last runs, with why a run failed or kept its workspace, and you can pause it, resume it, start it now, edit it, or remove it with its runs and undo that. It only runs while cornercase's server runs, and only git repositories can have routines.

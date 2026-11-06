@@ -24,3 +24,10 @@ fn the_keys_wrap_around_the_menu() {
 fn a_menu_of_separators_has_nothing_to_choose() {
     assert_eq!(step(&[Entry::Separator], None, true), None);
 }
+
+#[test]
+fn the_keys_skip_a_plugins_name() {
+    let entries = vec![item("Close", |_, _, _| {}), Entry::Heading("Notes".into()), item("Say", |_, _, _| {})];
+    assert_eq!(step(&entries, Some(0), true), Some(2));
+    assert_eq!(step(&entries, Some(2), false), Some(0));
+}

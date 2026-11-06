@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
-    ParentElement, Pixels, Point, SharedString, Stateful, StatefulInteractiveElement, Styled, Window, anchored,
-    deferred, div, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Div, FocusHandle, FontWeight, InteractiveElement, IntoElement, KeyDownEvent,
+    MouseButton, ParentElement, Pixels, Point, SharedString, Stateful, StatefulInteractiveElement, Styled, Window,
+    anchored, deferred, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::Root;
@@ -22,6 +22,7 @@ pub(crate) type Action = Rc<dyn Fn(&mut Root, &mut Window, &mut Context<Root>)>;
 pub(crate) enum Entry {
     Item { label: SharedString, action: Action, danger: bool },
     Submenu { label: SharedString, entries: Vec<Entry> },
+    Heading(SharedString),
     Separator,
 }
 pub(crate) fn item(
@@ -150,7 +151,7 @@ impl Root {
                     menu.highlight = step(&menu.entries, None, true);
                 }
             }
-            Entry::Separator => {}
+            Entry::Heading(_) | Entry::Separator => {}
         }
     }
 
@@ -194,6 +195,7 @@ fn menu_entry(index: usize, entry: Entry, highlighted: bool, cx: &mut Context<Ro
     let id = SharedString::from(format!("menu-{index}"));
     match entry {
         Entry::Separator => div().mx(px(10.)).my(px(4.)).h(px(1.)).bg(colours::border()).into_any_element(),
+        Entry::Heading(label) => menu_heading(label).into_any_element(),
         Entry::Item { label, action, danger } => menu_row(id, label, false, (highlighted, danger))
             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                 this.close_menu(window, cx);
@@ -204,6 +206,18 @@ fn menu_entry(index: usize, entry: Entry, highlighted: bool, cx: &mut Context<Ro
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_submenu(&entries, cx)))
             .into_any_element(),
     }
+}
+
+fn menu_heading(label: SharedString) -> Div {
+    div()
+        .px(px(10.))
+        .pt(px(3.))
+        .pb(px(2.))
+        .text_size(px(11.))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(colours::muted())
+        .whitespace_nowrap()
+        .child(label)
 }
 
 pub(crate) fn menu_row(

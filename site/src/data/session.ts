@@ -148,6 +148,6 @@ export const SHEETS: { name: string; file: string; keys: string[]; line: string 
   { name: 'Processes', file: 'processes', keys: ['shift', 'cmd', 'M'], line: 'What every pane runs, its CPU and memory.' },
   { name: 'Ports', file: 'ports', keys: ['shift', 'cmd', 'O'], line: 'What listens, to open it or stop it.' },
   { name: 'Worktrees', file: 'worktrees', keys: ['shift', 'cmd', 'T'], line: 'Every worktree on disk, and what is safe to remove.' },
-  { name: 'Plugins', file: 'plugins', keys: ['shift', 'cmd', 'X'], line: 'Install them, link your own, run them.' },
+  { name: 'Plugins', file: 'plugins', keys: ['shift', 'cmd', 'X'], line: 'Install them, link your own, run them from the menus and the rail.' },
   { name: 'Settings', file: 'settings', keys: ['cmd', ','], line: 'All of cornercase, in one form.' },
 ];

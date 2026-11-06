@@ -19,7 +19,7 @@ use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop::{self, Board};
 use crate::model::{Frame, Grid, Project, Session, Workspace};
 use crate::notify::{self, Notifier};
-use crate::panels::PanelKind;
+use crate::panels::{PanelKind, plugins};
 use crate::platform::Os;
 use crate::render::Metrics;
 use crate::render::layout::{Along, Layout};
@@ -379,6 +379,7 @@ impl Root {
             Err(e) => self.lost(e.to_string(), cx),
         }
         self.store.update(cx, Store::follow_app);
+        self.store.update(cx, |_, cx| plugins::read_offers(cx));
     }
 
     fn lost(&mut self, why: String, cx: &mut Context<Self>) {

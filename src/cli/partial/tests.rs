@@ -1,4 +1,4 @@
-use super::answer;
+use super::{answer, printed};
 
 #[test]
 fn a_partial_answer_keeps_its_output() {
@@ -21,4 +21,21 @@ fn an_error_drops_its_output_and_names_the_command() {
 fn an_error_without_text_still_says_it_failed() {
     let err = answer("start", None, b"", b"").expect_err("killed by a signal");
     assert_eq!(err.to_string(), "cornercase start: failed");
+}
+
+#[test]
+fn a_failure_that_printed_its_outcome_keeps_it() {
+    let out = printed("plugin", Some(1), b"{\"error\":\"exit status: 3\"}", b"").expect("an outcome");
+    assert_eq!(out, "{\"error\":\"exit status: 3\"}");
+}
+
+#[test]
+fn a_refusal_that_printed_nothing_is_an_error() {
+    let err = printed("plugin", Some(1), b"", b"Error: no window is attached\n").expect_err("a refusal");
+    assert_eq!(err.to_string(), "cornercase plugin: no window is attached");
+}
+
+#[test]
+fn a_success_that_printed_nothing_is_no_error() {
+    assert_eq!(printed("plugin", Some(0), b"", b"").expect("an answer"), "");
 }

@@ -1,0 +1,14 @@
+{
+  "action": "board",
+  "code": null,
+  "context": "tab",
+  "ended": "closed",
+  "error": "the popup was closed",
+  "log": "/home/ana/.local/state/cornercase/plugins/state/acme.notes/plugin.log",
+  "ms": 1466,
+  "plugin": "acme.notes",
+  "project": 4,
+  "signal": null,
+  "tab": 2,
+  "workspace": 3
+}

@@ -1,0 +1,173 @@
+{
+  "plugins": [
+    {
+      "button": {
+        "actions": [
+          "board",
+          "tally"
+        ],
+        "icon": "✎",
+        "title": "Notes board"
+      },
+      "enabled": true,
+      "error": null,
+      "id": "acme.notes",
+      "label": "Notes 0.1.0",
+      "log": "/home/ana/.local/state/cornercase/plugins/state/acme.notes/plugin.log",
+      "manifest": {
+        "actions": [
+          {
+            "command": [
+              "bin/say"
+            ],
+            "contexts": [
+              "project",
+              "workspace",
+              "tab",
+              "pane"
+            ],
+            "id": "say",
+            "placement": "job",
+            "title": "Say where"
+          },
+          {
+            "command": [
+              "bin/fail"
+            ],
+            "contexts": [
+              "pane",
+              "workspace"
+            ],
+            "id": "fail",
+            "placement": "job",
+            "title": "Fail on purpose"
+          },
+          {
+            "command": [
+              "bin/board"
+            ],
+            "contexts": [
+              "button",
+              "tab"
+            ],
+            "height": 12,
+            "id": "board",
+            "placement": "popup",
+            "title": "Open board",
+            "width": 60
+          },
+          {
+            "command": [
+              "bin/say"
+            ],
+            "contexts": [
+              "button"
+            ],
+            "id": "tally",
+            "placement": "job",
+            "title": "Tally"
+          }
+        ],
+        "api": 1,
+        "button": {
+          "icon": "✎",
+          "title": "Notes board"
+        },
+        "description": "Say where it ran",
+        "events": [],
+        "id": "acme.notes",
+        "min_cornercase": "0.12.187",
+        "name": "Notes",
+        "permissions": [],
+        "platforms": [],
+        "service": [],
+        "version": "0.1.0",
+        "window": []
+      },
+      "note": "Say where it ran",
+      "services": [],
+      "source": {
+        "kind": "link",
+        "path": "/home/ana/code/plugins/notes"
+      },
+      "state": "on"
+    },
+    {
+      "button": {
+        "actions": [
+          "go"
+        ],
+        "icon": "D",
+        "title": "Deploy"
+      },
+      "enabled": true,
+      "error": null,
+      "id": "acme.deploy",
+      "label": "Deploy 0.2.0",
+      "log": "/home/ana/.local/state/cornercase/plugins/state/acme.deploy/plugin.log",
+      "manifest": {
+        "actions": [
+          {
+            "command": [
+              "bin/go"
+            ],
+            "contexts": [
+              "button",
+              "workspace"
+            ],
+            "id": "go",
+            "placement": "job",
+            "title": "Deploy now"
+          }
+        ],
+        "api": 1,
+        "description": "One button, one action",
+        "events": [],
+        "id": "acme.deploy",
+        "min_cornercase": "0.12.187",
+        "name": "Deploy",
+        "permissions": [],
+        "platforms": [],
+        "service": [],
+        "version": "0.2.0",
+        "window": []
+      },
+      "note": "One button, one action",
+      "services": [],
+      "source": {
+        "kind": "link",
+        "path": "/home/ana/code/plugins/deploy"
+      },
+      "state": "on"
+    },
+    {
+      "enabled": true,
+      "error": null,
+      "id": "acme.quiet",
+      "label": "Quiet 0.2.0",
+      "log": "/home/ana/.local/state/cornercase/plugins/state/acme.quiet/plugin.log",
+      "manifest": {
+        "actions": [],
+        "api": 1,
+        "description": "No menus, no button",
+        "events": [],
+        "id": "acme.quiet",
+        "name": "Quiet",
+        "permissions": [],
+        "platforms": [],
+        "service": [],
+        "version": "0.2.0",
+        "window": []
+      },
+      "note": "No menus, no button",
+      "services": [],
+      "source": {
+        "kind": "link",
+        "path": "/home/ana/code/plugins/quiet"
+      },
+      "state": "on"
+    }
+  ],
+  "problem": null,
+  "revision": 2
+}

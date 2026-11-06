@@ -10,6 +10,7 @@ use crate::desktop;
 use crate::model::Session;
 use crate::model::machines::{self, Machine};
 use crate::panels::PanelKind;
+use crate::panels::plugins::Offers;
 use crate::prefs::{self, Prefs};
 
 mod jobs;
@@ -34,6 +35,7 @@ pub(crate) struct Store {
     pub prefs: Prefs,
     pub started_run_in: Option<u64>,
     pub jobs: Jobs,
+    pub plugins: Offers,
     pub keys_to_terminal: bool,
     next_toast: u64,
     app_stream: Option<Stream>,
@@ -102,6 +104,7 @@ impl Store {
             prefs: prefs::load(),
             started_run_in: None,
             jobs: Jobs::default(),
+            plugins: Offers::default(),
             keys_to_terminal: false,
             next_toast: 1,
             app_stream: None,
