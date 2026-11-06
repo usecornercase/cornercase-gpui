@@ -1,7 +1,9 @@
+use std::cmp::Ordering;
+
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use super::model::{FlowInfo, project_args};
+use super::model::{FlowInfo, FlowSpec, project_args};
 use crate::store::args;
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -11,6 +13,8 @@ pub(super) struct RoleDraft {
     pub agent: String,
     pub model: String,
     pub effort: String,
+    pub args: String,
+    pub env: String,
     pub prompt: String,
     pub edits: bool,
     pub own_worktree: bool,
@@ -93,6 +97,16 @@ fn number(value: &Value, key: &str) -> String {
     value.get(key).and_then(Value::as_u64).map(|n| n.to_string()).unwrap_or_default()
 }
 
+fn arguments(value: &Value) -> String {
+    let words = value.get("args").and_then(Value::as_array).into_iter().flatten();
+    join_words(words.filter_map(Value::as_str).map(str::to_string))
+}
+
+fn variables(value: &Value) -> String {
+    let pairs = value.get("env").and_then(Value::as_object).into_iter().flatten();
+    join_words(pairs.map(|(key, value)| format!("{key}={}", value.as_str().unwrap_or_default())))
+}
+
 impl RoleDraft {
     pub(super) fn from_value(value: &Value) -> Self {
         Self {
@@ -101,6 +115,8 @@ impl RoleDraft {
             agent: text(value, "agent"),
             model: text(value, "model"),
             effort: text(value, "effort"),
+            args: arguments(value),
+            env: variables(value),
             prompt: text(value, "prompt"),
             edits: value.get("edits").and_then(Value::as_bool).unwrap_or(false),
             own_worktree: text(value, "worktree") == "own",
@@ -111,18 +127,31 @@ impl RoleDraft {
         Self { name: name.into(), agent: agent.into(), edits, ..Self::default() }
     }
 
-    fn to_value(&self, lead: bool) -> Value {
+    fn to_value(&self, lead: bool) -> Result<Value, String> {
         let mut map = object(&self.base);
         map.insert("name".into(), self.name.trim().into());
         map.insert("agent".into(), self.agent.trim().into());
         map.insert("model".into(), optional(&self.model));
         map.insert("effort".into(), optional(&self.effort));
+        map.insert("args".into(), split_words(&self.args).into());
+        map.insert("env".into(), self.env_value()?);
         map.insert("prompt".into(), self.prompt.clone().into());
         if !lead {
             map.insert("edits".into(), self.edits.into());
             map.insert("worktree".into(), if self.own_worktree { "own" } else { "shared" }.into());
         }
-        Value::Object(map)
+        Ok(Value::Object(map))
+    }
+
+    fn env_value(&self) -> Result<Value, String> {
+        let mut env = Map::new();
+        for pair in split_words(&self.env) {
+            let Some((key, value)) = pair.split_once('=').filter(|(key, _)| !key.is_empty()) else {
+                return Err(format!("{}: variables are KEY=value, and `{pair}` has no =", self.name.trim()));
+            };
+            env.insert(key.to_string(), value.into());
+        }
+        Ok(Value::Object(env))
     }
 }
 
@@ -202,12 +231,17 @@ impl Draft {
         map.insert("description".into(), self.description.clone().into());
         map.insert("notes".into(), self.notes.clone().into());
         map.insert("end".into(), if self.commits { "commits" } else { "pull_request" }.into());
-        map.insert("orchestrator".into(), self.orchestrator.to_value(true));
-        map.insert("roles".into(), Value::Array(self.roles.iter().map(|r| r.to_value(false)).collect()));
+        map.insert("orchestrator".into(), self.orchestrator.to_value(true)?);
+        let roles: Result<Vec<Value>, String> = self.roles.iter().map(|r| r.to_value(false)).collect();
+        map.insert("roles".into(), Value::Array(roles?));
         let stages: Result<Vec<Value>, String> =
             self.stages.iter().enumerate().map(|(i, s)| s.to_value(i + 1)).collect();
         map.insert("stages".into(), Value::Array(stages?));
         Ok(Value::Object(map))
+    }
+
+    pub(super) fn plan(&self) -> Option<FlowSpec> {
+        serde_json::from_value(self.to_value().ok()?).ok()
     }
 }
 
@@ -237,6 +271,95 @@ pub(super) fn removed_from(list: &str, gone: &str) -> Option<String> {
     let names = role_names(list);
     let kept: Vec<&str> = names.iter().map(String::as_str).filter(|n| *n != gone).collect();
     (kept.len() != names.len()).then(|| kept.join(", "))
+}
+
+pub(super) fn only_role_in(list: &str, name: &str) -> bool {
+    role_names(list) == [name]
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum LoopAfter {
+    Same,
+    To(String),
+    Gone,
+}
+
+pub(super) fn loop_after(back_to: &str, number: usize, moved: impl Fn(usize) -> Option<usize>) -> LoopAfter {
+    let Ok(to) = back_to.trim().parse() else { return LoopAfter::Same };
+    match moved(to) {
+        Some(target) if target == 0 || target >= number => LoopAfter::Gone,
+        Some(target) if target == to => LoopAfter::Same,
+        Some(target) => LoopAfter::To(target.to_string()),
+        None => LoopAfter::Gone,
+    }
+}
+
+pub(super) fn swapped(first: usize, second: usize) -> impl Fn(usize) -> Option<usize> {
+    move |stage| {
+        Some(if stage == first {
+            second
+        } else if stage == second {
+            first
+        } else {
+            stage
+        })
+    }
+}
+
+pub(super) fn without(gone: usize) -> impl Fn(usize) -> Option<usize> {
+    move |stage| match stage.cmp(&gone) {
+        Ordering::Less => Some(stage),
+        Ordering::Equal => None,
+        Ordering::Greater => Some(stage - 1),
+    }
+}
+
+pub(super) fn neighbour(index: usize, up: bool, len: usize) -> Option<usize> {
+    let other = if up { index.checked_sub(1) } else { Some(index + 1) };
+    other.filter(|other| *other < len && index < len)
+}
+
+pub(super) fn gone_note(stages: &[usize]) -> Option<String> {
+    let (last, rest) = stages.split_last()?;
+    let names: Vec<String> = rest.iter().map(ToString::to_string).collect();
+    Some(if names.is_empty() {
+        format!("Stage {last} lost its loop: it no longer goes back to an earlier stage")
+    } else {
+        format!("Stages {} and {last} lost their loops: they no longer go back to an earlier stage", names.join(", "))
+    })
+}
+
+pub(super) fn split_words(text: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut word: Option<String> = None;
+    let mut quote = None;
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (Some(open), c) if c == open => quote = None,
+            (Some('"') | None, '\\') => word.get_or_insert_default().extend(chars.next()),
+            (None, c) if c.is_whitespace() => words.extend(word.take()),
+            (None, '"' | '\'') => {
+                quote = Some(c);
+                word.get_or_insert_default();
+            }
+            (_, c) => word.get_or_insert_default().push(c),
+        }
+    }
+    words.extend(word);
+    words
+}
+
+fn join_words(words: impl Iterator<Item = String>) -> String {
+    words.map(|word| quoted(&word)).collect::<Vec<_>>().join(" ")
+}
+
+fn quoted(word: &str) -> String {
+    let plain = |c: char| c.is_ascii_alphanumeric() || "-_./:@%+=,".contains(c);
+    if !word.is_empty() && word.chars().all(plain) {
+        return word.to_string();
+    }
+    format!("'{}'", word.replace('\'', r"'\''"))
 }
 
 pub(super) fn fresh_role_name(taken: &[String]) -> String {

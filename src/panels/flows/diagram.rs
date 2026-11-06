@@ -4,8 +4,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, Context, Div, FontWeight, IntoElement, ParentElement as _, Rgba,
-    SharedString, Styled as _, div, ease_in_out, px, rgb, rgba,
+    Animation, AnimationExt as _, AnyElement, Div, FontWeight, IntoElement, ParentElement as _, Rgba, SharedString,
+    Styled as _, WeakEntity, div, ease_in_out, px, rgb, rgba,
 };
 
 use super::FlowsPanel;
@@ -50,6 +50,7 @@ pub(super) struct Plan<'a> {
     pub run: Option<&'a Run>,
     pub focus: Option<&'a str>,
     pub key: &'a str,
+    pub panel: Option<&'a WeakEntity<FlowsPanel>>,
 }
 
 impl<'a> Plan<'a> {
@@ -83,40 +84,43 @@ impl<'a> Plan<'a> {
 }
 
 impl FlowsPanel {
-    pub(super) fn diagram(&self, plan: Plan, cx: &Context<Self>) -> Div {
-        let room = self.board.get() - 2. * BOARD_PAD;
-        let graph = graph::fit(plan.flow, plan.run.and_then(|r| r.outside), room);
-        let field = div()
-            .relative()
-            .flex_none()
-            .mx_auto()
-            .w(px(graph.width))
-            .h(px(graph.height))
-            .children(layers(plan, &graph, &self.played, cx))
-            .children(travel(plan, &graph, &self.played));
-        board(self.board.clone()).child(field).children(plan.run.and_then(|r| r.outside).and_then(outside_note))
+    pub(super) fn diagram(&self, plan: Plan) -> Div {
+        draw(plan, &self.board, &self.played)
     }
 }
 
-fn layers(plan: Plan, graph: &Graph, played: &Played, cx: &Context<FlowsPanel>) -> Vec<AnyElement> {
+pub(super) fn draw(plan: Plan, room: &Rc<Cell<f32>>, played: &Played) -> Div {
+    let graph = graph::fit(plan.flow, plan.run.and_then(|r| r.outside), room.get() - 2. * BOARD_PAD);
+    let field = div()
+        .relative()
+        .flex_none()
+        .mx_auto()
+        .w(px(graph.width))
+        .h(px(graph.height))
+        .children(layers(plan, &graph, played))
+        .children(travel(plan, &graph, played));
+    board(room.clone()).child(field).children(plan.run.and_then(|r| r.outside).and_then(outside_note))
+}
+
+fn layers(plan: Plan, graph: &Graph, played: &Played) -> Vec<AnyElement> {
     let stages = graph.markers.len();
-    let lead = rise(lead_layer(plan, graph, cx), plan.key, 0, played);
-    let middle = (0..stages).map(|stage| rise(stage_layer(plan, graph, stage, cx), plan.key, stage + 1, played));
+    let lead = rise(lead_layer(plan, graph), plan.key, 0, played);
+    let middle = (0..stages).map(|stage| rise(stage_layer(plan, graph, stage), plan.key, stage + 1, played));
     let end = rise(end_layer(plan, graph), plan.key, stages + 1, played);
     std::iter::once(lead).chain(middle).chain(std::iter::once(end)).collect()
 }
 
-fn lead_layer(plan: Plan, graph: &Graph, cx: &Context<FlowsPanel>) -> Div {
-    layer().child(wires::lines(vec![divider(graph)])).child(caption(graph)).child(lead_card(plan, graph.lead, cx))
+fn lead_layer(plan: Plan, graph: &Graph) -> Div {
+    layer().child(wires::lines(vec![divider(graph)])).child(caption(graph)).child(lead_card(plan, graph.lead))
 }
 
-fn stage_layer(plan: Plan, graph: &Graph, stage: usize, cx: &Context<FlowsPanel>) -> Div {
+fn stage_layer(plan: Plan, graph: &Graph, stage: usize) -> Div {
     let cards = graph.cards.iter().enumerate().filter(|(_, c)| c.stage == stage);
     let labels = graph.labels.iter().filter(|l| l.stage == stage);
     layer()
         .child(wires::lines(stage_lines(plan, graph, stage)))
         .child(marker(plan, graph.markers.get(stage).copied().unwrap_or_default(), stage))
-        .children(cards.map(|card| role_card(plan, card, cx)))
+        .children(cards.map(|card| role_card(plan, card)))
         .children(labels.filter_map(|l| loop_label(plan, *l, graph.short)))
 }
 

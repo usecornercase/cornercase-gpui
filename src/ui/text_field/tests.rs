@@ -1,24 +1,7 @@
-use super::{Escaped, escaped, one_line, selected_rows, shared, word_end, word_start};
+use gpui::KeyContext;
 
-#[test]
-fn a_selection_inside_one_row_paints_one_span() {
-    assert_eq!(selected_rows(&[0, 10, 20], 25, &(12..15)), vec![(1, 12..15)]);
-}
-
-#[test]
-fn a_selection_across_wraps_paints_a_span_per_row() {
-    assert_eq!(selected_rows(&[0, 10, 20], 25, &(5..22)), vec![(0, 5..10), (1, 10..20), (2, 20..22)]);
-}
-
-#[test]
-fn a_selection_ending_at_a_wrap_leaves_the_next_row_alone() {
-    assert_eq!(selected_rows(&[0, 10], 18, &(3..10)), vec![(0, 3..10)]);
-}
-
-#[test]
-fn an_unwrapped_line_is_one_row() {
-    assert_eq!(selected_rows(&[0], 8, &(0..8)), vec![(0, 0..8)]);
-}
+use super::{Escaped, LINES_CONTEXT, NewLine, Submit, bindings, escaped, shared, word_end, word_start};
+use crate::platform::Os;
 
 #[test]
 fn escape_reverts_an_edited_field_then_passes_on() {
@@ -61,8 +44,17 @@ fn a_selection_goes_to_the_primary_selection_unless_it_is_empty_or_masked() {
 }
 
 #[test]
-fn pasted_line_breaks_of_any_kind_become_one_space_each() {
-    assert_eq!(one_line("first\nsecond"), "first second");
-    assert_eq!(one_line("first\r\nsecond\rthird"), "first second third");
-    assert_eq!(one_line("a\n\nb"), "a  b");
+fn enter_breaks_the_line_before_it_can_submit() {
+    for os in [Os::Mac, Os::Linux, Os::Windows] {
+        let keys = bindings(os);
+        let new_line = keys.iter().position(|key| key.action().partial_eq(&NewLine));
+        let submit = keys.iter().position(|key| key.action().partial_eq(&Submit));
+        assert!(new_line > submit, "gpui runs the later of two bindings at one depth first");
+    }
+}
+
+#[test]
+fn a_field_of_several_lines_answers_to_both_key_contexts() {
+    let context = KeyContext::parse(LINES_CONTEXT).expect("context");
+    assert!(context.contains("TextField") && context.contains("Multiline"));
 }
