@@ -153,7 +153,7 @@ pub(crate) fn run_with_stdin<S: AsRef<str>>(args: &[S], stdin: Option<&str>) -> 
     run_on(&target(), args, stdin.map(str::as_bytes))
 }
 
-fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&[u8]>) -> Result<String> {
+pub(crate) fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&[u8]>) -> Result<String> {
     let mut cmd = target.command(args);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() });
@@ -233,7 +233,15 @@ pub(crate) fn stream<S: AsRef<str>>(
     on_line: impl FnMut(String) + Send + 'static,
     on_end: impl FnOnce(String) + Send + 'static,
 ) -> Result<Stream> {
-    let target = target();
+    stream_on(&target(), args, on_line, on_end)
+}
+
+pub(crate) fn stream_on<S: AsRef<str>>(
+    target: &Target,
+    args: &[S],
+    on_line: impl FnMut(String) + Send + 'static,
+    on_end: impl FnOnce(String) + Send + 'static,
+) -> Result<Stream> {
     let mut cmd = target.command(args);
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = spawn(&mut cmd)?;
@@ -312,13 +320,22 @@ type Typed = Vec<(u64, serde_json::Value)>;
 
 const MAX_INPUT_BATCH: usize = 256;
 
+pub(crate) fn moves_view<S: AsRef<str>>(args: &[S]) -> bool {
+    let first = args.first().map(AsRef::as_ref);
+    matches!(first, Some("focus" | "go")) || args.iter().any(|arg| arg.as_ref() == "--focus")
+}
+
 #[derive(Clone)]
 pub(crate) struct Queue {
     tx: mpsc::Sender<Job>,
+    view_moves: Arc<dyn Fn() + Send + Sync>,
 }
 
 impl Queue {
-    pub(crate) fn new(on_error: impl Fn(String) + Send + Sync + 'static) -> Self {
+    pub(crate) fn new(
+        on_error: impl Fn(String) + Send + Sync + 'static,
+        on_view_move: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
         let (tx, rx) = mpsc::channel::<Job>();
         let mut worker = {
             let current = CURRENT.lock();
@@ -331,7 +348,14 @@ impl Queue {
             }
         };
         thread::spawn(move || worker.work(&rx));
-        Self { tx }
+        Self { tx, view_moves: Arc::new(on_view_move) }
+    }
+
+    fn send(&self, cmd: Cmd) {
+        if moves_view(&cmd.args) {
+            (self.view_moves)();
+        }
+        let _ = self.tx.send(Job::Cmd(cmd));
     }
 
     pub(crate) fn input(&self, pane: u64, event: serde_json::Value) {
@@ -343,19 +367,19 @@ impl Queue {
     }
 
     pub(crate) fn cmd(&self, args: Vec<String>) {
-        let _ = self.tx.send(Job::Cmd(Cmd { args, coalesce: None, reply: None, stdin: None }));
+        self.send(Cmd { args, coalesce: None, reply: None, stdin: None });
     }
 
     pub(crate) fn cmd_with_stdin(&self, args: Vec<String>, stdin: Vec<u8>) {
-        let _ = self.tx.send(Job::Cmd(Cmd { args, coalesce: None, reply: None, stdin: Some(stdin) }));
+        self.send(Cmd { args, coalesce: None, reply: None, stdin: Some(stdin) });
     }
 
     pub(crate) fn coalesced(&self, key: &'static str, args: Vec<String>) {
-        let _ = self.tx.send(Job::Cmd(Cmd { args, coalesce: Some(key), reply: None, stdin: None }));
+        self.send(Cmd { args, coalesce: Some(key), reply: None, stdin: None });
     }
 
     pub(crate) fn cmd_then(&self, args: Vec<String>, reply: impl FnOnce(Result<String>) + Send + 'static) {
-        let _ = self.tx.send(Job::Cmd(Cmd { args, coalesce: None, reply: Some(Box::new(reply)), stdin: None }));
+        self.send(Cmd { args, coalesce: None, reply: Some(Box::new(reply)), stdin: None });
     }
 
     pub(crate) fn reconnect(&self) {

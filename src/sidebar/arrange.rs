@@ -8,7 +8,7 @@ use gpui::{
 use super::rows::{Listing, list_text};
 use super::{Arrangement, card, list_end, section_head, sidebar_footer, sidebar_header, tip};
 use crate::app::{GAP, Root};
-use crate::model::Session;
+use crate::model::{MachineSeen, Session, Shown, ThereProject};
 use crate::theme::colours;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{self, Icon};
@@ -82,7 +82,8 @@ impl Root {
             Arrangement::ProjectsOnTop => self.stack(projects, self.workspaces_section(cx), cx),
             Arrangement::WorkspacesOnTop => self.stack(self.workspaces_section(cx), projects, cx),
             Arrangement::SideBySide => {
-                let column = card().flex_none().w(px(self.projects_column())).min_h_0().child(projects);
+                let width = px(self.projects_column());
+                let column = card().flex_none().flex_basis(width).w(width).min_h_0().child(projects);
                 return cards.child(column).child(self.main_card(self.workspaces_section(cx), cx));
             }
         };
@@ -137,11 +138,18 @@ impl Root {
 
     fn listing(&self, session: &Session) -> Listing {
         let look = &self.side.look.current;
+        let place = self.side.machine_place.clone();
+        let shown = match &place {
+            Some(place) => Shown { project: session.pair_of(place), ..Shown::default() },
+            None => session.shown(),
+        };
         Listing {
-            shown: session.shown(),
+            shown,
             groups: Rc::new(session.groups.iter().map(|g| g.id).collect()),
             tree: look.arrangement == Arrangement::Tree,
             tabs: look.tabs_in_sidebar,
+            place,
+            now: crate::panels::queue::now(),
         }
     }
 
@@ -156,28 +164,41 @@ impl Root {
         for section in session.sections() {
             rows.extend(self.section_rows(session, section, &listing, cx));
         }
+        rows.extend(self.alone_project_rows(session, &listing, cx));
         rows_column().children(rows)
     }
 
     fn workspaces_section(&self, cx: &mut Context<Self>) -> Div {
-        let project = self.session.as_ref().and_then(|s| s.shown().project);
+        let listing = self.session.as_ref().map(|s| self.listing(s));
+        let project = listing.and_then(|listing| listing.shown.project);
+        let alone = self.alone_shown().is_some();
         div()
             .flex_1()
             .min_h_0()
             .flex()
             .flex_col()
-            .child(workspaces_header(project, cx))
+            .child(if alone { section_head("Workspaces", div()) } else { workspaces_header(project, cx) })
             .child(scroller("sidebar-workspaces").child(self.workspace_rows(cx)))
+    }
+
+    fn alone_shown(&self) -> Option<(&MachineSeen, &ThereProject)> {
+        self.session.as_ref()?.alone_of(self.side.machine_place.as_ref()?)
     }
 
     fn workspace_rows(&self, cx: &mut Context<Self>) -> AnyElement {
         let Some(session) = &self.session else { return rows_column().into_any_element() };
         let listing = self.listing(session);
+        if let Some((seen, there)) = self.alone_shown() {
+            let rows = there.workspaces.iter().map(|ws| self.there_workspace(seen, ws, &listing, cx));
+            return rows_column().children(rows.collect::<Vec<_>>()).into_any_element();
+        }
         let Some(project) = listing.shown.project.and_then(|id| session.projects.iter().find(|p| p.id == id)) else {
             return ui::note("No project shown.").into_any_element();
         };
         let siblings: Rc<Vec<u64>> = Rc::new(project.workspaces.iter().map(|w| w.id).collect());
-        let rows = project.workspaces.iter().map(|ws| self.render_workspace(ws, &listing, siblings.clone(), cx));
-        rows_column().children(rows.collect::<Vec<_>>()).into_any_element()
+        let mut rows: Vec<AnyElement> =
+            project.workspaces.iter().map(|ws| self.render_workspace(ws, &listing, siblings.clone(), cx)).collect();
+        rows.extend(self.there_rows_under(project.id, &listing, cx));
+        rows_column().children(rows).into_any_element()
     }
 }

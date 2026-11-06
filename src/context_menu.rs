@@ -28,6 +28,7 @@ pub(crate) enum Entry {
     Submenu { label: SharedString, entries: Vec<Entry> },
     Heading(SharedString),
     Note(SharedString),
+    Resting { label: SharedString },
     Separator,
 }
 pub(crate) fn item(
@@ -62,6 +63,10 @@ pub(crate) fn act_busy(label: impl Into<SharedString>, busy: Busy, args: Vec<Str
 
 pub(crate) fn submenu(label: impl Into<SharedString>, entries: Vec<Entry>) -> Entry {
     Entry::Submenu { label: label.into(), entries }
+}
+
+pub(crate) fn resting(label: impl Into<SharedString>) -> Entry {
+    Entry::Resting { label: label.into() }
 }
 
 pub(crate) fn note(text: impl Into<SharedString>) -> Entry {
@@ -175,7 +180,7 @@ impl Root {
                     menu.highlight = step(&menu.entries, None, true);
                 }
             }
-            Entry::Heading(_) | Entry::Note(_) | Entry::Separator => {}
+            Entry::Heading(_) | Entry::Note(_) | Entry::Resting { .. } | Entry::Separator => {}
         }
     }
 
@@ -221,6 +226,7 @@ fn menu_entry(index: usize, entry: Entry, highlighted: bool, cx: &mut Context<Ro
         Entry::Separator => div().mx(px(10.)).my(px(4.)).h(px(1.)).bg(colours::border()).into_any_element(),
         Entry::Heading(label) => menu_heading(label).into_any_element(),
         Entry::Note(text) => ui::dim(text).px(px(10.)).py(px(5.)).into_any_element(),
+        Entry::Resting { label } => resting_row(label).into_any_element(),
         Entry::Item { label, action, danger, chosen } => menu_row(id, label, false, (highlighted, danger))
             .when(chosen, |d| d.child(icon(Icon::Check, 12.).text_color(colours::text())))
             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
@@ -244,6 +250,10 @@ fn menu_heading(label: SharedString) -> Div {
         .text_color(colours::muted())
         .whitespace_nowrap()
         .child(label)
+}
+
+fn resting_row(label: SharedString) -> Div {
+    div().px(px(10.)).py(px(5.)).text_color(colours::faint()).child(label)
 }
 
 pub(crate) fn menu_row(

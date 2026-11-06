@@ -4,6 +4,8 @@ use serde_json::Value;
 use crate::panels::flows::model::epoch;
 use crate::ui::Icon;
 
+pub(crate) mod seen;
+
 pub(crate) const THIS_COMPUTER: &str = "this computer";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -121,6 +123,11 @@ fn ago(seconds: i64) -> String {
     }
 }
 
+fn seen_ago(seen: Option<&str>, now: i64) -> Option<String> {
+    let seen = epoch(seen?)?;
+    Some(format!("seen {} ago", ago(now - seen)))
+}
+
 impl Machine {
     pub(crate) fn linked(&self) -> bool {
         self.problem.is_none() && self.state == LinkState::Linked
@@ -143,8 +150,7 @@ impl Machine {
     }
 
     pub(crate) fn seen_ago(&self, now: i64) -> Option<String> {
-        let seen = epoch(self.seen.as_deref()?)?;
-        Some(format!("seen {} ago", ago(now - seen)))
+        seen_ago(self.seen.as_deref(), now)
     }
 
     pub(crate) fn words(&self, now: i64) -> String {
