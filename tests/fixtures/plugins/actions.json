@@ -1,0 +1,63 @@
+{
+  "actions": [
+    {
+      "action": "say",
+      "contexts": [
+        "project",
+        "workspace",
+        "tab",
+        "pane"
+      ],
+      "name": "Notes",
+      "placement": "job",
+      "plugin": "acme.notes",
+      "title": "Say where"
+    },
+    {
+      "action": "fail",
+      "contexts": [
+        "pane",
+        "workspace"
+      ],
+      "name": "Notes",
+      "placement": "job",
+      "plugin": "acme.notes",
+      "title": "Fail on purpose"
+    },
+    {
+      "action": "board",
+      "contexts": [
+        "button",
+        "tab"
+      ],
+      "height": 12,
+      "name": "Notes",
+      "placement": "popup",
+      "plugin": "acme.notes",
+      "title": "Open board",
+      "width": 60
+    },
+    {
+      "action": "tally",
+      "contexts": [
+        "button"
+      ],
+      "name": "Notes",
+      "placement": "job",
+      "plugin": "acme.notes",
+      "title": "Tally"
+    },
+    {
+      "action": "go",
+      "contexts": [
+        "button",
+        "workspace"
+      ],
+      "name": "Deploy",
+      "placement": "job",
+      "plugin": "acme.deploy",
+      "title": "Deploy now"
+    }
+  ],
+  "revision": 2
+}

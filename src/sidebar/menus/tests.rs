@@ -1,7 +1,9 @@
-use super::{context_item, open_in_item, workspace_menu};
+use super::{context_item, open_in_item, plugin_items, spot_of, workspace_menu};
 use crate::context_menu::Entry;
 use crate::model::{PaneInfo, Session};
 use crate::panels::files::open::{Found, Launch, Opener};
+use crate::panels::plugins::{Offers, Spot, listed_offers};
+use crate::sidebar::Target;
 
 const PROJECT: &str = r#"{"projects":[{"id":1,"name":"shop","workspaces":[
     {"id":2,"name":"plain","path":"/home/ana/notes"},
@@ -16,7 +18,7 @@ fn labels(workspace: u64) -> Vec<String> {
         .iter()
         .filter_map(|entry| match entry {
             Entry::Item { label, .. } | Entry::Submenu { label, .. } => Some(label.to_string()),
-            Entry::Separator => None,
+            Entry::Heading(_) | Entry::Separator => None,
         })
         .collect()
 }
@@ -53,10 +55,42 @@ fn a_pane_whose_agent_left_offers_no_context() {
     assert!(context_item(&PaneInfo::default()).is_none());
 }
 
+fn plugin_row(entry: &Entry) -> String {
+    match entry {
+        Entry::Item { label, .. } | Entry::Submenu { label, .. } => label.to_string(),
+        Entry::Heading(name) => format!("[{name}]"),
+        Entry::Separator => "---".to_string(),
+    }
+}
+
+#[test]
+fn a_plugins_actions_come_below_a_line_under_its_name() {
+    let entries = plugin_items(listed_offers().offered(Spot::Workspace(3)));
+    let rows: Vec<String> = entries.iter().map(plugin_row).collect();
+    assert_eq!(rows, ["---", "[Notes]", "Say where", "Fail on purpose", "---", "[Deploy]", "Deploy now"]);
+}
+
+#[test]
+fn with_no_plugin_a_menu_gets_nothing() {
+    assert!(plugin_items(Offers::default().offered(Spot::Pane(1))).is_empty());
+}
+
+#[test]
+fn each_row_offers_the_actions_of_its_own_kind() {
+    assert_eq!(spot_of(Target::Project(1)), Some(Spot::Project(1)));
+    assert_eq!(spot_of(Target::Workspace(2)), Some(Spot::Workspace(2)));
+    assert_eq!(spot_of(Target::Tab(3)), Some(Spot::Tab(3)));
+}
+
+#[test]
+fn a_group_offers_no_actions() {
+    assert_eq!(spot_of(Target::Group(1)), None);
+}
+
 fn opener_labels(openers: &[Found]) -> Option<(String, Vec<String>)> {
     let label = |entry: &Entry| match entry {
         Entry::Item { label, .. } | Entry::Submenu { label, .. } => label.to_string(),
-        Entry::Separator => String::new(),
+        Entry::Heading(_) | Entry::Separator => String::new(),
     };
     open_in_item("/work/shop", openers).map(|entry| match &entry {
         Entry::Submenu { entries, .. } => (label(&entry), entries.iter().map(label).collect()),

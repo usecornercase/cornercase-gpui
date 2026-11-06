@@ -12,6 +12,14 @@ pub(super) struct Status {
 pub(super) struct PluginStatus {
     pub(super) id: String,
     pub(super) services: Vec<Service>,
+    pub(super) button: Option<Face>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub(super) struct Face {
+    pub(super) title: String,
+    pub(super) icon: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -33,6 +41,10 @@ pub(super) enum Health {
 impl Status {
     pub(super) fn services(&self, id: &str) -> &[Service] {
         self.plugins.iter().find(|p| p.id == id).map_or(&[], |p| p.services.as_slice())
+    }
+
+    pub(super) fn face(&self, id: &str) -> Option<&Face> {
+        self.plugins.iter().find(|p| p.id == id)?.button.as_ref()
     }
 }
 

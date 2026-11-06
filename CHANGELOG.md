@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.12
+
+- **Plugins reach the menus and the rail.** What a plugin offers for a project, a workspace, a tab or a pane shows at the bottom of that row's `⋯` and right-click menu, and of a pane's right-click menu, under the plugin's name. A plugin with a button gets a slot in the rail, after the docked panels: with one action a click runs it, with several it opens a menu of them. How it ended comes back as a toast and a popup opens over the terminal, as from the Plugins sheet. For now a button acts on what cornercase's own window shows and a popup needs that window open (usecornercase/cornercase-terminal#666); the slot's tooltip and the sheet say so.
+- A plugin's action that fails now says how (`exit status: 3`) and points at its log, where it only said `cornercase plugin: failed`. Closing a plugin's popup with its `✕` no longer shows an error.
+
 ## 0.1.11
 
 - **Changes filters by path.** A field over the file list keeps the files you name: a piece of a path (`order`), a pattern as in `.gitignore` (`*.test.js`, `src/api/**`), `!` to leave files out (`!*.lock`). The summary says how many are left (`3 of 31 files`); Enter gives your keys back to the pane, Escape clears it.

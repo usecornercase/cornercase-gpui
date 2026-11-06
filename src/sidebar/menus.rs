@@ -11,6 +11,7 @@ use crate::model::{PaneInfo, Project, PullRequest, Session, Workspace};
 use crate::panels::PanelKind;
 use crate::panels::files::open::{self, Found, Opening};
 use crate::panels::flows::{FlowStart, start_flow};
+use crate::panels::plugins::{Group, Run, Spot, run_action};
 use crate::store::{self, Busy, ToastKind};
 use crate::ui;
 
@@ -74,6 +75,29 @@ fn new_workspace_item(project: Option<u64>) -> Entry {
 
 fn start_flow_item(project: Option<u64>) -> Entry {
     item("Start a flow…", move |_, window, cx| start_flow(FlowStart::in_project(project), window, cx))
+}
+
+pub(super) fn run_item(run: Run) -> Entry {
+    item(run.title().to_string(), move |_, _, cx| run_action(&run, cx, |_, _| {}))
+}
+
+fn plugin_items(groups: Vec<Group>) -> Vec<Entry> {
+    groups
+        .into_iter()
+        .flat_map(|group| {
+            let name = [Entry::Separator, Entry::Heading(group.name.into())];
+            name.into_iter().chain(group.runs.into_iter().map(run_item))
+        })
+        .collect()
+}
+
+fn spot_of(target: Target) -> Option<Spot> {
+    match target {
+        Target::Group(_) => None,
+        Target::Project(id) => Some(Spot::Project(id)),
+        Target::Workspace(id) => Some(Spot::Workspace(id)),
+        Target::Tab(id) => Some(Spot::Tab(id)),
+    }
 }
 
 fn group_menu(session: &Session, id: u64) -> Vec<Entry> {
@@ -256,8 +280,15 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let entries = self.menu_for(target, cx);
+        let mut entries = self.menu_for(target, cx);
+        if let Some(spot) = spot_of(target) {
+            entries.extend(self.plugin_entries(spot, cx));
+        }
         self.open_menu(at, entries, window, cx);
+    }
+
+    pub(crate) fn plugin_entries(&self, spot: Spot, cx: &App) -> Vec<Entry> {
+        plugin_items(self.store.read(cx).plugins.offered(spot))
     }
 
     pub(super) fn open_new_menu(
