@@ -222,10 +222,11 @@ impl Root {
             self.switch(target, window, cx);
             return;
         }
+        let to_terminal = store.update(cx, |s, _| std::mem::take(&mut s.keys_to_terminal));
         let s = store.read(cx);
         let overlay = s.dialog.is_some() || s.sheet.is_some();
         let in_dock = self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx);
-        if (self.had_overlay && !overlay) || (s.shown_dock().is_none() && in_dock) {
+        if to_terminal || (self.had_overlay && !overlay) || (s.shown_dock().is_none() && in_dock) {
             window.focus(&self.focus);
         }
         self.had_overlay = overlay;

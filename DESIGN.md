@@ -35,6 +35,7 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 - [Files panel](design/files-panel.md) (`panels/files.rs`, `panels/files/`): the tree, the viewer, search, the ⇧⌘P finder; the one panel that reads the disk.
 - [Browser panel](design/browser.md) (`panels/browser.rs`, `panels/browser/`, `assets/browser/`): a headless Chrome drawn in the dock, why not a native web view, its profile and port, tabs per workspace, input, devices, the console, handing elements and screenshots to agents, agents driving it, ports and ssh tunnels.
 - [TODO panel](design/todo-panel.md) (`panels/todo.rs`, `panels/todo/`): the TODO list and sending an item to an agent.
+- [Recap](design/recap.md) (`panels/recap.rs`, `panels/recap/`): an agent's summary of what your agents did, its three ranges, a run beside the queue, naming ids, what a link goes to, what waits on #664.
 - [Queue](design/queue.md) (`panels/queue.rs`, `panels/queue/`): scheduled agent starts, their times and form.
 - [Issues](design/issues.md) (`panels/issues.rs`, `panels/issues/`): the issues browser, starting an agent on an issue, the #461 and #472 stopgaps.
 - [Accounts](design/accounts.md) (`panels/accounts.rs`, `panels/accounts/`): agent logins and profiles.

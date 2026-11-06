@@ -32,6 +32,7 @@ pub(crate) struct Store {
     pub prefs: Prefs,
     pub started_run_in: Option<u64>,
     pub jobs: Jobs,
+    pub keys_to_terminal: bool,
     next_toast: u64,
     app_stream: Option<Stream>,
 }
@@ -98,6 +99,7 @@ impl Store {
             prefs: prefs::load(),
             started_run_in: None,
             jobs: Jobs::default(),
+            keys_to_terminal: false,
             next_toast: 1,
             app_stream: None,
         });
@@ -153,6 +155,12 @@ impl Store {
 
     pub(crate) fn focus(&self, kind: &str, id: u64) {
         self.act(args(&["focus", &format!("--{kind}"), &id.to_string()]));
+    }
+
+    pub(crate) fn show_in_terminal(&mut self, kind: &str, id: u64, cx: &mut Context<Self>) {
+        self.focus(kind, id);
+        self.keys_to_terminal = true;
+        cx.notify();
     }
 
     pub(crate) fn toast(&mut self, text: impl Into<String>, kind: ToastKind, cx: &mut Context<Self>) {
@@ -377,6 +385,17 @@ pub(crate) fn run_busy<T: 'static>(
 ) {
     let id = Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx));
     run_job(cx, id, args, then);
+}
+
+pub(crate) fn run_partial_busy<T: 'static>(
+    cx: &mut Context<T>,
+    busy: Busy,
+    args: Vec<String>,
+    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+) {
+    let id = Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx));
+    let job = (Store::get(cx), id);
+    run_with(cx, Some(job), move || cli::run_partial(&args), then);
 }
 
 pub(crate) fn run_local(cx: &mut App, busy: Busy, work: impl FnOnce() -> anyhow::Result<()> + Send + 'static) {

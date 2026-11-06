@@ -41,6 +41,12 @@ fn shift_p_goes_to_a_file_and_shift_m_shows_processes() {
 }
 
 #[test]
+fn shift_h_shows_the_recap_and_h_alone_stays_macos_hide() {
+    assert_eq!(command("h", true), Some(Command::Panel(PanelKind::Recap)));
+    assert_eq!(command("h", false), None);
+}
+
+#[test]
 fn p_without_shift_shows_the_pull_request() {
     assert_eq!(command("p", false), Some(Command::PullRequest));
     assert_eq!(keys_of(Command::PullRequest, Os::Mac).as_deref(), Some("⌘P"));
@@ -221,6 +227,13 @@ fn on_linux_other_keys_are_left_to_the_program() {
     assert_eq!(on_linux("v", SUPER), None);
     assert_eq!(on_linux("1", SUPER), None);
     assert_eq!(chord(&pressed("t", CTRL_SHIFT), true, Os::Mac, false), None);
+}
+
+#[test]
+fn on_linux_the_recap_is_ctrl_alt_shift_h() {
+    assert_eq!(on_linux("h", CTRL_ALT_SHIFT), Some(Command::Panel(PanelKind::Recap)));
+    assert_eq!(on_linux("h", CTRL_SHIFT), None);
+    assert_eq!(keys_of(Command::Panel(PanelKind::Recap), Os::Linux).as_deref(), Some("Ctrl+Alt+Shift+H"));
 }
 
 #[test]

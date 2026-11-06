@@ -29,7 +29,7 @@ fn linux_takes_a_wider_dialog_for_its_longer_keys_within_the_window() {
 
 #[test]
 fn the_list_grows_with_the_window_and_scrolls_past_it() {
-    assert!((body_height(800.) - 560.).abs() < f32::EPSILON);
-    assert!((body_height(1000.) - 760.).abs() < f32::EPSILON);
+    assert!((body_height(800.) - 584.).abs() < f32::EPSILON);
+    assert!((body_height(1000.) - 784.).abs() < f32::EPSILON);
     assert!((body_height(300.) - 200.).abs() < f32::EPSILON);
 }
