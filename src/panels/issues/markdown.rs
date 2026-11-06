@@ -3,7 +3,7 @@ use std::ops::Range;
 use std::str::Lines;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Mark {
+pub(crate) enum Mark {
     Bold,
     Italic,
     Code,
@@ -12,14 +12,14 @@ pub(super) enum Mark {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(super) struct Inline {
+pub(crate) struct Inline {
     pub text: String,
     pub marks: Vec<(Range<usize>, Mark)>,
     pub links: Vec<(Range<usize>, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum Block {
+pub(crate) enum Block {
     Heading(u8, Inline),
     Paragraph(Inline),
     Item(usize, String, Inline),
@@ -29,7 +29,7 @@ pub(super) enum Block {
     Rule,
 }
 
-pub(super) fn parse(source: &str) -> Vec<Block> {
+pub(crate) fn parse(source: &str) -> Vec<Block> {
     let source = strip_comments(&source.replace("\r\n", "\n"));
     let mut parser = Parser { lines: source.lines().peekable(), blocks: Vec::new(), paragraph: Vec::new() };
     while let Some(line) = parser.lines.next() {

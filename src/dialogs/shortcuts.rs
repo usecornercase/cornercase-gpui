@@ -53,7 +53,7 @@ fn width(os: Os, window: f32) -> f32 {
 }
 
 fn body_height(window: f32) -> f32 {
-    (window - 240.).max(200.)
+    (window - 216.).max(200.)
 }
 
 fn keys(label: impl Into<SharedString>) -> Div {

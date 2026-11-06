@@ -139,6 +139,10 @@ fn pull_request_item(workspace: u64, pr: &PullRequest) -> Entry {
     item(format!("{}…", pr.heading()), move |_, window, cx| dialogs::pull_request(workspace, window, cx))
 }
 
+fn merge_check_item(workspace: u64) -> Entry {
+    item("Merge check…", move |_, window, cx| dialogs::merge_check(workspace, window, cx))
+}
+
 fn close_workspace_item(ws: &Workspace) -> Entry {
     let (id, name) = (ws.id, ws.name.clone());
     let label = if ws.worktree { "Close its tabs…" } else { "Close workspace…" };
@@ -214,6 +218,7 @@ fn workspace_menu(session: &Session, id: u64) -> Vec<Entry> {
     entries.push(Entry::Separator);
     entries.push(rename_item("Rename workspace", Target::Workspace(id)));
     entries.extend(ws.pull_request.as_ref().map(|pr| pull_request_item(id, pr)));
+    entries.extend(ws.branch.is_some().then(|| merge_check_item(id)));
     if ws.runs_flow() {
         entries.push(panel_item("View flow", PanelKind::Flow, Some(("workspace", id))));
     }

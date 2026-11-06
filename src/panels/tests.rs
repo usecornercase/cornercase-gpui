@@ -21,7 +21,7 @@ fn the_flow_panel_shows_only_while_the_shown_workspace_runs_a_flow() {
 
 #[test]
 fn the_other_docked_panels_show_in_any_workspace() {
-    for kind in [PanelKind::Changes, PanelKind::Files, PanelKind::Todo, PanelKind::Browser] {
+    for kind in [PanelKind::Changes, PanelKind::Files, PanelKind::Todo, PanelKind::Recap, PanelKind::Browser] {
         assert!(kind.shows(Some(&session(2))), "{kind:?}");
         assert!(kind.shows(None), "{kind:?}");
     }

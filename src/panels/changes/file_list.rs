@@ -4,6 +4,7 @@ use gpui::{
 };
 
 use crate::model::Session;
+use crate::notify::tip;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui;
@@ -128,9 +129,29 @@ fn viewed_box(workspace: u64, path: &str, viewed: bool) -> gpui::Stateful<gpui::
         .when(!viewed, |d| d.border_color(colours::faint()).hover(|s| s.border_color(colours::text())))
 }
 
+fn is_muted(file: &FileInfo) -> bool {
+    file.viewed || file.fold != FoldClass::Open
+}
+
+fn shared_mark(workspace: u64, file: &FileInfo, hint: String) -> impl IntoElement + use<> {
+    div()
+        .id(SharedString::from(format!("shared-{workspace}-{}", file.path)))
+        .flex_none()
+        .text_size(px(11.))
+        .text_color(if is_muted(file) { colours::muted() } else { colours::working() })
+        .child("⇄")
+        .tooltip(tip(hint))
+}
+
+fn shared_hint(workspace: u64, file: &FileInfo, cx: &Context<ChangesPanel>) -> Option<String> {
+    let store = Store::get(cx);
+    let session = store.read(cx).session.as_ref()?;
+    session.file_shared_tip(workspace, &file.path, file.old_path.as_deref())
+}
+
 fn file_name(file: &FileInfo) -> impl IntoElement + use<> {
     let (dir, name) = split_path(&file.path);
-    let muted = file.viewed || file.fold != FoldClass::Open;
+    let muted = is_muted(file);
     let detail = match &file.old_path {
         Some(old) => format!("{old} →"),
         None => dir,
@@ -230,6 +251,7 @@ impl ChangesPanel {
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_selected(&pick, cx)))
             .child(status_letter(file.status).w(px(12.)).flex_none())
             .child(file_name(file))
+            .when_some(shared_hint(workspace, file, cx), |d, hint| d.child(shared_mark(workspace, file, hint)))
             .when_some(fold_tag(file.fold), |d, tag| d.child(tag_badge(tag)))
             .child(counts(file.added, file.removed))
             .when(mode.uncommitted(), |d| d.child(Self::row_stage_button(&group, workspace, file, cx)))

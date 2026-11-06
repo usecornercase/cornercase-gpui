@@ -32,10 +32,12 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 - [Sidebar](design/sidebar.md) (`sidebar.rs`, `sidebar/`): the panel rail, the floating card, rows, drag and drop, menus and inline forms.
 - [Pull requests](design/pull-requests.md) (`model/pull_request.rs`, `dialogs/pull_request.rs`, `dialogs/pull_request/`): a workspace's pull request on its row and in its dialog, its checks, conflicts and stack, Ask agent, what waits on #567.
 - [Context dialog](design/context-dialog.md) (`model/agent_context.rs`, `dialogs/context.rs`, `dialogs/context/`): what fills an agent's context, reading it without touching the agent, the bar and its lists, other agents.
+- [Shared files and the merge check](design/shared-files.md) (`model/shared.rs`, `dialogs/merge_check.rs`, `dialogs/merge_check/`): `⇄` on a workspace's row and a file of the Changes panel, what they say, the dialog that checks a workspace's merges, Ask agent.
 - [Changes panel](design/changes-panel.md) (`panels/changes.rs`, `panels/changes/`): the workspace's diff, staging, discarding, review.
 - [Files panel](design/files-panel.md) (`panels/files.rs`, `panels/files/`): the tree, the viewer, search, the ⇧⌘P finder; the one panel that reads the disk.
 - [Browser panel](design/browser.md) (`panels/browser.rs`, `panels/browser/`, `assets/browser/`): a headless Chrome drawn in the dock, why not a native web view, its profile and port, tabs per workspace, input, devices, the console, handing elements and screenshots to agents, agents driving it, ports and ssh tunnels.
 - [TODO panel](design/todo-panel.md) (`panels/todo.rs`, `panels/todo/`): the TODO list and sending an item to an agent.
+- [Recap](design/recap.md) (`panels/recap.rs`, `panels/recap/`): an agent's summary of what your agents did, its three ranges, a run beside the queue, naming ids, what a link goes to, what waits on #664.
 - [Queue](design/queue.md) (`panels/queue.rs`, `panels/queue/`): scheduled agent starts, their times and form.
 - [Issues](design/issues.md) (`panels/issues.rs`, `panels/issues/`): the issues browser, starting an agent on an issue, the #461 and #472 stopgaps.
 - [Accounts](design/accounts.md) (`panels/accounts.rs`, `panels/accounts/`): agent logins and profiles.

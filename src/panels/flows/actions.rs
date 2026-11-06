@@ -50,7 +50,7 @@ fn toast(text: impl Into<String>, kind: ToastKind, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
 }
 
-fn note(note: Option<&str>, cx: &mut App) {
+pub(super) fn note(note: Option<&str>, cx: &mut App) {
     if let Some(note) = note {
         toast(note, ToastKind::Info, cx);
     }

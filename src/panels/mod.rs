@@ -9,6 +9,7 @@ pub(crate) mod poll;
 pub(crate) mod ports;
 pub(crate) mod processes;
 pub(crate) mod queue;
+pub(crate) mod recap;
 pub(crate) mod search;
 pub(crate) mod settings;
 pub(crate) mod todo;
@@ -25,6 +26,7 @@ pub(crate) enum PanelKind {
     Changes,
     Files,
     Todo,
+    Recap,
     Browser,
     Flow,
     Queue,
@@ -41,10 +43,11 @@ pub(crate) enum PanelKind {
 }
 
 impl PanelKind {
-    pub(crate) const ALL: [PanelKind; 16] = [
+    pub(crate) const ALL: [PanelKind; 17] = [
         PanelKind::Changes,
         PanelKind::Files,
         PanelKind::Todo,
+        PanelKind::Recap,
         PanelKind::Browser,
         PanelKind::Flow,
         PanelKind::Queue,
@@ -65,6 +68,7 @@ impl PanelKind {
             Self::Changes => Icon::Changes,
             Self::Files => Icon::Files,
             Self::Todo => Icon::Todo,
+            Self::Recap => Icon::Recap,
             Self::Browser => Icon::Globe,
             Self::Flow => Icon::Waypoints,
             Self::Queue => Icon::Queue,
@@ -86,6 +90,7 @@ impl PanelKind {
             Self::Changes => "Changes",
             Self::Files => "Files",
             Self::Todo => "TODO",
+            Self::Recap => "Recap",
             Self::Browser => "Browser",
             Self::Flow => "Flow",
             Self::Queue => "Queue",
@@ -103,7 +108,7 @@ impl PanelKind {
     }
 
     pub(crate) fn docked(self) -> bool {
-        matches!(self, Self::Changes | Self::Files | Self::Todo | Self::Browser | Self::Flow)
+        matches!(self, Self::Changes | Self::Files | Self::Todo | Self::Recap | Self::Browser | Self::Flow)
     }
 
     pub(crate) fn shows(self, session: Option<&Session>) -> bool {
@@ -115,6 +120,7 @@ impl PanelKind {
             Self::Changes => changes::build(window, cx),
             Self::Files => files::build(window, cx),
             Self::Todo => todo::build(window, cx),
+            Self::Recap => recap::build(window, cx),
             Self::Browser => browser::build(window, cx),
             Self::Flow => flows::build_dock(window, cx),
             Self::Queue => queue::build(window, cx),

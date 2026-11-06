@@ -1,36 +1,23 @@
+use std::cell::Cell;
+use std::ops::RangeInclusive;
+use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{App, AppContext as _, Context, Entity, WeakEntity, Window};
+use gpui::{App, AppContext as _, Context, Entity, ScrollHandle, WeakEntity, Window};
 use serde_json::Value;
 
 use super::FlowsPanel;
-use super::actions::{Imported, announce, run_stdin};
+use super::actions::{Imported, announce, note, run_stdin};
+use super::diagram::Played;
 use super::draft::{
-    Draft, Place, RoleDraft, Saved, StageDraft, fresh_role_name, has_breaks, parse_saved, place_of, removed_from,
-    renamed_in, save_args,
+    Draft, LoopAfter, Place, RoleDraft, Saved, StageDraft, fresh_role_name, gone_note, has_breaks, loop_after,
+    neighbour, only_role_in, parse_saved, place_of, removed_from, renamed_in, save_args, swapped, without,
 };
-use super::model::{self, FlowInfo};
+use super::model::{self, FlowInfo, FlowSpec};
 use crate::ui::{TextField, TextFieldEvent};
 
 const CHECK_DELAY: Duration = Duration::from_millis(400);
-
-pub(super) enum Text {
-    Field(Entity<TextField>),
-    Kept(String),
-}
-
-impl Text {
-    fn new(text: &str, placeholder: &str, window: &mut Window, cx: &mut Context<FlowEditor>) -> Self {
-        if has_breaks(text) { Self::Kept(text.to_string()) } else { Self::Field(input(text, placeholder, window, cx)) }
-    }
-
-    pub(super) fn value(&self, cx: &App) -> String {
-        match self {
-            Self::Field(field) => field.read(cx).text(),
-            Self::Kept(text) => text.clone(),
-        }
-    }
-}
+const PROMPT_ROWS: RangeInclusive<usize> = 3..=12;
 
 pub(super) struct RoleFields {
     base: Value,
@@ -38,21 +25,25 @@ pub(super) struct RoleFields {
     pub agent: Entity<TextField>,
     pub model: Entity<TextField>,
     pub effort: Entity<TextField>,
-    pub prompt: Text,
+    pub args: Entity<TextField>,
+    pub env: Entity<TextField>,
+    pub prompt: Entity<TextField>,
     pub edits: bool,
     pub own_worktree: bool,
     last_name: String,
 }
 
 impl RoleFields {
-    fn new(role: &RoleDraft, window: &mut Window, cx: &mut Context<FlowEditor>) -> Self {
+    fn new(role: &RoleDraft, inputs: &Inputs, window: &mut Window, cx: &mut Context<FlowEditor>) -> Self {
         Self {
             base: role.base.clone(),
-            name: input(&role.name, "Name", window, cx),
-            agent: input(&role.agent, "claude, codex, gemini…", window, cx),
-            model: input(&role.model, "The agent's default", window, cx),
-            effort: input(&role.effort, "The agent's default", window, cx),
-            prompt: Text::new(&role.prompt, "What this role does", window, cx),
+            name: inputs.line(&role.name, "Name", window, cx),
+            agent: inputs.line(&role.agent, "claude, codex, gemini…", window, cx),
+            model: inputs.line(&role.model, "The agent's default", window, cx),
+            effort: inputs.line(&role.effort, "The agent's default", window, cx),
+            args: inputs.wrapped(&role.args, "Added to the agent's command", window, cx),
+            env: inputs.wrapped(&role.env, "KEY=value KEY='a value'", window, cx),
+            prompt: inputs.lines(&role.prompt, "What this role does", window, cx),
             edits: role.edits,
             own_worktree: role.own_worktree,
             last_name: role.name.clone(),
@@ -66,7 +57,9 @@ impl RoleFields {
             agent: self.agent.read(cx).text(),
             model: self.model.read(cx).text(),
             effort: self.effort.read(cx).text(),
-            prompt: self.prompt.value(cx),
+            args: self.args.read(cx).text(),
+            env: self.env.read(cx).text(),
+            prompt: self.prompt.read(cx).text(),
             edits: self.edits,
             own_worktree: self.own_worktree,
         }
@@ -86,14 +79,24 @@ pub(super) struct StageFields {
 }
 
 impl StageFields {
-    fn new(stage: &StageDraft, window: &mut Window, cx: &mut Context<FlowEditor>) -> Self {
+    fn new(stage: &StageDraft, inputs: &Inputs, window: &mut Window, cx: &mut Context<FlowEditor>) -> Self {
         Self {
             base: stage.base.clone(),
-            roles: input(&stage.roles, "coder, reviewer", window, cx),
-            back_to: input(&stage.back_to, "No loop", window, cx),
-            when: input(&stage.when, "findings", window, cx),
-            at_most: input(&stage.at_most, "2", window, cx),
+            roles: inputs.line(&stage.roles, "coder, reviewer", window, cx),
+            back_to: inputs.line(&stage.back_to, "No loop", window, cx),
+            when: inputs.line(&stage.when, "findings", window, cx),
+            at_most: inputs.line(&stage.at_most, "2", window, cx),
         }
+    }
+
+    fn clear_loop(&self, cx: &mut Context<FlowEditor>) {
+        for field in [&self.back_to, &self.when, &self.at_most] {
+            field.update(cx, TextField::clear);
+        }
+    }
+
+    fn holds_only(&self, role: &str, cx: &App) -> bool {
+        only_role_in(&self.roles.read(cx).text(), role)
     }
 
     fn draft(&self, cx: &App) -> StageDraft {
@@ -137,33 +140,67 @@ pub(super) struct FlowEditor {
     pub new: bool,
     original: Result<Value, String>,
     base: Value,
+    pub inputs: Inputs,
     pub name: Entity<TextField>,
-    pub description: Text,
-    pub notes: Text,
+    pub description: Entity<TextField>,
+    pub notes: Entity<TextField>,
     pub commits: bool,
     pub orchestrator: RoleFields,
     pub roles: Vec<RoleFields>,
     pub stages: Vec<StageFields>,
+    pub plan: FlowSpec,
+    pub board: Rc<Cell<f32>>,
+    pub played: Played,
     pub verdict: Verdict,
     generation: u64,
     pub mode: Mode,
     pub error: Option<String>,
 }
 
-fn input(text: &str, placeholder: &str, window: &mut Window, cx: &mut Context<FlowEditor>) -> Entity<TextField> {
-    let text = text.to_string();
-    let field = cx.new(|cx| {
-        let mut field = TextField::new(placeholder.to_string(), cx).in_tab_order();
-        field.set_text(text, cx);
+#[derive(Default)]
+pub(super) struct Inputs {
+    pub scroller: ScrollHandle,
+}
+
+impl Inputs {
+    fn line(&self, text: &str, hint: &str, window: &mut Window, cx: &mut Context<FlowEditor>) -> Entity<TextField> {
+        self.field((text, hint), |field| field, window, cx)
+    }
+
+    fn wrapped(&self, text: &str, hint: &str, window: &mut Window, cx: &mut Context<FlowEditor>) -> Entity<TextField> {
+        self.field((text, hint), TextField::wraps, window, cx)
+    }
+
+    fn lines(&self, text: &str, hint: &str, window: &mut Window, cx: &mut Context<FlowEditor>) -> Entity<TextField> {
+        self.field((text, hint), |field| field.multiline(PROMPT_ROWS), window, cx)
+    }
+
+    fn sentence(&self, text: &str, hint: &str, window: &mut Window, cx: &mut Context<FlowEditor>) -> Entity<TextField> {
+        if has_breaks(text) { self.lines(text, hint, window, cx) } else { self.wrapped(text, hint, window, cx) }
+    }
+
+    fn field(
+        &self,
+        (text, hint): (&str, &str),
+        shape: impl FnOnce(TextField) -> TextField,
+        window: &mut Window,
+        cx: &mut Context<FlowEditor>,
+    ) -> Entity<TextField> {
+        let text = text.to_string();
+        let scroller = self.scroller.clone();
+        let field = cx.new(|cx| {
+            let mut field = shape(TextField::new(hint.to_string(), cx).in_tab_order().inside(scroller));
+            field.set_text(text, cx);
+            field
+        });
+        cx.subscribe_in(&field, window, |this: &mut FlowEditor, _, event, _, cx| match event {
+            TextFieldEvent::Submit => this.save(cx),
+            TextFieldEvent::Changed => this.changed(cx),
+            TextFieldEvent::Cancel => {}
+        })
+        .detach();
         field
-    });
-    cx.subscribe_in(&field, window, |this: &mut FlowEditor, _, event, _, cx| match event {
-        TextFieldEvent::Submit => this.save(cx),
-        TextFieldEvent::Changed => this.changed(cx),
-        TextFieldEvent::Cancel => {}
-    })
-    .detach();
-    field
+    }
 }
 
 impl FlowsPanel {
@@ -216,6 +253,7 @@ impl FlowEditor {
         cx: &mut Context<Self>,
     ) -> Self {
         let Opening { draft, place, title, note } = opening;
+        let inputs = Inputs::default();
         let mut this = Self {
             panel,
             project,
@@ -225,13 +263,17 @@ impl FlowEditor {
             place,
             original: draft.to_value(),
             base: draft.base.clone(),
-            name: input(&draft.name, "Name", window, cx),
-            description: Text::new(&draft.description, "What the flow is for", window, cx),
-            notes: Text::new(&draft.notes, "Notes for the orchestrator (optional)", window, cx),
+            name: inputs.line(&draft.name, "Name", window, cx),
+            description: inputs.sentence(&draft.description, "What the flow is for", window, cx),
+            notes: inputs.lines(&draft.notes, "Notes for the orchestrator (optional)", window, cx),
             commits: draft.commits,
-            orchestrator: RoleFields::new(&draft.orchestrator, window, cx),
-            roles: draft.roles.iter().map(|r| RoleFields::new(r, window, cx)).collect(),
-            stages: draft.stages.iter().map(|s| StageFields::new(s, window, cx)).collect(),
+            orchestrator: RoleFields::new(&draft.orchestrator, &inputs, window, cx),
+            roles: draft.roles.iter().map(|r| RoleFields::new(r, &inputs, window, cx)).collect(),
+            stages: draft.stages.iter().map(|s| StageFields::new(s, &inputs, window, cx)).collect(),
+            plan: draft.plan().unwrap_or_default(),
+            board: Rc::new(Cell::new(super::BOARD)),
+            played: Played::default(),
+            inputs,
             verdict: Verdict::Waiting,
             generation: 0,
             mode: Mode::Editing,
@@ -245,8 +287,8 @@ impl FlowEditor {
         Draft {
             base: self.base.clone(),
             name: self.name.read(cx).text(),
-            description: self.description.value(cx),
-            notes: self.notes.value(cx),
+            description: self.description.read(cx).text(),
+            notes: self.notes.read(cx).text(),
             commits: self.commits,
             orchestrator: self.orchestrator.draft(cx),
             roles: self.roles.iter().map(|r| r.draft(cx)).collect(),
@@ -286,6 +328,9 @@ impl FlowEditor {
     }
 
     pub(super) fn schedule_check(&mut self, cx: &mut Context<Self>) {
+        if let Some(plan) = self.draft(cx).plan() {
+            self.plan = plan;
+        }
         self.generation += 1;
         let generation = self.generation;
         cx.spawn(async move |this, cx| {
@@ -392,9 +437,9 @@ impl FlowEditor {
     pub(super) fn add_role(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let taken: Vec<String> = self.roles.iter().map(|r| r.current_name(cx)).collect();
         let name = fresh_role_name(&taken);
-        let role = RoleFields::new(&RoleDraft::new(&name, "claude", false), window, cx);
+        let role = RoleFields::new(&RoleDraft::new(&name, "claude", false), &self.inputs, window, cx);
         self.roles.push(role);
-        let stage = StageFields::new(&StageDraft::with_roles(&name), window, cx);
+        let stage = StageFields::new(&StageDraft::with_roles(&name), &self.inputs, window, cx);
         self.stages.push(stage);
         self.schedule_check(cx);
     }
@@ -404,12 +449,17 @@ impl FlowEditor {
             return;
         }
         let gone = self.roles.remove(index).current_name(cx);
+        let emptied: Vec<usize> = (0..self.stages.len()).filter(|i| self.stages[*i].holds_only(&gone, cx)).collect();
         self.rewrite_stages(|list| removed_from(list, &gone), cx);
+        for stage in emptied.into_iter().rev() {
+            self.stages.remove(stage);
+            self.follow_loops(without(stage + 1), cx);
+        }
         self.schedule_check(cx);
     }
 
     pub(super) fn add_stage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let stage = StageFields::new(&StageDraft::default(), window, cx);
+        let stage = StageFields::new(&StageDraft::default(), &self.inputs, window, cx);
         self.stages.push(stage);
         self.schedule_check(cx);
     }
@@ -417,7 +467,30 @@ impl FlowEditor {
     pub(super) fn remove_stage(&mut self, index: usize, cx: &mut Context<Self>) {
         if index < self.stages.len() {
             self.stages.remove(index);
+            self.follow_loops(without(index + 1), cx);
             self.schedule_check(cx);
         }
+    }
+
+    pub(super) fn move_stage(&mut self, index: usize, up: bool, cx: &mut Context<Self>) {
+        let Some(other) = neighbour(index, up, self.stages.len()) else { return };
+        self.stages.swap(index, other);
+        self.follow_loops(swapped(index + 1, other + 1), cx);
+        self.schedule_check(cx);
+    }
+
+    fn follow_loops(&self, moved: impl Fn(usize) -> Option<usize>, cx: &mut Context<Self>) {
+        let mut gone = Vec::new();
+        for (i, stage) in self.stages.iter().enumerate() {
+            match loop_after(&stage.back_to.read(cx).text(), i + 1, &moved) {
+                LoopAfter::Same => {}
+                LoopAfter::To(to) => stage.back_to.update(cx, |field, cx| field.set_text(to, cx)),
+                LoopAfter::Gone => {
+                    stage.clear_loop(cx);
+                    gone.push(i + 1);
+                }
+            }
+        }
+        note(gone_note(&gone).as_deref(), cx);
     }
 }

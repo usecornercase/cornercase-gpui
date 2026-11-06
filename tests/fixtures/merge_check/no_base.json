@@ -1,0 +1,13 @@
+{
+  "checks": [
+    {
+      "base": null,
+      "clean": false,
+      "conflicts": [],
+      "error": "no base branch to merge into",
+      "left_out": 0,
+      "with": null
+    }
+  ],
+  "workspace": 24
+}

@@ -1,6 +1,6 @@
 use gpui::{
-    ClickEvent, Context, IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _,
-    div, prelude::FluentBuilder as _, px,
+    ClickEvent, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
 use super::{card, tip};
@@ -13,9 +13,11 @@ use crate::ui::glass::ring;
 use crate::ui::{self, Icon};
 
 const RAIL_WIDTH: f32 = 44.;
+const RING: f32 = 3.;
 pub(super) const COLUMN: f32 = RAIL_WIDTH + 2. * GAP;
 
-const DOCKED: [PanelKind; 4] = [PanelKind::Changes, PanelKind::Files, PanelKind::Todo, PanelKind::Browser];
+const DOCKED: [PanelKind; 5] =
+    [PanelKind::Changes, PanelKind::Files, PanelKind::Todo, PanelKind::Recap, PanelKind::Browser];
 const SHEETS: [PanelKind; 10] = [
     PanelKind::Search,
     PanelKind::Issues,
@@ -46,18 +48,33 @@ impl Root {
         div().h_full().flex_none().flex().flex_col().pt(px(TITLEBAR_HEIGHT)).px(px(GAP)).pb(px(GAP)).child(
             card()
                 .w(px(RAIL_WIDTH))
+                .min_h_0()
                 .items_center()
                 .gap(px(6.))
-                .pt(px(5.))
                 .pb(px(10.))
-                .children(self.rail_buttons(&self.docked_kinds(cx), cx))
-                .child(div().w(px(18.)).h(px(1.)).my(px(6.)).flex_none().rounded_full().bg(colours::edge()))
-                .children(self.rail_buttons(&SHEETS, cx))
-                .child(div().flex_1())
+                .child(self.rail_panels(cx))
                 .child(tours_button())
                 .child(shortcuts_button())
                 .children(self.rail_buttons(&[PanelKind::Settings], cx)),
         )
+    }
+
+    fn rail_panels(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        div()
+            .id("rail-panels")
+            .flex_1()
+            .min_h_0()
+            .w_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(px(6.))
+            .pt(px(5.))
+            .pb(px(RING))
+            .overflow_y_scroll()
+            .children(self.rail_buttons(&self.docked_kinds(cx), cx))
+            .child(div().w(px(18.)).h(px(1.)).my(px(6.)).flex_none().rounded_full().bg(colours::edge()))
+            .children(self.rail_buttons(&SHEETS, cx))
     }
 
     fn docked_kinds(&self, cx: &Context<Self>) -> Vec<PanelKind> {
