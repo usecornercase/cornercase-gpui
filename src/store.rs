@@ -60,6 +60,7 @@ pub(crate) struct Store {
     pub jobs: Jobs,
     pub plugins: Offers,
     pub keys_to_terminal: bool,
+    pub file_full_screen: bool,
     pub accounts: AccountsInfo,
     pub selection: Selection,
     pub account_settings: AccountSettings,
@@ -146,6 +147,7 @@ impl Store {
             jobs: Jobs::default(),
             plugins: Offers::default(),
             keys_to_terminal: false,
+            file_full_screen: false,
             accounts: AccountsInfo::default(),
             selection: Selection::default(),
             account_settings: AccountSettings::default(),
@@ -284,6 +286,7 @@ impl Store {
 
     pub(crate) fn give_keys_back(&mut self, cx: &mut Context<Self>) {
         self.keys_to_terminal = true;
+        self.file_full_screen = false;
         cx.notify();
     }
 
@@ -300,6 +303,7 @@ impl Store {
         self.cmd(args(&["send", "--pane", &pane.to_string(), "--", text]));
         self.focus("pane", pane);
         self.keys_to_terminal = true;
+        self.file_full_screen = false;
         self.toast(format!("Sent {label} to {agent}"), ToastKind::Info, cx);
     }
 
@@ -412,6 +416,23 @@ impl Store {
         self.dock.filter(|kind| kind.shows(self.session.as_ref()))
     }
 
+    pub(crate) fn shows_file_full_screen(&self) -> bool {
+        self.file_full_screen && self.shown_dock() == Some(PanelKind::Files)
+    }
+
+    pub(crate) fn toggle_file_full_screen(&mut self, cx: &mut Context<Self>) {
+        self.file_full_screen = !self.file_full_screen;
+        cx.notify();
+    }
+
+    pub(crate) fn leave_file_full_screen(&mut self, cx: &mut Context<Self>) -> bool {
+        let left = std::mem::take(&mut self.file_full_screen);
+        if left {
+            cx.notify();
+        }
+        left
+    }
+
     pub(crate) fn show_run(&mut self, cx: &mut Context<Self>) {
         self.sheet = None;
         self.dock = Some(PanelKind::Flow);
@@ -488,6 +509,13 @@ impl Store {
         self.prefs = changed;
         cx.notify();
         Ok(())
+    }
+
+    pub(crate) fn toggle_long_lines(&mut self, cx: &mut Context<Self>) {
+        let value = if self.prefs.wraps() { "cut" } else { "wrap" };
+        if let Err(e) = self.set_pref("long_lines", value, cx) {
+            self.toast(format!("{e:#}"), ToastKind::Error, cx);
+        }
     }
 
     pub(crate) fn run_started(&mut self, workspace: u64, cx: &mut Context<Self>) {

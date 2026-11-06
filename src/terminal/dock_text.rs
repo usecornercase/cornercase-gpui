@@ -4,6 +4,7 @@ use crate::app::Root;
 use crate::panels::PanelKind;
 use crate::panels::changes::ChangesPanel;
 use crate::panels::files::FilesPanel;
+use crate::store::Store;
 
 impl Root {
     fn files_panel(&self) -> Option<Entity<FilesPanel>> {
@@ -37,6 +38,7 @@ impl Root {
             }
             _ => false,
         };
+        let answered = answered || self.store.update(cx, Store::leave_file_full_screen);
         if answered {
             window.focus(&self.dock_focus);
         }

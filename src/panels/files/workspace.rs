@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use gpui::{AppContext as _, Context};
 
 use crate::model::{Project, Session, Workspace};
+use crate::store::Store;
 
 use super::served::Listed;
 use super::source::Source;
@@ -19,6 +20,9 @@ impl Place {
         match listing {
             Ok(listing) => {
                 let cleared = root && self.error.take().is_some();
+                if self.source.lists_marks() {
+                    tree::keep_marks(&mut self.marks, &rel, &listing);
+                }
                 if self.listings.get(&rel) == Some(&listing) {
                     return cleared;
                 }
@@ -41,6 +45,7 @@ impl FilesPanel {
             self.take_run_file(cx);
         } else {
             self.forget_flow();
+            self.store.update(cx, Store::leave_file_full_screen);
         }
     }
 
@@ -84,12 +89,15 @@ impl FilesPanel {
         cx.notify();
     }
 
-    pub(super) fn tick(&mut self, list: bool, cx: &mut Context<Self>) {
+    pub(super) fn tick(&mut self, list: bool, again: bool, cx: &mut Context<Self>) {
         if !self.showing(cx) {
             return;
         }
         if list {
             self.relist(cx);
+        }
+        if let Some(id) = self.current.filter(|_| again) {
+            self.follow_changes(id, true, cx);
         }
         self.check_file(cx);
     }
@@ -107,13 +115,14 @@ impl FilesPanel {
 
     pub(super) fn list(&mut self, id: u64, folders: Vec<PathBuf>, cx: &mut Context<Self>) {
         let Some(place) = self.places.get(&id) else { return };
-        let source = place.source.clone();
+        let (source, marked) = (place.source.clone(), folders.clone());
         let job = cx.background_spawn(async move { source.list(folders) });
         cx.spawn(async move |this, cx| {
             let listed = job.await;
             let _ = this.update(cx, |this, cx| this.apply_listings(id, listed, cx));
         })
         .detach();
+        self.read_marks(id, marked, cx);
     }
 
     fn apply_listings(&mut self, id: u64, listed: Listed, cx: &mut Context<Self>) {
@@ -126,6 +135,7 @@ impl FilesPanel {
         if changed {
             cx.notify();
         }
+        self.follow_changes(id, false, cx);
     }
 
     pub(super) fn click_row(&mut self, rel: PathBuf, dir: bool, cx: &mut Context<Self>) {

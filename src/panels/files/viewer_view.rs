@@ -1,25 +1,30 @@
-use std::ops::Range;
 use std::path::PathBuf;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, ObjectFit, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window, div, img, prelude::FluentBuilder as _, px,
-    relative, uniform_list,
+    AnyElement, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, ListState, ObjectFit,
+    ParentElement as _, Pixels, StatefulInteractiveElement as _, Styled as _, StyledImage as _, Window, div, img,
+    list as list_of, prelude::FluentBuilder as _, px, relative,
 };
 
 use crate::keymap::{Command, with_keys};
+use crate::notify::tip;
 use crate::panels::PanelKind;
 use crate::platform::paths::Style;
+use crate::prefs::LongLines;
+use crate::store::Store;
 use crate::theme::{colours, radius};
-use crate::ui;
-use crate::ui::selection::{self, Lit, Styles, overlay};
+use crate::ui::selection::{self, Fit, Lit, Styles, overlay};
+use crate::ui::{self, Icon};
 
 use super::disk::{self, Content};
-use super::find;
+use super::gutter_view::{mark_cell, old_lines};
 use super::style::{
-    CodeRow, centered_note, code_row, faint_small, file_icon, image_label, number_width, plural, span_styles,
+    centered_note, code_frame, faint_small, file_icon, image_label, number_cell, number_width, plural, span_styles,
 };
 use super::{FilesPanel, Target, Viewer};
+
+const CODE_TOP: f32 = 4.;
+const CODE_BOTTOM: f32 = 4.;
 
 struct Heading {
     name: String,
@@ -29,6 +34,8 @@ struct Heading {
     path: PathBuf,
     target: Target,
     text: bool,
+    wraps: bool,
+    full: bool,
 }
 
 fn content_info(viewer: &Viewer) -> Vec<String> {
@@ -59,7 +66,7 @@ fn back_label(from_flow: bool, from_search: bool) -> &'static str {
     }
 }
 
-fn heading(viewer: &Viewer, style: Style, flow_shows: bool) -> Heading {
+fn heading(viewer: &Viewer, style: Style, flow_shows: bool, full: bool) -> Heading {
     let rel = &viewer.rel;
     let shown = style.shown(rel);
     let (folder, name) = style.split(&shown);
@@ -70,6 +77,8 @@ fn heading(viewer: &Viewer, style: Style, flow_shows: bool) -> Heading {
         info: content_info(viewer).join("  ·  "),
         path: viewer.path.clone(),
         text: matches!(viewer.content, Some(Content::Text(_))),
+        wraps: viewer.long_lines == LongLines::Wrap,
+        full,
         target: Target { rel: rel.clone(), dir: false, line: viewer.selecting.selection.map(|s| s.covered().0) },
     }
 }
@@ -100,6 +109,17 @@ fn other_body(content: &Content) -> AnyElement {
 }
 
 impl FilesPanel {
+    fn viewer_tools(heading: &Heading, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let glyph = if heading.full { Icon::Shrink } else { Icon::Enlarge };
+        let full = ui::tool_button("files-full-screen", glyph, 24., heading.full)
+            .tooltip(tip("Full screen: this button or Esc goes back"))
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.store.update(cx, Store::toggle_file_full_screen)));
+        let wrap = selection::wrap_button("files-wrap", heading.wraps).on_click(|_: &ClickEvent, _, cx| {
+            Store::get(cx).update(cx, Store::toggle_long_lines);
+        });
+        div().flex_none().flex().items_center().gap(px(2.)).when(heading.text, |d| d.child(wrap)).child(full)
+    }
+
     fn viewer_title(heading: &Heading, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         div()
             .flex()
@@ -118,7 +138,8 @@ impl FilesPanel {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(ui::one_line(heading.name.clone())),
             )
-            .child(faint_small(ui::one_line(heading.folder.clone())))
+            .child(faint_small(ui::one_line(heading.folder.clone())).flex_1())
+            .child(Self::viewer_tools(heading, cx))
     }
 
     fn viewer_actions(heading: &Heading, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -132,7 +153,7 @@ impl FilesPanel {
             .when(heading.text, |d| {
                 d.child(
                     ui::button("files-find", "Find")
-                        .tooltip(crate::notify::tip(with_keys("Find in this file", Command::FindInFile)))
+                        .tooltip(tip(with_keys("Find in this file", Command::FindInFile)))
                         .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_find(window, cx))),
                 )
             })
@@ -159,33 +180,43 @@ impl FilesPanel {
             .child(Self::viewer_actions(heading, cx))
     }
 
-    fn viewer_body(&self, content: Option<&Content>, room: f32, cx: &mut Context<Self>) -> AnyElement {
-        match content {
-            None => ui::loading("Reading…").into_any_element(),
-            Some(Content::Text(text)) => uniform_list(
-                "files-code",
-                text.lines.len(),
-                cx.processor(|this, range: Range<usize>, _window, _cx| this.code_items(range)),
-            )
+    fn code_list(list: &ListState, cx: &mut Context<Self>) -> AnyElement {
+        list_of(list.clone(), cx.processor(|this, ix: usize, _window, cx| this.code_item(ix, cx)))
             .size_full()
-            .pt(px(4. + room / 2.))
-            .pb(px(4.))
-            .track_scroll(self.code_scroll.clone())
-            .into_any_element(),
+            .pb(px(CODE_BOTTOM))
+            .into_any_element()
+    }
+
+    fn viewer_body(viewer: &Viewer, cx: &mut Context<Self>) -> AnyElement {
+        match &viewer.content {
+            None => ui::loading("Reading…").into_any_element(),
+            Some(Content::Text(_)) => Self::code_list(&viewer.list, cx),
             Some(other) => other_body(other),
         }
     }
 
+    fn follow_wrap(&mut self, cx: &Context<Self>) {
+        let long_lines = self.store.read(cx).prefs.long_lines;
+        let viewer = self.place_mut().and_then(|p| p.viewer.as_mut());
+        if let Some(viewer) = viewer.filter(|viewer| viewer.long_lines != long_lines) {
+            viewer.long_lines = long_lines;
+            viewer.refit();
+        }
+    }
+
     pub(super) fn render_viewer(&mut self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        self.follow_wrap(cx);
+        self.settle_reveal(window);
         let Some(viewer) = self.place().and_then(|p| p.viewer.as_ref()) else { return div().into_any_element() };
         viewer.selecting.laid().clear();
-        let flow_shows = PanelKind::Flow.shows(self.store.read(cx).session.as_ref());
-        let heading = heading(viewer, self.style(), flow_shows);
-        let room = if viewer.find.is_some() { find::FIELD_ROOM } else { 0. };
+        let store = self.store.read(cx);
+        let flow_shows = PanelKind::Flow.shows(store.session.as_ref());
+        let heading = heading(viewer, self.style(), flow_shows, store.shows_file_full_screen());
+        let room = viewer.room();
         let bar = self.line_bar(cx);
         let code = selection::body(cx)
             .rounded_b(px(radius::CARD - 1.))
-            .child(self.viewer_body(viewer.content.as_ref(), room, cx))
+            .child(Self::viewer_body(viewer, cx))
             .children(self.find_bar(window, cx))
             .child(selection::layer(cx.weak_entity(), &viewer.selecting, bar, room));
         div()
@@ -198,10 +229,10 @@ impl FilesPanel {
             .into_any_element()
     }
 
-    fn line_styles(viewer: &Viewer, ix: usize, line: &str, lit: &Lit) -> Styles {
+    fn line_styles(viewer: &Viewer, (ix, line): (usize, &str), fit: Fit, lit: &Lit) -> Styles {
         let styles = span_styles(viewer.spans.as_ref(), ix);
         let styles = match &viewer.find {
-            Some(find) => find.paint_line(styles, ix, line),
+            Some(find) => find.paint_line(styles, (ix, line), fit),
             None => styles,
         };
         match lit.drawn_range(line) {
@@ -210,23 +241,38 @@ impl FilesPanel {
         }
     }
 
-    fn code_items(&mut self, range: Range<usize>) -> Vec<AnyElement> {
-        let Some(viewer) = self.place().and_then(|p| p.viewer.as_ref()) else { return Vec::new() };
-        let Some(Content::Text(text)) = &viewer.content else { return Vec::new() };
-        let width = number_width(text.lines.len());
-        range
-            .filter_map(|ix| text.lines.get(ix).map(|line| (ix, line)))
-            .map(|(ix, line)| Self::code_line(viewer, (ix, line), width))
-            .collect()
+    fn code_item(&mut self, ix: usize, cx: &mut Context<Self>) -> AnyElement {
+        let Some(viewer) = self.place().and_then(|p| p.viewer.as_ref()) else { return div().into_any_element() };
+        let Some(Content::Text(text)) = &viewer.content else { return div().into_any_element() };
+        let Some(line) = text.lines.get(ix) else { return div().into_any_element() };
+        let (fit, width) = (viewer.fit(), number_width(text.lines.len()));
+        let (above, below) = (ix, Some(ix + 1).filter(|next| *next == text.lines.len()));
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .when(ix == 0, |d| d.pt(px(CODE_TOP + viewer.room())))
+            .children(viewer.margin.unfolded_before(above).map(|block| old_lines(block, fit, width)))
+            .child(Self::code_line(viewer, (ix, line), (fit, width), cx))
+            .children(below.and_then(|next| viewer.margin.unfolded_before(next)).map(|b| old_lines(b, fit, width)))
+            .into_any_element()
     }
 
-    fn code_line(viewer: &Viewer, (ix, line): (usize, &str), width: gpui::Pixels) -> AnyElement {
+    fn code_line(
+        viewer: &Viewer,
+        (ix, line): (usize, &str),
+        (fit, width): (Fit, Pixels),
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let lit = viewer.selecting.lit(ix, line);
         let selected = lit == Lit::Line;
-        let (laid, len) = (viewer.selecting.laid().clone(), line.len());
-        let row = CodeRow::new(ix, line, Self::line_styles(viewer, ix, line, &lit), selected, width)
-            .on_laid(move |out| laid.add_line(ix, len, out));
-        code_row(row).when(!selected, |d| d.hover(|s| s.bg(colours::panel()))).into_any_element()
+        let styles = Self::line_styles(viewer, (ix, line), fit, &lit);
+        let number = if selected { colours::accent() } else { colours::faint() };
+        let mark = viewer.margin.gutter.as_ref().and_then(|gutter| gutter.at(ix)).map(|block| mark_cell(ix, block, cx));
+        fit.row(code_frame(selected))
+            .when(!selected, |d| d.hover(|s| s.bg(colours::panel())))
+            .child(number_cell(width).relative().text_color(number).child((ix + 1).to_string()).children(mark))
+            .child(selection::code_cell(viewer.selecting.laid(), (ix, line), styles, fit))
     }
 }
 

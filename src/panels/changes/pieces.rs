@@ -58,7 +58,7 @@ fn status_colour(status: FileStatus) -> Rgba {
     }
 }
 
-pub(super) fn status_letter(status: FileStatus) -> gpui::Div {
+pub(crate) fn status_letter(status: FileStatus) -> gpui::Div {
     div()
         .font_family(FONT_FAMILY)
         .text_size(px(11.))

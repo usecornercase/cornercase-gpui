@@ -1,4 +1,4 @@
-use gpui::{AnyElement, ClickEvent, ClipboardItem, Context, IntoElement, StatefulInteractiveElement as _, px};
+use gpui::{AnyElement, ClickEvent, ClipboardItem, Context, IntoElement, StatefulInteractiveElement as _};
 
 use crate::store::{Store, ToastKind};
 use crate::ui::selection::{self, Edge, Selecting, Selection, Selects};
@@ -8,7 +8,6 @@ use super::pieces::toast;
 use super::wire::FileStatus;
 use super::{ChangesPanel, DiffData};
 
-const ROW: f32 = 18.;
 const NO_OWN_TEXT: &str = "tabs may have become spaces: needs usecornercase/cornercase-terminal#667";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,11 +83,8 @@ impl Selects for ChangesPanel {
         Some(&mut self.open.selecting)
     }
 
-    fn scroll_a_row(&mut self, edge: Edge, _drawn: (Spot, Spot)) {
-        self.diff_list.scroll_by(match edge {
-            Edge::Top => px(-ROW),
-            Edge::Bottom => px(ROW),
-        });
+    fn scroll_a_row(&mut self, edge: Edge) {
+        self.diff_list.scroll_by(edge.a_row());
     }
 
     fn line_text(&self, spot: Spot) -> Option<&str> {

@@ -1,6 +1,8 @@
 use std::sync::atomic::AtomicBool;
 
 use super::super::search;
+use crate::ui::selection::Fit;
+
 use super::{Hit, all_hits, count, first_from, on_line, stepped};
 
 fn lines(text: &[&str]) -> Vec<String> {
@@ -87,14 +89,20 @@ fn stepping_through_no_hits_stays_on_none() {
 #[test]
 fn a_drawn_line_finds_only_its_own_hits() {
     let hits = [hit(2, 0, 1), hit(5, 0, 1), hit(5, 3, 4), hit(9, 0, 1)];
-    assert_eq!(on_line(&hits, 5), &hits[1..3]);
-    assert_eq!(on_line(&hits, 6), &[]);
+    assert_eq!(on_line(&hits, 5, 4096), &hits[1..3]);
+    assert_eq!(on_line(&hits, 6, 4096), &[]);
 }
 
 #[test]
 fn hits_far_past_the_edge_of_a_huge_line_are_not_drawn() {
     let hits = [hit(1, 0, 1), hit(1, 4_000, 4_001), hit(1, 500_000, 500_001), hit(2, 0, 1)];
-    assert_eq!(on_line(&hits, 1), &hits[..2]);
+    assert_eq!(on_line(&hits, 1, 4096), &hits[..2]);
+}
+
+#[test]
+fn a_wrapped_line_lights_its_hits_as_far_as_it_is_drawn() {
+    let hits = [hit(1, 0, 1), hit(1, 9_000, 9_001), hit(1, 500_000, 500_001)];
+    assert_eq!(on_line(&hits, 1, Fit::Wrap { columns: 100 }.lit_bytes()), &hits[..2]);
 }
 
 #[test]

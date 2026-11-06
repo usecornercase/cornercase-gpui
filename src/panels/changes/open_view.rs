@@ -112,6 +112,9 @@ impl ChangesPanel {
                 d.child(ui::busy("diff-updating", "updating…").text_size(px(11.)))
             })
             .child(counts(file.added, file.removed))
+            .child(selection::wrap_button("diff-wrap", self.wraps).on_click(|_: &ClickEvent, _, cx| {
+                Store::get(cx).update(cx, Store::toggle_long_lines);
+            }))
             .child(
                 ui::icon_button("open-close", "✕")
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.select(None, cx))),
@@ -164,7 +167,7 @@ impl ChangesPanel {
         if data.rows.is_empty() {
             return ui::note(empty_diff_text(file)).into_any_element();
         }
-        diff_view::diff_list(&self.diff_list, data, cx.entity().downgrade(), &self.open.selecting)
+        diff_view::diff_list(&self.diff_list, self.wraps, data, cx.entity().downgrade(), &self.open.selecting)
     }
 
     pub(super) fn render_footer(&self) -> impl IntoElement + use<> {

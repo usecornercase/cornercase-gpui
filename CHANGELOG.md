@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.18
+
+- **Files shows what changed.** The tree's rows end in git's letter, in the colours of the Changes panel, for a changed file and for a folder holding one. In an open file the margin marks added lines in green, changed ones in blue and where lines were removed in red; a click on a mark shows the old lines, and another hides them.
+- **Long lines wrap in the Files viewer**, as they already did in the Changes diff, so you can read one whole in a narrow panel, with its number on the first row. Selecting and finding work across the rows. A button in the viewer and on the diff's open file cuts them at the edge instead, and the window remembers your choice. A line of more than about 100 rows, such as a minified bundle, ends in `…`; Copy and Open give the rest.
+- **Read a file full screen.** A button in the viewer's title gives the file the terminal's area and the dock's. The same button or Esc puts it back, and your programs keep their size. Ask agent and switching tabs put it back too.
+
 ## 0.1.17
 
 - **Tabs past the edge can be reached.** When a workspace has more tabs than the bar holds, `‹` and `›` appear at its ends, the wheel scrolls it, and the tab you are on stays in view.

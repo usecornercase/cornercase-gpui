@@ -44,7 +44,7 @@ pub(super) enum Staging {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub(super) enum FileStatus {
+pub(crate) enum FileStatus {
     #[default]
     Modified,
     Added,

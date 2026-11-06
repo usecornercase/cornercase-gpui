@@ -1,15 +1,15 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, ClickEvent, ClipboardItem, CursorStyle, FontStyle, FontWeight, HighlightStyle,
-    InteractiveElement as _, IntoElement, ListState, MouseButton, ParentElement as _, Rgba, SharedString,
-    StatefulInteractiveElement as _, Styled as _, StyledText, WeakEntity, div, list, prelude::FluentBuilder as _, px,
+    AnyElement, App, ClickEvent, ClipboardItem, FontStyle, FontWeight, HighlightStyle, InteractiveElement as _,
+    IntoElement, ListState, MouseButton, ParentElement as _, Rgba, SharedString, StatefulInteractiveElement as _,
+    Styled as _, WeakEntity, div, list, prelude::FluentBuilder as _, px,
 };
 
 use crate::store::{Store, ToastKind};
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
-use crate::ui::selection::{self, Laid, Lit, Selecting, Selection, Styles, overlay};
+use crate::ui::selection::{self, Fit, Laid, Lit, Selecting, Selection, Styles, overlay};
 
 use super::diff::{Part, Spot};
 use super::pieces::{plural, toast};
@@ -19,6 +19,7 @@ use super::{ChangesPanel, DiffData, Look, Row, diff};
 struct Picked {
     selection: Option<Selection<Spot>>,
     laid: Laid<Spot>,
+    fit: Fit,
 }
 
 struct CodeLine<'a> {
@@ -37,11 +38,14 @@ struct CodeLine<'a> {
 
 pub(super) fn diff_list(
     state: &ListState,
+    wraps: bool,
     data: Rc<DiffData>,
     panel: WeakEntity<ChangesPanel>,
     selecting: &Selecting<Spot>,
 ) -> AnyElement {
-    let picked = Picked { selection: selecting.selection, laid: selecting.laid().clone() };
+    let laid = selecting.laid().clone();
+    let fit = Fit::of(wraps, laid.body().size.width);
+    let picked = Picked { selection: selecting.selection, laid, fit };
     list(state.clone(), move |ix, _window, _cx| diff_row(&data, ix, &panel, &picked)).size_full().into_any_element()
 }
 
@@ -221,23 +225,18 @@ impl CodeLine<'_> {
         }
     }
 
-    fn styled_text(&self, lit: &Lit) -> StyledText {
-        let shown = if self.text.is_empty() { " " } else { self.text };
-        StyledText::new(SharedString::from(shown.to_string())).with_highlights(self.highlights(lit))
-    }
-
     fn render(self) -> AnyElement {
         let tint = self.tint;
         let lit = self.picked.selection.map_or(Lit::Nothing, |selection| selection.lit(self.spot, self.text));
         let selected = lit == Lit::Line;
-        let text = self.styled_text(&lit);
-        let probe = selection::row_probe(&self.picked.laid, (self.spot, self.text.len()), text.layout().clone());
-        div()
+        let fit = self.picked.fit;
+        let cell = selection::code_cell(&self.picked.laid, (self.spot, self.text), self.highlights(&lit), fit);
+        fit.row(div())
             .w_full()
             .flex()
             .font_family(FONT_FAMILY)
             .text_size(px(12.))
-            .line_height(px(18.))
+            .line_height(px(selection::CODE_ROW))
             .when_some(line_ground(tint, selected, self.dim), gpui::Styled::bg)
             .child(line_number(self.old, selected))
             .child(line_number(self.new, selected))
@@ -248,17 +247,7 @@ impl CodeLine<'_> {
                     .text_color(tint.map_or(colours::faint(), Into::into))
                     .child(self.sign.to_string()),
             )
-            .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .pr(px(8.))
-                    .cursor(CursorStyle::IBeam)
-                    .text_color(colours::text())
-                    .child(text)
-                    .child(probe),
-            )
+            .child(cell.text_color(colours::text()))
             .into_any_element()
     }
 }

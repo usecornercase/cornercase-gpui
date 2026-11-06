@@ -1,13 +1,12 @@
 use std::ops::Range;
 
 use gpui::{
-    CursorStyle, Div, ElementId, FontStyle, HighlightStyle, Hsla, ImageFormat, InteractiveElement as _, IntoElement,
+    Div, ElementId, FontStyle, HighlightStyle, Hsla, ImageFormat, InteractiveElement as _, IntoElement,
     ParentElement as _, Pixels, SharedString, Stateful, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::theme::{ANSI, FONT_FAMILY, colours, hsla, radius};
-use crate::ui::one_line::LaidOut;
-use crate::ui::selection::Styles;
+use crate::ui::selection::{CODE_CELL, CODE_ROW, Styles};
 use crate::ui::{self, Icon, OneLine, file_icons};
 
 use super::highlight::Kind;
@@ -19,18 +18,12 @@ pub(super) struct CodeRow {
     pub styles: Styles,
     pub selected: bool,
     pub width: Pixels,
-    pub on_laid: Option<Box<dyn FnOnce(LaidOut)>>,
 }
 
 impl CodeRow {
     pub(super) fn new(ix: usize, line: &str, styles: Styles, selected: bool, width: Pixels) -> Self {
         let shown = if line.is_empty() { " ".to_string() } else { line.to_string() };
-        Self { ix, shown, styles, selected, width, on_laid: None }
-    }
-
-    pub(super) fn on_laid(mut self, report: impl FnOnce(LaidOut) + 'static) -> Self {
-        self.on_laid = Some(Box::new(report));
-        self
+        Self { ix, shown, styles, selected, width }
     }
 }
 
@@ -40,7 +33,7 @@ pub(super) fn image_label(format: ImageFormat) -> String {
 
 pub(super) fn number_width(lines: usize) -> Pixels {
     let digits = lines.to_string().len().max(3);
-    px(small_f32(digits) * 7.3 + 16.)
+    px(small_f32(digits) * CODE_CELL + 16.)
 }
 
 pub(super) fn span_styles(spans: Option<&Spans>, ix: usize) -> Styles {
@@ -50,29 +43,29 @@ pub(super) fn span_styles(spans: Option<&Spans>, ix: usize) -> Styles {
         .unwrap_or_default()
 }
 
-pub(super) fn code_row(row: CodeRow) -> Div {
-    let selectable = row.on_laid.is_some();
-    let text = ui::one_line(row.shown).highlights(row.styles).when_some(row.on_laid, OneLine::on_laid);
+pub(super) fn code_frame(selected: bool) -> Div {
     div()
         .flex()
         .w_full()
-        .h(px(18.))
-        .line_height(px(18.))
+        .line_height(px(CODE_ROW))
         .font_family(FONT_FAMILY)
         .text_size(px(CODE_SIZE))
+        .when(selected, |d| d.bg(colours::selected()))
+}
+
+pub(super) fn number_cell(width: Pixels) -> Div {
+    div().w(width).flex_none().pr(px(10.)).text_right()
+}
+
+pub(super) fn code_row(row: CodeRow) -> Div {
+    let text = ui::one_line(row.shown).highlights(row.styles);
+    let number = if row.selected { colours::accent() } else { colours::faint() };
+    code_frame(row.selected)
+        .h(px(CODE_ROW))
         .items_center()
         .whitespace_nowrap()
-        .when(row.selected, |d| d.bg(colours::selected()))
-        .child(
-            div()
-                .w(row.width)
-                .flex_none()
-                .pr(px(10.))
-                .text_right()
-                .text_color(if row.selected { colours::accent() } else { colours::faint() })
-                .child((row.ix + 1).to_string()),
-        )
-        .child(div().flex_1().min_w_0().pr(px(8.)).when(selectable, |d| d.cursor(CursorStyle::IBeam)).child(text))
+        .child(number_cell(row.width).text_color(number).child((row.ix + 1).to_string()))
+        .child(div().flex_1().min_w_0().pr(px(8.)).child(text))
 }
 
 pub(super) fn clip(ranges: &[Range<usize>], within: Range<usize>) -> Vec<Range<usize>> {
