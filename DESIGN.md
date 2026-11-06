@@ -43,8 +43,8 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 - [Machines](design/machines.md) (`model/machines.rs`, `panels/machines.rs`, `panels/machines/`): the computers the server links to, the list in `Store`, each link's state in words, adding, editing, removing, retrying and updating them, why ⇧⌘K is another thing.
 - [Usage](design/usage.md) (`panels/usage.rs`, `panels/usage/`): plan limits and stats, the #462 and #472 stopgaps.
 - [Flows](design/flows.md) (`panels/flows.rs`, `panels/flows/`): teams of agents, their runs, the plan's diagram and its look, import and start.
-- [Settings](design/settings.md) (`panels/settings.rs`, `panels/settings/`): the form built from `config --json`, its layout (navigation, rows that keep their place, dropdowns, the agents table), search, saving, tokens, asking first, export and import.
-- [Search](design/search.md) (`panels/search.rs`, `panels/search/`): names and what agents and shells said.
+- [Settings](design/settings.md) (`panels/settings.rs`, `panels/settings/`): the form built from `config --json`, its layout (navigation, rows that keep their place, dropdowns, the agents table), search, landing on a row from the global search, saving, tokens, asking first, export and import.
+- [Search](design/search.md) (`panels/search.rs`, `panels/search/`): names, settings and what agents and shells said.
 - [Tour](design/tour.md) (`tour.rs`, `tour/`): cornercase's guided tours drawn here, the catalogue, the card, what a step opens and completes.
 - [Plugins](design/plugins.md) (`panels/plugins.rs`, `panels/plugins/`): installed plugins, linking and running them.
 - [Processes](design/processes.md) (`panels/processes.rs`, `panels/processes/`, `panels/poll.rs`): what every pane runs, CPU and memory, stopping a program, sampling while open.

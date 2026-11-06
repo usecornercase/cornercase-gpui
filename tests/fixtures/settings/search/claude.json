@@ -1,0 +1,61 @@
+{
+  "results": [
+    {
+      "hidden": false,
+      "key": "agents.claude.mode",
+      "label": "claude",
+      "note": "",
+      "page": "Agents",
+      "section": "How each agent starts",
+      "shown": "default",
+      "title": "Agents › claude"
+    },
+    {
+      "hidden": false,
+      "label": "● System",
+      "note": "claude's own login · ~/.claude",
+      "page": "Accounts",
+      "section": "Claude Code",
+      "shown": "",
+      "title": "Accounts › Claude Code › ● System"
+    },
+    {
+      "hidden": false,
+      "label": "rename…",
+      "note": "a name for the window; its folder stays",
+      "page": "Accounts",
+      "section": "Claude Code",
+      "shown": "",
+      "title": "Accounts › Claude Code › rename…"
+    },
+    {
+      "hidden": false,
+      "label": "+ add account",
+      "note": "makes its folder and opens a tab to log in",
+      "page": "Accounts",
+      "section": "Claude Code",
+      "shown": "",
+      "title": "Accounts › Claude Code › + add account"
+    },
+    {
+      "hidden": false,
+      "key": "resume_agents",
+      "label": "resume conversations",
+      "note": "Claude, Codex, Gemini, Vibe, Grok, Cursor, Copilot, in their tabs",
+      "page": "Agents",
+      "section": "Agent",
+      "shown": "[x] after a restart",
+      "title": "Agents › resume conversations"
+    },
+    {
+      "hidden": false,
+      "key": "recap_agent",
+      "label": "recap agent",
+      "note": "writes the Recap panel's summaries: Claude Code or Codex",
+      "page": "Agents",
+      "section": "Recap",
+      "shown": "auto (claude)",
+      "title": "Agents › recap agent"
+    }
+  ]
+}

@@ -188,6 +188,33 @@ fn every_word_of_the_search_must_match() {
 }
 
 #[test]
+fn search_finds_a_setting_by_the_value_it_shows() {
+    let d = sample();
+    assert_eq!(search(&d, "5 min")[0].section.items, [Item::Setting(1)]);
+}
+
+#[test]
+fn search_does_not_read_a_switchs_box_as_its_value() {
+    assert_eq!(search(&sample(), "[x]"), Vec::<Found>::new());
+}
+
+#[test]
+fn search_finds_a_setting_by_its_page() {
+    let d = sample();
+    let found = search(&d, "ui shown");
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].page, "UI");
+}
+
+#[test]
+fn search_finds_a_connection_by_the_state_it_shows() {
+    let d = sample();
+    let found = search(&d, "refused");
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].page, "Remote");
+}
+
+#[test]
 fn pages_match_by_name_or_what_they_hold() {
     let pages: Vec<String> = ["Worktrees", "Projects", "Share"].map(String::from).to_vec();
     assert_eq!(pages_matching(&pages, "teardown"), ["Projects"]);

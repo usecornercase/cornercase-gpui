@@ -1,6 +1,7 @@
 mod candidates;
 mod found;
 mod names;
+mod settings;
 
 use std::ops::Range;
 use std::time::Duration;
@@ -20,6 +21,7 @@ use crate::ui::{self, Icon, OneLine, TextField, TextFieldEvent};
 use candidates::candidates;
 use found::{Found, Hit, PaneHits, by_pane, row_of_match};
 use names::{Goto, Kind, Ranked, context_top, find, listing_status, rank, shown_row};
+use settings::{Asked, SettingRow};
 
 const MAX_NAMES: usize = 200;
 const KIND_WIDTH: f32 = 92.;
@@ -40,6 +42,7 @@ pub(crate) struct SearchPanel {
     reveal: Option<usize>,
     open: bool,
     sessions: Sessions,
+    settings: Asked,
 }
 
 #[derive(Default)]
@@ -79,6 +82,7 @@ impl SearchPanel {
             reveal: None,
             open: true,
             sessions: Sessions::default(),
+            settings: Asked::default(),
         };
         panel.select_first(cx);
         panel
@@ -98,10 +102,8 @@ impl SearchPanel {
         self.mode = mode;
         self.select_first(cx);
         self.sessions = Sessions { generation: self.sessions.generation + 1, ..Sessions::default() };
-        if mode == Mode::Sessions {
-            self.changed(cx);
-        }
-        cx.notify();
+        self.settings.forget_enter();
+        self.changed(cx);
     }
 
     fn choose_mode(&mut self, mode: Mode, window: &mut Window, cx: &mut Context<Self>) {
@@ -139,8 +141,9 @@ impl SearchPanel {
 
     fn changed(&mut self, cx: &mut Context<Self>) {
         self.select_first(cx);
-        if self.mode == Mode::Sessions {
-            self.schedule(cx);
+        match self.mode {
+            Mode::Names => self.schedule_settings(cx),
+            Mode::Sessions => self.schedule(cx),
         }
         cx.notify();
     }
@@ -207,10 +210,12 @@ impl SearchPanel {
         }
     }
 
-    fn submit_name(&self, cx: &mut Context<Self>) {
+    fn submit_name(&mut self, cx: &mut Context<Self>) {
         let (names, _) = self.names(cx);
-        if let Some(hit) = names.get(self.selected.min(names.len().saturating_sub(1))) {
-            go(hit.candidate.goto, cx);
+        let selected = self.selected.min((names.len() + self.settings.hits().len()).saturating_sub(1));
+        match names.get(selected) {
+            Some(hit) => go(hit.candidate.goto, cx),
+            None => self.submit_setting(selected - names.len(), cx),
         }
     }
 
@@ -236,7 +241,7 @@ impl SearchPanel {
 
     fn count(&self, cx: &App) -> usize {
         match self.mode {
-            Mode::Names => self.names(cx).0.len(),
+            Mode::Names => self.names(cx).0.len() + self.settings.hits().len(),
             Mode::Sessions => self.sessions.found.as_ref().map_or(0, |f| f.matches.len()),
         }
     }
@@ -269,8 +274,19 @@ impl SearchPanel {
     }
 
     fn name_rows(&mut self, names: Vec<Ranked>, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        self.selected = self.selected.min(names.len().saturating_sub(1));
-        names.into_iter().enumerate().map(|(i, hit)| name_row(i, i == self.selected, hit, cx)).collect()
+        let first = names.len();
+        let found = self.settings.hits().to_vec();
+        self.selected = self.selected.min((first + found.len()).saturating_sub(1));
+        let selected = self.selected;
+        let mut rows: Vec<AnyElement> =
+            names.into_iter().enumerate().map(|(i, hit)| name_row(i, i == selected, hit, cx)).collect();
+        let query = self.query(cx);
+        let stale = self.settings.waiting_for(&query);
+        for (i, setting) in found.into_iter().enumerate() {
+            let row = SettingRow { index: i, selected: first + i == selected, stale };
+            rows.push(row.render(setting, &query, cx));
+        }
+        rows
     }
 
     fn session_rows(&mut self, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -291,7 +307,8 @@ impl SearchPanel {
 
     fn names_and_status(&mut self, cx: &mut Context<Self>) -> (Vec<AnyElement>, String) {
         let (names, total) = self.names(cx);
-        let status = listing_status(&self.query(cx), names.len(), total);
+        let query = self.query(cx);
+        let status = self.settings.status(listing_status(&query, names.len(), total), &query, names.len());
         (self.name_rows(names, cx), status)
     }
 
@@ -349,9 +366,22 @@ impl SearchPanel {
             .child(self.mode_segments(cx))
     }
 
+    fn working(&self) -> bool {
+        match self.mode {
+            Mode::Names => self.settings.asking(),
+            Mode::Sessions => self.sessions.searching,
+        }
+    }
+
+    fn failing(&self) -> bool {
+        match self.mode {
+            Mode::Names => self.settings.failed(),
+            Mode::Sessions => self.sessions.error.is_some(),
+        }
+    }
+
     fn status_bar(&self, status: String) -> Div {
-        let sessions = self.mode == Mode::Sessions;
-        let searching = sessions && self.sessions.searching;
+        let searching = self.working();
         div().flex_none().flex().items_center().justify_between().gap(px(12.)).px(px(18.)).pt(px(8.)).pb(px(6.)).child(
             div()
                 .flex()
@@ -359,7 +389,7 @@ impl SearchPanel {
                 .gap(px(6.))
                 .text_size(px(12.))
                 .text_color(if searching { colours::working() } else { colours::muted() })
-                .when(self.sessions.error.is_some() && sessions, |d| d.text_color(colours::failed()))
+                .when(self.failing(), |d| d.text_color(colours::failed()))
                 .when(searching, |d| d.child(ui::spinner("search-spinner", 12., colours::working())))
                 .child(status),
         )
@@ -527,10 +557,14 @@ fn kind_look(kind: Kind) -> (&'static str, Icon, Hsla) {
     }
 }
 
-fn kind_chip(kind: Kind) -> Div {
-    let (label, glyph, colour) = kind_look(kind);
+fn labelled_chip(label: &'static str, glyph: Icon, colour: Hsla) -> Div {
     let chip = chip_box(colour).flex().items_center().gap(px(4.)).child(ui::icon(glyph, 11.).text_color(colour));
     div().w(px(KIND_WIDTH)).flex_none().child(chip.child(label))
+}
+
+fn kind_chip(kind: Kind) -> Div {
+    let (label, glyph, colour) = kind_look(kind);
+    labelled_chip(label, glyph, colour)
 }
 
 fn source_chip(source: &str) -> Div {

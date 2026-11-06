@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.6
+
+- **Search finds settings.** Type in ⌘F and the settings that match are listed after your projects, workspaces, agents and tabs, so those keep their places. Each shows where it lives and its value, such as `UI › sound  [x] on`. Click one or press Enter and Settings opens on that row, scrolled to it and marked for a moment, with nothing changed. A row that doesn't show yet is listed muted with what it needs. Results about accounts, machines, flows and plugins open their own sheets.
+- Settings' own search now also finds a setting by the value it shows and by its page, such as `hidden` or `ui sound`.
+- Typing while a sheet with no text field is open, such as Accounts, no longer types into the terminal behind it. Keys also keep working after a sheet opens from another one's text field: Escape used to do nothing until a click.
+
 ## 0.1.5
 
 - **Machines, a new sheet** (⇧⌘N; Ctrl+Alt+Shift+N on Linux and Windows): the other computers your agents can run on, which cornercase links to through your own `ssh`. It shows this computer and each machine with its link in words, live: `connecting…`, `linked · 0.13.1`, `unreachable · seen 2 min ago` with what `ssh` said under it, or `older` with **Update…**. **Add machine** opens a form that says at once what it would refuse and offers the hosts of your `~/.ssh/config`. Each machine can be edited, its link tried again, or removed, which leaves its server running there. To move the whole window to another server, ⇧⌘K still does that.
