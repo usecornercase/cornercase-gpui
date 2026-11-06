@@ -6,12 +6,14 @@ use gpui::{
 
 use crate::store::{self, Busy, Store, args};
 use crate::theme::{colours, radius};
-use crate::ui::{self, TextField, TextFieldEvent};
+use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
+mod merge_check;
 mod pull_request;
 mod remote;
 mod shortcuts;
 
+pub(crate) use merge_check::merge_check;
 pub(crate) use pull_request::{pull_request, pull_tag, shown_pull_request, stack_tag};
 pub(crate) use remote::{PathQuestion, ask_path, connect, ssh_hosts};
 pub(crate) use shortcuts::shortcuts;
@@ -42,6 +44,28 @@ pub(crate) fn cancel_and(action: Stateful<Div>) -> Div {
 
 fn close(cx: &mut App) {
     Store::get(cx).update(cx, Store::close_dialog);
+}
+
+fn muted(text: impl Into<SharedString>) -> Div {
+    div().text_size(px(12.)).text_color(colours::muted()).child(text.into())
+}
+
+fn branch_line(text: String) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .text_size(px(12.))
+        .text_color(colours::muted())
+        .child(ui::icon(Icon::Branch, 12.).text_color(colours::faint()))
+        .child(div().flex_1().min_w_0().child(ui::one_line(text)))
+}
+
+fn ask_button(workspace: u64, text: String, label: String) -> Stateful<Div> {
+    ui::icon_text_button("ask-agent", Icon::Send, "Ask agent", Tone::Plain).on_click(move |_: &ClickEvent, _, cx| {
+        close(cx);
+        Store::get(cx).update(cx, |s, cx| s.ask_agent(workspace, &text, &label, cx));
+    })
 }
 
 fn show(view: AnyView, focus: &FocusHandle, window: &mut Window, cx: &mut App) {
