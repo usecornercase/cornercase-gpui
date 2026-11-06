@@ -20,6 +20,11 @@ pub(crate) fn items(app: Option<&Value>) -> Vec<Item> {
         .unwrap_or_default()
 }
 
+pub(crate) fn any_pending(app: Option<&Value>) -> bool {
+    let todos = app.and_then(|app| app.get("todos")).and_then(Value::as_array);
+    todos.is_some_and(|todos| todos.iter().any(|t| Item::deserialize(t).is_ok_and(|item| !item.done)))
+}
+
 pub(crate) fn undo_number(answer: &Value) -> Option<u64> {
     answer.get("undo").and_then(Value::as_u64)
 }

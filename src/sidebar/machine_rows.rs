@@ -7,6 +7,7 @@ use gpui::{
 };
 
 use super::Renaming;
+use super::look::Look;
 use super::rows::{End, Listing, chevron, hover_button, hover_listener, name_label, nested, row_frame, trailing};
 use super::tab_rows::{tab_details, tab_text, tab_title};
 use super::workspace::{detail_row, plural};
@@ -77,8 +78,8 @@ fn there_details_line(ws: &ThereWorkspace, folded: bool, leaving: bool) -> Optio
     )
 }
 
-fn there_tab_details(tab: &Tab<ThereId>, title: &str) -> Option<String> {
-    Some(tab_details(tab, None)).filter(|details| !details.is_empty() && details != title)
+fn there_tab_details(tab: &Tab<ThereId>, title: &str, look: &Look) -> Option<String> {
+    Some(tab_details(tab, None, look)).filter(|details| !details.is_empty() && details != title)
 }
 
 fn there_tab_text(name: Div, note: Option<String>, details: Option<String>) -> Div {
@@ -156,6 +157,7 @@ struct ThereRow<'a> {
     chosen: bool,
     folded: bool,
     leaving: bool,
+    look: &'a Look,
 }
 
 impl Root {
@@ -175,7 +177,8 @@ impl Root {
         let leaving = self.store.read(cx).machine_leaving(&aim);
         let chosen = listing.place.as_ref().is_some_and(|place| place.is_at(seen, ws));
         let folded = self.side.there_folds.folded(&FoldThere::workspace(seen, ws));
-        let row = ThereRow { seen, ws, aim, chosen, folded, leaving };
+        let look = &self.side.look.current;
+        let row = ThereRow { seen, ws, aim, chosen, folded, leaving, look };
         let children =
             if folded { Vec::new() } else { ws.tabs.iter().map(|tab| there_tab(&row, tab, listing, cx)).collect() };
         div()
@@ -285,7 +288,7 @@ impl Root {
 fn there_tab(row: &ThereRow<'_>, tab: &Tab<ThereId>, listing: &Listing, cx: &mut Context<Root>) -> AnyElement {
     let selected = row.chosen && listing.place.as_ref().is_some_and(|place| place.tab == Some(tab.id));
     let title = tab_title(tab);
-    let details = there_tab_details(tab, &title);
+    let details = there_tab_details(tab, &title, row.look);
     let note = row.seen.tab_note(tab, listing.now);
     let name = name_label(title).flex_initial().min_w(px(0.)).text_color(if selected {
         colours::text()
@@ -330,7 +333,8 @@ fn alone_project_row(
         .child(lead)
         .child(name)
         .child(row_end(end, false).child(machine_tag(seen)).when(folded, |d| {
-            d.child(ui::dim(format!("{}", there.workspaces.len()))).child(status_of(seen, there.attention()))
+            d.when(listing.counts, |d| d.child(ui::dim(format!("{}", there.workspaces.len()))))
+                .child(status_of(seen, there.attention()))
         }));
     match there.workspaces.first() {
         Some(ws) => pick_on_click(frame, MachinePlace::at(seen, ws, None), cx),

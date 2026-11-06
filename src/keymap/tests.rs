@@ -132,7 +132,31 @@ fn browser_keys_answer_only_in_the_browser() {
     assert_eq!(in_browser("r", false), Some(Command::Reload));
     assert_eq!(in_browser("x", false), Some(Command::Cut));
     assert_eq!(command("l", false), None);
-    assert_eq!(command("r", false), None);
+    assert_eq!(command("x", false), None);
+    assert_ne!(command("r", false), Some(Command::Reload));
+}
+
+#[test]
+fn the_keys_that_get_around_step_forward_alone_and_back_with_shift() {
+    assert_eq!(command("j", false), Some(Command::NextWorkspace));
+    assert_eq!(command("j", true), Some(Command::PreviousWorkspace));
+    assert_eq!(command("y", false), Some(Command::NextProject));
+    assert_eq!(command("y", true), Some(Command::PreviousProject));
+}
+
+#[test]
+fn the_agent_that_needs_you_and_the_mark_have_their_keys() {
+    assert_eq!(command("b", false), Some(Command::AgentNeedingYou));
+    assert_eq!(command("r", false), Some(Command::Mark));
+    assert_eq!(keys_of(Command::AgentNeedingYou, Os::Linux).as_deref(), Some("Ctrl+Shift+B"));
+    assert_eq!(keys_of(Command::PreviousWorkspace, Os::Windows).as_deref(), Some("Ctrl+Alt+Shift+J"));
+}
+
+#[test]
+fn reload_keeps_its_key_in_the_browser_and_the_mark_takes_it_elsewhere() {
+    assert_eq!(in_browser("r", false), Some(Command::Reload));
+    assert_eq!(keys_of(Command::Mark, Os::Mac).as_deref(), Some("⌘R"));
+    assert_eq!(keys_of(Command::Reload, Os::Mac).as_deref(), Some("⌘R"));
 }
 
 #[test]
@@ -230,7 +254,7 @@ fn on_linux_other_keys_are_left_to_the_program() {
     assert_eq!(on_linux("[", CTRL), None);
     assert_eq!(on_linux("b", ALT), None);
     assert_eq!(on_linux("t", CTRL_ALT), None);
-    assert_eq!(on_linux("y", CTRL_SHIFT), None);
+    assert_eq!(on_linux("z", CTRL_SHIFT), None);
     assert_eq!(on_linux("i", CTRL_ALT_SHIFT), None);
     assert_eq!(on_linux("v", SUPER), None);
     assert_eq!(on_linux("1", SUPER), None);

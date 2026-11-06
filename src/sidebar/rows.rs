@@ -26,6 +26,7 @@ pub(super) struct Listing {
     pub tabs: bool,
     pub place: Option<MachinePlace>,
     pub now: i64,
+    pub counts: bool,
 }
 
 fn id_prefix(target: Target) -> &'static str {
@@ -294,7 +295,7 @@ impl Root {
     fn group_end(&self, target: Target, count: usize, collapsed: bool, cx: &mut Context<Self>) -> Div {
         let fold = div().text_size(px(13.)).text_color(colours::faint()).child(if collapsed { "▸" } else { "▾" });
         self.row_end(target, End { gap: 6., buttons: 1, figures: true }, cx)
-            .when(collapsed, |d| d.child(ui::dim(format!("{count}"))))
+            .when(collapsed && self.side.look.current.counts, |d| d.child(ui::dim(format!("{count}"))))
             .child(fold)
     }
 
@@ -355,7 +356,9 @@ impl Root {
         let count = session.map_or(project.workspaces.len(), |s| s.workspaces_under(project));
         let attention = session.map_or_else(|| project.attention(), |s| s.attention_under(project));
         self.row_end(target, End { gap: 4., buttons: 2, figures: collapsed }, cx)
-            .when(collapsed, |d| d.child(ui::dim(format!("{count}"))).child(badge(attention)))
+            .when(collapsed, |d| {
+                d.when(self.side.look.current.counts, |d| d.child(ui::dim(format!("{count}")))).child(badge(attention))
+            })
             .child(
                 hover_button(SharedString::from(format!("project-add-{id}")), row_group_id(target), "+", 1)
                     .on_mouse_down(

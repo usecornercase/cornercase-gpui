@@ -26,6 +26,19 @@ fn reads_workspace_details_from_the_session() {
 }
 
 #[test]
+fn a_pane_scrolled_up_counts_the_lines_below_its_view() {
+    let frame: Frame = parse(
+        r#"{"surface":1,"revision":1,"tab":1,"cols":80,"rows":24,"panes":[
+        {"pane":1,"scroll":{"total":402,"offset":324,"rows":48}},
+        {"pane":2,"scroll":{"total":402,"offset":354,"rows":48}}]}"#,
+    );
+    let mut grid = Grid::default();
+    assert!(matches!(grid.apply(frame), Applied::Ok));
+    assert_eq!(grid.pane(1).expect("a pane").below(), 30);
+    assert_eq!(grid.pane(2).expect("a pane").below(), 0);
+}
+
+#[test]
 fn a_pane_whose_folder_is_gone_keeps_the_session_readable() {
     let text = r#"{"projects":[{"id":1,"name":"shop","workspaces":[{"id":2,"name":"feat",
         "tabs":[{"id":3,"panes":[{"id":4,"path":null,"program":null}]}]}]}]}"#;

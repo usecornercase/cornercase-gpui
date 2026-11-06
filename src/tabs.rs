@@ -11,11 +11,15 @@ use crate::app::{Root, TITLEBAR_HEIGHT};
 use crate::context_menu::{Entry, act, danger, item};
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
-use crate::model::{PaneInfo, Tab};
-use crate::sidebar::{Dragged, Renaming, Target, cmd, draggable, order, tip};
+use crate::model::{Tab, memory_size};
+use crate::sidebar::{Dragged, Look, Renaming, Target, cmd, draggable, order, tip};
 use crate::store::Busy;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, badge};
+
+mod strip;
+
+pub(crate) use strip::TabStrip;
 
 const TAB_HEIGHT: f32 = 28.;
 
@@ -23,9 +27,12 @@ fn faint(text: String) -> Div {
     div().text_size(px(11.)).text_color(colours::faint()).child(text)
 }
 
-fn tab_detail(agent: &PaneInfo, mark: Option<&str>) -> Option<String> {
-    let context = agent.model.as_ref().and(agent.context).map(|c| format!("{c}%"));
-    let parts: Vec<String> = agent.model.iter().cloned().chain(mark.map(str::to_string)).chain(context).collect();
+fn tab_detail(tab: &Tab, mark: Option<&str>, look: &Look) -> Option<String> {
+    let agent = tab.agent_pane();
+    let share = agent.filter(|a| a.model.is_some() || a.context.is_none()).and_then(|a| look.share_of(a));
+    let model = agent.and_then(|agent| look.model_of(agent));
+    let memory = tab.memory().map(memory_size);
+    let parts: Vec<String> = model.into_iter().chain(mark.map(str::to_string)).chain(share).chain(memory).collect();
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
@@ -151,23 +158,42 @@ impl Root {
     }
 
     fn tab_group(&self, cx: &mut Context<Self>) -> Div {
+        let group = div().flex().items_center().min_w_0().gap(px(6.)).overflow_hidden();
+        if self.side.look.current.tabs_in_sidebar {
+            return group;
+        }
+        group
+            .child(self.scrolled_tabs(cx))
+            .child(new_tab_button(cx))
+            .child(strip::watcher(&self.side.strip, cx.entity().downgrade()))
+    }
+
+    fn scrolled_tabs(&self, cx: &mut Context<Self>) -> Div {
+        let strip = &self.side.strip;
+        let arrows = strip.arrows();
         div()
             .flex()
             .items_center()
             .min_w_0()
-            .gap(px(6.))
-            .overflow_hidden()
+            .gap(px(strip::ARROW_GAP))
+            .when(arrows, |d| d.child(strip::arrow(false, strip.can_step(false), cx)))
             .child(self.tab_strip(cx))
-            .when(!self.side.look.current.tabs_in_sidebar, |d| d.child(new_tab_button(cx)))
+            .when(arrows, |d| d.child(strip::arrow(true, strip.can_step(true), cx)))
     }
 
-    fn tab_strip(&self, cx: &mut Context<Self>) -> Div {
-        let strip = div().flex().items_center().min_w_0().gap(px(4.)).overflow_hidden();
-        if self.side.look.current.tabs_in_sidebar {
-            return strip;
-        }
+    fn tab_strip(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let strip = div()
+            .id("tab-strip")
+            .flex()
+            .items_center()
+            .min_w_0()
+            .gap(px(4.))
+            .overflow_x_scroll()
+            .track_scroll(self.side.strip.handle());
         let Some((_, ws)) = self.shown_workspace() else { return strip };
         let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab).filter(|_| self.side.machine_place.is_none());
+        let index = ws.tabs.iter().position(|t| Some(t.id) == shown_tab);
+        self.side.strip.show(Some(ws.id), shown_tab, index);
         let siblings: Rc<Vec<u64>> = Rc::new(ws.tabs.iter().map(|t| t.id).collect());
         strip.children(ws.tabs.iter().map(|tab| self.tab(tab, Some(tab.id) == shown_tab, &siblings, cx)))
     }
@@ -194,7 +220,8 @@ impl Root {
     fn tab_face(&self, tab: &Tab, selected: bool, cx: &mut Context<Self>) -> Stateful<Div> {
         let group = SharedString::from(format!("tab-{}", tab.id));
         let others = tab.panes.len().saturating_sub(1);
-        let detail = tab.agent_pane().and_then(|agent| tab_detail(agent, self.account_mark(agent, cx).as_deref()));
+        let mark = tab.agent_pane().and_then(|agent| self.account_mark(agent, cx));
+        let detail = tab_detail(tab, mark.as_deref(), &self.side.look.current);
         div()
             .id(group.clone())
             .group(group.clone())

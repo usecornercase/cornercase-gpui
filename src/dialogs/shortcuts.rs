@@ -33,13 +33,13 @@ fn columns(os: Os) -> [&'static [Section]; 3] {
     match os {
         Os::Mac => [
             &[Keys(Group::Panels), System],
-            &[Keys(Group::Window), Keys(Group::Terminal), Keys(Group::Viewer)],
+            &[Keys(Group::Window), Keys(Group::GettingAround), Keys(Group::Terminal), Keys(Group::Viewer)],
             &[Keys(Group::TabsAndPanes), Keys(Group::Browser), Elsewhere],
         ],
         Os::Linux | Os::Windows => [
             &[Keys(Group::Panels), System],
-            &[Keys(Group::Window), Keys(Group::Terminal), Keys(Group::Browser)],
-            &[Keys(Group::TabsAndPanes), Keys(Group::Viewer), Elsewhere],
+            &[Keys(Group::TabsAndPanes), Keys(Group::GettingAround), Keys(Group::Terminal), Keys(Group::Viewer)],
+            &[Keys(Group::Window), Keys(Group::Browser), Elsewhere],
         ],
     }
 }
@@ -53,7 +53,7 @@ fn width(os: Os, window: f32) -> f32 {
 }
 
 fn body_height(window: f32) -> f32 {
-    (window - 216.).max(200.)
+    (window - 160.).max(200.)
 }
 
 fn keys(label: impl Into<SharedString>) -> Div {
@@ -75,7 +75,7 @@ fn line(label: impl Into<SharedString>, what: &'static str) -> Div {
         .items_center()
         .justify_between()
         .gap(px(12.))
-        .py(px(2.))
+        .py(px(1.5))
         .child(div().flex_1().min_w_0().text_color(colours::muted()).child(what))
         .child(keys(label))
 }

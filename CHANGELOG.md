@@ -2,12 +2,22 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.17
+## 0.1.18
 
 - **Run an issue, a flow or a workspace on another machine.** An issue's Start, Start a flow and New workspace have a **Run on** row once you list a machine: this computer, then each machine, with why one that is down cannot be picked. The choice lasts while the dialog is open, and a project needs a git remote to run elsewhere, since that is how the same project is found there.
 - **The window asks the machine first.** Picking a machine reads its accounts, which agents it has, its trackers and its flows, and says so while it asks. The account row lists that machine's accounts, Start a flow lists its flows, a tracker it can't reach is named, and an agent that isn't installed or logged in there says so and offers a tab there to fix it. Schedule is hidden: the queue starts work on this computer only.
 - **Clone a project there.** When the machine has no clone of the project, Start opens **Clone shop on vps**, with the address, which you can edit, and the folder there. The clone runs on its own while you go back to the dialog, and a toast says how it went. It copies no git-ignored files such as `.env` yet: that needs usecornercase/cornercase-terminal#678.
 - **What started is selected here** as soon as the machine lists it, without moving cornercase's own window, also while an agent waits for its trust question to be answered. A flow on a machine is followed through its tab, since the run page reads this computer's runs. Every failure is a toast with what the machine or `ssh` said, and the dialog stays open.
+
+## 0.1.17
+
+- **Tabs past the edge can be reached.** When a workspace has more tabs than the bar holds, `‹` and `›` appear at its ends, the wheel scrolls it, and the tab you are on stays in view.
+- **`↓ n more`.** A pane scrolled up says how many lines are below it. A click on it goes back to the bottom.
+- **A message that waits for you says so.** When a script or another agent sends a message to the pane you are typing in, cornercase holds it until you are done. The pane's card now reads `1 message waiting · goes after yours`. Send now and Wait turn wait on cornercase (usecornercase/cornercase-terminal#676), and the card says that too.
+- **New keys to get around**: ⌘J and ⇧⌘J go to the next and previous workspace, ⌘Y and ⇧⌘Y to the next and previous project, ⌘B to the agent that needs you, and ⌘R marks the agent in the pane for review, or as reviewed. On Linux and Windows ⌘ is Ctrl+Shift and ⇧⌘ is Ctrl+Alt+Shift.
+- A tab reads `Opus 5.5 · compacted` after its conversation was compacted, and with Settings › UI › memory on it ends with the memory its panes use.
+- The rail counts the changed files on Changes' icon and puts a dot on TODO's while items wait.
+- The window now follows Settings › UI's model, context, counts, TODO dot and inactive panes, as cornercase's own does.
 
 ## 0.1.16
 
