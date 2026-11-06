@@ -53,11 +53,11 @@ fn subscribed<T: Submit>(field: Entity<TextField>, cx: &mut Context<T>, window: 
 pub(super) fn buttons<T: Submit>(
     ids: (&'static str, &'static str),
     (glyph, label): (Icon, &'static str),
-    busy: Option<&'static str>,
+    busy: Option<&str>,
     cx: &Context<T>,
 ) -> Div {
     let submit = match busy {
-        Some(busy) => ui::busy_button(ids.1, busy, Tone::Primary),
+        Some(busy) => ui::busy_button(ids.1, busy.to_string(), Tone::Primary),
         None => ui::icon_text_button(ids.1, glyph, label, Tone::Primary)
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
     };

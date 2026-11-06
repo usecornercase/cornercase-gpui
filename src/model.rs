@@ -20,7 +20,7 @@ pub(crate) use agent_context::{McpServer, Skills};
 pub(crate) use details::memory_size;
 pub(crate) use grid::{Applied, Grid, PaneGrid, Run};
 pub(crate) use link::Link;
-pub(crate) use machines::seen::{Aim, MachinePlace, MachineSeen, ThereId, ThereProject, ThereWorkspace};
+pub(crate) use machines::seen::{Aim, MachinePlace, MachineSeen, Spot, ThereId, ThereProject, ThereWorkspace};
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};
 pub(crate) use shared::Shared;
 pub(crate) use surface::{
@@ -68,6 +68,15 @@ pub(crate) struct Project {
     pub collapsed: bool,
     pub workspaces: Vec<Workspace>,
     pub custom_name: Option<String>,
+    pub repo: Option<String>,
+    pub remotes: Vec<GitRemote>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub(crate) struct GitRemote {
+    pub name: String,
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

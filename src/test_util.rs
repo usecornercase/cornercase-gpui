@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::cli::{Remote, Target};
 use crate::model::machines::MachineIcon;
-use crate::model::{Aim, ThereId};
+use crate::model::{Aim, Session, Spot, ThereId};
 use crate::store::{MachineRead, Reach};
 
 macro_rules! fixture {
@@ -12,6 +12,12 @@ macro_rules! fixture {
 }
 
 pub(crate) use fixture;
+
+pub(crate) fn shop_on_vps() -> Spot {
+    let session: Session = serde_json::from_str(fixture!("machines/view.json")).expect("a view line");
+    let seen = session.machine("vps").expect("vps");
+    seen.spot(seen.projects.iter().find(|there| there.name == "shop").expect("shop there"))
+}
 
 pub(crate) fn in_usr_bin(tools: &'static [&'static str]) -> impl Fn(&str) -> Option<PathBuf> {
     move |name| tools.contains(&name).then(|| PathBuf::from(format!("/usr/bin/{name}")))

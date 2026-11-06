@@ -4,6 +4,10 @@ use super::{LinkState, MachineIcon, seen_ago};
 use crate::model::{Project, Session, Tab, loudest_of, needs_you, status_rank, works};
 use crate::store::args;
 
+mod spot;
+
+pub(crate) use spot::{LoginTab, Spot};
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize)]
 #[serde(transparent)]
 pub(crate) struct ThereId(u64);
@@ -36,6 +40,7 @@ pub(crate) struct ThereProject {
     pub name: String,
     pub path: String,
     pub paired: Option<u64>,
+    pub repo: Option<String>,
     pub workspaces: Vec<ThereWorkspace>,
 }
 

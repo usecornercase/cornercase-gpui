@@ -1,4 +1,21 @@
 use super::*;
+use crate::test_util::shop_on_vps;
+
+#[test]
+fn a_workspace_on_a_machine_names_it_and_its_project() {
+    assert_eq!(
+        workspace_args_there("notes", false, &shop_on_vps()),
+        ["new-workspace", "notes", "--machine", "vps", "--project", "8", "--json"]
+    );
+}
+
+#[test]
+fn a_worktree_on_a_machine_says_so() {
+    assert_eq!(
+        workspace_args_there("feat/x", true, &shop_on_vps()),
+        ["new-workspace", "feat/x", "--machine", "vps", "--project", "8", "--worktree", "--json"]
+    );
+}
 
 #[test]
 fn a_dialog_body_grows_with_the_window_within_limits() {

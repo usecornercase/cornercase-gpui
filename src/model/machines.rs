@@ -4,6 +4,7 @@ use serde_json::Value;
 use crate::panels::flows::model::epoch;
 use crate::ui::Icon;
 
+pub(crate) mod run_on;
 pub(crate) mod seen;
 
 pub(crate) const THIS_COMPUTER: &str = "this computer";
