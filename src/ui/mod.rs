@@ -381,14 +381,12 @@ pub(crate) fn segments(items: Vec<AnyElement>) -> Div {
         .children(items)
 }
 
+fn segment_shape(id: impl Into<ElementId>) -> Stateful<Div> {
+    div().id(id).relative().px(px(12.)).py(px(3.)).rounded(px(radius::CHIP)).text_size(px(12.))
+}
+
 fn segment_base(id: impl Into<ElementId>, selected: bool) -> Stateful<Div> {
-    div()
-        .id(id)
-        .relative()
-        .px(px(12.))
-        .py(px(3.))
-        .rounded(px(radius::CHIP))
-        .text_size(px(12.))
+    segment_shape(id)
         .cursor_pointer()
         .when(selected, |d| d.bg(colours::selected()).text_color(colours::text()))
         .when(!selected, |d| {
@@ -412,6 +410,22 @@ pub(crate) fn icon_segment(
         .items_center()
         .gap(px(6.))
         .child(icon(glyph, 14.).text_color(tint))
+        .child(label.into())
+}
+
+pub(crate) fn resting_icon_segment(
+    id: impl Into<ElementId>,
+    glyph: Icon,
+    label: impl Into<SharedString>,
+    selected: bool,
+) -> Stateful<Div> {
+    segment_shape(id)
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .text_color(colours::faint())
+        .when(selected, |d| d.bg(colours::selected()))
+        .child(icon(glyph, 14.).text_color(colours::faint()))
         .child(label.into())
 }
 

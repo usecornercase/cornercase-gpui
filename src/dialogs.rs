@@ -1,11 +1,15 @@
 use gpui::{
     AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _,
-    Window, div, px,
+    Window, div, prelude::FluentBuilder as _, px,
 };
 
+use crate::cli;
+use crate::model::Spot;
 use crate::model::accounts::pick::{AccountPick, account_args};
-use crate::store::{self, Busy, Store, args};
+use crate::model::machines::run_on::Starting;
+use crate::model::machines::run_on::checks::Wanted;
+use crate::store::{self, Busy, StartThere, Store, args};
 use crate::theme::{colours, radius};
 use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
@@ -14,12 +18,14 @@ mod context;
 mod merge_check;
 mod pull_request;
 mod remote;
+mod run_on;
 mod shortcuts;
 
 pub(crate) use context::{VIEW_CONTEXT, context_choices, view_context};
 pub(crate) use merge_check::merge_check;
 pub(crate) use pull_request::{pull_request, pull_tag, shown_pull_request, stack_tag};
 pub(crate) use remote::{PathQuestion, ask_path, connect, ssh_hosts};
+pub(crate) use run_on::{Gate, RunOn, RunOnEvent, accounts_of, agent_line, starting_there};
 pub(crate) use shortcuts::shortcuts;
 
 pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> Div {
@@ -98,6 +104,7 @@ pub(crate) struct NewWorkspace {
     project_name: String,
     name: Entity<TextField>,
     worktree: bool,
+    run_on: Entity<RunOn>,
 }
 
 pub(crate) fn new_workspace(project: Option<u64>, window: &mut Window, cx: &mut App) {
@@ -109,19 +116,40 @@ pub(crate) fn new_workspace(project: Option<u64>, window: &mut Window, cx: &mut 
     let (id, name) = (p.id, p.name.clone());
     let view = cx.new(|cx| {
         let name_field = text_field("feat/my-branch", cx, |this: &mut NewWorkspace, _, cx| this.submit(cx), window);
-        NewWorkspace { project: id, project_name: name, name: name_field, worktree: true }
+        let run_on = cx.new(|cx| RunOn::new(Some(id), Wanted::default(), cx));
+        cx.observe(&run_on, |_, _, cx| cx.notify()).detach();
+        NewWorkspace { project: id, project_name: name, name: name_field, worktree: true, run_on }
     });
     let focus = view.read(cx).name.read(cx).focus_handle(cx);
     show(view.into(), &focus, window, cx);
 }
 
+fn workspace_args_there(name: &str, worktree: bool, spot: &Spot) -> Vec<String> {
+    let mut a = args(&["new-workspace", name]);
+    a.extend(spot.starting_args());
+    if worktree {
+        a.push("--worktree".into());
+    }
+    a.push("--json".into());
+    a
+}
+
 impl NewWorkspace {
     fn submit(&mut self, cx: &mut Context<Self>) {
         let name = self.name.read(cx).text().trim().to_string();
-        if name.is_empty() {
+        if name.is_empty() || starting_there(cx) {
             return;
         }
-        let mut a = args(&["new-workspace", &name, "--project", &self.project.to_string(), "--focus"]);
+        let back = self.name.read(cx).focus_handle(cx);
+        match self.run_on.update(cx, |run_on, cx| run_on.gate(back, cx)) {
+            Gate::Here => self.create_here(&name, cx),
+            Gate::There(spot) => self.create_there(name, spot, cx),
+            Gate::Held => {}
+        }
+    }
+
+    fn create_here(&self, name: &str, cx: &mut Context<Self>) {
+        let mut a = args(&["new-workspace", name, "--project", &self.project.to_string(), "--focus"]);
         if self.worktree {
             a.push("--worktree".into());
         }
@@ -130,6 +158,25 @@ impl NewWorkspace {
             s.act_busy(busy, a, cx);
             s.close_dialog(cx);
         });
+    }
+
+    fn create_there(&self, name: String, spot: Spot, cx: &mut Context<Self>) {
+        let command = workspace_args_there(&name, self.worktree, &spot);
+        let start =
+            StartThere { spot, starting: Starting::Workspace { name }, command, target: cli::target(), select: true };
+        Store::get(cx).update(cx, |s, cx| s.start_there(start, cx));
+    }
+
+    fn create_button(cx: &Context<Self>) -> Stateful<Div> {
+        if starting_there(cx) {
+            return ui::busy_button("create", "Creating…", Tone::Primary);
+        }
+        ui::primary_button("create", "Create").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
+    }
+
+    fn where_line(&self, cx: &App) -> Option<Div> {
+        let how = if self.worktree { "In its own worktree" } else { "In a workspace" };
+        self.run_on.read(cx).where_line(how, cx)
     }
 }
 
@@ -149,11 +196,10 @@ impl Render for NewWorkspace {
                             this.worktree = !this.worktree;
                             cx.notify();
                         })),
-                ),
-            cancel_and(
-                ui::primary_button("create", "Create")
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
-            ),
+                )
+                .when(self.run_on.read(cx).offered(cx), |d| d.child(self.run_on.clone()))
+                .children(self.where_line(cx)),
+            cancel_and(Self::create_button(cx)),
         )
     }
 }

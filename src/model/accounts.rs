@@ -15,6 +15,15 @@ pub(crate) struct AccountsInfo {
     pub profile: String,
     pub login: Option<Ids>,
     pub tokens: Vec<String>,
+    pub agents: Vec<KnownAgent>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub(crate) struct KnownAgent {
+    pub agent: String,
+    pub command: String,
+    pub installed: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]

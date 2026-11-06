@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::model::Spot;
 use crate::model::accounts::pick::{AccountPick, account_args};
 use crate::panels::flows::{FlowStart, IssueTask};
 
@@ -562,9 +563,28 @@ pub(super) struct StartPlan {
 
 impl StartPlan {
     pub(super) fn start_args(&self) -> Vec<String> {
+        let mut a = self.start_words();
+        self.place_args(&mut a);
+        self.start_flags(&mut a);
+        a.extend(["--focus".into(), "--json".into()]);
+        a
+    }
+
+    pub(super) fn start_args_there(&self, spot: &Spot) -> Vec<String> {
+        let mut a = self.start_words();
+        a.extend(spot.starting_args());
+        self.start_flags(&mut a);
+        a.push("--json".into());
+        a
+    }
+
+    fn start_words(&self) -> Vec<String> {
         let mut a = vec!["start".to_string(), self.agent.clone(), "--issue".into(), self.issue.key.clone()];
         a.extend(["--source".into(), self.issue.source.clone()]);
-        self.place_args(&mut a);
+        a
+    }
+
+    fn start_flags(&self, a: &mut Vec<String>) {
         for (flag, value) in [
             ("--mode", &self.mode),
             ("--model", &self.model),
@@ -577,8 +597,6 @@ impl StartPlan {
             }
         }
         a.extend(account_args(&self.accounts));
-        a.extend(["--focus".into(), "--json".into()]);
-        a
     }
 
     pub(super) fn queue_args(&self, at: &str) -> Vec<String> {

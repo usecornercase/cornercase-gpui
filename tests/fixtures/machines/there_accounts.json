@@ -1,0 +1,74 @@
+{
+  "agents": [
+    {
+      "agent": "claude",
+      "command": "/home/ana/.local/bin/agent",
+      "installed": true
+    },
+    {
+      "agent": "codex",
+      "command": "/home/ana/.local/bin/agent",
+      "installed": true
+    },
+    {
+      "agent": "gemini",
+      "command": "gemini",
+      "installed": true
+    },
+    {
+      "agent": "aider",
+      "command": "aider",
+      "installed": false
+    }
+  ],
+  "profile": "",
+  "profiles": [],
+  "providers": [
+    {
+      "accounts": [
+        {
+          "login": {
+            "checked": "2026-11-06T04:58:58.359Z",
+            "email": "ana@example.com",
+            "plan": "max",
+            "state": "signed-in"
+          },
+          "name": "home",
+          "path": "/home/ana/.local/state/cornercase/s.accounts/claude/home",
+          "unshared": []
+        },
+        {
+          "login": {
+            "checked": "2026-11-06T04:58:58.360Z",
+            "state": "signed-out"
+          },
+          "name": "work",
+          "path": "/home/ana/.local/state/cornercase/s.accounts/claude/work",
+          "unshared": []
+        }
+      ],
+      "env": "CLAUDE_CONFIG_DIR",
+      "provider": "claude",
+      "system_login": {
+        "checked": "2026-11-06T04:58:58.360Z",
+        "state": "signed-out"
+      },
+      "system_path": "/home/ana/.claude",
+      "title": "Claude Code"
+    },
+    {
+      "accounts": [],
+      "env": "CODEX_HOME",
+      "provider": "codex",
+      "system_path": "/home/ana/.codex",
+      "title": "Codex"
+    },
+    {
+      "accounts": [],
+      "env": "GEMINI_CLI_HOME",
+      "provider": "gemini",
+      "system_path": "/home/ana",
+      "title": "Gemini CLI"
+    }
+  ]
+}

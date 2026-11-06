@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use crate::test_util::shop_on_vps;
 
 const SOURCES: &str = r#"{
   "closed": false,
@@ -21,6 +22,38 @@ const SOURCES: &str = r#"{
     {"source": "future", "state": "something-new"}
   ]
 }"#;
+
+#[test]
+fn starting_on_a_machine_names_its_project_and_moves_no_window() {
+    let plan = StartPlan {
+        issue: Issue { key: "#7".into(), source: "github".into(), ..Issue::default() },
+        agent: "claude".into(),
+        place: Some(Place { project: 4, workspace: Some(3), ..Place::default() }),
+        branch: Some("fix-it".into()),
+        accounts: vec![AccountPick { agent: "claude".into(), folder: "home".into() }],
+        ..StartPlan::default()
+    };
+    assert_eq!(
+        plan.start_args_there(&shop_on_vps()),
+        [
+            "start",
+            "claude",
+            "--issue",
+            "#7",
+            "--source",
+            "github",
+            "--machine",
+            "vps",
+            "--project",
+            "8",
+            "--worktree",
+            "fix-it",
+            "--account",
+            "claude=home",
+            "--json"
+        ]
+    );
+}
 
 #[test]
 fn sources() {

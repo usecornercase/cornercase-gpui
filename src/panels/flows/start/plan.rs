@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+use crate::model::Spot;
 use crate::model::accounts::pick::{AccountPick, account_args};
 use crate::panels::flows::model::project_args;
 use crate::store::args;
@@ -154,8 +155,20 @@ fn flag(name: &str, value: Option<&String>) -> Vec<String> {
 
 impl Plan {
     pub(super) fn args(&self) -> Vec<String> {
+        let mut command = self.args_in(project_args(self.project));
+        if self.focus {
+            command.push("--focus".into());
+        }
+        command
+    }
+
+    pub(super) fn args_there(&self, spot: &Spot) -> Vec<String> {
+        self.args_in(spot.starting_args())
+    }
+
+    fn args_in(&self, place: Vec<String>) -> Vec<String> {
         let mut command = args(&["flow", "run", &self.flow, "--json"]);
-        command.extend(project_args(self.project));
+        command.extend(place);
         command.extend(match &self.task {
             Task::Prompt(prompt) => flag("--prompt", Some(prompt)),
             Task::Issue { key, source, prompt } => {
@@ -166,9 +179,6 @@ impl Plan {
         command.extend(flag("--worktree", self.branch.as_ref()));
         command.extend(flag("--workspace-name", self.workspace_name.as_ref()));
         command.extend(account_args(&self.accounts));
-        if self.focus {
-            command.push("--focus".into());
-        }
         command
     }
 }
