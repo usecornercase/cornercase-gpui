@@ -9,10 +9,10 @@ use serde_json::Value;
 
 use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop;
-use crate::model::Session;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, RestartAnswer, Selection, Stamp, Switch, switching_key};
 use crate::model::machines::{self, Machine};
+use crate::model::{MachinePlace, Session};
 use crate::panels::PanelKind;
 use crate::panels::files::open::{self, Found};
 use crate::panels::plugins::Offers;
@@ -20,9 +20,12 @@ use crate::panels::settings::FoundSetting;
 use crate::prefs::{self, Prefs};
 
 mod jobs;
+mod machines_there;
 
 pub(crate) use jobs::Busy;
 use jobs::Jobs;
+use machines_there::Homes;
+pub(crate) use machines_there::{MachineAct, NoticeThere};
 
 const NO_FLOW: &str = "This workspace runs no flow";
 
@@ -40,6 +43,8 @@ pub(crate) struct Store {
     pub queue: Queue,
     pub app: Option<Value>,
     pub machines: Vec<Machine>,
+    pub machine_place: Option<MachinePlace>,
+    homes: Homes,
     pub dock: Option<PanelKind>,
     pub sheet: Option<PanelKind>,
     pub dialog: Option<AnyView>,
@@ -69,9 +74,15 @@ pub(crate) struct Toast {
     pub id: u64,
     pub text: String,
     pub kind: ToastKind,
-    pub action: Option<(String, Vec<String>)>,
+    pub action: Option<(String, ToastGo)>,
     pub at: Instant,
     pub count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ToastGo {
+    Run(Vec<String>),
+    Machine(NoticeThere),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -118,6 +129,8 @@ impl Store {
             queue,
             app: None,
             machines: Vec::new(),
+            machine_place: None,
+            homes: Homes::default(),
             dock: None,
             sheet: None,
             dialog: None,
@@ -316,7 +329,7 @@ impl Store {
         &mut self,
         text: impl Into<String>,
         kind: ToastKind,
-        action: Option<(String, Vec<String>)>,
+        action: Option<(String, ToastGo)>,
         cx: &mut Context<Self>,
     ) {
         let id = self.next_toast;
@@ -357,6 +370,9 @@ impl Store {
     }
 
     pub(crate) fn run_aside(&mut self, busy: Busy, args: Vec<String>, cx: &mut Context<Self>) {
+        if cli::moves_view(&args) {
+            self.leave_machine_place(cx);
+        }
         let id = self.start_job(busy, cx);
         run_job(cx, id, args, |this, result, cx| {
             if let Err(e) = result {
@@ -541,8 +557,33 @@ pub(crate) fn run_busy<T: 'static>(
     args: Vec<String>,
     then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
 ) {
-    let id = Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx));
+    let id = Store::get(cx).update(cx, |s, cx| {
+        if cli::moves_view(&args) {
+            s.leave_machine_place(cx);
+        }
+        s.start_job(busy, cx)
+    });
     run_job(cx, id, args, then);
+}
+
+pub(crate) fn run_on<T: 'static>(
+    cx: &mut Context<T>,
+    target: Target,
+    args: Vec<String>,
+    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+) {
+    run_with(cx, None, move || cli::run_on(&target, &args, None), then);
+}
+
+fn run_job_on<T: 'static>(
+    cx: &mut Context<T>,
+    id: u64,
+    target: Target,
+    args: Vec<String>,
+    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+) {
+    let job = (Store::get(cx), id);
+    run_with(cx, Some(job), move || cli::run_on(&target, &args, None), then);
 }
 
 pub(crate) fn run_partial_busy<T: 'static>(
@@ -682,9 +723,20 @@ pub(crate) fn follow_until<T: 'static>(
     on_line: impl Fn(&mut T, String, &mut Context<T>) + 'static,
     on_end: impl FnOnce(&mut T, String, &mut Context<T>) + 'static,
 ) -> Option<Stream> {
+    follow_on(cx, &cli::target(), args, on_line, on_end)
+}
+
+pub(crate) fn follow_on<T: 'static>(
+    cx: &mut Context<T>,
+    target: &Target,
+    args: impl AsRef<[String]>,
+    on_line: impl Fn(&mut T, String, &mut Context<T>) + 'static,
+    on_end: impl FnOnce(&mut T, String, &mut Context<T>) + 'static,
+) -> Option<Stream> {
     let (tx, rx) = mpsc::unbounded::<Line>();
     let end = tx.clone();
-    let stream = cli::stream(
+    let stream = cli::stream_on(
+        target,
         args.as_ref(),
         move |line| {
             let _ = tx.unbounded_send(Line::Text(line));

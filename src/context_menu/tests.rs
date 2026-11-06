@@ -1,7 +1,8 @@
 use gpui::{point, px};
 
 use super::{
-    ABOVE_POINTER, Entry, FRAME_PADDING, ROW_HEIGHT, SEPARATOR_HEIGHT, above, choice, item, note, step, submenu,
+    ABOVE_POINTER, Entry, FRAME_PADDING, ROW_HEIGHT, SEPARATOR_HEIGHT, above, choice, item, note, resting, step,
+    submenu,
 };
 
 fn entries() -> Vec<Entry> {
@@ -62,4 +63,11 @@ fn a_menu_opened_above_the_pointer_ends_just_over_it() {
     let entries = [item("One", |_, _, _| {}), item("Two", |_, _, _| {}), Entry::Separator, item("More", |_, _, _| {})];
     let height = 3. * ROW_HEIGHT + SEPARATOR_HEIGHT + 2. * FRAME_PADDING;
     assert_eq!(above(point(px(10.), px(500.)), &entries), point(px(10.), px(500. - height - ABOVE_POINTER)));
+}
+
+#[test]
+fn the_keys_skip_a_line_at_rest() {
+    let entries = [resting("vps unreachable"), item("Rename", |_, _, _| {}), resting("Rename")];
+    assert_eq!(step(&entries, None, true), Some(1));
+    assert_eq!(step(&entries, Some(1), true), Some(1));
 }

@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
+use crate::model::Aim;
+
 pub(crate) const SHOW_AFTER: Duration = Duration::from_millis(300);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,11 +29,20 @@ fn removal_key(workspace: u64) -> String {
     format!("remove-worktree:{workspace}")
 }
 
+pub(crate) fn leaving_key(aim: &Aim) -> String {
+    format!("machine-leaving:{}", aim.key())
+}
+
+pub(crate) fn renaming_key(aim: &Aim) -> String {
+    format!("machine-renaming:{}", aim.key())
+}
+
 #[derive(Default)]
 pub(crate) struct Jobs {
     running: Vec<(u64, Instant, Busy)>,
     next: u64,
     leaving: HashSet<u64>,
+    leaving_there: HashSet<Aim>,
 }
 
 impl Jobs {
@@ -77,6 +88,18 @@ impl Jobs {
 
     pub(crate) fn keep_leaving(&mut self, listed: impl Fn(u64) -> bool) {
         self.leaving.retain(|workspace| listed(*workspace));
+    }
+
+    pub(crate) fn left_there(&mut self, aim: Aim) {
+        self.leaving_there.insert(aim);
+    }
+
+    pub(crate) fn leaving_there(&self, aim: &Aim) -> bool {
+        self.leaving_there.contains(aim) || self.busy(&leaving_key(aim))
+    }
+
+    pub(crate) fn keep_leaving_there(&mut self, listed: impl Fn(&Aim) -> bool) {
+        self.leaving_there.retain(|aim| listed(aim));
     }
 }
 

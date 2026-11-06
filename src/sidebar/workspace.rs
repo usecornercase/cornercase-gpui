@@ -107,6 +107,10 @@ fn shared_tag(ws: &Workspace, session: Option<&Session>) -> Option<Stateful<Div>
     )
 }
 
+pub(super) fn detail_row() -> Div {
+    div().flex().gap(px(6.)).overflow_hidden().whitespace_nowrap().text_size(px(11.)).text_color(colours::faint())
+}
+
 fn detail_line(ws: &Workspace, look: &WorkspaceLook, removing: bool) -> Option<Div> {
     let setup = ws.setup.as_deref().map(|s| match s {
         "running" => ("setup…", colours::working()),
@@ -116,13 +120,7 @@ fn detail_line(ws: &Workspace, look: &WorkspaceLook, removing: bool) -> Option<D
     if !removing && setup.is_none() && detail.is_empty() {
         return None;
     }
-    let line = div()
-        .flex()
-        .gap(px(6.))
-        .overflow_hidden()
-        .whitespace_nowrap()
-        .text_size(px(11.))
-        .text_color(colours::faint())
+    let line = detail_row()
         .when(removing, |d| d.child(ui::busy(("ws-removing", ws.id), "removing…").text_size(px(11.))))
         .children(setup.map(|(text, colour)| div().text_color(colour).child(text)))
         .children(detail);
@@ -344,7 +342,7 @@ fn agent_menu_button(id: u64, scope: &str, group: SharedString, cx: &mut Context
     )
 }
 
-pub(super) fn agent_details(pane: &PaneInfo, mark: Option<&str>) -> String {
+pub(super) fn agent_details<Id>(pane: &PaneInfo<Id>, mark: Option<&str>) -> String {
     let mut details = vec![pane.agent.clone().unwrap_or_default()];
     details.extend(pane.role.clone());
     details.extend(pane.model.clone());

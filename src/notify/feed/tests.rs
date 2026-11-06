@@ -4,6 +4,7 @@ fn fixture(name: &str) -> Event {
     let text = match name {
         "notice" => crate::test_util::fixture!("events/notice.json"),
         "notice-sound" => crate::test_util::fixture!("events/notice-sound.json"),
+        "notice-machine" => crate::test_util::fixture!("events/notice-machine.json"),
         "clipboard" => crate::test_util::fixture!("events/clipboard.json"),
         "bell" => crate::test_util::fixture!("events/bell.json"),
         "status" => crate::test_util::fixture!("events/status.json"),
@@ -23,6 +24,38 @@ fn reads_a_notice() {
     assert_eq!(n.sound, None);
     assert!(n.toast_kind() == ToastKind::NeedsYou);
     assert_eq!(n.headline(), "claude needs you");
+}
+
+#[test]
+fn a_notice_of_ours_goes_by_its_token() {
+    let Event::Notice(n) = fixture("notice") else { panic!("not a notice") };
+    assert_eq!(n.machine, None);
+    assert_eq!(n.there(&[]), None);
+    assert_eq!(n.go(None), ToastGo::Run(args(&["go", "cc-ab12cd-3"])));
+}
+
+#[test]
+fn reads_a_notice_of_an_agent_on_a_machine() {
+    let Event::Notice(n) = fixture("notice-machine") else { panic!("not a notice") };
+    assert_eq!(n.machine.as_deref(), Some("vps"));
+    assert_eq!(n.message, "claude on vps needs you in shop › notes");
+    assert_eq!(n.sound.as_deref(), Some("needs-you"));
+    assert!(n.toast_kind() == ToastKind::NeedsYou);
+    assert_eq!(n.headline(), "claude needs you");
+}
+
+#[test]
+fn a_notice_of_an_agent_on_a_machine_goes_to_its_panes_there_not_by_its_token() {
+    let Event::Notice(n) = fixture("notice-machine") else { panic!("not a notice") };
+    let seen = MachineSeen { name: "vps".into(), boot: "b".into(), ..MachineSeen::default() };
+    let there = NoticeThere {
+        machine: "vps".into(),
+        boot: "b".into(),
+        panes: vec![ThereId::heard(15)],
+        gone: "claude in shop › notes is gone".into(),
+    };
+    assert_eq!(n.there(&[seen]).as_ref(), Some(&there));
+    assert_eq!(n.go(Some(there.clone())), ToastGo::Machine(there));
 }
 
 #[test]

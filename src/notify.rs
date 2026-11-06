@@ -17,7 +17,7 @@ use crate::cli::Stream;
 use crate::desktop;
 use crate::model::Session;
 use crate::platform::Os;
-use crate::store::{self, Busy, Store, ToastKind, args};
+use crate::store::{self, Busy, Store, ToastGo, ToastKind, args};
 use crate::theme::{UI_FAMILY, colours, radius};
 use crate::ui::{self, glass};
 
@@ -148,7 +148,12 @@ impl Notifier {
     }
 
     fn notice(&mut self, notice: Notice, cx: &mut Context<Self>) {
-        let go = ("Go".to_string(), args(&["go", &notice.token]));
+        let store = self.store.read(cx);
+        let there = notice.there(store.session.as_ref().map_or(&[], |session| &session.machines));
+        if self.active && there.as_ref().is_some_and(|there| store.shows_notice(there)) {
+            return;
+        }
+        let go = ("Go".to_string(), notice.go(there));
         self.store.update(cx, |s, cx| s.toast_with(notice.message.clone(), notice.toast_kind(), Some(go), cx));
         let behind = !self.active;
         if notice.sound.is_none() && !behind {
@@ -211,8 +216,9 @@ impl Notifier {
     }
 
     fn bell(&mut self, tab: Option<u64>, pane: Option<u64>, cx: &mut Context<Self>) {
-        let session = self.store.read(cx).session.as_ref();
-        let shown = session.and_then(|s| s.shown().tab);
+        let store = self.store.read(cx);
+        let session = store.session.as_ref();
+        let shown = session.and_then(|s| s.shown().tab).filter(|_| store.machine_place.is_none());
         if tab.is_some() && tab == shown {
             self.flash(cx);
             return;
@@ -224,7 +230,7 @@ impl Notifier {
         self.bell_toasts.insert(key, Instant::now());
         let place = tab.and_then(|t| session.and_then(|s| tab_place(s, t)));
         let text = place.map_or_else(|| "Bell in another tab".to_string(), |p| format!("Bell in {p}"));
-        let action = tab.map(|t| ("Show".to_string(), args(&["focus", "--tab", &t.to_string()])));
+        let action = tab.map(|t| ("Show".to_string(), ToastGo::Run(args(&["focus", "--tab", &t.to_string()]))));
         self.store.update(cx, |s, cx| s.toast_with(text, ToastKind::Info, action, cx));
     }
 

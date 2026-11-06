@@ -82,7 +82,7 @@ fn sections_put_loose_projects_first_and_keep_empty_groups() {
 
 #[test]
 fn agent_titles_lose_their_spinner() {
-    let pane = |t: &str| PaneInfo { title: Some(t.into()), ..Default::default() };
+    let pane = |t: &str| PaneInfo::<u64> { title: Some(t.into()), ..Default::default() };
     assert_eq!(pane("✳ Fix the login").agent_title().as_deref(), Some("Fix the login"));
     assert_eq!(pane("⠋ ").agent_title(), None);
 }

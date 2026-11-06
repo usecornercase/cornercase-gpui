@@ -2,11 +2,19 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.15
+## 0.1.16
 
 - **Choose the account an agent starts on.** Once an agent has more than one login, whatever starts it offers a dropdown of its accounts: an issue's Start and Schedule, the Agent button, the Queue's form and Start a flow, one for each agent of the team. It rests on the account in use, named as such; pick another and it applies to that start only. A queued entry you leave alone takes whichever account is in use when it starts, and one whose account has since been removed says so rather than moving to another. If you never pick, nothing changes, and without a second login nothing shows. Settings › UI's account picker turns it off.
 - The TODO panel's send menu says which account each agent runs on.
 - In the Accounts sheet, the Escape after the one that closes the add form, a rename or a new profile closes the sheet. It used to do nothing until a click.
+
+## 0.1.15
+
+- **A machine's workspaces in your sidebar.** They sit under the project here that is a clone of the same repository, after your own, tagged with the machine, with their tabs and their agents' status, model and context. A project with no clone here gets a row at the end of the list. A project's count and its mark count them too, so an agent waiting on a machine marks the project here. When the machine is down its rows stay, dimmed, with the spinner still, and a tab with an agent says `waiting · seen 2 min ago`. Folding works on them; they can't be dragged and have no `+ Tab`, and a machine's tabs have no buttons.
+- **Rename, close or remove a worktree there from its row.** Hovering a machine's workspace shows `✕` and `⋯`. Rename is the same field in the row. `✕` always asks, naming the machine, and for a worktree shows what that machine found: changes not committed, a lock, its teardown. The row says `removing…` until it is gone. With the machine down nothing is sent, and a toast says so. These go through your own `ssh` from this computer, so a window that is itself on another server shows the rows and says plainly that it can't act on them.
+- **Its agents' notices reach you here**: the same toast, desktop notification and sound, `claude on vps needs you in shop › notes`, and **Go** picks that workspace.
+- **A click picks a machine's workspace or tab.** For now the terminal's place shows a card with where it runs, what its agent is doing and its folder, and what you type there is not sent: drawing its tab here comes next. Clicking anything of yours goes back, and an agent of yours behind the card still tells you when it needs you.
+- With projects and workspaces side by side, the projects' column takes its share of the width again; it had shrunk to its longest name.
 
 ## 0.1.14
 

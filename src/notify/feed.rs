@@ -3,9 +3,10 @@ use std::path::Path;
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::model::{MachineSeen, ThereId};
 use crate::platform::Os;
 use crate::platform::paths::{self, Style};
-use crate::store::ToastKind;
+use crate::store::{NoticeThere, ToastGo, ToastKind, args};
 
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(tag = "event", rename_all = "lowercase")]
@@ -46,9 +47,24 @@ pub(crate) struct Notice {
     pub panes: Vec<u64>,
     #[serde(default)]
     pub sound: Option<String>,
+    #[serde(default)]
+    pub machine: Option<String>,
 }
 
 impl Notice {
+    pub(crate) fn there(&self, machines: &[MachineSeen]) -> Option<NoticeThere> {
+        let machine = self.machine.clone()?;
+        let boot = machines.iter().find(|seen| seen.name == machine).map(|seen| seen.boot.clone()).unwrap_or_default();
+        let panes = self.panes.iter().copied().map(ThereId::heard).collect();
+        let agent = self.agent.as_deref().unwrap_or("the agent");
+        let gone = format!("{agent} in {} is gone", self.place.as_deref().unwrap_or("that place"));
+        Some(NoticeThere { machine, boot, panes, gone })
+    }
+
+    pub(crate) fn go(&self, there: Option<NoticeThere>) -> ToastGo {
+        there.map_or_else(|| ToastGo::Run(args(&["go", &self.token])), ToastGo::Machine)
+    }
+
     pub(crate) fn toast_kind(&self) -> ToastKind {
         match self.status.as_deref() {
             Some("done") => ToastKind::Done,
