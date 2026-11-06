@@ -169,7 +169,10 @@ impl FilesPanel {
             Results::Text(text) => {
                 let Some((path, line)) = text_target(text, self.search.rows.get(ix)) else { return };
                 let lit = search::matcher(&self.search.answered);
-                (self.style().relative(&path), OpenAt { line: line.map(zero_based), lit, from_search: true })
+                (
+                    self.style().relative(&path),
+                    OpenAt { line: line.map(zero_based), lit, from_search: true, ..OpenAt::default() },
+                )
             }
         };
         self.open_file(rel, at, cx);

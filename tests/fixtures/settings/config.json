@@ -29,7 +29,7 @@
      "env":"TELEGRAM_TOKEN"}
   ],
   "projects": [
-    {"folder":"/code/shop","key":"","project":4,"repository":true,"setup":"npm ci","teardown":""},
+    {"builds":["node_modules","target"],"folder":"/code/shop","key":"","project":4,"repository":true,"setup":"npm ci","teardown":""},
     {"folder":"/code/gone","key":"","repository":false,"setup":"","teardown":"rm -rf x"}
   ]
 }

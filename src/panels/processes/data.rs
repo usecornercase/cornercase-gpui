@@ -67,6 +67,31 @@ pub(super) struct Process {
     pub(super) memory: Option<u64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Closing {
+    Agent,
+    Asks(String),
+    Now,
+}
+
+impl PaneUse {
+    pub(super) fn closing(&self) -> Closing {
+        if self.agent.is_some() {
+            return Closing::Agent;
+        }
+        let names: Vec<String> = under(&self.processes, self.pid)
+            .into_iter()
+            .filter(|(depth, _)| *depth == 0)
+            .map(|(_, process)| process.command().0)
+            .collect();
+        if names.is_empty() { Closing::Now } else { Closing::Asks(names.join(", ")) }
+    }
+
+    pub(super) fn close_command(&self) -> Vec<String> {
+        ["close", "--pane", &self.pane.to_string()].map(str::to_string).to_vec()
+    }
+}
+
 impl Process {
     pub(super) fn command(&self) -> (String, String) {
         let (program, arguments) = command(&self.name, &self.args);

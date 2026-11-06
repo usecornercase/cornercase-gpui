@@ -4,6 +4,7 @@ mod choice;
 mod connection;
 mod controls;
 mod data;
+mod forum;
 mod import;
 mod landing;
 mod links;
@@ -64,6 +65,7 @@ pub(crate) struct SettingsPanel {
     exported: Option<data::Exported>,
     import: Option<import::Import>,
     was_open: bool,
+    first_project: Option<u64>,
     nav_width: Split,
     search: Entity<TextField>,
     scroll: ScrollHandle,
@@ -94,6 +96,7 @@ impl SettingsPanel {
             exported: None,
             import: None,
             was_open: true,
+            first_project: None,
             nav_width: NAV,
             search,
             scroll: ScrollHandle::new(),
@@ -101,9 +104,17 @@ impl SettingsPanel {
             landings: 0,
             spot: landing::Spot::default(),
         };
+        this.open_asked_project(&store, cx);
         this.load(cx);
         this.take_landing(cx);
         this
+    }
+
+    fn open_asked_project(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+        if let Some(project) = store.update(cx, |s, _| s.take_project_sheet(PanelKind::Settings)) {
+            self.first_project = Some(project);
+            self.go_to(data::PROJECTS.to_string(), cx);
+        }
     }
 
     fn search_field(window: &mut Window, cx: &mut Context<Self>) -> Entity<TextField> {
@@ -138,6 +149,7 @@ impl SettingsPanel {
         if open {
             self.take_landing(cx);
         }
+        self.open_asked_project(store, cx);
         if open && (!self.was_open || newer) {
             self.load(cx);
         }
@@ -150,6 +162,7 @@ impl SettingsPanel {
     fn opened(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.choice = None;
         self.landed = None;
+        self.first_project = None;
         self.search.update(cx, TextField::clear);
         window.focus(&self.search.read(cx).focus_handle(cx));
         self.to_top();
@@ -204,7 +217,7 @@ impl SettingsPanel {
     }
 
     fn sync_scripts(&mut self, project: &data::ProjectEntry, cx: &mut Context<Self>) {
-        for script in [Script::Setup, Script::Teardown] {
+        for script in Script::all_of(project) {
             let text = script.of(project);
             if text.contains('\n') {
                 continue;
@@ -212,8 +225,9 @@ impl SettingsPanel {
             let placeholder = match script {
                 Script::Setup => "such as npm ci",
                 Script::Teardown => "such as docker compose down",
+                Script::Builds => "none",
             };
-            self.sync(Role::Script(project.folder.clone(), script), text, placeholder, cx);
+            self.sync(Role::Script(project.folder.clone(), *script), &text, placeholder, cx);
         }
     }
 

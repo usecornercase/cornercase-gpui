@@ -6,6 +6,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, StyledImage as _, div, img, px, relative, uniform_list,
 };
 
+use crate::panels::PanelKind;
 use crate::platform::paths::Style;
 use crate::theme::{colours, radius};
 use crate::ui;
@@ -47,14 +48,22 @@ fn content_info(viewer: &Viewer) -> Vec<String> {
     info
 }
 
-fn heading(viewer: &Viewer, style: Style) -> Heading {
+fn back_label(from_flow: bool, from_search: bool) -> &'static str {
+    match (from_flow, from_search) {
+        (true, _) => "‹ Flow",
+        (false, true) => "‹ Results",
+        (false, false) => "‹ Files",
+    }
+}
+
+fn heading(viewer: &Viewer, style: Style, flow_shows: bool) -> Heading {
     let rel = &viewer.rel;
     let shown = style.shown(rel);
     let (folder, name) = style.split(&shown);
     Heading {
         name: if name.is_empty() { shown.clone() } else { name.to_string() },
         folder: folder.to_string(),
-        back: if viewer.from_search { "‹ Results" } else { "‹ Files" },
+        back: back_label(viewer.from_flow && flow_shows, viewer.from_search),
         info: content_info(viewer).join("  ·  "),
         path: viewer.path.clone(),
         target: Target { rel: rel.clone(), dir: false, line: viewer.selected },
@@ -157,7 +166,8 @@ impl FilesPanel {
 
     pub(super) fn render_viewer(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let Some(viewer) = self.place().and_then(|p| p.viewer.as_ref()) else { return div().into_any_element() };
-        let heading = heading(viewer, self.style());
+        let flow_shows = PanelKind::Flow.shows(self.store.read(cx).session.as_ref());
+        let heading = heading(viewer, self.style(), flow_shows);
         let body = self.viewer_body(viewer.content.as_ref(), cx);
         div()
             .flex_1()
@@ -200,3 +210,6 @@ impl FilesPanel {
             .into_any_element()
     }
 }
+
+#[cfg(test)]
+mod tests;

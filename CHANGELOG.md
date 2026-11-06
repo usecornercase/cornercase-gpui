@@ -2,10 +2,29 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.10
+## 0.1.12
 
 - **Plugins reach the menus and the rail.** What a plugin offers for a project, a workspace, a tab or a pane shows at the bottom of that row's `⋯` and right-click menu, and of a pane's right-click menu, under the plugin's name. A plugin with a button gets a slot in the rail, after the docked panels: with one action a click runs it, with several it opens a menu of them. How it ended comes back as a toast and a popup opens over the terminal, as from the Plugins sheet. For now a button acts on what cornercase's own window shows and a popup needs that window open (usecornercase/cornercase-terminal#666); the slot's tooltip and the sheet say so.
 - A plugin's action that fails now says how (`exit status: 3`) and points at its log, where it only said `cornercase plugin: failed`. Closing a plugin's popup with its `✕` no longer shows an error.
+
+## 0.1.11
+
+- **Changes filters by path.** A field over the file list keeps the files you name: a piece of a path (`order`), a pattern as in `.gitignore` (`*.test.js`, `src/api/**`), `!` to leave files out (`!*.lock`). The summary says how many are left (`3 of 31 files`); Enter gives your keys back to the pane, Escape clears it.
+- **Open in…** on a project, a workspace or a pane takes its folder to your file manager, VS Code, Cursor, Zed or Sublime Text, whichever you have. A pane opens the folder its program is in.
+- **A project's menu reaches more of the project.** Project settings… opens Settings on it, where a repository can now change the folders Free builds deletes, and Worktrees… lists that project's alone, with a button for every worktree.
+- **Import only what you want.** Each section of a shared setup has a tick in the preview; what you untick stays as it is.
+- **Processes closes a pane.** It asks first when a program runs there, and an agent's pane goes through Close agent.
+- **Ports stops several at once.** Tick the ones to stop, or use Stop all for a workspace's; it asks once, naming each program.
+- **A file of a run opens beside the Flow panel.** In the Flow panel a click shows the file in the Files panel, and ‹ Flow goes back, scrolled where you left it.
+- **Help.** The rail's `?` now has the docs and the bug report beside the tours, and can reset the tours' progress.
+- **The Discord forum's state in Settings › Remote**: ready, or the step it waits for. Choosing among several servers still takes cornercase's own window.
+
+## 0.1.10
+
+- **Usage of every machine.** Once you have machines, the Usage sheet has a row that picks this computer, one machine or all of them, for Limits, Stats and By agent alike.
+- Under all, Stats adds the machines up and says that **most at once** is the largest peak of one machine, not a sum.
+- Under all, Limits lists each machine's accounts under its name. A Claude Code account logged in on two of them shows once, with `on this computer, vps` under it, and its numbers are the latest reading, never added.
+- Old numbers say so: a machine that is down shows the numbers it gave last with `seen 5 min ago`, one whose last answer failed says why and how old they are, and one that never answered says why instead of its rows.
 
 ## 0.1.9
 

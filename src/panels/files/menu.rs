@@ -1,52 +1,17 @@
-use std::path::PathBuf;
-
-use anyhow::Context as _;
 use gpui::{
     AnyElement, ClickEvent, ClipboardItem, Context, InteractiveElement as _, IntoElement, MouseDownEvent,
     ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Styled as _, anchored, deferred, div, px,
 };
 
-use crate::desktop;
 use crate::platform::Os;
 use crate::platform::paths::Style;
-use crate::store::{self, Busy, ToastKind};
+use crate::store::{self, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
 
-use super::open::{self, Launch, Opener};
+use super::open::{self, Opener, Opening, opener_label};
 use super::style::menu_entry;
 use super::{FilesPanel, Menu, Target};
-
-#[derive(Clone)]
-struct Opening {
-    opener: Opener,
-    launch: Launch,
-    path: PathBuf,
-    line: Option<usize>,
-    dir: bool,
-}
-
-impl Opening {
-    fn run(&self) -> anyhow::Result<()> {
-        match self.opener {
-            Opener::FileManager => desktop::reveal(&self.path, self.dir),
-            Opener::DefaultApp => desktop::open(&self.path),
-            _ => {
-                let argv = open::argv(&self.launch, self.opener, &self.path, self.line.map(|l| l + 1), self.dir);
-                let label = self.opener.label(Os::CURRENT);
-                desktop::run(&argv.context("nothing to run")?).with_context(|| format!("could not open in {label}"))
-            }
-        }
-    }
-}
-
-fn opener_label(opener: Opener, dir: bool) -> String {
-    match opener {
-        Opener::FileManager => desktop::show_label(Os::CURRENT, dir),
-        Opener::DefaultApp => "Open with default app".to_string(),
-        other => format!("Open in {}", other.label(Os::CURRENT)),
-    }
-}
 
 fn opens(opener: Opener, menu: &Menu) -> bool {
     opener != Opener::DefaultApp || menu.default_app
@@ -64,8 +29,7 @@ impl FilesPanel {
     fn open_with(&mut self, opening: Opening, cx: &mut Context<Self>) {
         self.menu = None;
         cx.notify();
-        let busy = Busy::new("open-with", format!("Opening in {}…", opening.opener.label(Os::CURRENT)));
-        store::run_local(cx, busy, move || opening.run());
+        store::run_local(cx, opening.busy(), move || opening.run());
     }
 
     pub(super) fn copy(&mut self, text: String, what: &str, cx: &mut Context<Self>) {
@@ -77,7 +41,8 @@ impl FilesPanel {
 
     fn opener_entries(&self, menu: &Menu, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let mut entries: Vec<AnyElement> = Vec::new();
-        for (i, (opener, launch)) in self.openers.iter().enumerate() {
+        let openers = self.store.read(cx).openers.clone();
+        for (i, (opener, launch)) in openers.iter().enumerate() {
             if !opens(*opener, menu) {
                 continue;
             }
@@ -92,7 +57,7 @@ impl FilesPanel {
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_with(opening.clone(), cx)));
             entries.push(entry.into_any_element());
         }
-        if self.openers.is_empty() {
+        if openers.is_empty() {
             entries.push(div().px(px(10.)).py(px(4.)).child(ui::dim("No apps to open with")).into_any_element());
         }
         entries

@@ -1,20 +1,20 @@
 use gpui::{
-    AnyElement, ClickEvent, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Focusable as _, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::model::Session;
 use crate::store::Store;
 use crate::theme::{FONT_FAMILY, colours, radius};
-use crate::ui;
+use crate::ui::{self, Icon, TextField};
 
-use super::pieces::plural;
+use super::filter::files_label;
 use super::selection::switching_base;
 use super::wire::{Base, Mode, State};
 use super::{ChangesPanel, Scope};
 
 struct Totals {
-    files: usize,
+    files: String,
     added: usize,
     removed: usize,
 }
@@ -28,7 +28,7 @@ fn totals_view(totals: &Totals) -> impl IntoElement + use<> {
         .flex()
         .flex_none()
         .gap(px(6.))
-        .child(div().text_color(colours::muted()).child(plural(totals.files, "file")))
+        .child(div().text_color(colours::muted()).child(totals.files.clone()))
         .child(div().text_color(colours::done()).child(format!("+{}", totals.added)))
         .child(div().text_color(colours::failed()).child(format!("−{}", totals.removed)))
 }
@@ -54,7 +54,12 @@ fn branch_name(branch: &str) -> impl IntoElement + use<> {
 }
 
 impl ChangesPanel {
-    pub(super) fn render_header(&self, session: Option<&Session>, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(super) fn render_header(
+        &self,
+        session: Option<&Session>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         div()
             .flex_none()
             .flex()
@@ -68,6 +73,19 @@ impl ChangesPanel {
             .child(self.scope_tabs(cx))
             .child(self.summary_line(session, cx))
             .when(self.base_open, |d| d.child(self.render_bases(cx)))
+            .when(self.has_files(), |d| d.child(self.filter_box(window, cx)))
+    }
+
+    fn has_files(&self) -> bool {
+        self.summary.as_ref().is_some_and(|s| s.workspaces.iter().any(|w| !w.files.is_empty()))
+    }
+
+    fn filter_box(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let clear = (!self.filter.read(cx).text().is_empty()).then(|| {
+            ui::field_action("changes-filter-clear", Icon::Close, "Clear the filter", colours::muted())
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.filter.update(cx, TextField::clear)))
+        });
+        ui::search_field(self.filter.clone(), self.filter.read(cx).focus_handle(cx).is_focused(window), clear)
     }
 
     fn scope_tab(&self, id: &'static str, label: &'static str, scope: Scope, cx: &mut Context<Self>) -> AnyElement {
@@ -85,10 +103,12 @@ impl ChangesPanel {
         ])
     }
 
-    fn totals(&self) -> Option<Totals> {
+    fn totals(&self, cx: &Context<Self>) -> Option<Totals> {
         let summary = self.summary.as_ref().filter(|s| s.state == State::Ready)?;
+        let query = self.query(cx);
+        let files = summary.workspaces.iter().flat_map(|w| &w.files);
         Some(Totals {
-            files: summary.workspaces.iter().map(|w| w.files.len()).sum(),
+            files: files_label(files.clone().filter(|f| query.keeps(f)).count(), files.count(), !query.is_empty()),
             added: summary.workspaces.iter().map(|w| w.added).sum(),
             removed: summary.workspaces.iter().map(|w| w.removed).sum(),
         })
@@ -122,7 +142,7 @@ impl ChangesPanel {
             .gap(px(8.))
             .text_size(px(11.))
             .child(div().flex_1().min_w(px(0.)).text_color(colours::muted()).child(ui::one_line(place)))
-            .when_some(self.totals(), |d, totals| d.child(totals_view(&totals)))
+            .when_some(self.totals(cx), |d, totals| d.child(totals_view(&totals)))
             .when_some(self.base_label(), |d, label| d.child(self.base_button(label, cx)))
     }
 

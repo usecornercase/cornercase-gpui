@@ -1,4 +1,6 @@
-use super::data::{Freed, List, Order, Tone, Worktree, free_command, free_message, list_command, shown, total};
+use super::data::{
+    Freed, List, Order, Tone, Worktree, free_command, free_message, list_command, scope_note, shown, total,
+};
 use crate::panels::flows::model::epoch;
 use crate::test_util::fixture;
 
@@ -95,7 +97,7 @@ fn the_total_names_builds_left_idle_for_a_week() {
 
 #[test]
 fn the_commands_ask_for_json() {
-    assert_eq!(list_command(false), ["worktrees", "list", "--json", "--no-sizes"]);
+    assert_eq!(list_command(false, None), ["worktrees", "list", "--json", "--no-sizes"]);
     assert_eq!(free_command("/w", true, false), ["worktrees", "free-builds", "--path", "/w", "--json", "--check"]);
     assert_eq!(free_command("/w", false, true), ["worktrees", "free-builds", "--path", "/w", "--json", "--force"]);
 }
@@ -106,4 +108,16 @@ fn freeing_warns_about_what_runs_in_the_worktree() {
     let text = free_message(&freed);
     assert!(text.starts_with("Frees 296.0 KB: node_modules 296.0 KB."));
     assert!(text.ends_with("Python runs in it and may still use them."));
+}
+
+#[test]
+fn one_project_is_listed_by_its_id() {
+    assert_eq!(list_command(true, Some(7)), ["worktrees", "list", "--json", "--project", "7"]);
+    assert_eq!(list_command(false, Some(7)), ["worktrees", "list", "--json", "--no-sizes", "--project", "7"]);
+}
+
+#[test]
+fn the_sheet_names_the_project_it_shows() {
+    assert_eq!(scope_note(Some("shop")), "Only the worktrees of shop.");
+    assert_eq!(scope_note(None), "Only the worktrees of this project.");
 }

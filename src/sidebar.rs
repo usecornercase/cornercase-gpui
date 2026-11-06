@@ -30,7 +30,7 @@ pub(crate) use crate::store::args as cmd;
 pub(crate) use folds::Fold;
 pub(crate) use forms::close_agent;
 pub(crate) use look::Arrangement;
-pub(crate) use menus::reopening;
+pub(crate) use menus::{path_items, reopening};
 
 const MARK: f32 = 1.25;
 

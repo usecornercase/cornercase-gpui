@@ -2,7 +2,7 @@ pub(crate) mod disk;
 mod finder;
 mod highlight;
 mod menu;
-mod open;
+pub(crate) mod open;
 mod peek;
 mod querying;
 mod results_view;
@@ -39,7 +39,6 @@ use crate::ui::{self, TextField, TextFieldEvent};
 
 use disk::Content;
 pub(crate) use finder::{find_file, is_finder};
-use open::{Launch, Opener};
 pub(crate) use peek::{Anchor, Peek, WebPage};
 use source::Source;
 pub(crate) use viewer::open_link;
@@ -99,6 +98,7 @@ struct Viewer {
     lit: Option<RegexMatcher>,
     checking: bool,
     from_search: bool,
+    from_flow: bool,
 }
 
 enum Results {
@@ -169,7 +169,6 @@ pub(crate) struct FilesPanel {
     search: Search,
     show_hidden: bool,
     rows: Vec<tree::Row>,
-    openers: Arc<Vec<(Opener, Launch)>>,
     menu: Option<Menu>,
     tree_scroll: UniformListScrollHandle,
     code_scroll: UniformListScrollHandle,
@@ -192,15 +191,6 @@ fn ticker(cx: &mut Context<FilesPanel>) -> Task<()> {
     })
 }
 
-fn detect_openers(cx: &mut Context<FilesPanel>) {
-    let openers = cx.background_spawn(async { open::detect() });
-    cx.spawn(async move |this, cx| {
-        let openers = openers.await;
-        let _ = this.update(cx, |this, _| this.openers = Arc::new(openers));
-    })
-    .detach();
-}
-
 fn query_event(this: &mut FilesPanel, field: &Entity<TextField>, event: &TextFieldEvent, cx: &mut Context<FilesPanel>) {
     match event {
         TextFieldEvent::Changed => {
@@ -217,14 +207,11 @@ impl FilesPanel {
         let store = Store::get(cx);
         let query = cx.new(|cx| TextField::new("Search files…", cx).clears_on_escape());
         let subscriptions = vec![
-            cx.observe(&store, |this, _, cx| this.follow_workspace(cx)),
+            cx.observe(&store, |this, _, cx| this.store_changed(cx)),
             cx.subscribe(&query, |this, field, event: &TextFieldEvent, cx| query_event(this, &field, event, cx)),
         ];
         let tick = ticker(cx);
         let remote = cli::host().is_some();
-        if !remote {
-            detect_openers(cx);
-        }
         let mut panel = Self {
             store,
             remote,
@@ -234,7 +221,6 @@ impl FilesPanel {
             search: Search::new(),
             show_hidden: true,
             rows: Vec::new(),
-            openers: Arc::new(Vec::new()),
             menu: None,
             tree_scroll: UniformListScrollHandle::new(),
             code_scroll: UniformListScrollHandle::new(),
@@ -242,7 +228,7 @@ impl FilesPanel {
             _subscriptions: subscriptions,
             _tick: tick,
         };
-        panel.follow_workspace(cx);
+        panel.store_changed(cx);
         panel
     }
 
