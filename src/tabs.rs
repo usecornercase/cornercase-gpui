@@ -127,11 +127,14 @@ fn agent_entries(tab: &Tab) -> Vec<Entry> {
         act("Mark as pending review", cmd(&["mark", "--tab", &t]))
     };
     let pane = agent.id;
-    vec![
-        Entry::Separator,
-        mark,
-        danger("Close agent…", move |_, window, cx| crate::sidebar::close_agent(pane, window, cx)),
-    ]
+    let mut entries = vec![Entry::Separator, mark];
+    entries.extend(
+        dialogs::context_choices(tab)
+            .into_iter()
+            .map(|(pane, label)| item(label, move |_, window, cx| dialogs::view_context(pane, window, cx))),
+    );
+    entries.push(danger("Close agent…", move |_, window, cx| crate::sidebar::close_agent(pane, window, cx)));
+    entries
 }
 
 impl Root {

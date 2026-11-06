@@ -1,0 +1,14 @@
+{
+  "age": null,
+  "agent": "claude",
+  "breakdown": null,
+  "compacted": false,
+  "error": null,
+  "loading": false,
+  "model": "Opus 5.5",
+  "notice": null,
+  "pane": 13,
+  "percent": 17,
+  "read_at": null,
+  "title": "Claude Code"
+}

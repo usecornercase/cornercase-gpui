@@ -297,6 +297,7 @@ impl Root {
         if self.agent_has_children(pane) {
             entries.push(fold_item(Fold::Pane(pane), info.collapsed));
         }
+        entries.push(item(dialogs::VIEW_CONTEXT, move |_, window, cx| dialogs::view_context(pane, window, cx)));
         entries.push(Entry::Separator);
         entries.push(danger("Close agent…", move |_, window, cx| forms::close_agent(pane, window, cx)));
         entries
