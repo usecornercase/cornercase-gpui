@@ -385,3 +385,25 @@ fn a_flow_on_an_issue_takes_the_task_of_its_read_page_and_leaves_a_blank_one_to_
     assert_eq!(task(&ReadIssue { prompt: " ".into(), ..read }), None);
     assert_eq!(flow_start(&issue(), &sources, true, None).issue.expect("an issue").prompt, None);
 }
+
+fn on_work() -> Vec<AccountPick> {
+    vec![AccountPick { agent: "claude".into(), folder: "work".into() }]
+}
+
+#[test]
+fn a_start_with_a_picked_account_names_it() {
+    let args = StartPlan { accounts: on_work(), ..worktree_plan() }.start_args();
+    assert!(args.windows(2).any(|pair| pair == ["--account", "claude=work"]), "{args:?}");
+}
+
+#[test]
+fn a_scheduled_start_with_a_picked_account_names_it() {
+    let args = StartPlan { accounts: on_work(), ..worktree_plan() }.queue_args("in 2h");
+    assert!(args.windows(2).any(|pair| pair == ["--account", "claude=work"]), "{args:?}");
+}
+
+#[test]
+fn a_start_without_a_pick_names_no_account() {
+    assert!(!worktree_plan().start_args().contains(&"--account".to_string()));
+    assert!(!worktree_plan().queue_args("in 2h").contains(&"--account".to_string()));
+}

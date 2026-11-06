@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::model::accounts::AccountsInfo;
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::store::{ToastKind, args};
 
@@ -81,6 +82,7 @@ pub(crate) struct Target {
     pub pane: u64,
     pub status: Option<String>,
     pub label: String,
+    pub account: Option<String>,
 }
 
 fn agent_panes(session: &Session) -> impl Iterator<Item = (&Project, &Workspace, &Tab, &PaneInfo)> {
@@ -93,14 +95,14 @@ fn agent_panes(session: &Session) -> impl Iterator<Item = (&Project, &Workspace,
         .filter(|(.., pane)| pane.agent.is_some())
 }
 
-fn target(project: &Project, workspace: &Workspace, pane: &PaneInfo) -> Target {
+fn target(project: &Project, workspace: &Workspace, pane: &PaneInfo, accounts: Option<&AccountsInfo>) -> Target {
     let agent = pane.agent.clone().unwrap_or_default();
     let label = if project.workspaces.len() > 1 {
         format!("{} › {} · {agent}", project.name, workspace.name)
     } else {
         format!("{} · {agent}", project.name)
     };
-    Target { pane: pane.id, status: pane.status.clone(), label }
+    Target { pane: pane.id, status: pane.status.clone(), label, account: accounts.and_then(|a| a.mark(pane)) }
 }
 
 fn disambiguate(found: &mut [(Target, String)], suffix: impl Fn(&Target, &str) -> Option<String>) {
@@ -115,9 +117,9 @@ fn disambiguate(found: &mut [(Target, String)], suffix: impl Fn(&Target, &str) -
     }
 }
 
-pub(crate) fn targets(session: &Session) -> Vec<Target> {
+pub(crate) fn targets(session: &Session, accounts: Option<&AccountsInfo>) -> Vec<Target> {
     let mut found: Vec<(Target, String)> =
-        agent_panes(session).map(|(p, w, t, pane)| (target(p, w, pane), t.name.clone())).collect();
+        agent_panes(session).map(|(p, w, t, pane)| (target(p, w, pane, accounts), t.name.clone())).collect();
     disambiguate(&mut found, |_, tab| (!tab.is_empty()).then(|| format!("({tab})")));
     disambiguate(&mut found, |target, _| Some(format!("(pane {})", target.pane)));
     found.into_iter().map(|(t, _)| t).collect()

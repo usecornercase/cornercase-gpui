@@ -6,8 +6,9 @@ use super::data::{
     repository_for, sections, sentence, status_label,
 };
 use super::draft::{Draft, Target, When, cleanup_flag};
-use super::form::Times;
+use super::form::{Times, starting_agent};
 use super::time::{Civil, days, local, relative, when_label};
+use crate::model::accounts::pick::AccountPick;
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::panels::flows::model::FlowInfo;
 use crate::platform::Os;
@@ -428,6 +429,7 @@ fn draft() -> Draft {
         flow: None,
         cleanup: None,
         name: Some(String::new()),
+        accounts: Vec::new(),
     }
 }
 
@@ -613,4 +615,34 @@ fn reads_agents_and_modes_from_the_settings() {
     assert_eq!(mode_choices(&config, "claude"), (vec!["default".into(), "plan".into()], Some("plan".into())));
     assert_eq!(mode_choices(&config, "codex"), (vec![], None));
     assert_eq!(agent_choices(&json!({})), (vec![], "auto".to_string()));
+}
+
+#[test]
+fn a_picked_account_goes_with_the_entry() {
+    let accounts = vec![AccountPick { agent: "claude".into(), folder: "work".into() }];
+    let args = Draft { accounts, ..draft() }.args().expect("the arguments");
+    assert!(args.windows(2).any(|pair| pair == ["--account", "claude=work"]), "{args:?}");
+}
+
+#[test]
+fn a_saved_account_is_not_sent_again_on_an_edit() {
+    let args = Draft { edit: Some(4), text: String::new(), when: When::Keep, target: Target::Keep, ..draft() }.args();
+    assert_eq!(args.map(|a| a.join(" ")), Ok("queue edit 4 --json".to_string()));
+}
+
+#[test]
+fn the_account_row_follows_the_agent_chosen_else_the_entrys_else_the_default() {
+    assert_eq!(starting_agent(false, Some("codex"), Some("claude"), Some("gemini")), ["codex"]);
+    assert_eq!(starting_agent(false, None, Some("claude"), Some("gemini")), ["claude"]);
+    assert_eq!(starting_agent(false, None, None, Some("gemini")), ["gemini"]);
+}
+
+#[test]
+fn no_agent_named_has_no_account_row() {
+    assert_eq!(starting_agent(false, None, None, None), Vec::<String>::new());
+}
+
+#[test]
+fn a_routine_that_runs_a_flow_has_no_account_row() {
+    assert_eq!(starting_agent(true, Some("codex"), Some("claude"), Some("gemini")), Vec::<String>::new());
 }

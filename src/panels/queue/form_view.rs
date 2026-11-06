@@ -1,5 +1,5 @@
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, ElementId, FontWeight, InteractiveElement as _, IntoElement,
+    AnyElement, App, ClickEvent, Context, Div, ElementId, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
@@ -21,6 +21,7 @@ const FLOW_TASK: &str = "The prompt is the team's task.";
 const FLOW_MODES: &str = "Set by the flow's roles.";
 const NO_REPOSITORY: &str =
     "Open a git repository's folder as a project first: only git repositories can have routines.";
+const FOLLOWS: &str = "Left as it is, it starts on whichever account is in use at that time.";
 const CLEANUP: &str = "remove the workspace when it finishes";
 const CLEANUP_NOTE: &str = "Once the agent has been done for 3 minutes, the run's workspace and branch go. The \
                             workspace stays, and the run says why, when anything would be lost: uncommitted or \
@@ -330,9 +331,18 @@ fn modes(form: &Form, config: &Value, cx: &mut Context<QueuePanel>) -> Option<Di
     Some(ui::field("Mode", chips(items)))
 }
 
+fn account_row(form: &Form, cx: &App) -> Option<Div> {
+    let default = Store::get(cx).read(cx).account_settings.default_agent.clone();
+    let agents = form.account_agents(default.as_deref());
+    let follows = form.accounts.follow_in_use(&agents, cx);
+    let fields = form.accounts.fields(&agents, cx)?;
+    Some(stack().gap(px(6.)).child(fields).when(follows, |d| d.child(ui::dim(FOLLOWS))))
+}
+
 fn agent_section(form: &Form, config: Option<&Value>, flows: Option<&[String]>, cx: &mut Context<QueuePanel>) -> Div {
     let Some(config) = config else { return section(Icon::Agent, "Agent", ui::busy("agents-loading", "Loading…")) };
-    section(Icon::Agent, "Agent", stack().child(agents(form, config, flows, cx)).children(modes(form, config, cx)))
+    let controls = stack().child(agents(form, config, flows, cx)).children(account_row(form, cx));
+    section(Icon::Agent, "Agent", controls.children(modes(form, config, cx)))
 }
 
 fn header_text(editing: bool, repeats: bool) -> (&'static str, &'static str) {

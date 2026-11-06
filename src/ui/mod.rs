@@ -1,3 +1,4 @@
+pub(crate) mod account_picker;
 pub(crate) mod brand;
 pub(crate) mod file_icons;
 pub(crate) mod glass;

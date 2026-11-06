@@ -3,8 +3,7 @@ mod project;
 
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, MouseButton, MouseDownEvent, ParentElement as _, Render, Stateful, StatefulInteractiveElement as _,
-    Styled as _, Window, div, px,
+    IntoElement, ParentElement as _, Render, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 pub(crate) use self::plan::{FlowStart, IssueTask};
@@ -19,6 +18,7 @@ use crate::cli;
 use crate::dialogs;
 use crate::store::{self, Store, args};
 use crate::theme::{FONT_FAMILY, colours, radius};
+use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, Icon, TextField};
 
 const CHOICE: f32 = 30.;
@@ -53,6 +53,7 @@ pub(super) struct StartFlow {
     selected: Option<String>,
     loading: bool,
     fields: Fields,
+    accounts: AccountPickers,
     focus: bool,
     busy: bool,
     error: Option<String>,
@@ -77,6 +78,7 @@ fn open(preset: FlowStart, known: Option<Known>, window: &mut Window, cx: &mut A
         session.projects.iter().map(|p| (p.id, ProjectChoice { name: p.name.clone(), path: p.path.clone() })).collect();
     let projects = preset.choices(&open);
     let project = preset.chosen(&projects, session.shown().project);
+    store.update(cx, Store::list_accounts);
     let view = cx.new(|cx| StartFlow::new(preset, (projects, project), known, window, cx));
     let focus = view.read(cx).fields.prompt.read(cx).focus_handle(cx);
     store.update(cx, |s, cx| s.show_dialog(view.into(), cx));
@@ -124,6 +126,7 @@ impl StartFlow {
         cx: &mut Context<Self>,
     ) -> Self {
         let fresh = known.as_ref().is_some_and(|k| k.project == project);
+        cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
         let mut this = Self {
             fields: Fields::new(preset.issue.as_ref(), window, cx),
             issue: preset.issue,
@@ -133,6 +136,7 @@ impl StartFlow {
             flows: known.map(|k| k.flows).unwrap_or_default(),
             selected: None,
             loading: false,
+            accounts: AccountPickers::default(),
             focus: true,
             busy: false,
             error: None,
@@ -217,6 +221,15 @@ impl StartFlow {
         self.flows.iter().find(|f| Some(f.key()) == self.selected)
     }
 
+    fn clear_error(&mut self, cx: &mut Context<Self>) {
+        self.error = None;
+        cx.notify();
+    }
+
+    fn team(&self) -> Vec<String> {
+        self.selected().map(FlowInfo::team_agents).unwrap_or_default()
+    }
+
     fn typed(&self, cx: &App) -> Typed {
         let text = |field: &Entity<TextField>| field.read(cx).text();
         let fields = &self.fields;
@@ -226,6 +239,7 @@ impl StartFlow {
             branch: text(&fields.branch),
             workspace: text(&fields.workspace),
             focus: self.focus,
+            accounts: self.accounts.picks(&self.team(), cx),
         }
     }
 
@@ -348,10 +362,11 @@ impl StartFlow {
             .flex_col()
             .gap(px(10.))
             .children(self.issue.as_ref().map(|issue| ui::field("Issue", issue_line(issue))))
-            .child(ui::field("Project", self.project_picker(cx)))
+            .child(ui::field("Project", self.project_picker(window, cx)))
             .child(ui::field("Flow", self.flow_choices(cx)))
             .children(risk.map(error_text))
             .children(self.task_fields(window, cx))
+            .children(self.accounts.fields(&self.team(), cx))
             .child(self.focus_checkbox(cx))
             .child(ui::dim(self.footnote()))
             .children(self.error.clone().map(error_text))
@@ -392,6 +407,8 @@ fn issue_line(issue: &IssueTask) -> Div {
 
 impl Render for StartFlow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let choices = Store::get(cx).read(cx).account_choices();
+        self.accounts.follow(choices, Self::clear_error, cx);
         let title = if self.issue.is_some() { "Start a flow on an issue" } else { "Start a flow" };
         let height = dialogs::body_height(f32::from(window.viewport_size().height));
         dialogs::frame(
@@ -400,9 +417,5 @@ impl Render for StartFlow {
             buttons(("start-cancel", "start-run"), (Icon::Play, "Start"), self.busy.then_some("Starting…"), cx),
         )
         .w(px(580.))
-        .on_mouse_down(
-            MouseButton::Left,
-            cx.listener(|this, _: &MouseDownEvent, window, cx| this.close_projects(window, cx)),
-        )
     }
 }

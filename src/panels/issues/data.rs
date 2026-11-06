@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::model::accounts::pick::{AccountPick, account_args};
 use crate::panels::flows::{FlowStart, IssueTask};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -556,6 +557,7 @@ pub(super) struct StartPlan {
     pub place: Option<Place>,
     pub branch: Option<String>,
     pub workspace_name: Option<String>,
+    pub accounts: Vec<AccountPick>,
 }
 
 impl StartPlan {
@@ -574,6 +576,7 @@ impl StartPlan {
                 a.extend([flag.to_string(), value.clone()]);
             }
         }
+        a.extend(account_args(&self.accounts));
         a.extend(["--focus".into(), "--json".into()]);
         a
     }
@@ -595,6 +598,7 @@ impl StartPlan {
         if let Some(name) = &self.workspace_name {
             a.extend(["--name".into(), name.clone()]);
         }
+        a.extend(account_args(&self.accounts));
         a
     }
 

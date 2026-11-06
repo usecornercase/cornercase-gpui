@@ -180,3 +180,10 @@ fn a_loop_label_says_its_limit_or_its_rounds_long_or_short() {
     assert_eq!(back.label(Some(1), false), "findings · 1/3");
     assert_eq!(back.label(Some(4), true), "findings 4/3");
 }
+
+#[test]
+fn a_team_names_each_of_its_agents_once_the_orchestrator_first() {
+    let listing = parse_listing(LIST).expect("a listing");
+    let quick = listing.flows.iter().find(|f| f.origin == "user").expect("the user's flow");
+    assert_eq!(quick.team_agents(), ["claude", "codex"]);
+}

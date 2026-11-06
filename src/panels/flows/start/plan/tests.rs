@@ -199,3 +199,20 @@ fn an_issue_keeps_to_the_projects_it_allows_without_guessing_one() {
     assert_eq!(start.chosen(&choices, Some(1)), None);
     assert_eq!(FlowStart { project: Some(7), ..start }.chosen(&choices, Some(1)), Some(7));
 }
+
+#[test]
+fn each_picked_account_goes_with_its_agent() {
+    let accounts = vec![
+        AccountPick { agent: "claude".into(), folder: "work".into() },
+        AccountPick { agent: "codex".into(), folder: String::new() },
+    ];
+    let typed = Typed { accounts, ..task("Fix it", "", "") };
+    let args = plan("Quick", Some(4), None, &typed).expect("a plan").args();
+    assert!(args.windows(4).any(|w| w == ["--account", "claude=work", "--account", "codex="]), "{args:?}");
+}
+
+#[test]
+fn a_flow_started_without_a_pick_names_no_account() {
+    let args = plan("Quick", Some(4), None, &task("Fix it", "", "")).expect("a plan").args();
+    assert!(!args.contains(&"--account".to_string()));
+}
