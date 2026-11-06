@@ -26,7 +26,7 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 
 ## Install
 
-You need [cornercase](https://usecornercase.dev/docs/installation/) 0.12.234 or newer (0.12.287 or newer on Windows, its first release there). The window finds it on the `PATH`, in your login shell's `PATH` or where its installers put it, and says so, with the way to install it, when it is missing.
+You need [cornercase](https://usecornercase.dev/docs/installation/) 0.13.1 or newer. The window finds it on the `PATH`, in your login shell's `PATH` or where its installers put it, and says so, with the way to install it, when it is missing.
 
 ### Download
 

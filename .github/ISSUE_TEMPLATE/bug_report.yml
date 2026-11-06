@@ -35,7 +35,7 @@ body:
     attributes:
       label: cornercase version
       description: The output of `cornercase --version`, and on the other machine too if you use `--remote`.
-      placeholder: cornercase 0.12.234
+      placeholder: cornercase 0.13.1
     validations:
       required: true
   - type: input

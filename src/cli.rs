@@ -18,7 +18,7 @@ use parking_lot::Mutex;
 
 #[cfg(test)]
 pub(crate) use locate::parse_version;
-pub(crate) use locate::{Binary, INSTALL_GUIDE, Missing, Origin, Problem, Version, minimum};
+pub(crate) use locate::{Binary, INSTALL_GUIDE, MINIMUM, Missing, Origin, Problem, Version};
 pub(crate) use partial::run_partial;
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
@@ -138,7 +138,7 @@ pub(crate) fn ensure_binary(chosen: Option<String>) -> Result<(), Missing> {
 }
 
 pub(crate) fn check_chosen(path: std::path::PathBuf) -> Result<Binary, Missing> {
-    locate::chosen(path, crate::platform::Os::CURRENT, &System::here())
+    locate::chosen(path, &System::here())
 }
 
 pub(crate) fn command<S: AsRef<str>>(args: &[S]) -> Command {
