@@ -117,9 +117,9 @@ fn preview(path: &Path) -> Still {
     }
 }
 
-fn code(path: &Path, lines: Vec<String>) -> Still {
+fn code(path: &Path, lines: Arc<Vec<String>>) -> Still {
     let language = highlight::language(path, lines.first().map_or("", String::as_str));
-    Still::Code(Code { lines: Arc::new(lines), spans: None, language })
+    Still::Code(Code { lines, spans: None, language })
 }
 
 pub(super) fn described(content: Content, path: &Path, remote: bool) -> Still {

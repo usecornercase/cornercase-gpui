@@ -1,6 +1,6 @@
-use gpui::{FontWeight, HighlightStyle, TextRun, TextStyle};
+use gpui::{FontWeight, HighlightStyle, Hsla, TextRun, TextStyle, px};
 
-use super::{ELLIPSIS, ending, kept, one_line, runs};
+use super::{Cut, ELLIPSIS, caret_in, ending, kept, one_line, runs};
 
 fn bold() -> HighlightStyle {
     HighlightStyle { font_weight: Some(FontWeight::BOLD), ..Default::default() }
@@ -51,4 +51,40 @@ fn the_ending_keeps_the_styles_up_to_the_cut_then_the_ellipsis() {
 #[test]
 fn line_breaks_and_tabs_read_as_spaces() {
     assert_eq!(one_line("one\ntwo\tthree\r").text.as_ref(), "one two three ");
+}
+
+#[test]
+fn the_ellipsis_is_lit_when_something_lit_is_hidden_behind_it() {
+    let style = TextStyle::default();
+    let lit = HighlightStyle { background_color: Some(Hsla::white()), ..Default::default() };
+    let runs = vec![style.to_run(9), style.clone().highlight(lit).to_run(2), style.to_run(1)];
+    let ended = ending(&runs, 5, style.to_run(ELLIPSIS.len()));
+    assert_eq!(ended.last().and_then(|mark| mark.background_color), Some(Hsla::white()));
+}
+
+#[test]
+fn the_ellipsis_stays_plain_when_only_what_shows_is_lit() {
+    let style = TextStyle::default();
+    let lit = HighlightStyle { background_color: Some(Hsla::white()), ..Default::default() };
+    let runs = vec![style.clone().highlight(lit).to_run(5), style.to_run(7)];
+    let ended = ending(&runs, 5, style.to_run(ELLIPSIS.len()));
+    assert_eq!(ended.last().and_then(|mark| mark.background_color), None);
+}
+
+#[test]
+fn a_line_that_fits_takes_the_closest_character() {
+    assert_eq!(caret_in(None, 20, px(70.), 10), 10);
+}
+
+#[test]
+fn the_ellipsis_stands_for_the_hidden_end_of_the_line() {
+    let cut = Some(Cut { kept: 12, mark_x: px(84.) });
+    assert_eq!(caret_in(cut, 200, px(90.), 13), 200);
+}
+
+#[test]
+fn before_the_ellipsis_a_cut_line_stops_at_what_it_kept() {
+    let cut = Some(Cut { kept: 12, mark_x: px(84.) });
+    assert_eq!(caret_in(cut, 200, px(83.), 13), 12);
+    assert_eq!(caret_in(cut, 200, px(14.), 2), 2);
 }

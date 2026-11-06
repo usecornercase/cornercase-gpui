@@ -42,7 +42,7 @@ fn a_text_file_reads_as_lines_with_its_stamp() {
     let (content, stamp) =
         content(Path::new("src/main.rs"), Ok(crate::test_util::fixture!("files/read-text.json").to_string()));
     let Content::Text(text) = content else { panic!("not text: {content:?}") };
-    assert_eq!(text.lines, ["fn main() {", "    println!(\"hello\");", "}", "mod"]);
+    assert_eq!(*text.lines, ["fn main() {", "    println!(\"hello\");", "}", "mod"]);
     let stamp = stamp.expect("a stamp");
     assert_eq!(stamp.len, 38);
     assert_eq!(stamp.modified, parse_utc("2026-10-29T20:21:00.503Z"));

@@ -7,6 +7,7 @@ use crate::platform::Os;
 pub(crate) enum Command {
     Panel(PanelKind),
     FindFile,
+    FindInFile,
     Copy,
     Paste,
     NewTab,
@@ -42,6 +43,14 @@ pub(crate) enum Group {
     TabsAndPanes,
     Terminal,
     Browser,
+    Viewer,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Focus {
+    Elsewhere,
+    Browser,
+    Viewer,
 }
 
 pub(crate) struct Shortcut {
@@ -65,6 +74,7 @@ pub(crate) const SHORTCUTS: &[Shortcut] = &[
     key(&["b"], true, Command::Panel(PanelKind::Browser)),
     key(&["f"], true, Command::Panel(PanelKind::Flow)),
     key(&["f"], false, Command::Panel(PanelKind::Search)),
+    key(&["f"], false, Command::FindInFile),
     key(&["i"], false, Command::Panel(PanelKind::Issues)),
     key(&["s"], true, Command::Panel(PanelKind::Queue)),
     key(&["g"], true, Command::Panel(PanelKind::Flows)),
@@ -240,12 +250,22 @@ impl Shortcut {
     fn in_browser(&self) -> bool {
         self.command.group() == Group::Browser
     }
+
+    fn answers_in(&self) -> Focus {
+        match self.command.group() {
+            Group::Browser => Focus::Browser,
+            Group::Viewer => Focus::Viewer,
+            _ => Focus::Elsewhere,
+        }
+    }
 }
 
 impl Command {
     pub(crate) fn describe(self, os: Os) -> &'static str {
         match (self, os) {
             (Self::Tab, Os::Linux | Os::Windows) => "Go to a tab (Alt+9 the last)",
+            (Self::FindInFile, Os::Mac) => "Find in the file, ↩ ⇧↩ to move",
+            (Self::FindInFile, Os::Linux | Os::Windows) => "Find in the file, Enter Shift+Enter",
             _ => self.describe_any(),
         }
     }
@@ -309,6 +329,7 @@ impl Command {
             | Self::NextPane => Group::TabsAndPanes,
             Self::Copy | Self::Paste | Self::ZoomIn | Self::ZoomOut | Self::ZoomReset => Group::Terminal,
             Self::Back | Self::Forward | Self::Reload | Self::FocusAddress | Self::Cut => Group::Browser,
+            Self::FindInFile => Group::Viewer,
             _ => Group::Window,
         }
     }
@@ -316,8 +337,8 @@ impl Command {
 
 impl Group {
     #[cfg(test)]
-    pub(crate) const ALL: [Group; 5] =
-        [Group::Panels, Group::Window, Group::TabsAndPanes, Group::Terminal, Group::Browser];
+    pub(crate) const ALL: [Group; 6] =
+        [Group::Panels, Group::Window, Group::TabsAndPanes, Group::Terminal, Group::Browser, Group::Viewer];
 
     pub(crate) fn title(self) -> &'static str {
         match self {
@@ -326,16 +347,18 @@ impl Group {
             Self::TabsAndPanes => "Tabs and panes",
             Self::Terminal => "Terminal",
             Self::Browser => "Browser",
+            Self::Viewer => "Files viewer",
         }
     }
 }
 
-pub(crate) fn find(key: &str, shift: bool, browser: bool, os: Os) -> Option<&'static Shortcut> {
+pub(crate) fn find(key: &str, shift: bool, focus: Focus, os: Os) -> Option<&'static Shortcut> {
     let either = shift && os == Os::Mac;
     SHORTCUTS
         .iter()
-        .filter(|s| s.takes(key) && (s.shift == shift || either) && (browser || !s.in_browser()))
-        .min_by_key(|s| (s.shift != shift, !s.in_browser()))
+        .filter(|s| s.takes(key) && (s.shift == shift || either))
+        .filter(|s| s.answers_in() == Focus::Elsewhere || s.answers_in() == focus)
+        .min_by_key(|s| (s.shift != shift, s.answers_in() != focus))
 }
 
 pub(crate) fn typed_with_alt_gr(ks: &Keystroke, os: Os) -> bool {
@@ -368,7 +391,7 @@ pub(crate) fn chord(ks: &Keystroke, shift: bool, os: Os, browser: bool) -> Optio
 
 pub(crate) fn shortcut(ks: &Keystroke, shift: bool, os: Os, browser: bool) -> Option<&'static Shortcut> {
     let (key, shift) = chord(ks, shift, os, browser)?;
-    find(key, shift, browser, os)
+    find(key, shift, if browser { Focus::Browser } else { Focus::Elsewhere }, os)
 }
 
 fn control_chord(ks: &Keystroke, shift: bool, browser: bool) -> Option<(&str, bool)> {

@@ -168,11 +168,9 @@ impl FilesPanel {
             }
             Results::Text(text) => {
                 let Some((path, line)) = text_target(text, self.search.rows.get(ix)) else { return };
-                let lit = search::matcher(&self.search.answered);
-                (
-                    self.style().relative(&path),
-                    OpenAt { line: line.map(zero_based), lit, from_search: true, ..OpenAt::default() },
-                )
+                let query = Some(self.search.answered.clone());
+                let at = OpenAt { line: line.map(zero_based), query, from_search: true, ..OpenAt::default() };
+                (self.style().relative(&path), at)
             }
         };
         self.open_file(rel, at, cx);

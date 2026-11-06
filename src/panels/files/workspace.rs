@@ -69,6 +69,7 @@ impl FilesPanel {
         }
         self.current = Some(id);
         self.menu = None;
+        self.left_place = true;
         let source = Source::new(id, root.clone(), self.remote);
         let place = self.places.entry(id).or_insert_with(|| Place::new(root, source));
         let query = place.query.clone();

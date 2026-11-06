@@ -10,7 +10,7 @@ use gpui::{
 
 use crate::app::{Conn, Drag, Root};
 use crate::dialogs;
-use crate::keymap::{self, Command, with_keys};
+use crate::keymap::{self, Command, Focus, with_keys};
 use crate::keys;
 use crate::model::Grid;
 use crate::model::link::Hovered;
@@ -24,6 +24,7 @@ use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
 
 mod browser;
+mod dock_text;
 mod input;
 mod links;
 mod machine_card;
@@ -46,7 +47,7 @@ struct Chord<'a> {
     key: &'a str,
     shift: bool,
     terminal: bool,
-    browser: bool,
+    focus: Focus,
 }
 
 const DEFAULT_FONT_SIZE: f32 = 13.;
@@ -94,7 +95,12 @@ impl Root {
         let browser = self.browser_has_focus(window, cx);
         let held = keymap::shift_held(ks, window);
         let Some((key, shift)) = keymap::chord(ks, held, Os::CURRENT, browser) else { return false };
-        self.shortcut(Chord { key, shift, terminal, browser }, window, cx)
+        let focus = match (browser, self.viewer_has_focus(window, cx)) {
+            (true, _) => Focus::Browser,
+            (false, true) => Focus::Viewer,
+            (false, false) => Focus::Elsewhere,
+        };
+        self.shortcut(Chord { key, shift, terminal, focus }, window, cx)
     }
 
     fn type_in(&mut self, event: serde_json::Value, cx: &mut Context<Self>) {
@@ -127,6 +133,7 @@ impl Root {
             || self.store.update(cx, Store::close_overlay)
             || self.browser_cancel_pick(cx)
             || self.browser_escape(window, cx)
+            || self.dock_escape(window, cx)
         {
             return true;
         }
@@ -145,7 +152,7 @@ impl Root {
     }
 
     fn shortcut(&mut self, chord: Chord<'_>, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let Some(command) = keymap::find(chord.key, chord.shift, chord.browser, Os::CURRENT).map(|s| s.command) else {
+        let Some(command) = keymap::find(chord.key, chord.shift, chord.focus, Os::CURRENT).map(|s| s.command) else {
             return false;
         };
         let over_dialogs = matches!(
@@ -155,13 +162,14 @@ impl Root {
         if self.store.read(cx).dialog.is_some() && !over_dialogs {
             return true;
         }
-        if chord.browser && self.browser_command(command, window, cx) {
+        if chord.focus == Focus::Browser && self.browser_command(command, window, cx) {
             return true;
         }
         match command {
             Command::Panel(kind) => self.store.update(cx, |s, cx| s.toggle(kind, cx)),
             Command::FindFile => self.find_file(window, cx),
-            Command::Copy | Command::Paste => self.clipboard_shortcut(command, chord.terminal, cx),
+            Command::FindInFile => self.find_in_file(window, cx),
+            Command::Copy | Command::Paste => self.clipboard_shortcut(command, chord.terminal, window, cx),
             Command::Close => self.close_shortcut(window, cx),
             Command::CloseTab => self.close_shown_tab(window, cx),
             Command::Shortcuts => dialogs::shortcuts(window, cx),
@@ -188,7 +196,10 @@ impl Root {
         }
     }
 
-    fn clipboard_shortcut(&mut self, command: Command, terminal: bool, cx: &mut Context<Self>) {
+    fn clipboard_shortcut(&mut self, command: Command, terminal: bool, window: &Window, cx: &mut Context<Self>) {
+        if command == Command::Copy && self.dock_copy(window, cx) {
+            return;
+        }
         if self.side.machine_place.is_some() {
             if terminal && command == Command::Paste {
                 self.typed_on_machine(cx);

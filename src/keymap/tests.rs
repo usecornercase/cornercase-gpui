@@ -1,18 +1,18 @@
 use gpui::{Keystroke, Modifiers};
 
 use super::{
-    Command, Group, SHORTCUTS, chord, find, in_group, keys_label, keys_of, labelled, left_to_system, opens_with_system,
-    other_keys, shortcut, system_keys, tab_index, typed_with_alt_gr,
+    Command, Focus, Group, SHORTCUTS, chord, find, in_group, keys_label, keys_of, labelled, left_to_system,
+    opens_with_system, other_keys, shortcut, system_keys, tab_index, typed_with_alt_gr,
 };
 use crate::panels::PanelKind;
 use crate::platform::Os;
 
 fn command(key: &str, shift: bool) -> Option<Command> {
-    find(key, shift, false, Os::Mac).map(|s| s.command)
+    find(key, shift, Focus::Elsewhere, Os::Mac).map(|s| s.command)
 }
 
 fn in_browser(key: &str, shift: bool) -> Option<Command> {
-    find(key, shift, true, Os::Mac).map(|s| s.command)
+    find(key, shift, Focus::Browser, Os::Mac).map(|s| s.command)
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn every_panel_has_keys() {
 fn no_two_shortcuts_share_a_chord() {
     for (i, a) in SHORTCUTS.iter().enumerate() {
         for b in &SHORTCUTS[i + 1..] {
-            let shared = a.keys.iter().any(|k| b.keys.contains(k)) && a.in_browser() == b.in_browser();
+            let shared = a.keys.iter().any(|k| b.keys.contains(k)) && a.answers_in() == b.answers_in();
             assert!(!(shared && a.shift == b.shift), "{:?} and {:?} share a chord", a.command, b.command);
         }
     }
@@ -425,4 +425,48 @@ fn a_link_opens_with_the_system_on_command_or_ctrl_click() {
 fn the_link_key_still_opens_with_shift_held() {
     assert!(opens_with_system(Modifiers { shift: true, ..SUPER }, Os::Mac));
     assert!(opens_with_system(CTRL_SHIFT, Os::Linux));
+}
+
+#[test]
+fn command_f_finds_in_the_file_while_the_viewer_has_the_focus() {
+    let in_viewer = find("f", false, Focus::Viewer, Os::Mac).map(|s| s.command);
+    assert_eq!(in_viewer, Some(Command::FindInFile));
+}
+
+#[test]
+fn command_f_is_search_everywhere_else() {
+    assert_eq!(command("f", false), Some(Command::Panel(PanelKind::Search)));
+    assert_eq!(in_browser("f", false), Some(Command::Panel(PanelKind::Search)));
+}
+
+#[test]
+fn the_viewer_keeps_the_window_shortcuts() {
+    let in_viewer = |key, shift| find(key, shift, Focus::Viewer, Os::Mac).map(|s| s.command);
+    assert_eq!(in_viewer("c", false), Some(Command::Copy));
+    assert_eq!(in_viewer("w", false), Some(Command::Close));
+    assert_eq!(in_viewer("f", true), Some(Command::Panel(PanelKind::Flow)));
+    assert_eq!(in_viewer("l", false), None);
+}
+
+#[test]
+fn on_linux_ctrl_shift_f_finds_in_the_file_while_the_viewer_has_the_focus() {
+    let keystroke = pressed("f", CTRL_SHIFT);
+    let (key, shift) = chord(&keystroke, true, Os::Linux, false).expect("a chord");
+    let found = find(key, shift, Focus::Viewer, Os::Linux).map(|s| s.command);
+    assert_eq!(found, Some(Command::FindInFile));
+    assert_eq!(keys_of(Command::FindInFile, Os::Linux).as_deref(), Some("Ctrl+Shift+F"));
+    assert_eq!(keys_of(Command::FindInFile, Os::Mac).as_deref(), Some("⌘F"));
+}
+
+#[test]
+fn on_linux_ctrl_alt_shift_f_stays_the_flow_panel_in_the_viewer() {
+    let keystroke = pressed("f", CTRL_ALT_SHIFT);
+    let (key, shift) = chord(&keystroke, true, Os::Linux, false).expect("a chord");
+    let found = find(key, shift, Focus::Viewer, Os::Linux).map(|s| s.command);
+    assert_eq!(found, Some(Command::Panel(PanelKind::Flow)));
+}
+
+#[test]
+fn a_plain_ctrl_f_still_reaches_the_program() {
+    assert_eq!(shortcut(&pressed("f", CTRL), false, Os::Linux, false).map(|s| s.command), None);
 }

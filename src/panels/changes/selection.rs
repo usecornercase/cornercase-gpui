@@ -81,7 +81,10 @@ impl ChangesPanel {
         let same = self.open.data.as_ref().is_some_and(|d| d.selected == selected);
         let gaps = match &self.open.data {
             Some(d) if same && d.patch.hunks == patch.hunks => d.gaps.clone(),
-            _ => HashMap::new(),
+            _ => {
+                self.open.selecting.selection = None;
+                HashMap::new()
+            }
         };
         self.open.error = None;
         self.set_data(selected, patch, gaps, same);

@@ -2,13 +2,19 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.13
+## 0.1.14
 
 - **A machine's workspaces in your sidebar.** They sit under the project here that is a clone of the same repository, after your own, tagged with the machine, with their tabs and their agents' status, model and context. A project with no clone here gets a row at the end of the list. A project's count and its mark count them too, so an agent waiting on a machine marks the project here. When the machine is down its rows stay, dimmed, with the spinner still, and a tab with an agent says `waiting · seen 2 min ago`. Folding works on them; they can't be dragged and have no `+ Tab`, and a machine's tabs have no buttons.
 - **Rename, close or remove a worktree there from its row.** Hovering a machine's workspace shows `✕` and `⋯`. Rename is the same field in the row. `✕` always asks, naming the machine, and for a worktree shows what that machine found: changes not committed, a lock, its teardown. The row says `removing…` until it is gone. With the machine down nothing is sent, and a toast says so. These go through your own `ssh` from this computer, so a window that is itself on another server shows the rows and says plainly that it can't act on them.
 - **Its agents' notices reach you here**: the same toast, desktop notification and sound, `claude on vps needs you in shop › notes`, and **Go** picks that workspace.
 - **A click picks a machine's workspace or tab.** For now the terminal's place shows a card with where it runs, what its agent is doing and its folder, and what you type there is not sent: drawing its tab here comes next. Clicking anything of yours goes back, and an agent of yours behind the card still tells you when it needs you.
 - With projects and workspaces side by side, the projects' column takes its share of the width again; it had shrunk to its longest name.
+
+## 0.1.13
+
+- **Select lines and characters in the Files viewer and the Changes diff.** A click selects a line, a drag or ⇧-click a range of lines (a drag on the numbers keeps to whole lines), a drag on the text selects characters and a double click a word. Open, Ask agent and Copy float beside the selection: ask the workspace's agent about `path:12-30`, copy the text, or open it at that line. In Files, Copy keeps the file's own tabs and a long line's hidden end; in a diff, tabs may come as spaces until cornercase gives the window a line's own text. ⌘C (Ctrl+Shift+C on Linux and Windows) copies the selection too, and Esc clears it.
+- **Find in the open file.** ⌘F (Ctrl+Shift+F on Linux and Windows) while the Files viewer has the focus, or its Find button, opens a field over the file: every match lights up, with a count such as `3 of 12`, and Enter and Shift+Enter move between them. A big file stays smooth. Elsewhere ⌘F still opens Search. Opening a result of a text search opens the field with your search in it, so you can go on through the file.
+- After Ask agent the keys go to the agent's pane, so you can type your question right away.
 
 ## 0.1.12
 

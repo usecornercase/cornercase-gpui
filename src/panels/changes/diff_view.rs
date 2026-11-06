@@ -1,19 +1,25 @@
-use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, ClickEvent, ClipboardItem, FontStyle, FontWeight, HighlightStyle, InteractiveElement as _,
-    IntoElement, ListState, ParentElement as _, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _,
-    StyledText, WeakEntity, div, list, prelude::FluentBuilder as _, px,
+    AnyElement, App, ClickEvent, ClipboardItem, CursorStyle, FontStyle, FontWeight, HighlightStyle,
+    InteractiveElement as _, IntoElement, ListState, MouseButton, ParentElement as _, Rgba, SharedString,
+    StatefulInteractiveElement as _, Styled as _, StyledText, WeakEntity, div, list, prelude::FluentBuilder as _, px,
 };
 
-use crate::store::ToastKind;
-use crate::theme::{FONT_FAMILY, colours, radius};
+use crate::store::{Store, ToastKind};
+use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
+use crate::ui::selection::{self, Laid, Lit, Selecting, Selection, Styles, overlay};
 
+use super::diff::{Part, Spot};
 use super::pieces::{plural, toast};
 use super::wire::{FileStatus, Hunk, LineKind, Segment};
 use super::{ChangesPanel, DiffData, Look, Row, diff};
+
+struct Picked {
+    selection: Option<Selection<Spot>>,
+    laid: Laid<Spot>,
+}
 
 struct CodeLine<'a> {
     old: Option<u32>,
@@ -25,22 +31,30 @@ struct CodeLine<'a> {
     looks: &'a [Look],
     tint: Option<Rgba>,
     dim: bool,
+    spot: Spot,
+    picked: &'a Picked,
 }
 
-pub(super) fn diff_list(state: &ListState, data: Rc<DiffData>, panel: WeakEntity<ChangesPanel>) -> AnyElement {
-    list(state.clone(), move |ix, _window, _cx| diff_row(&data, ix, &panel)).size_full().into_any_element()
+pub(super) fn diff_list(
+    state: &ListState,
+    data: Rc<DiffData>,
+    panel: WeakEntity<ChangesPanel>,
+    selecting: &Selecting<Spot>,
+) -> AnyElement {
+    let picked = Picked { selection: selecting.selection, laid: selecting.laid().clone() };
+    list(state.clone(), move |ix, _window, _cx| diff_row(&data, ix, &panel, &picked)).size_full().into_any_element()
 }
 
 fn empty() -> AnyElement {
     div().into_any_element()
 }
 
-fn diff_row(data: &DiffData, ix: usize, panel: &WeakEntity<ChangesPanel>) -> AnyElement {
+fn diff_row(data: &DiffData, ix: usize, panel: &WeakEntity<ChangesPanel>, picked: &Picked) -> AnyElement {
     let Some(row) = data.rows.get(ix) else { return empty() };
     match *row {
         Row::Gap { hunk, lines } => gap_button(hunk, lines, panel.clone()),
-        Row::GapLine { hunk, line } => gap_line(data, hunk, line),
-        Row::Line { hunk, line } => patch_line(data, hunk, line),
+        Row::GapLine { hunk, line } => gap_line(data, Spot { hunk, part: Part::Gap, line }, picked),
+        Row::Line { hunk, line } => patch_line(data, Spot { hunk, part: Part::Patch, line }, picked),
         Row::Hunk(i) => hunk_header(data, i),
     }
 }
@@ -57,6 +71,7 @@ fn gap_button(hunk: usize, lines: u32, panel: WeakEntity<ChangesPanel>) -> AnyEl
         .text_color(colours::faint())
         .cursor_pointer()
         .hover(|s| s.text_color(colours::accent()).bg(colours::hover()))
+        .on_mouse_down(MouseButton::Left, selection::keep_selection)
         .child(format!("⋯ {} unchanged", plural(lines as usize, "line")))
         .on_click(move |_: &ClickEvent, _, cx| {
             let _ = panel.update(cx, |this, cx| this.load_gap(hunk, cx));
@@ -64,9 +79,9 @@ fn gap_button(hunk: usize, lines: u32, panel: WeakEntity<ChangesPanel>) -> AnyEl
         .into_any_element()
 }
 
-fn gap_line(data: &DiffData, hunk: usize, line: usize) -> AnyElement {
-    let Some((gap, looks)) = data.gaps.get(&hunk) else { return empty() };
-    let Some(l) = gap.lines.get(line) else { return empty() };
+fn gap_line(data: &DiffData, spot: Spot, picked: &Picked) -> AnyElement {
+    let Some((gap, looks)) = data.gaps.get(&spot.hunk) else { return empty() };
+    let Some(l) = gap.lines.get(spot.line) else { return empty() };
     CodeLine {
         old: Some(l.old),
         new: Some(l.new),
@@ -77,12 +92,14 @@ fn gap_line(data: &DiffData, hunk: usize, line: usize) -> AnyElement {
         looks,
         tint: None,
         dim: true,
+        spot,
+        picked,
     }
     .render()
 }
 
-fn patch_line(data: &DiffData, hunk: usize, line: usize) -> AnyElement {
-    let Some(l) = data.patch.hunks.get(hunk).and_then(|h| h.lines.get(line)) else { return empty() };
+fn patch_line(data: &DiffData, spot: Spot, picked: &Picked) -> AnyElement {
+    let Some(l) = data.patch.hunks.get(spot.hunk).and_then(|h| h.lines.get(spot.line)) else { return empty() };
     let (sign, tint) = match l.kind {
         LineKind::Context => (' ', None),
         LineKind::Removed => ('-', Some(colours::failed())),
@@ -98,20 +115,10 @@ fn patch_line(data: &DiffData, hunk: usize, line: usize) -> AnyElement {
         looks: &data.looks,
         tint,
         dim: false,
+        spot,
+        picked,
     }
     .render()
-}
-
-fn hunk_action(id: &'static str, i: usize, label: &'static str) -> gpui::Stateful<gpui::Div> {
-    div()
-        .id((id, i))
-        .px(px(6.))
-        .rounded(px(radius::CHIP))
-        .text_size(px(11.))
-        .text_color(colours::muted())
-        .cursor_pointer()
-        .hover(|s| s.bg(colours::selected()).text_color(colours::text()))
-        .child(label)
 }
 
 fn hunk_title(hunk: &Hunk) -> impl IntoElement + use<> {
@@ -132,18 +139,20 @@ fn copy_hunk(patch_text: &str, cx: &mut App) {
 fn hunk_actions(data: &DiffData, i: usize, hunk: &Hunk) -> Vec<AnyElement> {
     let (workspace, path) = (data.selected.workspace, data.patch.file.path.clone());
     let changed = diff::changed(hunk);
-    let reference = diff::reference(&path, changed);
+    let reference = selection::reference(&path, changed);
     let patch_text = diff::patch(hunk);
     let mut actions = Vec::new();
     if data.patch.file.status != FileStatus::Deleted {
-        let open = hunk_action("hunk-open", i, "Open").on_click(move |_: &ClickEvent, _, cx| {
-            ChangesPanel::open_in_editor(workspace, &path, changed.0, cx);
+        let open = selection::action(("hunk-open", i), "Open").on_click(move |_: &ClickEvent, _, cx| {
+            Store::get(cx).read(cx).open_in_editor(workspace, &path, changed.0);
         });
         actions.push(open.into_any_element());
     }
-    let ask = hunk_action("hunk-ask", i, "Ask agent")
-        .on_click(move |_: &ClickEvent, _, cx| ChangesPanel::ask_agent(workspace, &reference, cx));
-    let copy = hunk_action("hunk-copy", i, "Copy").on_click(move |_: &ClickEvent, _, cx| copy_hunk(&patch_text, cx));
+    let ask = selection::action(("hunk-ask", i), "Ask agent").on_click(move |_: &ClickEvent, _, cx| {
+        Store::get(cx).update(cx, |s, cx| s.ask_about(workspace, &reference, cx));
+    });
+    let copy =
+        selection::action(("hunk-copy", i), "Copy").on_click(move |_: &ClickEvent, _, cx| copy_hunk(&patch_text, cx));
     actions.extend([ask.into_any_element(), copy.into_any_element()]);
     actions
 }
@@ -167,14 +176,23 @@ fn hunk_header(data: &DiffData, i: usize) -> AnyElement {
         .into_any_element()
 }
 
-fn line_number(n: Option<u32>) -> impl IntoElement {
+fn line_number(n: Option<u32>, selected: bool) -> impl IntoElement {
     div()
         .w(px(34.))
         .flex_none()
         .pr(px(6.))
         .text_right()
-        .text_color(colours::faint())
+        .text_color(if selected { colours::accent() } else { colours::faint() })
         .child(n.map(|n| n.to_string()).unwrap_or_default())
+}
+
+fn line_ground(tint: Option<Rgba>, selected: bool, dim: bool) -> Option<Rgba> {
+    match (tint, selected) {
+        (Some(tint), true) => Some(Rgba { a: 0.26, ..tint }),
+        (Some(tint), false) => Some(Rgba { a: 0.11, ..tint }),
+        (None, true) => Some(colours::selected()),
+        (None, false) => dim.then(colours::sidebar),
+    }
 }
 
 impl CodeLine<'_> {
@@ -192,33 +210,37 @@ impl CodeLine<'_> {
         }
     }
 
-    fn highlights(&self) -> Vec<(Range<usize>, HighlightStyle)> {
-        diff::runs(self.text, self.syntax, self.emphasis)
+    fn highlights(&self, lit: &Lit) -> Styles {
+        let styles = diff::runs(self.text, self.syntax, self.emphasis)
             .into_iter()
             .map(|run| (run.range, self.run_style(self.looks.get(run.style).copied(), run.emphasis)))
-            .collect()
+            .collect();
+        match lit.drawn_range(self.text) {
+            Some(range) => overlay(styles, &[range], selection::selected_chars()),
+            None => styles,
+        }
     }
 
-    fn styled_text(&self) -> StyledText {
-        if self.text.is_empty() {
-            StyledText::new(SharedString::from(" "))
-        } else {
-            StyledText::new(SharedString::from(self.text.to_string())).with_highlights(self.highlights())
-        }
+    fn styled_text(&self, lit: &Lit) -> StyledText {
+        let shown = if self.text.is_empty() { " " } else { self.text };
+        StyledText::new(SharedString::from(shown.to_string())).with_highlights(self.highlights(lit))
     }
 
     fn render(self) -> AnyElement {
         let tint = self.tint;
+        let lit = self.picked.selection.map_or(Lit::Nothing, |selection| selection.lit(self.spot, self.text));
+        let selected = lit == Lit::Line;
+        let text = self.styled_text(&lit);
+        let probe = selection::row_probe(&self.picked.laid, (self.spot, self.text.len()), text.layout().clone());
         div()
             .w_full()
             .flex()
             .font_family(FONT_FAMILY)
             .text_size(px(12.))
             .line_height(px(18.))
-            .when_some(tint, |d, t| d.bg(Rgba { a: 0.11, ..t }))
-            .when(self.dim, |d| d.bg(colours::sidebar()))
-            .child(line_number(self.old))
-            .child(line_number(self.new))
+            .when_some(line_ground(tint, selected, self.dim), gpui::Styled::bg)
+            .child(line_number(self.old, selected))
+            .child(line_number(self.new, selected))
             .child(
                 div()
                     .w(px(14.))
@@ -226,7 +248,17 @@ impl CodeLine<'_> {
                     .text_color(tint.map_or(colours::faint(), Into::into))
                     .child(self.sign.to_string()),
             )
-            .child(div().flex_1().min_w(px(0.)).pr(px(8.)).text_color(colours::text()).child(self.styled_text()))
+            .child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .pr(px(8.))
+                    .cursor(CursorStyle::IBeam)
+                    .text_color(colours::text())
+                    .child(text)
+                    .child(probe),
+            )
             .into_any_element()
     }
 }
