@@ -32,6 +32,7 @@ fn looking<'a>(session: &'a Session, list: &'a [Machine], project_id: u64) -> Lo
         seen: &session.machines,
         cloning: false,
         cloned: &[],
+        now: Instant::now(),
     }
 }
 
@@ -54,7 +55,7 @@ fn new_project(session: &mut Session, id: u64, repo: &str) {
 
 fn cloned(session: &Session, project: u64, there: u64) -> Cloned {
     let seen = session.machine("vps").expect("vps");
-    Cloned { machine: "vps".into(), boot: seen.boot.clone(), project, there: ThereId::heard(there) }
+    Cloned { machine: "vps".into(), boot: seen.boot.clone(), project, there: ThereId::heard(there), at: Instant::now() }
 }
 
 #[test]
@@ -128,6 +129,16 @@ fn a_clone_that_answered_waits_until_the_machine_lists_it() {
     let (list, cloned) = (list(), [cloned(&session, 40, 30)]);
     let answered = Looking { cloned: &cloned, ..looking(&session, &list, 40) };
     assert_eq!(answered.there(), There::Listing);
+}
+
+#[test]
+fn a_clone_the_machine_never_lists_asks_for_another_clone_after_a_while() {
+    let mut session = session();
+    new_project(&mut session, 40, "github.com/acme/only-here");
+    let (list, cloned) = (list(), [cloned(&session, 40, 30)]);
+    let later = Instant::now() + Duration::from_secs(31);
+    let answered = Looking { cloned: &cloned, now: later, ..looking(&session, &list, 40) };
+    assert_eq!(answered.there(), There::NotCloned);
 }
 
 #[test]

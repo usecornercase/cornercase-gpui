@@ -69,6 +69,7 @@ pub(crate) struct Looking<'a> {
     pub seen: &'a [MachineSeen],
     pub cloning: bool,
     pub cloned: &'a [Cloned],
+    pub now: Instant,
 }
 
 impl Looking<'_> {
@@ -99,12 +100,14 @@ impl Looking<'_> {
         if let Some(there) = seen.pair_of(project) {
             return There::Ready(seen.spot(there));
         }
-        let cloned = self.cloned.iter().find(|cloned| cloned.of(seen, project.id));
-        match cloned.map(|cloned| seen.project(cloned.there)) {
-            Some(Some(there)) => There::Ready(seen.spot(there)),
-            Some(None) => There::Listing,
-            None => There::NotCloned,
+        let mut cloned = self.cloned.iter().rev().filter(|cloned| cloned.of(seen, project.id));
+        if let Some(there) = cloned.clone().find_map(|cloned| seen.project(cloned.there)) {
+            return There::Ready(seen.spot(there));
         }
+        if cloned.any(|cloned| cloned.listing_soon(self.now)) {
+            return There::Listing;
+        }
+        There::NotCloned
     }
 }
 

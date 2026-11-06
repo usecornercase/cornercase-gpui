@@ -105,9 +105,6 @@ impl RunOn {
         }
         self.chosen = machine;
         self.checks.restart();
-        if let Some(machine) = self.chosen.clone() {
-            Store::get(cx).update(cx, |s, cx| s.ask_machine_home(&machine, cx));
-        }
         if moved {
             cx.emit(RunOnEvent::Chosen);
         }
@@ -117,6 +114,7 @@ impl RunOn {
 
     fn ask_due(&mut self, cx: &mut Context<Self>) {
         let Some(machine) = self.chosen.clone() else { return };
+        Store::get(cx).update(cx, |s, cx| s.ask_machine_home(&machine, cx));
         let s = Store::get(cx).read(cx);
         let Some(seen) = s.session.as_ref().and_then(|session| session.machine(&machine)) else { return };
         let (boot, linked) = (seen.boot.clone(), seen.linked());

@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use serde::Deserialize;
 
 use super::super::seen::{MachineSeen, ThereId};
@@ -7,6 +9,7 @@ use crate::store::args;
 pub(crate) const FILES_NOTE: &str =
     "Git-ignored files such as .env stay on this computer: copying them needs usecornercase/cornercase-terminal#678.";
 const UNREADABLE: &str = "its answer could not be read";
+const LISTED_WITHIN: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Cloned {
@@ -14,11 +17,16 @@ pub(crate) struct Cloned {
     pub boot: String,
     pub project: u64,
     pub there: ThereId,
+    pub at: Instant,
 }
 
 impl Cloned {
     pub(crate) fn of(&self, seen: &MachineSeen, project: u64) -> bool {
         self.machine == seen.name && self.boot == seen.boot && self.project == project
+    }
+
+    pub(crate) fn listing_soon(&self, now: Instant) -> bool {
+        now < self.at + LISTED_WITHIN
     }
 }
 

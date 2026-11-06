@@ -88,7 +88,8 @@ fn an_answer_with_no_path_or_project_is_a_failure() {
 #[test]
 fn a_clone_counts_for_its_machine_its_run_and_its_project() {
     let seen = MachineSeen { name: "vps".into(), boot: "1".into(), ..MachineSeen::default() };
-    let cloned = Cloned { machine: "vps".into(), boot: "1".into(), project: 8, there: ThereId::heard(3) };
+    let cloned =
+        Cloned { machine: "vps".into(), boot: "1".into(), project: 8, there: ThereId::heard(3), at: Instant::now() };
     assert!(cloned.of(&seen, 8));
     assert!(!cloned.of(&seen, 9));
     assert!(!Cloned { boot: "2".into(), ..cloned.clone() }.of(&seen, 8));

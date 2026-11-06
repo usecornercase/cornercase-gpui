@@ -57,6 +57,7 @@ impl Store {
             seen: self.session.as_ref().map_or(&[][..], |session| &session.machines),
             cloning: project.is_some_and(|project| self.jobs.busy(&clone_key(machine, project))),
             cloned: &self.cloned,
+            now: Instant::now(),
         };
         looking.there()
     }
@@ -168,7 +169,7 @@ impl Store {
         match answer {
             Ok(there) => {
                 self.toast(format!("Cloned {name} on {machine}"), ToastKind::Done, cx);
-                self.cloned.push(Cloned { machine, boot, project, there });
+                self.cloned.push(Cloned { machine, boot, project, there, at: Instant::now() });
             }
             Err(why) => self.toast(format!("The clone on {machine} failed: {why}"), ToastKind::Error, cx),
         }
