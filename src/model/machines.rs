@@ -4,6 +4,8 @@ use serde_json::Value;
 use crate::panels::flows::model::epoch;
 use crate::ui::Icon;
 
+pub(crate) const THIS_COMPUTER: &str = "this computer";
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(from = "String")]
 pub(crate) enum MachineIcon {

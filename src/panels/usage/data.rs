@@ -2,11 +2,22 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+use super::machines::MachineRead;
 use crate::panels::flows::model::days_from_civil;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub(super) struct Plans {
+    pub agents: Vec<Plan>,
+    pub machine: Option<MachineRead>,
+    pub machines: Vec<MachineUsage>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub(super) struct MachineUsage {
+    #[serde(flatten)]
+    pub machine: MachineRead,
     pub agents: Vec<Plan>,
 }
 
@@ -17,6 +28,7 @@ pub(super) struct Plan {
     pub title: String,
     pub loading: bool,
     pub read_at: Option<String>,
+    pub age: Option<u64>,
     #[serde(rename = "plan")]
     pub tier: Option<String>,
     pub limited: Option<bool>,
@@ -27,6 +39,7 @@ pub(super) struct Plan {
     pub account: Option<String>,
     pub label: Option<String>,
     pub active: bool,
+    pub identity: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -72,14 +85,18 @@ impl Plan {
         std::iter::once(title).chain(account).chain(tier).collect::<Vec<_>>().join(" · ")
     }
 
-    pub(super) fn status(&self, now: i64) -> String {
+    pub(super) fn read(&self, machine: Option<&MachineRead>) -> Option<i64> {
+        match machine {
+            Some(machine) => Some(machine.read()? - i64::try_from(self.age?).ok()?),
+            None => self.read_at.as_deref().and_then(parse_utc),
+        }
+    }
+
+    pub(super) fn status(&self, read: Option<i64>, now: i64) -> String {
         if self.loading {
             return "loading…".into();
         }
-        match self.read_at.as_deref().and_then(parse_utc) {
-            Some(at) => updated((now - at).max(0)),
-            None => String::new(),
-        }
+        read.map_or_else(String::new, |at| updated((now - at).max(0)))
     }
 
     pub(super) fn unasked(&self) -> bool {
@@ -94,6 +111,8 @@ pub(super) struct Stats {
     pub windows: BTreeMap<String, Window>,
     pub blocks: Vec<Block>,
     pub merged_pull_requests: Option<Merged>,
+    pub machine: Option<MachineRead>,
+    pub machines: Vec<MachineRead>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -333,6 +352,22 @@ pub(super) fn updated(secs: i64) -> String {
     } else {
         format!("updated {days}d ago")
     }
+}
+
+pub(super) fn ago(secs: i64) -> String {
+    let minutes = secs.max(0) / 60;
+    let (hours, days) = (minutes / 60, minutes / 1_440);
+    match (minutes, hours, days) {
+        (0, _, _) => "just now".into(),
+        (_, 0, _) => format!("{minutes} min ago"),
+        (_, _, 0) => format!("{hours}h ago"),
+        (_, _, 1) => "1 day ago".into(),
+        _ => format!("{days} days ago"),
+    }
+}
+
+pub(super) fn asked(secs: i64) -> String {
+    format!("asked {}", ago(secs))
 }
 
 pub(super) fn parse_utc(text: &str) -> Option<i64> {

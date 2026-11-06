@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.10
+## 0.1.11
 
 - **Changes filters by path.** A field over the file list keeps the files you name: a piece of a path (`order`), a pattern as in `.gitignore` (`*.test.js`, `src/api/**`), `!` to leave files out (`!*.lock`). The summary says how many are left (`3 of 31 files`); Enter gives your keys back to the pane, Escape clears it.
 - **Open in…** on a project, a workspace or a pane takes its folder to your file manager, VS Code, Cursor, Zed or Sublime Text, whichever you have. A pane opens the folder its program is in.
@@ -13,6 +13,13 @@ Every pull request that changes the app adds a section here for its new version.
 - **A file of a run opens beside the Flow panel.** In the Flow panel a click shows the file in the Files panel, and ‹ Flow goes back, scrolled where you left it.
 - **Help.** The rail's `?` now has the docs and the bug report beside the tours, and can reset the tours' progress.
 - **The Discord forum's state in Settings › Remote**: ready, or the step it waits for. Choosing among several servers still takes cornercase's own window.
+
+## 0.1.10
+
+- **Usage of every machine.** Once you have machines, the Usage sheet has a row that picks this computer, one machine or all of them, for Limits, Stats and By agent alike.
+- Under all, Stats adds the machines up and says that **most at once** is the largest peak of one machine, not a sum.
+- Under all, Limits lists each machine's accounts under its name. A Claude Code account logged in on two of them shows once, with `on this computer, vps` under it, and its numbers are the latest reading, never added.
+- Old numbers say so: a machine that is down shows the numbers it gave last with `seen 5 min ago`, one whose last answer failed says why and how old they are, and one that never answered says why instead of its rows.
 
 ## 0.1.9
 

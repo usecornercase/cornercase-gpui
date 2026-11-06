@@ -1,10 +1,9 @@
 use super::form::Draft;
 use crate::keymap::{self, Command};
-use crate::model::machines::Machine;
+use crate::model::machines::{Machine, THIS_COMPUTER};
 use crate::platform::Os;
 use crate::store::{Busy, args};
 
-const THIS_COMPUTER: &str = "this computer";
 const HERE_LOCAL: &str = "Runs the server you are using; it links to each machine below";
 const HERE_REMOTE: &str = "Runs the server this window is connected to; it links to each machine below";
 
