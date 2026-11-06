@@ -1,0 +1,47 @@
+{
+  "checks": [
+    {
+      "base": "main",
+      "clean": false,
+      "conflicts": [
+        {
+          "kind": "contents",
+          "message": "CONFLICT (content): Merge conflict in README.md",
+          "path": "README.md"
+        }
+      ],
+      "error": null,
+      "left_out": 0,
+      "with": null
+    },
+    {
+      "base": null,
+      "clean": false,
+      "conflicts": [
+        {
+          "kind": "contents",
+          "message": "CONFLICT (content): Merge conflict in README.md",
+          "path": "README.md"
+        }
+      ],
+      "error": null,
+      "left_out": 0,
+      "with": 7
+    },
+    {
+      "base": null,
+      "clean": false,
+      "conflicts": [
+        {
+          "kind": "contents",
+          "message": "CONFLICT (content): Merge conflict in README.md",
+          "path": "README.md"
+        }
+      ],
+      "error": null,
+      "left_out": 0,
+      "with": 18
+    }
+  ],
+  "workspace": 15
+}

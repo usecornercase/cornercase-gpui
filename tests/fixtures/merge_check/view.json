@@ -1,0 +1,262 @@
+{
+  "boot": "2664925-1793929122841269842",
+  "caller": null,
+  "config": {
+    "revision": 3
+  },
+  "groups": [],
+  "home": "/home/ana",
+  "projects": [
+    {
+      "active": false,
+      "collapsed": false,
+      "custom_name": null,
+      "group": null,
+      "id": 8,
+      "name": "shop",
+      "path": "/home/ana/code/shop",
+      "remotes": [
+        {
+          "name": "origin",
+          "url": "https://github.com/acme/shop.git"
+        }
+      ],
+      "repo": "github.com/acme/shop",
+      "workspaces": [
+        {
+          "active": true,
+          "behind": 0,
+          "branch": "main",
+          "collapsed": false,
+          "custom_name": null,
+          "id": 7,
+          "name": "main",
+          "path": "/home/ana/code/shop",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "shared": [
+            {
+              "count": 1,
+              "files": [
+                "README.md"
+              ],
+              "workspace": 15
+            },
+            {
+              "count": 1,
+              "files": [
+                "README.md"
+              ],
+              "workspace": 18
+            }
+          ],
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 6,
+              "layout": {
+                "leaf": 5
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_sends": 0,
+                  "id": 5,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/ana/code/shop",
+                  "pid": 2664968,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            }
+          ],
+          "worktree": false
+        },
+        {
+          "active": false,
+          "behind": 0,
+          "branch": "mc/checkout",
+          "collapsed": false,
+          "custom_name": null,
+          "id": 15,
+          "name": "mc/checkout",
+          "path": "/home/ana/code/worktrees/shop/mc-checkout",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "shared": [
+            {
+              "count": 1,
+              "files": [
+                "README.md"
+              ],
+              "workspace": 7
+            },
+            {
+              "count": 2,
+              "files": [
+                "README.md",
+                "notes.txt"
+              ],
+              "workspace": 18
+            }
+          ],
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 17,
+              "layout": {
+                "leaf": 16
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_sends": 0,
+                  "id": 16,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/ana/code/worktrees/shop/mc-checkout",
+                  "pid": 2676785,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            }
+          ],
+          "worktree": true
+        },
+        {
+          "active": false,
+          "behind": 0,
+          "branch": "mc/pricing",
+          "collapsed": false,
+          "custom_name": null,
+          "id": 18,
+          "name": "mc/pricing",
+          "path": "/home/ana/code/worktrees/shop/mc-pricing",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "shared": [
+            {
+              "count": 1,
+              "files": [
+                "README.md"
+              ],
+              "workspace": 7
+            },
+            {
+              "count": 2,
+              "files": [
+                "README.md",
+                "notes.txt"
+              ],
+              "workspace": 15
+            }
+          ],
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 20,
+              "layout": {
+                "leaf": 19
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_sends": 0,
+                  "id": 19,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/ana/code/worktrees/shop/mc-pricing",
+                  "pid": 2677082,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            }
+          ],
+          "worktree": true
+        }
+      ]
+    }
+  ],
+  "revision": 1,
+  "shown": {
+    "pane": 1,
+    "project": 4,
+    "tab": 2,
+    "workspace": 3
+  },
+  "theme": {
+    "from": "default",
+    "scheme": null
+  },
+  "version": "0.13.1",
+  "view": {
+    "active": false,
+    "cols": 100,
+    "controls": false,
+    "id": 26,
+    "projection": 1,
+    "rows": 30,
+    "shown": {
+      "pane": 1,
+      "project": 4,
+      "tab": 2,
+      "workspace": 3
+    },
+    "visible": true
+  }
+}

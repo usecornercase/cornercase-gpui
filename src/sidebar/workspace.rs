@@ -13,7 +13,7 @@ use super::rows::{
 use super::{Fold, Target, draggable, forms, tip};
 use crate::app::Root;
 use crate::dialogs;
-use crate::model::{AgentRow, PaneInfo, PullRequest, Shown, Workspace};
+use crate::model::{AgentRow, PaneInfo, PullRequest, Session, Shown, Workspace};
 use crate::theme::colours;
 use crate::ui::{self, badge};
 
@@ -85,6 +85,25 @@ fn pull_request_tags(ws: &Workspace) -> Option<Div> {
             .text_size(px(11.))
             .child(tag("pr", text, colour).when(crossed, Styled::line_through))
             .children(stack),
+    )
+}
+
+fn shared_tag(ws: &Workspace, session: Option<&Session>) -> Option<Stateful<Div>> {
+    let (id, count) = (ws.id, ws.shared_count());
+    let session = session.filter(|_| count > 0)?;
+    Some(
+        div()
+            .id(SharedString::from(format!("ws-shared-{id}")))
+            .flex_none()
+            .text_size(px(11.))
+            .text_color(colours::working())
+            .cursor_pointer()
+            .child(format!("⇄{count}"))
+            .tooltip(tip(session.shared_tip(ws)))
+            .on_click(move |_: &ClickEvent, window, cx| {
+                cx.stop_propagation();
+                dialogs::merge_check(id, window, cx);
+            }),
     )
 }
 
@@ -225,10 +244,12 @@ impl Root {
 
     fn workspace_end(&self, ws: &Workspace, look: &WorkspaceLook, removing: bool, cx: &mut Context<Self>) -> Div {
         let status = !look.has_children || look.collapsed;
-        let figures = ws.pull_request.is_some() || ws.behind > 0 || status;
+        let shared = shared_tag(ws, self.session.as_ref()).filter(|_| !removing);
+        let figures = ws.pull_request.is_some() || shared.is_some() || ws.behind > 0 || status;
         let end = End { gap: 5., buttons: u8::from(!removing), figures };
         let end = if removing { trailing(end, false) } else { self.row_end(Target::Workspace(ws.id), end, cx) };
         end.children(pull_request_tags(ws))
+            .children(shared)
             .when(ws.behind > 0, |d| {
                 d.child(
                     div().flex_none().text_size(px(11.)).text_color(colours::muted()).child(format!("↓{}", ws.behind)),

@@ -4,7 +4,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Subscription, Task, Window, div, prelude::FluentBuilder as _, px,
 };
 
-use super::{body_height, close, frame, show};
+use super::{ask_button, body_height, branch_line, close, frame, muted, show};
 use crate::model::{PullRequest, Session, Workspace};
 use crate::store::{self, Busy, Store, ToastKind};
 use crate::theme::{colours, radius};
@@ -219,20 +219,7 @@ fn header(shown: &Shown) -> Div {
 fn branches(shown: &Shown) -> Option<Div> {
     let branch = shown.branch.as_deref()?;
     let into = shown.pr.base.as_deref().map(|base| format!(" → {base}")).unwrap_or_default();
-    Some(
-        div()
-            .flex()
-            .items_center()
-            .gap(px(6.))
-            .text_size(px(12.))
-            .text_color(colours::muted())
-            .child(ui::icon(Icon::Branch, 12.).text_color(colours::faint()))
-            .child(div().flex_1().min_w_0().child(ui::one_line(format!("{branch}{into}")))),
-    )
-}
-
-fn muted(text: impl Into<SharedString>) -> Div {
-    div().text_size(px(12.)).text_color(colours::muted()).child(text.into())
+    Some(branch_line(format!("{branch}{into}")))
 }
 
 fn checks(pr: &PullRequest, note: Option<Note<'_>>) -> Div {
@@ -298,13 +285,6 @@ fn buttons(shown: &Shown) -> Div {
         .child(copy_button(pr.url.clone()))
         .child(ui::button("pr-done", "Done").on_click(|_: &ClickEvent, _, cx| close(cx)))
         .child(open_button(pr))
-}
-
-fn ask_button(workspace: u64, text: String, label: String) -> Stateful<Div> {
-    ui::icon_text_button("pr-ask", Icon::Send, "Ask agent", Tone::Plain).on_click(move |_: &ClickEvent, _, cx| {
-        close(cx);
-        Store::get(cx).update(cx, |s, cx| s.ask_agent(workspace, &text, &label, cx));
-    })
 }
 
 fn copy_button(url: String) -> Stateful<Div> {
