@@ -86,6 +86,7 @@ impl FilesPanel {
         entries.extend(Self::copy_entries(menu, cx));
         let frame = ui::glass::card(radius::CARD)
             .id("files-menu")
+            .occlude()
             .min_w(px(200.))
             .p(px(4.))
             .text_size(px(13.))

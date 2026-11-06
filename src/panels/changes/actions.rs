@@ -1,7 +1,7 @@
 use gpui::{App, Context, WeakEntity, Window};
 
 use crate::dialogs;
-use crate::store::{self, Busy, Store, ToastKind, args};
+use crate::store::{self, Busy, ToastKind, args};
 
 use super::pieces::{find_mut, toast};
 use super::wire::{FileInfo, FileStatus, Mode, Staging};
@@ -92,23 +92,6 @@ impl ChangesPanel {
     fn refused(&mut self, error: &anyhow::Error, cx: &mut Context<Self>) {
         toast(error.to_string(), ToastKind::Error, cx);
         self.reread(cx);
-    }
-
-    pub(super) fn open_in_editor(workspace: u64, path: &str, line: u32, cx: &mut App) {
-        let store = Store::get(cx);
-        let s = store.read(cx);
-        let mut a = args(&["new-tab", "--workspace", &workspace.to_string(), "--focus"]);
-        if let Some(view) = s.view_id {
-            a.extend(["--view".to_string(), view.to_string()]);
-        }
-        a.push("--".into());
-        a.push(diff::editor_command(path, line));
-        s.cmd(a);
-    }
-
-    pub(super) fn ask_agent(workspace: u64, reference: &str, cx: &mut App) {
-        let label = reference.trim_end().to_string();
-        Store::get(cx).update(cx, |s, cx| s.ask_agent(workspace, reference, &label, cx));
     }
 }
 

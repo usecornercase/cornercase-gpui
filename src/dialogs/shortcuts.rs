@@ -33,13 +33,13 @@ fn columns(os: Os) -> [&'static [Section]; 3] {
     match os {
         Os::Mac => [
             &[Keys(Group::Panels), System],
-            &[Keys(Group::Window), Keys(Group::Terminal)],
+            &[Keys(Group::Window), Keys(Group::Terminal), Keys(Group::Viewer)],
             &[Keys(Group::TabsAndPanes), Keys(Group::Browser), Elsewhere],
         ],
         Os::Linux | Os::Windows => [
             &[Keys(Group::Panels), System],
             &[Keys(Group::Window), Keys(Group::Terminal), Keys(Group::Browser)],
-            &[Keys(Group::TabsAndPanes), Elsewhere],
+            &[Keys(Group::TabsAndPanes), Keys(Group::Viewer), Elsewhere],
         ],
     }
 }

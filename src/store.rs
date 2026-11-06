@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -23,6 +24,14 @@ pub(crate) use jobs::Busy;
 use jobs::Jobs;
 
 const NO_FLOW: &str = "This workspace runs no flow";
+
+fn editor_command(path: &str, line: impl Display) -> String {
+    format!("${{VISUAL:-${{EDITOR:-vi}}}} +{line} {}", shell_quote(path))
+}
+
+fn shell_quote(text: &str) -> String {
+    format!("'{}'", text.replace('\'', r"'\''"))
+}
 
 pub(crate) struct Store {
     pub session: Option<Session>,
@@ -263,7 +272,23 @@ impl Store {
         };
         self.cmd(args(&["send", "--pane", &pane.to_string(), "--", text]));
         self.focus("pane", pane);
+        self.keys_to_terminal = true;
         self.toast(format!("Sent {label} to {agent}"), ToastKind::Info, cx);
+    }
+
+    pub(crate) fn ask_about(&mut self, workspace: u64, reference: &str, cx: &mut Context<Self>) {
+        let label = reference.trim_end().to_string();
+        self.ask_agent(workspace, reference, &label, cx);
+    }
+
+    pub(crate) fn open_in_editor(&self, workspace: u64, path: &str, line: impl Display) {
+        let mut a = args(&["new-tab", "--workspace", &workspace.to_string(), "--focus"]);
+        if let Some(view) = self.view_id {
+            a.extend(["--view".to_string(), view.to_string()]);
+        }
+        a.push("--".into());
+        a.push(editor_command(path, line));
+        self.cmd(a);
     }
 
     pub(crate) fn copy_elsewhere(&mut self, path: String, cx: &mut Context<Self>) {

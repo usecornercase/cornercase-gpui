@@ -2,9 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.13
+## 0.1.14
 
 - The window now says what only cornercase's own window can do for now, where you would look for it, and which cornercase issue it waits on: pairing a phone's browser or a Telegram or Discord chat (Settings › Remote), removing the worktrees of closed projects and deleting branches (the Worktrees sheet and the Remove questions), **Run setup** (a worktree's menu), importing a VS Code workspace (the `+` beside Projects) and a plugin's window processes (its card in Plugins).
+
+## 0.1.13
+
+- **Select lines and characters in the Files viewer and the Changes diff.** A click selects a line, a drag or ⇧-click a range of lines (a drag on the numbers keeps to whole lines), a drag on the text selects characters and a double click a word. Open, Ask agent and Copy float beside the selection: ask the workspace's agent about `path:12-30`, copy the text, or open it at that line. In Files, Copy keeps the file's own tabs and a long line's hidden end; in a diff, tabs may come as spaces until cornercase gives the window a line's own text. ⌘C (Ctrl+Shift+C on Linux and Windows) copies the selection too, and Esc clears it.
+- **Find in the open file.** ⌘F (Ctrl+Shift+F on Linux and Windows) while the Files viewer has the focus, or its Find button, opens a field over the file: every match lights up, with a count such as `3 of 12`, and Enter and Shift+Enter move between them. A big file stays smooth. Elsewhere ⌘F still opens Search. Opening a result of a text search opens the field with your search in it, so you can go on through the file.
+- After Ask agent the keys go to the agent's pane, so you can type your question right away.
 
 ## 0.1.12
 

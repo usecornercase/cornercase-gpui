@@ -15,7 +15,7 @@ fn every_section_shows_once_on_each_platform() {
 
 #[test]
 fn on_linux_the_browser_moves_beside_the_terminal_to_balance_the_columns() {
-    assert_eq!(columns(Os::Mac)[1], [Section::Keys(Group::Window), Section::Keys(Group::Terminal)]);
+    assert_eq!(columns(Os::Mac)[1][..2], [Section::Keys(Group::Window), Section::Keys(Group::Terminal)]);
     assert_eq!(columns(Os::Linux)[1].last(), Some(&Section::Keys(Group::Browser)));
 }
 

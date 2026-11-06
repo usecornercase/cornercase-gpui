@@ -8,15 +8,45 @@ use gpui::{
 const ELLIPSIS: &str = "…";
 const BREAKS: [char; 3] = ['\n', '\r', '\t'];
 
+type OnLaid = Box<dyn FnOnce(LaidOut)>;
+
 pub(crate) struct OneLine {
     text: SharedString,
     highlights: Vec<(Range<usize>, HighlightStyle)>,
+    on_laid: Option<OnLaid>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Cut {
+    kept: usize,
+    mark_x: Pixels,
+}
+
+pub(crate) struct LaidOut {
+    pub(crate) bounds: Bounds<Pixels>,
+    line: ShapedLine,
+    cut: Option<Cut>,
+}
+
+impl LaidOut {
+    pub(crate) fn index_at(&self, x: Pixels) -> usize {
+        let local = x - self.bounds.left();
+        caret_in(self.cut, self.line.len(), local, self.line.closest_index_for_x(local))
+    }
+}
+
+fn caret_in(cut: Option<Cut>, len: usize, x: Pixels, closest: usize) -> usize {
+    match cut {
+        Some(cut) if x >= cut.mark_x => len,
+        Some(cut) => closest.min(cut.kept),
+        None => closest,
+    }
 }
 
 pub(crate) fn one_line(text: impl Into<SharedString>) -> OneLine {
     let text: SharedString = text.into();
     let text = if text.contains(BREAKS) { text.replace(BREAKS, " ").into() } else { text };
-    OneLine { text, highlights: Vec::new() }
+    OneLine { text, highlights: Vec::new(), on_laid: None }
 }
 
 impl OneLine {
@@ -25,13 +55,19 @@ impl OneLine {
         self
     }
 
-    fn cut(&self, measured: &Measured, width: Pixels, window: &Window) -> ShapedLine {
+    pub(crate) fn on_laid(mut self, report: impl FnOnce(LaidOut) + 'static) -> Self {
+        self.on_laid = Some(Box::new(report));
+        self
+    }
+
+    fn cut(&self, measured: &Measured, width: Pixels, window: &Window) -> (ShapedLine, Cut) {
         let system = window.text_system();
         let mark = system.shape_line(ELLIPSIS.into(), measured.font_size, std::slice::from_ref(&measured.mark), None);
         let at = measured.line.index_for_x(width - mark.width).unwrap_or(self.text.len());
         let kept = kept(&self.text, at);
         let text = SharedString::from(format!("{}{ELLIPSIS}", &self.text[..kept]));
-        system.shape_line(text, measured.font_size, &ending(&measured.runs, kept, measured.mark.clone()), None)
+        let cut = Cut { kept, mark_x: measured.line.x_for_index(kept) };
+        (system.shape_line(text, measured.font_size, &ending(&measured.runs, kept, measured.mark.clone()), None), cut)
     }
 }
 
@@ -87,10 +123,16 @@ impl Element for OneLine {
         window: &mut Window,
         _cx: &mut App,
     ) -> Self::PrepaintState {
-        if measured.line.width <= bounds.size.width.ceil() {
-            return measured.line.clone();
+        let (shown, cut) = if measured.line.width <= bounds.size.width.ceil() {
+            (measured.line.clone(), None)
+        } else {
+            let (shown, cut) = self.cut(measured, bounds.size.width, window);
+            (shown, Some(cut))
+        };
+        if let Some(report) = self.on_laid.take() {
+            report(LaidOut { bounds, line: measured.line.clone(), cut });
         }
-        self.cut(measured, bounds.size.width, window)
+        shown
     }
 
     fn paint(
@@ -143,16 +185,17 @@ fn kept(text: &str, at: usize) -> usize {
     text[..at].trim_end().len()
 }
 
-fn ending(runs: &[TextRun], kept: usize, mark: TextRun) -> Vec<TextRun> {
-    let mut left = kept;
+fn ending(runs: &[TextRun], kept: usize, mut mark: TextRun) -> Vec<TextRun> {
+    let mut at = 0;
     let mut ended = Vec::new();
     for run in runs {
-        if left == 0 {
-            break;
+        if at < kept {
+            ended.push(TextRun { len: run.len.min(kept - at), ..run.clone() });
         }
-        let len = run.len.min(left);
-        ended.push(TextRun { len, ..run.clone() });
-        left -= len;
+        at += run.len;
+        if at > kept {
+            mark.background_color = mark.background_color.or(run.background_color);
+        }
     }
     ended.push(mark);
     ended
