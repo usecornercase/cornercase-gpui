@@ -1,6 +1,7 @@
 use anyhow::Result;
 use gpui::{App, Context};
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use super::data::Ran;
@@ -148,15 +149,35 @@ fn initial(title: &str) -> String {
 pub(crate) struct Offers {
     pub(super) list: ActionList,
     pub(super) status: Option<Status>,
+    asked: u64,
+}
+
+fn parsed<T: DeserializeOwned>(answer: Result<Value>) -> Result<T> {
+    Ok(serde_json::from_value(answer?)?)
 }
 
 impl Offers {
-    fn read_actions(&mut self, answer: Result<Value>) {
-        self.list = answer.ok().and_then(|value| serde_json::from_value(value).ok()).unwrap_or_default();
+    fn ask(&mut self) -> u64 {
+        self.asked += 1;
+        self.asked
     }
 
-    fn read_status(&mut self, answer: Result<Value>) {
-        self.status = answer.ok().and_then(|value| serde_json::from_value(value).ok());
+    fn read_actions(&mut self, asked: u64, answer: Result<Value>) -> Result<()> {
+        if asked != self.asked {
+            return Ok(());
+        }
+        self.list = ActionList::default();
+        self.list = parsed(answer)?;
+        Ok(())
+    }
+
+    fn read_status(&mut self, asked: u64, answer: Result<Value>) -> Result<()> {
+        if asked != self.asked {
+            return Ok(());
+        }
+        self.status = None;
+        self.status = Some(parsed(answer)?);
+        Ok(())
     }
 
     pub(crate) fn offered(&self, spot: Spot) -> Vec<Group> {
@@ -187,14 +208,22 @@ impl Offers {
     }
 }
 
-pub(crate) fn read_offers(cx: &mut Context<Store>) {
-    store::run_json(cx, args(&["plugin", "actions", "--json"]), |this, answer, cx| {
-        this.plugins.read_actions(answer);
-        cx.notify();
+fn offers_read(store: &mut Store, read: Result<()>, cx: &mut Context<Store>) {
+    if let Err(e) = read {
+        store.toast(format!("Could not read the plugins: {}", cli::reason(&e)), ToastKind::Error, cx);
+    }
+    cx.notify();
+}
+
+pub(crate) fn read_offers(store: &mut Store, cx: &mut Context<Store>) {
+    let asked = store.plugins.ask();
+    store::run_json(cx, args(&["plugin", "actions", "--json"]), move |this, answer, cx| {
+        let read = this.plugins.read_actions(asked, answer);
+        offers_read(this, read, cx);
     });
-    store::run_json(cx, args(&["plugin", "status", "--json"]), |this, answer, cx| {
-        this.plugins.read_status(answer);
-        cx.notify();
+    store::run_json(cx, args(&["plugin", "status", "--json"]), move |this, answer, cx| {
+        let read = this.plugins.read_status(asked, answer);
+        offers_read(this, read, cx);
     });
 }
 
@@ -239,7 +268,7 @@ pub(crate) fn run_action<T: 'static>(
                 s.toast(text, kind, cx);
             }
             if told.refused {
-                read_offers(cx);
+                read_offers(s, cx);
             }
         });
         then(this, cx);
@@ -263,8 +292,11 @@ pub(super) fn target(contexts: &[String], shown: Shown) -> Option<Spot> {
 pub(crate) fn listed_offers() -> Offers {
     use crate::test_util::fixture;
     let mut offers = Offers::default();
-    offers.read_actions(serde_json::from_str(fixture!("plugins/actions.json")).map_err(anyhow::Error::from));
-    offers.read_status(serde_json::from_str(fixture!("plugins/status-buttons.json")).map_err(anyhow::Error::from));
+    let asked = offers.ask();
+    let actions = serde_json::from_str(fixture!("plugins/actions.json")).map_err(anyhow::Error::from);
+    let status = serde_json::from_str(fixture!("plugins/status-buttons.json")).map_err(anyhow::Error::from);
+    offers.read_actions(asked, actions).expect("the actions parse");
+    offers.read_status(asked, status).expect("the status parses");
     offers
 }
 

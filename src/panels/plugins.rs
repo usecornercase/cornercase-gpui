@@ -136,7 +136,7 @@ impl PluginsPanel {
             }
             cx.notify();
         });
-        Store::get(cx).update(cx, |_, cx| read_offers(cx));
+        Store::get(cx).update(cx, read_offers);
         if cli::host().is_none() {
             for id in self.logs.keys().cloned().collect::<Vec<_>>() {
                 Self::read_log(id, cx);

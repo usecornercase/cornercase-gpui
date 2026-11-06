@@ -5,6 +5,16 @@ use crate::model::Shown;
 use crate::store::ToastKind;
 use crate::test_util::fixture;
 
+fn read_actions(offers: &mut Offers, answer: anyhow::Result<serde_json::Value>) -> anyhow::Result<()> {
+    let asked = offers.ask();
+    offers.read_actions(asked, answer)
+}
+
+fn read_status(offers: &mut Offers, answer: anyhow::Result<serde_json::Value>) -> anyhow::Result<()> {
+    let asked = offers.ask();
+    offers.read_status(asked, answer)
+}
+
 fn titles(runs: &[Run]) -> Vec<&str> {
     runs.iter().map(Run::title).collect()
 }
@@ -37,9 +47,57 @@ fn with_no_plugin_nothing_is_offered() {
 #[test]
 fn a_failed_read_offers_nothing() {
     let mut offers = offers();
-    offers.read_actions(Err(anyhow::anyhow!("no server")));
+    read_actions(&mut offers, Err(anyhow::anyhow!("no server"))).expect_err("the failure");
     assert!(offers.offered(Spot::Pane(1)).is_empty());
     assert!(offers.buttons().is_empty());
+}
+
+#[test]
+fn a_failed_read_says_why() {
+    let mut offers = Offers::default();
+    let actions = read_actions(&mut offers, Err(anyhow::anyhow!("no server"))).expect_err("the failure");
+    assert_eq!(actions.to_string(), "no server");
+    let status = read_status(&mut offers, Err(anyhow::anyhow!("no answer"))).expect_err("the failure");
+    assert_eq!(status.to_string(), "no answer");
+}
+
+#[test]
+fn an_answer_that_cannot_be_read_is_a_failure() {
+    let mut offers = offers();
+    read_actions(&mut offers, Ok(json!({"actions": 3}))).expect_err("not a list of actions");
+    read_status(&mut offers, Ok(json!({"plugins": 3}))).expect_err("not a list of plugins");
+    assert!(offers.offered(Spot::Pane(1)).is_empty());
+    assert!(offers.status.is_none());
+}
+
+#[test]
+fn an_older_read_cannot_replace_the_actions_of_a_newer_one() {
+    let mut offers = Offers::default();
+    let older = offers.ask();
+    let newer = offers.ask();
+    offers.read_actions(newer, Ok(json!({"revision": 3, "actions": []}))).expect("the newer answer");
+    offers.read_actions(older, Ok(json!({"revision": 2, "actions": []}))).expect("dropped");
+    assert_eq!(offers.list.revision, 3);
+}
+
+#[test]
+fn an_older_read_cannot_replace_the_status_of_a_newer_one() {
+    let mut offers = Offers::default();
+    let older = offers.ask();
+    let newer = offers.ask();
+    offers.read_status(newer, Ok(json!({"problem": "the newer"}))).expect("the newer answer");
+    offers.read_status(older, Ok(json!({"problem": "the older"}))).expect("dropped");
+    assert_eq!(offers.status.and_then(|status| status.problem).as_deref(), Some("the newer"));
+}
+
+#[test]
+fn a_failure_of_an_older_read_is_not_told_and_changes_nothing() {
+    let mut offers = Offers::default();
+    let older = offers.ask();
+    let newer = offers.ask();
+    offers.read_actions(newer, Ok(json!({"revision": 3, "actions": []}))).expect("the newer answer");
+    offers.read_actions(older, Err(anyhow::anyhow!("no server"))).expect("dropped");
+    assert_eq!(offers.list.revision, 3);
 }
 
 #[test]
@@ -83,7 +141,7 @@ fn a_plugin_that_is_off_has_no_button_though_its_status_lists_one() {
     let mut offers = offers();
     let answer = json!({"revision": 3, "actions": [{"plugin": "acme.deploy", "action": "go", "name": "Deploy",
         "title": "Deploy now", "contexts": ["button"], "placement": "job"}]});
-    offers.read_actions(Ok(answer));
+    read_actions(&mut offers, Ok(answer)).expect("the actions parse");
     let buttons = offers.buttons();
     assert_eq!(buttons.len(), 1);
     assert_eq!(buttons[0].plugin, "acme.deploy");
@@ -92,7 +150,7 @@ fn a_plugin_that_is_off_has_no_button_though_its_status_lists_one() {
 #[test]
 fn without_the_status_a_button_goes_by_the_plugins_name() {
     let mut offers = offers();
-    offers.read_status(Err(anyhow::anyhow!("no server")));
+    read_status(&mut offers, Err(anyhow::anyhow!("no server"))).expect_err("the failure");
     let buttons = offers.buttons();
     assert_eq!((buttons[0].title.as_str(), buttons[0].glyph().as_str()), ("Notes", "N"));
 }
@@ -101,7 +159,7 @@ fn without_the_status_a_button_goes_by_the_plugins_name() {
 fn an_icon_from_a_private_font_gives_way_to_the_titles_initial() {
     let mut offers = offers();
     let status = json!({"plugins": [{"id": "acme.deploy", "button": {"title": "ship it", "icon": "\u{ea60}"}}]});
-    offers.read_status(Ok(status));
+    read_status(&mut offers, Ok(status)).expect("the status parses");
     let buttons = offers.buttons();
     assert_eq!(buttons[1].glyph(), "S");
 }

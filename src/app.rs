@@ -385,7 +385,7 @@ impl Root {
         self.store.update(cx, |s, cx| {
             s.follow_app(cx);
             s.list_accounts(cx);
-            plugins::read_offers(cx);
+            plugins::read_offers(s, cx);
         });
     }
 
