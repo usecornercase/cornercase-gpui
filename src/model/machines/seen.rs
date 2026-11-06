@@ -205,12 +205,50 @@ impl MachinePlace {
 
     pub(crate) fn followed(&self, machines: &[MachineSeen]) -> Option<Self> {
         let seen = machines.iter().find(|m| m.name == self.machine)?;
-        if seen.boot == self.boot {
-            return Some(Self::at(seen, seen.workspace(self.workspace)?, self.tab));
+        let same_run = seen.boot == self.boot;
+        let found = if same_run { seen.workspace(self.workspace) } else { self.by_path(seen) };
+        match found {
+            Some(ws) => Some(Self::at(seen, ws, self.tab.filter(|_| same_run))),
+            None => (!seen.linked()).then(|| self.clone()),
         }
+    }
+
+    fn by_path<'a>(&self, seen: &'a MachineSeen) -> Option<&'a ThereWorkspace> {
         let at_path = seen.workspaces().filter(|ws| ws.path == self.path);
-        let ws = at_path.clone().find(|ws| ws.name == self.name).or_else(|| at_path.clone().next())?;
-        Some(Self::at(seen, ws, None))
+        at_path.clone().find(|ws| ws.name == self.name).or_else(|| at_path.clone().next())
+    }
+
+    fn shown_flags(&self) -> Vec<String> {
+        match self.tab {
+            Some(tab) => args(&["--tab", &tab.0.to_string()]),
+            None => args(&["--workspace", &self.workspace.0.to_string()]),
+        }
+    }
+
+    pub(crate) fn open_args(&self, (cols, rows): (u16, u16), hidden: bool) -> Vec<String> {
+        let mut command = args(&["view", "--cols", &cols.to_string(), "--rows", &rows.to_string()]);
+        command.extend(self.shown_flags());
+        command.extend(hidden.then(|| "--hidden".to_string()));
+        command
+    }
+
+    pub(crate) fn focus_args(&self, view: u64) -> Vec<String> {
+        let mut command = args(&["focus"]);
+        command.extend(self.shown_flags());
+        command.extend(args(&["--view", &view.to_string()]));
+        command
+    }
+
+    pub(crate) fn shows_the_same(&self, other: &Self) -> bool {
+        self.same_workspace(other) && self.tab == other.tab
+    }
+
+    pub(crate) fn gone_note(&self) -> String {
+        format!("{} is no longer on {}", self.name, self.machine)
+    }
+
+    pub(crate) fn aim(&self) -> Aim {
+        Aim { machine: self.machine.clone(), boot: self.boot.clone(), workspace: self.workspace }
     }
 
     pub(crate) fn is_at(&self, seen: &MachineSeen, ws: &ThereWorkspace) -> bool {

@@ -82,7 +82,7 @@ impl Notice {
     }
 }
 
-pub(super) fn parse_event(line: &str) -> Option<Event> {
+pub(crate) fn parse_event(line: &str) -> Option<Event> {
     serde_json::from_str(line.trim()).ok()
 }
 

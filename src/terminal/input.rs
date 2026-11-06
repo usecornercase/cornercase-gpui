@@ -71,7 +71,7 @@ impl EntityInputHandler for Root {
         _cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
         let metrics = self.metrics.as_ref()?;
-        let pane = self.grid.active_pane()?;
+        let pane = self.shown().grid.active_pane()?;
         let c = pane.cursor?;
         let cells = self.layout.borrow().card(pane.pane)?.cells;
         let x = cells.x + metrics.cell_width * f32::from(c.x);

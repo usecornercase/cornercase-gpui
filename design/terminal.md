@@ -163,3 +163,17 @@ Code: `src/terminal/pane_drag.rs` (the handle, pressing, dragging, dropping), `s
 - **Separators come from optional entries left out**, so the menu drops separators at either end and doubled ones rather than every caller checking.
 - **An entry runs on the window after the menu has closed**, so it can open a dialog or another menu.
 - Entries that stop or remove something are red (`danger`); one of several choices can carry a check at its end (`choice`).
+
+## A machine's tab
+
+Code: `Root::shown` and `Root::input` in `app/machine.rs`, and `terminal/` and `tabs.rs` reading through them. Everything else about it is in `design/machines.md`.
+
+- **The same code with the other queue**: drawing, the layout, keys, pastes, the wheel, a selection, dividers and a click on a pane read `self.shown()`, the connection the frame came on, so a pane id only ever goes back to its own server. Whose session a pane is looked up in goes the same way (`shown_session`): the status bar reads `vps · zsh · ~/code/shop`, with the home there, and a word's path rules are that server's.
+- **Keys** (`keys_go`, plain): a live tab's active pane; while another tab arrives they wait for it; before the first frame and while it is down a toast says `vps unreachable: nothing was sent` (or what else holds it), and nothing is kept. With no machine shown, no frame means nowhere, as before.
+- **`takes_input`** is what the mouse and the wheel ask, and `frame_shown` what the painter asks: a tab that is down still draws its last frame, and the layout it leaves behind must not reach a pane.
+- **Selections are read and never copied there** (`selection --pane P --json`, without `--copy`, which would use the machine's own clipboard and toast), and reach this computer's clipboard (or the primary selection on Linux) cleaned of control and hidden characters, line breaks and tabs kept, since they come from another machine (`selection::cleaned`).
+- **The right button** has no menu there: it goes to a program that reads the mouse, focusing its pane first, and otherwise does nothing, not even focus, as upstream's. So the release reaches the program too, which a local right press, whose release the menu takes, does not need.
+- **What a local path means differs**: no underline, no peek and no ⌘-click on a path there (`spot_under`; ⌘-click selects as a plain press), rather than opening a file here by mistake. A file dropped or a picture pasted goes through `paste-file` on the machine's queue, as for a window on another server, so its path is there.
+- **Keys that act on the tab's structure**: splitting there works, ⌘[ ⌘] and the tab keys (⌘1…9, ⇧⌘[ ⇧⌘]) move there, ⌘T and the keys that walk workspaces, projects and agents go back and act here, as they name what is here, and ⌘W, ⇧⌘W and marking an agent say they are not offered yet (`Root::not_offered_there`): they would otherwise reach the pane with the same number here. A pane's `↓ n more` and its held messages read the machine's frame and session like the rest, and the click that goes back to the bottom goes on its queue.
+- **Dimmed** (`Surface::dimmed`, 40 % over each pane's own fade, no cursor) while it is not live, with the card over it (`terminal/machine_card.rs`). Moving panes and the handle are off (`hover_handle`), and `drop_drags` releases a press before the connection it belongs to is left.
+- **Checked live** on 2026-11-06: `design/machines.md` has the list.

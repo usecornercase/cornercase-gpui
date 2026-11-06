@@ -117,7 +117,7 @@ fn more_button((pane, below): (u64, u64), widest: Pixels, metrics: &Metrics, roo
         .tooltip(tip("Back to the bottom".to_string()))
         .on_mouse_down(MouseButton::Left, move |_: &MouseDownEvent, _, cx| {
             cx.stop_propagation();
-            let _ = root.update(cx, |this, _| this.queue.cmd(bottom_args(pane)));
+            let _ = root.update(cx, |this, _| this.shown().queue.cmd(bottom_args(pane)));
         })
         .child(more_text(below))
 }
@@ -155,11 +155,12 @@ pub(super) fn place(notes: Vec<PaneNotes>, room: &Room<'_>, window: &mut Window,
 
 impl Root {
     pub(super) fn pane_notes(&self) -> Vec<PaneNotes> {
-        let session = self.session.as_ref();
-        let several = self.grid.panes.len() > 1;
+        let session = self.shown_session();
+        let panes = &self.shown().grid.panes;
+        let several = panes.len() > 1;
         let look = &self.side.look.current;
         let of = |p: &PaneGrid| notes_of(p, session.and_then(|s| s.pane(p.pane)), look.fades(several, p.active));
-        self.grid.panes.iter().filter_map(of).collect()
+        panes.iter().filter_map(of).collect()
     }
 }
 

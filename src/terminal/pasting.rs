@@ -46,18 +46,22 @@ fn image_of(entries: &[ClipboardEntry]) -> Option<&Image> {
 }
 
 impl Root {
-    pub(crate) fn paste(&self, pane: u64, cx: &mut Context<Self>) {
+    pub(crate) fn paste(&mut self, pane: Option<u64>, cx: &mut Context<Self>) {
         let Some(item) = cx.read_from_clipboard() else { return };
-        if let Some(text) = item.text() {
-            self.queue.input(pane, json!({ "paste": text }));
-        } else if let Some(image) = image_of(item.entries()) {
-            self.queue.cmd_with_stdin(image_args(pane, image.format), image.bytes.clone());
+        match (item.text(), image_of(item.entries()), pane) {
+            (Some(text), _, Some(pane)) => self.shown().queue.input(pane, json!({ "paste": text })),
+            (Some(text), _, None) => self.input(json!({ "paste": text }), cx),
+            (None, Some(image), Some(pane)) => {
+                self.shown().queue.cmd_with_stdin(image_args(pane, image.format), image.bytes.clone());
+            }
+            (None, Some(_), None) => self.refuse_on_machine(cx),
+            (None, None, _) => {}
         }
     }
 
     pub(super) fn paste_primary(&self, pane: u64, cx: &mut Context<Self>) {
         if let Some(text) = desktop::read_primary(cx) {
-            self.queue.input(pane, json!({ "paste": text }));
+            self.shown().queue.input(pane, json!({ "paste": text }));
         }
     }
 
@@ -66,13 +70,13 @@ impl Root {
             Some(Hit::Pane(pane, _)) => Some(pane),
             _ => None,
         };
-        let Some(pane) = under.or_else(|| self.active_pane()) else { return };
-        if self.host.is_none() {
-            self.queue.input(pane, json!({ "paste": paths_text(paths.paths()) }));
+        let Some(pane) = under.filter(|_| self.takes_input()).or_else(|| self.active_pane()) else { return };
+        if self.host.is_none() && self.machine.is_none() {
+            self.own.queue.input(pane, json!({ "paste": paths_text(paths.paths()) }));
             return;
         }
         for path in paths.paths() {
-            self.queue.cmd(file_args(pane, path));
+            self.shown().queue.cmd(file_args(pane, path));
         }
     }
 }

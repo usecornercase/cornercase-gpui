@@ -21,7 +21,7 @@ use crate::store::{self, Busy, Store, ToastGo, ToastKind, args};
 use crate::theme::{UI_FAMILY, colours, radius};
 use crate::ui::{self, glass};
 
-pub(crate) use feed::{AppState, Event, Notes, Notice, Prefs, Release};
+pub(crate) use feed::{AppState, Event, Notes, Notice, Prefs, Release, parse_event};
 
 const FLASH: Duration = Duration::from_millis(160);
 const BELL_TOAST_EVERY: Duration = Duration::from_secs(30);
@@ -139,7 +139,7 @@ impl Notifier {
     }
 
     fn on_line(&mut self, line: &str, cx: &mut Context<Self>) {
-        match feed::parse_event(line) {
+        match parse_event(line) {
             Some(Event::Notice(notice)) => self.notice(notice, cx),
             Some(Event::Clipboard { text, pane }) => self.clipboard(text, pane, cx),
             Some(Event::Bell { tab, pane, .. }) => self.bell(tab, pane, cx),
@@ -234,7 +234,7 @@ impl Notifier {
         self.store.update(cx, |s, cx| s.toast_with(text, ToastKind::Info, action, cx));
     }
 
-    fn flash(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn flash(&mut self, cx: &mut Context<Self>) {
         self.flash += 1;
         let flash = self.flash;
         self.flashing = true;

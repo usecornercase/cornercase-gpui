@@ -109,7 +109,7 @@ impl Root {
     pub(crate) fn set_folded(&mut self, fold: Fold, collapsed: bool) {
         self.side.folds.set(fold, collapsed, self.session.as_mut());
         let tx = self.tx.clone();
-        self.queue.cmd_then(fold.args(collapsed), move |result| {
+        self.own.queue.cmd_then(fold.args(collapsed), move |result| {
             let _ = tx.unbounded_send(Msg::Folded(fold, collapsed, result.err().map(|e| e.to_string())));
         });
     }
@@ -187,7 +187,7 @@ impl Root {
     pub(crate) fn drop_on(&mut self, dragged: Target, target: Target) {
         let Some(session) = &self.session else { return };
         if let Some(args) = drop_command(session, dragged, target) {
-            self.queue.cmd(args);
+            self.own.queue.cmd(args);
         }
     }
 
@@ -233,7 +233,7 @@ impl Root {
             return;
         };
         let mut args = vec!["open".into(), path, "--focus".into(), "--json".into()];
-        if let Some(view) = self.view_id {
+        if let Some(view) = self.own.view_id {
             args.extend(["--view".into(), view.to_string()]);
         }
         crate::store::run_busy(cx, busy, args, move |this: &mut Root, result, cx| {
@@ -246,7 +246,7 @@ impl Root {
         match result {
             Ok(v) => {
                 let Some(project) = v.get("project").and_then(Value::as_u64) else { return };
-                self.queue.cmd(into_group(project, group));
+                self.own.queue.cmd(into_group(project, group));
                 self.set_folded(Fold::Group(group), false);
             }
             Err(e) => self.say(&e.to_string(), cx),

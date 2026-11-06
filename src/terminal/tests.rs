@@ -1,7 +1,7 @@
 use gpui::CursorStyle;
 
 use super::pane_menu::move_pane_args;
-use super::selection::{kept, read_args, word_at};
+use super::selection::{cleaned, kept, read_args, word_at};
 use super::{cycled, divider_cursor};
 use crate::app::Msg;
 use crate::desktop::Board;
@@ -51,29 +51,52 @@ fn cycling_wraps_around_both_ways() {
 
 #[test]
 fn copying_asks_cornercase_to_copy_while_the_primary_selection_only_reads_the_text() {
-    assert_eq!(read_args(4, Board::Clipboard), ["selection", "--pane", "4", "--copy", "--json"]);
-    assert_eq!(read_args(4, Board::Primary), ["selection", "--pane", "4", "--json"]);
+    assert_eq!(read_args(4, Board::Clipboard, false), ["selection", "--pane", "4", "--copy", "--json"]);
+    assert_eq!(read_args(4, Board::Primary, false), ["selection", "--pane", "4", "--json"]);
 }
 
 #[test]
 fn a_read_selection_goes_to_its_board() {
     let read = Ok(r#"{"text":"ls -la"}"#.to_string());
-    assert!(matches!(kept(Board::Primary, read), Some(Msg::Copied(Board::Primary, text)) if text == "ls -la"));
-    assert!(kept(Board::Primary, Ok(r#"{"text":""}"#.to_string())).is_none());
+    assert!(matches!(kept(Board::Primary, read, false), Some(Msg::Copied(Board::Primary, text)) if text == "ls -la"));
+    assert!(kept(Board::Primary, Ok(r#"{"text":""}"#.to_string()), false).is_none());
 }
 
 #[test]
 fn a_pane_with_nothing_selected_leaves_the_board_alone() {
-    assert!(kept(Board::Primary, Ok(r#"{"pane":4}"#.to_string())).is_none());
-    assert!(kept(Board::Primary, Ok(r#"{"pane":4,"text":null}"#.to_string())).is_none());
+    assert!(kept(Board::Primary, Ok(r#"{"pane":4}"#.to_string()), false).is_none());
+    assert!(kept(Board::Primary, Ok(r#"{"pane":4,"text":null}"#.to_string()), false).is_none());
 }
 
 #[test]
 fn a_selection_that_cannot_be_read_says_why() {
     let read = Err(anyhow::anyhow!("no such pane"));
-    assert!(matches!(kept(Board::Primary, read), Some(Msg::Error(e)) if e == "no such pane"));
+    assert!(matches!(kept(Board::Primary, read, false), Some(Msg::Error(e)) if e == "no such pane"));
     for answer in ["Selected: ls -la", r#"{"text":7}"#] {
-        let said = kept(Board::Clipboard, Ok(answer.to_string()));
+        let said = kept(Board::Clipboard, Ok(answer.to_string()), false);
         assert!(matches!(said, Some(Msg::Error(e)) if e.starts_with("could not read the selection")), "{answer}");
     }
+}
+
+#[test]
+fn a_selection_on_a_machine_is_read_and_never_copied_there() {
+    assert_eq!(read_args(4, Board::Clipboard, true), ["selection", "--pane", "4", "--json"]);
+}
+
+#[test]
+fn a_selection_from_a_machine_reaches_the_clipboard_cleaned() {
+    let read = Ok(serde_json::json!({ "text": "ls\u{1b}[0m\u{202e} -la\n\tnext" }).to_string());
+    let said = kept(Board::Clipboard, read, true);
+    assert!(matches!(said, Some(Msg::Copied(Board::Clipboard, text)) if text == "ls[0m -la\n\tnext"));
+}
+
+#[test]
+fn a_selection_from_a_machine_with_nothing_left_once_cleaned_copies_nothing() {
+    let read = Ok(serde_json::json!({ "text": "\u{1b}\u{200b}" }).to_string());
+    assert!(kept(Board::Clipboard, read, true).is_none());
+}
+
+#[test]
+fn what_is_cleaned_keeps_lines_tabs_and_every_visible_character() {
+    assert_eq!(cleaned("a\tb\nñ中 🦀"), "a\tb\nñ中 🦀");
 }

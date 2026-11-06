@@ -25,6 +25,7 @@ Filed on 2026-11-06, against cornercase 0.13.1. For each, `--help`, `contract --
 
 - **#678**: the Clone form's muted line (`FILES_NOTE` in `src/model/machines/run_on/clone.rs`, drawn by `src/dialogs/run_on/clone.rs`) gives way to the list of git-ignored files with their boxes, as upstream's dialog has them.
 - **#679**: following a new tab on a machine while `start` holds its answer (`Item::NewIn` and `Awaited::new_tab_in` in `src/model/machines/run_on.rs`, `early` in `Store::start_there`) gives way to `start --placed`, whose answer names the tab at once.
+- **#680**: a machine's card saying `reconnecting…` while its link is down (`state_of` in `src/terminal/machine_card.rs`, `Standing::Reconnecting`) gives way to counting down to the link's next try, once the list says when (`design/machines.md`).
 - **#675**: the note on a machine's first read of stats (`Pick::asking_stats`, `src/panels/usage/machines.rs`) gives way to reading them cached first, as `load_plans` does (`load_stats`, `src/panels/usage.rs`).
 - **#667**: the Changes panel's Copy saying that tabs may have become spaces (`NO_OWN_TEXT` and `copied_toast` in `src/panels/changes/lines.rs`) gives way to copying a line's own text, once `changes file` and `changes gap` give it (`design/changes-panel.md`).
 - **#583**: a flow's start dialog showing the run with `focus --tab` of the orchestrator's tab in our view once `flow run` answers (`finish` in `src/panels/flows/start.rs`; `Started::place` and `StartedMember` in `src/panels/flows/model.rs`) gives way to `flow run --focus --view` alone.
