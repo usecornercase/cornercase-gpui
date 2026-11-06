@@ -6,15 +6,25 @@ use gpui::{
 use serde_json::Value;
 
 use super::QueuePanel;
-use super::data::{SOURCES, agent_choices, mode_choices, sentence};
+use super::data::{ROUTINES_NOTE, SOURCES, agent_choices, is_repository, mode_choices, sentence};
 use super::draft::When;
 use super::form::{Form, Spot};
+use super::repeat::{self, DAYS, UNITS};
 use crate::model::Session;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, Tone, boxed, glass};
 
 const TRUST: &str = "Unattended: it accepts the folder's trust prompt and submits the prompt by itself.";
+const EVERY_HINT: &str = "At least 30 minutes apart, at most a year.";
+const FLOW_TASK: &str = "The prompt is the team's task.";
+const FLOW_MODES: &str = "Set by the flow's roles.";
+const NO_REPOSITORY: &str =
+    "Open a git repository's folder as a project first: only git repositories can have routines.";
+const CLEANUP: &str = "remove the workspace when it finishes";
+const CLEANUP_NOTE: &str = "Once the agent has been done for 3 minutes, the run's workspace and branch go. The \
+                            workspace stays, and the run says why, when anything would be lost: uncommitted or \
+                            unpushed work, or a lock. Looking at the run's tab, or a server restart, keeps it too.";
 
 fn pick(el: Stateful<Div>, cx: &mut Context<QueuePanel>, change: impl Fn(&mut Form) + 'static) -> AnyElement {
     el.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.update_form(&change, cx))).into_any_element()
@@ -67,6 +77,10 @@ fn section(glyph: Icon, title: &'static str, control: impl IntoElement) -> Div {
 }
 
 fn what(form: &Form, window: &Window, cx: &mut Context<QueuePanel>) -> impl IntoElement + use<> {
+    if form.repeats() {
+        let note = form.runs_flow().then(|| ui::dim(FLOW_TASK));
+        return section(Icon::Message, "What", stack().child(boxed(&form.prompt, window, cx)).children(note));
+    }
     let kinds = ui::segments(vec![
         seg("q-what-prompt", "Prompt", !form.issue, cx, |f| f.issue = false),
         seg("q-what-issue", "Issue", form.issue, cx, |f| f.issue = true),
@@ -88,45 +102,73 @@ fn issue(form: &Form, window: &Window, cx: &mut Context<QueuePanel>) -> AnyEleme
         .into_any_element()
 }
 
+fn when_seg(form: &Form, kind: When, cx: &mut Context<QueuePanel>) -> AnyElement {
+    let segment = ui::segment(("q-when", kind as usize), kind.label(), form.when == kind).px(px(9.));
+    pick(segment, cx, move |f| f.choose_when(kind))
+}
+
+fn when_track(form: &Form, kinds: &[When], cx: &mut Context<QueuePanel>) -> Div {
+    let items = kinds.iter().map(|kind| when_seg(form, *kind, cx)).collect();
+    hug(ui::segments(items).flex_wrap())
+}
+
 fn when(form: &Form, window: &Window, cx: &mut Context<QueuePanel>) -> impl IntoElement + use<> {
-    let mut kinds = Vec::new();
-    if form.editing() {
-        kinds.push(seg("q-when-keep", When::Keep.label(), form.when == When::Keep, cx, |f| f.when = When::Keep));
-    }
-    for kind in When::NEW {
-        kinds.push(seg(("q-when", kind as usize), kind.label(), form.when == kind, cx, move |f| f.when = kind));
-    }
-    let kinds = hug(ui::segments(kinds).flex_wrap());
-    section(Icon::Queue, "When", stack().child(kinds).children(when_values(form, window, cx)))
+    let offered = When::offered(form.editing(), form.old.repeat.is_some());
+    let tracks: Vec<Div> = offered.iter().map(|kinds| when_track(form, kinds, cx)).collect();
+    section(Icon::Queue, "When", stack().children(tracks).children(when_values(form, window, cx)))
 }
 
 fn when_values(form: &Form, window: &Window, cx: &mut Context<QueuePanel>) -> Option<AnyElement> {
     let values = match form.when {
-        When::At | When::Tomorrow => div().w(px(110.)).child(boxed(&form.clock, window, cx)),
+        When::At | When::Tomorrow | When::Daily | When::Weekdays => clock_box(form, window, cx),
         When::On => div()
             .flex()
             .gap(px(8.))
             .child(div().w(px(130.)).child(boxed(&form.date, window, cx)))
             .child(div().w(px(90.)).child(boxed(&form.clock, window, cx))),
-        When::In => div()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .child(div().w(px(70.)).child(boxed(&form.amount, window, cx)))
-            .child(units(form, cx)),
+        When::In => amount_and_units(form, window, cx),
+        When::Every => stack().child(amount_and_units(form, window, cx)).child(ui::dim(EVERY_HINT)),
+        When::Weekly => stack().child(hug(weekdays(form, cx))).child(clock_box(form, window, cx)),
         When::ClaudeReset | When::CodexReset => ui::dim("When the plan's 5-hour session resets, read once now."),
-        When::Keep => return None,
+        When::Keep => ui::dim(format!("↻ {}", repeat::words(form.old.repeat.as_deref()?))),
     };
     Some(values.into_any_element())
 }
 
+fn clock_box(form: &Form, window: &Window, cx: &mut Context<QueuePanel>) -> Div {
+    div().w(px(110.)).child(boxed(&form.clock, window, cx))
+}
+
+fn amount_and_units(form: &Form, window: &Window, cx: &mut Context<QueuePanel>) -> Div {
+    div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .gap(px(8.))
+        .child(div().w(px(70.)).child(boxed(&form.amount, window, cx)))
+        .child(units(form, cx))
+}
+
 fn units(form: &Form, cx: &mut Context<QueuePanel>) -> Div {
     ui::segments(
-        [('m', "minutes"), ('h', "hours"), ('d', "days")]
+        UNITS
             .into_iter()
             .map(|(unit, label)| seg(("q-unit", u32::from(unit)), label, form.unit == unit, cx, move |f| f.unit = unit))
             .collect(),
     )
+}
+
+fn weekdays(form: &Form, cx: &mut Context<QueuePanel>) -> Div {
+    ui::segments(
+        DAYS.into_iter()
+            .enumerate()
+            .map(|(at, day)| {
+                let label = sentence(day.get(..3).unwrap_or(day));
+                seg(("q-day", at), label, form.weekday == day, cx, move |f| f.weekday = day)
+            })
+            .collect(),
+    )
+    .flex_wrap()
 }
 
 fn choose_project(form: &mut Form, id: u64) {
@@ -137,20 +179,34 @@ fn choose_project(form: &mut Form, id: u64) {
 fn choose_agent(form: &mut Form, agent: Option<String>) {
     form.agent = agent;
     form.mode = None;
+    form.flow = None;
+}
+
+fn choose_flow(form: &mut Form, flow: String) {
+    form.flow = Some(flow);
+    form.agent = None;
+    form.mode = None;
+}
+
+fn keep_or_move(form: &Form, cx: &mut Context<QueuePanel>) -> Div {
+    hug(ui::segments(vec![
+        seg("q-place-keep", "unchanged", form.spot == Spot::Keep, cx, |f| f.spot = Spot::Keep),
+        seg("q-place-change", "somewhere else", form.spot != Spot::Keep, cx, |f| f.spot = Spot::NewWorktree),
+    ]))
 }
 
 fn place(form: &Form, session: Option<&Session>, window: &Window, cx: &mut Context<QueuePanel>) -> Div {
+    if form.repeats() {
+        return routine_place(form, session, cx);
+    }
     let mut place = stack();
     if form.editing() {
-        place = place.child(hug(ui::segments(vec![
-            seg("q-place-keep", "unchanged", form.spot == Spot::Keep, cx, |f| f.spot = Spot::Keep),
-            seg("q-place-change", "somewhere else", form.spot != Spot::Keep, cx, |f| f.spot = Spot::NewWorktree),
-        ])));
+        place = place.child(keep_or_move(form, cx));
     }
     if form.spot == Spot::Keep {
         return place;
     }
-    place = place.child(ui::field("Project", projects(form, session, cx)));
+    place = place.child(ui::field("Project", projects(form, session, |_| true, cx)));
     let Some(project) = form.project else { return place };
     place = place.child(ui::field("A new tab in", workspaces(form, project, session, cx)));
     place.when(form.spot == Spot::NewWorktree, |d| {
@@ -158,9 +214,39 @@ fn place(form: &Form, session: Option<&Session>, window: &Window, cx: &mut Conte
     })
 }
 
-fn projects(form: &Form, session: Option<&Session>, cx: &mut Context<QueuePanel>) -> Div {
-    let projects: Vec<(u64, String)> =
-        session.map(|s| s.projects.iter().map(|p| (p.id, p.name.clone())).collect()).unwrap_or_default();
+fn routine_place(form: &Form, session: Option<&Session>, cx: &mut Context<QueuePanel>) -> Div {
+    let mut place = stack();
+    if form.editing() {
+        place = place.child(keep_or_move(form, cx));
+    }
+    if form.spot != Spot::Keep {
+        place = place.child(repositories(form, session, cx));
+    }
+    let new_worktree = div().text_size(px(12.)).text_color(colours::muted()).child("new worktree");
+    place.child(ui::field("Open in", new_worktree)).child(cleanup(form, cx)).child(ui::dim(ROUTINES_NOTE))
+}
+
+fn repositories(form: &Form, session: Option<&Session>, cx: &mut Context<QueuePanel>) -> Div {
+    if session.is_none_or(|s| !s.projects.iter().any(is_repository)) {
+        return ui::dim(NO_REPOSITORY);
+    }
+    ui::field("Project", projects(form, session, is_repository, cx))
+}
+
+fn cleanup(form: &Form, cx: &mut Context<QueuePanel>) -> Div {
+    let checkbox = ui::checkbox("q-cleanup", form.cleanup, CLEANUP).text_size(px(12.5));
+    stack().gap(px(4.)).child(pick(checkbox, cx, |f| f.cleanup = !f.cleanup)).child(ui::dim(CLEANUP_NOTE))
+}
+
+fn projects(
+    form: &Form,
+    session: Option<&Session>,
+    shown: impl Fn(&crate::model::Project) -> bool,
+    cx: &mut Context<QueuePanel>,
+) -> Div {
+    let projects: Vec<(u64, String)> = session
+        .map(|s| s.projects.iter().filter(|p| shown(p)).map(|p| (p.id, p.name.clone())).collect())
+        .unwrap_or_default();
     chips(
         projects
             .into_iter()
@@ -187,26 +273,45 @@ fn workspaces(form: &Form, project: u64, session: Option<&Session>, cx: &mut Con
     chips(choices)
 }
 
-fn agents(form: &Form, config: &Value, cx: &mut Context<QueuePanel>) -> Div {
+fn agents(form: &Form, config: &Value, flows: Option<&[String]>, cx: &mut Context<QueuePanel>) -> Div {
     let (agents, default_agent) = agent_choices(config);
     let editing = form.editing();
     let mut items = Vec::new();
     if editing {
-        items.push(chip("q-agent-keep", "unchanged", form.agent.is_none(), cx, |f| choose_agent(f, None)));
+        let keep = form.agent.is_none() && form.flow.is_none();
+        items.push(chip("q-agent-keep", "unchanged", keep, cx, |f| choose_agent(f, None)));
     }
     for agent in agents {
         let selected = match &form.agent {
             Some(a) => *a == agent,
-            None => !editing && agent == default_agent,
+            None => !editing && form.flow.is_none() && agent == default_agent,
         };
         let id = SharedString::from(format!("q-agent-{agent}"));
         let value = agent.clone();
         items.push(chip(id, agent, selected, cx, move |f| choose_agent(f, Some(value.clone()))));
     }
+    if form.repeats() {
+        items.extend(flow_chips(form, flows, cx));
+    }
     chips(items)
 }
 
+fn flow_chips(form: &Form, flows: Option<&[String]>, cx: &mut Context<QueuePanel>) -> Vec<AnyElement> {
+    let Some(flows) = flows else { return vec![ui::busy("flows-loading", "Loading flows…").into_any_element()] };
+    let mut items = Vec::new();
+    for name in flows {
+        let id = SharedString::from(format!("q-flow-{name}"));
+        let selected = form.flow.as_ref() == Some(name);
+        let value = name.clone();
+        items.push(chip(id, format!("{name} (flow)"), selected, cx, move |f| choose_flow(f, value.clone())));
+    }
+    items
+}
+
 fn modes(form: &Form, config: &Value, cx: &mut Context<QueuePanel>) -> Option<Div> {
+    if form.runs_flow() {
+        return Some(ui::field("Mode", ui::dim(FLOW_MODES)));
+    }
     let agent = form.agent.clone().or_else(|| (!form.editing()).then(|| agent_choices(config).1))?;
     if agent == "auto" {
         return None;
@@ -225,17 +330,22 @@ fn modes(form: &Form, config: &Value, cx: &mut Context<QueuePanel>) -> Option<Di
     Some(ui::field("Mode", chips(items)))
 }
 
-fn agent_section(form: &Form, config: Option<&Value>, cx: &mut Context<QueuePanel>) -> Div {
+fn agent_section(form: &Form, config: Option<&Value>, flows: Option<&[String]>, cx: &mut Context<QueuePanel>) -> Div {
     let Some(config) = config else { return section(Icon::Agent, "Agent", ui::busy("agents-loading", "Loading…")) };
-    section(Icon::Agent, "Agent", stack().child(agents(form, config, cx)).children(modes(form, config, cx)))
+    section(Icon::Agent, "Agent", stack().child(agents(form, config, flows, cx)).children(modes(form, config, cx)))
 }
 
-fn header(editing: bool) -> Div {
-    let (title, line) = if editing {
-        ("Edit queue entry", "Only what you change is sent; the rest stays as it was.")
-    } else {
-        ("Schedule an agent", "It starts by itself at the time you choose.")
-    };
+fn header_text(editing: bool, repeats: bool) -> (&'static str, &'static str) {
+    match (editing, repeats) {
+        (true, true) => ("Edit routine", "Only what you change is sent, and only the runs to come follow it."),
+        (true, false) => ("Edit queue entry", "Only what you change is sent; the rest stays as it was."),
+        (false, true) => ("Schedule a routine", "It starts by itself every time, until you pause or remove it."),
+        (false, false) => ("Schedule an agent", "It starts by itself at the time you choose."),
+    }
+}
+
+fn header(form: &Form) -> Div {
+    let (title, line) = header_text(form.editing(), form.repeats());
     div()
         .flex_none()
         .flex()
@@ -320,6 +430,7 @@ impl QueuePanel {
     pub(super) fn form_view(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         let form = self.form.as_ref()?;
         let session = Store::get(cx).read(cx).session.clone();
+        let flows = self.flows.names.as_deref();
         let fields = div()
             .px(px(20.))
             .pb(px(18.))
@@ -329,15 +440,9 @@ impl QueuePanel {
             .child(what(form, window, cx))
             .child(when(form, window, cx))
             .child(section(Icon::Branch, "Where", place(form, session.as_ref(), window, cx)))
-            .child(agent_section(form, self.config.as_ref(), cx))
+            .child(agent_section(form, self.config.as_ref(), flows, cx))
             .child(section(Icon::Pencil, "Name", boxed(&form.name, window, cx)));
         let body = div().id("queue-form").flex_1().min_h_0().overflow_y_scroll().child(fields);
-        Some(
-            frame(self.form_width.size())
-                .child(header(form.editing()))
-                .child(body)
-                .child(footer(form, cx))
-                .into_any_element(),
-        )
+        Some(frame(self.form_width.size()).child(header(form)).child(body).child(footer(form, cx)).into_any_element())
     }
 }

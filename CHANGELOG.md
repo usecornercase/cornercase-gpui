@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.6
+
+- Routines in the Queue: schedule an agent or a flow to start again and again, every so many minutes, hours, days or weeks, every day, every weekday or on a day of the week. Each run gets a fresh worktree from the up-to-date default branch and can remove its workspace when it finishes, if nothing would be lost. A routine shows its next time and its last runs, with why a run failed or kept its workspace, and you can pause it, resume it, start it now, edit it, or remove it with its runs and undo that. It only runs while cornercase's server runs, and only git repositories can have routines.
+
 ## 0.1.5
 
 - **Machines, a new sheet** (⇧⌘N; Ctrl+Alt+Shift+N on Linux and Windows): the other computers your agents can run on, which cornercase links to through your own `ssh`. It shows this computer and each machine with its link in words, live: `connecting…`, `linked · 0.13.1`, `unreachable · seen 2 min ago` with what `ssh` said under it, or `older` with **Update…**. **Add machine** opens a form that says at once what it would refuse and offers the hosts of your `~/.ssh/config`. Each machine can be edited, its link tried again, or removed, which leaves its server running there. To move the whole window to another server, ⇧⌘K still does that.
