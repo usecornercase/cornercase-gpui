@@ -353,7 +353,7 @@ pub(crate) fn segments(items: Vec<AnyElement>) -> Div {
         .children(items)
 }
 
-pub(crate) fn segment(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> Stateful<Div> {
+fn segment_base(id: impl Into<ElementId>, selected: bool) -> Stateful<Div> {
     div()
         .id(id)
         .relative()
@@ -366,6 +366,24 @@ pub(crate) fn segment(id: impl Into<ElementId>, label: impl Into<SharedString>, 
         .when(!selected, |d| {
             d.text_color(colours::muted()).hover(|s| s.bg(colours::hover()).text_color(colours::text()))
         })
+}
+
+pub(crate) fn segment(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> Stateful<Div> {
+    segment_base(id, selected).child(label.into())
+}
+
+pub(crate) fn icon_segment(
+    id: impl Into<ElementId>,
+    glyph: Icon,
+    label: impl Into<SharedString>,
+    selected: bool,
+) -> Stateful<Div> {
+    let tint = if selected { colours::accent() } else { colours::muted() };
+    segment_base(id, selected)
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .child(icon(glyph, 14.).text_color(tint))
         .child(label.into())
 }
 
@@ -375,6 +393,23 @@ pub(crate) fn home_relative(path: &str) -> String {
 
 pub(crate) fn title(text: impl Into<SharedString>) -> Div {
     div().font_weight(FontWeight::SEMIBOLD).child(text.into())
+}
+
+pub(crate) fn emblem_page(glyph: Icon, heading: impl Into<SharedString>) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(10.))
+        .px(px(28.))
+        .pt(px(40.))
+        .pb(px(28.))
+        .child(emblem(glyph))
+        .child(div().text_size(px(17.)).font_weight(FontWeight::SEMIBOLD).text_center().child(heading.into()))
+}
+
+pub(crate) fn emblem_line(text: impl Into<SharedString>) -> Div {
+    div().max_w(px(470.)).text_center().text_color(colours::muted()).child(text.into())
 }
 
 pub(crate) fn emblem(glyph: Icon) -> Div {

@@ -1,7 +1,7 @@
 mod agents;
 mod data;
 mod profiles;
-mod widgets;
+pub(crate) mod widgets;
 
 use std::collections::{HashMap, HashSet};
 
@@ -403,13 +403,7 @@ impl AccountsPanel {
             .then(|| ui::callout(colours::waiting(), data::tokens_title(&info.tokens), TOKENS_NOTE));
         let failed = self.error_at(None).map(|e| ui::callout(colours::failed(), "The change failed", e));
         let empty = cards.is_empty().then(|| widgets::note("No agent here takes accounts."));
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(12.))
-            .px(px(16.))
-            .pt(px(14.))
-            .pb(px(24.))
+        widgets::page()
             .child(self.top_bar(cx))
             .children(tokens)
             .children(failed)
@@ -422,18 +416,9 @@ impl AccountsPanel {
         let Some(error) = self.load_error.clone() else {
             return ui::loading("Listing the accounts…").into_any_element();
         };
-        div()
-            .flex()
-            .flex_col()
-            .items_start()
-            .gap(px(10.))
-            .p(px(16.))
-            .child(ui::error_line(format!("Could not list the accounts: {error}")))
-            .child(
-                ui::button("accounts-retry", "Try again")
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.load(cx))),
-            )
-            .into_any_element()
+        let try_again = ui::button("accounts-retry", "Try again")
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.load(cx)));
+        widgets::could_not_read(format!("Could not list the accounts: {error}"), try_again).into_any_element()
     }
 }
 

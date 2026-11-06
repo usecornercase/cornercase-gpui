@@ -65,6 +65,14 @@ fn no_shortcut_takes_a_key_macos_or_the_app_menu_keeps() {
 }
 
 #[test]
+fn n_with_shift_lists_the_machines_and_without_it_makes_a_workspace() {
+    assert_eq!(command("n", true), Some(Command::Panel(PanelKind::Machines)));
+    assert_eq!(command("n", false), Some(Command::NewWorkspace));
+    assert_eq!(keys_of(Command::Panel(PanelKind::Machines), Os::Mac).as_deref(), Some("⇧⌘N"));
+    assert_eq!(keys_of(Command::Panel(PanelKind::Machines), Os::Linux).as_deref(), Some("Ctrl+Alt+Shift+N"));
+}
+
+#[test]
 fn every_panel_has_keys() {
     for kind in PanelKind::ALL {
         assert!(keys_of(Command::Panel(kind), Os::Mac).is_some(), "{kind:?} has no keys");

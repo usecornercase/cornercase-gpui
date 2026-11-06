@@ -30,6 +30,9 @@ pub(crate) enum Icon {
     Agent,
     Keyboard,
     Server,
+    Cloud,
+    House,
+    Diamond,
     Laptop,
     Play,
     Pause,
@@ -102,7 +105,7 @@ pub(crate) enum Icon {
 }
 
 impl Icon {
-    const ALL: [Icon; 86] = [
+    const ALL: [Icon; 89] = [
         Icon::Changes,
         Icon::Files,
         Icon::Todo,
@@ -120,6 +123,9 @@ impl Icon {
         Icon::Agent,
         Icon::Keyboard,
         Icon::Server,
+        Icon::Cloud,
+        Icon::House,
+        Icon::Diamond,
         Icon::Laptop,
         Icon::Play,
         Icon::Pause,
@@ -219,6 +225,9 @@ impl Icon {
             Icon::Keyboard => asset!("keyboard"),
             Icon::Help => asset!("circle-help"),
             Icon::Server => asset!("server"),
+            Icon::Cloud => asset!("cloud"),
+            Icon::House => asset!("house"),
+            Icon::Diamond => asset!("diamond"),
             Icon::Laptop => asset!("laptop"),
             Icon::Processes => asset!("activity"),
             Icon::Ports => asset!("plug"),

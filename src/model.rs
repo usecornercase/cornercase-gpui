@@ -6,6 +6,7 @@ use crate::platform::paths;
 
 mod grid;
 pub(crate) mod link;
+pub(crate) mod machines;
 mod pull_request;
 mod surface;
 

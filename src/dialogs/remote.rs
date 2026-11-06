@@ -11,14 +11,26 @@ use gpui::{
 use super::{cancel_and, close, frame, show, text_field};
 use crate::cli::{self, Remote, Target};
 use crate::desktop;
+use crate::keymap::{self, Command};
+use crate::panels::PanelKind;
+use crate::platform::Os;
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, Icon, TextField};
+
+pub(crate) use hosts::read as ssh_hosts;
 
 const HOW: &str = "Every command runs as ssh DESTINATION cornercase …, with your ssh config, keys and agent, and \
                    the server starts there if none runs. It never asks for a password: use a key or an agent.";
 const WHERE: &str = "The shells, agents and files stay on that machine. cornercase is looked for on its PATH, in \
                      ~/.local/bin, ~/.cargo/bin and Homebrew's folders.";
+
+fn machines_note() -> String {
+    let keys = keymap::keys_of(Command::Panel(PanelKind::Machines), Os::CURRENT).unwrap_or_default();
+    format!(
+        "This moves the whole window there. To keep it here and link another computer instead, use Machines ({keys})."
+    )
+}
 
 pub(crate) struct Connect {
     destination: Entity<TextField>,
@@ -106,7 +118,15 @@ impl Render for Connect {
             .child(self.places(cx))
             .child(ui::field("Destination", ui::boxed(&self.destination, window, cx)))
             .child(ui::field("Run cornercase there with (optional)", ui::boxed(&self.program, window, cx)))
-            .child(div().flex().flex_col().gap(px(4.)).child(ui::dim(HOW)).child(ui::dim(WHERE)));
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(ui::dim(HOW))
+                    .child(ui::dim(WHERE))
+                    .child(ui::dim(machines_note())),
+            );
         let button = ui::primary_button("connect", "Connect")
             .when(!ready, |b| b.opacity(0.5))
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)));

@@ -86,17 +86,8 @@ fn buttons(cx: &mut Context<QueuePanel>) -> Div {
 
 impl QueuePanel {
     pub(super) fn empty_page(&self, cx: &mut Context<Self>) -> AnyElement {
-        let page = div()
-            .flex()
-            .flex_col()
-            .items_center()
-            .gap(px(10.))
-            .px(px(28.))
-            .pt(px(40.))
-            .pb(px(28.))
-            .child(ui::emblem(Icon::Queue))
-            .child(div().text_size(px(17.)).font_weight(FontWeight::SEMIBOLD).text_center().child(HEADING))
-            .child(div().max_w(px(470.)).text_center().text_color(colours::muted()).child(LEAD))
+        let page = ui::emblem_page(Icon::Queue, HEADING)
+            .child(ui::emblem_line(LEAD))
             .when(self.form.is_none(), |d| d.child(buttons(cx)))
             .child(div().w_full().mt(px(8.)).flex().justify_center().child(points()));
         div().id("queue-empty").flex_1().min_h_0().overflow_y_scroll().child(page).into_any_element()
