@@ -917,6 +917,7 @@ impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_title(window);
         self.keep_beating(window, cx);
+        self.keep_the_keys(window, cx);
         let window_frame = frame::Frame::read(window, Os::CURRENT);
         let (sheet, dialog) = {
             let s = self.store.read(cx);

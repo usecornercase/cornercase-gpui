@@ -21,8 +21,8 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 - **Docked panels.** Changes (the workspace's diff, to stage, discard and review), Files (tree, viewer and search), TODO, Recap (below), a Browser and, in a workspace that runs a flow, Flow: its plan lit up where the work stands, its team and their messages, beside the agents at work.
 - **Recap.** An agent sums up what your agents did, in every project: where things stand now and what waits on you, yesterday for the daily (the last day you worked with agents, so on Monday it is Friday), or the last 7 days. Every conversation and pull request it names is a link: to the agent's pane, or to the pull request on the web. Settings › Agents › Recap chooses the agent, its model and the language.
 - **A browser beside the agent.** A real Chrome on the workspace's dev servers, with device sizes and the console. Pick an element or take a screenshot and hand it to the agent.
-- **The rest of cornercase.** Search, Issues, Queue, Flows, Usage, Accounts, Processes, Ports, Worktrees, Plugins, Settings and the guided tours, each one shortcut away. A flow, a team of agents, starts from its sheet, from an issue or from a project's `+`, and opens its workspace with the Flow panel beside it (View flow in the workspace's menu opens it later); from an issue, its task comes filled in with the issue's, ready to add to. Edit one in its sheet: prompts of several lines, stages that move up and down with their loops kept right, its plan redrawn as you go.
-- **Other machines.** Connect the window to cornercase on another machine over your own `ssh`; it reconnects by itself when the link drops.
+- **The rest of cornercase.** Search, Issues, Queue, Flows, Usage, Accounts, Machines, Processes, Ports, Worktrees, Plugins, Settings and the guided tours, each one shortcut away. A flow, a team of agents, starts from its sheet, from an issue or from a project's `+`, and opens its workspace with the Flow panel beside it (View flow in the workspace's menu opens it later); from an issue, its task comes filled in with the issue's, ready to add to. Edit one in its sheet: prompts of several lines, stages that move up and down with their loops kept right, its plan redrawn as you go.
+- **Other machines.** Connect the window to cornercase on another machine over your own `ssh`; it reconnects by itself when the link drops. Or stay here and list the computers your agents can run on in the Machines sheet: it shows each one's link, live, and adds, edits, retries, updates and removes them.
 - **Notifications.** Agent notices as toasts and desktop notifications, with sounds and the bell.
 
 ## Install
@@ -114,7 +114,7 @@ Every key goes to the program in the active pane, except ⌘ shortcuts. ⌘/ lis
 | **Panes** | ⌘D split right · ⇧⌘D split down · ⌘[ ⌘] previous, next · ⌘W close what is on top, else the pane |
 | **Projects** | ⌘O open a project · ⌘N new workspace · ⌘G start an agent · ⌘P the workspace's pull request · ⇧⌘P go to a file · ⇧⌘K connect to another server |
 | **Panels** | ⇧⌘C Changes · ⇧⌘E Files · ⇧⌘L TODO · ⇧⌘H Recap · ⇧⌘B Browser · ⇧⌘F Flow (in a flow's workspace) |
-| **Sheets** | ⌘F Search · ⌘I Issues · ⇧⌘S Queue · ⇧⌘G Flows · ⌘U Usage · ⇧⌘A Accounts · ⇧⌘M Processes · ⇧⌘O Ports · ⇧⌘T Worktrees · ⇧⌘X Plugins · ⌘, Settings |
+| **Sheets** | ⌘F Search · ⌘I Issues · ⇧⌘S Queue · ⇧⌘G Flows · ⌘U Usage · ⇧⌘A Accounts · ⇧⌘N Machines · ⇧⌘M Processes · ⇧⌘O Ports · ⇧⌘T Worktrees · ⇧⌘X Plugins · ⌘, Settings |
 | **Terminal** | ⌘C copy · ⌘V paste (an image as a file the agent can open) · ⌘+ ⌘- ⌘0 text size |
 | **In the Browser** | ⌘L address · ⌘R reload · ⌘[ ⌘] back, forward · ⌘C ⌘X ⌘V on the page; every other key goes to the page |
 | **Window** | ⌘H hide · ⌥⌘H hide the others · ⌘M minimise · ⌃⌘F full screen · ⌘Q quit |

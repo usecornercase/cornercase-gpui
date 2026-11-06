@@ -40,6 +40,7 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 - [Queue](design/queue.md) (`panels/queue.rs`, `panels/queue/`): scheduled agent starts, their times and form.
 - [Issues](design/issues.md) (`panels/issues.rs`, `panels/issues/`): the issues browser, starting an agent on an issue, the #461 and #472 stopgaps.
 - [Accounts](design/accounts.md) (`panels/accounts.rs`, `panels/accounts/`): agent logins and profiles.
+- [Machines](design/machines.md) (`model/machines.rs`, `panels/machines.rs`, `panels/machines/`): the computers the server links to, the list in `Store`, each link's state in words, adding, editing, removing, retrying and updating them, why ⇧⌘K is another thing.
 - [Usage](design/usage.md) (`panels/usage.rs`, `panels/usage/`): plan limits and stats, the #462 and #472 stopgaps.
 - [Flows](design/flows.md) (`panels/flows.rs`, `panels/flows/`): teams of agents, their runs, the plan's diagram and its look, import and start.
 - [Settings](design/settings.md) (`panels/settings.rs`, `panels/settings/`): the form built from `config --json`, its layout (navigation, rows that keep their place, dropdowns, the agents table), search, saving, tokens, asking first, export and import.

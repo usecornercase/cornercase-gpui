@@ -4,6 +4,7 @@ pub(crate) mod changes;
 pub(crate) mod files;
 pub(crate) mod flows;
 pub(crate) mod issues;
+pub(crate) mod machines;
 pub(crate) mod plugins;
 pub(crate) mod poll;
 pub(crate) mod ports;
@@ -34,6 +35,7 @@ pub(crate) enum PanelKind {
     Usage,
     Settings,
     Accounts,
+    Machines,
     Flows,
     Search,
     Plugins,
@@ -43,7 +45,7 @@ pub(crate) enum PanelKind {
 }
 
 impl PanelKind {
-    pub(crate) const ALL: [PanelKind; 17] = [
+    pub(crate) const ALL: [PanelKind; 18] = [
         PanelKind::Changes,
         PanelKind::Files,
         PanelKind::Todo,
@@ -55,6 +57,7 @@ impl PanelKind {
         PanelKind::Usage,
         PanelKind::Settings,
         PanelKind::Accounts,
+        PanelKind::Machines,
         PanelKind::Flows,
         PanelKind::Search,
         PanelKind::Plugins,
@@ -76,6 +79,7 @@ impl PanelKind {
             Self::Usage => Icon::Usage,
             Self::Settings => Icon::Settings,
             Self::Accounts => Icon::Accounts,
+            Self::Machines => Icon::Server,
             Self::Flows => Icon::Flows,
             Self::Search => Icon::Search,
             Self::Plugins => Icon::Plugins,
@@ -98,6 +102,7 @@ impl PanelKind {
             Self::Usage => "Usage",
             Self::Settings => "Settings",
             Self::Accounts => "Accounts",
+            Self::Machines => "Machines",
             Self::Flows => "Flows",
             Self::Search => "Search",
             Self::Plugins => "Plugins",
@@ -128,6 +133,7 @@ impl PanelKind {
             Self::Usage => usage::build(window, cx),
             Self::Settings => settings::build(window, cx),
             Self::Accounts => accounts::build(window, cx),
+            Self::Machines => machines::build(window, cx),
             Self::Flows => flows::build(window, cx),
             Self::Search => search::build(window, cx),
             Self::Plugins => plugins::build(window, cx),

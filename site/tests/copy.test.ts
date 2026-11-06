@@ -16,6 +16,7 @@ const PANEL_KEYS: Record<string, string> = {
   Flows: 'Flows',
   Usage: 'Usage',
   Accounts: 'Accounts',
+  Machines: 'Machines',
   Processes: 'Processes',
   Ports: 'Ports',
   Worktrees: 'Worktrees',

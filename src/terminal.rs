@@ -113,6 +113,12 @@ impl Root {
         s.dialog.is_some() || s.sheet.is_some()
     }
 
+    pub(crate) fn keep_the_keys(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.overlay_open(cx) && window.focused(cx).is_none() {
+            cx.defer_in(window, |this, window, _| window.focus(&this.focus));
+        }
+    }
+
     fn escape(&mut self, terminal: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if self.cancel_pane_drag(cx)
             || self.store.update(cx, Store::close_overlay)

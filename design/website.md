@@ -34,8 +34,8 @@ The landing page for this window, asked for on 2026-11-05 ("ultra mega impactant
 
 ## Real captures
 
-- **The sheets' ring shows real screens, not drawings** (`src/assets/sheets/`), and so do the still pictures (`src/assets/stills/`): the debug build on a private server, with cornercase's `site/capture/` fake home (its projects, agents, `gh`), `CORNERCASE_GPUI_OPEN=<panel>`, a dark window behind the app for its blur to show, and `screencapture -R` of the window's rectangle, since `-l` composes the window over grey without its blur. They were taken on 2026-11-05 with cornercase 0.13.0; retake them when a sheet changes much. Paths in them are the fake home's.
-- **Why a ring you stand inside**: eleven sheets one key apart read as one room, and the neighbours wrapping around the current one say there are more. A grid would be a wall of small screens, and it is what the page falls back to without motion.
+- **The sheets' ring shows real screens, not drawings** (`src/assets/sheets/`), and so do the still pictures (`src/assets/stills/`): the debug build on a private server, with cornercase's `site/capture/` fake home (its projects, agents, `gh`), `CORNERCASE_GPUI_OPEN=<panel>`, a dark window behind the app for its blur to show, and `screencapture -R` of the window's rectangle, since `-l` composes the window over grey without its blur. They were taken on 2026-11-05 with cornercase 0.13.0; retake them when a sheet changes much. Paths in them are the fake home's. Machines' (2026-11-06, cornercase 0.13.1) is the one taken elsewhere: the Linux build under Xvfb, so without a desktop's blur behind it, with `machines` answered from a file so that it shows every state; retake it on a Mac with the others.
+- **Why a ring you stand inside**: twelve sheets one key apart read as one room, and the neighbours wrapping around the current one say there are more. A grid would be a wall of small screens, and it is what the page falls back to without motion.
 
 ## Without motion
 
