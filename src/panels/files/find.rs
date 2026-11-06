@@ -6,14 +6,14 @@ use std::time::Duration;
 
 use gpui::{
     AnyElement, AppContext as _, ClickEvent, Context, Entity, Focusable as _, HighlightStyle, InteractiveElement as _,
-    IntoElement, KeyDownEvent, ParentElement as _, ScrollStrategy, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window, div, point, px, relative,
+    IntoElement, KeyDownEvent, ParentElement as _, StatefulInteractiveElement as _, Styled as _, Subscription, Window,
+    div, px, relative,
 };
 use grep_matcher::Matcher as _;
 use grep_regex::RegexMatcher;
 
 use crate::theme::{colours, radius};
-use crate::ui::selection::{Styles, overlay};
+use crate::ui::selection::{CODE_ROW, Fit, Off, Styles, overlay};
 use crate::ui::{self, TextField, TextFieldEvent};
 
 use super::disk::Content;
@@ -23,8 +23,8 @@ use super::{FilesPanel, Viewer, search};
 const FIELD_TOP: f32 = 8.;
 const FIELD_HEIGHT: f32 = 48.;
 pub(super) const FIELD_ROOM: f32 = FIELD_TOP + FIELD_HEIGHT;
-const DRAWN_BYTES: u32 = 4096;
 const BUSY_AFTER: Duration = Duration::from_millis(150);
+const ROWS_WITHOUT_A_FRAME: usize = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Hit {
@@ -86,11 +86,16 @@ pub(super) fn stepped(current: Option<usize>, len: usize, back: bool) -> Option<
     })
 }
 
-pub(super) fn on_line(hits: &[Hit], line: usize) -> &[Hit] {
-    let line = small(line);
+pub(super) fn on_line(hits: &[Hit], line: usize, lit_bytes: usize) -> &[Hit] {
+    let (line, lit_bytes) = (small(line), small(lit_bytes));
     let from = hits.partition_point(|hit| hit.line < line);
-    let shown = hits[from..].partition_point(|hit| hit.line == line && hit.start < DRAWN_BYTES);
+    let shown = hits[from..].partition_point(|hit| hit.line == line && hit.start < lit_bytes);
     &hits[from..from + shown]
+}
+
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a height in pixels, at least a row")]
+fn rows_in(height: f32) -> usize {
+    if height < CODE_ROW { ROWS_WITHOUT_A_FRAME } else { (height / CODE_ROW) as usize }
 }
 
 pub(super) fn count(current: Option<usize>, len: usize) -> String {
@@ -169,20 +174,23 @@ impl Find {
         self.answered = true;
     }
 
-    fn current_line(&self) -> Option<usize> {
-        self.hits.get(self.current?).map(|hit| hit.line as usize)
+    fn current_hit(&self) -> Option<Hit> {
+        self.hits.get(self.current?).copied()
     }
 
-    pub(super) fn paint_line(&self, styles: Styles, ix: usize, line: &str) -> Styles {
-        let lit = on_line(&self.hits, ix);
-        if lit.is_empty() {
-            return styles;
-        }
-        let current = self.current.and_then(|at| self.hits.get(at)).copied();
-        let others: Vec<Range<usize>> =
-            lit.iter().filter(|hit| Some(**hit) != current).filter_map(|hit| hit.range_in(line)).collect();
+    fn current_line(&self) -> Option<usize> {
+        self.current_hit().map(|hit| hit.line as usize)
+    }
+
+    pub(super) fn paint_line(&self, styles: Styles, (ix, line): (usize, &str), fit: Fit) -> Styles {
+        let current = self.current_hit().filter(|hit| hit.line == small(ix));
+        let others: Vec<Range<usize>> = on_line(&self.hits, ix, fit.lit_bytes())
+            .iter()
+            .filter(|hit| Some(**hit) != current)
+            .filter_map(|hit| hit.range_in(line))
+            .collect();
         let styles = overlay(styles, &others, other_hits());
-        match current.filter(|hit| lit.contains(hit)).and_then(|hit| hit.range_in(line)) {
+        match current.and_then(|hit| hit.range_in(line)) {
             Some(range) => overlay(styles, &[range], current_hit()),
             None => styles,
         }
@@ -223,18 +231,15 @@ impl FilesPanel {
         let field = viewer.find.get_or_insert_with(|| Find::new(&seed, cx)).field.clone();
         window.focus(&field.read(cx).focus_handle(cx));
         if fresh {
-            self.keep_view(true);
+            self.remeasure_first_line();
             self.find_changed(cx);
         }
         cx.notify();
     }
 
-    fn keep_view(&self, field_opened: bool) {
-        let handle = self.code_scroll.0.borrow().base_handle.clone();
-        let offset = handle.offset();
-        if offset.y < px(0.) {
-            let by = px(if field_opened { -FIELD_ROOM } else { FIELD_ROOM });
-            handle.set_offset(point(offset.x, (offset.y + by).min(px(0.))));
+    fn remeasure_first_line(&self) {
+        if let Some(viewer) = self.place().and_then(|place| place.viewer.as_ref()) {
+            viewer.remeasure(0);
         }
     }
 
@@ -242,7 +247,7 @@ impl FilesPanel {
         if let Some(viewer) = self.viewer_mut() {
             viewer.find = None;
         }
-        self.keep_view(false);
+        self.remeasure_first_line();
         window.focus(&self.focus);
         cx.notify();
     }
@@ -311,23 +316,31 @@ impl FilesPanel {
             return;
         };
         find.answer(hits, asked.start);
-        let line = find.current_line().filter(|_| asked.jump && self.current == Some(asked.place));
-        if let Some(line) = line {
-            self.show_line(line);
+        if asked.jump && self.current == Some(asked.place) {
+            self.show_current_hit();
         }
         cx.notify();
     }
 
-    fn show_line(&self, line: usize) {
-        self.code_scroll.scroll_to_item(line, ScrollStrategy::Center);
+    fn show_current_hit(&mut self) {
+        let Some(viewer) = self.viewer_mut() else { return };
+        let Some(hit) = viewer.find.as_ref().and_then(Find::current_hit) else { return };
+        let spot = (hit.line as usize, hit.start as usize);
+        let laid = viewer.selecting.laid();
+        match laid.off(spot.0, spot.1, FIELD_ROOM) {
+            Off::InView => {}
+            Off::By(distance) => viewer.list.scroll_by(distance),
+            Off::Gone => {
+                let rows = rows_in(f32::from(laid.body().size.height) - FIELD_ROOM);
+                viewer.go_near(spot, rows / 2);
+            }
+        }
     }
 
     pub(super) fn find_step(&mut self, back: bool, cx: &mut Context<Self>) {
         let Some(find) = self.viewer_mut().and_then(|viewer| viewer.find.as_mut()) else { return };
         find.current = stepped(find.current, find.hits.len(), back);
-        if let Some(line) = find.current_line() {
-            self.show_line(line);
-        }
+        self.show_current_hit();
         cx.notify();
     }
 
@@ -350,7 +363,7 @@ impl FilesPanel {
         let field_closed = viewer.find.take().is_some();
         let gone = field_closed || viewer.selecting.selection.take().is_some();
         if field_closed {
-            self.keep_view(false);
+            self.remeasure_first_line();
         }
         if gone {
             cx.notify();

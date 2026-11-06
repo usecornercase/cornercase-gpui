@@ -25,12 +25,22 @@ pub(crate) enum PreviewPages {
     LocalAddresses,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum LongLines {
+    Cut,
+    #[default]
+    #[serde(other)]
+    Wrap,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Prefs {
     pub open_links: OpenLinks,
     pub preview_pages: PreviewPages,
     pub cornercase_bin: Option<String>,
+    pub long_lines: LongLines,
 }
 
 impl Prefs {
@@ -66,6 +76,10 @@ impl Prefs {
             PreviewPages::LocalAddresses => local,
             PreviewPages::WhenAsked => false,
         }
+    }
+
+    pub(crate) fn wraps(&self) -> bool {
+        self.long_lines == LongLines::Wrap
     }
 }
 

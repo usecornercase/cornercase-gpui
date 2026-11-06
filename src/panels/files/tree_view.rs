@@ -8,6 +8,7 @@ use gpui::{
 };
 
 use crate::notify::tip;
+use crate::panels::changes::{FileStatus, status_letter};
 use crate::platform::paths::Style;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, glass};
@@ -108,16 +109,23 @@ impl FilesPanel {
     fn tree_items(&mut self, range: Range<usize>, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let last = self.place().and_then(|p| p.last.clone());
         let menu_rel = self.menu.as_ref().map(|m| m.target.rel.clone());
+        let status = |row: &tree::Row| self.place().and_then(|p| p.marks.get(&row.path).copied());
         range
-            .filter_map(|ix| self.rows.get(ix).cloned().map(|row| (ix, row)))
+            .filter_map(|ix| self.rows.get(ix).map(|row| (ix, row)))
             .map(|(ix, row)| {
                 let selected = last.as_ref() == Some(&row.path) || menu_rel.as_ref() == Some(&row.path);
-                Self::tree_row(ix, &row, selected, cx).into_any_element()
+                Self::tree_row(ix, row, selected, status(row), cx).into_any_element()
             })
             .collect()
     }
 
-    fn tree_row(ix: usize, row: &tree::Row, selected: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn tree_row(
+        ix: usize,
+        row: &tree::Row,
+        selected: bool,
+        status: Option<FileStatus>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let (rel, dir) = (row.path.clone(), row.dir);
         let target = Target { rel: row.path.clone(), dir, line: None };
         div()
@@ -135,11 +143,14 @@ impl FilesPanel {
             .when(!selected, |d| d.hover(|s| s.bg(colours::hover())))
             .child(chevron(row.dir, row.open))
             .child(file_icon(&row.name, row.dir, row.open))
-            .child(ellipsis(ui::one_line(row.name.clone())).ml(px(4.)).text_color(if row.name.starts_with('.') {
-                colours::muted()
-            } else {
-                colours::text()
-            }))
+            .child(
+                ellipsis(ui::one_line(row.name.clone())).flex_1().ml(px(4.)).text_color(if row.name.starts_with('.') {
+                    colours::muted()
+                } else {
+                    colours::text()
+                }),
+            )
+            .children(status.map(|status| status_letter(status).flex_none()))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.click_row(rel.clone(), dir, cx)))
             .on_mouse_down(
                 MouseButton::Right,

@@ -37,7 +37,7 @@ fn lists_folders_first_and_respects_gitignore() {
 #[test]
 fn flattens_open_folders_and_hides_dotfiles() {
     let mut listings = HashMap::new();
-    let entry = |name: &str, dir| Entry { name: name.into(), dir };
+    let entry = |name: &str, dir| Entry { name: name.into(), dir, status: None };
     listings.insert(
         PathBuf::new(),
         Listing { entries: vec![entry("src", true), entry(".env", false), entry("a", false)], truncated: false },
@@ -72,4 +72,52 @@ fn reveal_opens_parents() {
     assert_eq!(reveal(&mut expanded, Path::new("a/b/c.rs")), vec![PathBuf::from("a/b")]);
     assert!(expanded.contains(Path::new("a/b")));
     assert_eq!(reveal(&mut expanded, Path::new("top.rs")), Vec::<PathBuf>::new());
+}
+
+fn marked(entries: &[(&str, Option<FileStatus>)]) -> Listing {
+    let entry =
+        |(name, status): &(&str, Option<FileStatus>)| Entry { name: (*name).into(), dir: false, status: *status };
+    Listing { entries: entries.iter().map(entry).collect(), truncated: false }
+}
+
+#[test]
+fn the_marks_of_a_listing_are_kept_by_path() {
+    let mut marks = Marks::new();
+    let listing = marked(&[("a.rs", Some(FileStatus::Modified)), ("b.rs", None)]);
+    assert!(keep_marks(&mut marks, Path::new("src"), &listing));
+    assert_eq!(marks.get(&Path::new("src").join("a.rs")), Some(&FileStatus::Modified));
+    assert_eq!(marks.len(), 1);
+}
+
+#[test]
+fn a_listing_with_the_same_marks_changes_nothing() {
+    let mut marks = Marks::new();
+    let listing = marked(&[("a.rs", Some(FileStatus::Modified))]);
+    keep_marks(&mut marks, Path::new(""), &listing);
+    assert!(!keep_marks(&mut marks, Path::new(""), &listing));
+}
+
+#[test]
+fn a_file_that_is_no_longer_changed_loses_its_mark() {
+    let mut marks = Marks::new();
+    keep_marks(&mut marks, Path::new(""), &marked(&[("a.rs", Some(FileStatus::Modified))]));
+    assert!(keep_marks(&mut marks, Path::new(""), &marked(&[("a.rs", None)])));
+    assert!(marks.is_empty());
+}
+
+#[test]
+fn a_mark_that_changes_kind_is_replaced() {
+    let mut marks = Marks::new();
+    keep_marks(&mut marks, Path::new(""), &marked(&[("a.rs", Some(FileStatus::Untracked))]));
+    assert!(keep_marks(&mut marks, Path::new(""), &marked(&[("a.rs", Some(FileStatus::Added))])));
+    assert_eq!(marks.get(Path::new("a.rs")), Some(&FileStatus::Added));
+}
+
+#[test]
+fn a_listing_leaves_the_marks_of_other_folders() {
+    let mut marks = Marks::new();
+    keep_marks(&mut marks, Path::new("src"), &marked(&[("a.rs", Some(FileStatus::Modified))]));
+    keep_marks(&mut marks, Path::new(""), &marked(&[("src", Some(FileStatus::Modified))]));
+    assert!(!keep_marks(&mut marks, Path::new("docs"), &marked(&[])));
+    assert_eq!(marks.len(), 2);
 }

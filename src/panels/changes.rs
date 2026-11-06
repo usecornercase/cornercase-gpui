@@ -16,8 +16,8 @@ use std::rc::Rc;
 
 use gpui::{
     AnyView, App, AppContext as _, Context, Div, Entity, Hsla, InteractiveElement as _, IntoElement, ListAlignment,
-    ListState, ParentElement as _, Render, ScrollHandle, Styled as _, Window, div, point, prelude::FluentBuilder as _,
-    px, relative,
+    ListOffset, ListState, ParentElement as _, Render, ScrollHandle, Styled as _, Window, div, point,
+    prelude::FluentBuilder as _, px, relative,
 };
 
 use crate::cli::Stream;
@@ -29,6 +29,8 @@ use crate::ui::{TextField, TextFieldEvent};
 
 use diff::{Row, Spot};
 use filter::Query;
+pub(crate) use pieces::status_letter;
+pub(crate) use wire::FileStatus;
 use wire::{Base, Gap, Mode, Patch, Summary};
 
 const FILES: Split = Split::new(60., 60., f32::INFINITY);
@@ -105,6 +107,7 @@ pub(crate) struct ChangesPanel {
     base: Option<Base>,
     base_open: bool,
     diff_list: ListState,
+    wraps: bool,
     files_height: Split,
     filter: Entity<TextField>,
     files_scroll: ScrollHandle,
@@ -130,6 +133,7 @@ impl ChangesPanel {
             base: None,
             base_open: false,
             diff_list: ListState::new(0, ListAlignment::Top, px(400.)),
+            wraps: true,
             files_height: FILES,
             filter,
             files_scroll: ScrollHandle::new(),
@@ -149,6 +153,17 @@ impl ChangesPanel {
 
     fn query(&self, cx: &App) -> Query {
         Query::parse(&self.filter.read(cx).text())
+    }
+
+    fn follow_wrap(&mut self, cx: &App) {
+        let wraps = Store::get(cx).read(cx).prefs.wraps();
+        if wraps == self.wraps {
+            return;
+        }
+        self.wraps = wraps;
+        let top = self.diff_list.logical_scroll_top();
+        self.diff_list.reset(self.open.data.as_ref().map_or(0, |data| data.rows.len()));
+        self.diff_list.scroll_to(ListOffset { item_ix: top.item_ix, offset_in_item: px(0.) });
     }
 }
 
@@ -182,6 +197,7 @@ impl ChangesPanel {
 
 impl Render for ChangesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.follow_wrap(cx);
         let session = Store::get(cx).read(cx).session.clone();
         let session = session.as_ref();
         div()

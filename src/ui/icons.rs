@@ -102,10 +102,13 @@ pub(crate) enum Icon {
     Maximise,
     Restore,
     Recap,
+    WrapText,
+    Enlarge,
+    Shrink,
 }
 
 impl Icon {
-    const ALL: [Icon; 89] = [
+    const ALL: [Icon; 92] = [
         Icon::Changes,
         Icon::Files,
         Icon::Todo,
@@ -195,6 +198,9 @@ impl Icon {
         Icon::Maximise,
         Icon::Restore,
         Icon::Recap,
+        Icon::WrapText,
+        Icon::Enlarge,
+        Icon::Shrink,
     ];
 
     fn asset(self) -> (&'static str, &'static [u8]) {
@@ -314,6 +320,9 @@ impl Icon {
             Icon::Commit => asset!("git-commit-horizontal"),
             Icon::Branch => asset!("git-branch"),
             Icon::Eye => asset!("eye"),
+            Icon::WrapText => asset!("wrap-text"),
+            Icon::Enlarge => asset!("maximize-2"),
+            Icon::Shrink => asset!("minimize-2"),
             Icon::EyeOff => asset!("eye-off"),
             Icon::FolderOpen => asset!("folder-open"),
             Icon::File => asset!("file-text"),

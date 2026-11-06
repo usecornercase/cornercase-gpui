@@ -1,3 +1,4 @@
+mod code;
 mod pointer;
 
 use std::fmt::Display;
@@ -8,7 +9,8 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::theme::colours;
 
-pub(crate) use pointer::{Laid, Selecting, Selects, action, action_bar, body, keep_selection, layer, row_probe};
+pub(crate) use code::{CODE_CELL, CODE_ROW, Fit, code_cell, plain_text, wrap_button};
+pub(crate) use pointer::{Laid, Off, Selecting, Selects, action, action_bar, body, keep_selection, layer};
 
 const BAR_GAP: f32 = 4.;
 const BAR_MARGIN: f32 = 8.;
@@ -230,6 +232,15 @@ pub(crate) enum Edge {
     Bottom,
 }
 
+impl Edge {
+    pub(crate) fn a_row(self) -> Pixels {
+        match self {
+            Self::Top => px(-CODE_ROW),
+            Self::Bottom => px(CODE_ROW),
+        }
+    }
+}
+
 pub(crate) fn edge_at(y: Pixels, body: Bounds<Pixels>) -> Option<Edge> {
     if y < body.top() {
         Some(Edge::Top)
@@ -259,6 +270,13 @@ pub(crate) fn host<S: Copy + Ord>(selection: Selection<S>, drawn: impl DoubleEnd
     let (first, last) = selection.ends();
     let mut inside = drawn.filter(|spot| first <= *spot && *spot <= last);
     if selection.head() == first { inside.next() } else { inside.next_back() }
+}
+
+pub(crate) fn off_centre(y: Pixels, body: Bounds<Pixels>, inset: Pixels) -> Option<Pixels> {
+    if body.top() + inset <= y && y + px(CODE_ROW) <= body.bottom() {
+        return None;
+    }
+    Some(y - (body.top() + inset + (body.size.height - inset) / 2.))
 }
 
 pub(crate) fn bar_origin(host: Bounds<Pixels>, bar: Size<Pixels>, room: Bounds<Pixels>) -> Point<Pixels> {

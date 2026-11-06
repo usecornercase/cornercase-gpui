@@ -250,7 +250,7 @@ impl Finder {
     }
 
     fn warm(&mut self, cx: &mut Context<Self>) {
-        let Some(Spot { root, source: Source::Disk(_), .. }) = &self.spot else { return };
+        let Some(Spot { root, source: Source::Disk { .. }, .. }) = &self.spot else { return };
         let root = root.clone();
         self.index = self.panel.read_with(cx, |panel, _| panel.fresh_index(&root)).ok().flatten();
         if self.index.is_some() {

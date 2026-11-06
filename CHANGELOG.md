@@ -2,12 +2,18 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.18
+## 0.1.19
 
 - **Run an issue, a flow or a workspace on another machine.** An issue's Start, Start a flow and New workspace have a **Run on** row once you list a machine: this computer, then each machine, with why one that is down cannot be picked. The choice lasts while the dialog is open, and a project needs a git remote to run elsewhere, since that is how the same project is found there.
 - **The window asks the machine first.** Picking a machine reads its accounts, which agents it has, its trackers and its flows, and says so while it asks. The account row lists that machine's accounts, Start a flow lists its flows, a tracker it can't reach is named, and an agent that isn't installed or logged in there says so and offers a tab there to fix it. Schedule is hidden: the queue starts work on this computer only.
 - **Clone a project there.** When the machine has no clone of the project, Start opens **Clone shop on vps**, with the address, which you can edit, and the folder there. The clone runs on its own while you go back to the dialog, and a toast says how it went. It copies no git-ignored files such as `.env` yet: that needs usecornercase/cornercase-terminal#678.
 - **What started is selected here** as soon as the machine lists it, without moving cornercase's own window, also while an agent waits for its trust question to be answered. A flow on a machine is followed through its tab, since the run page reads this computer's runs. Every failure is a toast with what the machine or `ssh` said, and the dialog stays open.
+
+## 0.1.18
+
+- **Files shows what changed.** The tree's rows end in git's letter, in the colours of the Changes panel, for a changed file and for a folder holding one. In an open file the margin marks added lines in green, changed ones in blue and where lines were removed in red; a click on a mark shows the old lines, and another hides them.
+- **Long lines wrap in the Files viewer**, as they already did in the Changes diff, so you can read one whole in a narrow panel, with its number on the first row. Selecting and finding work across the rows. A button in the viewer and on the diff's open file cuts them at the edge instead, and the window remembers your choice. A line of more than about 100 rows, such as a minified bundle, ends in `…`; Copy and Open give the rest.
+- **Read a file full screen.** A button in the viewer's title gives the file the terminal's area and the dock's. The same button or Esc puts it back, and your programs keep their size. Ask agent and switching tabs put it back too.
 
 ## 0.1.17
 

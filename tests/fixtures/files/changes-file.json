@@ -1,0 +1,109 @@
+{
+  "added": 4,
+  "digest": "0b6059e6e0c93515",
+  "fold": "open",
+  "hunks": [
+    {
+      "context": "",
+      "lines": [
+        {
+          "kind": "context",
+          "new": 1,
+          "old": 1,
+          "text": "one"
+        },
+        {
+          "kind": "removed",
+          "new": null,
+          "old": 2,
+          "text": "two"
+        },
+        {
+          "kind": "added",
+          "new": 2,
+          "old": null,
+          "text": "TWO changed"
+        },
+        {
+          "kind": "context",
+          "new": 3,
+          "old": 3,
+          "text": "three"
+        },
+        {
+          "kind": "added",
+          "new": 4,
+          "old": null,
+          "text": "six-inserted-a"
+        },
+        {
+          "kind": "added",
+          "new": 5,
+          "old": null,
+          "text": "six-inserted-b"
+        },
+        {
+          "kind": "context",
+          "new": 6,
+          "old": 4,
+          "text": "four"
+        },
+        {
+          "kind": "removed",
+          "new": null,
+          "old": 5,
+          "text": "five"
+        },
+        {
+          "kind": "context",
+          "new": 7,
+          "old": 6,
+          "text": "six"
+        },
+        {
+          "kind": "context",
+          "new": 8,
+          "old": 7,
+          "text": "seven"
+        },
+        {
+          "kind": "removed",
+          "new": null,
+          "old": 8,
+          "text": "eight"
+        },
+        {
+          "kind": "context",
+          "new": 9,
+          "old": 9,
+          "text": "nine"
+        },
+        {
+          "kind": "context",
+          "new": 10,
+          "old": 10,
+          "text": "ten"
+        },
+        {
+          "kind": "added",
+          "new": 11,
+          "old": null,
+          "text": "added end"
+        }
+      ],
+      "new_start": 1,
+      "old_start": 1
+    }
+  ],
+  "mode": "uncommitted",
+  "old_path": null,
+  "path": "src/deep/er/main.txt",
+  "removed": 3,
+  "staged": "no",
+  "status": "modified",
+  "styles": [
+    {}
+  ],
+  "viewed": false,
+  "workspace": 7
+}

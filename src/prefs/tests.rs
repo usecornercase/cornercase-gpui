@@ -56,6 +56,15 @@ fn a_chosen_cornercase_is_kept_in_the_settings() {
 }
 
 #[test]
+fn long_lines_wrap_until_asked_to_be_cut() {
+    assert!(Prefs::parse("").wraps());
+    assert!(Prefs::parse(r#"{"open_links": "browser_panel"}"#).wraps());
+    let cut = Prefs::default().with("long_lines", "cut").expect("a known value");
+    assert!(!cut.wraps());
+    assert_eq!(Prefs::parse(&serde_json::to_string(&cut).expect("writes")), cut);
+}
+
+#[test]
 fn settings_from_before_keep_no_chosen_cornercase() {
     let prefs = Prefs::parse(r#"{"open_links": "browser_panel"}"#);
     assert_eq!((prefs.open_links, prefs.cornercase_bin), (OpenLinks::BrowserPanel, None));
