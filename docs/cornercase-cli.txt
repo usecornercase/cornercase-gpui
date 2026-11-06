@@ -7,7 +7,7 @@ Options:
       --panes                     One line per pane, its columns separated by tabs, for scripts
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --follow                    Keep running and print the whole state as one JSON line each time it changes (`cornercase view` does it for a view)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --app                       Print the TODO list, the queue, away, the update found and keep awake as JSON; with --follow, again each time they change
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
@@ -81,7 +81,7 @@ Arguments:
 Options:
       --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -89,6 +89,39 @@ Options:
 Examples:
   cornercase open ~/src/shop
   cornercase open . --focus
+
+================================================================ cornercase clone
+Clone a git repository into a folder, open it as a project, and print its path
+
+Usage: cornercase clone [OPTIONS] <URL> [FOLDER]
+
+Arguments:
+  <URL>     The repository, as `git clone` takes it
+  [FOLDER]  The folder the clone goes in, as a new folder named after the repository [default: the current one; with --remote, the home folder there]
+
+Options:
+      --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Runs `git clone` on the server's machine into a new folder inside FOLDER, named after the
+repository as git names it, then opens that folder as a project, as `cornercase open` does, and
+prints its path once git is done. A folder of that name that exists and is not empty is refused;
+an empty one is used. A FOLDER with `..` in it is refused, and so is a repository named `.git`.
+A repository on this machine can be given by its path, relative to the current folder. A clone
+that fails leaves no folder behind, the folders it made for FOLDER included, and says what failed:
+not a repository, access denied, or git's own reason. git never asks for a password: the server's
+ssh keys and git credentials must already reach the repository. With --remote, FOLDER and a
+repository's path are the other machine's (absolute, or starting with ~/), and without FOLDER the
+clone goes in that machine's home folder.
+
+Examples:
+  cornercase clone git@github.com:acme/shop.git ~/src
+  cornercase clone https://github.com/acme/shop --focus
+  cornercase --remote devbox clone git@github.com:acme/shop.git ~/src --json
 
 ================================================================ cornercase new-workspace
 Add a workspace to a project, or a git worktree, and print its id
@@ -101,8 +134,9 @@ Arguments:
 Options:
       --project <ID>              The project [default: the one this runs in, else the shown one]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree                  Check the branch out in a git worktree of its own, at a repository's root only
+      --machine <NAME>            Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers
       --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
@@ -113,9 +147,15 @@ branch from HEAD when the branch does not exist yet; the command returns once gi
 project's setup (settings → project settings) then runs in the new tab, which `start --worktree`
 waits for before it types the agent.
 
+With --machine NAME the workspace is made on that machine of `cornercase machines`, by its server:
+--project is that machine's id, as `status --json` lists it under machines, and so is the id printed.
+--focus shows it in this window once the machine lists it. It needs a server that knows the
+`machine-start` feature.
+
 Examples:
   cornercase new-workspace experiments
   cornercase new-workspace fix/login --worktree --project 3
+  cornercase new-workspace fix/login --worktree --project 2 --machine vps --focus
 
 ================================================================ cornercase new-tab
 The words of COMMAND are joined with spaces and typed at the prompt once the shell is ready,
@@ -136,7 +176,7 @@ Options:
           The workspace [default: the one this runs in, else the shown one]
 
       --remote-command <COMMAND>
-          How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+          How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
 
       --worktree <BRANCH>
           The workspace on this branch, looked up in the project this runs in, else the shown one
@@ -188,7 +228,7 @@ Options:
           Split it down instead of right
 
       --remote-command <COMMAND>
-          How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+          How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
 
       --focus
           Also show it in the window, or in the view with --view, which otherwise stay as they are
@@ -226,7 +266,7 @@ Options:
           One of the agent's modes, as settings → agents lists them, such as plan [default: the one chosen there]
 
       --remote-command <COMMAND>
-          How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+          How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
 
       --effort <LEVEL>
           The agent's effort, such as high: Claude Code, Codex, Grok Build and GitHub Copilot CLI take one [default: the agent's own]
@@ -282,6 +322,9 @@ Options:
       --account <AGENT=ACCOUNT>
           Start that agent with this account, over the default ones; AGENT= is its own login. Give it once per agent
 
+      --machine <NAME>
+          Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers
+
       --focus
           Also show it in the window, or in the view with --view, which otherwise stay as they are
 
@@ -311,12 +354,20 @@ Shortcut, Linear, Jira, Plane and Asana issues aren't tied to a repository: when
 command lists them and asks for --project (a new worktree) or --workspace (a new tab). A workspace already
 on the branch gets a new tab. It needs a server that knows the `issues` feature.
 
+With --machine NAME the agent starts on that machine of `cornercase machines`, by its server, as if
+the command ran there: --project, --workspace and the pane's id printed are that machine's ids, as
+`status --json` lists them under machines, and the agent, its accounts, profiles and issue trackers
+are the machine's own. --wait, --until and --timeout are refused: follow the agent there, with
+`cornercase --remote`. --focus shows its tab in this window once the machine lists it. It needs a
+server that knows the `machine-start` feature.
+
 Examples:
   cornercase start claude --issue '#482'
   cornercase start codex --issue ENG-42 --project 3
   cornercase start claude --worktree fix-login --prompt 'Fix the login form, then commit'
   cornercase start codex --prompt-file task.md --wait --timeout 1800
   cornercase start claude --mode plan --model opus --prompt 'Plan the login rework'
+  cornercase start claude --issue '#482' --project 2 --machine vps --focus
 
 ================================================================ cornercase send
 Paste text into a pane, and press Enter with --enter
@@ -335,7 +386,7 @@ Options:
           Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
 
       --remote-command <COMMAND>
-          How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+          How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
 
       --tab <ID>
           A tab: its agent's pane, else its active one
@@ -381,13 +432,15 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 after a restart (`resuming` in the JSON), where the text would reach its shell or its start-up:
 send again once it is back, or pass --force.
 
-With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or
-GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
+With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI,
+Vibe CLI or GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
 have been submitted` when it records none: read the pane before sending it again. A working Codex,
-Gemini, Grok Build, Cursor CLI or GitHub Copilot CLI holds a prompt until it takes it, so the command returns then.
+Gemini, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI holds a prompt until it takes it, so the command returns
+then.
 Grok Build queues that prompt; pressing Enter again sends it now and cancels the turn. Gemini local
 slash commands, ? help and ! shell input, and the / and ! commands of Grok Build and Cursor CLI, and the / and !
-commands and a lone ? of GitHub Copilot CLI, return after Enter without confirming a prompt record. A compact command
+commands and a lone ? of GitHub Copilot CLI, and the / (but not /skill), ! and & commands of Vibe CLI, return after Enter without
+confirming a prompt record. A compact command
 (`/compact` of Claude Code and Codex) returns once the agent records the compaction, however long that takes
 while the agent works on it; --timeout bounds it. In other programs it returns once Enter is pressed.
 
@@ -412,7 +465,7 @@ Arguments:
 Options:
       --pane <ID>                 The pane [default: the one this runs in, else the shown one]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --tab <ID>                  A tab: its agent's pane, else its active one
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
   -h, --help                      Print help
@@ -431,7 +484,7 @@ Usage: cornercase read [OPTIONS]
 Options:
       --pane <ID>                 The pane; with --last-message, repeat it to read several [default: the one this runs in, else the shown one]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --tab <ID>                  A tab: its agent's pane, else its active one; with --last-message, repeat it
       --lines <N>                 The last N lines, scrollback included (a pane keeps its last 10 MB of output)
       --last-message              The last message of the agent in the pane, from its own record
@@ -443,10 +496,10 @@ Lines the terminal wrapped come back joined, and empty lines at the end are left
 
 With --last-message it prints the last message the agent in the pane wrote, as plain text, from
 its own record (Claude Code's transcript, Codex's rollout, Gemini's session file, opencode's
-database, Grok Build's session, Cursor CLI's chat store, GitHub Copilot CLI's session events) instead of the
+database, Grok Build's session, Cursor CLI's chat store, GitHub Copilot CLI's session events, Vibe CLI's unified session store) instead of the
 screen, so it comes whole even once it scrolled off, without the input box or status lines. While the agent works
 it is the newest one so far. --json adds when it was written and whether the agent's turn is over. It fails on a
-pane without Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI or GitHub Copilot CLI, and before
+pane without Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI, Vibe CLI or GitHub Copilot CLI, and before
 the agent wrote anything.
 
 With --last-message, repeat --pane or --tab to read several agents at once. Each message has a
@@ -479,7 +532,7 @@ Options:
           Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
 
       --remote-command <COMMAND>
-          How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+          How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
 
       --tab <ID>
           A tab: its agent's pane, else its active one; repeat it to wait on several
@@ -526,7 +579,7 @@ agent goes on when they end. It then prints how it ended (idle, done, failed, pe
 or the line that matched.
 Waiting for an agent needs OSC 7501 reports, or a reader for Claude Code, Codex, Gemini CLI,
 opencode, Grok Build, Cursor CLI or GitHub Copilot CLI in the pane. Without reports, Gemini status needs its dynamic window title,
-and Cursor CLI's waiting needs /status-indicators. A timeout exits with 1 and does not prove that the
+and Cursor CLI's waiting needs /status-indicators. Vibe CLI's status comes only from its reports. A timeout exits with 1 and does not prove that the
 agent missed what you sent: read the pane before sending it again.
 
 Several panes and tabs take --any or --all, and the condition applies to each. --any returns once
@@ -549,7 +602,7 @@ Usage: cornercase close [OPTIONS] <--pane <ID>|--tab <ID>|--workspace <ID>|--wor
 Options:
       --pane <ID>                 A pane
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --tab <ID>                  A tab and its panes
       --workspace <ID>            A workspace and its tabs
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
@@ -595,7 +648,7 @@ Arguments:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --tab <ID>                  The tab [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            Rename this workspace instead
       --worktree <BRANCH>         Rename the workspace on this branch instead, looked up in the project this runs in, else the shown one
       --project <ID>              Rename this project instead
@@ -615,12 +668,13 @@ Usage: cornercase focus [OPTIONS] <--pane <ID>|--tab <ID>|--workspace <ID>|--wor
 Options:
       --pane <ID>                 A pane
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --tab <ID>                  A tab and its panes
       --workspace <ID>            A workspace and its tabs
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --project <ID>              A project and its workspaces
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
+      --machine <NAME>            Pick one of this machine's workspaces or tabs as the one shown, whose tab the window shows from there: --workspace and --tab are its ids
       --reveal <TEXT>             Also scroll the pane to this text and select it, as Enter on a result of the search does: the text `cornercase search` looked for
       --line <LINE>               The match's line as `cornercase search` printed it (screen matches); without it, the newest place the pane shows the text
       --json                      Print JSON instead of text
@@ -636,14 +690,20 @@ newest place the pane shows the text. The scroll and the selection are the pane'
 every view show them. When the pane no longer holds the text it is still shown, a warning goes to
 stderr and the exit status is 0.
 
+--machine NAME picks one of a machine's workspaces or tabs as the one shown: --workspace and --tab
+take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
+since this server started. The window then shows that tab, or the workspace's active tab, streamed
+from the machine, and `status --json` reports it as `shown_remote`, with its stream's state.
+
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
-view shows changes.
+view shows changes. With --machine it is what was picked, as `shown_remote` in `status --json`.
 
 Examples:
   cornercase focus --pane 12
   cornercase focus --pane 12 --reveal 'migration failed' --line 340
   cornercase focus --view 41 --tab 7
+  cornercase focus --machine vps --workspace 4
 
 ================================================================ cornercase go
 Go to the agent a notice is about, as a click on its desktop notification does
@@ -657,13 +717,14 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Does what a click on an agent's desktop notification does, or the go button of its toast: shows
 the agent's pane (the one still needing you, when the notice covered several), or its workspace once
 they are all closed, and prints the pane's id. With --view ID it moves that view (see
-`cornercase view`) instead of the window. TOKEN is a notice's, from `cornercase events --notices`.
+`cornercase view`) instead of the window; a notice about an agent on one of your machines refuses
+--view, since only the window shows that machine's workspace. TOKEN is from `cornercase events --notices`.
 It fails for a token this server never gave or no longer keeps (the last 64; a restart forgets them),
 and when the agent and its workspace are gone.
 
@@ -682,7 +743,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 The desktop notification goes through the terminal of every open window, like the one for an
@@ -699,7 +760,7 @@ Usage: cornercase away [OPTIONS]
 Options:
       --off                       Stop: agents no longer message you on Telegram or Discord
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 It needs a Telegram or Discord bot paired with your phone (Settings › Remote), and turns away on
@@ -719,7 +780,7 @@ Usage: cornercase mark [OPTIONS]
 Options:
       --pane <ID>                 The pane [default: the one this runs in, else the shown one]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --tab <ID>                  A tab: its agent's pane, else its active one
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --reviewed                  Take the mark off: the agent's work has been reviewed
@@ -744,13 +805,14 @@ Arguments:
   <TEXT>...  The text to look for, ignoring case
 
 Options:
-      --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --settings                  Also list the settings that match, as the global search does
+      --json                      Print JSON instead of text
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Looks in what the coding agents in the panes were told and answered (Claude Code, Codex, Gemini CLI,
-opencode, Grok Build, Cursor CLI and GitHub Copilot CLI, the same records as `read --last-message`) and in the history of every
+opencode, Grok Build, Cursor CLI, Vibe CLI and GitHub Copilot CLI, the same records as `read --last-message`) and in the history of every
 pane, shells included, ignoring case. Panes of projects being closed and workspaces being removed
 are left out. It prints one line per match, newest first within a pane, its columns separated by
 tabs under a header: the pane, the agent or program, where the text was found (prompt, reply or
@@ -783,7 +845,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Examples:
@@ -814,7 +876,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase todo list
@@ -825,7 +887,7 @@ Usage: cornercase todo list [OPTIONS]
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase todo done
@@ -838,7 +900,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase todo send
@@ -852,7 +914,7 @@ Arguments:
 Options:
       --pane <ID>                 The pane [default: the one this runs in, else the shown one]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --tab <ID>                  A tab: its agent's pane, else its active one
       --force                     Send even when the agent shows a dialog, a panel or its shell mode instead of its input box, or its feedback survey
       --json                      Print JSON instead of text
@@ -882,7 +944,7 @@ Arguments:
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase todo edit
@@ -896,7 +958,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase todo undone
@@ -909,7 +971,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase todo move
@@ -924,7 +986,7 @@ Options:
       --before <ID>               Before this item; across kinds it stops at the end of the ones to do
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --last                      At the end of its kind, pending or done
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase todo clear-done
@@ -935,7 +997,7 @@ Usage: cornercase todo clear-done [OPTIONS]
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase todo restore
@@ -948,7 +1010,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase queue
@@ -961,14 +1023,16 @@ Commands:
   edit           Edit an entry that has not started
   list           List scheduled, started, failed and missed entries
   remove         Remove an entry and print the number that restore takes to put it back
-  run            Start a pending, missed or failed entry now
+  run            Start a pending, missed or failed entry now, or a routine once more
+  pause          Stop a routine from firing until it is resumed
+  resume         Let a paused routine fire again, from the next occurrence after now
   clear-started  Remove every started entry and print the number that restore takes to put them back
   restore        Put back what remove or clear-started removed
   help           Print this message or the help of the given subcommand(s)
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase queue add
@@ -977,10 +1041,14 @@ Schedule a prompt or issue and print the entry's persistent id
 Usage: cornercase queue add [OPTIONS]
 
 Options:
-      --at <AT>                   Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, claude reset or codex reset
+      --at <AT>                   Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, in 1w, claude reset or codex reset
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --every <EVERY>             Make a routine that repeats: 30m, 2h, 3d, 2w, 'day 09:00', 'weekday 09:00' or 'monday 09:00'. At least 30 minutes apart; each run gets its own worktree from the up-to-date default branch
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --flow <FLOW>               Run this flow in each run of a routine; the prompt is its task
+      --cleanup                   Remove a routine run's workspace when it finishes, if nothing would be lost
+      --no-cleanup                Keep a routine run's workspace (the default)
       --agent <AGENT>             Agent name, or auto to use the current default or running agent
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --mode <MODE>               One of the agent's configured modes
       --prompt <PROMPT>           Prompt to submit when the entry starts
       --issue <ISSUE>             Issue URL or key; its prompt uses the configured template
@@ -1002,10 +1070,14 @@ Arguments:
   <ID>  
 
 Options:
-      --at <AT>                   Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, claude reset or codex reset
+      --at <AT>                   Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, in 1w, claude reset or codex reset
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --every <EVERY>             Make a routine that repeats: 30m, 2h, 3d, 2w, 'day 09:00', 'weekday 09:00' or 'monday 09:00'. At least 30 minutes apart; each run gets its own worktree from the up-to-date default branch
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --flow <FLOW>               Run this flow in each run of a routine; the prompt is its task
+      --cleanup                   Remove a routine run's workspace when it finishes, if nothing would be lost
+      --no-cleanup                Keep a routine run's workspace (the default)
       --agent <AGENT>             Agent name, or auto to use the current default or running agent
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --mode <MODE>               One of the agent's configured modes
       --prompt <PROMPT>           Prompt to submit when the entry starts
       --issue <ISSUE>             Issue URL or key; its prompt uses the configured template
@@ -1026,7 +1098,7 @@ Usage: cornercase queue list [OPTIONS]
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase queue remove
@@ -1040,11 +1112,11 @@ Arguments:
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase queue run
-Start a pending, missed or failed entry now
+Start a pending, missed or failed entry now, or a routine once more
 
 Usage: cornercase queue run [OPTIONS] <ID>
 
@@ -1053,7 +1125,33 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase queue pause
+Stop a routine from firing until it is resumed
+
+Usage: cornercase queue pause [OPTIONS] <ID>
+
+Arguments:
+  <ID>  
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase queue resume
+Let a paused routine fire again, from the next occurrence after now
+
+Usage: cornercase queue resume [OPTIONS] <ID>
+
+Arguments:
+  <ID>  
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase queue clear-started
@@ -1064,7 +1162,7 @@ Usage: cornercase queue clear-started [OPTIONS]
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase queue restore
@@ -1077,7 +1175,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase events
@@ -1089,7 +1187,7 @@ Options:
       --pane <ID>...              Only what happens to these panes, and stop once they all closed
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --host                      Also print what programs ask of the terminal: their clipboard writes (with the text in --json) and bells
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --notices                   Also print each notice about an agent that needs you, failed or finished, with its token for `cornercase go`
       --json                      Print one JSON object per line instead of text
   -h, --help                      Print help
@@ -1104,6 +1202,8 @@ With --notices, each notice about an agent is told too, as the window's toast an
 say it, with the same rules (a second's wait, once per change, never for a tab seen in the window or
 in a view), and with --json its token, agent, status, place, message and panes:
   workspace 2  notice  claude needs you in shop › main  cc-3f2a9c-4
+An agent on a linked machine tells its notices too, with the machine's name and without ids here:
+  machine vps  notice  claude on vps needs you in shop › main  cc-3f2a9c-5
 `cornercase go TOKEN` then does what a click on that notification does.
 With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
   pane 7  clipboard  11 bytes         it wrote to the clipboard (OSC 52); the text itself only with --json
@@ -1145,7 +1245,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 A flow is a team of coding agents and the plan they follow: one tab per role in a new
@@ -1157,6 +1257,7 @@ Examples:
   cornercase flow list
   cornercase flow run Quick --prompt 'Fix the login form'
   cornercase flow run 'Full issue' --issue ENG-42 --project 3
+  cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
   cornercase flow run 'Full issue' --prompt-file task.md --worktree fix-login
   cornercase flow export Quick > quick.toml
   cornercase flow import quick.toml
@@ -1177,7 +1278,7 @@ Options:
       --project <ID>              The project whose flows to list too [default: the one this runs in, else the shown one]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase flow run
@@ -1192,7 +1293,7 @@ Options:
       --prompt <TEXT>             The task: what the team should do; with --issue, it replaces the prompt made from the issue
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --prompt-file <FILE>        Read the task from a file, or from standard input with -; with --issue, it replaces the prompt made from the issue
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The worktree's branch, made when missing [default: the issue's with --issue, else from the task's first words, made unique]
       --project <ID>              The project [default: the one this runs in, else the shown one]
       --issue <KEY>               Work on this issue instead: a key such as #482, sc-48 or ENG-42, or its URL, with the prompt the Issues dialog's start uses and its branch (settings → Worktrees → issue branches; --worktree names another)
@@ -1200,6 +1301,7 @@ Options:
       --workspace-name <NAME>     The workspace's name when the issue makes a worktree [default: the issue's key and title]
       --profile <NAME>            Start it with the accounts of this profile; an empty name is each agent's own login [default: the default accounts]
       --account <AGENT=ACCOUNT>   Start that agent with this account, over the default ones; AGENT= is its own login. Give it once per agent
+      --machine <NAME>            Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers
       --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
@@ -1229,10 +1331,16 @@ a built-in flow of its name, and a project's flow never stands in for another of
 command says so on stderr when it happens. A built-in flow deleted in Settings › Flows is refused,
 and keeps its name: a project's flow named like it does not run either.
 
+With --machine NAME the flow runs on that machine of `cornercase machines`, by its server: the flow,
+its agents and accounts are the machine's, --project and the ids printed are that machine's, as
+`status --json` lists them under machines, and so is the run's folder. --focus shows the run in this
+window once the machine lists it. It needs a server that knows the `machine-start` feature.
+
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'
   cornercase flow run 'Bug, test first' --prompt-file bug.md --worktree fix-crash --json
   cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
+  cornercase flow run Quick --issue '#482' --project 2 --machine vps
 
 ================================================================ cornercase flow export
 Print a flow as text to share it: a file to send to a teammate, or to commit
@@ -1246,7 +1354,7 @@ Options:
       --project <ID>              The project whose flows to look in [default: the one this runs in]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 It prints the flow as TOML, the file a flow is kept in, so a teammate can read its prompts, variables
@@ -1283,7 +1391,7 @@ Options:
           The project, for --to project [default: the one this runs in]
 
       --remote-command <COMMAND>
-          How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+          How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
 
       --name <NAME>
           Import it under another name
@@ -1351,7 +1459,7 @@ Options:
           The project, for --to project and the flows its name may clash with [default: the one this runs in, else the shown one]
 
       --remote-command <COMMAND>
-          How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+          How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
 
       --path <FILE>
           The file of the flow being edited, as `flow list --json` gives it: a new name renames it, --to moves it
@@ -1394,7 +1502,7 @@ Options:
       --follow                    Print the runs again, as one JSON line, each time something changes
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 It prints one block per running flow: its workspace, the stage the work is in and the rounds of its loops,
@@ -1418,7 +1526,7 @@ Usage: cornercase flow messages [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --follow                    Go on printing each new message until the run ends
       --json                      Print JSON instead of text
@@ -1445,7 +1553,7 @@ Usage: cornercase flow files [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -1482,7 +1590,7 @@ Options:
           The project whose flows to look in [default: the one this runs in]
 
       --remote-command <COMMAND>
-          How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+          How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
 
       --path <FILE>
           The flow's file, also one that cannot be read, as `flow list --json` gives it
@@ -1515,7 +1623,7 @@ Arguments:
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 A built-in flow lives in the binary, so deleting it hides its name: your choice, kept across updates,
@@ -1536,7 +1644,7 @@ Arguments:
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 It brings a deleted built-in flow back, and when you edited it, deletes your version so the built-in
@@ -1557,7 +1665,7 @@ Options:
       --clear                     Choose no default: the start dialog opens on the first built-in flow that can start
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --project <ID>              The project whose flows to look in [default: the one this runs in]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -1584,7 +1692,7 @@ Options:
       --clear                     Go back to name order
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --project <ID>              The project whose flows to look in [default: the one this runs in]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -1606,7 +1714,7 @@ Usage: cornercase contract [OPTIONS]
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Programs that drive cornercase without this command line (an editor extension, a dashboard) ask
@@ -1629,7 +1737,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --tab <ID>                  The tab to stream; `cornercase status` lists them
       --cols <N>                  Columns of the surface the tab is laid out in (1 to 1000)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --rows <N>                  Rows of the surface the tab is laid out in (1 to 500)
       --view <ID>                 Stream the tab this view shows, at the view's size, and follow it (see `cornercase view`)
       --popup                     Stream the plugin popup open in the window, at its own size, until it closes
@@ -1677,7 +1785,7 @@ Usage: cornercase view [OPTIONS]
 Options:
       --cols <N>                  Columns of the view's surface (1 to 1000); without a size it only follows the session
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --rows <N>                  Rows of the view's surface (1 to 500)
       --inactive                  Start inactive: it sizes nothing and streams no terminals until `view-set --active`
       --tab <ID>                  Start on this tab [default: what the window shows]
@@ -1722,7 +1830,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --view <ID>                 The view, as the first line of `cornercase view` prints it
       --cols <N>                  New columns (1 to 1000)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --rows <N>                  New rows (1 to 500)
       --active                    Make it active again: it sizes its tab and streams terminals
       --inactive                  Make it inactive: it sizes nothing and streams no terminals, and the tab goes back
@@ -1755,7 +1863,7 @@ Options:
       --pane <ID>                 The pane to type into; `cornercase status --panes` lists them. With --follow, for the lines that name none. With --popup, the popup's id from its surface lines (`popup.pane`), so nothing reaches a popup opened since
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --popup                     Type into the plugin popup open in the window instead of a pane
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --follow                    Keep running and send each line of standard input as soon as it arrives, until it ends (give - as the only EVENT)
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -1794,6 +1902,30 @@ Examples:
   cornercase input --pane 12 '{"mouse": {"kind": "scroll-up", "x": 10, "y": 5}}'
   cornercase input --popup --pane 40 '{"key": {"code": "down"}}' '{"key": {"code": "enter"}}'
 
+================================================================ cornercase requests
+Keep one connection and run each command of standard input as it arrives, for programs that send many
+
+Usage: cornercase requests [OPTIONS] --follow <LINES>
+
+Arguments:
+  <LINES>  - to read one command per line from standard input
+
+Options:
+      --follow                    Keep running and run each line of standard input as soon as it arrives, until it ends (give - as the only LINES)
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+For programs that send many commands, such as a window that draws cornercase itself (see `cornercase view`): it keeps one connection, and with --remote one ssh connection, and runs each line of standard input as it arrives, in order, until standard input ends. A line is a command as the command line takes it, in JSON, with what it reads from - in stdin:
+  {"args": ["focus", "--tab", "6", "--view", "21"]}
+  {"args": ["send", "--pane", "5", "-"], "stdin": "cargo test"}
+Other keys are refused, so a typo never runs a command without its text. Each line gets one answer line, in order: status (the exit status the command would have had), json (what it printed with --json) or text, stderr (its warnings) and error. A wrong or refused line does not stop the next ones. Streams (events, surface, view, changes list, every --follow), start-server, update, restart, kill-server and logs need a process of their own and are refused with 2, as is --remote on a line. A line that waits (wait, send --wait, start --wait) holds the lines after it until it is answered. It exits with 0 when every line had 0, 3 when some did not, 1 when the server stops or the connection drops (it never reconnects: ids change with a restart), and 0 once what reads its answers is gone.
+
+Examples:
+  cornercase requests --follow -
+  cornercase --remote devbox requests --follow -
+  printf '%s\n' '{"args": ["status", "--json"]}' | cornercase requests --follow -
+
 ================================================================ cornercase scroll
 Scroll a pane's view through its history
 
@@ -1802,7 +1934,7 @@ Usage: cornercase scroll [OPTIONS] --pane <ID> <--up <ROWS>|--down <ROWS>|--top|
 Options:
       --pane <ID>                 The pane to act on; `cornercase status --panes` lists them
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --up <ROWS>                 Rows towards older output
       --down <ROWS>               Rows towards newer output
       --top                       To the oldest line kept
@@ -1827,7 +1959,7 @@ Options:
       --pane <ID>                 The pane to act on; `cornercase status --panes` lists them
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --from <X,Y>                Where the selection starts: column and row of the view, from 0
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --to <X,Y>                  Where the selection ends
       --rectangle                 Select a block of columns instead of whole lines
       --clear                     Remove the selection
@@ -1854,7 +1986,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --surface <ID>              The surface: the `surface` of the lines `cornercase surface` prints
       --cols <N>                  Columns to lay the tab out in (1 to 1000)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --rows <N>                  Rows to lay the tab out in (1 to 500)
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -1875,7 +2007,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --surface <ID>              The surface: the `surface` of the lines `cornercase surface` prints
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Sends a running `cornercase surface` a complete line now, like its first one, even when nothing
@@ -1897,7 +2029,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --tab <ID>                  The tab; `cornercase status` lists them
       --path <PATH>               The divider, as first or second at each level down [default: the outermost] [possible values: first, second]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -1918,7 +2050,7 @@ Options:
       --pane <ID>                 The pane to act on; `cornercase status --panes` lists them
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --cell <X,Y>                The cell: column and row of the pane's view, from 0
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -1945,7 +2077,7 @@ Options:
       --pane <ID>                 The pane to act on; `cornercase status --panes` lists them
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --name <NAME>               The file's name there [default: FILE's name, else pasted, with an image's extension]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -1972,7 +2104,7 @@ Options:
       --clear                     Give the terminals the colours of the first window again, or the defaults
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Programs in the terminals ask for the colours they are drawn with (OSC 10, 11 and 4, and the light
@@ -2002,6 +2134,7 @@ Read and change settings, tokens and project commands
 Usage: cornercase config [OPTIONS] [COMMAND]
 
 Commands:
+  search   Find settings by the start of each word, as the search of the settings modal does
   set      Change settings: KEY VALUE pairs, checked together, all or none
   project  Set the commands a project runs when it makes a worktree and before it removes one
   secret   Check and save a tracker's token or a bot's, read from standard input
@@ -2012,7 +2145,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2050,6 +2183,20 @@ Examples:
   cornercase config import team.toml --only agents,worktrees
   cornercase config import team.toml --preview --json
 
+================================================================ cornercase config search
+Find settings by the start of each word, as the search of the settings modal does
+
+Usage: cornercase config search [OPTIONS] <TEXT>...
+
+Arguments:
+  <TEXT>...  The words to look for; every word must match
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
 ================================================================ cornercase config set
 Change settings: KEY VALUE pairs, checked together, all or none
 
@@ -2060,7 +2207,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2075,7 +2222,7 @@ Arguments:
 Options:
       --project <ID>              The id of an open project, from `cornercase status`
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --setup <SETUP>             The commands to run after a worktree is made; empty removes them
       --teardown <TEARDOWN>       The commands to run before a worktree is removed; empty removes them
       --builds <NAMES>            The folders `worktrees free-builds` deletes, separated by spaces or commas; `default` restores the usual list; empty means none
@@ -2092,7 +2239,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2106,7 +2253,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2118,7 +2265,7 @@ Usage: cornercase config export [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --to <FILE>                 Write them to FILE instead of standard output
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2133,7 +2280,7 @@ Arguments:
 Options:
       --only <SECTIONS>           Only these sections: agents, issues, worktrees, interface, repositories
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --yes                       Import without asking
       --preview                   Show what would change and exit, without asking or importing
       --json                      Print JSON instead of text
@@ -2148,7 +2295,7 @@ Options:
       --group <ID>                Move this group
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --project <ID>              Move this project
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            Move this workspace
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --tab <ID>                  Move this tab
@@ -2179,7 +2326,7 @@ Usage: cornercase move-pane [OPTIONS] --pane <ID> --target <ID> --place <PLACE>
 Options:
       --pane <ID>                 The pane to move
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --target <ID>               The pane of the same tab to move it onto
       --place <PLACE>             Swap the two, or take that side of the target [possible values: swap, left, right, above, below]
       --json                      Print JSON instead of text
@@ -2203,7 +2350,7 @@ Options:
       --group <ID>                A group and its projects
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --project <ID>              A project and its workspaces
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            A workspace and its tabs
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --pane <ID>                 An agent's pane and the agents it started, in the agents section
@@ -2227,7 +2374,7 @@ Options:
       --group <ID>                A group and its projects
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --project <ID>              A project and its workspaces
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            A workspace and its tabs
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --pane <ID>                 An agent's pane and the agents it started, in the agents section
@@ -2255,7 +2402,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 `new` takes the next icon and colour, as + New › new group does, and prints the group's id. `style`
@@ -2280,7 +2427,7 @@ Arguments:
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase group style
@@ -2295,7 +2442,7 @@ Options:
       --icon <CHAR>               One of ● ◉ ◐ ◆ ■ ▲ ▼ ★ ✦ ♥ ♣ ♠
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --colour <N>                A palette index: 1 9 208 214 3 11 2 10 6 14 4 12 99 5 13 205
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2310,7 +2457,7 @@ Arguments:
 Options:
       --close-projects            Close its projects too, then delete the group once their shells have stopped
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase issue
@@ -2327,7 +2474,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 These read the trackers through the server's own connections, the ones the Issues dialog uses:
@@ -2342,7 +2489,7 @@ handle, or for Jira, Plane and Asana an id from `issue people`. A tracker that f
 stderr, its cached list is still printed, and the command exits 3 after listing the others. read prints an issue's details, its
 description in Markdown and its comments. people lists whom a tracker's filters can name.
 
-To work on one: `cornercase start --issue KEY`, or `cornercase flow run NAME --issue KEY`.
+To work on one: `cornercase start --issue KEY`, or `cornercase flow run NAME --issue KEY` (`--prompt` gives the team your own task).
 
 Examples:
   cornercase issue sources
@@ -2361,7 +2508,7 @@ Options:
       --project <ID>              The project whose repository and places count [default: the one this runs in, else the shown one]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase issue list
@@ -2373,7 +2520,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --source <SOURCE>           Only this tracker [default: every connected one] [possible values: github, gitlab, shortcut, linear, jira, plane, asana]
       --project <ID>              The project whose repository and places count [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --closed                    Closed issues too
       --assignee <WHO>            me, anyone, a handle or, for Jira, Plane and Asana, an id from `issue people` (a handle needs --source) [alias: --owner]
       --author <WHO>              Who opened it: me, anyone, a handle or an id from `issue people` (a handle needs --source) [aliases: --requester, --creator, --reporter]
@@ -2397,7 +2544,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --source <SOURCE>           The tracker, for a key that more than one could have [possible values: github, gitlab, shortcut, linear, jira, plane, asana]
       --project <ID>              The project whose repository and places count [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2413,7 +2560,7 @@ Options:
       --project <ID>              The project whose repository and places count [default: the one this runs in, else the shown one]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --cached                    Answer from what the server already holds, without asking the tracker
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2437,7 +2584,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 `list` prints the changed files of a workspace (the one you are in, or the one --workspace or --worktree names), or of every project with --every, and with --follow keeps printing them as JSON lines each time they change. `file` prints one file's diff, `gap` the unchanged lines between one of its hunks and the one before (hunks count from 0, so the first has no gap), `base` the branches the Commits and All modes can compare with (naming one sets it, --default goes back to following the default branch), and `viewed` marks a file as viewed or clears the mark. `discard` throws a file's uncommitted changes away (a file git does not track is deleted), asks first on a terminal and needs --yes in a script; it cannot be undone. `stage` puts a file's changes in git's index, as `git add` does, and `unstage` takes them out of it. `viewed`, `stage`, `unstage` and `discard` act on the version `changes file` shows; with --digest, on the version whose digest `changes list --json` or `changes file --json` printed, the one you saw, so a file that changed since is left alone (`viewed` does not mark it, the others fail and say so). The modes are uncommitted (the default), commits and all. The base and the viewed marks are shared with the window's changes panel; the mode of a stream is its own.
@@ -2463,7 +2610,7 @@ Usage: cornercase changes list [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --every                     Every project's uncommitted changes, grouped like the panel's Every project
       --mode <MODE>               What to compare: uncommitted, commits or all [default: uncommitted] [possible values: uncommitted, commits, all]
@@ -2482,7 +2629,7 @@ Arguments:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --mode <MODE>               What to compare: uncommitted, commits or all [default: uncommitted] [possible values: uncommitted, commits, all]
       --json                      Print JSON instead of text
@@ -2499,7 +2646,7 @@ Arguments:
 Options:
       --hunk <N>                  The hunk, counted from 0 as in `changes file`: its gap is the lines between it and the one before
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --mode <MODE>               What to compare: uncommitted, commits or all [default: uncommitted] [possible values: uncommitted, commits, all]
@@ -2517,7 +2664,7 @@ Arguments:
 Options:
       --default                   Go back to following the default branch
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --json                      Print JSON instead of text
@@ -2531,7 +2678,7 @@ Usage: cornercase changes merge-check [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --with <ID>                 Check only the merge with this workspace of the same project
       --base <BRANCH>             Check only the merge into this branch
@@ -2546,7 +2693,7 @@ Usage: cornercase changes shared [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -2563,7 +2710,7 @@ Options:
       --clear                     Clear the mark
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --digest <HEX>              Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --mode <MODE>               What to compare: uncommitted, commits or all [default: uncommitted] [possible values: uncommitted, commits, all]
@@ -2580,7 +2727,7 @@ Arguments:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --digest <HEX>              Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]
   -y, --yes                       Discard without asking
@@ -2597,7 +2744,7 @@ Arguments:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --digest <HEX>              Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]
   -h, --help                      Print help
@@ -2613,7 +2760,7 @@ Arguments:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --digest <HEX>              Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]
   -h, --help                      Print help
@@ -2631,7 +2778,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 `list` prints the entries of one or more folders, `read` a file, and `search` finds files by name or by text, all as the files panel does, so a program on another machine (--remote) sees what the panel shows without reading the disk itself.
@@ -2665,7 +2812,7 @@ Arguments:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --follow                    Keep running and print the folders as one JSON line each time they change
       --json                      Print JSON instead of text
@@ -2682,7 +2829,7 @@ Arguments:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --follow                    Keep running and print the file as one JSON line each time it changes
       --json                      Print JSON instead of text
@@ -2699,7 +2846,7 @@ Arguments:
 Options:
       --names                     Search file names, fuzzy and ranked (the panel's name mode)
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --text                      Search the text of the files (the default)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
@@ -2714,8 +2861,9 @@ Usage: cornercase usage [OPTIONS]
 Options:
       --cached                    Print the last answers with their age, without asking the agents again
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --machine <NAME>            Ask a machine for its limits, or with `all` this computer and every machine
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Asks Claude Code and Codex for your plan limits as the Limits tab of the Usage dialog does, and
@@ -2727,11 +2875,15 @@ tokens, and each waits at most ten seconds. A probe already running, from the di
 prints the last answers with their age. With --json it prints {"agents": [...]}: each agent's
 plan, its limits (label, kind, scope, percent, severity, resets_at in UTC), extra, notice, error,
 and when it was read (read_at, and age in seconds). It exits with 3 when an agent could not be
-asked, after printing them all, that one with its error.
+asked, after printing them all, that one with its error. --machine NAME asks that machine over ssh
+and adds "machine" (name, state, seen, read_at, error); --machine all prints this computer and
+then each machine under "machines", and exits with 3 when a machine could not be read either.
 
 Examples:
   cornercase usage
   cornercase usage --cached --json
+  cornercase usage --machine vps
+  cornercase usage --machine all --json
 
 ================================================================ cornercase ports
 List the TCP ports a workspace's programs listen on, with the URL to open each
@@ -2745,7 +2897,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --all                       Every TCP port your processes listen on, each with its workspace or none
@@ -2784,7 +2936,7 @@ Options:
       --pid <PID>                 Which program, when several listen on the port
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Stops the program that listens on PORT, if it belongs to a workspace (`cornercase ports --all`
@@ -2807,7 +2959,7 @@ Usage: cornercase pull-request [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -2837,6 +2989,103 @@ Examples:
   cornercase pull-request --worktree feat/login --json
   cornercase pull-request --workspace 4
 
+================================================================ cornercase context
+Print what fills an agent's context, as its Context dialog shows it
+
+Usage: cornercase context [OPTIONS]
+
+Options:
+      --pane <ID>                 The pane [default: the one this runs in, else the shown one]
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --tab <ID>                  A tab: its agent's pane, else its active one
+      --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
+      --cached                    Print the last answer with its age, without asking the agent again
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Prints what fills an agent's context, as the Context dialog shows it (`view context` in a tab's
+menu or an agent row's): how its window splits between the system prompt, the tools, MCP servers,
+memory files (AGENTS.md, CLAUDE.md), skills and the conversation, with each memory file and MCP
+server, the skill count and the tools that took the most of the conversation.
+
+For Claude Code it starts a second `claude` that reloads the same conversation, in the same
+folder, account and model, sends no prompt and spends no tokens. It starts your MCP servers a second time. It turns the hooks off and waits
+up to 8 s for the MCP servers to connect, so a read takes 3 to 10 s. The numbers are a reload of
+the conversation with today's settings: while the agent works they lag by the reply in progress.
+A pane with no conversation yet answers with what a new one starts with. Without --pane or --tab
+it reads the pane it runs in. A pane that runs no agent exits with 1. The other agents answer
+their model and how full the window is, with a notice that they do not say what fills it.
+
+--cached prints the last answer with its age and starts nothing, so a script can read it cheaply.
+
+A read that fails says why on the line `context unavailable:` (with --json, in `error`, beside the
+numbers of the last good read) and the command exits with 3.
+
+With --json it prints {"pane", "agent", "title", "model", "percent", "compacted", "loading",
+"read_at", "age", "breakdown", "notice", "error"}. breakdown is null until a read worked, else
+{"model", "conversation", "total_tokens", "max_tokens", "percent", "auto_compact_at",
+"categories" (each {id, name, tokens, kind}, the kind being used, deferred, buffer or free),
+"memory_files" ({path, kind, tokens}), "mcp_servers" ({name, tools, loaded, tokens}),
+"mcp_instructions" ({name, tokens}), "skills" ({total, included, tokens}), "messages"}. The
+messages are tokens too: the calls, results, attachments, assistant and user text, and per tool
+and attachment kind.
+
+Examples:
+  cornercase context
+  cornercase context --pane 4 --json
+  cornercase context --tab 3 --cached
+
+================================================================ cornercase recap
+Print the Recap panel's summary of what your agents did: now, yesterday or the last 7 days
+
+Usage: cornercase recap [OPTIONS] [RANGE]
+
+Arguments:
+  [RANGE]  What to sum up: now, yesterday or week [default: now] [possible values: now, yesterday, week]
+
+Options:
+      --fresh                     Write it again, even if the last one is still current
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --dossier                   Print the dossier the agent would read, without running an agent
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --agent <AGENT>             The agent that writes it (claude or codex), for this run only
+      --account <NAME>            The agent's account, for this run only
+      --model <MODEL>             The model, for this run only
+      --effort <LEVEL>            The effort, for this run only
+      --language <LANGUAGE>       The language it is written in, for this run only
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Prints the Recap panel's summary of what your agents did: `now` (where things stand, what waits
+on you first), `yesterday` (Done / In progress / On you, for the last day with agent activity, so
+on Monday it is Friday) or `week` (per project, the last 7 days). An agent (Claude Code or Codex,
+set in Settings > Agents > Recap) reads a dossier cornercase builds from the journal of your
+agent conversations and writes it in the background; it runs without a pane, reads transcripts
+and `cornercase search`, and changes no project. The text names each conversation as
+`project > workspace > tab` and each pull request as `#number`.
+
+A current result is printed at once (`now` for 30 minutes, `yesterday` once per day, `week` once
+per day). Otherwise the command waits for the agent. --fresh writes it again. --agent, --account,
+--model, --effort and --language change the settings for that run only, and write it again.
+--dossier prints the dossier without running an agent.
+
+Nothing to sum up prints why and exits 0. A run that fails prints the last good text, then
+`recap unavailable:` and the reason, and exits with 3. A server that does not know `recap` is
+refused by name.
+
+With --json it prints {"range", "day", "label", "from", "to", "zone", "written_at", "age",
+"agent", "title", "account", "model", "effort", "language", "tokens", "conversations", "text",
+"places", "dossier", "loading", "progress", "empty", "error"}. text keeps the ids ([c3], [p1]);
+places maps each id to {kind, project, workspace, branch, tab, agent, conversation, pane, boot,
+number, url, state}. `cornercase events` reports a recap starting, finishing or failing.
+
+Examples:
+  cornercase recap
+  cornercase recap yesterday --language Spanish
+  cornercase recap week --fresh --json
+  cornercase recap --dossier yesterday
+
 ================================================================ cornercase processes
 List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program
 
@@ -2850,7 +3099,7 @@ Commands:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --pane <ID>                 Only this pane [default: every pane]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            Only the panes of this workspace [default: every pane]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --interval <MS>             How long to measure the CPU over, in milliseconds [default: 1000]
@@ -2891,7 +3140,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --started <STARTED>         Only if it is still the process listed with this `started` value
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Stops a program of a pane and everything it started: PID and its descendants, found when the
@@ -2921,7 +3170,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Commands for the worktrees cornercase makes for workspaces. `list` shows every worktree on disk
@@ -2942,7 +3191,7 @@ Options:
       --project <ID>              Only the worktrees of this project's repository [default: every worktree on disk]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --no-sizes                  Leave out the sizes, so it answers without walking the worktrees
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2974,7 +3223,7 @@ Usage: cornercase worktrees size [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --path <PATH>               A linked worktree by its folder, open in cornercase or not
       --json                      Print JSON instead of text
@@ -3002,7 +3251,7 @@ Usage: cornercase worktrees free-builds [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --path <PATH>               A linked worktree by its folder, open in cornercase or not
       --json                      Print JSON instead of text
@@ -3025,6 +3274,143 @@ Examples:
   cornercase worktrees free-builds --worktree feat/login
   cornercase worktrees free-builds --path ~/.cornercase/worktrees/shop/feat-login --force
 
+================================================================ cornercase machines
+List the machines work can start on with the state of each link, and add, change or remove them
+
+Usage: cornercase machines [OPTIONS]
+       cornercase machines <COMMAND>
+
+Commands:
+  add     Add a machine: a name, its ssh destination, an icon and a folder
+  edit    Change a machine's name, destination, icon or folder
+  remove  Remove a machine and end its link; its server keeps running there
+  update  Install this cornercase's release on an older machine
+  retry   Try the links again now: one machine's, or every machine's
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Lists this computer and the other machines work can start on, as Settings › Machines shows them,
+each with the state of its link: the server keeps one ssh connection to each machine's cornercase,
+through your own ssh and keys, and starts the server there with `start-server` when none runs. It
+never stops that server, not when the link drops nor when the machine is removed; a server stopped
+there comes back with the link, so remove the machine first to stop it for good. A link that drops
+is tried again after 1, 2, 4 and 8 s, then every 15 s, and every minute while a person has to act
+there (older, cornercase not found, this computer, the same server as another machine); `retry`,
+this computer waking up or changing network try them all at once. ssh runs with BatchMode and
+forwards nothing, so connect once by hand to accept the host key.
+
+The states are connecting, linked (with the version there), unreachable (since when, and why) and
+older. With --json it prints {"here": {"icon", "version"}, "machines": [{"name", "icon",
+"destination", "folder", "state", "version", "server_version", "seen", "error", "updating",
+"problem"}]}: version is the cornercase installed there and server_version the one its server
+runs, seen when the link was last up (UTC), error why it is down, and problem what is wrong with an
+entry of config.json, which then gets no link. Every subcommand prints the list the same way.
+
+Examples:
+  cornercase machines
+  cornercase machines add vps miguel@vps.example.com --icon server
+  cornercase machines edit vps --folder '~/src'
+  cornercase machines retry vps
+  cornercase machines remove vps
+
+================================================================ cornercase machines add
+Add a machine: a name, its ssh destination, an icon and a folder
+
+Usage: cornercase machines add [OPTIONS] <NAME> <DESTINATION>
+
+Arguments:
+  <NAME>         Its name: letters, digits, `.`, `_` and `-`, at most 20
+  <DESTINATION>  Where ssh reaches it: user@host, or a host of ~/.ssh/config
+
+Options:
+      --icon <ICON>               Its icon, by glyph or name: ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server, ◆ other
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --folder <FOLDER>           Its folder for clones there [default: ~/code]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+A name is 1 to 20 letters, digits, `.`, `_` and `-`, unique ignoring case. The destination is what
+ssh takes: user@host, host or a Host of ~/.ssh/config, unique, with no spaces and not starting with
+`-`. The folder is absolute or starts with ~/, and is the machine's: nothing is made there yet. A
+refused value exits with 1 and says why, and config.json is left as it was.
+
+================================================================ cornercase machines edit
+Change a machine's name, destination, icon or folder
+
+Usage: cornercase machines edit [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  The machine's name, as `cornercase machines` lists it
+
+Options:
+      --name <NEW_NAME>            Its new name
+      --remote <DESTINATION>       Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --destination <DESTINATION>  Its new ssh destination; the link is made again
+      --remote-command <COMMAND>   How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --icon <ICON>                Its icon, by glyph or name: ☁ server, ▭ laptop, ▣ desktop, ◫ mini, ⌂ home server, ◆ other
+      --folder <FOLDER>            Its new folder for clones there
+      --json                       Print JSON instead of text
+  -h, --help                       Print help
+
+A name is 1 to 20 letters, digits, `.`, `_` and `-`, unique ignoring case. The destination is what
+ssh takes: user@host, host or a Host of ~/.ssh/config, unique, with no spaces and not starting with
+`-`. The folder is absolute or starts with ~/, and is the machine's: nothing is made there yet. A
+refused value exits with 1 and says why, and config.json is left as it was.
+
+================================================================ cornercase machines remove
+Remove a machine and end its link; its server keeps running there
+
+Usage: cornercase machines remove [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  The machine's name, as `cornercase machines` lists it
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase machines update
+Install this cornercase's release on an older machine
+
+Usage: cornercase machines update [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  The machine's name, as `cornercase machines` lists it
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+Runs `cornercase update` on a machine whose cornercase is older than this one, through ssh with no
+terminal: it installs the release and restarts nothing, so the server there keeps running its version
+until it restarts there, and the list says so. The command waits for the install, then the link is
+tried again. It exits with 1 when the machine is not older, or when the install fails, with the
+last line it printed there (Homebrew's command, for one).
+
+================================================================ cornercase machines retry
+Try the links again now: one machine's, or every machine's
+
+Usage: cornercase machines retry [OPTIONS] [NAME]
+
+Arguments:
+  [NAME]  Only this machine [default: every machine]
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
 ================================================================ cornercase tour
 Show the guided tour in the window, or move, end or reset it
 
@@ -3043,7 +3429,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3067,7 +3453,7 @@ Usage: cornercase tour list [OPTIONS]
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3083,7 +3469,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --step <STEP>               Start at this step's id
       --no-card                   Keep the window's card hidden, for a program that draws its own
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3094,7 +3480,7 @@ Usage: cornercase tour next [OPTIONS]
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3105,7 +3491,7 @@ Usage: cornercase tour back [OPTIONS]
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3116,7 +3502,7 @@ Usage: cornercase tour skip [OPTIONS]
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3127,7 +3513,7 @@ Usage: cornercase tour end [OPTIONS]
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3142,7 +3528,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3156,7 +3542,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3173,7 +3559,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 `close` closes every tab of a workspace (the one you are in, or the one --workspace or --worktree names) that runs a coding agent, whole, and keeps what each agent needs to start again: its conversation, mode and account. Shells and the workspace stay. It refuses when closing would cut an agent's turn, when an agent cannot resume its conversation (opencode, custom agents, an agent with no conversation yet starts a new one) or when other panes share those tabs, unless you pass --force; --check says what would close and closes nothing. A flow's team closes with its orchestrator and the run is kept whole. `reopen` brings the tabs back after the others, each agent in its own conversation (even with resume_agents off), and a flow's orchestrator last with its team's new pane ids. `forget` drops what was closed for good, asks first on a terminal and needs --yes in a script, and ends a kept flow run. Closed agents survive a restart of the server and show as `closed_agents` in `status --json`; removing the workspace forgets them.
@@ -3193,7 +3579,7 @@ Usage: cornercase agents close [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --check                     Say what would close and close nothing
       --force                     Close even agents that are working or cannot resume, and the other panes of their tabs
@@ -3208,7 +3594,7 @@ Usage: cornercase agents reopen [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -3221,7 +3607,7 @@ Usage: cornercase agents forget [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
   -y, --yes                       Forget without asking
       --json                      Print JSON instead of text
@@ -3243,7 +3629,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 An account is a folder of its own under cornercase's state folder in which an agent keeps its
@@ -3279,7 +3665,7 @@ Options:
       --check                     Also ask each agent whether its account is signed in, and as whom
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase account add
@@ -3294,7 +3680,7 @@ Arguments:
 Options:
       --login                     Then open a tab that runs the agent's login with this account
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --workspace <ID>            The workspace of the login tab [default: here]
       --focus                     Also show the login tab in the window
       --json                      Print JSON instead of text
@@ -3312,7 +3698,7 @@ Arguments:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
   -y, --yes                       Remove it without asking
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase account rename
@@ -3328,7 +3714,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --system                    Name the agent's own login, the one outside any account
       --clear                     Drop the name, so the folder's name (or System) shows again
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3345,7 +3731,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --system                    Use the agent's own login, outside any account
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase account restart
@@ -3361,7 +3747,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --system                    Restart them on the agent's own login, outside any account
       --pane <ID>                 Restart only this pane, also a shell at its prompt; give it once per pane [default: every pane of the agent on another account]
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -3380,7 +3766,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 A profile, for scripts, names which account each agent uses. While a profile is active, it is the
@@ -3403,7 +3789,7 @@ Usage: cornercase profile list [OPTIONS]
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase profile new
@@ -3417,7 +3803,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase profile set
@@ -3432,7 +3818,7 @@ Options:
       --provider <AGENT>          The agent to change; without --account it goes back to the system's login
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --account <ACCOUNT>         The account it uses
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --rename <NEW>              A new name for the profile
   -h, --help                      Print help
 
@@ -3447,7 +3833,7 @@ Arguments:
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --system                    Use the system's own logins, with no profile
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase profile delete
@@ -3460,7 +3846,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase remote
@@ -3472,9 +3858,9 @@ Arguments:
   <DESTINATION>  Where ssh connects: a host from ~/.ssh/config, or user@host
 
 Options:
-      --command <COMMAND>         How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --command <COMMAND>         How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 cornercase runs `ssh DESTINATION cornercase proxy`, so your ssh config, keys, agent and
@@ -3483,10 +3869,13 @@ on that machine; this one only shows them, and copies and notifications go throu
 If the connection drops, the window stays and reconnects by itself; Esc or quit gives up. Both
 machines need the same version of cornercase. Reconnecting never asks for a password, so use a
 key or an agent. To send the commands for scripts and agents there, give them --remote DESTINATION.
+The other machine may run Windows: the first time, cornercase finds out whether its sshd runs
+commands with cmd.exe or PowerShell, and remembers it.
 
 Examples:
   cornercase remote devbox
   cornercase remote me@10.0.0.5 --command '~/bin/cornercase'
+  cornercase remote me@winbox --command 'C:\tools\cornercase.exe'
 
 ================================================================ cornercase skill
 Print the instructions that teach coding agents these commands
@@ -3495,7 +3884,7 @@ Usage: cornercase skill [OPTIONS]
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Install them for Claude Code, Codex and other agents with
@@ -3510,7 +3899,7 @@ Usage: cornercase update [OPTIONS]
 Options:
       --check                     Only say whether a newer version is out
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -y, --yes                       Restart the server without asking
       --when-idle                 Wait until no agent is working, then restart
       --timeout <SECONDS>         With --when-idle, give up after this many seconds and keep the server running
@@ -3531,7 +3920,7 @@ Usage: cornercase restart [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
   -y, --yes                       Restart the server without asking
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --when-idle                 Wait until no agent is working, then restart
       --timeout <SECONDS>         With --when-idle, give up after this many seconds and keep the server running
   -h, --help                      Print help
@@ -3559,7 +3948,7 @@ Usage: cornercase start-server [OPTIONS]
 Options:
       --cols <N>                  Columns of the terminals until a window attaches, 90 to 1000 [default: 160]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --rows <N>                  Rows of the terminals until a window attaches, 10 to 500 [default: 48]
       --theme <FILE>              Colours programs in the terminals see: a JSON file, or - for standard input (see `cornercase theme`)
       --json                      Print JSON instead of text
@@ -3585,7 +3974,7 @@ Usage: cornercase kill-server [OPTIONS]
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
   -y, --yes                       Stop the server without asking, even if this terminal is one of its own
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 Run from a terminal inside cornercase, it would stop the server it runs in, and this terminal with
@@ -3606,7 +3995,7 @@ Options:
   -n, --lines <N>                 How many of the last lines to print [default: 200]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
   -f, --follow                    Keep printing what the server writes, until interrupted
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --path                      Print only where the log is
   -h, --help                      Print help
 
@@ -3635,16 +4024,19 @@ Usage: cornercase stats [OPTIONS]
 Options:
       --json                      Print every counter and the heatmap blocks as JSON
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --share                     Print a link to a card made locally in the browser
+      --machine <NAME>            Read a machine's stats through the server, or with `all` this computer's and every machine's summed
   -h, --help                      Print help
 
-Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). Merged pull requests need a running server and gh or glab.
+Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). --machine needs the server, which asks the machine over ssh; with `all` it sums the machines it could read and lists each. Merged pull requests need a running server and gh or glab.
 
 Examples:
   cornercase stats
   cornercase stats --json
   cornercase stats --share
+  cornercase stats --machine vps
+  cornercase stats --machine all --json
 
 ================================================================ cornercase plugin
 Install, add, list, turn on and off the plugins that extend cornercase
@@ -3669,7 +4061,7 @@ Commands:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 A plugin is a folder with a cornercase-plugin.toml that declares commands: actions in the row menus, hooks on events, services the server keeps running and processes each local window keeps running. Its commands talk back through these same commands.
@@ -3715,7 +4107,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin install
@@ -3730,7 +4122,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
   -y, --yes                       Install without asking; needed when there is no terminal to ask in
       --preview                   Fetch it and print what installing it would run, then exit without asking or installing
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      With --preview, print it as JSON, for a program that shows it and asks itself
       --commit <COMMIT>           Install only if SOURCE still gives this commit, the one --preview printed; unlike SOURCE@COMMIT, updates keep following its branch or tag
   -h, --help                      Print help
@@ -3747,7 +4139,7 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
   -y, --yes                       Update without asking; needed when there is no terminal to ask in
       --preview                   Fetch it and print what updating would run, or that it is up to date, then exit without asking or updating
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      With --preview and an ID, print it as JSON, for a program that shows it and asks itself
       --commit <COMMIT>           Update only to this commit, the one --preview printed; refused once the plugin gives another
   -h, --help                      Print help
@@ -3762,7 +4154,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin unlink
@@ -3775,7 +4167,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin list
@@ -3786,7 +4178,7 @@ Usage: cornercase plugin list [OPTIONS]
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin status
@@ -3797,7 +4189,7 @@ Usage: cornercase plugin status [OPTIONS]
 Options:
       --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin actions
@@ -3809,7 +4201,7 @@ Options:
       --context <KIND>            Only the actions offered for a project, workspace, tab or pane, or on the plugins' buttons [possible values: project, workspace, tab, pane, button]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --json                      Print JSON instead of text
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin run
@@ -3824,7 +4216,7 @@ Arguments:
 Options:
       --pane <ID>                 A pane
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --tab <ID>                  A tab and its panes
       --workspace <ID>            A workspace and its tabs
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
@@ -3840,7 +4232,7 @@ Usage: cornercase plugin popup-close [OPTIONS]
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin enable
@@ -3853,7 +4245,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin disable
@@ -3866,7 +4258,7 @@ Arguments:
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin logs
@@ -3881,7 +4273,7 @@ Options:
   -n, --lines <N>                 How many of the last lines to print [default: 200]
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
   -f, --follow                    Keep printing what the server writes, until interrupted
-      --remote-command <COMMAND>  How to run cornercase there, as sh reads it [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --path                      Print only where the log is
   -h, --help                      Print help
 

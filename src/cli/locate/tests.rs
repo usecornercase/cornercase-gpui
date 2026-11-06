@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use super::{
-    Binary, Inputs, Missing, Origin, Probe, Problem, closed, installer_dirs, locate, merged, minimum, parse_version,
+    Binary, Inputs, MINIMUM, Missing, Origin, Probe, Problem, closed, installer_dirs, locate, merged, parse_version,
     shell_args, shell_path, unix_dirs,
 };
 use crate::platform::Os;
@@ -51,7 +51,7 @@ impl Probe for Fake {
     }
 }
 
-const GOOD: &str = "cornercase 0.12.287";
+const GOOD: &str = "cornercase 0.13.1";
 
 fn inputs(os: Os) -> Inputs {
     Inputs {
@@ -103,10 +103,8 @@ fn versions_compare_as_numbers() {
 }
 
 #[test]
-fn windows_needs_its_first_release_there() {
-    assert_eq!(minimum(Os::Windows).to_string(), "0.12.287");
-    assert_eq!(minimum(Os::Mac), minimum(Os::Linux));
-    assert_eq!(minimum(Os::Mac).to_string(), "0.12.234");
+fn every_platform_needs_the_release_with_routines() {
+    assert_eq!(MINIMUM.to_string(), "0.13.1");
 }
 
 #[test]

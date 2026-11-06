@@ -117,12 +117,7 @@ impl Found {
     }
 }
 
-pub(crate) const fn minimum(os: Os) -> Version {
-    match os {
-        Os::Windows => Version { major: 0, minor: 12, patch: 287 },
-        Os::Mac | Os::Linux => Version { major: 0, minor: 12, patch: 234 },
-    }
-}
+pub(crate) const MINIMUM: Version = Version { major: 0, minor: 13, patch: 1 };
 
 impl Version {
     pub(crate) fn parse(text: &str) -> Option<Self> {
@@ -137,11 +132,11 @@ pub(crate) fn parse_version(line: &str) -> Option<Version> {
     Version::parse(line.trim().strip_prefix("cornercase ")?)
 }
 
-fn verdict(answer: Result<Vec<String>, String>, os: Os) -> Result<(), Problem> {
+fn verdict(answer: Result<Vec<String>, String>) -> Result<(), Problem> {
     let lines = answer.map_err(Problem::DoesNotStart)?;
     let first = lines.first().map(|line| line.trim()).unwrap_or_default();
     let version = parse_version(first).ok_or_else(|| Problem::NotCornercase(first.chars().take(80).collect()))?;
-    if version < minimum(os) { Err(Problem::TooOld(version)) } else { Ok(()) }
+    if version < MINIMUM { Err(Problem::TooOld(version)) } else { Ok(()) }
 }
 
 pub(crate) fn installer_dirs(os: Os, home: Option<&Path>, cargo_home: Option<&Path>) -> Vec<PathBuf> {
@@ -201,7 +196,7 @@ pub(crate) fn locate(inputs: &Inputs, probe: &impl Probe) -> Result<Binary, Miss
     }
     let by_hand = inputs.chosen.clone().filter(|path| probe.is_program(path));
     let gone = inputs.chosen.clone().filter(|_| by_hand.is_none());
-    let by_hand = by_hand.map(|path| checked(Found::plain(path, Origin::Chosen), inputs.os, probe));
+    let by_hand = by_hand.map(|path| checked(Found::plain(path, Origin::Chosen), probe));
     if let Some(Ok(binary)) = by_hand {
         return Ok(binary);
     }
@@ -209,14 +204,14 @@ pub(crate) fn locate(inputs: &Inputs, probe: &impl Probe) -> Result<Binary, Miss
         let stale = gone.map(|path| Missing::Unusable { path, origin: Origin::Chosen, problem: Problem::NotAProgram });
         return Err(by_hand.and_then(Result::err).or(stale).unwrap_or_else(|| not_found(inputs, probe)));
     };
-    checked(found, inputs.os, probe)
+    checked(found, probe)
 }
 
-pub(crate) fn chosen(path: PathBuf, os: Os, probe: &impl Probe) -> Result<Binary, Missing> {
+pub(crate) fn chosen(path: PathBuf, probe: &impl Probe) -> Result<Binary, Missing> {
     if !probe.is_program(&path) {
         return Err(Missing::Unusable { path, origin: Origin::Chosen, problem: Problem::NotAProgram });
     }
-    checked(Found::plain(path, Origin::Chosen), os, probe)
+    checked(Found::plain(path, Origin::Chosen), probe)
 }
 
 fn named(name: &str, inputs: &Inputs, probe: &impl Probe) -> Result<Binary, Missing> {
@@ -226,7 +221,7 @@ fn named(name: &str, inputs: &Inputs, probe: &impl Probe) -> Result<Binary, Miss
         probe.find(&inputs.path, name)
     };
     match path {
-        Some(path) => checked(Found::plain(path, Origin::Variable), inputs.os, probe),
+        Some(path) => checked(Found::plain(path, Origin::Variable), probe),
         None => Err(Missing::Unusable {
             path: PathBuf::from(name),
             origin: Origin::Variable,
@@ -262,8 +257,8 @@ fn not_found(inputs: &Inputs, probe: &impl Probe) -> Missing {
     Missing::NotFound { places: places(inputs), asked_shell: login_shell(inputs, probe).is_some() }
 }
 
-fn checked(found: Found, os: Os, probe: &impl Probe) -> Result<Binary, Missing> {
-    match verdict(probe.version(&found.path, found.path_env.as_deref()), os) {
+fn checked(found: Found, probe: &impl Probe) -> Result<Binary, Missing> {
+    match verdict(probe.version(&found.path, found.path_env.as_deref())) {
         Ok(()) => Ok(Binary { path: found.path, path_env: found.path_env }),
         Err(problem) => Err(Missing::Unusable { path: found.path, origin: found.origin, problem }),
     }

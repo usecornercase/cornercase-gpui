@@ -42,11 +42,11 @@ test('every sheet shows the key the app gives it', () => {
   }
 });
 
-test('the versions of cornercase the page asks for are the ones the app asks for', () => {
-  const minimum = LOCATE.slice(LOCATE.indexOf('fn minimum'), LOCATE.indexOf('impl Version'));
-  const versions = [...minimum.matchAll(/major: (\d+), minor: (\d+), patch: (\d+)/g)].map((hit) => `${hit[1]}.${hit[2]}.${hit[3]}`);
-  assert.equal(versions.length, 2);
-  for (const version of versions) assert.ok(DOWNLOAD_SECTION.includes(version), version);
+test('the version of cornercase the page asks for is the one the app asks for', () => {
+  const minimum = LOCATE.slice(LOCATE.indexOf('const MINIMUM'), LOCATE.indexOf('impl Version'));
+  const version = minimum.match(/major: (\d+), minor: (\d+), patch: (\d+)/);
+  assert.ok(version, 'the app states its minimum');
+  assert.ok(DOWNLOAD_SECTION.includes(`${version[1]}.${version[2]}.${version[3]}`), version[0]);
 });
 
 test('the downloads are the files a release publishes', () => {

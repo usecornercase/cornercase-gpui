@@ -43,14 +43,14 @@ fn not_found(places: &[PathBuf], asked_shell: bool, os: Os, home: &str) -> Strin
     format!(
         "This window needs cornercase {} or newer on this {}, and found none on the PATH{shell} or where its \
          installers put it: {}. Install it, then try again, or choose it yourself.",
-        cli::minimum(os),
+        cli::MINIMUM,
         desktop::machine(os),
         places.join(", ")
     )
 }
 
-fn unusable(path: &Path, origin: Origin, problem: &Problem, os: Os, home: &str) -> String {
-    let (place, min) = (shown(path, home), cli::minimum(os));
+fn unusable(path: &Path, origin: Origin, problem: &Problem, home: &str) -> String {
+    let (place, min) = (shown(path, home), cli::MINIMUM);
     let named = format!("{place}{}", origin_note(origin));
     let text = match (problem, origin) {
         (Problem::NotAProgram, Origin::Variable) => format!(
@@ -82,7 +82,7 @@ fn unusable(path: &Path, origin: Origin, problem: &Problem, os: Os, home: &str) 
 fn lead(missing: &Missing, os: Os, home: &str) -> String {
     match missing {
         Missing::NotFound { places, asked_shell } => not_found(places, *asked_shell, os, home),
-        Missing::Unusable { path, origin, problem } => unusable(path, *origin, problem, os, home),
+        Missing::Unusable { path, origin, problem } => unusable(path, *origin, problem, home),
     }
 }
 
