@@ -10,6 +10,8 @@ pub(crate) const ENTER: Duration = Duration::from_millis(180);
 pub(crate) const PULSE: Duration = Duration::from_millis(1400);
 pub(crate) const POP: Duration = Duration::from_millis(110);
 pub(crate) const LEAVE: Duration = Duration::from_millis(120);
+pub(crate) const MARK: Duration = Duration::from_millis(2600);
+const MARK_HOLD: f32 = 0.5;
 const TURN: Duration = Duration::from_millis(900);
 const ORBIT: Duration = Duration::from_millis(1200);
 const ORBIT_FRAME: Duration = Duration::from_micros(33_333);
@@ -69,6 +71,14 @@ pub(crate) fn fade<E: Styled + IntoElement + 'static>(
     way: Way,
 ) -> AnimationElement<E> {
     element.with_animation(id, way.animation(), move |element, t| element.opacity(way.shown(t)))
+}
+
+pub(crate) fn marked(t: f32) -> f32 {
+    if t <= MARK_HOLD { 1. } else { 1. - ease_in((t - MARK_HOLD) / (1. - MARK_HOLD)) }
+}
+
+pub(crate) fn mark<E: Styled + IntoElement + 'static>(element: E, id: impl Into<ElementId>) -> AnimationElement<E> {
+    element.with_animation(id, Animation::new(MARK), |element, t| element.opacity(marked(t)))
 }
 
 pub(crate) fn pulse<E: Styled + IntoElement + 'static>(element: E, id: impl Into<ElementId>) -> AnimationElement<E> {

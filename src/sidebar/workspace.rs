@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement, Rgba, SharedString, Stateful, StatefulInteractiveElement, Styled, div, prelude::FluentBuilder as _,
-    px,
+    AnyElement, App, ClickEvent, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement, Rgba, SharedString, Stateful, StatefulInteractiveElement, Styled, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::rows::{
@@ -258,6 +258,10 @@ impl Root {
             .when(status, |d| d.child(badge(ws.loudest())))
     }
 
+    pub(crate) fn account_mark(&self, pane: &PaneInfo, cx: &App) -> Option<String> {
+        self.side.look.current.account_mark.then(|| self.store.read(cx).accounts.mark(pane)).flatten()
+    }
+
     fn agent_tab_name(&self, tab: u64) -> String {
         self.session
             .as_ref()
@@ -277,7 +281,8 @@ impl Root {
         let id = pane.id;
         let selected = shown.pane == Some(id);
         let title = pane.agent_title().unwrap_or_else(|| self.agent_tab_name(row.tab));
-        let details = place.place.iter().cloned().chain([agent_details(pane)]).collect::<Vec<_>>().join(" · ");
+        let details = agent_details(pane, self.account_mark(pane, cx).as_deref());
+        let details = place.place.iter().cloned().chain([details]).collect::<Vec<_>>().join(" · ");
         let gid = SharedString::from(format!("{}-{id}", place.scope));
         ui::row(gid.clone(), selected)
             .group(gid.clone())
@@ -339,16 +344,20 @@ fn agent_menu_button(id: u64, scope: &str, group: SharedString, cx: &mut Context
     )
 }
 
-pub(super) fn agent_details(pane: &PaneInfo) -> String {
+pub(super) fn agent_details(pane: &PaneInfo, mark: Option<&str>) -> String {
     let mut details = vec![pane.agent.clone().unwrap_or_default()];
     details.extend(pane.role.clone());
     details.extend(pane.model.clone());
+    details.extend(mark.map(str::to_string));
     details.extend(pane.context.map(|c| format!("{c}%")));
     if pane.subagents > 0 {
         details.push(plural(pane.subagents as usize, "subagent"));
     }
     if pane.resuming {
         details.push("resuming".into());
+    }
+    if pane.account_restart.is_some() {
+        details.push("restarts after this turn".into());
     }
     details.join(" · ")
 }

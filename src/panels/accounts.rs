@@ -20,7 +20,7 @@ use crate::theme::colours;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
 const INTRO: &str = "Each agent can keep several logins, each in a folder of its own. New workspaces start with the \
-                     default one; open panes keep the account they started with.";
+                     default one; open panes keep the account they started with until you switch them on the pane.";
 const TOKENS_NOTE: &str = "A token variable wins over every account: an agent that reads it uses it, whichever \
                            account it starts with.";
 
@@ -63,6 +63,9 @@ impl AccountsPanel {
             let open = store.read(cx).sheet == Some(PanelKind::Accounts);
             if open && !this.was_open {
                 this.load(cx);
+            }
+            if !open && this.was_open {
+                store.update(cx, Store::list_accounts);
             }
             this.was_open = open;
         })

@@ -273,7 +273,7 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut entries = self.menu_for(target);
+        let mut entries = self.menu_for(target, cx);
         if let Some(spot) = spot_of(target) {
             entries.extend(self.plugin_entries(spot, cx));
         }
@@ -301,17 +301,17 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let entries = self.agent_menu(pane);
+        let entries = self.agent_menu(pane, cx);
         self.open_menu(at, entries, window, cx);
     }
 
-    fn menu_for(&self, target: Target) -> Vec<Entry> {
+    fn menu_for(&self, target: Target, cx: &App) -> Vec<Entry> {
         let Some(session) = &self.session else { return Vec::new() };
         match target {
             Target::Group(id) => group_menu(session, id),
             Target::Project(id) => project_menu(session, id),
             Target::Workspace(id) => workspace_menu(session, id),
-            Target::Tab(id) => self.tab_menu(id),
+            Target::Tab(id) => self.tab_menu(id, cx),
         }
     }
 
@@ -327,7 +327,7 @@ impl Root {
             .is_some_and(|r| r.children > 0)
     }
 
-    pub(crate) fn agent_menu(&self, pane: u64) -> Vec<Entry> {
+    pub(crate) fn agent_menu(&self, pane: u64, cx: &App) -> Vec<Entry> {
         let Some(info) = self.session.as_ref().and_then(|s| s.pane(pane)) else { return Vec::new() };
         let p = pane.to_string();
         let mut entries = vec![act("Show", cmd(&["focus", "--pane", &p]))];
@@ -339,6 +339,7 @@ impl Root {
         if self.agent_has_children(pane) {
             entries.push(fold_item(Fold::Pane(pane), info.collapsed));
         }
+        entries.extend(self.switch_account_item(pane, cx));
         entries.extend(context_item(info));
         entries.push(Entry::Separator);
         entries.push(danger("Close agent…", move |_, window, cx| forms::close_agent(pane, window, cx)));

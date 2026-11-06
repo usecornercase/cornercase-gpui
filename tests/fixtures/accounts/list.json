@@ -1,0 +1,40 @@
+{
+  "profile": "",
+  "profiles": [],
+  "providers": [
+    {
+      "accounts": [
+        {
+          "name": "personal",
+          "path": "/home/ana/.local/state/cornercase/accounts/claude/personal",
+          "unshared": []
+        },
+        {
+          "label": "Work",
+          "name": "work",
+          "path": "/home/ana/.local/state/cornercase/accounts/claude/work",
+          "unshared": []
+        }
+      ],
+      "env": "CLAUDE_CONFIG_DIR",
+      "provider": "claude",
+      "system_label": "Own",
+      "system_path": "/home/ana/.claude",
+      "title": "Claude Code"
+    },
+    {
+      "accounts": [],
+      "env": "CODEX_HOME",
+      "provider": "codex",
+      "system_path": "/home/ana/.codex",
+      "title": "Codex"
+    },
+    {
+      "accounts": [],
+      "env": "GEMINI_CLI_HOME",
+      "provider": "gemini",
+      "system_path": "/home/ana",
+      "title": "Gemini CLI"
+    }
+  ]
+}

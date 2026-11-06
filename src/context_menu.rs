@@ -3,7 +3,7 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, ClickEvent, Context, Div, FocusHandle, FontWeight, InteractiveElement, IntoElement, KeyDownEvent,
     MouseButton, ParentElement, Pixels, Point, SharedString, Stateful, StatefulInteractiveElement, Styled, Window,
-    anchored, deferred, div, prelude::FluentBuilder as _, px,
+    anchored, deferred, div, point, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::Root;
@@ -11,16 +11,20 @@ use crate::keymap;
 use crate::platform::Os;
 use crate::store::Busy;
 use crate::theme::{colours, radius};
-use crate::ui::glass;
 use crate::ui::motion::{self, Way};
+use crate::ui::{Icon, glass, icon};
 
 const MENU_DROP: f32 = 4.;
+const ROW_HEIGHT: f32 = 29.5;
+const SEPARATOR_HEIGHT: f32 = 9.;
+const FRAME_PADDING: f32 = 4.;
+const ABOVE_POINTER: f32 = 6.;
 
 pub(crate) type Action = Rc<dyn Fn(&mut Root, &mut Window, &mut Context<Root>)>;
 
 #[derive(Clone)]
 pub(crate) enum Entry {
-    Item { label: SharedString, action: Action, danger: bool },
+    Item { label: SharedString, action: Action, danger: bool, chosen: bool },
     Submenu { label: SharedString, entries: Vec<Entry> },
     Heading(SharedString),
     Separator,
@@ -29,13 +33,20 @@ pub(crate) fn item(
     label: impl Into<SharedString>,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
 ) -> Entry {
-    Entry::Item { label: label.into(), action: Rc::new(action), danger: false }
+    Entry::Item { label: label.into(), action: Rc::new(action), danger: false, chosen: false }
 }
 pub(crate) fn danger(
     label: impl Into<SharedString>,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
 ) -> Entry {
-    Entry::Item { label: label.into(), action: Rc::new(action), danger: true }
+    Entry::Item { label: label.into(), action: Rc::new(action), danger: true, chosen: false }
+}
+pub(crate) fn choice(
+    label: impl Into<SharedString>,
+    chosen: bool,
+    action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
+) -> Entry {
+    Entry::Item { label: label.into(), action: Rc::new(action), danger: false, chosen }
 }
 pub(crate) fn act(label: impl Into<SharedString>, args: Vec<String>) -> Entry {
     item(label, move |root, _, _| root.act(args.clone()))
@@ -73,6 +84,14 @@ fn step(entries: &[Entry], from: Option<usize>, down: bool) -> Option<usize> {
         Some(at) => at.checked_sub(1).unwrap_or(choices.len() - 1),
     };
     choices.get(next).copied()
+}
+
+#[expect(clippy::cast_precision_loss, reason = "a menu has a few entries")]
+pub(crate) fn above(at: Point<Pixels>, entries: &[Entry]) -> Point<Pixels> {
+    let separators = entries.iter().filter(|e| matches!(e, Entry::Separator)).count();
+    let rows = entries.len() - separators;
+    let height = rows as f32 * ROW_HEIGHT + separators as f32 * SEPARATOR_HEIGHT + FRAME_PADDING * 2.;
+    point(at.x, at.y - px(height + ABOVE_POINTER))
 }
 
 fn without_stray_separators(entries: Vec<Entry>) -> Vec<Entry> {
@@ -196,7 +215,8 @@ fn menu_entry(index: usize, entry: Entry, highlighted: bool, cx: &mut Context<Ro
     match entry {
         Entry::Separator => div().mx(px(10.)).my(px(4.)).h(px(1.)).bg(colours::border()).into_any_element(),
         Entry::Heading(label) => menu_heading(label).into_any_element(),
-        Entry::Item { label, action, danger } => menu_row(id, label, false, (highlighted, danger))
+        Entry::Item { label, action, danger, chosen } => menu_row(id, label, false, (highlighted, danger))
+            .when(chosen, |d| d.child(icon(Icon::Check, 12.).text_color(colours::text())))
             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                 this.close_menu(window, cx);
                 action(this, window, cx);

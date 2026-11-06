@@ -136,7 +136,9 @@ pub(super) fn listing_status(query: &str, shown: usize, total: usize) -> String 
         (true, 0) => no_project(Os::CURRENT),
         (true, n) if n > shown => format!("The first {shown} of {n} in the sidebar's order · type to find the rest"),
         (true, _) => {
-            "Everything open, in the sidebar's order · type to find it by name, branch, folder, agent or model".into()
+            "Everything open, in the sidebar's order · type to find it by name, branch, folder, agent or model, or a \
+             setting"
+                .into()
         }
         (false, 0) => format!("Nothing matches “{query}”"),
         (false, n) if n > shown => format!("The first {shown} of {n} results"),

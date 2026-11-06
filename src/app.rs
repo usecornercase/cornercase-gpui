@@ -112,7 +112,7 @@ pub(crate) struct Root {
     pub(crate) sidebar_width: Split,
     pub(crate) pair_width: Split,
     dock_widths: DockWidths,
-    had_overlay: bool,
+    had: Overlays,
     leaving_sheet: Leaving<PanelKind>,
     leaving_dialog: Leaving<AnyView>,
     leaving_dock: Leaving<PanelKind>,
@@ -207,7 +207,7 @@ impl Root {
         .detach();
         cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)).detach();
         cx.observe_window_activation(window, |this, window, cx| {
-            this.activation_changed(window.is_window_active());
+            this.activation_changed(window.is_window_active(), cx);
             cx.notify();
         })
         .detach();
@@ -224,12 +224,13 @@ impl Root {
         }
         let to_terminal = store.update(cx, |s, _| std::mem::take(&mut s.keys_to_terminal));
         let s = store.read(cx);
-        let overlay = s.dialog.is_some() || s.sheet.is_some();
+        let now = Overlays { open: s.dialog.is_some() || s.sheet.is_some(), sheet: s.sheet };
         let in_dock = self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx);
-        if to_terminal || (self.had_overlay && !overlay) || (s.shown_dock().is_none() && in_dock) {
+        let gave_way = s.dialog.is_none() && sheet_gave_way(self.had.sheet, s.sheet);
+        if to_terminal || (self.had.open && !now.open) || gave_way || (s.shown_dock().is_none() && in_dock) {
             window.focus(&self.focus);
         }
-        self.had_overlay = overlay;
+        self.had = now;
         self.track_leaving(cx);
         cx.notify();
     }
@@ -286,7 +287,7 @@ impl Root {
             sidebar_width: SIDEBAR,
             pair_width: PAIR,
             dock_widths: DOCKS,
-            had_overlay: false,
+            had: Overlays::default(),
             leaving_sheet: Leaving::default(),
             leaving_dialog: Leaving::default(),
             leaving_dock: Leaving::default(),
@@ -321,11 +322,14 @@ impl Root {
         .detach();
     }
 
-    fn activation_changed(&mut self, active: bool) {
+    fn activation_changed(&mut self, active: bool, cx: &mut Context<Self>) {
         if active == self.visible {
             return;
         }
         self.visible = active;
+        if active && self.conn == Conn::Connected {
+            self.store.update(cx, Store::list_accounts);
+        }
         if let Some(id) = self.view_id {
             let flag = if active { "--visible" } else { "--hidden" };
             self.queue.cmd(vec!["view-set".into(), "--view".into(), id.to_string(), flag.into()]);
@@ -378,8 +382,11 @@ impl Root {
             Ok(s) => self.view_stream = Some(s),
             Err(e) => self.lost(e.to_string(), cx),
         }
-        self.store.update(cx, Store::follow_app);
-        self.store.update(cx, |_, cx| plugins::read_offers(cx));
+        self.store.update(cx, |s, cx| {
+            s.follow_app(cx);
+            s.list_accounts(cx);
+            plugins::read_offers(cx);
+        });
     }
 
     fn lost(&mut self, why: String, cx: &mut Context<Self>) {
@@ -433,6 +440,7 @@ impl Root {
         let shared = session.clone();
         self.store.update(cx, |s, cx| {
             s.jobs.keep_leaving(|workspace| shared.workspace(workspace).is_some());
+            s.follow_accounts(&shared, cx);
             s.session = Some(shared);
             s.view_id = view_id;
             cx.notify();
@@ -723,6 +731,16 @@ fn dock_access(kind: Option<PanelKind>) -> split::Access<Root> {
         Some(PanelKind::Flow) => flow_width,
         _ => dock_width,
     }
+}
+
+#[derive(Clone, Copy, Default)]
+struct Overlays {
+    open: bool,
+    sheet: Option<PanelKind>,
+}
+
+fn sheet_gave_way(before: Option<PanelKind>, now: Option<PanelKind>) -> bool {
+    before.is_some() && now.is_some() && before != now
 }
 
 fn wide_default(window_width: f32) -> f32 {

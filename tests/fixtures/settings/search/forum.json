@@ -1,0 +1,24 @@
+{
+  "results": [
+    {
+      "hidden": true,
+      "key": "discord_forum",
+      "label": "forum mode",
+      "note": "shows once a phone is paired",
+      "page": "Remote",
+      "section": "Discord",
+      "shown": "",
+      "title": "Remote › forum mode"
+    },
+    {
+      "hidden": true,
+      "key": "discord_forum_close",
+      "label": "closed workspaces",
+      "note": "shows once forum mode is on",
+      "page": "Remote",
+      "section": "Discord",
+      "shown": "",
+      "title": "Remote › closed workspaces"
+    }
+  ]
+}

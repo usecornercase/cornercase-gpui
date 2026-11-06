@@ -1,6 +1,6 @@
 [package]
 name = "cornercase-gpui"
-version = "0.1.8"
+version = "0.1.10"
 edition = "2024"
 description = "A native window for cornercase on macOS, Linux and Windows, drawn with GPUI"
 license = "MIT OR Apache-2.0"

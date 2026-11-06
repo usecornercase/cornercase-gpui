@@ -1,7 +1,4 @@
-use std::collections::BTreeMap;
-
-use serde::Deserialize;
-
+pub(super) use crate::model::accounts::{Account, AccountsInfo, Login, LoginState, Profile, Provider};
 use crate::platform::{Os, paths};
 use crate::store::args;
 
@@ -11,75 +8,6 @@ pub(super) const fn kept_login(os: Os) -> &'static str {
         Os::Linux => "A login kept in the system keyring stays",
         Os::Windows => "A login kept in the Windows Credential Manager stays",
     }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default)]
-pub(super) struct AccountsInfo {
-    pub providers: Vec<Provider>,
-    pub profiles: Vec<Profile>,
-    pub profile: String,
-    pub login: Option<Ids>,
-    pub tokens: Vec<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default)]
-pub(super) struct Provider {
-    #[serde(rename = "provider")]
-    pub id: String,
-    pub title: String,
-    pub env: String,
-    pub accounts: Vec<Account>,
-    pub system_label: String,
-    pub active: String,
-    pub system_path: Option<String>,
-    pub system_login: Option<Login>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default)]
-pub(super) struct Account {
-    pub name: String,
-    pub path: String,
-    pub unshared: Vec<String>,
-    pub login: Option<Login>,
-    pub label: String,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub(super) enum LoginState {
-    SignedIn,
-    SignedOut,
-    Failed,
-    #[default]
-    #[serde(other)]
-    Unknown,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default)]
-pub(super) struct Login {
-    pub state: LoginState,
-    pub email: Option<String>,
-    pub plan: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default)]
-pub(super) struct Profile {
-    pub name: String,
-    pub accounts: BTreeMap<String, String>,
-    pub active: bool,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
-#[serde(default)]
-pub(super) struct Ids {
-    pub workspace: Option<u64>,
-    pub tab: Option<u64>,
-    pub pane: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -230,22 +158,8 @@ pub(super) fn status(login: Option<&Login>, checked: bool, checking: bool) -> St
 }
 
 impl Provider {
-    pub(super) fn system_name(&self) -> &str {
-        if self.system_label.is_empty() { "System" } else { &self.system_label }
-    }
-
     pub(super) fn checks(&self, folder: &str) -> bool {
         !folder.is_empty() || !self.accounts.is_empty()
-    }
-
-    pub(super) fn name_of<'a>(&'a self, account: &'a str) -> &'a str {
-        if account.is_empty() {
-            return self.system_name();
-        }
-        match self.accounts.iter().find(|a| a.name == account) {
-            Some(a) if !a.label.is_empty() => &a.label,
-            _ => account,
-        }
     }
 }
 

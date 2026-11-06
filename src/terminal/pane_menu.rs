@@ -79,7 +79,7 @@ impl Root {
         let agent = info.as_ref().is_some_and(|i| i.agent.is_some());
         if agent {
             entries.push(Entry::Separator);
-            entries.extend(self.agent_menu(pane).into_iter().skip(1));
+            entries.extend(self.agent_menu(pane, cx).into_iter().skip(1));
         }
         entries.push(Entry::Separator);
         entries.push(danger("Close pane", move |this, window, cx| this.close_pane(pane, window, cx)));

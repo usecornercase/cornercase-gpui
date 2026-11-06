@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FocusHandle, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement, SharedString, Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,
-    prelude::FluentBuilder as _, px,
+    AnyElement, App, ClickEvent, Context, Div, FocusHandle, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement, SharedString, Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window,
+    div, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::frame::{self, Frame};
@@ -11,7 +11,7 @@ use crate::app::{Root, TITLEBAR_HEIGHT};
 use crate::context_menu::{Entry, act, danger, item};
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
-use crate::model::Tab;
+use crate::model::{PaneInfo, Tab};
 use crate::sidebar::{Dragged, Target, cmd, draggable, order, tip};
 use crate::store::Busy;
 use crate::theme::{colours, radius};
@@ -23,13 +23,10 @@ fn faint(text: String) -> Div {
     div().text_size(px(11.)).text_color(colours::faint()).child(text)
 }
 
-fn tab_detail(tab: &Tab) -> Option<String> {
-    let agent = tab.agent_pane()?;
-    match (&agent.model, agent.context) {
-        (Some(m), Some(c)) => Some(format!("{m} · {c}%")),
-        (Some(m), None) => Some(m.clone()),
-        _ => None,
-    }
+fn tab_detail(agent: &PaneInfo, mark: Option<&str>) -> Option<String> {
+    let context = agent.model.as_ref().and(agent.context).map(|c| format!("{c}%"));
+    let parts: Vec<String> = agent.model.iter().cloned().chain(mark.map(str::to_string)).chain(context).collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 fn tab_drop_style(style: StyleRefinement, dragged: Target, id: u64, siblings: &[u64]) -> StyleRefinement {
@@ -118,7 +115,7 @@ fn new_tab_menu() -> Vec<Entry> {
     ]
 }
 
-fn agent_entries(tab: &Tab) -> Vec<Entry> {
+fn agent_entries(tab: &Tab, switch: Option<Entry>) -> Vec<Entry> {
     let Some(agent) = tab.agent_pane() else { return Vec::new() };
     let t = tab.id.to_string();
     let mark = if agent.status.as_deref() == Some("pending") {
@@ -128,6 +125,7 @@ fn agent_entries(tab: &Tab) -> Vec<Entry> {
     };
     let pane = agent.id;
     let mut entries = vec![Entry::Separator, mark];
+    entries.extend(switch);
     entries.extend(
         dialogs::context_choices(tab)
             .into_iter()
@@ -196,6 +194,7 @@ impl Root {
     fn tab_face(&self, tab: &Tab, selected: bool, cx: &mut Context<Self>) -> Stateful<Div> {
         let group = SharedString::from(format!("tab-{}", tab.id));
         let others = tab.panes.len().saturating_sub(1);
+        let detail = tab.agent_pane().and_then(|agent| tab_detail(agent, self.account_mark(agent, cx).as_deref()));
         div()
             .id(group.clone())
             .group(group.clone())
@@ -218,7 +217,7 @@ impl Root {
             .children(tab.loudest().map(|status| badge(Some(status))))
             .child(self.tab_name(tab))
             .when(others > 0, |d| d.child(faint(format!("+{others}"))))
-            .when_some(tab_detail(tab), |d, text| d.child(faint(text).whitespace_nowrap()))
+            .when_some(detail, |d, text| d.child(faint(text).whitespace_nowrap()))
             .child(close_button(tab, group, selected, cx))
     }
 
@@ -237,13 +236,14 @@ impl Root {
         }
     }
 
-    pub(crate) fn tab_menu(&self, id: u64) -> Vec<Entry> {
+    pub(crate) fn tab_menu(&self, id: u64, cx: &App) -> Vec<Entry> {
         let Some(tab) = self.session.as_ref().and_then(|s| s.tab(id)).cloned() else { return Vec::new() };
         let mut entries = vec![
             item("Rename tab", move |this, window, cx| this.start_rename(Target::Tab(id), window, cx)),
             act("New shell tab", cmd(&["new-tab", "--focus"])),
         ];
-        entries.extend(agent_entries(&tab));
+        let switch = tab.agent_pane().and_then(|agent| self.switch_account_item(agent.id, cx));
+        entries.extend(agent_entries(&tab, switch));
         entries.push(Entry::Separator);
         entries.push(danger("Close tab", move |this, window, cx| this.close_tab(&tab, window, cx)));
         entries
@@ -270,3 +270,6 @@ impl Root {
         );
     }
 }
+
+#[cfg(test)]
+mod tests;

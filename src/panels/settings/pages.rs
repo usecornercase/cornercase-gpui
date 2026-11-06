@@ -147,7 +147,9 @@ impl SettingsPanel {
         if !query.is_empty() {
             return column.children(self.render_search(described, &query, window, cx)).into_any_element();
         }
-        let column = column.child(widgets::heading(page_icon(&self.page), self.page.clone(), data::about(&self.page)));
+        let column = column
+            .child(widgets::heading(page_icon(&self.page), self.page.clone(), data::about(&self.page)))
+            .children(self.page_notice());
         match self.page.as_str() {
             data::PROJECTS => column.children(self.render_projects(described, window, cx)),
             data::SHARE => column.children(self.render_share(cx)),
@@ -204,7 +206,7 @@ impl SettingsPanel {
     }
 
     pub(super) fn render_item(&self, d: &Described, item: &Item, slot: Slot<'_>, cx: &mut Context<Self>) -> AnyElement {
-        match item {
+        let row = match item {
             Item::Setting(i) => self.render_setting(&d.settings[*i], slot, cx),
             Item::Connection(i) => self.render_connection(&d.connections[*i], slot, cx),
             Item::Agent { kind, mode, extra } => {
@@ -212,7 +214,8 @@ impl SettingsPanel {
                     AgentItem { kind, mode: mode.map(|i| &d.settings[i]), extra: extra.map(|i| &d.settings[i]) };
                 self.render_agent(&agent, slot, cx)
             }
-        }
+        };
+        if self.spot.item.as_ref() == Some(item) { self.landed_row(row) } else { row }
     }
 
     fn render_setting(&self, setting: &Setting, slot: Slot<'_>, cx: &mut Context<Self>) -> AnyElement {
