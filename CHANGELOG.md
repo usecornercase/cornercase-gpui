@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.21
+
+- The macOS release no longer fails when Apple's service drops the connection while it confirms the notarization: it asks again. Nothing changes in the window. Releases that failed this way only delayed their notes, which show here with the next one.
+
 ## 0.1.20
 
 - **Run an issue, a flow or a workspace on another machine.** An issue's Start, Start a flow and New workspace have a **Run on** row once you list a machine: this computer, then each machine, with why one that is down cannot be picked. The choice lasts while the dialog is open, and a project needs a git remote to run elsewhere, since that is how the same project is found there.
