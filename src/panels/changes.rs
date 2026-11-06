@@ -5,6 +5,7 @@ mod file_list;
 mod filter;
 mod follow;
 mod header;
+mod lines;
 mod open_view;
 mod pieces;
 mod selection;
@@ -22,10 +23,11 @@ use gpui::{
 use crate::cli::Stream;
 use crate::model::Session;
 use crate::store::Store;
+use crate::ui::selection::Selecting;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{TextField, TextFieldEvent};
 
-use diff::Row;
+use diff::{Row, Spot};
 use filter::Query;
 use wire::{Base, Gap, Mode, Patch, Summary};
 
@@ -86,6 +88,7 @@ struct Open {
     loading: bool,
     error: Option<String>,
     generation: u64,
+    selecting: Selecting<Spot>,
 }
 
 pub(crate) struct ChangesPanel {

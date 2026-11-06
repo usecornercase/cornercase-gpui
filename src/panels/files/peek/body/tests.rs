@@ -2,7 +2,6 @@ use std::io::Cursor;
 use std::path::Path;
 
 use super::*;
-use crate::panels::files::disk::Text;
 
 fn png(w: u32, h: u32) -> Vec<u8> {
     let mut bytes = Cursor::new(Vec::new());
@@ -34,7 +33,7 @@ fn a_picture_knows_its_size_from_its_header() {
 
 #[test]
 fn text_shows_as_code_in_its_language() {
-    let text = Text { lines: vec!["fn main() {}".into()] };
+    let text = disk::text("fn main() {}");
     let Still::Code(code) = described(Content::Text(text), Path::new("a.rs"), false) else { panic!("code") };
     assert_eq!((code.lines.len(), code.language), (1, Some("Rust")));
 }

@@ -11,6 +11,29 @@ pub(super) enum Row {
     Line { hunk: usize, line: usize },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Part {
+    Gap,
+    Patch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Spot {
+    pub(super) hunk: usize,
+    pub(super) part: Part,
+    pub(super) line: usize,
+}
+
+impl Row {
+    pub(super) fn spot(self) -> Option<Spot> {
+        match self {
+            Self::GapLine { hunk, line } => Some(Spot { hunk, part: Part::Gap, line }),
+            Self::Line { hunk, line } => Some(Spot { hunk, part: Part::Patch, line }),
+            Self::Gap { .. } | Self::Hunk(_) => None,
+        }
+    }
+}
+
 pub(super) fn rows(hunks: &[Hunk], gaps: &HashMap<usize, Gap>) -> Vec<Row> {
     let mut rows = Vec::new();
     for (i, hunk) in hunks.iter().enumerate() {
@@ -86,18 +109,6 @@ pub(super) fn changed(hunk: &Hunk) -> (u32, u32) {
         }
     }
     (new, new)
-}
-
-pub(super) fn reference(path: &str, (first, last): (u32, u32)) -> String {
-    if first == last { format!("{path}:{first} ") } else { format!("{path}:{first}-{last} ") }
-}
-
-pub(super) fn editor_command(path: &str, line: u32) -> String {
-    format!("${{VISUAL:-${{EDITOR:-vi}}}} +{line} {}", shell_quote(path))
-}
-
-fn shell_quote(text: &str) -> String {
-    format!("'{}'", text.replace('\'', r"'\''"))
 }
 
 pub(super) fn discard_question(file: &FileInfo) -> String {

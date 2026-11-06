@@ -12,5 +12,6 @@ Code: every panel
 ## To remove once these land
 
 - **#675**: the note on a machine's first read of stats (`Pick::asking_stats`, `src/panels/usage/machines.rs`) gives way to reading them cached first, as `load_plans` does (`load_stats`, `src/panels/usage.rs`).
+- **#667**: the Changes panel's Copy saying that tabs may have become spaces (`NO_OWN_TEXT` and `copied_toast` in `src/panels/changes/lines.rs`) gives way to copying a line's own text, once `changes file` and `changes gap` give it (`design/changes-panel.md`).
 - **#583**: a flow's start dialog showing the run with `focus --tab` of the orchestrator's tab in our view once `flow run` answers (`finish` in `src/panels/flows/start.rs`; `Started::place` and `StartedMember` in `src/panels/flows/model.rs`) gives way to `flow run --focus --view` alone.
 - **#549**: showing a fold before the session confirms it (`src/sidebar/folds.rs`, `Folds` in `SideState` and `Msg::Folded` in `src/app.rs`); `set_folded` goes back to queueing the command alone.

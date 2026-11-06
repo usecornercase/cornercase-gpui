@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::{Toast, ToastKind, push_toast};
+use super::{Toast, ToastKind, editor_command, push_toast};
 
 fn toast(id: u64, text: &str) -> Toast {
     Toast { id, text: text.into(), kind: ToastKind::Error, action: None, at: Instant::now(), count: 1 }
@@ -51,4 +51,10 @@ fn at_most_five_toasts_are_kept() {
         push_toast(&mut toasts, toast(id, &id.to_string()));
     }
     assert_eq!(toasts.first().map(|t| t.id), Some(3));
+}
+
+#[test]
+fn quotes_the_path_for_the_editor() {
+    assert_eq!(editor_command("src/a b.rs", 7), "${VISUAL:-${EDITOR:-vi}} +7 'src/a b.rs'");
+    assert_eq!(editor_command("it's.txt", 1), r"${VISUAL:-${EDITOR:-vi}} +1 'it'\''s.txt'");
 }
