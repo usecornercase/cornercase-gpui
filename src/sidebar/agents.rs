@@ -5,7 +5,7 @@ use super::rows::list_text;
 use super::section_head;
 use super::workspace::AgentPlace;
 use crate::app::Root;
-use crate::model::{AgentRow, Session};
+use crate::model::{AgentRow, Session, Shown};
 use crate::ui;
 
 pub(crate) fn places_shown(rows: &[AgentRow<'_>]) -> Vec<bool> {
@@ -49,7 +49,7 @@ impl Root {
         if rows.is_empty() {
             return ui::note("No agents running.");
         }
-        let shown = session.shown();
+        let shown = if self.side.machine_place.is_some() { Shown::default() } else { session.shown() };
         let list = list_text(div().flex().flex_col().gap(px(1.)).px(px(10.)).pb(px(4.)));
         list.children(rows.iter().zip(places_shown(rows)).map(|(row, with_place)| {
             let place = AgentPlace {

@@ -4,6 +4,8 @@ mod arrange;
 mod folds;
 mod forms;
 mod look;
+mod machine_acts;
+mod machine_rows;
 mod menus;
 pub(crate) mod order;
 pub(crate) mod rail;
@@ -22,6 +24,7 @@ use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
 use crate::context_menu::Menu;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
+use crate::model::{Aim, MachinePlace};
 use crate::platform::Os;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, TextField};
@@ -101,8 +104,14 @@ pub(crate) fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut Ap
     move |_, cx| cx.new(|_| Tip(text.clone())).into()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Renaming {
+    Here(Target),
+    There(Aim),
+}
+
 pub(crate) struct Rename {
-    pub target: Target,
+    pub what: Renaming,
     pub field: Entity<TextField>,
     initial: String,
 }
@@ -112,10 +121,12 @@ pub(crate) struct SideState {
     pub menu: Option<Menu>,
     pub rename: Option<Rename>,
     pub folds: folds::Folds,
+    pub there_folds: machine_rows::ThereFolds,
     pub look: look::Looks,
     pub sizes: arrange::Sizes,
     pub hovered: Option<SharedString>,
     pub strip: crate::tabs::TabStrip,
+    pub machine_place: Option<MachinePlace>,
 }
 
 impl Root {

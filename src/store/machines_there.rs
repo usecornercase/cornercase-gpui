@@ -1,0 +1,213 @@
+use std::collections::{HashMap, HashSet};
+
+use gpui::Context;
+use serde_json::Value;
+
+use super::jobs::{leaving_key, renaming_key};
+use super::{Busy, Store, ToastKind, args, run_job_on, run_on};
+use crate::cli::{self, Remote, Target};
+use crate::desktop;
+use crate::model::machines::Machine;
+use crate::model::machines::seen::sighted;
+use crate::model::{Aim, MachinePlace, MachineSeen, ThereId};
+
+const NOTHING_SENT: &str = "nothing was sent";
+
+#[derive(Default)]
+pub(super) struct Homes {
+    known: HashMap<String, String>,
+    asked: HashSet<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct NoticeThere {
+    pub machine: String,
+    pub boot: String,
+    pub panes: Vec<ThereId>,
+    pub gone: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum MachineAct {
+    Rename(String),
+    Close,
+    Remove { force: bool, unlock: bool },
+}
+
+impl MachineAct {
+    fn args(&self, aim: &Aim) -> Vec<String> {
+        match self {
+            Self::Rename(name) => aim.rename_args(name),
+            Self::Close => aim.close_args(),
+            Self::Remove { force, unlock } => aim.remove_args(*force, *unlock),
+        }
+    }
+
+    fn leaves(&self) -> bool {
+        !matches!(self, Self::Rename(_))
+    }
+
+    fn job(&self, aim: &Aim, name: &str) -> Busy {
+        let machine = &aim.machine;
+        match self {
+            Self::Rename(_) => Busy::new(renaming_key(aim), format!("Renaming {name} on {machine}…")),
+            Self::Close => Busy::new(leaving_key(aim), format!("Closing {name} on {machine}…")),
+            Self::Remove { .. } => Busy::new(leaving_key(aim), format!("Removing {name} on {machine}…")),
+        }
+    }
+
+    fn done(&self, aim: &Aim, name: &str) -> Option<String> {
+        let machine = &aim.machine;
+        match self {
+            Self::Rename(_) => None,
+            Self::Close => Some(format!("Closed {name} on {machine}")),
+            Self::Remove { .. } => Some(format!("Removed {name} on {machine}")),
+        }
+    }
+}
+
+struct Acting {
+    aim: Aim,
+    act: MachineAct,
+    name: String,
+}
+
+pub(crate) fn machine_target(window: &Target, list: &[Machine], seen: &MachineSeen) -> Result<Target, String> {
+    let name = &seen.name;
+    if let Some(host) = window.host() {
+        return Err(format!("{name} is linked from {host}: its address means nothing from this {}", desktop::here()));
+    }
+    if !seen.linked() {
+        return Err(seen.link_note());
+    }
+    let listed =
+        list.iter().find(|machine| machine.name == *name).ok_or_else(|| format!("{name} is no longer listed"))?;
+    let remote = Remote::new(&listed.destination, "");
+    remote.map(Target::Remote).ok_or_else(|| format!("{name}'s ssh destination cannot be used"))
+}
+
+fn sent_or_not(why: &str) -> String {
+    format!("{why}: {NOTHING_SENT}")
+}
+
+fn home_in(status: &str) -> Option<String> {
+    let status: Value = serde_json::from_str(status).ok()?;
+    status.get("home").and_then(Value::as_str).map(str::to_string)
+}
+
+impl Store {
+    pub(crate) fn pick_machine_place(&mut self, place: MachinePlace, cx: &mut Context<Self>) {
+        self.ask_machine_home(&place.machine, cx);
+        self.machine_place = Some(place);
+        cx.notify();
+    }
+
+    pub(crate) fn leave_machine_place(&mut self, cx: &mut Context<Self>) {
+        if self.machine_place.take().is_some() {
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn follow_machines(&mut self) {
+        let Some(session) = &self.session else { return };
+        self.machine_place = self.machine_place.as_ref().and_then(|place| place.followed(&session.machines));
+        self.jobs.keep_leaving_there(|aim| sighted(&session.machines, aim).is_ok());
+    }
+
+    fn place_of_notice(&self, there: &NoticeThere) -> Option<MachinePlace> {
+        self.session.as_ref()?.place_holding_panes((&there.machine, &there.boot), &there.panes)
+    }
+
+    pub(crate) fn go_there(&mut self, there: &NoticeThere, cx: &mut Context<Self>) {
+        match self.place_of_notice(there) {
+            Some(place) => self.pick_machine_place(place, cx),
+            None => self.toast(there.gone.clone(), ToastKind::Info, cx),
+        }
+    }
+
+    pub(crate) fn shows_notice(&self, there: &NoticeThere) -> bool {
+        let shown = self.machine_place.as_ref();
+        shown.zip(self.place_of_notice(there)).is_some_and(|(shown, place)| shown.same_workspace(&place))
+    }
+
+    pub(crate) fn machine_target(&self, seen: &MachineSeen) -> Result<Target, String> {
+        machine_target(&cli::target(), &self.machines, seen)
+    }
+
+    pub(crate) fn reach_machine(&self, aim: &Aim) -> Result<Target, String> {
+        let machines = self.session.as_ref().map_or(&[][..], |session| &session.machines);
+        let (seen, ws) = sighted(machines, aim)?;
+        let target = self.machine_target(seen)?;
+        if self.machine_busy(aim) {
+            return Err(format!("{} on {} is still waiting for its last action", ws.name, seen.name));
+        }
+        Ok(target)
+    }
+
+    pub(crate) fn machine_busy(&self, aim: &Aim) -> bool {
+        self.machine_leaving(aim) || self.jobs.busy(&renaming_key(aim))
+    }
+
+    pub(crate) fn machine_leaving(&self, aim: &Aim) -> bool {
+        self.jobs.leaving_there(aim)
+    }
+
+    pub(crate) fn not_sent(&mut self, why: &str, cx: &mut Context<Self>) {
+        self.toast(sent_or_not(why), ToastKind::Error, cx);
+    }
+
+    pub(crate) fn act_on_machine(&mut self, aim: Aim, act: MachineAct, cx: &mut Context<Self>) {
+        let target = match self.reach_machine(&aim) {
+            Ok(target) => target,
+            Err(why) => return self.not_sent(&why, cx),
+        };
+        let machines = self.session.as_ref().map_or(&[][..], |session| &session.machines);
+        let name = sighted(machines, &aim).map(|(_, ws)| ws.name.clone()).unwrap_or_default();
+        let id = self.start_job(act.job(&aim, &name), cx);
+        let command = act.args(&aim);
+        let acting = Acting { aim, act, name };
+        run_job_on(cx, id, target, command, move |this: &mut Self, result, cx| this.acted(acting, result.err(), cx));
+    }
+
+    fn acted(&mut self, acting: Acting, failed: Option<anyhow::Error>, cx: &mut Context<Self>) {
+        let Acting { aim, act, name } = acting;
+        if let Some(e) = failed {
+            self.toast(format!("{}: {}", aim.machine, cli::reason(&e)), ToastKind::Error, cx);
+            return;
+        }
+        if let Some(done) = act.done(&aim, &name) {
+            self.toast(done, ToastKind::Info, cx);
+        }
+        if act.leaves() {
+            self.jobs.left_there(aim);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn machine_home(&self, boot: &str) -> Option<&str> {
+        self.homes.known.get(boot).map(String::as_str)
+    }
+
+    pub(crate) fn ask_machine_home(&mut self, machine: &str, cx: &mut Context<Self>) {
+        let Some(seen) = self.session.as_ref().and_then(|session| session.machine(machine)) else { return };
+        let boot = seen.boot.clone();
+        let Ok(target) = self.machine_target(seen) else { return };
+        if self.homes.known.contains_key(&boot) || !self.homes.asked.insert(boot.clone()) {
+            return;
+        }
+        run_on(cx, target, args(&["status", "--json"]), move |this: &mut Self, result, cx| {
+            match result.ok().as_deref().and_then(home_in) {
+                Some(home) => {
+                    this.homes.known.insert(boot, home);
+                }
+                None => {
+                    this.homes.asked.remove(&boot);
+                }
+            }
+            cx.notify();
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -146,7 +146,7 @@ impl Root {
     }
 
     pub(crate) fn frame_shown(&self) -> bool {
-        self.has_frame && !self.shows_no_tab()
+        self.has_frame && !self.shows_no_tab() && self.side.machine_place.is_none()
     }
 
     pub(crate) fn drop_drags_without_tab(&mut self) {

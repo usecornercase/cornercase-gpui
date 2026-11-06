@@ -52,11 +52,11 @@ impl Default for Look {
 }
 
 impl Look {
-    pub(crate) fn model_of(&self, pane: &PaneInfo) -> Option<String> {
+    pub(crate) fn model_of<Id>(&self, pane: &PaneInfo<Id>) -> Option<String> {
         pane.model.clone().filter(|_| self.model)
     }
 
-    pub(crate) fn share_of(&self, pane: &PaneInfo) -> Option<String> {
+    pub(crate) fn share_of<Id>(&self, pane: &PaneInfo<Id>) -> Option<String> {
         let share = pane.context.map(|c| format!("{c}%")).or_else(|| pane.compacted.then(|| "compacted".to_string()));
         share.filter(|_| self.context)
     }

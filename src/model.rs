@@ -20,6 +20,7 @@ pub(crate) use agent_context::{McpServer, Skills};
 pub(crate) use details::memory_size;
 pub(crate) use grid::{Applied, Grid, PaneGrid, Run};
 pub(crate) use link::Link;
+pub(crate) use machines::seen::{Aim, MachinePlace, MachineSeen, ThereId, ThereProject, ThereWorkspace};
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};
 pub(crate) use shared::Shared;
 pub(crate) use surface::{
@@ -37,6 +38,7 @@ pub(crate) struct Session {
     pub view: Option<ViewInfo>,
     pub config: ConfigInfo,
     pub home: Option<String>,
+    pub machines: Vec<MachineSeen>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
@@ -98,21 +100,21 @@ pub(crate) struct Changes {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
-pub(crate) struct Tab {
-    pub id: u64,
+#[serde(default, bound(deserialize = "Id: Deserialize<'de> + Default"))]
+pub(crate) struct Tab<Id = u64> {
+    pub id: Id,
     pub name: String,
     pub status: Option<String>,
     pub active: bool,
-    pub panes: Vec<PaneInfo>,
+    pub panes: Vec<PaneInfo<Id>>,
     pub custom_name: Option<String>,
 }
 
 #[expect(clippy::struct_excessive_bools, reason = "mirrors the flags of a pane in cornercase's view")]
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
-pub(crate) struct PaneInfo {
-    pub id: u64,
+#[serde(default, bound(deserialize = "Id: Deserialize<'de> + Default"))]
+pub(crate) struct PaneInfo<Id = u64> {
+    pub id: Id,
     pub path: Option<String>,
     pub program: Option<String>,
     pub agent: Option<String>,
@@ -122,7 +124,7 @@ pub(crate) struct PaneInfo {
     pub active: bool,
     pub title: Option<String>,
     pub dialog: bool,
-    pub parent: Option<u64>,
+    pub parent: Option<Id>,
     pub subagents: u32,
     pub role: Option<String>,
     pub collapsed: bool,
@@ -204,8 +206,7 @@ impl Session {
     }
 
     pub(crate) fn anyone_working(&self) -> bool {
-        let working = |status: &Option<String>| status.as_deref() == Some("working");
-        self.tabs().any(|t| working(&t.status) || t.panes.iter().any(|p| working(&p.status)))
+        self.tabs().any(works) || self.machines.iter().any(MachineSeen::works)
     }
 
     pub(crate) fn sections(&self) -> Vec<(Option<u64>, Vec<u64>)> {
@@ -224,11 +225,16 @@ impl Session {
     }
 }
 
-impl PaneInfo {
+impl<Id> PaneInfo<Id> {
     pub(crate) fn agent_title(&self) -> Option<String> {
         let title = self.title.as_deref()?.trim_start_matches(|c: char| !c.is_alphanumeric()).trim();
         (!title.is_empty()).then(|| title.to_string())
     }
+}
+
+pub(crate) fn works<Id>(tab: &Tab<Id>) -> bool {
+    let working = |status: &Option<String>| status.as_deref() == Some("working");
+    working(&tab.status) || tab.panes.iter().any(|p| working(&p.status))
 }
 
 pub(crate) fn status_rank(status: Option<&str>) -> u8 {
@@ -242,21 +248,25 @@ pub(crate) fn status_rank(status: Option<&str>) -> u8 {
     }
 }
 
-impl Tab {
+impl<Id> Tab<Id> {
     pub(crate) fn loudest(&self) -> Option<&str> {
         let tab = self.status.as_deref();
         let panes = self.panes.iter().filter_map(|p| p.status.as_deref());
         std::iter::once(tab).flatten().chain(panes).max_by_key(|s| status_rank(Some(s)))
     }
 
-    pub(crate) fn agent_pane(&self) -> Option<&PaneInfo> {
+    pub(crate) fn agent_pane(&self) -> Option<&PaneInfo<Id>> {
         self.panes.iter().find(|p| p.agent.is_some())
     }
 }
 
+pub(crate) fn loudest_of<Id>(tabs: &[Tab<Id>]) -> Option<&str> {
+    tabs.iter().filter_map(Tab::loudest).max_by_key(|s| status_rank(Some(s)))
+}
+
 impl Workspace {
     pub(crate) fn loudest(&self) -> Option<&str> {
-        self.tabs.iter().filter_map(Tab::loudest).max_by_key(|s| status_rank(Some(s)))
+        loudest_of(&self.tabs)
     }
 
     pub(crate) fn runs_flow(&self) -> bool {
@@ -322,7 +332,7 @@ impl Session {
     }
 }
 
-fn needs_you(status: &str) -> bool {
+pub(crate) fn needs_you(status: &str) -> bool {
     matches!(status, "waiting" | "failed" | "done" | "pending")
 }
 

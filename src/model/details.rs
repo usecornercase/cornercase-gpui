@@ -12,7 +12,7 @@ pub(crate) fn memory_size(bytes: u64) -> String {
     format!("{}.{} GB", tenths / 10, tenths % 10)
 }
 
-impl Tab {
+impl<Id> Tab<Id> {
     pub(crate) fn memory(&self) -> Option<u64> {
         self.panes.iter().filter_map(|p| p.memory).reduce(u64::saturating_add)
     }

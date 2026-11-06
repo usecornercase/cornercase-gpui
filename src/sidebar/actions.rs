@@ -2,13 +2,13 @@ use gpui::{App, AppContext as _, Context, Focusable as _, PathPromptOptions, Win
 use serde_json::Value;
 
 use super::order::{self, Place};
-use super::{Fold, Rename, Target, cmd};
+use super::{Fold, Rename, Renaming, Target, cmd};
 use crate::app::{Msg, Root};
 use crate::cli;
 use crate::dialogs::{self, PathQuestion};
 use crate::model::Session;
 use crate::platform::paths::Style;
-use crate::store::Busy;
+use crate::store::{Busy, MachineAct};
 use crate::ui::{TextField, TextFieldEvent};
 
 pub(super) fn into_group(project: u64, group: u64) -> Vec<String> {
@@ -96,12 +96,12 @@ fn drop_command(session: &Session, dragged: Target, target: Target) -> Option<Ve
     }
 }
 
-fn rename_placeholder(target: Target) -> &'static str {
-    match target {
-        Target::Group(_) => "group name",
-        Target::Project(_) => "empty: the folder's name",
-        Target::Workspace(_) => "empty: the branch's name",
-        Target::Tab(_) => "empty: the program's name",
+fn rename_placeholder(what: &Renaming) -> &'static str {
+    match what {
+        Renaming::Here(Target::Group(_)) => "group name",
+        Renaming::Here(Target::Project(_)) => "empty: the folder's name",
+        Renaming::Here(Target::Workspace(_)) | Renaming::There(_) => "empty: the branch's name",
+        Renaming::Here(Target::Tab(_)) => "empty: the program's name",
     }
 }
 
@@ -142,8 +142,12 @@ impl Root {
 
     pub(crate) fn start_rename(&mut self, target: Target, window: &mut Window, cx: &mut Context<Self>) {
         let Some(initial) = self.current_name(target) else { return };
+        self.open_rename(Renaming::Here(target), initial, window, cx);
+    }
+
+    pub(super) fn open_rename(&mut self, what: Renaming, initial: String, window: &mut Window, cx: &mut Context<Self>) {
         let field = cx.new(|cx| {
-            let mut f = TextField::new(rename_placeholder(target), cx);
+            let mut f = TextField::new(rename_placeholder(&what), cx);
             f.set_text(initial.clone(), cx);
             f
         });
@@ -154,19 +158,30 @@ impl Root {
         })
         .detach();
         window.focus(&field.read(cx).focus_handle(cx));
-        self.side.rename = Some(Rename { target, field, initial });
+        self.side.rename = Some(Rename { what, field, initial });
         cx.notify();
     }
 
     pub(crate) fn finish_rename(&mut self, save: bool, window: &mut Window, cx: &mut Context<Self>) {
         let Some(rename) = self.side.rename.take() else { return };
         let text = rename.field.read(cx).text().trim().to_string();
-        let empty_group = matches!(rename.target, Target::Group(_)) && text.is_empty();
-        if save && text != rename.initial && !empty_group {
-            self.act(vec!["rename".into(), rename.target.flag().into(), rename.target.id().to_string(), text]);
+        if save && text != rename.initial {
+            self.send_rename(rename.what, text, cx);
         }
         window.focus(&self.focus);
         cx.notify();
+    }
+
+    fn send_rename(&mut self, what: Renaming, text: String, cx: &mut Context<Self>) {
+        match what {
+            Renaming::Here(Target::Group(_)) if text.is_empty() => {}
+            Renaming::Here(target) => {
+                self.act(vec!["rename".into(), target.flag().into(), target.id().to_string(), text]);
+            }
+            Renaming::There(aim) => {
+                self.store.update(cx, |s, cx| s.act_on_machine(aim, MachineAct::Rename(text), cx));
+            }
+        }
     }
 
     pub(crate) fn drop_on(&mut self, dragged: Target, target: Target) {

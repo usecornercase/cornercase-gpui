@@ -12,7 +12,7 @@ use crate::context_menu::{Entry, act, danger, item};
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::{Tab, memory_size};
-use crate::sidebar::{Dragged, Look, Target, cmd, draggable, order, tip};
+use crate::sidebar::{Dragged, Look, Renaming, Target, cmd, draggable, order, tip};
 use crate::store::Busy;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, badge};
@@ -191,7 +191,7 @@ impl Root {
             .overflow_x_scroll()
             .track_scroll(self.side.strip.handle());
         let Some((_, ws)) = self.shown_workspace() else { return strip };
-        let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab);
+        let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab).filter(|_| self.side.machine_place.is_none());
         let index = ws.tabs.iter().position(|t| Some(t.id) == shown_tab);
         self.side.strip.show(Some(ws.id), shown_tab, index);
         let siblings: Rc<Vec<u64>> = Rc::new(ws.tabs.iter().map(|t| t.id).collect());
@@ -249,7 +249,7 @@ impl Root {
     }
 
     fn tab_name(&self, tab: &Tab) -> AnyElement {
-        match self.side.rename.as_ref().filter(|r| r.target == Target::Tab(tab.id)) {
+        match self.side.rename.as_ref().filter(|r| r.what == Renaming::Here(Target::Tab(tab.id))) {
             Some(r) => div().w(px(140.)).child(ui::input_box(r.field.clone(), true).py(px(0.))).into_any_element(),
             None => div().whitespace_nowrap().child(tab.name.clone()).into_any_element(),
         }
