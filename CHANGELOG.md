@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.10
+
+- **Usage of every machine.** Once you have machines, the Usage sheet has a row that picks this computer, one machine or all of them, for Limits, Stats and By agent alike.
+- Under all, Stats adds the machines up and says that **most at once** is the largest peak of one machine, not a sum.
+- Under all, Limits lists each machine's accounts under its name. A Claude Code account logged in on two of them shows once, with `on this computer, vps` under it, and its numbers are the latest reading, never added.
+- Old numbers say so: a machine that is down shows the numbers it gave last with `seen 5 min ago`, one whose last answer failed says why and how old they are, and one that never answered says why instead of its rows.
+
 ## 0.1.9
 
 - Once an agent has more than one login, the window says which account each agent runs on: after its model in the sidebar and the tab bar, and on a small button at the bottom of its pane. That button, or Switch account in a tab's or a pane's menu, moves the agent to another account in the same conversation, after its turn if it is busy, and tells you what happened. On a shell, the buttons say which account an agent typed there would start on. If you never added an account, nothing changes.
