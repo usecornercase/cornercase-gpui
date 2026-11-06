@@ -164,17 +164,31 @@ fn a_listing_from_a_server_that_restarted_is_not_believed() {
 
 #[test]
 fn a_machines_place_never_takes_the_key_of_a_workspace_here() {
-    let key = place_key(&aim());
+    let key = place_key(&vps_read(Reach::Up(target())));
     assert!(on_a_machine(key));
     assert_ne!(key, 7);
     assert!(!on_a_machine(7));
-    assert_eq!(key, place_key(&aim()));
+    assert_eq!(key, place_key(&vps_read(Reach::Up(target()))));
 }
 
 #[test]
 fn another_boot_of_the_same_workspace_is_another_place() {
-    let restarted = Aim { boot: "99-1".into(), ..aim() };
-    assert_ne!(place_key(&aim()), place_key(&restarted));
+    let read = vps_read(Reach::Up(target()));
+    let restarted = MachineRead { aim: Aim { boot: "99-1".into(), ..aim() }, ..read.clone() };
+    assert_ne!(place_key(&read), place_key(&restarted));
+}
+
+#[test]
+fn another_destination_is_another_place_so_a_late_answer_finds_nothing() {
+    let read = vps_read(Reach::Up(target()));
+    let moved = MachineRead { destination: "ana@other.example.com".into(), ..read.clone() };
+    assert_ne!(place_key(&read), place_key(&moved));
+}
+
+#[test]
+fn a_machine_going_down_keeps_its_place() {
+    let down = vps_read(Reach::Down("vps unreachable".into()));
+    assert_eq!(place_key(&down), place_key(&vps_read(Reach::Up(target()))));
 }
 
 #[test]
@@ -252,4 +266,12 @@ fn a_search_left_behind_cannot_answer_or_open_what_it_found() {
     assert!(!search.enter);
     assert!(search.running.is_none());
     assert!(running.load(Ordering::Relaxed));
+}
+
+#[test]
+fn a_search_left_behind_is_not_asked_again_when_the_machine_comes_back() {
+    let mut search = Search::new();
+    search.refused = true;
+    search.forget();
+    assert!(!search.refused);
 }

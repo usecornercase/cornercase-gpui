@@ -34,6 +34,7 @@ pub(crate) fn vps_target() -> Target {
 pub(crate) fn vps_read(reach: Reach) -> MachineRead {
     MachineRead {
         aim: vps_aim(),
+        destination: "ana@vps.example.com".into(),
         icon: MachineIcon::Server,
         place: "shop".into(),
         path: "/home/ana/code/shop".into(),

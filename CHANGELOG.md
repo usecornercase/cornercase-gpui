@@ -4,8 +4,8 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.1.21
 
-- **Changes and Files read a machine's workspace.** With a machine's workspace picked in the sidebar, these two panels show what is on that machine, and say `on vps` at the top. Changes follows its diff live in Uncommitted, Commits and All, with the filter, the gaps and selecting and copying lines. Files browses its tree, opens its files, searches names and text, and ⇧⌘P finds a file there. Nothing on your computer is read for them, even where the same path exists here.
-- **They only read.** Staging, discarding, marking viewed, choosing the base, Ask agent and opening in an editor are not offered on a machine's workspace. Every project stays this computer's and says so.
+- **Changes and Files read a machine's workspace.** With a machine's workspace picked in the sidebar, these two panels show what is on that machine, and say `on vps` at the top. Changes follows its diff live in Uncommitted, Commits and All, with the filter, the gaps and selecting and copying lines. Files browses its tree, opens its files, searches names and text, and ⇧⌘P finds a file there. Nothing on your computer is read for them, even where the same path exists here. A window connected to another server can't reach that server's machines: the panels say so and read nothing.
+- **They only read.** Staging, discarding, marking viewed, choosing the base, Ask agent and opening in an editor are not offered on a machine's workspace. Every project stays on the server this window is on, and says which.
 - **When the machine goes down** the panels keep what they show and say `vps unreachable · reconnecting…`; opening another file there sends nothing and tells you so, and they pick up by themselves when the link is back. If the server there restarted, they start over, since what they showed may no longer be that workspace.
 
 ## 0.1.20

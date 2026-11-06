@@ -4,6 +4,7 @@ use std::rc::Rc;
 use gpui::{Context, ListOffset, px};
 
 use crate::cli::{self, Target};
+use crate::panels::on_machine;
 use crate::store::{self, Busy, Store, ToastKind, args};
 
 use super::pieces::{find, looks, parse, toast};
@@ -21,13 +22,34 @@ pub(super) fn switching_base(workspace: u64) -> String {
     format!("changes-base:{workspace}")
 }
 
+impl Open {
+    fn read_failed(&mut self, why: String) -> bool {
+        self.digest.clear();
+        self.error = Some(why);
+        self.data.is_some()
+    }
+
+    pub(super) fn drop_reads_under_way(&mut self) {
+        self.generation += 1;
+        self.loading = false;
+        self.digest.clear();
+    }
+}
+
 impl ChangesPanel {
     fn read_target(&self, workspace: &Whose) -> Result<Target, String> {
         if matches!(workspace, Whose::Here(_)) {
             return Ok(cli::target());
         }
         let Some(read) = &self.on_machine else { return Err("that machine is no longer shown".to_string()) };
-        read.reach.target().cloned().ok_or_else(|| read.reach.why_not().unwrap_or_default().to_string())
+        on_machine::may_ask(read, &self.retry)
+    }
+
+    fn patch_failed(&mut self, error: &anyhow::Error, cx: &mut Context<Self>) {
+        let text = error.to_string();
+        if self.open.read_failed(text.clone()) {
+            toast(text, ToastKind::Error, cx);
+        }
     }
 
     pub(super) fn refuses_reading(&self, workspace: &Whose, cx: &mut Context<Self>) -> bool {
@@ -93,7 +115,7 @@ impl ChangesPanel {
             this.open.loading = false;
             match parse::<Patch>(result) {
                 Ok(patch) => this.show_patch(selected, patch),
-                Err(e) => this.open.error = Some(e.to_string()),
+                Err(e) => this.patch_failed(&e, cx),
             }
             cx.notify();
         });

@@ -3,8 +3,12 @@ use super::*;
 use crate::store::Reach;
 use crate::test_util::{vps_aim as aim, vps_read as read, vps_target as on_machine};
 
+fn on_vps() -> Whose {
+    Whose::There(aim(), "ana@vps.example.com".into())
+}
+
 fn there(mode: Mode) -> Follow {
-    Follow { scope: Scope::Project(mode), workspace: Some(Whose::There(aim())) }
+    Follow { scope: Scope::Project(mode), workspace: Some(on_vps()) }
 }
 
 fn every() -> Follow {
@@ -63,13 +67,13 @@ fn a_closed_panel_follows_nothing() {
 #[test]
 fn a_picked_machine_takes_the_place_of_the_workspace_shown_here() {
     let read = read(Reach::Up(on_machine()));
-    assert_eq!(shown_whose(None, Some(&read)), Some(Whose::There(aim())));
+    assert_eq!(shown_whose(None, Some(&read)), Some(on_vps()));
 }
 
 #[test]
 fn a_machine_down_stays_the_workspace_shown() {
     let read = read(Reach::Down("vps unreachable".into()));
-    assert_eq!(shown_whose(None, Some(&read)), Some(Whose::There(aim())));
+    assert_eq!(shown_whose(None, Some(&read)), Some(on_vps()));
 }
 
 #[test]
@@ -93,20 +97,20 @@ fn a_summary_for_a_workspace_here_has_no_boot_to_compare() {
 
 #[test]
 fn a_machines_workspace_is_no_workspace_here() {
-    assert_eq!(Whose::There(aim()).here(), None);
+    assert_eq!(on_vps().here(), None);
     assert_eq!(Whose::Here(43).here(), Some(43));
 }
 
 #[test]
 fn the_files_a_machine_lists_are_its_own_whatever_their_numbers_mean_here() {
-    assert!(Whose::There(aim()).holds(43));
+    assert!(on_vps().holds(43));
     assert!(!Whose::Here(7).holds(43));
 }
 
 #[test]
 fn a_row_of_a_machines_list_stays_the_machines() {
     let (listed, here) = (43, Whose::Here(43));
-    assert_eq!(whose_listed(Some(&there(Mode::All)), listed), Whose::There(aim()));
+    assert_eq!(whose_listed(Some(&there(Mode::All)), listed), on_vps());
     assert_eq!(whose_listed(Some(&every()), listed), here);
 }
 
@@ -120,4 +124,10 @@ fn the_first_line_of_a_reopened_stream_is_only_starting() {
 fn a_ready_line_with_no_files_is_news() {
     let line = r#"{"boot":"b1","mode":"uncommitted","revision":2,"state":"ready","workspaces":[]}"#;
     assert!(!only_starting(&wire::summary(line).expect("parses")));
+}
+
+#[test]
+fn another_destination_is_another_place_to_read() {
+    let read = MachineRead { destination: "ana@other.example.com".into(), ..read(Reach::Up(on_machine())) };
+    assert_ne!(shown_whose(None, Some(&read)), Some(on_vps()));
 }

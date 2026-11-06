@@ -142,7 +142,9 @@ impl FilesPanel {
     }
 
     fn apply_listings(&mut self, id: u64, listed: Listed, cx: &mut Context<Self>) {
-        self.machine_answered(&listed, cx);
+        if self.current == Some(id) {
+            self.machine_answered(&listed, cx);
+        }
         let Some(place) = self.places.get_mut(&id) else { return };
         place.listing = false;
         let mut changed = false;

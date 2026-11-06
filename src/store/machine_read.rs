@@ -32,6 +32,7 @@ impl Reach {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MachineRead {
     pub aim: Aim,
+    pub destination: String,
     pub icon: MachineIcon,
     pub place: String,
     pub path: String,
@@ -56,8 +57,10 @@ fn read_of(
     home: Option<&str>,
 ) -> MachineRead {
     let listed = seen.place_name(place.workspace).filter(|_| seen.boot == place.boot);
+    let reached_at = list.iter().find(|machine| machine.name == seen.name);
     MachineRead {
         aim: place.aim(),
+        destination: reached_at.map_or_else(String::new, |machine| machine.destination.clone()),
         icon: seen.icon,
         place: listed.unwrap_or_else(|| place.name().to_string()),
         path: place.path().to_string(),

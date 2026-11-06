@@ -3,6 +3,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
+use crate::cli::{self, Target};
 use crate::desktop;
 use crate::model::Session;
 use crate::store::Store;
@@ -43,8 +44,11 @@ fn place_label(scope: Scope, shown: Option<u64>, session: Option<&Session>) -> S
     }
 }
 
-fn every_project_here() -> String {
-    format!("uncommitted changes of every project on this {}", desktop::here())
+fn every_project_on(window: &Target) -> String {
+    match window.host() {
+        Some(host) => format!("uncommitted changes of every project on {host}"),
+        None => format!("uncommitted changes of every project on this {}", desktop::here()),
+    }
 }
 
 fn default_label(base: &Base) -> String {
@@ -152,7 +156,7 @@ impl ChangesPanel {
     fn place_text(&self, session: Option<&Session>) -> String {
         match (&self.on_machine, self.scope) {
             (Some(_), Scope::Project(_)) => String::new(),
-            (Some(_), Scope::Every) => every_project_here(),
+            (Some(_), Scope::Every) => every_project_on(&cli::target()),
             (None, _) => place_label(self.scope, self.shown.as_ref().and_then(Whose::here), session),
         }
     }
@@ -207,3 +211,6 @@ impl ChangesPanel {
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.choose_base(Some(name.clone()), cx)))
     }
 }
+
+#[cfg(test)]
+mod tests;

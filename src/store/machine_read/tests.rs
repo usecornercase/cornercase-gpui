@@ -110,3 +110,17 @@ fn the_numbers_of_another_run_do_not_name_a_place_kept_while_the_link_is_down() 
     let restarted = MachineSeen { boot: "b2".into(), projects, ..seen(LinkState::Unreachable) };
     assert_eq!(place_then(&restarted).place, "main");
 }
+
+#[test]
+fn a_read_names_the_destination_it_goes_through_also_while_the_machine_is_down() {
+    assert_eq!(read(LinkState::Linked, &Target::Local).destination, "ana@vps.example.com");
+    assert_eq!(read(LinkState::Unreachable, &Target::Local).destination, "ana@vps.example.com");
+}
+
+#[test]
+fn a_machine_gone_from_the_list_has_no_destination() {
+    let seen = seen(LinkState::Linked);
+    let ws = seen.workspace(ThereId::heard(7)).expect("a workspace");
+    let read = read_of(&MachinePlace::at(&seen, ws, None), &seen, &Target::Local, &[], None);
+    assert_eq!(read.destination, "");
+}

@@ -31,6 +31,32 @@ fn a_machine_that_cannot_be_read_from_this_window_does_not_promise_to_come_back(
 }
 
 #[test]
+fn a_machine_that_answers_may_be_asked_at_its_destination() {
+    assert_eq!(may_ask(&read(up()), &Retry::default()), Ok(vps_target()));
+}
+
+#[test]
+fn nothing_new_is_asked_of_a_machine_that_stopped_answering() {
+    let mut retry = Retry::default();
+    retry.failed("vps restarted".into(), Instant::now());
+    assert_eq!(may_ask(&read(up()), &retry), Err("vps did not answer".to_string()));
+}
+
+#[test]
+fn hearing_from_the_machine_lets_it_be_asked_again() {
+    let mut retry = Retry::default();
+    retry.failed("vps restarted".into(), Instant::now());
+    retry.heard();
+    assert_eq!(may_ask(&read(up()), &retry), Ok(vps_target()));
+}
+
+#[test]
+fn a_machine_down_is_not_asked_and_says_why() {
+    let why = may_ask(&read(Reach::Down("vps unreachable".into())), &Retry::default());
+    assert_eq!(why, Err("vps unreachable".to_string()));
+}
+
+#[test]
 fn a_panel_with_nothing_to_show_names_the_machine_it_waits_for() {
     assert_eq!(nothing_read(&read(up())), "Nothing read from vps");
 }

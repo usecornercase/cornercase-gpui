@@ -5,7 +5,7 @@ use gpui::{
     Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
-use crate::cli;
+use crate::cli::{self, Target};
 use crate::notify::tip;
 use crate::store::{MachineRead, Reach};
 use crate::theme::colours;
@@ -60,6 +60,14 @@ pub(crate) fn note(read: &MachineRead, retry: &Retry) -> Option<Note> {
         Reach::Up(_) => retry.waiting().then(|| reconnecting(&format!("{} did not answer", read.aim.machine))),
         Reach::Down(why) => Some(reconnecting(why)),
         Reach::Refused(why) => Some(Note::Refused(why.clone())),
+    }
+}
+
+pub(crate) fn may_ask(read: &MachineRead, retry: &Retry) -> Result<Target, String> {
+    match &read.reach {
+        Reach::Up(_) if retry.waiting() => Err(format!("{} did not answer", read.aim.machine)),
+        Reach::Up(target) => Ok(target.clone()),
+        Reach::Down(why) | Reach::Refused(why) => Err(why.clone()),
     }
 }
 

@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Instant;
 
 use gpui::{
     AnyView, App, AppContext as _, Context, ListAlignment, ListOffset, ListState, ScrollStrategy, WeakEntity, Window,
@@ -248,20 +247,17 @@ impl FilesPanel {
         spans: Option<Spans>,
         cx: &mut Context<Self>,
     ) {
+        self.machine_read_answered(reading.id, content.as_ref());
         let Some(viewer) = self.places.get_mut(&reading.id).and_then(|p| p.viewer.as_mut()) else { return };
         if viewer.path != reading.path {
             return;
         }
-        if let Some(Content::Lost(why)) = &content {
+        if matches!(content, Some(Content::Lost(_))) {
             viewer.checking = false;
-            self.retry.failed(why.clone(), Instant::now());
             cx.notify();
             return;
         }
         let fresh = content.is_some();
-        if fresh {
-            self.retry.heard();
-        }
         if let Some(content) = content {
             viewer.set_content(content, reading);
         }

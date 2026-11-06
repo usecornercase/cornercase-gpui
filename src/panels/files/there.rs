@@ -45,9 +45,10 @@ pub(super) fn source_of(read: &MachineRead) -> Option<Source> {
     Some(Source::There(There::new(read.reach.target()?.clone(), &read.aim)))
 }
 
-pub(super) fn place_key(aim: &Aim) -> u64 {
+pub(super) fn place_key(read: &MachineRead) -> u64 {
     let mut hasher = DefaultHasher::new();
-    aim.hash(&mut hasher);
+    read.aim.hash(&mut hasher);
+    read.destination.hash(&mut hasher);
     hasher.finish() | ON_A_MACHINE
 }
 
@@ -133,22 +134,29 @@ impl There {
 
 impl FilesPanel {
     pub(super) fn follow_machine(&mut self, read: &MachineRead, cx: &mut Context<Self>) {
-        let key = place_key(&read.aim);
-        let here = self.current == Some(key);
-        if !here {
-            self.leave_machine(cx);
-        }
-        let Some(source) = source_of(read) else {
-            self.retry = Retry::default();
-            if !here && self.current.take().is_some() {
-                self.left_place = true;
-                cx.notify();
-            }
+        let key = place_key(read);
+        if self.current == Some(key) {
+            self.stay_on_machine(read, cx);
             return;
-        };
-        match self.places.get_mut(&key).filter(|_| here) {
-            Some(place) => place.source = source,
-            None => self.switch_to(key, PathBuf::from(&read.path), source, cx),
+        }
+        self.leave_machine(cx);
+        match source_of(read) {
+            Some(source) => self.switch_to(key, PathBuf::from(&read.path), source, cx),
+            None => {
+                if self.current.take().is_some() {
+                    self.left_place = true;
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    fn stay_on_machine(&mut self, read: &MachineRead, cx: &mut Context<Self>) {
+        if read.reach.target().is_none() {
+            self.retry = Retry::default();
+        }
+        if self.search.refused && self.showing(cx) && on_machine::may_ask(read, &self.retry).is_ok() {
+            self.run_search(cx);
         }
     }
 
@@ -170,7 +178,7 @@ impl FilesPanel {
     }
 
     pub(super) fn refuses_asking(&mut self, cx: &mut Context<Self>) -> Option<String> {
-        let why = self.machine.as_ref()?.reach.why_not()?.to_string();
+        let why = on_machine::may_ask(self.machine.as_ref()?, &self.retry).err()?;
         self.store.update(cx, |s, cx| s.not_sent(&why, cx));
         Some(why)
     }
@@ -192,6 +200,21 @@ impl FilesPanel {
                     cx.notify();
                 }
             }
+        }
+    }
+
+    pub(super) fn machine_read_answered(&mut self, id: u64, content: Option<&Content>) {
+        if self.current != Some(id) {
+            return;
+        }
+        match content {
+            Some(Content::Lost(why)) => {
+                self.retry.failed(why.clone(), Instant::now());
+            }
+            Some(_) => {
+                self.retry.heard();
+            }
+            None => {}
         }
     }
 

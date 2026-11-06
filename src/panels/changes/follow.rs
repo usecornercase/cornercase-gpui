@@ -30,27 +30,27 @@ fn ended_reason(err: &str) -> String {
 
 pub(super) fn shown_whose(session: Option<&Session>, read: Option<&MachineRead>) -> Option<Whose> {
     match read {
-        Some(read) => Some(Whose::There(read.aim.clone())),
+        Some(read) => Some(Whose::There(read.aim.clone(), read.destination.clone())),
         None => session?.shown().workspace.map(Whose::Here),
     }
 }
 
 pub(super) fn stream_target(follow: Option<&Follow>, read: Option<&MachineRead>, window: &Target) -> Option<Target> {
     match follow?.workspace {
-        Some(Whose::There(_)) => read?.reach.target().cloned(),
+        Some(Whose::There(..)) => read?.reach.target().cloned(),
         _ => Some(window.clone()),
     }
 }
 
 pub(super) fn whose_listed(follow: Option<&Follow>, listed: u64) -> Whose {
     match follow {
-        Some(Follow { workspace: Some(there @ Whose::There(_)), .. }) => there.clone(),
+        Some(Follow { workspace: Some(there @ Whose::There(..)), .. }) => there.clone(),
         _ => Whose::Here(listed),
     }
 }
 
 fn from_another_server(summary: &Summary, follow: Option<&Follow>) -> bool {
-    let Some(Follow { workspace: Some(Whose::There(aim)), .. }) = follow else { return false };
+    let Some(Follow { workspace: Some(Whose::There(aim, _)), .. }) = follow else { return false };
     !summary.boot.is_empty() && summary.boot != aim.boot
 }
 
@@ -163,11 +163,7 @@ impl ChangesPanel {
     fn on_summary(&mut self, line: &str, cx: &mut Context<Self>) {
         let Ok(summary) = wire::summary(line) else { return };
         if from_another_server(&summary, self.follow.as_ref()) {
-            self.stream = None;
-            self.stream_generation += 1;
-            let machine = self.on_machine.as_ref().map_or("the machine", |read| read.aim.machine.as_str());
-            self.try_again_later(format!("{machine} restarted"), cx);
-            cx.notify();
+            self.server_moved_on(cx);
             return;
         }
         let heard = self.retry.heard();
@@ -179,6 +175,15 @@ impl ChangesPanel {
         }
         self.summary = Some(summary);
         self.refresh_open(cx);
+        cx.notify();
+    }
+
+    fn server_moved_on(&mut self, cx: &mut Context<Self>) {
+        self.stream = None;
+        self.stream_generation += 1;
+        self.open.drop_reads_under_way();
+        let machine = self.on_machine.as_ref().map_or("the machine", |read| read.aim.machine.as_str());
+        self.try_again_later(format!("{machine} restarted"), cx);
         cx.notify();
     }
 

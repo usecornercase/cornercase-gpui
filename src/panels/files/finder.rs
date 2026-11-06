@@ -48,7 +48,7 @@ impl Spot {
 
     fn on_machine(read: &MachineRead) -> Option<Self> {
         Some(Self {
-            id: place_key(&read.aim),
+            id: place_key(read),
             root: PathBuf::from(&read.path),
             style: Style::of_path(&read.path),
             source: source_of(read)?,

@@ -138,6 +138,7 @@ struct Search {
     running: Option<Arc<AtomicBool>>,
     generation: u64,
     enter: bool,
+    refused: bool,
     index: Option<(PathBuf, Arc<Vec<String>>, Instant)>,
 }
 
@@ -151,6 +152,7 @@ impl Search {
             running: None,
             generation: 0,
             enter: false,
+            refused: false,
             index: None,
         }
     }
@@ -165,6 +167,7 @@ impl Search {
         self.clear();
         self.generation += 1;
         self.enter = false;
+        self.refused = false;
         if let Some(running) = self.running.take() {
             running.store(true, Ordering::Relaxed);
         }

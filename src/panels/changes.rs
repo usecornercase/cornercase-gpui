@@ -57,28 +57,28 @@ impl Scope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Whose {
     Here(u64),
-    There(Aim),
+    There(Aim, String),
 }
 
 impl Whose {
     fn arg(&self) -> String {
         match self {
             Self::Here(id) => id.to_string(),
-            Self::There(aim) => aim.workspace_arg(),
+            Self::There(aim, _) => aim.workspace_arg(),
         }
     }
 
     fn holds(&self, listed: u64) -> bool {
         match self {
             Self::Here(id) => *id == listed,
-            Self::There(_) => true,
+            Self::There(..) => true,
         }
     }
 
     fn here(&self) -> Option<u64> {
         match self {
             Self::Here(id) => Some(*id),
-            Self::There(_) => None,
+            Self::There(..) => None,
         }
     }
 }
@@ -203,7 +203,7 @@ impl ChangesPanel {
     }
 
     fn reads_machine(&self) -> bool {
-        matches!(self.follow, Some(Follow { workspace: Some(Whose::There(_)), .. }))
+        matches!(self.follow, Some(Follow { workspace: Some(Whose::There(..)), .. }))
     }
 
     fn machine_shown(&self) -> Option<&MachineRead> {
