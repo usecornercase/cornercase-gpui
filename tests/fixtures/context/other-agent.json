@@ -1,0 +1,14 @@
+{
+  "age": null,
+  "agent": "codex",
+  "breakdown": null,
+  "compacted": false,
+  "error": null,
+  "loading": false,
+  "model": "gpt-5.4",
+  "notice": "Codex does not say what fills its context",
+  "pane": 21,
+  "percent": 20,
+  "read_at": null,
+  "title": "Codex"
+}

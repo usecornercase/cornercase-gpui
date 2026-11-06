@@ -1,13 +1,17 @@
 use serde_json::json;
 
 use super::data::{
-    Body, Click, Entry, Group, Place, State, agent_choices, entries, folder_name, live_pane, missed, mode_choices,
-    notice, place_label, sections, sentence, status_label,
+    Body, Click, Entry, Group, Place, Row, Section, State, agent_choices, clear_goes_in, entries, flow_names,
+    folder_name, is_repository, live_pane, missed, missed_run, mode_choices, notice, place_label, remove_tip,
+    repository_for, sections, sentence, status_label,
 };
-use super::draft::{Draft, Target, When};
+use super::draft::{Draft, Target, When, cleanup_flag};
+use super::form::Times;
 use super::time::{Civil, days, local, relative, when_label};
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
+use crate::panels::flows::model::FlowInfo;
 use crate::platform::Os;
+use crate::test_util::fixture;
 
 #[test]
 fn reads_entries_leniently() {
@@ -38,8 +42,30 @@ fn entry(id: u64, state: &str) -> Entry {
 fn ids(list: &[Entry], filter: &str) -> Vec<(Group, Vec<u64>)> {
     sections(list, filter, None)
         .into_iter()
-        .map(|(group, shown)| (group, shown.iter().map(|e| e.id).collect()))
+        .map(|section| (section.group, section.rows.iter().map(|row| row.entry.id).collect()))
         .collect()
+}
+
+fn listed() -> Vec<Entry> {
+    let list: serde_json::Value = serde_json::from_str(fixture!("queue/routines.json")).expect("the fixture");
+    entries(Some(&json!({ "queue": list["entries"] })))
+}
+
+fn listed_entry(id: u64) -> Entry {
+    listed().into_iter().find(|e| e.id == id).expect("the fixture's entry")
+}
+
+fn routine(id: u64, repeat: &str) -> Entry {
+    Entry { repeat: Some(repeat.into()), ..entry(id, "pending") }
+}
+
+fn run_of(routine: u64, id: u64, state: &str) -> Entry {
+    Entry { routine: Some(routine), at: i64::try_from(id).expect("an id"), ..entry(id, state) }
+}
+
+fn runs_under(sections: &[Section], routine: u64) -> Vec<u64> {
+    let row = sections.iter().flat_map(|section| &section.rows).find(|row| row.entry.id == routine);
+    row.map(|row| row.runs.iter().map(|run| run.id).collect()).unwrap_or_default()
 }
 
 fn session_with_pane(pane: u64) -> Session {
@@ -103,6 +129,205 @@ fn the_status_names_the_state_and_the_pane() {
 fn a_missed_start_blames_the_machine_by_its_name() {
     assert!(missed(Os::Mac).contains("or the Mac slept."));
     assert!(missed(Os::Linux).contains("or the computer slept."));
+    assert!(missed_run(Os::Windows).contains("or the PC slept."));
+}
+
+#[test]
+fn reads_a_routine_with_its_repeat_flow_cleanup_and_next_time() {
+    let routine = listed_entry(4);
+    assert_eq!(routine.repeat.as_deref(), Some("monday 09:00"));
+    assert_eq!(routine.flow.as_deref(), Some("Quick"));
+    assert!(routine.cleanup && !routine.paused);
+    assert_eq!(routine.next, Some(1_794_214_800));
+    assert_eq!(routine.routine, None);
+    assert_eq!(State::of(&routine), State::Repeating);
+}
+
+#[test]
+fn a_paused_routine_has_no_next_time() {
+    let routine = listed_entry(6);
+    assert!(routine.paused);
+    assert_eq!(routine.next, None);
+    assert_eq!(State::of(&routine), State::Paused);
+}
+
+#[test]
+fn a_run_names_its_routine_and_says_why_it_was_kept() {
+    let kept = listed_entry(9);
+    assert_eq!((kept.routine, State::of(&kept)), (Some(7), State::Kept));
+    assert_eq!(kept.reason.as_deref(), Some("1 uncommitted"));
+    assert_eq!(kept.pane, Some(16));
+    assert_eq!(notice(&kept).as_deref(), Some("1 uncommitted"));
+    let removed = listed_entry(8);
+    assert_eq!((removed.routine, State::of(&removed)), (Some(6), State::Removed));
+    assert_eq!(notice(&removed), None);
+}
+
+#[test]
+fn a_failed_run_says_why_and_a_missed_run_points_to_the_next_one() {
+    assert_eq!(
+        notice(&listed_entry(10)).as_deref(),
+        Some("Could not fetch origin: Could not read from remote repository.")
+    );
+    let missed = notice(&run_of(1, 2, "missed")).expect("a notice");
+    assert!(missed.contains("next time") && !missed.contains("Start it now"), "{missed}");
+}
+
+#[test]
+fn routines_gather_their_runs_in_a_section_of_their_own() {
+    let list = listed();
+    let shown = sections(&list, "", None);
+    assert_eq!(ids(&list, ""), [(Group::Routines, vec![2, 1, 6, 7, 3, 4])]);
+    assert_eq!(runs_under(&shown, 2), [5]);
+    assert_eq!(runs_under(&shown, 6), [8]);
+    assert_eq!(runs_under(&shown, 7), [9]);
+    assert_eq!(runs_under(&shown, 3), [10]);
+    assert_eq!(runs_under(&shown, 1), Vec::<u64>::new());
+}
+
+#[test]
+fn a_routines_last_ten_runs_show_newest_first() {
+    let mut list = vec![routine(1, "2h")];
+    list.extend((2..=14).map(|id| run_of(1, id, "started")));
+    assert_eq!(runs_under(&sections(&list, "", None), 1), [14, 13, 12, 11, 10, 9, 8, 7, 6, 5]);
+}
+
+#[test]
+fn a_run_whose_routine_is_gone_stays_in_its_states_section() {
+    assert_eq!(ids(&[run_of(9, 2, "started")], ""), [(Group::Scheduled, vec![]), (Group::Started, vec![2])]);
+}
+
+#[test]
+fn a_filter_that_matches_only_a_run_keeps_its_routine() {
+    let list = [routine(1, "2h"), Entry { label: "release".into(), ..run_of(1, 2, "started") }, routine(3, "4h")];
+    assert_eq!(ids(&list, "release"), [(Group::Routines, vec![1])]);
+    assert_eq!(runs_under(&sections(&list, "release", None), 1), [2]);
+}
+
+#[test]
+fn a_filter_finds_a_routine_by_its_flow() {
+    let list = [Entry { flow: Some("Quick".into()), ..routine(1, "2h") }, routine(2, "4h")];
+    assert_eq!(ids(&list, "quick"), [(Group::Routines, vec![1])]);
+}
+
+#[test]
+fn nothing_is_said_to_be_scheduled_only_without_routines() {
+    assert_eq!(ids(&[routine(1, "2h")], ""), [(Group::Routines, vec![1])]);
+}
+
+#[test]
+fn a_run_is_history_and_a_routine_can_be_edited_and_started() {
+    assert!(routine(1, "2h").runnable());
+    assert!(!run_of(1, 2, "failed").runnable());
+    assert!(!run_of(1, 2, "missed").runnable());
+    assert_eq!(Click::of(&routine(1, "2h"), None, false), Click::Edit);
+    assert_eq!(Click::of(&run_of(1, 2, "failed"), None, false), Click::Nothing);
+    assert_eq!(Click::of(&run_of(1, 2, "kept"), Some(9), false), Click::Open(9));
+}
+
+#[test]
+fn clear_started_clears_finished_runs_and_never_a_routine() {
+    assert!(!routine(1, "2h").clearable());
+    assert!(entry(2, "started").clearable());
+    assert!(!entry(3, "failed").clearable());
+    for state in ["started", "removed", "kept", "failed", "missed"] {
+        assert!(run_of(1, 4, state).clearable(), "{state}");
+    }
+    assert!(!run_of(1, 5, "starting").clearable());
+}
+
+#[test]
+fn clear_started_sits_with_what_started_else_with_the_routines_runs() {
+    let finished = [routine(1, "2h"), run_of(1, 2, "kept")];
+    assert_eq!(clear_goes_in(&sections(&finished, "", None)), Some(Group::Routines));
+    let both = [routine(1, "2h"), run_of(1, 2, "kept"), entry(3, "started")];
+    assert_eq!(clear_goes_in(&sections(&both, "", None)), Some(Group::Started));
+    assert_eq!(clear_goes_in(&sections(&[routine(1, "2h")], "", None)), None);
+}
+
+#[test]
+fn a_routine_with_a_starting_run_waits_to_be_removed() {
+    let (one, starting, started) = (routine(1, "2h"), run_of(1, 2, "starting"), run_of(1, 3, "started"));
+    assert!(!Row { entry: &one, runs: vec![&starting, &started] }.removable());
+    assert!(Row { entry: &one, runs: vec![&started] }.removable());
+    assert!(!Row { entry: &starting, runs: vec![] }.removable());
+}
+
+#[test]
+fn removing_says_what_goes_and_what_stays() {
+    assert!(remove_tip(&routine(1, "2h")).contains("and its runs"));
+    assert!(remove_tip(&run_of(1, 2, "started")).contains("its workspace stay"));
+    assert!(remove_tip(&entry(3, "started")).contains("keeps running"));
+    assert_eq!(remove_tip(&entry(4, "pending")), "Remove");
+}
+
+#[test]
+fn a_routine_and_its_runs_read_in_words() {
+    assert_eq!(status_label(&routine(1, "day 09:00"), None), "↻ every day at 09:00");
+    let paused = Entry { paused: true, ..routine(1, "2h") };
+    assert_eq!(status_label(&paused, None), "↻ every 2 hours");
+    assert_eq!(status_label(&run_of(1, 2, "removed"), None), "Workspace removed");
+    assert_eq!(status_label(&run_of(1, 2, "kept"), None), "Workspace kept");
+    assert_eq!(status_label(&run_of(1, 2, "kept"), Some(9)), "Workspace kept · pane 9");
+}
+
+#[test]
+fn a_routine_names_its_flow_and_its_cleanup() {
+    let place = Place { project: "/src/shop".into(), ..Place::default() };
+    let flow = Entry { flow: Some("Quick".into()), cleanup: true, place: place.clone(), ..routine(1, "2h") };
+    assert_eq!(flow.meta(None), "flow Quick · shop · removes its workspace");
+    let agent = Entry { agent: "claude".into(), place, ..routine(2, "2h") };
+    assert_eq!(agent.meta(None), "claude · shop");
+}
+
+#[test]
+fn a_routine_runs_at_its_next_time_and_an_entry_at_its_own() {
+    assert_eq!(Entry { next: Some(9), at: 3, ..routine(1, "2h") }.next_time(), 9);
+    assert_eq!(Entry { at: 3, ..entry(2, "pending") }.next_time(), 3);
+}
+
+#[test]
+fn a_kept_run_opens_its_pane_while_it_lives() {
+    let kept = Entry { pane: Some(9), server: Some("boot-1".into()), ..run_of(1, 2, "kept") };
+    assert_eq!(live_pane(&kept, Some("boot-1"), Some(&session_with_pane(9))), Some(9));
+    assert_eq!(live_pane(&kept, Some("boot-2"), Some(&session_with_pane(9))), None);
+}
+
+fn project(id: u64, workspace: Workspace) -> Project {
+    Project { id, path: "/src/shop".into(), workspaces: vec![workspace], ..Project::default() }
+}
+
+#[test]
+fn a_project_is_a_repository_when_its_root_has_a_branch_or_it_holds_a_worktree() {
+    let root = Workspace { path: "/src/shop".into(), branch: Some("main".into()), ..Workspace::default() };
+    assert!(is_repository(&project(1, root)));
+    let plain = Workspace { path: "/src/shop".into(), ..Workspace::default() };
+    assert!(!is_repository(&project(2, plain)));
+    let worktree = Workspace { path: "/wt/x".into(), worktree: true, ..Workspace::default() };
+    assert!(is_repository(&project(3, worktree)));
+}
+
+#[test]
+fn a_routines_project_moves_to_the_first_repository_only_when_it_is_not_one() {
+    let root = Workspace { path: "/src/shop".into(), branch: Some("main".into()), ..Workspace::default() };
+    let plain = Workspace { path: "/src/shop".into(), ..Workspace::default() };
+    let projects = vec![project(1, plain), project(2, root.clone()), project(3, root)];
+    let session = Session { projects, ..Session::default() };
+    assert_eq!(repository_for(Some(3), &session), Some(3));
+    assert_eq!(repository_for(Some(1), &session), Some(2));
+    assert_eq!(repository_for(None, &session), Some(2));
+    assert_eq!(repository_for(Some(1), &Session::default()), None);
+}
+
+#[test]
+fn only_a_flow_that_can_start_is_offered_and_each_name_once() {
+    let flow = |name: &str, problems: &[&str]| FlowInfo {
+        name: name.into(),
+        problems: problems.iter().map(|p| (*p).to_string()).collect(),
+        ..FlowInfo::default()
+    };
+    let flows = [flow("Quick", &[]), flow("Broken", &["no such agent"]), flow("Quick", &[]), flow("Arena", &[])];
+    assert_eq!(flow_names(&flows), ["Quick", "Arena"]);
 }
 
 #[test]
@@ -196,11 +421,137 @@ fn draft() -> Draft {
         date: String::new(),
         amount: "2".into(),
         unit: 'h',
+        weekday: "monday".into(),
         target: Target::Workspace(7),
         agent: None,
         mode: None,
+        flow: None,
+        cleanup: None,
         name: Some(String::new()),
     }
+}
+
+fn routine_draft(when: When) -> Draft {
+    Draft { when, clock: "09:00".into(), target: Target::Repository(8), cleanup: Some(false), ..draft() }
+}
+
+#[test]
+fn every_kind_of_repeat_writes_the_text_every_takes() {
+    let every = |amount: &str, unit: char| Draft { amount: amount.into(), unit, ..routine_draft(When::Every) };
+    assert_eq!(every("30", 'm').every(), Ok(Some("30m".to_string())));
+    assert_eq!(every("2", 'h').every(), Ok(Some("2h".to_string())));
+    assert_eq!(every("3", 'd').every(), Ok(Some("3d".to_string())));
+    assert_eq!(every("2", 'w').every(), Ok(Some("2w".to_string())));
+    assert_eq!(routine_draft(When::Daily).every(), Ok(Some("day 09:00".to_string())));
+    assert_eq!(routine_draft(When::Weekdays).every(), Ok(Some("weekday 09:00".to_string())));
+    let friday = Draft { weekday: "friday".into(), ..routine_draft(When::Weekly) };
+    assert_eq!(friday.every(), Ok(Some("friday 09:00".to_string())));
+    assert_eq!(routine_draft(When::In).every(), Ok(None));
+    assert_eq!(routine_draft(When::Weekly).at(), Ok(None));
+}
+
+#[test]
+fn a_value_is_left_for_the_server_to_refuse() {
+    let draft = Draft { amount: "10".into(), unit: 'm', ..routine_draft(When::Every) };
+    assert_eq!(draft.every(), Ok(Some("10m".to_string())));
+    let draft = Draft { amount: "400".into(), unit: 'd', ..routine_draft(When::Every) };
+    assert_eq!(draft.every(), Ok(Some("400d".to_string())));
+}
+
+#[test]
+fn a_repeat_needs_its_amount_and_its_clock() {
+    assert!(Draft { amount: " ".into(), ..routine_draft(When::Every) }.args().is_err());
+    assert!(Draft { clock: " ".into(), ..routine_draft(When::Daily) }.args().is_err());
+    assert!(Draft { clock: String::new(), ..routine_draft(When::Weekly) }.args().is_err());
+}
+
+#[test]
+fn builds_queue_add_for_a_routine() {
+    let d = Draft {
+        agent: Some("claude".into()),
+        mode: Some("plan".into()),
+        name: Some("deps".into()),
+        cleanup: Some(true),
+        ..routine_draft(When::Daily)
+    };
+    assert_eq!(
+        d.args().map(|a| a.join(" ")),
+        Ok("queue add --every day 09:00 --prompt review the login fix --project 8 --agent claude --mode plan \
+         --name deps --cleanup --json"
+            .to_string())
+    );
+    assert_eq!(
+        routine_draft(When::Every).args().map(|a| a.join(" ")),
+        Ok("queue add --every 2h --prompt review the login fix --project 8 --no-cleanup --json".to_string())
+    );
+}
+
+#[test]
+fn a_routine_on_a_flow_sends_the_flow() {
+    let d = Draft { flow: Some("Quick".into()), ..routine_draft(When::Weekly) };
+    assert_eq!(
+        d.args().map(|a| a.join(" ")),
+        Ok("queue add --every monday 09:00 --prompt review the login fix --project 8 --flow Quick --no-cleanup --json"
+            .to_string())
+    );
+    let no_task = Draft { text: " ".into(), flow: Some("Quick".into()), ..routine_draft(When::Weekly) };
+    assert_eq!(no_task.args(), Err("write the team's task".to_string()));
+}
+
+#[test]
+fn a_new_routine_needs_a_repository() {
+    assert!(Draft { target: Target::Keep, ..routine_draft(When::Every) }.args().is_err());
+}
+
+#[test]
+fn an_edit_of_a_routine_sends_only_what_changed() {
+    let edit = |when: When| Draft {
+        edit: Some(4),
+        text: String::new(),
+        target: Target::Keep,
+        cleanup: None,
+        name: None,
+        ..routine_draft(when)
+    };
+    assert_eq!(edit(When::Keep).args().map(|a| a.join(" ")), Ok("queue edit 4 --json".to_string()));
+    assert_eq!(
+        edit(When::Weekdays).args().map(|a| a.join(" ")),
+        Ok("queue edit 4 --every weekday 09:00 --json".to_string())
+    );
+    let moved = Draft { target: Target::Repository(9), cleanup: Some(true), ..edit(When::Keep) };
+    assert_eq!(moved.args().map(|a| a.join(" ")), Ok("queue edit 4 --project 9 --cleanup --json".to_string()));
+}
+
+#[test]
+fn the_cleanup_flag_is_sent_only_when_it_says_something() {
+    assert_eq!(cleanup_flag(true, false, None), Some(false));
+    assert_eq!(cleanup_flag(true, true, None), Some(true));
+    assert_eq!(cleanup_flag(true, true, Some(true)), None);
+    assert_eq!(cleanup_flag(true, false, Some(true)), Some(false));
+    assert_eq!(cleanup_flag(false, true, None), None);
+}
+
+#[test]
+fn an_edit_cannot_turn_an_entry_into_a_routine_or_back() {
+    let kinds = |editing, routine| When::offered(editing, routine).concat();
+    assert!(kinds(false, false).iter().any(|k| k.repeats()) && kinds(false, false).iter().any(|k| !k.repeats()));
+    assert!(!kinds(true, false).iter().any(|k| k.repeats()));
+    assert!(kinds(true, true).iter().all(|k| k.repeats() || *k == When::Keep));
+    assert!(kinds(true, true).contains(&When::Keep) && kinds(true, false).contains(&When::Keep));
+    assert!(!kinds(false, false).contains(&When::Keep));
+}
+
+#[test]
+fn a_routines_form_starts_from_its_repeat() {
+    let times = |repeat: &str| Times::of(Some(&routine(1, repeat)));
+    assert_eq!((times("3d 01:25").amount.as_str(), times("3d 01:25").unit), ("3", 'd'));
+    assert_eq!(times("3d 01:25").clock, "01:25");
+    assert_eq!(times("friday 18:00").weekday, "friday");
+    assert_eq!(times("friday 18:00").clock, "18:00");
+    assert_eq!(times("day 09:00").amount, "1");
+    assert_eq!(Times::of(Some(&entry(1, "pending"))).amount, "");
+    let new = Times::of(None);
+    assert_eq!((new.amount.as_str(), new.unit, new.weekday, new.clock.as_str()), ("1", 'h', "monday", ""));
 }
 
 #[test]

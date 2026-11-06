@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 use crate::platform::paths;
 
+mod agent_context;
 mod grid;
 pub(crate) mod link;
 pub(crate) mod machines;
@@ -11,6 +12,9 @@ mod pull_request;
 mod shared;
 mod surface;
 
+pub(crate) use agent_context::{Breakdown, Category, ContextAnswer, Messages, Slot};
+#[cfg(test)]
+pub(crate) use agent_context::{McpServer, Skills};
 pub(crate) use grid::{Applied, Grid, PaneGrid, Run};
 pub(crate) use link::Link;
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};

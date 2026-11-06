@@ -1,6 +1,6 @@
-use super::workspace_menu;
+use super::{context_item, workspace_menu};
 use crate::context_menu::Entry;
-use crate::model::Session;
+use crate::model::{PaneInfo, Session};
 
 const PROJECT: &str = r#"{"projects":[{"id":1,"name":"shop","workspaces":[
     {"id":2,"name":"plain","path":"/home/ana/notes"},
@@ -39,4 +39,15 @@ fn the_merge_check_comes_after_the_pull_request() {
     let labels = labels(4);
     let check = labels.iter().position(|label| label == "Merge check…").expect("the entry");
     assert!(labels[check - 1].starts_with("Pull request #485"), "{labels:?}");
+}
+
+#[test]
+fn a_pane_running_an_agent_offers_its_context() {
+    let pane = PaneInfo { id: 1, agent: Some("claude".into()), ..PaneInfo::default() };
+    assert!(context_item(&pane).is_some());
+}
+
+#[test]
+fn a_pane_whose_agent_left_offers_no_context() {
+    assert!(context_item(&PaneInfo::default()).is_none());
 }
