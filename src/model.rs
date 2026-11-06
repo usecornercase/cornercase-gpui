@@ -7,11 +7,13 @@ use crate::platform::paths;
 mod grid;
 pub(crate) mod link;
 mod pull_request;
+mod shared;
 mod surface;
 
 pub(crate) use grid::{Applied, Grid, PaneGrid, Run};
 pub(crate) use link::Link;
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};
+pub(crate) use shared::Shared;
 pub(crate) use surface::{
     Area, Branch, Colour, Colours, Cursor, CursorShape, Frame, MouseMode, Node, OpenPopup, Style, UnderlineKind,
 };
@@ -75,6 +77,7 @@ pub(crate) struct Workspace {
     pub setup: Option<String>,
     pub changes: Option<Changes>,
     pub closed_agents: Option<usize>,
+    pub shared: Vec<Shared>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
