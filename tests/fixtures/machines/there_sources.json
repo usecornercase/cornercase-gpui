@@ -1,0 +1,77 @@
+{
+  "closed": false,
+  "places": [
+    {
+      "here": true,
+      "label": "work \u203a default",
+      "project": 4,
+      "workspace": 3,
+      "worktree": false
+    },
+    {
+      "here": false,
+      "label": "shop",
+      "project": 8,
+      "workspace": null,
+      "worktree": true
+    }
+  ],
+  "project": 8,
+  "sources": [
+    {
+      "fields": [
+        "assignee",
+        "author"
+      ],
+      "from": "gh",
+      "missing": [],
+      "name": "GitHub",
+      "people": [
+        "anyone",
+        "anyone"
+      ],
+      "repository": true,
+      "source": "github",
+      "state": "connected",
+      "tab": true
+    },
+    {
+      "fields": [
+        "assignee",
+        "author"
+      ],
+      "missing": [
+        "token"
+      ],
+      "name": "GitLab",
+      "people": [
+        "anyone",
+        "anyone"
+      ],
+      "repository": true,
+      "source": "gitlab",
+      "state": "missing",
+      "tab": true
+    },
+    {
+      "fields": [
+        "assignee",
+        "reporter"
+      ],
+      "missing": [
+        "site",
+        "email",
+        "token"
+      ],
+      "name": "Jira",
+      "people": [
+        "anyone",
+        "anyone"
+      ],
+      "repository": false,
+      "source": "jira",
+      "state": "missing",
+      "tab": true
+    }
+  ]
+}

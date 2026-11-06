@@ -6,8 +6,12 @@ use gpui::{
 
 use super::IssuesPanel;
 use super::data::{Agents, Choice, EFFORT_AGENTS, Issue, Place, Sources, StartPlan, When};
-use crate::dialogs;
-use crate::store::Store;
+use crate::cli;
+use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, starting_there};
+use crate::model::Spot;
+use crate::model::machines::run_on::Starting;
+use crate::model::machines::run_on::checks::Wanted;
+use crate::store::{StartThere, Store};
 use crate::theme::colours;
 use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone, boxed};
@@ -65,6 +69,7 @@ pub(super) struct StartForm {
     at: Entity<TextField>,
     error: Option<String>,
     panel: WeakEntity<IssuesPanel>,
+    run_on: Entity<RunOn>,
 }
 
 pub(super) fn open(setup: Setup, window: &mut Window, cx: &mut Context<IssuesPanel>) {
@@ -91,6 +96,15 @@ fn text_field(placeholder: &str, text: &str, clear_error: bool, cx: &mut Context
     });
     cx.subscribe(&field, move |this: &mut StartForm, _, event, cx| this.on_field(event, clear_error, cx)).detach();
     field
+}
+
+fn run_on_of(issue: &Issue, places: &Places, cx: &mut Context<StartForm>) -> Entity<RunOn> {
+    let project = places.chosen.and_then(|at| places.list.get(at)).map(|place| place.project);
+    let wanted = Wanted { accounts: true, tracker: Some(issue.source.clone()), ..Wanted::default() };
+    let run_on = cx.new(|cx| RunOn::new(project, wanted, cx));
+    cx.observe(&run_on, |_, _, cx| cx.notify()).detach();
+    cx.subscribe(&run_on, |this, _, event, cx| this.run_on_event(event, cx)).detach();
+    run_on
 }
 
 fn chips(
@@ -123,13 +137,15 @@ impl StartForm {
         let mode = agents.modes.get(&agent).map(|(chosen, _)| chosen.clone());
         let name_hint = format!("{} {}", issue.key, issue.title);
         cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
+        let places = Places::of(&sources, repository, project_name);
+        let run_on = run_on_of(&issue, &places, cx);
         Self {
             model: text_field("the agent's own, such as opus", "", true, cx),
             effort: text_field("the agent's own, such as high", "", true, cx),
             branch: text_field("the issue's branch", &issue.branch, true, cx),
             name: text_field(&name_hint, "", true, cx),
             at: text_field(When::At.placeholder().unwrap_or_default(), "", true, cx),
-            places: Places::of(&sources, repository, project_name),
+            places,
             issue,
             agents,
             agent,
@@ -139,7 +155,21 @@ impl StartForm {
             when: When::At,
             error: None,
             panel,
+            run_on,
         }
+    }
+
+    fn run_on_event(&mut self, event: &RunOnEvent, cx: &mut Context<Self>) {
+        if *event == RunOnEvent::Chosen {
+            self.accounts = AccountPickers::default();
+            self.error = None;
+            self.schedule = self.schedule && !self.on_machine(cx);
+        }
+        cx.notify();
+    }
+
+    fn on_machine(&self, cx: &App) -> bool {
+        self.run_on.read(cx).machine().is_some()
     }
 
     fn on_field(&mut self, event: &TextFieldEvent, clear_error: bool, cx: &mut Context<Self>) {
@@ -193,6 +223,8 @@ impl StartForm {
     fn set_place(&mut self, index: usize, cx: &mut Context<Self>) {
         self.places.chosen = Some(index);
         self.error = None;
+        let project = self.place().map(|place| place.project);
+        self.run_on.update(cx, |run_on, cx| run_on.set_project(project, cx));
         cx.notify();
     }
 
@@ -209,7 +241,7 @@ impl StartForm {
         Ok(StartPlan {
             issue: self.issue.clone(),
             agent: self.agent.clone(),
-            mode: self.mode.clone().filter(|m| Some(m) != chosen_mode.as_ref()),
+            mode: self.mode.clone().filter(|m| Some(m) != chosen_mode.as_ref() && !self.on_machine(cx)),
             model: text(&self.model),
             effort,
             place: Some(place),
@@ -225,21 +257,40 @@ impl StartForm {
     }
 
     fn submit(&mut self, cx: &mut Context<Self>) {
+        if starting_there(cx) {
+            return;
+        }
         let plan = match self.plan(cx) {
             Ok(plan) => plan,
             Err(e) => return self.fail(e, cx),
         };
+        let back = if self.schedule { &self.at } else { &self.model }.read(cx).focus_handle(cx);
+        match self.run_on.update(cx, |run_on, cx| run_on.gate(back, cx)) {
+            Gate::Here => self.submit_here(&plan, cx),
+            Gate::There(spot) => Self::submit_there(&plan, spot, cx),
+            Gate::Held => {}
+        }
+    }
+
+    fn submit_here(&mut self, plan: &StartPlan, cx: &mut Context<Self>) {
         let panel = self.panel.clone();
         if !self.schedule {
             close(cx);
-            let _ = panel.update(cx, |p, cx| p.start(&plan, cx));
+            let _ = panel.update(cx, |p, cx| p.start(plan, cx));
             return;
         }
         let Some(at) = self.when.at(&self.at.read(cx).text()) else {
             return self.fail(format!("Say when: {}.", self.when.placeholder().unwrap_or_default()), cx);
         };
         close(cx);
-        let _ = panel.update(cx, |_, cx| IssuesPanel::schedule(&plan, at, cx));
+        let _ = panel.update(cx, |_, cx| IssuesPanel::schedule(plan, at, cx));
+    }
+
+    fn submit_there(plan: &StartPlan, spot: Spot, cx: &mut Context<Self>) {
+        let starting = Starting::Agent { agent: plan.agent.clone(), issue: plan.issue.key.clone() };
+        let command = plan.start_args_there(&spot);
+        let start = StartThere { spot, starting, command, target: cli::target(), select: true };
+        Store::get(cx).update(cx, |s, cx| s.start_there(start, cx));
     }
 
     fn issue_heading(&self) -> Div {
@@ -251,7 +302,11 @@ impl StartForm {
             .child(div().text_color(colours::muted()).line_clamp(2).text_ellipsis().child(self.issue.title.clone()))
     }
 
-    fn now_or_later(&self, cx: &mut Context<Self>) -> Div {
+    fn now_or_later(&self, cx: &mut Context<Self>) -> Option<Div> {
+        (!self.on_machine(cx)).then(|| self.now_or_later_segments(cx))
+    }
+
+    fn now_or_later_segments(&self, cx: &mut Context<Self>) -> Div {
         ui::segments(vec![
             ui::segment("start-now", "Start now", !self.schedule)
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.set_schedule(false, cx)))
@@ -286,9 +341,12 @@ impl StartForm {
         } else {
             self.agents.list.clone()
         };
+        let chosen = std::slice::from_ref(&self.agent);
         let mut fields = vec![ui::field("Agent", chips("agent", &agents, &self.agent, Self::set_agent, cx))];
-        fields.extend(self.accounts.fields(std::slice::from_ref(&self.agent), cx));
-        if let Some((_, modes)) = self.agents.modes.get(&self.agent) {
+        fields.extend(agent_line(&self.run_on, chosen, &self.accounts.picks(chosen, cx), cx));
+        fields.extend(accounts_of(&self.run_on, self.accounts.fields(chosen, cx), cx));
+        let modes = self.agents.modes.get(&self.agent).filter(|_| !self.on_machine(cx));
+        if let Some((_, modes)) = modes {
             let mode = self.mode.clone().unwrap_or_default();
             fields.push(ui::field("Mode", chips("mode", modes, &mode, Self::set_mode, cx)));
         }
@@ -304,8 +362,17 @@ impl StartForm {
             .when(effort, |d| d.child(div().flex_1().child(ui::field("Effort", boxed(&self.effort, window, cx)))))
     }
 
+    fn line_there(&self, cx: &App) -> Option<Div> {
+        let how = if self.worktree() { "In its own worktree" } else { "In a tab" };
+        self.run_on.read(cx).where_line(how, cx)
+    }
+
     fn place_field(&self, cx: &mut Context<Self>) -> Option<Div> {
+        let there = self.line_there(cx);
         if !self.places.choose {
+            if let Some(there) = there {
+                return Some(ui::field("Where", there));
+            }
             let place = self.place()?;
             let what = if place.worktree { "A new worktree of" } else { "A new tab in" };
             let text = format!("{what} {}, the issue's repository", place.label);
@@ -318,7 +385,8 @@ impl StartForm {
             if places.is_empty() {
                 ui::dim("Open a project first: this tracker's issues need a place to start in.").into_any_element()
             } else {
-                div().flex().flex_wrap().gap(px(4.)).children(places).into_any_element()
+                let chips = div().flex().flex_wrap().gap(px(4.)).children(places);
+                div().flex().flex_col().gap(px(6.)).child(chips).children(there).into_any_element()
             },
         ))
     }
@@ -341,7 +409,13 @@ impl StartForm {
         branch.into_iter().chain(named).collect()
     }
 
-    fn footnote(&self) -> Div {
+    fn footnote(&self, cx: &App) -> Div {
+        if let Some(machine) = self.run_on.read(cx).machine() {
+            return ui::dim(format!(
+                "The agent starts with the issue as its first prompt ({machine}'s prompt template, the issue's URL by \
+                 default), sent at once. Schedule is hidden: the queue starts work on this computer only."
+            ));
+        }
         ui::dim(if self.schedule {
             "The queue starts the agent at that time with the issue as its prompt, accepting folder trust prompts."
         } else {
@@ -349,22 +423,27 @@ impl StartForm {
         })
     }
 
-    fn buttons(&self, cx: &mut Context<Self>) -> Div {
+    fn go_button(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
+        if starting_there(cx) {
+            return ui::busy_button("start-go", "Starting…", Tone::Primary);
+        }
         let (glyph, label) = if self.schedule { (Icon::Queue, "Schedule") } else { (Icon::Play, "Start") };
+        ui::icon_text_button("start-go", glyph, label, Tone::Primary)
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
+    }
+
+    fn buttons(&self, cx: &mut Context<Self>) -> Div {
         div()
             .flex()
             .gap(px(8.))
             .child(ui::button("start-cancel", "Cancel").on_click(|_: &ClickEvent, _, cx| close(cx)))
-            .child(
-                ui::icon_text_button("start-go", glyph, label, Tone::Primary)
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
-            )
+            .child(self.go_button(cx))
     }
 }
 
 impl Render for StartForm {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let choices = Store::get(cx).read(cx).account_choices();
+        let choices = self.run_on.read(cx).account_choices(cx);
         self.accounts.follow(choices, Self::clear_error, cx);
         let schedule = self.schedule;
         let body = div()
@@ -372,13 +451,14 @@ impl Render for StartForm {
             .flex_col()
             .gap(px(12.))
             .child(self.issue_heading())
-            .child(self.now_or_later(cx))
+            .children(self.now_or_later(cx))
+            .when(RunOn::offered(cx), |d| d.child(self.run_on.clone()))
             .when(schedule, |d| d.child(self.when_field(window, cx)))
             .children(self.agent_fields(cx))
             .when(!schedule, |d| d.child(self.model_fields(window, cx)))
             .children(self.place_field(cx))
             .children(self.naming_fields(window, cx))
-            .child(self.footnote())
+            .child(self.footnote(cx))
             .children(
                 self.error.clone().map(|error| div().text_size(px(12.)).text_color(colours::failed()).child(error)),
             );

@@ -1,5 +1,6 @@
 mod plan;
 mod project;
+mod there;
 
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, InteractiveElement as _,
@@ -15,7 +16,7 @@ use super::dialog::{Submit, boxed, buttons, field, filled_field};
 use super::model::{self, FlowInfo, Listing, Started, project_args};
 use super::widgets::{error_text, flow_summary, glyph};
 use crate::cli;
-use crate::dialogs;
+use crate::dialogs::{self, Gate, RunOn, accounts_of, starting_there};
 use crate::store::{self, Store, args};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::account_picker::AccountPickers;
@@ -51,6 +52,7 @@ pub(super) struct StartFlow {
     menu: ProjectMenu,
     flows: Vec<FlowInfo>,
     selected: Option<String>,
+    keep_flow: Option<String>,
     loading: bool,
     fields: Fields,
     accounts: AccountPickers,
@@ -58,6 +60,7 @@ pub(super) struct StartFlow {
     busy: bool,
     error: Option<String>,
     issue_read: IssueRead,
+    run_on: Entity<RunOn>,
 }
 
 pub(crate) fn start_flow(preset: FlowStart, window: &mut Window, cx: &mut App) {
@@ -104,15 +107,14 @@ impl Fields {
 
 impl Submit for StartFlow {
     fn submit(&mut self, cx: &mut Context<Self>) {
-        if self.busy {
+        if self.busy || starting_there(cx) {
             return;
         }
-        match self.command(cx) {
-            Ok((name, command)) => self.start(name, command, cx),
-            Err(error) => {
-                self.error = Some(error);
-                cx.notify();
-            }
+        let back = self.fields.prompt.read(cx).focus_handle(cx);
+        match self.run_on.update(cx, |run_on, cx| run_on.gate(back, cx)) {
+            Gate::Here => self.submit_here(cx),
+            Gate::There(spot) => self.submit_there(spot, cx),
+            Gate::Held => {}
         }
     }
 }
@@ -127,6 +129,7 @@ impl StartFlow {
     ) -> Self {
         let fresh = known.as_ref().is_some_and(|k| k.project == project);
         cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
+        let run_on = there::run_on_of(preset.issue.as_ref(), project, cx);
         let mut this = Self {
             fields: Fields::new(preset.issue.as_ref(), window, cx),
             issue: preset.issue,
@@ -135,12 +138,14 @@ impl StartFlow {
             menu: ProjectMenu::new(cx),
             flows: known.map(|k| k.flows).unwrap_or_default(),
             selected: None,
+            keep_flow: None,
             loading: false,
             accounts: AccountPickers::default(),
             focus: true,
             busy: false,
             error: None,
             issue_read: IssueRead::Done,
+            run_on,
         };
         this.selected =
             preset.flow.filter(|k| this.flows.iter().any(|f| f.key() == *k)).or_else(|| this.first_choice());
@@ -194,7 +199,7 @@ impl StartFlow {
         let mut command = args(&["flow", "list", "--json"]);
         command.extend(project_args(project));
         store::run(cx, command, move |this, result, cx| {
-            if this.project == project {
+            if this.project == project && !this.on_machine(cx) {
                 this.listed(result.and_then(|out| model::parse_listing(&out)));
                 cx.notify();
             }
@@ -210,7 +215,7 @@ impl StartFlow {
     }
 
     fn reselect(&mut self, flows: Vec<FlowInfo>) {
-        let name = self.selected().map(|f| f.name.clone());
+        let name = self.selected().map(|f| f.name.clone()).or(self.keep_flow.take());
         self.flows = flows;
         self.selected = name
             .and_then(|n| self.flows.iter().find(|f| f.name == n && f.can_start()).map(FlowInfo::key))
@@ -243,13 +248,27 @@ impl StartFlow {
         }
     }
 
-    fn command(&self, cx: &App) -> Result<(String, Vec<String>), String> {
+    fn submit_here(&mut self, cx: &mut Context<Self>) {
+        match self.command(cx) {
+            Ok((name, command)) => self.start(name, command, cx),
+            Err(error) => {
+                self.error = Some(error);
+                cx.notify();
+            }
+        }
+    }
+
+    fn flow_plan(&self, cx: &App) -> Result<plan::Plan, String> {
         let Some(flow) = self.selected() else { return Err("Pick a flow.".into()) };
         if let Some(problem) = flow.problems.first() {
             return Err(format!("{} cannot start: {problem}", flow.name));
         }
-        let plan = plan(&flow.name, self.project, self.issue.as_ref(), &self.typed(cx))?;
-        Ok((flow.name.clone(), Store::get(cx).read(cx).with_view(plan.args())))
+        plan(&flow.name, self.project, self.issue.as_ref(), &self.typed(cx))
+    }
+
+    fn command(&self, cx: &App) -> Result<(String, Vec<String>), String> {
+        let plan = self.flow_plan(cx)?;
+        Ok((plan.flow.clone(), Store::get(cx).read(cx).with_view(plan.args())))
     }
 
     fn start(&mut self, name: String, command: Vec<String>, cx: &mut Context<Self>) {
@@ -273,7 +292,10 @@ impl StartFlow {
         if self.project != Some(id) {
             self.project = Some(id);
             self.error = None;
-            self.load(cx);
+            self.run_on.update(cx, |run_on, cx| run_on.set_project(Some(id), cx));
+            if !self.on_machine(cx) {
+                self.load(cx);
+            }
             self.read_issue(cx);
             cx.notify();
         }
@@ -299,10 +321,11 @@ impl StartFlow {
 
     fn flow_rows(&self, cx: &Context<Self>) -> AnyElement {
         if self.flows.is_empty() {
-            let note = if self.loading {
+            let reading = self.loading || self.run_on.read(cx).flows_asking();
+            let note = if reading {
                 ui::busy("start-flows-loading", "Reading the flows…")
             } else {
-                ui::dim("No flows to start here.")
+                ui::dim(self.no_flows(cx))
             };
             return note.p(px(8.)).into_any_element();
         }
@@ -351,8 +374,9 @@ impl StartFlow {
         ))
     }
 
-    fn footnote(&self) -> String {
-        if self.issue.is_some() { format!("{ISSUE_NOTE} {TEAM_NOTE}") } else { TEAM_NOTE.to_string() }
+    fn footnote(&self, cx: &App) -> String {
+        let note = if self.issue.is_some() { format!("{ISSUE_NOTE} {TEAM_NOTE}") } else { TEAM_NOTE.to_string() };
+        self.footnote_there(note, cx)
     }
 
     fn form(&self, window: &Window, cx: &Context<Self>) -> Div {
@@ -363,12 +387,14 @@ impl StartFlow {
             .gap(px(10.))
             .children(self.issue.as_ref().map(|issue| ui::field("Issue", issue_line(issue))))
             .child(ui::field("Project", self.project_picker(window, cx)))
+            .children(self.run_on_rows(cx))
             .child(ui::field("Flow", self.flow_choices(cx)))
             .children(risk.map(error_text))
             .children(self.task_fields(window, cx))
-            .children(self.accounts.fields(&self.team(), cx))
+            .children(self.agent_note(cx))
+            .children(accounts_of(&self.run_on, self.accounts.fields(&self.team(), cx), cx))
             .child(self.focus_checkbox(cx))
-            .child(ui::dim(self.footnote()))
+            .child(ui::dim(self.footnote(cx)))
             .children(self.error.clone().map(error_text))
     }
 }
@@ -407,14 +433,15 @@ fn issue_line(issue: &IssueTask) -> Div {
 
 impl Render for StartFlow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let choices = Store::get(cx).read(cx).account_choices();
+        let choices = self.run_on.read(cx).account_choices(cx);
         self.accounts.follow(choices, Self::clear_error, cx);
+        let busy = (self.busy || starting_there(cx)).then_some("Starting…");
         let title = if self.issue.is_some() { "Start a flow on an issue" } else { "Start a flow" };
         let height = dialogs::body_height(f32::from(window.viewport_size().height));
         dialogs::frame(
             title,
             div().id("start-flow-form").max_h(px(height)).overflow_y_scroll().child(self.form(window, cx)),
-            buttons(("start-cancel", "start-run"), (Icon::Play, "Start"), self.busy.then_some("Starting…"), cx),
+            buttons(("start-cancel", "start-run"), (Icon::Play, "Start"), busy, cx),
         )
         .w(px(580.))
     }

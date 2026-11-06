@@ -231,6 +231,9 @@ impl Root {
             self.switch(target, window, cx);
             return;
         }
+        if let Some(focus) = store.update(cx, |s, _| s.refocus.take()) {
+            window.focus(&focus);
+        }
         let to_terminal = store.update(cx, |s, _| std::mem::take(&mut s.keys_to_terminal));
         let place = store.read(cx).machine_place.clone();
         if place != self.side.machine_place {
@@ -459,6 +462,7 @@ impl Root {
             s.follow_accounts(&shared, cx);
             s.session = Some(shared);
             s.follow_machines();
+            s.follow_awaited(cx);
             s.view_id = view_id;
             cx.notify();
         });

@@ -1,0 +1,28 @@
+{
+  "branch": "probe-flow",
+  "machine": "vps",
+  "members": [
+    {
+      "agent": "claude",
+      "pane": 19,
+      "role": "orchestrator",
+      "tab": 22
+    },
+    {
+      "agent": "claude",
+      "pane": 20,
+      "role": "coder",
+      "tab": 23
+    },
+    {
+      "agent": "codex",
+      "pane": 21,
+      "role": "reviewer",
+      "tab": 24
+    }
+  ],
+  "project": 8,
+  "run": 18,
+  "run_dir": "/home/ana/.local/state/cornercase/s.runs/2026-11-06-probe-flow",
+  "workspace": 17
+}

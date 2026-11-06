@@ -4,13 +4,15 @@ use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
 use futures::channel::{mpsc, oneshot};
-use gpui::{AnyView, App, AppContext as _, AsyncApp, ClipboardItem, Context, Entity, Global, WeakEntity};
+use gpui::{AnyView, App, AppContext as _, AsyncApp, ClipboardItem, Context, Entity, FocusHandle, Global, WeakEntity};
 use serde_json::Value;
 
 use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, RestartAnswer, Selection, Stamp, Switch, switching_key};
+use crate::model::machines::run_on::Awaited;
+use crate::model::machines::run_on::clone::Cloned;
 use crate::model::machines::{self, Machine};
 use crate::model::{MachinePlace, Session};
 use crate::panels::PanelKind;
@@ -21,11 +23,13 @@ use crate::prefs::{self, Prefs};
 
 mod jobs;
 mod machines_there;
+mod run_on;
 
 pub(crate) use jobs::Busy;
 use jobs::Jobs;
 use machines_there::Homes;
 pub(crate) use machines_there::{MachineAct, NoticeThere};
+pub(crate) use run_on::{CloneThere, StartThere};
 
 const NO_FLOW: &str = "This workspace runs no flow";
 
@@ -44,10 +48,14 @@ pub(crate) struct Store {
     pub app: Option<Value>,
     pub machines: Vec<Machine>,
     pub machine_place: Option<MachinePlace>,
+    awaited: Option<Awaited>,
+    cloned: Vec<Cloned>,
     homes: Homes,
     pub dock: Option<PanelKind>,
     pub sheet: Option<PanelKind>,
     pub dialog: Option<AnyView>,
+    dialog_behind: Option<(AnyView, FocusHandle)>,
+    pub refocus: Option<FocusHandle>,
     pub toasts: Vec<Toast>,
     pub switch_to: Option<Target>,
     pub browse: Option<(String, Option<u64>)>,
@@ -130,10 +138,14 @@ impl Store {
             app: None,
             machines: Vec::new(),
             machine_place: None,
+            awaited: None,
+            cloned: Vec::new(),
             homes: Homes::default(),
             dock: None,
             sheet: None,
             dialog: None,
+            dialog_behind: None,
+            refocus: None,
             toasts: Vec::new(),
             switch_to: None,
             browse: None,
@@ -430,6 +442,7 @@ impl Store {
 
     pub(crate) fn close_overlay(&mut self, cx: &mut Context<Self>) -> bool {
         let closed = self.dialog.take().is_some() || self.sheet.take().is_some();
+        self.dialog_comes_back();
         if closed {
             cx.notify();
         }
@@ -507,11 +520,13 @@ impl Store {
 
     pub(crate) fn close_dialog(&mut self, cx: &mut Context<Self>) {
         self.dialog = None;
+        self.dialog_comes_back();
         cx.notify();
     }
 
     pub(crate) fn connect(&mut self, target: Target, cx: &mut Context<Self>) {
         self.dialog = None;
+        self.dialog_behind = None;
         if target != cli::target() {
             self.switch_to = Some(target);
         }
@@ -573,6 +588,17 @@ pub(crate) fn run_on<T: 'static>(
     then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
 ) {
     run_with(cx, None, move || cli::run_on(&target, &args, None), then);
+}
+
+pub(crate) fn run_on_busy<T: 'static>(
+    cx: &mut Context<T>,
+    busy: Busy,
+    target: Target,
+    args: Vec<String>,
+    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+) {
+    let id = Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx));
+    run_job_on(cx, id, target, args, then);
 }
 
 fn run_job_on<T: 'static>(

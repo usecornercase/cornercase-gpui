@@ -1,4 +1,28 @@
 use super::*;
+use crate::model::Session;
+use crate::test_util::fixture;
+
+fn spot() -> Spot {
+    let session: Session = serde_json::from_str(fixture!("machines/view.json")).expect("a view line");
+    let seen = session.machine("vps").expect("vps");
+    seen.spot(seen.projects.iter().find(|there| there.name == "shop").expect("shop there"))
+}
+
+#[test]
+fn a_workspace_on_a_machine_names_it_and_its_project() {
+    assert_eq!(
+        workspace_args_there("notes", false, &spot()),
+        ["new-workspace", "notes", "--machine", "vps", "--project", "8", "--json"]
+    );
+}
+
+#[test]
+fn a_worktree_on_a_machine_says_so() {
+    assert_eq!(
+        workspace_args_there("feat/x", true, &spot()),
+        ["new-workspace", "feat/x", "--machine", "vps", "--project", "8", "--worktree", "--json"]
+    );
+}
 
 #[test]
 fn a_dialog_body_grows_with_the_window_within_limits() {

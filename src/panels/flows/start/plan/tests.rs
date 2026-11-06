@@ -1,4 +1,6 @@
 use super::*;
+use crate::model::Session;
+use crate::test_util::fixture;
 
 fn issue() -> IssueTask {
     IssueTask {
@@ -209,6 +211,30 @@ fn each_picked_account_goes_with_its_agent() {
     let typed = Typed { accounts, ..task("Fix it", "", "") };
     let args = plan("Quick", Some(4), None, &typed).expect("a plan").args();
     assert!(args.windows(4).any(|w| w == ["--account", "claude=work", "--account", "codex="]), "{args:?}");
+}
+
+fn spot() -> Spot {
+    let session: Session = serde_json::from_str(fixture!("machines/view.json")).expect("a view line");
+    let seen = session.machine("vps").expect("vps");
+    seen.spot(seen.projects.iter().find(|there| there.name == "shop").expect("shop there"))
+}
+
+#[test]
+fn a_flow_on_a_machine_names_it_and_its_project_and_moves_no_window() {
+    let args = plan("Quick", Some(4), None, &task("Fix it", "", "")).expect("a plan").args_there(&spot());
+    assert_eq!(args, ["flow", "run", "Quick", "--json", "--machine", "vps", "--project", "8", "--prompt=Fix it"]);
+}
+
+#[test]
+fn a_flow_on_a_machine_keeps_its_issue_and_accounts() {
+    let issue = IssueTask { key: "#7".into(), source: "github".into(), ..IssueTask::default() };
+    let accounts = vec![AccountPick { agent: "claude".into(), folder: "home".into() }];
+    let typed = Typed { accounts, ..task("", "", "") };
+    let args = plan("Quick", Some(4), Some(&issue), &typed).expect("a plan").args_there(&spot());
+    assert!(args.windows(2).any(|pair| pair == ["--account", "claude=home"]), "{args:?}");
+    assert!(args.contains(&"--issue=#7".to_string()), "{args:?}");
+    assert!(args.contains(&"--source=github".to_string()), "{args:?}");
+    assert!(!args.contains(&"--focus".to_string()), "{args:?}");
 }
 
 #[test]
