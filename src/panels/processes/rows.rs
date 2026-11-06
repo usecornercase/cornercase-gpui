@@ -5,10 +5,11 @@ use gpui::{
 
 use super::ProcessesPanel;
 use super::columns::{ACTION, CARD_PAD, LEAD, ROW_PAD, cell, cpu_text, cpu_with_meter, figures, memory_text};
-use super::data::{Found, Own, PaneUse, Process, Sample, folded, found, heading, ordered, place, under};
+use super::data::{Closing, Found, Own, PaneUse, Process, Sample, folded, found, heading, ordered, place, under};
 use crate::dialogs::Question;
-use crate::panels::poll::{Stop, confirm_stop};
+use crate::panels::poll::{Stop, confirm_stop, stop_now};
 use crate::panels::queue::open_pane;
+use crate::sidebar::close_agent;
 use crate::store::{Busy, Store};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::{self, Icon};
@@ -88,6 +89,37 @@ fn ask_stop(process: &Process, window: &mut Window, cx: &mut Context<ProcessesPa
     confirm_stop(question, busy, process.stop_command(), window, cx);
 }
 
+fn closing_key(pane: u64) -> String {
+    format!("close-pane:{pane}")
+}
+
+fn close_pane(pane: &PaneUse, window: &mut Window, cx: &mut Context<ProcessesPanel>) {
+    let busy = Busy::new(closing_key(pane.pane), format!("Closing {}…", heading(pane)));
+    match pane.closing() {
+        Closing::Agent => close_agent(pane.pane, window, cx),
+        Closing::Now => stop_now(busy, pane.close_command(), cx),
+        Closing::Asks(names) => {
+            let message = format!("It runs {names}: closing the pane stops it.");
+            let question = Question::new("Close this pane?", message, "Close pane", Vec::new());
+            confirm_stop(question, busy, pane.close_command(), window, cx);
+        }
+    }
+}
+
+fn close_slot(pane: &PaneUse, stop: Stop<ProcessesPanel>, group: SharedString) -> Option<Div> {
+    let id = pane.pane;
+    match stop {
+        Stop::Never => None,
+        Stop::Stopping => Some(div().child(ui::spinner(("closing", id), 12., colours::muted()))),
+        Stop::Ask(panel) => {
+            let closed = pane.clone();
+            let button = ui::row_action(("close", id), Icon::Close, "Close this pane", true)
+                .on_click(move |_: &ClickEvent, window, cx| panel.update(cx, |_, cx| close_pane(&closed, window, cx)));
+            Some(revealed(group, button))
+        }
+    }
+}
+
 fn stop_slot(process: &Process, stop: Stop<ProcessesPanel>, group: SharedString) -> Div {
     let slot = cell(ACTION);
     match stop {
@@ -158,9 +190,16 @@ fn pane_glyph(pane: &PaneUse) -> (Icon, Rgba) {
     if pane.agent.is_some() { (Icon::Agent, colours::accent()) } else { (Icon::Terminal, colours::muted()) }
 }
 
-fn pane_head(pane: &PaneUse, place: String, toggle: Option<bool>, cx: &mut Context<ProcessesPanel>) -> Stateful<Div> {
+fn pane_head(
+    pane: &PaneUse,
+    place: String,
+    toggle: Option<bool>,
+    close: Stop<ProcessesPanel>,
+    cx: &mut Context<ProcessesPanel>,
+) -> Stateful<Div> {
     let id = pane.pane;
     let group = SharedString::from(format!("pane-{id}"));
+    let closing = matches!(close, Stop::Stopping);
     let (glyph, colour) = pane_glyph(pane);
     let named = div().id(("pane-name", id)).flex_1().min_w_0().flex().items_center();
     let named = match toggle {
@@ -176,7 +215,8 @@ fn pane_head(pane: &PaneUse, place: String, toggle: Option<bool>, cx: &mut Conte
     hovered_row(&group, HEAD)
         .child(named.child(lead(toggle, glyph, colour)).child(title(heading(pane), place)))
         .child(figures(Some(pane.pid), cpu_with_meter(pane.cpu), memory_text(pane.memory, true)))
-        .child(cell(ACTION).child(revealed(group, go)))
+        .child(cell(ACTION).gap(px(4.)).child(revealed(group.clone(), go)).children(close_slot(pane, close, group)))
+        .when(closing, |d| d.opacity(0.5))
 }
 
 fn own_card(own: &Own) -> AnyElement {
@@ -202,8 +242,9 @@ impl ProcessesPanel {
         let (panel, store) = (cx.entity(), Store::get(cx));
         let stop = |p: &Process| Stop::of(true, self.watch.stopping(&stopping(p.pid), store.read(cx)), &panel);
         let rows: Vec<Stateful<Div>> = fold.rows.iter().map(|(depth, p)| process_row(*depth, p, stop(p))).collect();
+        let close = Stop::of(true, self.watch.stopping(&closing_key(pane.pane), store.read(cx)), &panel);
         card()
-            .child(pane_head(pane, place, toggle, cx))
+            .child(pane_head(pane, place, toggle, close, cx))
             .children(rows)
             .children(toggle.map(|open| more_row(pane.pane, fold.hidden, open, cx)))
             .into_any_element()

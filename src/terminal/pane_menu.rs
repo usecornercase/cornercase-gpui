@@ -6,7 +6,7 @@ use crate::context_menu::{Entry, act, danger, item, submenu};
 use crate::dialogs;
 use crate::model::{MouseMode, PaneInfo};
 use crate::render::moving::{Aim, Place};
-use crate::sidebar::cmd;
+use crate::sidebar::{cmd, path_items};
 use crate::store::Busy;
 
 const PLACES: [(&str, Place); 5] = [
@@ -80,6 +80,9 @@ impl Root {
             entries.push(Entry::Separator);
             entries.extend(self.agent_menu(pane, cx).into_iter().skip(1));
         }
+        entries.push(Entry::Separator);
+        let openers = self.store.read(cx).openers.clone();
+        entries.extend(info.and_then(|i| i.path).map(|path| path_items(&path, &openers)).unwrap_or_default());
         entries.push(Entry::Separator);
         entries.push(danger("Close pane", move |this, window, cx| this.close_pane(pane, window, cx)));
         entries

@@ -229,6 +229,7 @@ impl SettingsPanel {
             .children((setting.kind == Kind::List).then(|| self.render_sources(setting, cx)))
             .children(self.hint_of(&role, setting.hint(), slot.window, cx))
             .children(self.error_of(&role))
+            .children(self.forum_under(&setting.key, cx))
             .into_any_element()
     }
 

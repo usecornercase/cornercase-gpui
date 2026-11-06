@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
@@ -11,6 +12,7 @@ use crate::model::Session;
 use crate::model::accounts::{AccountsInfo, RestartAnswer, Selection, Stamp, Switch, switching_key};
 use crate::model::machines::{self, Machine};
 use crate::panels::PanelKind;
+use crate::panels::files::open::{self, Found};
 use crate::panels::settings::FoundSetting;
 use crate::prefs::{self, Prefs};
 
@@ -36,6 +38,9 @@ pub(crate) struct Store {
     pub landing: Option<FoundSetting>,
     pub prefs: Prefs,
     pub started_run_in: Option<u64>,
+    pub project_sheet: Option<(PanelKind, u64)>,
+    pub run_file: Option<String>,
+    pub openers: Arc<Vec<Found>>,
     pub jobs: Jobs,
     pub keys_to_terminal: bool,
     pub accounts: AccountsInfo,
@@ -109,6 +114,9 @@ impl Store {
             landing: None,
             prefs: prefs::load(),
             started_run_in: None,
+            project_sheet: None,
+            run_file: None,
+            openers: Arc::default(),
             jobs: Jobs::default(),
             keys_to_terminal: false,
             accounts: AccountsInfo::default(),
@@ -119,6 +127,7 @@ impl Store {
             app_stream: None,
         });
         cx.set_global(GlobalStore(store.clone()));
+        store.update(cx, |_, cx| detect_openers(cx));
         store
     }
 
@@ -231,6 +240,10 @@ impl Store {
 
     pub(crate) fn show_in_terminal(&mut self, kind: &str, id: u64, cx: &mut Context<Self>) {
         self.focus(kind, id);
+        self.give_keys_back(cx);
+    }
+
+    pub(crate) fn give_keys_back(&mut self, cx: &mut Context<Self>) {
         self.keys_to_terminal = true;
         cx.notify();
     }
@@ -378,6 +391,15 @@ impl Store {
         cx.notify();
     }
 
+    pub(crate) fn open_on_project(&mut self, kind: PanelKind, project: u64, cx: &mut Context<Self>) {
+        self.project_sheet = Some((kind, project));
+        self.open_sheet(kind, cx);
+    }
+
+    pub(crate) fn take_project_sheet(&mut self, kind: PanelKind) -> Option<u64> {
+        self.project_sheet.take_if(|(asked, _)| *asked == kind).map(|(_, project)| project)
+    }
+
     pub(crate) fn open(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
         if kind.docked() {
             self.dock = Some(kind);
@@ -390,6 +412,11 @@ impl Store {
     pub(crate) fn land_on(&mut self, found: FoundSetting, cx: &mut Context<Self>) {
         self.landing = Some(found);
         self.open_sheet(PanelKind::Settings, cx);
+    }
+
+    pub(crate) fn read_run_file(&mut self, path: String, cx: &mut Context<Self>) {
+        self.run_file = Some(path);
+        self.open(PanelKind::Files, cx);
     }
 
     pub(crate) fn open_in_browser(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
@@ -432,6 +459,18 @@ impl Store {
         }
         cx.notify();
     }
+}
+
+fn detect_openers(cx: &mut Context<Store>) {
+    if cli::host().is_some() {
+        return;
+    }
+    let found = cx.background_spawn(async { open::detect() });
+    cx.spawn(async move |this, cx| {
+        let found = Arc::new(found.await);
+        let _ = this.update(cx, |this, _| this.openers = found);
+    })
+    .detach();
 }
 
 pub(crate) fn args(parts: &[&str]) -> Vec<String> {

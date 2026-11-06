@@ -248,3 +248,21 @@ fn on_windows_the_default_app_refuses_folders_programs_and_what_is_gone() {
     assert!(!default_app_opens(Os::Windows, &root, true));
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_folder_is_offered_every_opener_but_the_default_app() {
+    let found = [
+        (Opener::FileManager, Launch::Desktop),
+        (Opener::VsCode, Launch::Command(PathBuf::from("/bin/code"))),
+        (Opener::DefaultApp, Launch::Desktop),
+    ];
+    let offered: Vec<Opener> = for_folders(&found).map(|(opener, _)| *opener).collect();
+    assert_eq!(offered, [Opener::FileManager, Opener::VsCode]);
+}
+
+#[test]
+fn opening_a_folder_names_no_line() {
+    let found = (Opener::Zed, Launch::Command(PathBuf::from("/bin/zed")));
+    let opening = Opening::folder(&found, "/work/shop");
+    assert_eq!((opening.path, opening.line, opening.dir), (PathBuf::from("/work/shop"), None, true));
+}

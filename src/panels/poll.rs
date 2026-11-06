@@ -133,13 +133,25 @@ pub(crate) fn confirm_stop<T: Polled>(
     window: &mut Window,
     cx: &mut Context<T>,
 ) {
+    confirm_stops(question, vec![(busy, command)], window, cx);
+}
+
+pub(crate) fn confirm_stops<T: Polled>(
+    question: Question,
+    stops: Vec<(Busy, Vec<String>)>,
+    window: &mut Window,
+    cx: &mut Context<T>,
+) {
     let this = cx.entity();
     let question = question.on_yes(move |cx| {
-        let (busy, command) = (busy.clone(), command.clone());
-        let key = busy.key().to_string();
-        this.update(cx, |_, cx| store::run_busy(cx, busy, command, move |this, r, cx| stopped(this, &key, r, cx)));
+        this.update(cx, |_, cx| stops.iter().for_each(|(busy, command)| stop_now(busy.clone(), command.clone(), cx)));
     });
     dialogs::confirm(question, window, cx);
+}
+
+pub(crate) fn stop_now<T: Polled>(busy: Busy, command: Vec<String>, cx: &mut Context<T>) {
+    let key = busy.key().to_string();
+    store::run_busy(cx, busy, command, move |this, r, cx| stopped(this, &key, r, cx));
 }
 
 fn stopped<T: Polled>(this: &mut T, key: &str, result: anyhow::Result<String>, cx: &mut Context<T>) {

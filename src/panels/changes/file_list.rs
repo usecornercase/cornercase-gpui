@@ -14,6 +14,8 @@ use super::pieces::{counts, faint_detail, plural, split_path, status_letter};
 use super::wire::{FileInfo, FoldClass, Mode, Staging, State, Summary, WorkspaceChanges};
 use super::{ChangesPanel, Scope, Selected};
 
+const NO_MATCH: &str = "No file matches the filter.";
+
 fn centred(title: String, detail: Option<String>, colour: Rgba) -> AnyElement {
     div()
         .size_full()
@@ -207,15 +209,26 @@ impl ChangesPanel {
         let Some(summary) = &self.summary else { return ui::note("").into_any_element() };
         let mode = self.scope.mode();
         let every = self.scope == Scope::Every;
+        let query = self.query(cx);
         let mut rows: Vec<AnyElement> = Vec::new();
         for ws in &summary.workspaces {
-            if every {
+            let kept: Vec<&FileInfo> = ws.files.iter().filter(|file| query.keeps(file)).collect();
+            if every && !kept.is_empty() {
                 rows.push(group_header(session, ws).into_any_element());
             }
-            rows.extend(ws.files.iter().map(|file| self.render_file(ws.workspace, file, mode, cx).into_any_element()));
+            rows.extend(kept.into_iter().map(|file| self.render_file(ws.workspace, file, mode, cx).into_any_element()));
+        }
+        if rows.is_empty() {
+            return ui::note(NO_MATCH).into_any_element();
         }
         let col = div().flex().flex_col().gap(px(2.)).p(px(8.)).children(rows);
-        div().id("changes-files").size_full().overflow_y_scroll().child(col).into_any_element()
+        div()
+            .id("changes-files")
+            .size_full()
+            .overflow_y_scroll()
+            .track_scroll(&self.files_scroll)
+            .child(col)
+            .into_any_element()
     }
 
     fn state_note(&self, session: Option<&Session>) -> Option<AnyElement> {

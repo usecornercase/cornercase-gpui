@@ -1,6 +1,6 @@
 use super::data::{
-    Found, Heat, Order, PaneUse, Process, Sample, command_line, counts, cpu, folded, found, heading, heat, load,
-    memory, ordered, place, sample_command, tree, under,
+    Closing, Found, Heat, Order, PaneUse, Process, Sample, command_line, counts, cpu, folded, found, heading, heat,
+    load, memory, ordered, place, sample_command, tree, under,
 };
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::test_util::fixture;
@@ -185,4 +185,27 @@ fn a_pane_is_headed_by_its_agent_else_its_program() {
     assert_eq!(heading(&s.panes[0]), "zsh");
     let agent = PaneUse { agent: Some("claude".into()), program: Some("2.1.311".into()), ..PaneUse::default() };
     assert_eq!(heading(&agent), "claude");
+}
+
+#[test]
+fn closing_an_agents_pane_goes_through_close_agent() {
+    let pane = PaneUse { pane: 3, pid: 10, agent: Some("claude".into()), ..PaneUse::default() };
+    assert_eq!(pane.closing(), Closing::Agent);
+}
+
+#[test]
+fn a_pane_running_only_its_shell_closes_at_once() {
+    let shell = Process { pid: 10, name: "zsh".into(), ..Process::default() };
+    let pane = PaneUse { pane: 3, pid: 10, processes: vec![shell], ..PaneUse::default() };
+    assert_eq!(pane.closing(), Closing::Now);
+    assert_eq!(pane.close_command(), ["close", "--pane", "3"]);
+}
+
+#[test]
+fn a_pane_running_programs_asks_first_and_names_them() {
+    let shell = Process { pid: 10, name: "zsh".into(), ..Process::default() };
+    let dev = Process { pid: 11, parent: Some(10), name: "vite".into(), ..Process::default() };
+    let child = Process { pid: 12, parent: Some(11), name: "esbuild".into(), ..Process::default() };
+    let pane = PaneUse { pane: 3, pid: 10, processes: vec![shell, dev, child], ..PaneUse::default() };
+    assert_eq!(pane.closing(), Closing::Asks("vite".to_string()));
 }
