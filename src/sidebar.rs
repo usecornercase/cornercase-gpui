@@ -229,8 +229,8 @@ fn list_end(cx: &mut Context<Root>) -> impl IntoElement + use<> {
             _ => s,
         })
         .on_drop(cx.listener(|this, d: &Dragged, _, _| match d.target {
-            Target::Project(id) => this.queue.cmd(actions::ungroup(id)),
-            Target::Group(_) => this.queue.cmd(actions::place_args(d.target, order::Place::End)),
+            Target::Project(id) => this.own.queue.cmd(actions::ungroup(id)),
+            Target::Group(_) => this.own.queue.cmd(actions::place_args(d.target, order::Place::End)),
             _ => {}
         }))
 }

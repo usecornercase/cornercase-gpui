@@ -1,4 +1,6 @@
+mod connection;
 pub(crate) mod frame;
+pub(crate) mod machine;
 mod status;
 mod surface;
 mod toasts;
@@ -16,9 +18,9 @@ use gpui::{
     StatefulInteractiveElement as _, Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 
-use crate::cli::{self, Queue, Stream, Target};
+use crate::cli::{self, Queue, Target};
 use crate::desktop::{self, Board};
-use crate::model::{Frame, Grid, Project, Session, Workspace};
+use crate::model::{Frame, Project, Session, Workspace};
 use crate::notify::{self, Notifier};
 use crate::panels::{PanelKind, plugins};
 use crate::platform::Os;
@@ -33,7 +35,8 @@ use crate::theme::{self, colours, radius};
 use crate::ui;
 use crate::ui::motion::{self, Leaving, Way};
 use crate::ui::split::{self, Edge, Split};
-use surface::Feed;
+pub(crate) use connection::Connection;
+use machine::MachineTab;
 
 pub(crate) const TITLEBAR_HEIGHT: f32 = 44.;
 pub(crate) const GAP: f32 = 8.;
@@ -52,16 +55,23 @@ const RETRY: Duration = Duration::from_millis(1500);
 pub(crate) enum Msg {
     Started(Result<String, String>),
     Missing(cli::Missing),
-    Session(u64, Box<Session>),
-    ViewEnded(u64, String),
-    Frame(u64, Box<Frame>),
-    SurfaceEnded(u64, String),
+    Stream(u64, Heard),
     Error(String),
     Copied(Board, String),
     Elsewhere(String),
     Folded(Fold, bool, Option<String>),
     ViewMoved,
-    TypedThere,
+}
+
+pub(crate) enum Heard {
+    Line(Box<Session>),
+    ViewEnded(String),
+    Frame(Box<Frame>),
+    SurfaceEnded(String),
+    QueueError(String),
+    FocusRefused(String),
+    Copied(String, Option<u64>),
+    Bell(Option<u64>),
 }
 
 #[derive(Clone, PartialEq)]
@@ -87,19 +97,12 @@ pub(crate) struct Root {
     pub(crate) focus: FocusHandle,
     pub(crate) store: Entity<Store>,
     pub(crate) tx: UnboundedSender<Msg>,
-    pub(crate) queue: Queue,
-    pub(crate) generation: u64,
-    pub(crate) view_stream: Option<Stream>,
-    surface_stream: Feed,
+    pub(crate) own: Connection,
+    pub(crate) machine: Option<MachineTab>,
     pub(crate) session: Option<Session>,
-    pub(crate) view_id: Option<u64>,
-    pub(crate) grid: Rc<Grid>,
-    pub(crate) has_frame: bool,
-    pub(crate) surface_error: Option<String>,
     pub(crate) metrics: Option<Metrics>,
     pub(crate) font_size: f32,
     pub(crate) layout: Rc<RefCell<Layout>>,
-    pub(crate) size: Option<(u16, u16)>,
     pub(crate) drag: Option<Drag>,
     pub(crate) pointer: Pointer,
     pub(crate) moves: Rc<RefCell<Moves>>,
@@ -110,6 +113,7 @@ pub(crate) struct Root {
     place: Vec<String>,
     pub(crate) side: SideState,
     pub(crate) visible: bool,
+    window_active: bool,
     pub(crate) panels: HashMap<PanelKind, AnyView>,
     pub(crate) sidebar_width: Split,
     pub(crate) pair_width: Split,
@@ -223,6 +227,7 @@ impl Root {
         kept.apply(&mut root);
         root.start(cx);
         Self::keep_seen_counting(cx);
+        Self::take_back_colours_on_quit(cx);
         root
     }
 
@@ -236,6 +241,7 @@ impl Root {
         if place != self.side.machine_place {
             self.machine_place_changed(place, window, cx);
         }
+        self.follow_link(cx);
         let s = store.read(cx);
         let now = Overlays { open: s.dialog.is_some() || s.sheet.is_some(), sheet: s.sheet };
         let in_dock = self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx);
@@ -259,6 +265,7 @@ impl Root {
         let left = cli::connect(target);
         cli::kill_all();
         cli::leave(&left);
+        self.take_back_colours();
         window.replace_root(cx, move |window, cx| Self::open(kept, window, cx));
     }
 
@@ -273,19 +280,12 @@ impl Root {
             focus,
             store,
             tx,
-            queue,
-            generation: 0,
-            view_stream: None,
-            surface_stream: Feed::Off,
+            own: Connection::new(cli::target(), queue),
+            machine: None,
             session: None,
-            view_id: None,
-            grid: Rc::new(Grid::default()),
-            has_frame: false,
-            surface_error: None,
             metrics: None,
             font_size: font_size_from_env(),
             layout: Rc::default(),
-            size: None,
             drag: None,
             pointer: Pointer::default(),
             moves: Rc::default(),
@@ -296,6 +296,7 @@ impl Root {
             place: Vec::new(),
             side: SideState::default(),
             visible: true,
+            window_active: true,
             panels: HashMap::new(),
             sidebar_width: SIDEBAR,
             pair_width: PAIR,
@@ -336,7 +337,9 @@ impl Root {
     }
 
     pub(crate) fn activation_changed(&mut self, active: bool, cx: &mut Context<Self>) {
-        let visible = active && self.side.machine_place.is_none();
+        self.window_active = active;
+        self.tell_machine_visible();
+        let visible = active && self.machine.is_none();
         if visible == self.visible {
             return;
         }
@@ -344,10 +347,7 @@ impl Root {
         if visible && self.conn == Conn::Connected {
             self.store.update(cx, Store::list_accounts);
         }
-        if let Some(id) = self.view_id {
-            let flag = if visible { "--visible" } else { "--hidden" };
-            self.queue.cmd(vec!["view-set".into(), "--view".into(), id.to_string(), flag.into()]);
-        }
+        self.own.tell_visible(visible);
     }
 
     fn open_requested_panel(&self, cx: &mut Context<Self>) {
@@ -361,40 +361,19 @@ impl Root {
     pub(crate) fn start(&mut self, cx: &App) {
         self.conn = Conn::Starting;
         let tx = self.tx.clone();
-        let (cols, rows) = self.size.unwrap_or((160, 48));
+        let (cols, rows) = self.own.size.unwrap_or((160, 48));
         let size = (cols.max(90), rows.max(10));
         let chosen = self.store.read(cx).prefs.cornercase_bin.clone();
         std::thread::spawn(move || start_server(&tx, size, chosen));
     }
 
     fn open_view(&mut self, cx: &mut Context<Self>) {
-        self.generation += 1;
-        let generation = self.generation;
-        self.surface_stream = Feed::Off;
-        self.view_stream = None;
-        self.view_id = None;
-        self.queue.reconnect();
-        let (cols, rows) = self.size.unwrap_or((120, 36));
+        self.own.queue.reconnect();
+        let (cols, rows) = self.own.size.unwrap_or((120, 36));
         let mut args = vec!["view".to_string(), "--cols".into(), cols.to_string(), "--rows".into(), rows.to_string()];
         args.extend(std::mem::take(&mut self.place));
-        let (tx, end) = (self.tx.clone(), self.tx.clone());
-        let stream = cli::stream(
-            &args,
-            move |line| match serde_json::from_str::<Session>(&line) {
-                Ok(s) => {
-                    let _ = tx.unbounded_send(Msg::Session(generation, Box::new(s)));
-                }
-                Err(e) => {
-                    let _ = tx.unbounded_send(Msg::Error(format!("view line: {e}")));
-                }
-            },
-            move |err| {
-                let _ = end.unbounded_send(Msg::ViewEnded(generation, err));
-            },
-        );
-        match stream {
-            Ok(s) => self.view_stream = Some(s),
-            Err(e) => self.lost(e.to_string(), cx),
+        if let Err(e) = self.own.open_view(&args, &self.tx) {
+            self.lost(e.to_string(), cx);
         }
         self.store.update(cx, |s, cx| {
             s.follow_app(cx);
@@ -408,10 +387,8 @@ impl Root {
     }
 
     fn drop_connection(&mut self, conn: Conn, cx: &mut Context<Self>) {
-        self.surface_stream = Feed::Off;
-        self.view_stream = None;
-        self.view_id = None;
-        self.has_frame = false;
+        self.own.close();
+        self.own.has_frame = false;
         self.conn = conn;
         self.store.update(cx, |s, cx| {
             s.view_id = None;
@@ -420,7 +397,6 @@ impl Root {
     }
 
     fn handle(&mut self, msg: Msg, cx: &mut Context<Self>) {
-        let current = self.generation;
         match msg {
             Msg::Started(Ok(_)) => self.open_view(cx),
             Msg::Missing(missing) => self.drop_connection(Conn::Missing(missing), cx),
@@ -428,10 +404,11 @@ impl Root {
                 self.lost(e, cx);
                 self.retry(cx);
             }
-            Msg::Session(generation, session) if generation == current => self.session_arrived(*session, cx),
-            Msg::ViewEnded(generation, err) if generation == current => self.view_ended(&err, cx),
-            Msg::Frame(generation, frame) if generation == current => self.frame_arrived(*frame),
-            Msg::SurfaceEnded(generation, err) if generation == current => self.surface_ended(generation, &err, cx),
+            Msg::Stream(serial, heard) => {
+                if !self.stream_heard(serial, heard, cx) {
+                    return;
+                }
+            }
             Msg::Error(e) => self.say(&e, cx),
             Msg::Copied(Board::Clipboard, text) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(text));
@@ -441,10 +418,33 @@ impl Root {
             Msg::Elsewhere(path) => self.store.update(cx, |s, cx| s.copy_elsewhere(path, cx)),
             Msg::Folded(fold, collapsed, error) => self.fold_answered(fold, collapsed, error.as_deref(), cx),
             Msg::ViewMoved => self.store.update(cx, Store::leave_machine_place),
-            Msg::TypedThere => self.typed_on_machine(cx),
-            _ => return,
         }
         cx.notify();
+    }
+
+    fn stream_heard(&mut self, serial: u64, heard: Heard, cx: &mut Context<Self>) -> bool {
+        if self.own.owns(serial) {
+            self.own_heard(serial, heard, cx);
+            return true;
+        }
+        let there = self.machine.as_ref().is_some_and(|tab| tab.conn.owns(serial));
+        if there {
+            self.machine_heard(heard, cx);
+        }
+        there
+    }
+
+    fn own_heard(&mut self, serial: u64, heard: Heard, cx: &mut Context<Self>) {
+        match heard {
+            Heard::Line(session) => self.session_arrived(*session, cx),
+            Heard::ViewEnded(err) => self.view_ended(&err, cx),
+            Heard::Frame(frame) => {
+                self.own.frame_arrived(*frame);
+            }
+            Heard::SurfaceEnded(err) => self.surface_ended(serial, &err, cx),
+            Heard::QueueError(e) | Heard::FocusRefused(e) => self.say(&e, cx),
+            Heard::Copied(..) | Heard::Bell(_) => {}
+        }
     }
 
     fn session_arrived(&mut self, mut session: Session, cx: &mut Context<Self>) {
@@ -452,13 +452,13 @@ impl Root {
         self.conn = Conn::Connected;
         self.attempts = 0;
         self.follow_surface(&session, cx);
-        let view_id = self.view_id;
+        let view_id = self.own.view_id;
         let shared = session.clone();
         self.store.update(cx, |s, cx| {
             s.jobs.keep_leaving(|workspace| shared.workspace(workspace).is_some());
             s.follow_accounts(&shared, cx);
             s.session = Some(shared);
-            s.follow_machines();
+            s.follow_machines(cx);
             s.view_id = view_id;
             cx.notify();
         });
@@ -496,50 +496,27 @@ impl Root {
     }
 
     pub(crate) fn act(&mut self, args: Vec<String>) {
-        if let Some(id) = self.view_id {
-            let mut args = args;
-            args.push("--view".into());
-            args.push(id.to_string());
-            self.queue.cmd(args);
-        }
+        self.own.act(args);
     }
 
     pub(crate) fn focus_item(&mut self, kind: &str, id: u64) {
         self.act(vec!["focus".into(), format!("--{kind}"), id.to_string()]);
     }
 
-    fn send_size(&mut self, cols: u16, rows: u16) {
-        if let Some(id) = self.view_id {
-            let args = vec![
-                "view-set".into(),
-                "--view".into(),
-                id.to_string(),
-                "--cols".into(),
-                cols.to_string(),
-                "--rows".into(),
-                rows.to_string(),
-            ];
-            self.queue.coalesced("size", args);
-        }
+    pub(crate) fn focus_on_shown(&self, kind: &str, id: u64) {
+        self.shown().act(vec!["focus".into(), format!("--{kind}"), id.to_string()]);
     }
 
     pub(crate) fn set_size(&mut self, cols: u16, rows: u16) {
-        if self.size != Some((cols, rows)) {
-            self.size = Some((cols, rows));
-            self.send_size(cols, rows);
+        let conn = self.shown_mut();
+        if conn.size != Some((cols, rows)) {
+            conn.size = Some((cols, rows));
+            conn.send_size((cols, rows));
         }
     }
 
     pub(crate) fn active_pane(&self) -> Option<u64> {
-        self.frame_shown().then(|| self.grid.active_pane().map(|p| p.pane)).flatten()
-    }
-
-    pub(crate) fn input(&self, event: serde_json::Value) {
-        if self.side.machine_place.is_some() {
-            let _ = self.tx.unbounded_send(Msg::TypedThere);
-        } else if let Some(pane) = self.active_pane() {
-            self.queue.input(pane, event);
-        }
+        self.takes_input().then(|| self.shown().grid.active_pane().map(|p| p.pane)).flatten()
     }
 
     pub(crate) fn shown_workspace(&self) -> Option<(&Project, &Workspace)> {

@@ -10,10 +10,11 @@ use crate::app::frame::{self, Frame};
 use crate::app::{Root, TITLEBAR_HEIGHT};
 use crate::context_menu::{Entry, act, danger, item};
 use crate::dialogs;
-use crate::keymap::{Command, with_keys};
-use crate::model::{Tab, memory_size};
+use crate::keymap::{self, Command, with_keys};
+use crate::model::{MachinePlace, MachineSeen, Tab, ThereId, ThereWorkspace, memory_size};
 use crate::sidebar::{Dragged, Look, Renaming, Target, cmd, draggable, order, tip};
-use crate::store::Busy;
+use crate::store::{Busy, ToastKind};
+use crate::terminal::cycled;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, badge};
 
@@ -27,7 +28,7 @@ fn faint(text: String) -> Div {
     div().text_size(px(11.)).text_color(colours::faint()).child(text)
 }
 
-fn tab_detail(tab: &Tab, mark: Option<&str>, look: &Look) -> Option<String> {
+fn tab_detail<Id>(tab: &Tab<Id>, mark: Option<&str>, look: &Look) -> Option<String> {
     let agent = tab.agent_pane();
     let share = agent.filter(|a| a.model.is_some() || a.context.is_none()).and_then(|a| look.share_of(a));
     let model = agent.and_then(|agent| look.model_of(agent));
@@ -83,7 +84,7 @@ fn new_tab_button(cx: &mut Context<Root>) -> impl IntoElement + use<> {
         )
         .on_drop(cx.listener(|this, d: &Dragged, _, _| {
             if let Target::Tab(id) = d.target {
-                this.queue.cmd(cmd(&["move", "--tab", &id.to_string(), "--last"]));
+                this.own.queue.cmd(cmd(&["move", "--tab", &id.to_string(), "--last"]));
             }
         }))
 }
@@ -96,12 +97,12 @@ fn split_buttons(cx: &mut Context<Root>) -> Div {
         .child(
             ui::tool_button("split-right", Icon::SplitRight, TAB_HEIGHT, false)
                 .tooltip(tip(with_keys("Split right", Command::SplitRight)))
-                .on_click(cx.listener(|this, _: &ClickEvent, _, _| this.split(false))),
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.split(false, cx))),
         )
         .child(
             ui::tool_button("split-down", Icon::SplitDown, TAB_HEIGHT, false)
                 .tooltip(tip(with_keys("Split down", Command::SplitDown)))
-                .on_click(cx.listener(|this, _: &ClickEvent, _, _| this.split(true))),
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.split(true, cx))),
         )
 }
 
@@ -120,6 +121,49 @@ fn new_tab_menu() -> Vec<Entry> {
         act("Start the default agent", cmd(&["start", "--focus"])),
         item("Start an agent…", |_, window, cx| dialogs::start_agent(window, cx)),
     ]
+}
+
+fn tab_pill(group: SharedString, selected: bool) -> Stateful<Div> {
+    div()
+        .id(group.clone())
+        .group(group)
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(6.))
+        .h(px(TAB_HEIGHT))
+        .pl(px(10.))
+        .pr(px(6.))
+        .relative()
+        .rounded(px(radius::CONTROL))
+        .border_1()
+        .border_color(gpui::transparent_black())
+        .cursor_pointer()
+        .when(selected, |d| d.bg(colours::selected()).border_color(colours::border()).text_color(colours::text()))
+        .when(!selected, |d| {
+            d.text_color(colours::muted()).hover(|s| s.bg(colours::hover()).text_color(colours::soft()))
+        })
+}
+
+fn machine_tab(
+    (seen, ws): (&MachineSeen, &ThereWorkspace),
+    tab: &Tab<ThereId>,
+    selected: bool,
+    look: &Look,
+    cx: &mut Context<Root>,
+) -> Stateful<Div> {
+    let place = MachinePlace::at(seen, ws, Some(tab.id));
+    let others = tab.panes.len().saturating_sub(1);
+    let detail = tab_detail(tab, None, look);
+    let status =
+        tab.loudest().map(|status| if seen.linked() { badge(Some(status)) } else { ui::still_badge(Some(status)) });
+    tab_pill(SharedString::from(format!("machine-tab-{}", tab.id.key())), selected)
+        .pr(px(10.))
+        .children(status)
+        .child(div().whitespace_nowrap().child(tab.name.clone()))
+        .when(others > 0, |d| d.child(faint(format!("+{others}"))))
+        .when_some(detail, |d, text| d.child(faint(text).whitespace_nowrap()))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_on_machine(place.clone(), cx)))
 }
 
 fn agent_entries(tab: &Tab, switch: Option<Entry>) -> Vec<Entry> {
@@ -164,7 +208,7 @@ impl Root {
         }
         group
             .child(self.scrolled_tabs(cx))
-            .child(new_tab_button(cx))
+            .when(self.machine.is_none(), |d| d.child(new_tab_button(cx)))
             .child(strip::watcher(&self.side.strip, cx.entity().downgrade()))
     }
 
@@ -190,8 +234,11 @@ impl Root {
             .gap(px(4.))
             .overflow_x_scroll()
             .track_scroll(self.side.strip.handle());
+        if self.machine.is_some() {
+            return strip.children(self.machine_tabs(cx));
+        }
         let Some((_, ws)) = self.shown_workspace() else { return strip };
-        let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab).filter(|_| self.side.machine_place.is_none());
+        let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab);
         let index = ws.tabs.iter().position(|t| Some(t.id) == shown_tab);
         self.side.strip.show(Some(ws.id), shown_tab, index);
         let siblings: Rc<Vec<u64>> = Rc::new(ws.tabs.iter().map(|t| t.id).collect());
@@ -222,25 +269,7 @@ impl Root {
         let others = tab.panes.len().saturating_sub(1);
         let mark = tab.agent_pane().and_then(|agent| self.account_mark(agent, cx));
         let detail = tab_detail(tab, mark.as_deref(), &self.side.look.current);
-        div()
-            .id(group.clone())
-            .group(group.clone())
-            .flex()
-            .flex_none()
-            .items_center()
-            .gap(px(6.))
-            .h(px(TAB_HEIGHT))
-            .pl(px(10.))
-            .pr(px(6.))
-            .relative()
-            .rounded(px(radius::CONTROL))
-            .border_1()
-            .border_color(gpui::transparent_black())
-            .cursor_pointer()
-            .when(selected, |d| d.bg(colours::selected()).border_color(colours::border()).text_color(colours::text()))
-            .when(!selected, |d| {
-                d.text_color(colours::muted()).hover(|s| s.bg(colours::hover()).text_color(colours::soft()))
-            })
+        tab_pill(group.clone(), selected)
             .children(tab.loudest().map(|status| badge(Some(status))))
             .child(self.tab_name(tab))
             .when(others > 0, |d| d.child(faint(format!("+{others}"))))
@@ -263,6 +292,55 @@ impl Root {
         }
     }
 
+    fn machine_workspace(&self) -> Option<(&MachineSeen, &ThereWorkspace)> {
+        let place = self.side.machine_place.as_ref()?;
+        let seen = self.session.as_ref()?.machine(&place.machine)?;
+        Some((seen, seen.workspace(place.workspace)?))
+    }
+
+    fn machine_tabs(&self, cx: &mut Context<Self>) -> Vec<Stateful<Div>> {
+        let Some((seen, ws)) = self.machine_workspace() else { return Vec::new() };
+        let shown = self.side.machine_place.as_ref().and_then(|place| place.tab);
+        let index = ws.tabs.iter().position(|tab| Some(tab.id) == shown);
+        self.side.strip.show(None, index.and_then(|at| u64::try_from(at).ok()), index);
+        let look = &self.side.look.current;
+        ws.tabs.iter().map(|tab| machine_tab((seen, ws), tab, Some(tab.id) == shown, look, cx)).collect()
+    }
+
+    fn pick_on_machine(&mut self, place: MachinePlace, cx: &mut Context<Self>) {
+        self.store.update(cx, |s, cx| s.pick_machine_place(place, cx));
+    }
+
+    fn machine_tab_place(
+        &self,
+        tab: impl FnOnce(&ThereWorkspace, Option<ThereId>) -> Option<ThereId>,
+    ) -> Option<MachinePlace> {
+        let (seen, ws) = self.machine_workspace()?;
+        let shown = self.side.machine_place.as_ref().and_then(|place| place.tab);
+        Some(MachinePlace::at(seen, ws, Some(tab(ws, shown)?)))
+    }
+
+    pub(crate) fn pick_machine_tab_number(&mut self, key: &str, cx: &mut Context<Self>) {
+        let number =
+            |ws: &ThereWorkspace, _| keymap::tab_index(key, ws.tabs.len()).and_then(|i| ws.tabs.get(i)).map(|t| t.id);
+        if let Some(place) = self.machine_tab_place(number) {
+            self.pick_on_machine(place, cx);
+        }
+    }
+
+    pub(crate) fn cycle_machine_tab(&mut self, by: i32, cx: &mut Context<Self>) {
+        let next = |ws: &ThereWorkspace, shown| cycled(&ws.tabs.iter().map(|t| t.id).collect::<Vec<_>>(), shown, by);
+        if let Some(place) = self.machine_tab_place(next) {
+            self.pick_on_machine(place, cx);
+        }
+    }
+
+    pub(crate) fn not_offered_there(&mut self, what: &str, cx: &mut Context<Self>) {
+        let Some(machine) = self.machine.as_ref().map(|tab| tab.machine.clone()) else { return };
+        let text = format!("{what} on {machine} is not offered here yet");
+        self.store.update(cx, |s, cx| s.toast(text, ToastKind::Info, cx));
+    }
+
     pub(crate) fn tab_menu(&self, id: u64, cx: &App) -> Vec<Entry> {
         let Some(tab) = self.session.as_ref().and_then(|s| s.tab(id)).cloned() else { return Vec::new() };
         let mut entries = vec![
@@ -279,7 +357,7 @@ impl Root {
     pub(crate) fn close_tab(&mut self, tab: &Tab, window: &mut Window, cx: &mut Context<Self>) {
         let command = cmd(&["close", "--tab", &tab.id.to_string()]);
         let Some(agent) = tab.agent_pane() else {
-            self.queue.cmd(command);
+            self.own.queue.cmd(command);
             return;
         };
         let what = agent.agent.clone().unwrap_or_else(|| "an agent".into());

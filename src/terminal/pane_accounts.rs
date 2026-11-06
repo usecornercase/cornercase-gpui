@@ -211,9 +211,12 @@ impl Root {
         let store = self.store.read(cx);
         let look = &self.side.look.current;
         let wanted = look.account_switcher && store.accounts.any();
-        let Some(session) = self.session.as_ref().filter(|_| wanted) else { return Vec::new() };
-        let (several, menu_open) = (self.grid.panes.len() > 1, self.side.menu.is_some());
-        let shown = self.grid.panes.iter().filter_map(|p| Some((session.pane(p.pane)?, look.fades(several, p.active))));
+        let Some(session) = self.session.as_ref().filter(|_| wanted && self.machine.is_none()) else {
+            return Vec::new();
+        };
+        let (several, menu_open) = (self.own.grid.panes.len() > 1, self.side.menu.is_some());
+        let shown =
+            self.own.grid.panes.iter().filter_map(|p| Some((session.pane(p.pane)?, look.fades(several, p.active))));
         shown.filter_map(|(pane, faded)| chips_of(pane, faded, menu_open, store)).collect()
     }
 

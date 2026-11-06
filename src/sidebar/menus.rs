@@ -69,7 +69,7 @@ fn project_sheet_item(label: &'static str, kind: PanelKind, project: u64) -> Ent
 }
 
 fn command_item(label: impl Into<SharedString>, args: Vec<String>) -> Entry {
-    item(label, move |this, _, _| this.queue.cmd(args.clone()))
+    item(label, move |this, _, _| this.own.queue.cmd(args.clone()))
 }
 
 fn new_workspace_item(project: Option<u64>) -> Entry {

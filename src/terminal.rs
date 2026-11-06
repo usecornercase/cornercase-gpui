@@ -8,6 +8,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled, WeakEntity, Window, canvas, div, prelude::FluentBuilder as _, px,
 };
 
+use crate::app::machine::MachineTab;
 use crate::app::{Conn, Drag, Root};
 use crate::dialogs;
 use crate::keymap::{self, Command, Focus, with_keys};
@@ -44,6 +45,7 @@ pub(crate) use links::Pointer;
 use pane_accounts::PaneChips;
 use pane_notes::PaneNotes;
 use popup::Popup;
+pub(crate) use selection::cleaned;
 
 #[derive(Clone, Copy)]
 struct Chord<'a> {
@@ -55,7 +57,7 @@ struct Chord<'a> {
 
 const DEFAULT_FONT_SIZE: f32 = 13.;
 
-fn cycled(ids: &[u64], current: Option<u64>, by: i32) -> Option<u64> {
+pub(crate) fn cycled<T: Copy + PartialEq>(ids: &[T], current: Option<T>, by: i32) -> Option<T> {
     let len = i32::try_from(ids.len()).ok().filter(|&len| len > 0)?;
     let at = ids.iter().position(|&id| Some(id) == current).and_then(|i| i32::try_from(i).ok()).unwrap_or(0);
     ids.get(usize::try_from((at + by).rem_euclid(len)).ok()?).copied()
@@ -109,15 +111,15 @@ impl Root {
     fn type_in(&mut self, event: serde_json::Value, cx: &mut Context<Self>) {
         self.dismiss_link(cx);
         let popup = Popup::get(&self.focus, cx);
-        if popup.read(cx).is_open() && self.side.machine_place.is_none() {
+        if popup.read(cx).is_open() && self.machine.is_none() {
             popup.read(cx).send(&event, cx);
         } else {
-            self.input(event);
+            self.input(event, cx);
         }
     }
 
     fn open_popup(&self, cx: &mut App) -> Option<Entity<Popup>> {
-        Some(Popup::get(&self.focus, cx)).filter(|popup| popup.read(cx).is_open())
+        Some(Popup::get(&self.focus, cx)).filter(|popup| self.machine.is_none() && popup.read(cx).is_open())
     }
 
     fn overlay_open(&self, cx: &App) -> bool {
@@ -203,34 +205,30 @@ impl Root {
         if command == Command::Copy && self.dock_copy(window, cx) {
             return;
         }
-        if self.side.machine_place.is_some() {
-            if terminal && command == Command::Paste {
-                self.typed_on_machine(cx);
-            }
-            return;
-        }
         if let Some(popup) = self.open_popup(cx) {
             if terminal && command == Command::Paste {
                 popup.read(cx).paste(cx);
             }
             return;
         }
-        let Some(pane) = self.active_pane().filter(|_| terminal) else { return };
-        if command == Command::Copy {
-            self.copy_selection(pane);
-        } else {
-            self.paste(pane, cx);
+        if !terminal {
+            return;
+        }
+        match (command, self.active_pane()) {
+            (Command::Copy, Some(pane)) => self.copy_selection(pane),
+            (Command::Paste, pane) => self.paste(pane, cx),
+            _ => {}
         }
     }
 
     fn view_shortcut(&mut self, command: Command, key: &str, cx: &mut Context<Self>) {
         match command {
             Command::NewTab => self.act(vec!["new-tab".into(), "--focus".into()]),
-            Command::SplitRight => self.split(false),
-            Command::SplitDown => self.split(true),
-            Command::PreviousTab => self.cycle_tab(-1),
-            Command::NextTab => self.cycle_tab(1),
-            Command::Tab => self.focus_tab_number(key),
+            Command::SplitRight => self.split(false, cx),
+            Command::SplitDown => self.split(true, cx),
+            Command::PreviousTab => self.cycle_tab(-1, cx),
+            Command::NextTab => self.cycle_tab(1, cx),
+            Command::Tab => self.focus_tab_number(key, cx),
             Command::PreviousPane => self.cycle_pane(-1),
             Command::NextPane => self.cycle_pane(1),
             Command::ZoomIn => self.zoom(1., cx),
@@ -252,13 +250,18 @@ impl Root {
             window.focus(&self.focus);
             return;
         }
+        if self.machine.is_some() {
+            self.not_offered_there("Closing a pane", cx);
+            return;
+        }
         if let Some(pane) = self.active_pane() {
             self.close_pane(pane, window, cx);
         }
     }
 
     fn close_shown_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.side.machine_place.is_some() {
+        if self.machine.is_some() {
+            self.not_offered_there("Closing a tab", cx);
             return;
         }
         let session = self.session.as_ref();
@@ -268,7 +271,11 @@ impl Root {
         }
     }
 
-    fn focus_tab_number(&mut self, key: &str) {
+    fn focus_tab_number(&mut self, key: &str, cx: &mut Context<Self>) {
+        if self.machine.is_some() {
+            self.pick_machine_tab_number(key, cx);
+            return;
+        }
         let Some((_, ws)) = self.shown_workspace() else { return };
         if let Some(tab) = keymap::tab_index(key, ws.tabs.len()).and_then(|i| ws.tabs.get(i)).map(|t| t.id) {
             self.focus_item("tab", tab);
@@ -285,17 +292,23 @@ impl Root {
         cx.notify();
     }
 
-    pub(crate) fn split(&mut self, down: bool) {
-        if let Some(pane) = self.active_pane() {
-            let mut args = vec!["split".into(), "--pane".into(), pane.to_string(), "--focus".into()];
-            if down {
-                args.push("--down".into());
-            }
-            self.act(args);
+    pub(crate) fn split(&mut self, down: bool, cx: &mut Context<Self>) {
+        let Some(pane) = self.active_pane() else {
+            self.refuse_on_machine(cx);
+            return;
+        };
+        let mut args = vec!["split".into(), "--pane".into(), pane.to_string(), "--focus".into()];
+        if down {
+            args.push("--down".into());
         }
+        self.shown().act(args);
     }
 
-    pub(crate) fn cycle_tab(&mut self, by: i32) {
+    fn cycle_tab(&mut self, by: i32, cx: &mut Context<Self>) {
+        if self.machine.is_some() {
+            self.cycle_machine_tab(by, cx);
+            return;
+        }
         let Some((_, ws)) = self.shown_workspace() else { return };
         let ids: Vec<u64> = ws.tabs.iter().map(|t| t.id).collect();
         let shown = self.session.as_ref().and_then(|s| s.shown().tab);
@@ -306,10 +319,10 @@ impl Root {
 
     fn cycle_pane(&mut self, by: i32) {
         let Some(pane) = self.active_pane() else { return };
-        let tab = self.session.as_ref().and_then(|s| s.tab_of_pane(pane));
+        let tab = self.shown_session().and_then(|s| s.tab_of_pane(pane));
         let ids: Vec<u64> = tab.map(|t| t.panes.iter().map(|p| p.id).collect()).unwrap_or_default();
         if let Some(next) = cycled(&ids, Some(pane), by).filter(|&next| next != pane) {
-            self.focus_item("pane", next);
+            self.focus_on_shown("pane", next);
         }
     }
 
@@ -338,7 +351,7 @@ impl Root {
             .child(self.surface(metrics.clone(), window, cx))
             .children(handle)
             .children(self.cover(cx))
-            .when(self.side.machine_place.is_none(), |d| d.child(popup))
+            .when(self.machine.is_none(), |d| d.child(popup))
             .child(files::Peek::get(cx))
             .children(self.render_ghost(&metrics))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| this.left_terminal(*hovered, cx)))
@@ -352,19 +365,17 @@ impl Root {
         if let Conn::Missing(missing) = &self.conn {
             return Some(Self::missing_page(missing, cx).into_any_element());
         }
-        if self.conn == Conn::Connected
-            && let Some(area) = self.machine_tab_area(cx)
-        {
-            return Some(area);
+        if self.machine.is_some() {
+            return self.machine_tab_area(cx);
         }
         if self.conn == Conn::Connected && self.shows_no_tab() {
             return self.empty_page(cx).map(IntoElement::into_any_element);
         }
-        (!self.has_frame).then(|| self.connection_note().into_any_element())
+        (!self.own.has_frame).then(|| self.connection_note().into_any_element())
     }
 
     fn connection_note(&self) -> impl IntoElement + use<> {
-        let (title, detail) = note_text(&self.conn, self.surface_error.as_deref(), self.host.as_deref());
+        let (title, detail) = note_text(&self.conn, self.own.surface_error.as_deref(), self.host.as_deref());
         let lost_remote = self.host.is_some() && matches!(self.conn, Conn::Lost(_));
         div()
             .absolute()
@@ -397,23 +408,23 @@ impl Root {
     }
 
     fn shown_link(&self) -> Option<Hovered> {
-        self.pointer.links.hovered().filter(|h| h.shown_in(&self.grid)).cloned()
+        self.pointer.links.hovered().filter(|h| h.shown_in(&self.shown().grid)).cloned()
     }
 
     fn surface(&self, metrics: Metrics, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let entity = cx.entity();
-        let shown = self.frame_shown();
-        let grid = shown.then(|| self.grid.clone());
+        let grid = self.frame_shown().then(|| self.shown().grid.clone());
         let (layout, moves) = (self.layout.clone(), self.moves.clone());
         let (chips, notes) = (self.pane_chips(cx), self.pane_notes());
-        let sizes = self.side.machine_place.is_none();
         let root = entity.downgrade();
-        let fit = Fit { layout, moves: moves.clone(), wanted: self.size, sizes, root, metrics, grid, chips, notes };
+        let wanted = self.shown().size;
+        let fit = Fit { layout, moves: moves.clone(), wanted, root, metrics, grid: grid.clone(), chips, notes };
         let focused = self.focus.is_focused(window) && window.is_window_active();
-        let (grid, has_frame, focus) = (self.grid.clone(), shown, self.focus.clone());
+        let focus = self.focus.clone();
         let link = self.shown_link().filter(|_| self.drag.is_none() || matches!(self.drag, Some(Drag::Link { .. })));
         let dim_inactive = self.side.look.current.dim_inactive_panes;
-        let painting = Painting { grid, has_frame, focus, focused, entity, moves, link, dim_inactive };
+        let dimmed = self.machine.as_ref().is_some_and(MachineTab::dimmed);
+        let painting = Painting { grid, dimmed, focus, focused, entity, moves, link, dim_inactive };
         canvas(
             move |bounds, window, cx| fit.prepaint(bounds, window, cx),
             move |bounds, mut placed, window, cx| {
@@ -428,7 +439,6 @@ struct Fit {
     layout: Rc<RefCell<Layout>>,
     moves: Rc<RefCell<Moves>>,
     wanted: Option<(u16, u16)>,
-    sizes: bool,
     root: WeakEntity<Root>,
     metrics: Metrics,
     grid: Option<Rc<Grid>>,
@@ -457,7 +467,7 @@ impl Fit {
             .collect();
         let cols = cells_across(f32::from(bounds.size.width) - extra.0, self.metrics.cell_width, 1000.);
         let rows = cells_across(f32::from(bounds.size.height) - extra.1, self.metrics.line_height, 500.);
-        if self.sizes && self.wanted != Some((cols, rows)) {
+        if self.wanted != Some((cols, rows)) {
             request_size(self.root.clone(), cols, rows, cx);
         }
         let settled = !self.moves.borrow().busy(Instant::now()) && !self.moves.borrow().lifted();
@@ -479,8 +489,8 @@ fn request_size(root: WeakEntity<Root>, cols: u16, rows: u16, cx: &mut App) {
 }
 
 struct Painting {
-    grid: Rc<Grid>,
-    has_frame: bool,
+    grid: Option<Rc<Grid>>,
+    dimmed: bool,
     focus: FocusHandle,
     focused: bool,
     entity: Entity<Root>,
@@ -495,10 +505,10 @@ impl Painting {
         for (hitbox, cursor) in &placed.grips {
             window.set_cursor_style(*cursor, hitbox);
         }
-        if !self.has_frame {
+        let Some(grid) = &self.grid else {
             render::card(bounds, colours::pane(), colours::border(), window);
             return;
-        }
+        };
         let now = Instant::now();
         let (stage, moving) = {
             let mut moves = self.moves.borrow_mut();
@@ -512,8 +522,9 @@ impl Painting {
             focused: self.focused,
             dim_inactive: self.dim_inactive,
             stage: &stage,
+            dimmed: self.dimmed,
         };
-        render::paint(&self.grid, &surface, window, cx);
+        render::paint(grid, &surface, window, cx);
         if let Some(link) = self.link.as_ref().filter(|_| !moving) {
             render::paint_link(&placed.layout, link, window);
         }

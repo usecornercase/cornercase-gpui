@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.18
+
+- **A machine's tab, live, in this window.** A click on a machine's workspace or tab now draws it as it is there, splits included, and it takes your keys and pastes, the wheel, selecting and dragging its dividers. What you select lands on this computer's clipboard, and so does what a program there copies. Its bell flashes here. The tab bar shows that workspace's tabs, and your sidebar and panels stay live beside it.
+- **It stays out of the way of what runs there.** The panes take this window's size while you look at them and give it back when you leave. Programs there are told this window's colours while one of its tabs shows, and those are taken back when you leave. Typing costs one process, as on a tab here.
+- **When the link drops, nothing you type goes astray.** The last frame stays, dimmed, under a card that says so and when it tries again. Nothing typed is sent or kept, and a toast says so. It comes back by itself, and if the server there restarted it finds the workspace again by its folder. A workspace closed there takes you back to your tab with a note.
+- A click on a path, opening links and pictures do not work on a machine's tab yet: they show nothing rather than open a file here by mistake. Closing panes and tabs there is not offered yet, and a window connected to another server says a machine's tab needs it on this computer.
+
 ## 0.1.17
 
 - **Tabs past the edge can be reached.** When a workspace has more tabs than the bar holds, `‹` and `›` appear at its ends, the wheel scrolls it, and the tab you are on stays in view.
