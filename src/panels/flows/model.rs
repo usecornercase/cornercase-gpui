@@ -98,6 +98,16 @@ impl FlowInfo {
         self.problems.is_empty()
     }
 
+    pub(crate) fn team_agents(&self) -> Vec<String> {
+        let mut agents: Vec<String> = Vec::new();
+        for role in std::iter::once(&self.flow.orchestrator).chain(&self.flow.roles) {
+            if !agents.contains(&role.agent) {
+                agents.push(role.agent.clone());
+            }
+        }
+        agents
+    }
+
     pub(crate) fn tags(&self) -> Vec<&'static str> {
         let mut tags = Vec::new();
         if self.default {

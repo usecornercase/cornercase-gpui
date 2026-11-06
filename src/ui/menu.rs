@@ -1,6 +1,7 @@
 use gpui::{
-    Div, ElementId, FocusHandle, InteractiveElement as _, MouseButton, MouseDownEvent, ParentElement as _, Rgba,
-    ScrollHandle, Stateful, StatefulInteractiveElement as _, Styled as _, Svg, div, prelude::FluentBuilder as _, px,
+    App, Div, ElementId, FocusHandle, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement as _, Rgba, ScrollHandle, Stateful, StatefulInteractiveElement as _, Styled as _, Svg, Window,
+    anchored, deferred, div, point, prelude::FluentBuilder as _, px,
 };
 
 use super::{Icon, glass, icon};
@@ -55,8 +56,26 @@ pub(crate) fn dropdown(id: impl Into<ElementId>, edge: Rgba) -> Stateful<Div> {
         .hover(|s| s.bg(colours::selected()))
 }
 
+pub(crate) fn edge(open: bool, risky: bool) -> Rgba {
+    match (open, risky) {
+        (true, _) => colours::accent(),
+        (false, true) => glass::tint(colours::failed(), 0.45),
+        (false, false) => colours::border(),
+    }
+}
+
 pub(crate) fn chevron() -> Svg {
     icon(Icon::ChevronDown, 12.).text_color(colours::muted())
+}
+
+pub(crate) fn backdrop(
+    id: impl Into<ElementId>,
+    window: &Window,
+    close: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let size = window.viewport_size();
+    let veil = div().id(id).w(size.width).h(size.height).occlude().on_any_mouse_down(close);
+    deferred(anchored().position(point(px(0.), px(0.))).child(veil)).with_priority(1)
 }
 
 pub(crate) fn card(id: impl Into<ElementId>, focus: &FocusHandle, scroll: &ScrollHandle) -> Stateful<Div> {

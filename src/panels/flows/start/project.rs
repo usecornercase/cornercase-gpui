@@ -71,12 +71,12 @@ fn unchosen() -> Vec<AnyElement> {
 }
 
 impl StartFlow {
-    pub(super) fn project_picker(&self, cx: &Context<Self>) -> AnyElement {
+    pub(super) fn project_picker(&self, window: &Window, cx: &Context<Self>) -> AnyElement {
         let chosen = self.chosen_project();
         match (shape(self.projects.len(), chosen.is_some()), chosen) {
             (Shape::Empty, _) => ui::dim(NONE_OPEN).into_any_element(),
             (Shape::Fixed, Some(project)) => fact_line().children(place(project)).into_any_element(),
-            _ => self.project_dropdown(chosen, cx).into_any_element(),
+            _ => self.project_dropdown(chosen, window, cx).into_any_element(),
         }
     }
 
@@ -85,8 +85,9 @@ impl StartFlow {
         self.projects.iter().find(|(choice, _)| *choice == id).map(|(_, project)| project)
     }
 
-    fn project_dropdown(&self, chosen: Option<&ProjectChoice>, cx: &Context<Self>) -> Div {
+    fn project_dropdown(&self, chosen: Option<&ProjectChoice>, window: &Window, cx: &Context<Self>) -> Div {
         let open = self.menu.open;
+        let close = cx.listener(|this, _: &MouseDownEvent, window, cx| this.close_projects(window, cx));
         let edge = if open { colours::accent() } else { colours::border() };
         let trigger = menu::dropdown("start-project", edge)
             .py(px(6.))
@@ -100,7 +101,8 @@ impl StartFlow {
                     this.toggle_projects(window, cx);
                 }),
             );
-        div().relative().flex().flex_col().child(trigger).when(open, |d| d.child(self.project_menu(cx)))
+        let menu = open.then(|| (menu::backdrop("start-projects-backdrop", window, close), self.project_menu(cx)));
+        div().relative().flex().flex_col().child(trigger).when_some(menu, |d, (veil, card)| d.child(veil).child(card))
     }
 
     fn project_menu(&self, cx: &Context<Self>) -> impl IntoElement + use<> {
@@ -110,7 +112,7 @@ impl StartFlow {
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| this.project_key(e, window, cx)))
             .children(rows);
         let shown = motion::slide(card, "start-projects-in", Way::Pop, (0., -DROP));
-        deferred(div().absolute().top_full().left_0().right_0().pt(px(BELOW)).child(shown)).with_priority(1)
+        deferred(div().absolute().top_full().left_0().right_0().pt(px(BELOW)).child(shown)).with_priority(2)
     }
 
     fn project_row(&self, index: usize, cx: &Context<Self>) -> Stateful<Div> {
@@ -150,7 +152,7 @@ impl StartFlow {
         cx.notify();
     }
 
-    pub(super) fn close_projects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn close_projects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !std::mem::take(&mut self.menu.open) {
             return;
         }

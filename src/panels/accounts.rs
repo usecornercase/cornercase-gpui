@@ -3,7 +3,7 @@ mod data;
 mod profiles;
 pub(crate) mod widgets;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use gpui::{
     AnyElement, AnyView, App, ClickEvent, Context, Div, Entity, Focusable as _, IntoElement, Render, SharedString,
@@ -40,6 +40,11 @@ struct Failure {
     text: String,
 }
 
+struct OpenField {
+    target: Target,
+    field: Entity<TextField>,
+}
+
 pub(crate) struct AccountsPanel {
     info: Option<AccountsInfo>,
     load_error: Option<String>,
@@ -47,12 +52,9 @@ pub(crate) struct AccountsPanel {
     error: Option<Failure>,
     asking: Asking,
     busy: Option<Running>,
-    add_fields: HashMap<String, Entity<TextField>>,
     no_login: HashSet<String>,
-    form: Option<Target>,
-    rename: Option<Target>,
-    rename_field: Entity<TextField>,
-    profile_field: Entity<TextField>,
+    form: Option<OpenField>,
+    rename: Option<OpenField>,
     was_open: bool,
 }
 
@@ -77,20 +79,18 @@ impl AccountsPanel {
             error: None,
             asking: Asking::default(),
             busy: None,
-            add_fields: HashMap::new(),
             no_login: HashSet::new(),
             form: None,
             rename: None,
-            rename_field: Self::rename_field(cx),
-            profile_field: Self::form_field("a name, such as Work", Self::new_profile, cx),
             was_open: true,
         };
         this.load(cx);
         this
     }
 
-    fn rename_field(cx: &mut Context<Self>) -> Entity<TextField> {
+    fn rename_field(current: String, cx: &mut Context<Self>) -> Entity<TextField> {
         let field = cx.new(|cx| TextField::new("a name; empty clears it", cx));
+        field.update(cx, |f, cx| f.set_text(current, cx));
         cx.subscribe(&field, |this, _, event: &TextFieldEvent, cx| match event {
             TextFieldEvent::Submit => this.submit_rename(cx),
             TextFieldEvent::Cancel => this.cancel_rename(cx),
@@ -100,19 +100,27 @@ impl AccountsPanel {
         field
     }
 
-    fn form_field(
-        placeholder: &'static str,
-        submit: impl Fn(&mut Self, &mut Context<Self>) + 'static,
-        cx: &mut Context<Self>,
-    ) -> Entity<TextField> {
+    fn form_field(form: &Target, cx: &mut Context<Self>) -> Entity<TextField> {
+        let placeholder = match form {
+            Target::Adding(_) => "a name, such as work",
+            _ => "a name, such as Work",
+        };
         let field = cx.new(|cx| TextField::new(placeholder, cx));
-        cx.subscribe(&field, move |this, _, event: &TextFieldEvent, cx| match event {
-            TextFieldEvent::Submit => submit(this, cx),
+        cx.subscribe(&field, |this, _, event: &TextFieldEvent, cx| match event {
+            TextFieldEvent::Submit => this.submit_open_form(cx),
             TextFieldEvent::Cancel => this.close_form(cx),
             TextFieldEvent::Changed => cx.notify(),
         })
         .detach();
         field
+    }
+
+    fn form_is(&self, form: &Target) -> bool {
+        self.form.as_ref().is_some_and(|open| open.target == *form)
+    }
+
+    fn form_text(&self, cx: &App) -> String {
+        self.form.as_ref().map(|open| open.field.read(cx).text().trim().to_string()).unwrap_or_default()
     }
 
     fn load(&mut self, cx: &mut Context<Self>) {
@@ -155,13 +163,6 @@ impl AccountsPanel {
     }
 
     fn show(&mut self, info: AccountsInfo, cx: &mut Context<Self>) {
-        for provider in &info.providers {
-            if !self.add_fields.contains_key(&provider.id) {
-                let agent = provider.id.clone();
-                let field = Self::form_field("a name, such as work", move |this, cx| this.add(&agent, cx), cx);
-                self.add_fields.insert(provider.id.clone(), field);
-            }
-        }
         self.info = Some(info);
         cx.notify();
     }
@@ -218,8 +219,7 @@ impl AccountsPanel {
     }
 
     fn add(&mut self, agent: &str, cx: &mut Context<Self>) {
-        let Some(field) = self.add_fields.get(agent).cloned() else { return };
-        let name = field.read(cx).text().trim().to_string();
+        let name = self.form_text(cx);
         if name.is_empty() || !self.idle() {
             return;
         }
@@ -231,9 +231,8 @@ impl AccountsPanel {
         }
         let workspace = Store::get(cx).read(cx).session.as_ref().and_then(|s| s.shown().workspace);
         let login = if self.no_login.contains(agent) { None } else { workspace };
-        self.change(data::add_args(agent, &name, login), cx, move |this, answer, cx| {
+        self.change(data::add_args(agent, &name, login), cx, |this, answer, cx| {
             this.form = None;
-            field.update(cx, TextField::clear);
             show_login_tab(answer, cx);
         });
     }
@@ -246,53 +245,44 @@ impl AccountsPanel {
     }
 
     fn new_profile(&mut self, cx: &mut Context<Self>) {
-        let name = self.profile_field.read(cx).text().trim().to_string();
+        let name = self.form_text(cx);
         if name.is_empty() || !self.idle() {
             return;
         }
-        let field = self.profile_field.clone();
-        self.change(data::profile_new_args(&name), cx, move |this, _, cx| {
-            this.form = None;
-            field.update(cx, TextField::clear);
-        });
+        self.change(data::profile_new_args(&name), cx, |this, _, _| this.form = None);
     }
 
-    fn open_form(&mut self, form: Target, window: &mut Window, cx: &mut Context<Self>) {
-        let field = match &form {
-            Target::Adding(agent) => self.add_fields.get(agent).cloned(),
-            _ => Some(self.profile_field.clone()),
-        };
-        self.form = Some(form);
+    fn open_form(&mut self, target: Target, window: &mut Window, cx: &mut Context<Self>) {
+        let field = Self::form_field(&target, cx);
+        window.focus(&field.read(cx).focus_handle(cx));
+        self.form = Some(OpenField { target, field });
         self.rename = None;
         self.error = None;
-        if let Some(field) = field {
-            window.focus(&field.read(cx).focus_handle(cx));
-        }
         cx.notify();
     }
 
     fn close_form(&mut self, cx: &mut Context<Self>) {
-        if self.error.as_ref().is_some_and(|e| e.at == self.form) {
+        let target = self.form.take().map(|open| open.target);
+        if self.error.as_ref().is_some_and(|e| e.at == target) {
             self.error = None;
         }
-        self.form = None;
         cx.notify();
     }
 
-    fn submit_form(&mut self, form: &Target, cx: &mut Context<Self>) {
-        match form {
-            Target::Adding(agent) => self.add(agent, cx),
-            Target::NewProfile => self.new_profile(cx),
+    fn submit_open_form(&mut self, cx: &mut Context<Self>) {
+        match self.form.as_ref().map(|open| open.target.clone()) {
+            Some(Target::Adding(agent)) => self.add(&agent, cx),
+            Some(Target::NewProfile) => self.new_profile(cx),
             _ => {}
         }
     }
 
     fn start_rename(&mut self, target: Target, current: String, window: &mut Window, cx: &mut Context<Self>) {
-        self.rename = Some(target);
+        let field = Self::rename_field(current, cx);
+        window.focus(&field.read(cx).focus_handle(cx));
+        self.rename = Some(OpenField { target, field });
         self.form = None;
         self.error = None;
-        self.rename_field.update(cx, |f, cx| f.set_text(current, cx));
-        window.focus(&self.rename_field.read(cx).focus_handle(cx));
         cx.notify();
     }
 
@@ -302,8 +292,8 @@ impl AccountsPanel {
     }
 
     fn submit_rename(&mut self, cx: &mut Context<Self>) {
-        let Some(target) = self.rename.take() else { return };
-        let label = self.rename_field.read(cx).text().trim().to_string();
+        let Some(OpenField { target, field }) = self.rename.take() else { return };
+        let label = field.read(cx).text().trim().to_string();
         let command = match &target {
             Target::Account(provider, account) => data::rename_args(provider, account, &label),
             Target::Profile(name) if !label.is_empty() && label != *name => data::profile_rename_args(name, &label),
@@ -355,16 +345,18 @@ impl AccountsPanel {
             .child(self.refresh_button(cx))
     }
 
+    fn renames(&self, target: &Target) -> bool {
+        self.rename.as_ref().is_some_and(|open| open.target == *target)
+    }
+
     fn rename_row(&self, id: String, lead: impl IntoElement, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
-        let focused = self.rename_field.read(cx).focus_handle(cx).is_focused(window);
+        let field = self.rename.as_ref().map(|open| {
+            let focused = open.field.read(cx).focus_handle(cx).is_focused(window);
+            ui::input_box(open.field.clone(), focused).max_w(px(360.)).overflow_hidden()
+        });
         widgets::row(SharedString::from(id), false)
             .child(widgets::lead(lead))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .child(ui::input_box(self.rename_field.clone(), focused).max_w(px(360.)).overflow_hidden()),
-            )
+            .child(div().flex_1().min_w_0().children(field))
             .child(ui::button("rename-cancel", "Cancel").on_click(cx.listener(|this, _, _, cx| this.cancel_rename(cx))))
             .child(
                 ui::primary_button("rename-save", "Save")
@@ -372,9 +364,9 @@ impl AccountsPanel {
             )
     }
 
-    fn form_buttons(&self, form: Target, label: &'static str, doing: &'static str, cx: &mut Context<Self>) -> Div {
+    fn form_buttons(&self, form: &Target, label: &'static str, doing: &'static str, cx: &mut Context<Self>) -> Div {
         let buttons = div().flex().items_center().gap(px(8.));
-        if self.running_on(&form).is_some() {
+        if self.running_on(form).is_some() {
             return buttons.child(ui::busy_button("form-busy", doing, Tone::Primary));
         }
         buttons
@@ -382,8 +374,14 @@ impl AccountsPanel {
             .child(
                 ui::primary_button("form-go", label)
                     .when(!self.idle(), |d| d.opacity(0.5))
-                    .on_click(cx.listener(move |this, _, _, cx| this.submit_form(&form, cx))),
+                    .on_click(cx.listener(|this, _, _, cx| this.submit_open_form(cx))),
             )
+    }
+
+    fn form_input(&self, width: f32, window: &Window, cx: &App) -> Option<Div> {
+        let open = self.form.as_ref()?;
+        let focused = open.field.read(cx).focus_handle(cx).is_focused(window);
+        Some(ui::input_box(open.field.clone(), focused).w(px(width)).overflow_hidden())
     }
 
     fn settled(&self, line: Stateful<Div>, note: Option<Div>, target: &Target) -> AnyElement {

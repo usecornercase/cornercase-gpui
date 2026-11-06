@@ -1,4 +1,5 @@
-use super::{hovered, step};
+use super::{edge, hovered, step};
+use crate::theme::colours;
 
 #[test]
 fn the_arrows_start_at_either_end() {
@@ -27,4 +28,15 @@ fn the_pointer_takes_the_highlight_and_leaving_its_entry_drops_it() {
 #[test]
 fn leaving_another_entry_keeps_the_highlight() {
     assert_eq!(hovered(Some(1), 2, false), Some(1));
+}
+
+#[test]
+fn an_open_dropdown_is_cobalt_even_when_its_value_is_a_risk() {
+    assert_eq!(edge(true, true), colours::accent());
+}
+
+#[test]
+fn a_closed_dropdown_is_plain_unless_its_value_is_a_risk() {
+    assert_eq!(edge(false, false), colours::border());
+    assert_ne!(edge(false, true), colours::border());
 }

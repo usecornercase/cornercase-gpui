@@ -1,6 +1,5 @@
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, Focusable as _, IntoElement, Rgba, SharedString, Stateful, Window, div,
-    prelude::*, px,
+    AnyElement, ClickEvent, Context, Div, IntoElement, Rgba, SharedString, Stateful, Window, div, prelude::*, px,
 };
 
 use super::AccountsPanel;
@@ -85,7 +84,7 @@ impl AccountsPanel {
 
     fn agent_header(&self, provider: &Provider, cx: &mut Context<Self>) -> Div {
         let form = Target::Adding(provider.id.clone());
-        let open = self.form.as_ref() == Some(&form);
+        let open = self.form_is(&form);
         widgets::header(Icon::Agent, provider.title.clone())
             .child(env_label(provider))
             .child(div().flex_1())
@@ -106,7 +105,7 @@ impl AccountsPanel {
 
     fn account_row(&self, row: Row, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let target = row.target();
-        if self.rename.as_ref() == Some(&target) {
+        if self.renames(&target) {
             return self.rename_row(row.id("renaming"), self.default_radio(row, cx), window, cx).into_any_element();
         }
         let doing = self.running_on(&target);
@@ -197,17 +196,15 @@ impl AccountsPanel {
 
     fn add_form(&self, provider: &Provider, window: &Window, cx: &mut Context<Self>) -> Option<Div> {
         let form = Target::Adding(provider.id.clone());
-        if self.form.as_ref() != Some(&form) {
+        if !self.form_is(&form) {
             return None;
         }
-        let field = self.add_fields.get(&provider.id)?;
-        let focused = field.read(cx).focus_handle(cx).is_focused(window);
         let note = self.form_note(&form, NAME_RULE);
         let line = widgets::form_line()
-            .child(ui::input_box(field.clone(), focused).w(px(260.)).overflow_hidden())
+            .children(self.form_input(260., window, cx))
             .child(self.login_checkbox(&provider.id, cx))
             .child(div().flex_1())
-            .child(self.form_buttons(form, "Add account", "Adding…", cx));
+            .child(self.form_buttons(&form, "Add account", "Adding…", cx));
         Some(widgets::form().child(line).child(note))
     }
 

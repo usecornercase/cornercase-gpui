@@ -9,6 +9,7 @@ use super::data::{Agents, Choice, EFFORT_AGENTS, Issue, Place, Sources, StartPla
 use crate::dialogs;
 use crate::store::Store;
 use crate::theme::colours;
+use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone, boxed};
 
 pub(super) struct Setup {
@@ -53,6 +54,7 @@ pub(super) struct StartForm {
     agents: Agents,
     places: Places,
     agent: String,
+    accounts: AccountPickers,
     mode: Option<String>,
     schedule: bool,
     when: When,
@@ -67,6 +69,7 @@ pub(super) struct StartForm {
 
 pub(super) fn open(setup: Setup, window: &mut Window, cx: &mut Context<IssuesPanel>) {
     let store = Store::get(cx);
+    store.update(cx, Store::list_accounts);
     let form = cx.new(|cx| StartForm::new(setup, cx));
     let focus = {
         let form = form.read(cx);
@@ -119,6 +122,7 @@ impl StartForm {
         let agent = agents.initial();
         let mode = agents.modes.get(&agent).map(|(chosen, _)| chosen.clone());
         let name_hint = format!("{} {}", issue.key, issue.title);
+        cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
         Self {
             model: text_field("the agent's own, such as opus", "", true, cx),
             effort: text_field("the agent's own, such as high", "", true, cx),
@@ -129,6 +133,7 @@ impl StartForm {
             issue,
             agents,
             agent,
+            accounts: AccountPickers::default(),
             mode,
             schedule,
             when: When::At,
@@ -161,6 +166,11 @@ impl StartForm {
     fn set_agent(&mut self, agent: String, cx: &mut Context<Self>) {
         self.mode = self.agents.modes.get(&agent).map(|(chosen, _)| chosen.clone());
         self.agent = agent;
+        cx.notify();
+    }
+
+    fn clear_error(&mut self, cx: &mut Context<Self>) {
+        self.error = None;
         cx.notify();
     }
 
@@ -205,6 +215,7 @@ impl StartForm {
             place: Some(place),
             branch,
             workspace_name: text(&self.name).filter(|_| worktree || self.schedule),
+            accounts: self.accounts.picks(std::slice::from_ref(&self.agent), cx),
         })
     }
 
@@ -276,6 +287,7 @@ impl StartForm {
             self.agents.list.clone()
         };
         let mut fields = vec![ui::field("Agent", chips("agent", &agents, &self.agent, Self::set_agent, cx))];
+        fields.extend(self.accounts.fields(std::slice::from_ref(&self.agent), cx));
         if let Some((_, modes)) = self.agents.modes.get(&self.agent) {
             let mode = self.mode.clone().unwrap_or_default();
             fields.push(ui::field("Mode", chips("mode", modes, &mode, Self::set_mode, cx)));
@@ -352,6 +364,8 @@ impl StartForm {
 
 impl Render for StartForm {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let choices = Store::get(cx).read(cx).account_choices();
+        self.accounts.follow(choices, Self::clear_error, cx);
         let schedule = self.schedule;
         let body = div()
             .flex()

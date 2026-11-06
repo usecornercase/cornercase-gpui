@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+use crate::model::accounts::pick::{AccountPick, account_args};
 use crate::panels::flows::model::project_args;
 use crate::store::args;
 
@@ -86,6 +87,7 @@ pub(super) struct Typed {
     pub branch: String,
     pub workspace: String,
     pub focus: bool,
+    pub accounts: Vec<AccountPick>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +104,7 @@ pub(super) struct Plan {
     pub branch: Option<String>,
     pub workspace_name: Option<String>,
     pub focus: bool,
+    pub accounts: Vec<AccountPick>,
 }
 
 pub(super) fn plan(flow: &str, project: Option<u64>, issue: Option<&IssueTask>, typed: &Typed) -> Result<Plan, String> {
@@ -110,7 +113,8 @@ pub(super) fn plan(flow: &str, project: Option<u64>, issue: Option<&IssueTask>, 
         Some(issue) => on_issue(issue, typed),
         None => (typed_task(typed)?, filled(&typed.branch), None),
     };
-    Ok(Plan { flow: flow.to_string(), project, task, branch, workspace_name, focus: typed.focus })
+    let (focus, accounts) = (typed.focus, typed.accounts.clone());
+    Ok(Plan { flow: flow.to_string(), project, task, branch, workspace_name, focus, accounts })
 }
 
 fn on_issue(issue: &IssueTask, typed: &Typed) -> (Task, Option<String>, Option<String>) {
@@ -161,6 +165,7 @@ impl Plan {
         });
         command.extend(flag("--worktree", self.branch.as_ref()));
         command.extend(flag("--workspace-name", self.workspace_name.as_ref()));
+        command.extend(account_args(&self.accounts));
         if self.focus {
             command.push("--focus".into());
         }

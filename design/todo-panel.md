@@ -12,5 +12,6 @@ Code: `src/panels/todo.rs`, `src/panels/todo/`
 - **The row's buttons show on hover**, but their column is always there so the text never reflows.
 - **Sending an item to an agent** (`todo send ID --pane P --json`) types it into the agent; the server checks it off once the agent took it and refuses, with its reason, when the agent cannot take a prompt now. An unconfirmed send or an item that changed meanwhile stays to do, and the toast says which.
 - **The send menu labels agents as the TUI's**: every agent pane in the sidebar's order, `project › workspace · agent` with the workspace only when the project has several; labels that would read the same get the tab's name, then the pane's id.
+- **The send menu says which account each agent runs on** (a chip, `AccountsInfo::mark`, under `account_mark` and only once there is an account, `design/accounts.md`): `todo send` goes to a running pane and takes no `--account`, so there is no account to pick here, and choosing the target is what chooses it.
 - **An item removed elsewhere closes what was open on it** (its edit field or its send menu).
 - **Sending an item to an agent is a job**: the item's buttons give way to a spinner until `todo send` answers, and the status bar names it. Adding, ticking, editing, moving and removing answer in milliseconds and show at once.

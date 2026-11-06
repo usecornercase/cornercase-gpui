@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::app::Root;
+use crate::model::accounts::pick::AccountSettings;
 use crate::store::{self, ToastKind};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -21,6 +22,8 @@ pub(crate) struct Look {
     pub agents_section: bool,
     pub account_mark: bool,
     pub account_switcher: bool,
+    pub account_picker: bool,
+    pub default_agent: Option<String>,
     pub boot: String,
     pub revision: u64,
 }
@@ -49,6 +52,11 @@ fn arrangement(value: &str) -> Arrangement {
     }
 }
 
+fn named_agent(agent: &str) -> Option<String> {
+    let agent = agent.trim();
+    (!agent.is_empty() && agent != "auto").then(|| agent.to_string())
+}
+
 pub(crate) fn parse(text: &str) -> anyhow::Result<Look> {
     let described: Described = serde_json::from_str(text)?;
     let value = |key: &str| described.settings.iter().find(|s| s.key == key).map(|s| &s.value);
@@ -58,9 +66,21 @@ pub(crate) fn parse(text: &str) -> anyhow::Result<Look> {
         agents_section: value("agents_section").and_then(Value::as_bool).unwrap_or(false),
         account_mark: value("account_mark").and_then(Value::as_bool).unwrap_or(true),
         account_switcher: value("account_switcher").and_then(Value::as_bool).unwrap_or(true),
+        account_picker: value("account_picker").and_then(Value::as_bool).unwrap_or(true),
+        default_agent: value("agent").and_then(Value::as_str).and_then(named_agent),
         boot: String::new(),
         revision: described.revision,
     })
+}
+
+impl Look {
+    fn account_settings(&self) -> AccountSettings {
+        AccountSettings {
+            mark: self.account_mark,
+            picker: self.account_picker,
+            default_agent: self.default_agent.clone(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -82,7 +102,7 @@ impl Root {
         store::run(cx, store::args(&["config", "--json"]), move |this: &mut Root, result, cx| {
             this.side.look.loading = false;
             match result.and_then(|out| parse(&out)) {
-                Ok(look) => this.side.look.current = Look { boot, ..look },
+                Ok(look) => this.take_look(Look { boot, ..look }, cx),
                 Err(e) => {
                     this.side.look.current.boot = boot;
                     let text = format!("Could not read the sidebar's settings: {e:#}");
@@ -91,6 +111,12 @@ impl Root {
             }
             cx.notify();
         });
+    }
+
+    fn take_look(&mut self, look: Look, cx: &mut gpui::Context<Self>) {
+        let settings = look.account_settings();
+        self.store.update(cx, |s, cx| s.take_account_settings(settings, cx));
+        self.side.look.current = look;
     }
 }
 

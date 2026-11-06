@@ -1,7 +1,4 @@
-use gpui::{
-    AnyElement, ClickEvent, Context, Div, Focusable as _, IntoElement, SharedString, Stateful, Window, div, prelude::*,
-    px,
-};
+use gpui::{AnyElement, ClickEvent, Context, Div, IntoElement, SharedString, Stateful, Window, div, prelude::*, px};
 
 use super::AccountsPanel;
 use super::data::{self, AccountsInfo, Profile, Provider, Target};
@@ -74,7 +71,7 @@ impl AccountsPanel {
 
     fn profiles_header(&self, cx: &mut Context<Self>) -> Div {
         let header = widgets::header(Icon::Accounts, "Profiles").child(div().flex_1());
-        if self.form == Some(Target::NewProfile) {
+        if self.form_is(&Target::NewProfile) {
             return header;
         }
         let button = ui::icon_text_button("profile-new", Icon::Plus, "New profile", Tone::Plain);
@@ -124,7 +121,7 @@ impl AccountsPanel {
         let name = profile.name.clone();
         let target = Target::Profile(name.clone());
         let radio = self.use_radio(&name, profile.active, cx);
-        if self.rename.as_ref() == Some(&target) {
+        if self.renames(&target) {
             return self.rename_row(format!("profile-renaming-{name}"), radio, window, cx).into_any_element();
         }
         let doing = self.running_on(&target);
@@ -153,14 +150,13 @@ impl AccountsPanel {
     }
 
     fn new_profile_form(&self, window: &Window, cx: &mut Context<Self>) -> Option<Div> {
-        if self.form != Some(Target::NewProfile) {
+        if !self.form_is(&Target::NewProfile) {
             return None;
         }
-        let focused = self.profile_field.read(cx).focus_handle(cx).is_focused(window);
         let line = widgets::form_line()
-            .child(ui::input_box(self.profile_field.clone(), focused).w(px(260.)).overflow_hidden())
+            .children(self.form_input(260., window, cx))
             .child(div().flex_1())
-            .child(self.form_buttons(Target::NewProfile, "Make profile", "Making…", cx));
+            .child(self.form_buttons(&Target::NewProfile, "Make profile", "Making…", cx));
         Some(widgets::form().child(line).child(self.form_note(&Target::NewProfile, NAME_NOTE)))
     }
 }

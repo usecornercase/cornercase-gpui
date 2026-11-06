@@ -9,6 +9,7 @@ use crate::cli;
 use crate::model::Session;
 use crate::panels::flows::model::{parse_listing, project_args};
 use crate::store::{self, Store, ToastKind, args};
+use crate::ui::account_picker::AccountPickers;
 use crate::ui::{TextField, TextFieldEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +32,7 @@ pub(super) struct Old {
     pub(super) repeat: Option<String>,
     flow: Option<String>,
     cleanup: bool,
+    agent: String,
 }
 
 impl Old {
@@ -41,6 +43,7 @@ impl Old {
             repeat: e.repeat.clone(),
             flow: e.flow.clone(),
             cleanup: e.cleanup,
+            agent: e.agent.clone(),
         })
     }
 }
@@ -91,6 +94,7 @@ pub(super) struct Form {
     pub(super) spot: Spot,
     pub(super) branch: Entity<TextField>,
     pub(super) agent: Option<String>,
+    pub(super) accounts: AccountPickers,
     pub(super) mode: Option<String>,
     pub(super) flow: Option<String>,
     pub(super) cleanup: bool,
@@ -128,6 +132,16 @@ impl Fields {
         }));
         field
     }
+}
+
+pub(super) fn starting_agent(
+    runs_flow: bool,
+    chosen: Option<&str>,
+    kept: Option<&str>,
+    default: Option<&str>,
+) -> Vec<String> {
+    let agent = chosen.or(kept).or(default).filter(|_| !runs_flow);
+    agent.map(str::to_string).into_iter().collect()
 }
 
 fn start_place(entry: Option<&Entry>, session: Option<&Session>) -> (Option<u64>, Spot) {
@@ -172,6 +186,7 @@ impl Form {
             spot,
             branch,
             agent: None,
+            accounts: AccountPickers::keeping(entry.map(|e| e.accounts.clone()).unwrap_or_default()),
             mode: None,
             flow: None,
             cleanup: entry.is_some_and(|e| e.cleanup),
@@ -193,6 +208,11 @@ impl Form {
 
     pub(super) fn runs_flow(&self) -> bool {
         self.flow.is_some() || (self.agent.is_none() && self.old.flow.is_some())
+    }
+
+    pub(super) fn account_agents(&self, default: Option<&str>) -> Vec<String> {
+        let kept = self.editing().then_some(self.old.agent.as_str());
+        starting_agent(self.runs_flow(), self.agent.as_deref(), kept, default)
     }
 
     pub(super) fn choose_when(&mut self, kind: When) {
@@ -225,6 +245,7 @@ impl Form {
 
     fn draft(&self, cx: &App) -> Draft {
         let text = |f: &Entity<TextField>| f.read(cx).text();
+        let default = Store::get(cx).read(cx).account_settings.default_agent.clone();
         let editing = self.editing();
         let issue = self.issue && !self.repeats();
         let mut body = if issue { text(&self.issue_key) } else { text(&self.prompt) };
@@ -250,6 +271,7 @@ impl Form {
             flow: self.flow.clone().filter(|_| self.repeats()),
             cleanup: cleanup_flag(self.repeats(), self.cleanup, editing.then_some(self.old.cleanup)),
             name,
+            accounts: self.accounts.picks(&self.account_agents(default.as_deref()), cx),
         }
     }
 }
@@ -281,7 +303,9 @@ impl QueuePanel {
         if self.config.is_none() {
             Self::load_config(cx);
         }
-        let session = Store::get(cx).read(cx).session.clone();
+        let store = Store::get(cx);
+        store.update(cx, Store::list_accounts);
+        let session = store.read(cx).session.clone();
         let form = Form::new(entry, session.as_ref(), window, cx);
         let focus = form.prompt.read(cx).focus_handle(cx);
         self.form = Some(form);
@@ -297,6 +321,13 @@ impl QueuePanel {
                 cx.notify();
             }
         });
+    }
+
+    pub(super) fn sync_accounts(&mut self, cx: &mut Context<Self>) {
+        let choices = Store::get(cx).read(cx).account_choices();
+        if let Some(form) = self.form.as_mut() {
+            form.accounts.follow(choices, |this, cx| this.update_form(|_| {}, cx), cx);
+        }
     }
 
     pub(super) fn sync_flows(&mut self, cx: &mut Context<Self>) {
