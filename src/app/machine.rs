@@ -412,10 +412,11 @@ impl Root {
     fn connect_machine(&mut self, target: Target, place: &MachinePlace, cx: &mut Context<Self>) {
         let Some(tab) = self.machine.as_mut() else { return };
         let size = tab.conn.size.or(self.own.size).unwrap_or((120, 36));
-        tab.told_visible = self.window_active;
-        tab.opened_visible = self.window_active;
+        let seen = self.window_active && !self.had.full;
+        tab.told_visible = seen;
+        tab.opened_visible = seen;
         tab.reopen(target, place, &self.tx);
-        if let Err(e) = tab.conn.open_view(&place.open_args(size, !self.window_active), &self.tx) {
+        if let Err(e) = tab.conn.open_view(&place.open_args(size, !seen), &self.tx) {
             self.machine_fell(&e.to_string(), cx);
         }
     }
@@ -570,10 +571,10 @@ impl Root {
     }
 
     pub(super) fn tell_machine_visible(&mut self) {
-        let active = self.window_active;
-        if let Some(tab) = self.machine.as_mut().filter(|tab| tab.told_visible != active) {
-            tab.told_visible = active;
-            tab.conn.tell_visible(active);
+        let seen = self.window_active && !self.had.full;
+        if let Some(tab) = self.machine.as_mut().filter(|tab| tab.told_visible != seen) {
+            tab.told_visible = seen;
+            tab.conn.tell_visible(seen);
         }
     }
 

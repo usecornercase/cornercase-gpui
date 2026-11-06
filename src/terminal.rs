@@ -87,7 +87,7 @@ impl Root {
             cx.stop_propagation();
             return;
         }
-        if !terminal || self.overlay_open(cx) {
+        if !terminal || self.overlay_open(cx) || self.store.read(cx).shows_file_full_screen() {
             return;
         }
         if let Some(event) = keys::key_event(ks, Os::CURRENT) {
@@ -246,7 +246,8 @@ impl Root {
             popup.read(cx).close(cx);
             return;
         }
-        if self.dock_focused(window, cx) && self.store.update(cx, Store::close_dock) {
+        let dock_first = self.dock_focused(window, cx) || self.store.read(cx).shows_file_full_screen();
+        if dock_first && self.store.update(cx, Store::close_dock) {
             window.focus(&self.focus);
             return;
         }

@@ -24,6 +24,22 @@ fn a_listing_answers_each_folder_in_the_order_asked() {
 }
 
 #[test]
+fn a_listing_keeps_the_git_mark_of_each_entry() {
+    let folders = vec![PathBuf::new(), PathBuf::from("src")];
+    let listed = listings(folders, Ok(crate::test_util::fixture!("files/list.json").to_string()));
+    let src = listed[1].1.as_ref().expect("src listed");
+    let status = |name: &str| src.entries.iter().find(|e| e.name == name).and_then(|e| e.status);
+    assert_eq!(status("main.rs"), Some(FileStatus::Modified));
+    assert_eq!(status("new.rs"), Some(FileStatus::Untracked));
+}
+
+#[test]
+fn a_file_s_changes_are_asked_by_its_path_in_the_workspace() {
+    let args = changes_args(7, &Path::new("src").join("-odd.rs"));
+    assert_eq!(args, ["changes", "file", "--workspace", "7", "--json", "--", "src/-odd.rs"]);
+}
+
+#[test]
 fn a_folder_that_cannot_be_listed_carries_its_error() {
     let folders = vec![PathBuf::new(), PathBuf::from("src"), PathBuf::from("nope")];
     let listed = listings(folders, Ok(crate::test_util::fixture!("files/list.json").to_string()));

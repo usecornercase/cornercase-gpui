@@ -1,12 +1,17 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use crate::panels::changes::FileStatus;
+
 pub(super) const MAX_ENTRIES: usize = 10_000;
+
+pub(super) type Marks = HashMap<PathBuf, FileStatus>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Entry {
     pub name: String,
     pub dir: bool,
+    pub status: Option<FileStatus>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -40,10 +45,30 @@ pub(super) fn list(root: &Path, rel: &Path) -> std::io::Result<Listing> {
             break;
         }
         let dir = entry.file_type().is_some_and(|t| t.is_dir()) || entry.path().is_dir();
-        listing.entries.push(Entry { name: entry.file_name().to_string_lossy().into_owned(), dir });
+        listing.entries.push(Entry { name: entry.file_name().to_string_lossy().into_owned(), dir, status: None });
     }
     sort(&mut listing.entries);
     Ok(listing)
+}
+
+pub(super) fn keep_marks(marks: &mut Marks, folder: &Path, listing: &Listing) -> bool {
+    let mut fresh: Marks =
+        listing.entries.iter().filter_map(|entry| Some((folder.join(&entry.name), entry.status?))).collect();
+    let mut changed = false;
+    marks.retain(|path, status| {
+        if path.parent() != Some(folder) {
+            return true;
+        }
+        let kept = fresh.get(path) == Some(status);
+        if kept {
+            fresh.remove(path);
+        }
+        changed |= !kept;
+        kept
+    });
+    changed |= !fresh.is_empty();
+    marks.extend(fresh);
+    changed
 }
 
 pub(super) fn sort(entries: &mut [Entry]) {

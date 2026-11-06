@@ -164,7 +164,8 @@ impl Peek {
     }
 
     fn read(&mut self, link: &Link, remote: bool, cx: &mut Context<Self>) {
-        let source = if remote { Source::Server(link.workspace.unwrap_or_default()) } else { Source::Disk("/".into()) };
+        let workspace = link.workspace.unwrap_or_default();
+        let source = if remote { Source::Server(workspace) } else { Source::Disk { root: "/".into(), workspace } };
         let path = PathBuf::from(&link.path);
         let task = cx.background_spawn(async move { described(source.read(&path).0, &path, remote) });
         self.land(task, cx);

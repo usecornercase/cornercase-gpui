@@ -1,4 +1,5 @@
 mod connection;
+mod dock;
 pub(crate) mod frame;
 pub(crate) mod machine;
 mod status;
@@ -36,6 +37,7 @@ use crate::ui;
 use crate::ui::motion::{self, Leaving, Way};
 use crate::ui::split::{self, Edge, Split};
 pub(crate) use connection::Connection;
+use dock::{dock_card, over_the_terminal};
 use machine::MachineTab;
 
 pub(crate) const TITLEBAR_HEIGHT: f32 = 44.;
@@ -243,13 +245,22 @@ impl Root {
         }
         self.follow_link(cx);
         let s = store.read(cx);
-        let now = Overlays { open: s.dialog.is_some() || s.sheet.is_some(), sheet: s.sheet };
+        let now = Overlays {
+            open: s.dialog.is_some() || s.sheet.is_some(),
+            sheet: s.sheet,
+            full: s.shows_file_full_screen(),
+        };
         let in_dock = self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx);
         let gave_way = s.dialog.is_none() && sheet_gave_way(self.had.sheet, s.sheet);
         if to_terminal || (self.had.open && !now.open) || gave_way || (s.shown_dock().is_none() && in_dock) {
-            window.focus(&self.focus);
+            window.focus(if now.full { &self.dock_focus } else { &self.focus });
         }
+        let full_changed = now.full != self.had.full;
         self.had = now;
+        if full_changed {
+            self.own.tell_visible(self.visible && !self.had.full);
+            self.tell_machine_visible();
+        }
         self.track_leaving(cx);
         cx.notify();
     }
@@ -347,7 +358,7 @@ impl Root {
         if visible && self.conn == Conn::Connected {
             self.store.update(cx, Store::list_accounts);
         }
-        self.own.tell_visible(visible);
+        self.own.tell_visible(visible && !self.had.full);
     }
 
     fn open_requested_panel(&self, cx: &mut Context<Self>) {
@@ -453,8 +464,12 @@ impl Root {
         self.attempts = 0;
         self.follow_surface(&session, cx);
         let view_id = self.own.view_id;
+        let moved = self.session.as_ref().is_some_and(|old| old.shown() != session.shown());
         let shared = session.clone();
         self.store.update(cx, |s, cx| {
+            if moved {
+                s.leave_file_full_screen(cx);
+            }
             s.jobs.keep_leaving(|workspace| shared.workspace(workspace).is_some());
             s.follow_accounts(&shared, cx);
             s.session = Some(shared);
@@ -541,18 +556,21 @@ impl Root {
     fn render_dock(
         &mut self,
         kind: PanelKind,
+        full: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let view = self.panel(kind, window, cx);
-        let card = dock_card(kind, view, &self.store, self.dock_size(kind, window)).track_focus(&self.dock_focus);
+        let width = (!full).then(|| self.dock_size(kind, window));
+        let card = dock_card(kind, view, &self.store, width).track_focus(&self.dock_focus);
         motion::slide(card, SharedString::from(format!("dock-in-{}", kind.title())), Way::In, (DOCK_SLIDE, 0.))
     }
 
     fn render_leaving_dock(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
         let (serial, kind) = self.leaving_dock.gone().map(|(serial, kind)| (serial, *kind))?;
         let view = self.panel(kind, window, cx);
-        let card = dock_card(kind, view, &self.store, self.dock_size(kind, window)).track_focus(&self.dock_focus);
+        let width = Some(self.dock_size(kind, window));
+        let card = dock_card(kind, view, &self.store, width).track_focus(&self.dock_focus);
         Some(
             div()
                 .absolute()
@@ -658,11 +676,13 @@ impl Root {
 
     fn render_body(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let shown = self.store.read(cx).shown_dock();
-        let dock = shown.map(|kind| self.render_dock(kind, window, cx));
+        let full = self.store.read(cx).shows_file_full_screen();
+        let dock = shown.map(|kind| self.render_dock(kind, full, window, cx));
         let leaving_dock = self.render_leaving_dock(window, cx);
         let width = dock_access(shown);
         let at = shown.map(|kind| (Edge::Left, self.dock_size(kind, window)));
-        let handle = at.map(|at| split::handle("dock-split", DockGrip, at, width, cx));
+        let kept_room = at.filter(|_| full).map(|(_, size)| div().w(px(size)).flex_none());
+        let handle = at.filter(|_| !full).map(|at| split::handle("dock-split", DockGrip, at, width, cx));
         div()
             .flex_1()
             .flex()
@@ -671,14 +691,16 @@ impl Root {
             .overflow_hidden()
             .on_drag_move(split::follow::<_, DockGrip>(Edge::Left, TERMINAL_KEEP, width, cx))
             .child(self.render_terminal_area(window, cx))
-            .children(dock)
+            .children(kept_room)
+            .children(dock.map(|dock| over_the_terminal(dock, full)))
             .children(leaving_dock)
             .children(handle)
     }
 
     fn render_terminal_area(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let flashing = self.notifier.read(cx).flashing();
-        div().flex_1().h_full().flex().pr(px(GAP)).child(
+        let covered = self.store.read(cx).shows_file_full_screen();
+        div().flex_1().h_full().flex().pr(px(GAP)).when(covered, Styled::invisible).child(
             div()
                 .flex_1()
                 .h_full()
@@ -722,6 +744,7 @@ fn dock_access(kind: Option<PanelKind>) -> split::Access<Root> {
 struct Overlays {
     open: bool,
     sheet: Option<PanelKind>,
+    full: bool,
 }
 
 fn sheet_gave_way(before: Option<PanelKind>, now: Option<PanelKind>) -> bool {
@@ -756,38 +779,6 @@ fn overlay(id: impl Into<ElementId>, way: Way, frame: frame::Frame, card: impl I
 
 fn occluder() -> Div {
     div().absolute().inset_0().occlude()
-}
-
-fn dock_card(kind: PanelKind, view: AnyView, store: &Entity<Store>, width: f32) -> Div {
-    let card = div()
-        .size_full()
-        .flex()
-        .flex_col()
-        .rounded(px(radius::CARD))
-        .bg(colours::surface())
-        .border_1()
-        .border_color(colours::border())
-        .child(dock_header(kind, store))
-        .child(div().flex_1().overflow_hidden().child(view));
-    div().w(px(width)).h_full().flex_none().flex().pr(px(GAP)).child(card)
-}
-
-fn dock_header(kind: PanelKind, store: &Entity<Store>) -> Div {
-    let store = store.clone();
-    div()
-        .h(px(DOCK_HEADER))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_between()
-        .pl(px(14.))
-        .pr(px(10.))
-        .border_b_1()
-        .border_color(colours::border())
-        .child(panel_title(kind))
-        .child(ui::icon_button("dock-close", "✕").on_click(move |_: &ClickEvent, _, cx| {
-            store.update(cx, Store::close_dock);
-        }))
 }
 
 fn sheet_card(kind: PanelKind, view: AnyView, store: &Entity<Store>) -> Stateful<Div> {

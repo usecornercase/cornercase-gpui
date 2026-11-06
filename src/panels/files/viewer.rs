@@ -1,17 +1,33 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use gpui::{AnyView, App, AppContext as _, Context, ScrollStrategy, WeakEntity};
+use gpui::{
+    AnyView, App, AppContext as _, Context, ListAlignment, ListOffset, ListState, ScrollStrategy, WeakEntity, Window,
+    px,
+};
 
 use super::disk::{self, Content};
-use super::find::Find;
+use super::find::{FIELD_ROOM, Find};
+use super::gutter::Margin;
 use super::source::Source;
+use super::style::small_f32;
 use super::{FilesPanel, Spans, Viewer, highlight, tree};
 use crate::model::Link;
 use crate::panels::PanelKind;
 use crate::platform::paths::{self, Style};
+use crate::prefs::LongLines;
 use crate::store::Store;
-use crate::ui::selection::{Selecting, Selection};
+use crate::ui::selection::{CODE_ROW, Fit, Off, Selecting, Selection};
+
+const OVERDRAW: f32 = 400.;
+const ROWS_ABOVE_A_LINE: usize = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Reveal {
+    spot: (usize, usize),
+    waited: bool,
+    tried_its_line: bool,
+}
 
 #[derive(Clone)]
 struct Fetch {
@@ -44,6 +60,22 @@ struct Reading {
     language: Option<&'static str>,
 }
 
+pub(super) fn top_for(lines: &[String], (line, at): (usize, usize), fit: Fit, mut above: usize) -> (usize, usize) {
+    let inside = fit.row_at(at);
+    if inside >= above {
+        return (line, inside - above);
+    }
+    above -= inside;
+    for ix in (0..line).rev() {
+        let taken = fit.rows_of(lines.get(ix).map_or(0, String::len));
+        if taken >= above {
+            return (ix, taken - above);
+        }
+        above -= taken;
+    }
+    (0, 0)
+}
+
 fn text_lines(content: &Content) -> Option<Arc<Vec<String>>> {
     match content {
         Content::Text(text) => Some(text.lines.clone()),
@@ -61,6 +93,10 @@ impl Viewer {
             language: None,
             stamp: None,
             selecting: Selecting::new(at.selection()),
+            list: ListState::new(0, ListAlignment::Top, px(OVERDRAW)),
+            long_lines: LongLines::default(),
+            margin: Margin::default(),
+            reveal: None,
             scroll_to: Some(at.line.unwrap_or(0)),
             find: None,
             checking: true,
@@ -76,6 +112,64 @@ impl Viewer {
         self.content = Some(content);
         self.stamp = reading.stamp;
         self.language = reading.language;
+        self.refit();
+    }
+
+    pub(super) fn line_count(&self) -> usize {
+        match &self.content {
+            Some(Content::Text(text)) => text.lines.len(),
+            _ => 0,
+        }
+    }
+
+    pub(super) fn fit(&self) -> Fit {
+        Fit::of(self.long_lines == LongLines::Wrap, self.selecting.laid().body().size.width)
+    }
+
+    pub(super) fn room(&self) -> f32 {
+        if self.find.is_some() { FIELD_ROOM } else { 0. }
+    }
+
+    fn show_near(&self, spot: (usize, usize), rows_above: usize) {
+        let Some(Content::Text(text)) = &self.content else { return };
+        let (item_ix, rows) = top_for(&text.lines, spot, self.fit(), rows_above);
+        self.list.scroll_to(ListOffset { item_ix, offset_in_item: px(small_f32(rows) * CODE_ROW) });
+    }
+
+    pub(super) fn go_near(&mut self, spot: (usize, usize), rows_above: usize) {
+        self.show_near(spot, rows_above);
+        self.reveal = Some(Reveal { spot, waited: false, tried_its_line: false });
+    }
+
+    fn settle_reveal(&mut self, window: &Window) {
+        let Some(reveal) = self.reveal else { return };
+        if !reveal.waited {
+            self.reveal = Some(Reveal { waited: true, ..reveal });
+            window.request_animation_frame();
+            return;
+        }
+        self.reveal = None;
+        match self.selecting.laid().off(reveal.spot.0, reveal.spot.1, self.room()) {
+            Off::InView => {}
+            Off::By(distance) => self.list.scroll_by(distance),
+            Off::Gone if reveal.tried_its_line => {}
+            Off::Gone => {
+                self.show_near((reveal.spot.0, 0), 0);
+                self.reveal = Some(Reveal { waited: false, tried_its_line: true, ..reveal });
+                window.request_animation_frame();
+            }
+        }
+    }
+
+    pub(super) fn remeasure(&self, line: usize) {
+        let item = line.min(self.line_count().saturating_sub(1));
+        self.list.splice(item..item + 1, 1);
+    }
+
+    pub(super) fn refit(&self) {
+        let top = self.list.logical_scroll_top();
+        self.list.reset(self.line_count());
+        self.list.scroll_to(top);
     }
 }
 
@@ -106,6 +200,12 @@ fn link_path(link: &Link, shown: Option<u64>) -> PathBuf {
 }
 
 impl FilesPanel {
+    pub(super) fn settle_reveal(&mut self, window: &Window) {
+        if let Some(viewer) = self.place_mut().and_then(|place| place.viewer.as_mut()) {
+            viewer.settle_reveal(window);
+        }
+    }
+
     fn open_link(&mut self, link: &Link, at: Option<usize>, cx: &mut Context<Self>) {
         let from_search = self.place().is_some_and(|p| !p.query.trim().is_empty());
         let through = at.is_none().then(|| link.last_line()).flatten();
@@ -154,11 +254,12 @@ impl FilesPanel {
         }
         viewer.spans = spans;
         viewer.checking = false;
-        if let (Some(line), Some(Content::Text(_))) = (viewer.scroll_to.take(), &viewer.content) {
-            self.code_scroll.scroll_to_item(line.saturating_sub(3), ScrollStrategy::Top);
+        if let Some(line) = viewer.scroll_to.take() {
+            viewer.go_near((line, 0), ROWS_ABOVE_A_LINE);
         }
         if fresh {
             self.find_again(reading.id, cx);
+            self.follow_changes(reading.id, true, cx);
         }
         cx.notify();
     }
@@ -252,6 +353,7 @@ impl FilesPanel {
         if from_flow {
             self.back_to_flow(cx);
         }
+        self.store.update(cx, Store::leave_file_full_screen);
         cx.notify();
     }
 }
