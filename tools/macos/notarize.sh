@@ -24,6 +24,15 @@ else
   set -- --key "$work/key.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER"
 fi
 
+stapler() {
+  tries=1
+  until xcrun stapler "$@"; do
+    [ "$tries" -lt 5 ] || fail "stapler $1 kept failing"
+    sleep $((tries * 20))
+    tries=$((tries + 1))
+  done
+}
+
 assess() {
   verdict=$(spctl --assess --verbose=2 "$@" 2>&1) || fail "Gatekeeper refuses it: $verdict"
   echo "$verdict"
@@ -46,15 +55,15 @@ status=$(printf '%s' "$result" | plutil -extract status raw -o - -)
 xcrun notarytool log "$id" "$@" || true
 [ "$status" = Accepted ] || fail "notarization ended $status"
 
-xcrun stapler staple "$target"
-xcrun stapler validate "$target"
+stapler staple "$target"
+stapler validate "$target"
 case "$target" in
   *.app) assess --type execute "$target" ;;
   *.dmg)
     assess --type open --context context:primary-signature "$target"
     mkdir "$mount"
     hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mount" "$target"
-    xcrun stapler validate "$mount/cornercase.app"
+    stapler validate "$mount/cornercase.app"
     assess --type execute "$mount/cornercase.app"
     ;;
 esac
