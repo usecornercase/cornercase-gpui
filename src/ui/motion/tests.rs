@@ -1,7 +1,8 @@
 use std::time::{Duration, Instant};
 
 use super::{
-    Beat, Leaving, Next, ORBIT, ORBIT_FRAME, Way, ease_in, ease_out, next_frame, orbit, orbit_turned, orbits_drawn,
+    Beat, Leaving, Next, ORBIT, ORBIT_FRAME, Way, ease_in, ease_out, marked, next_frame, orbit, orbit_turned,
+    orbits_drawn,
 };
 
 #[test]
@@ -133,4 +134,12 @@ fn a_new_frame_counts_its_orbits_afresh() {
     let _ = orbit(gpui::svg());
     let _ = orbit(gpui::svg());
     assert_eq!(orbits_drawn(), 2);
+}
+
+#[test]
+fn a_mark_holds_then_fades_to_nothing() {
+    assert!((marked(0.) - 1.).abs() < f32::EPSILON);
+    assert!((marked(0.5) - 1.).abs() < f32::EPSILON);
+    assert!(marked(0.75) > 0. && marked(0.75) < 1.);
+    assert!(marked(1.).abs() < f32::EPSILON);
 }

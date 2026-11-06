@@ -5,6 +5,11 @@ use serde_json::json;
 
 use crate::app::Root;
 
+fn text_for_pane(text: &str, overlay_open: bool) -> Option<String> {
+    let text: String = text.chars().filter(|c| !c.is_control()).collect();
+    (!overlay_open && !text.is_empty()).then_some(text)
+}
+
 impl EntityInputHandler for Root {
     fn text_for_range(
         &mut self,
@@ -42,11 +47,9 @@ impl EntityInputHandler for Root {
         cx: &mut Context<Self>,
     ) {
         self.marked.clear();
-        let text: String = text.chars().filter(|c| !c.is_control()).collect();
-        if text.is_empty() {
-            return;
+        if let Some(text) = text_for_pane(text, self.overlay_open(cx)) {
+            self.type_in(json!({ "text": text }), cx);
         }
-        self.type_in(json!({ "text": text }), cx);
     }
 
     fn replace_and_mark_text_in_range(
@@ -85,3 +88,6 @@ impl EntityInputHandler for Root {
         None
     }
 }
+
+#[cfg(test)]
+mod tests;

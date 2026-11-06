@@ -374,7 +374,7 @@ pub(super) const LINKS: &str = "Links";
 pub(super) const PROJECTS: &str = "Projects";
 pub(super) const SHARE: &str = "Share";
 
-const ORDER: [&str; 5] = ["Worktrees", "Agents", "Issues", "UI", "Remote"];
+pub(super) const ORDER: [&str; 5] = ["Worktrees", "Agents", "Issues", "UI", "Remote"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Item {
@@ -507,7 +507,9 @@ fn haystack(d: &Described, item: &Item) -> String {
         Item::Setting(i) => setting_text(&d.settings[*i]),
         Item::Connection(i) => {
             let c = &d.connections[*i];
-            [c.label.as_str(), &c.note, &c.key, &c.section, c.field.as_deref().unwrap_or_default()].join(" ")
+            let status = c.status().0;
+            [c.label.as_str(), &c.note, &c.key, &c.page, &c.section, &status, c.field.as_deref().unwrap_or_default()]
+                .join(" ")
         }
         Item::Agent { kind, mode, extra } => {
             let parts = [mode, extra].into_iter().flatten().map(|i| setting_text(&d.settings[*i]));
@@ -518,7 +520,8 @@ fn haystack(d: &Described, item: &Item) -> String {
 }
 
 fn setting_text(s: &Setting) -> String {
-    let fixed = [s.label.as_str(), &s.note, &s.key, &s.section, s.field.as_deref().unwrap_or_default()];
+    let field = s.field.as_deref().unwrap_or_default();
+    let fixed = [s.label.as_str(), &s.note, &s.key, &s.page, &s.section, s.switch_text(), field];
     fixed.into_iter().chain(s.choices.iter().map(|c| c.value.as_str())).collect::<Vec<_>>().join(" ")
 }
 
