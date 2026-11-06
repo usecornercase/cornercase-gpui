@@ -1,6 +1,19 @@
 use super::*;
 
 #[test]
+fn a_sheet_giving_way_to_another_takes_the_keys_back() {
+    assert!(sheet_gave_way(Some(PanelKind::Search), Some(PanelKind::Accounts)));
+}
+
+#[test]
+fn a_sheet_that_stays_or_opens_or_closes_does_not_give_way() {
+    assert!(!sheet_gave_way(Some(PanelKind::Search), Some(PanelKind::Search)));
+    assert!(!sheet_gave_way(None, Some(PanelKind::Search)));
+    assert!(!sheet_gave_way(Some(PanelKind::Search), None));
+    assert!(!sheet_gave_way(None, None));
+}
+
+#[test]
 fn the_browser_opens_on_half_a_window() {
     assert!((wide_default(1200.) - 600.).abs() < f32::EPSILON);
 }

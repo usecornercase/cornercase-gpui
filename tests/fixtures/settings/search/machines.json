@@ -1,0 +1,49 @@
+{
+  "results": [
+    {
+      "hidden": false,
+      "label": "Machines",
+      "note": "the tab",
+      "page": "Machines",
+      "section": "",
+      "shown": "",
+      "title": "Machines"
+    },
+    {
+      "hidden": false,
+      "label": "▭ this computer",
+      "note": "0.13.1",
+      "page": "Machines",
+      "section": "",
+      "shown": "",
+      "title": "Machines › ▭ this computer"
+    },
+    {
+      "hidden": false,
+      "label": "☁ vps",
+      "note": "linked · 0.13.1",
+      "page": "Machines",
+      "section": "",
+      "shown": "vps.example.com ",
+      "title": "Machines › ☁ vps"
+    },
+    {
+      "hidden": false,
+      "label": "▣ down",
+      "note": "unreachable · not seen yet",
+      "page": "Machines",
+      "section": "",
+      "shown": "down.example.com",
+      "title": "Machines › ▣ down"
+    },
+    {
+      "hidden": false,
+      "label": "+ add machine",
+      "note": "another computer you reach with ssh",
+      "page": "Machines",
+      "section": "",
+      "shown": "",
+      "title": "Machines › + add machine"
+    }
+  ]
+}

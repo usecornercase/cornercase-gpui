@@ -1,0 +1,114 @@
+{
+  "results": [
+    {
+      "hidden": false,
+      "label": "Accounts",
+      "note": "the tab",
+      "page": "Accounts",
+      "section": "",
+      "shown": "",
+      "title": "Accounts"
+    },
+    {
+      "hidden": false,
+      "label": "● System",
+      "note": "claude's own login · ~/.claude",
+      "page": "Accounts",
+      "section": "Claude Code",
+      "shown": "",
+      "title": "Accounts › Claude Code › ● System"
+    },
+    {
+      "hidden": false,
+      "label": "rename…",
+      "note": "a name for the window; its folder stays",
+      "page": "Accounts",
+      "section": "Claude Code",
+      "shown": "",
+      "title": "Accounts › Claude Code › rename…"
+    },
+    {
+      "hidden": false,
+      "label": "+ add account",
+      "note": "makes its folder and opens a tab to log in",
+      "page": "Accounts",
+      "section": "Claude Code",
+      "shown": "",
+      "title": "Accounts › Claude Code › + add account"
+    },
+    {
+      "hidden": false,
+      "label": "● System",
+      "note": "codex's own login · ~/.codex",
+      "page": "Accounts",
+      "section": "Codex",
+      "shown": "",
+      "title": "Accounts › Codex › ● System"
+    },
+    {
+      "hidden": false,
+      "label": "rename…",
+      "note": "a name for the window; its folder stays",
+      "page": "Accounts",
+      "section": "Codex",
+      "shown": "",
+      "title": "Accounts › Codex › rename…"
+    },
+    {
+      "hidden": false,
+      "label": "+ add account",
+      "note": "makes its folder and opens a tab to log in",
+      "page": "Accounts",
+      "section": "Codex",
+      "shown": "",
+      "title": "Accounts › Codex › + add account"
+    },
+    {
+      "hidden": false,
+      "label": "● System",
+      "note": "gemini's own login · ~",
+      "page": "Accounts",
+      "section": "Gemini CLI",
+      "shown": "",
+      "title": "Accounts › Gemini CLI › ● System"
+    },
+    {
+      "hidden": false,
+      "label": "rename…",
+      "note": "a name for the window; its folder stays",
+      "page": "Accounts",
+      "section": "Gemini CLI",
+      "shown": "",
+      "title": "Accounts › Gemini CLI › rename…"
+    },
+    {
+      "hidden": false,
+      "label": "+ add account",
+      "note": "makes its folder and opens a tab to log in",
+      "page": "Accounts",
+      "section": "Gemini CLI",
+      "shown": "",
+      "title": "Accounts › Gemini CLI › + add account"
+    },
+    {
+      "hidden": false,
+      "key": "shortcut",
+      "label": "Shortcut API token",
+      "note": "enter pastes one",
+      "page": "Issues",
+      "section": "Accounts",
+      "shown": "not connected",
+      "title": "Issues › Shortcut API token"
+    },
+    {
+      "hidden": false,
+      "key": "linear",
+      "label": "Linear API key",
+      "note": "enter pastes one",
+      "page": "Issues",
+      "section": "Accounts",
+      "shown": "not connected",
+      "title": "Issues › Linear API key"
+    }
+  ]
+}

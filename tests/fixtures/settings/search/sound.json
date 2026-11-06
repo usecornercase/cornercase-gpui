@@ -1,0 +1,44 @@
+{
+  "results": [
+    {
+      "hidden": false,
+      "key": "sound",
+      "label": "sound",
+      "note": "also while you look at cornercase, on the window's computer",
+      "page": "UI",
+      "section": "",
+      "shown": "[x] on",
+      "title": "UI › sound"
+    },
+    {
+      "hidden": false,
+      "key": "sound_waiting",
+      "label": "sound when it needs you",
+      "note": "an absolute or ~/ path on the window's computer; empty: built-in",
+      "page": "UI",
+      "section": "",
+      "shown": "built-in",
+      "title": "UI › sound when it needs you"
+    },
+    {
+      "hidden": false,
+      "key": "sound_done",
+      "label": "sound when it finishes",
+      "note": "an absolute or ~/ path on the window's computer; empty: built-in",
+      "page": "UI",
+      "section": "",
+      "shown": "built-in",
+      "title": "UI › sound when it finishes"
+    },
+    {
+      "hidden": false,
+      "key": "sound_subagents",
+      "label": "sound for subagents",
+      "note": "agents started by another agent or by a flow",
+      "page": "UI",
+      "section": "",
+      "shown": "[ ] off",
+      "title": "UI › sound for subagents"
+    }
+  ]
+}

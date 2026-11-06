@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.8
+
+- **Search finds settings.** Type in ⌘F and the settings that match are listed after your projects, workspaces, agents and tabs, so those keep their places. Each shows where it lives and its value, such as `UI › sound  [x] on`. Click one or press Enter and Settings opens on that row, scrolled to it and marked for a moment, with nothing changed. A row that doesn't show yet is listed muted with what it needs. Results about accounts, machines, flows and plugins open their own sheets.
+- Settings' own search now also finds a setting by the value it shows and by its page, such as `hidden` or `ui sound`.
+- Typing while a sheet with no text field is open, such as Accounts, no longer types into the terminal behind it. Keys also keep working after a sheet opens from another one's text field: Escape used to do nothing until a click.
+
 ## 0.1.7
 
 - Routines in the Queue: schedule an agent or a flow to start again and again, every so many minutes, hours, days or weeks, every day, every weekday or on a day of the week. Each run gets a fresh worktree from the up-to-date default branch and can remove its workspace when it finishes, if nothing would be lost. A routine shows its next time and its last runs, with why a run failed or kept its workspace, and you can pause it, resume it, start it now, edit it, or remove it with its runs and undo that. It only runs while cornercase's server runs, and only git repositories can have routines.

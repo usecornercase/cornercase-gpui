@@ -5,6 +5,7 @@ mod connection;
 mod controls;
 mod data;
 mod import;
+mod landing;
 mod links;
 mod pages;
 mod projects;
@@ -22,6 +23,7 @@ use gpui::{
 };
 
 use self::data::{Described, Script, Setting};
+pub(crate) use self::landing::{FoundSetting, parse_found, sheet_of};
 use crate::cli;
 use crate::panels::PanelKind;
 use crate::store::{self, Store, args};
@@ -65,6 +67,9 @@ pub(crate) struct SettingsPanel {
     nav_width: Split,
     search: Entity<TextField>,
     scroll: ScrollHandle,
+    landed: Option<landing::Landed>,
+    landings: u64,
+    spot: landing::Spot,
 }
 
 impl SettingsPanel {
@@ -92,8 +97,12 @@ impl SettingsPanel {
             nav_width: NAV,
             search,
             scroll: ScrollHandle::new(),
+            landed: None,
+            landings: 0,
+            spot: landing::Spot::default(),
         };
         this.load(cx);
+        this.take_landing(cx);
         this
     }
 
@@ -101,13 +110,20 @@ impl SettingsPanel {
         let field = cx.new(|cx| TextField::new("Search settings", cx).clears_on_escape().in_tab_order());
         cx.subscribe_in(&field, window, |this, _, event, _, cx| {
             if matches!(event, TextFieldEvent::Changed) {
-                this.choice = None;
-                this.to_top();
-                cx.notify();
+                this.search_changed(cx);
             }
         })
         .detach();
         field
+    }
+
+    fn search_changed(&mut self, cx: &mut Context<Self>) {
+        self.choice = None;
+        self.to_top();
+        if !self.query(cx).is_empty() {
+            self.landed = None;
+        }
+        cx.notify();
     }
 
     fn store_changed(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {
@@ -118,6 +134,9 @@ impl SettingsPanel {
         let newer = revision != 0 && (boot != self.boot || revision > loaded);
         if open && !self.was_open {
             self.opened(window, cx);
+        }
+        if open {
+            self.take_landing(cx);
         }
         if open && (!self.was_open || newer) {
             self.load(cx);
@@ -130,6 +149,7 @@ impl SettingsPanel {
 
     fn opened(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.choice = None;
+        self.landed = None;
         self.search.update(cx, TextField::clear);
         window.focus(&self.search.read(cx).focus_handle(cx));
         self.to_top();
@@ -248,6 +268,7 @@ impl SettingsPanel {
     fn go_to(&mut self, page: String, cx: &mut Context<Self>) {
         self.page = page;
         self.choice = None;
+        self.landed = None;
         self.search.update(cx, TextField::clear);
         self.to_top();
         cx.notify();
@@ -284,6 +305,7 @@ fn role_id(role: &Role) -> String {
 
 impl Render for SettingsPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.settle_landing();
         let at = (Edge::Right, self.nav_width.size());
         div()
             .size_full()

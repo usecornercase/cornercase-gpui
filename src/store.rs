@@ -10,6 +10,7 @@ use crate::desktop;
 use crate::model::Session;
 use crate::model::machines::{self, Machine};
 use crate::panels::PanelKind;
+use crate::panels::settings::FoundSetting;
 use crate::prefs::{self, Prefs};
 
 mod jobs;
@@ -31,6 +32,7 @@ pub(crate) struct Store {
     pub toasts: Vec<Toast>,
     pub switch_to: Option<Target>,
     pub browse: Option<(String, Option<u64>)>,
+    pub landing: Option<FoundSetting>,
     pub prefs: Prefs,
     pub started_run_in: Option<u64>,
     pub jobs: Jobs,
@@ -99,6 +101,7 @@ impl Store {
             toasts: Vec::new(),
             switch_to: None,
             browse: None,
+            landing: None,
             prefs: prefs::load(),
             started_run_in: None,
             jobs: Jobs::default(),
@@ -322,6 +325,11 @@ impl Store {
         } else {
             self.open_sheet(kind, cx);
         }
+    }
+
+    pub(crate) fn land_on(&mut self, found: FoundSetting, cx: &mut Context<Self>) {
+        self.landing = Some(found);
+        self.open_sheet(PanelKind::Settings, cx);
     }
 
     pub(crate) fn open_in_browser(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
