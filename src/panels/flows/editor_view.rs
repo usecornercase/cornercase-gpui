@@ -1,35 +1,22 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
+use super::diagram::{Plan, draw};
 use super::draft::Place;
-use super::editor::{FlowEditor, Mode, RoleFields, StageFields, Text, Verdict};
+use super::editor::{FlowEditor, Mode, RoleFields, StageFields, Verdict};
 use super::flow_page::block;
 use super::widgets::{alert, error_text, icon_action, panel_box};
 use crate::theme::colours;
 use crate::ui::{self, Icon, TextField, Tone, boxed};
 
-const KEPT: &str = "It has line breaks, which this one-line field would join: edit it in the flow's file.";
-
 fn labelled(label: &str, field: &gpui::Entity<TextField>, window: &Window, cx: &App) -> Div {
     ui::field(label.to_string(), boxed(field, window, cx)).flex_1().min_w_0()
 }
 
-fn text_control(label: &str, text: &Text, window: &Window, cx: &App) -> Div {
-    match text {
-        Text::Field(field) => labelled(label, field, window, cx),
-        Text::Kept(text) => ui::field(
-            label.to_string(),
-            panel_box()
-                .p(px(10.))
-                .flex()
-                .flex_col()
-                .gap(px(6.))
-                .child(div().text_size(px(12.)).text_color(colours::soft()).child(text.clone()))
-                .child(ui::dim(KEPT)),
-        ),
-    }
+fn text_control(label: &str, field: &gpui::Entity<TextField>, window: &Window, cx: &App) -> Div {
+    ui::field(label.to_string(), boxed(field, window, cx))
 }
 
 fn line() -> Div {
@@ -156,14 +143,16 @@ impl FlowEditor {
             .child(labelled("Effort", &role.effort, window, cx))
     }
 
+    fn command_line(role: &RoleFields, window: &Window, cx: &App) -> Div {
+        line().child(labelled("Arguments", &role.args, window, cx)).child(labelled("Variables", &role.env, window, cx))
+    }
+
     fn orchestrator_fields(&self, window: &Window, cx: &Context<Self>) -> Div {
         let lead = &self.orchestrator;
-        block(Icon::Waypoints, "Orchestrator").child(Self::agent_line(lead, window, cx)).child(text_control(
-            "Prompt",
-            &lead.prompt,
-            window,
-            cx,
-        ))
+        block(Icon::Waypoints, "Orchestrator")
+            .child(Self::agent_line(lead, window, cx))
+            .child(Self::command_line(lead, window, cx))
+            .child(text_control("Prompt", &lead.prompt, window, cx))
     }
 
     fn role_card(index: usize, role: &RoleFields, window: &Window, cx: &Context<Self>) -> Div {
@@ -178,6 +167,7 @@ impl FlowEditor {
             .flex_col()
             .gap(px(10.))
             .child(Self::agent_line(role, window, cx))
+            .child(Self::command_line(role, window, cx))
             .child(text_control("Prompt", &role.prompt, window, cx))
             .child(
                 line()
@@ -205,7 +195,24 @@ impl FlowEditor {
             ))
     }
 
-    fn stage_row(index: usize, stage: &StageFields, window: &Window, cx: &Context<Self>) -> Div {
+    fn stage_moves(index: usize, last: bool, cx: &Context<Self>) -> Div {
+        let step = |id: &'static str, glyph: Icon, hint: &'static str, up: bool| {
+            let blocked = if up { index == 0 } else { last };
+            icon_action((id, index), glyph, hint, false)
+                .when(blocked, |action| action.opacity(0.35).cursor_default())
+                .when(!blocked, |action| {
+                    action.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.move_stage(index, up, cx)))
+                })
+        };
+        div()
+            .flex()
+            .flex_none()
+            .gap(px(4.))
+            .child(step("stage-up", Icon::ArrowUp, "Move this stage up", true))
+            .child(step("stage-down", Icon::ArrowDown, "Move this stage down", false))
+    }
+
+    fn stage_row(index: usize, stage: &StageFields, last: bool, window: &Window, cx: &Context<Self>) -> Div {
         line()
             .child(
                 div()
@@ -221,7 +228,7 @@ impl FlowEditor {
             .child(labelled("When", &stage.when, window, cx).max_w(px(130.)))
             .child(labelled("At most", &stage.at_most, window, cx).max_w(px(80.)))
             .child(
-                div().pt(px(20.)).child(
+                div().pt(px(20.)).flex().gap(px(4.)).child(Self::stage_moves(index, last, cx)).child(
                     icon_action(("stage-remove", index), Icon::Trash, "Remove this stage", true)
                         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.remove_stage(index, cx))),
                 ),
@@ -229,12 +236,13 @@ impl FlowEditor {
     }
 
     fn stage_fields(&self, window: &Window, cx: &Context<Self>) -> Div {
+        let last = self.stages.len().saturating_sub(1);
         block(Icon::Repeat, "Stages")
             .child(ui::dim(
                 "Stages run top to bottom; the roles of one stage work side by side. A loop sends the work back \
                  to an earlier stage, at most so many times.",
             ))
-            .children(self.stages.iter().enumerate().map(|(i, stage)| Self::stage_row(i, stage, window, cx)))
+            .children(self.stages.iter().enumerate().map(|(i, stage)| Self::stage_row(i, stage, i == last, window, cx)))
             .child(adder(
                 "editor-add-stage",
                 "Add stage",
@@ -254,7 +262,12 @@ impl FlowEditor {
             .child(self.orchestrator_fields(window, cx))
             .child(self.role_fields(window, cx))
             .child(self.stage_fields(window, cx))
-            .child(ui::dim("A role's arguments and variables are kept as they are; change them in the flow's file."))
+            .child(self.plan_view())
+    }
+
+    fn plan_view(&self) -> Div {
+        let plan = Plan { flow: &self.plan, run: None, focus: None, key: "flow-draft", panel: None };
+        block(Icon::Flows, "Plan").child(draw(plan, &self.board, &self.played))
     }
 }
 
@@ -271,6 +284,7 @@ impl Render for FlowEditor {
         div().size_full().flex().flex_col().child(self.header(cx)).child(
             div()
                 .id(SharedString::from("flow-editor-body"))
+                .track_scroll(&self.inputs.scroller)
                 .flex_1()
                 .min_h_0()
                 .overflow_y_scroll()

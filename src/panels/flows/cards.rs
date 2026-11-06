@@ -1,10 +1,9 @@
 use gpui::{
-    BoxShadow, ClickEvent, Context, Div, ElementId, FontWeight, Hsla, InteractiveElement as _, ParentElement as _,
-    Rgba, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, div, linear_color_stop,
-    linear_gradient, point, prelude::FluentBuilder as _, px, rgb,
+    BoxShadow, ClickEvent, Div, ElementId, FontWeight, Hsla, InteractiveElement as _, ParentElement as _, Rgba,
+    SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, div, linear_color_stop, linear_gradient,
+    point, prelude::FluentBuilder as _, px, rgb,
 };
 
-use super::FlowsPanel;
 use super::diagram::{Plan, role_colour};
 use super::graph::{Card, Rect};
 use super::model::{self, Member, RoleSpec};
@@ -190,7 +189,7 @@ pub(super) fn conductor(size: f32) -> Div {
         .child(ui::icon(Icon::Waypoints, (size * 0.5).round()).text_color(colours::on_brand()))
 }
 
-pub(super) fn role_card(plan: Plan, (index, card): (usize, &Card), cx: &Context<FlowsPanel>) -> Stateful<Div> {
+pub(super) fn role_card(plan: Plan, (index, card): (usize, &Card)) -> Stateful<Div> {
     let colour = role_colour(plan.flow, &card.role);
     let spec = plan.flow.role(&card.role);
     let member = plan.member(&card.role);
@@ -201,10 +200,10 @@ pub(super) fn role_card(plan: Plan, (index, card): (usize, &Card), cx: &Context<
         card.role.clone().into(),
         line,
     ));
-    clickable(card_div, plan, &card.role, colour, cx)
+    clickable(card_div, plan, &card.role, colour)
 }
 
-pub(super) fn lead_card(plan: Plan, rect: Rect, cx: &Context<FlowsPanel>) -> Stateful<Div> {
+pub(super) fn lead_card(plan: Plan, rect: Rect) -> Stateful<Div> {
     let lead = &plan.flow.orchestrator;
     let name = if lead.name.is_empty() { "orchestrator" } else { lead.name.as_str() };
     let member = plan.run.and_then(|r| r.orchestrator());
@@ -215,18 +214,20 @@ pub(super) fn lead_card(plan: Plan, rect: Rect, cx: &Context<FlowsPanel>) -> Sta
         name.to_string().into(),
         line,
     ));
-    clickable(lead_div, plan, name, colour, cx)
+    clickable(lead_div, plan, name, colour)
 }
 
 fn pointer(card: Stateful<Div>, colour: Rgba) -> Stateful<Div> {
     card.cursor_pointer().hover(move |s| s.border_color(colour))
 }
 
-fn clickable(card: Stateful<Div>, plan: Plan, role: &str, colour: Rgba, cx: &Context<FlowsPanel>) -> Stateful<Div> {
+fn clickable(card: Stateful<Div>, plan: Plan, role: &str, colour: Rgba) -> Stateful<Div> {
     if plan.run.is_none() {
+        let Some(panel) = plan.panel.cloned() else { return card };
         let name = role.to_string();
-        return pointer(card, colour)
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_prompt(&name, cx)));
+        return pointer(card, colour).on_click(move |_: &ClickEvent, _, cx| {
+            let _ = panel.update(cx, |this, cx| this.toggle_prompt(&name, cx));
+        });
     }
     match plan.member(role).filter(|m| !m.closed).and_then(|m| m.pane) {
         Some(pane) => pointer(card, colour).on_click(move |_: &ClickEvent, _, cx| show_pane(pane, cx)),

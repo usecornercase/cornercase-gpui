@@ -21,7 +21,7 @@ It is only a window: cornercase's server keeps owning the shells, agents and wor
 - **Docked panels.** Changes (the workspace's diff, to stage, discard and review), Files (tree, viewer and search), TODO, Recap (below), a Browser and, in a workspace that runs a flow, Flow: its plan lit up where the work stands, its team and their messages, beside the agents at work.
 - **Recap.** An agent sums up what your agents did, in every project: where things stand now and what waits on you, yesterday for the daily (the last day you worked with agents, so on Monday it is Friday), or the last 7 days. Every conversation and pull request it names is a link: to the agent's pane, or to the pull request on the web. Settings › Agents › Recap chooses the agent, its model and the language.
 - **A browser beside the agent.** A real Chrome on the workspace's dev servers, with device sizes and the console. Pick an element or take a screenshot and hand it to the agent.
-- **The rest of cornercase.** Search, Issues, Queue, Flows, Usage, Accounts, Processes, Ports, Worktrees, Plugins, Settings and the guided tours, each one shortcut away. A flow, a team of agents, starts from its sheet, from an issue or from a project's `+`, and opens its workspace with the Flow panel beside it (View flow in the workspace's menu opens it later); from an issue, its task comes filled in with the issue's, ready to add to.
+- **The rest of cornercase.** Search, Issues, Queue, Flows, Usage, Accounts, Processes, Ports, Worktrees, Plugins, Settings and the guided tours, each one shortcut away. A flow, a team of agents, starts from its sheet, from an issue or from a project's `+`, and opens its workspace with the Flow panel beside it (View flow in the workspace's menu opens it later); from an issue, its task comes filled in with the issue's, ready to add to. Edit one in its sheet: prompts of several lines, stages that move up and down with their loops kept right, its plan redrawn as you go.
 - **Other machines.** Connect the window to cornercase on another machine over your own `ssh`; it reconnects by itself when the link drops.
 - **Notifications.** Agent notices as toasts and desktop notifications, with sounds and the bell.
 
@@ -148,7 +148,7 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 Some parts come from other projects and keep their licences:
 
-- The text field (`src/ui/text_field.rs`) is adapted from gpui 0.2.2's `examples/input.rs`, copyright Zed Industries, under Apache-2.0 ([LICENSE-GPUI](LICENSE-GPUI)).
+- The text field (`src/ui/text_field.rs` and `src/ui/text_field/element.rs`) is adapted from gpui 0.2.2's `examples/input.rs`, copyright Zed Industries, under Apache-2.0 ([LICENSE-GPUI](LICENSE-GPUI)).
 - The icons in `assets/icons/` are [Lucide](https://lucide.dev)'s, under ISC ([assets/icons/LICENSE](assets/icons/LICENSE)), with thinner strokes and two of them filled; the `status-*` and `window-*` icons are this project's own.
 - The file-type icons in `assets/file-icons/` are glyphs of [Seti UI](https://github.com/jesseweed/seti-ui) and [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts), under MIT ([assets/file-icons/LICENSE](assets/file-icons/LICENSE)).
 - The website in `site/` is set in [Archivo](https://github.com/Omnibus-Type/Archivo) and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), under the SIL Open Font License, which the site's npm packages carry.
