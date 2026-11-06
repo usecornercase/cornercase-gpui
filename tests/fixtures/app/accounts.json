@@ -1,0 +1,11 @@
+{
+  "accounts": {
+    "claude": "personal"
+  },
+  "profile": "Home",
+  "keep_awake": null,
+  "queue": [],
+  "revision": 5,
+  "todos": [],
+  "version": "0.13.1"
+}

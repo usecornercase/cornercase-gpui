@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::Session;
+use crate::model::accounts::{AccountsInfo, RestartAnswer, Selection, Stamp, Switch, switching_key};
 use crate::model::machines::{self, Machine};
 use crate::panels::PanelKind;
 use crate::panels::settings::FoundSetting;
@@ -37,6 +38,10 @@ pub(crate) struct Store {
     pub started_run_in: Option<u64>,
     pub jobs: Jobs,
     pub keys_to_terminal: bool,
+    pub accounts: AccountsInfo,
+    pub selection: Selection,
+    accounts_asked: u64,
+    accounts_stamp: Option<Stamp>,
     next_toast: u64,
     app_stream: Option<Stream>,
 }
@@ -106,6 +111,10 @@ impl Store {
             started_run_in: None,
             jobs: Jobs::default(),
             keys_to_terminal: false,
+            accounts: AccountsInfo::default(),
+            selection: Selection::default(),
+            accounts_asked: 0,
+            accounts_stamp: None,
             next_toast: 1,
             app_stream: None,
         });
@@ -121,6 +130,7 @@ impl Store {
         self.app_stream = follow(cx, args(&["status", "--app", "--follow"]), |this, line, cx| {
             if let Ok(value) = serde_json::from_str::<Value>(&line) {
                 this.machines = machines::in_app(&value);
+                this.selection = Selection::of(&value);
                 this.app = Some(value);
                 cx.notify();
             }
@@ -130,6 +140,56 @@ impl Store {
     pub(crate) fn take_machines(&mut self, machines: Vec<Machine>, cx: &mut Context<Self>) {
         self.machines = machines;
         cx.notify();
+    }
+
+    pub(crate) fn list_accounts(&mut self, cx: &mut Context<Self>) {
+        self.accounts_asked += 1;
+        let asked = self.accounts_asked;
+        run(cx, args(&["account", "list", "--json"]), move |this, result, cx| {
+            if asked == this.accounts_asked {
+                this.accounts_listed(result, cx);
+            }
+        });
+    }
+
+    fn accounts_listed(&mut self, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+        let listed = result.and_then(|out| Ok(serde_json::from_str::<AccountsInfo>(&out)?));
+        match listed {
+            Ok(accounts) if accounts == self.accounts => {}
+            Ok(accounts) => {
+                self.accounts = accounts;
+                cx.notify();
+            }
+            Err(e) => self.toast(format!("Could not list the accounts: {}", cli::reason(&e)), ToastKind::Error, cx),
+        }
+    }
+
+    pub(crate) fn follow_accounts(&mut self, session: &Session, cx: &mut Context<Self>) {
+        let stamp = session.accounts_stamp();
+        if self.accounts_stamp.replace(stamp.clone()).is_some_and(|before| before != stamp) {
+            self.list_accounts(cx);
+        }
+    }
+
+    pub(crate) fn switch_account(&mut self, switch: Switch, cx: &mut Context<Self>) {
+        let id = self.start_job(Busy::new(switching_key(switch.pane), switch.doing()), cx);
+        let args = switch.args();
+        run_job(cx, id, args, move |this, result, cx| this.account_switched(&switch, result, cx));
+    }
+
+    fn account_switched(&mut self, switch: &Switch, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+        let answer = result.and_then(|out| Ok(serde_json::from_str::<RestartAnswer>(&out)?));
+        match answer {
+            Ok(answer) => {
+                let said = switch.said(&answer);
+                let kind = if said.refused { ToastKind::Error } else { ToastKind::Info };
+                self.toast(said.text, kind, cx);
+            }
+            Err(e) => {
+                self.toast(cli::reason(&e), ToastKind::Error, cx);
+                self.list_accounts(cx);
+            }
+        }
     }
 
     pub(crate) fn with_view(&self, mut args: Vec<String>) -> Vec<String> {

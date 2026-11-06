@@ -1,0 +1,12 @@
+{
+  "account": "work",
+  "provider": "claude",
+  "restarted": [],
+  "skipped": [
+    {
+      "pane": 9,
+      "why": "pane 9 already uses that account"
+    }
+  ],
+  "waiting": []
+}

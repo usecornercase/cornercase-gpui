@@ -13,11 +13,14 @@ pub(crate) enum Arrangement {
     Tree,
 }
 
+#[expect(clippy::struct_excessive_bools, reason = "mirrors settings of config --json that are switches")]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Look {
     pub arrangement: Arrangement,
     pub tabs_in_sidebar: bool,
     pub agents_section: bool,
+    pub account_mark: bool,
+    pub account_switcher: bool,
     pub boot: String,
     pub revision: u64,
 }
@@ -53,6 +56,8 @@ pub(crate) fn parse(text: &str) -> anyhow::Result<Look> {
         arrangement: value("sidebar").and_then(Value::as_str).map_or(Arrangement::Tree, arrangement),
         tabs_in_sidebar: value("tabs").and_then(Value::as_str) == Some("sidebar"),
         agents_section: value("agents_section").and_then(Value::as_bool).unwrap_or(false),
+        account_mark: value("account_mark").and_then(Value::as_bool).unwrap_or(true),
+        account_switcher: value("account_switcher").and_then(Value::as_bool).unwrap_or(true),
         boot: String::new(),
         revision: described.revision,
     })

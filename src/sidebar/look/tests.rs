@@ -26,3 +26,12 @@ fn missing_settings_keep_the_tree_with_tabs_on_top() {
     assert!(!look.tabs_in_sidebar);
     assert!(!look.agents_section);
 }
+
+#[test]
+fn the_account_switches_are_on_unless_turned_off() {
+    let look = parse(r#"{"settings":[]}"#).expect("a look");
+    assert!(look.account_mark && look.account_switcher);
+    let text = r#"{"settings":[{"key":"account_mark","value":false},{"key":"account_switcher","value":false}]}"#;
+    let look = parse(text).expect("a look");
+    assert!(!look.account_mark && !look.account_switcher);
+}

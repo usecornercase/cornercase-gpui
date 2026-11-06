@@ -1,4 +1,4 @@
-use gpui::{Context, Window};
+use gpui::{App, Context, Window};
 use serde_json::json;
 
 use crate::app::Root;
@@ -60,7 +60,7 @@ impl Root {
         dialogs::confirm(question, window, cx);
     }
 
-    pub(super) fn pane_menu(&self, pane: u64, cell: (u16, u16)) -> Vec<Entry> {
+    pub(super) fn pane_menu(&self, pane: u64, cell: (u16, u16), cx: &App) -> Vec<Entry> {
         let p = pane.to_string();
         let info = self.session.as_ref().and_then(|s| s.pane(pane)).cloned();
         let mouse = self.grid.pane(pane).is_some_and(|g| g.modes.mouse != MouseMode::None);
@@ -78,7 +78,7 @@ impl Root {
         let agent = info.as_ref().is_some_and(|i| i.agent.is_some());
         if agent {
             entries.push(Entry::Separator);
-            entries.extend(self.agent_menu(pane).into_iter().skip(1));
+            entries.extend(self.agent_menu(pane, cx).into_iter().skip(1));
         }
         entries.push(Entry::Separator);
         entries.push(danger("Close pane", move |this, window, cx| this.close_pane(pane, window, cx)));
