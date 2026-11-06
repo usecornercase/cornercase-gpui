@@ -1,10 +1,13 @@
 use gpui::{App, AppContext as _, Context, Entity, Focusable as _, Subscription, Window};
 
-use super::QueuePanel;
-use super::data::Entry;
-use super::draft::{Draft, Target, When};
+use super::data::{Entry, flow_names, repository_for};
+use super::draft::{Draft, Target, When, cleanup_flag};
+use super::repeat::{DAYS, Repeat};
 use super::time::local;
+use super::{QueuePanel, toast_error};
+use crate::cli;
 use crate::model::Session;
+use crate::panels::flows::model::{parse_listing, project_args};
 use crate::store::{self, Store, ToastKind, args};
 use crate::ui::{TextField, TextFieldEvent};
 
@@ -21,6 +24,57 @@ impl From<Option<u64>> for Spot {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub(super) struct Old {
+    name: String,
+    prompt: String,
+    pub(super) repeat: Option<String>,
+    flow: Option<String>,
+    cleanup: bool,
+}
+
+impl Old {
+    fn of(entry: Option<&Entry>) -> Self {
+        entry.map_or_else(Self::default, |e| Self {
+            name: e.label.clone(),
+            prompt: e.prompt.clone(),
+            repeat: e.repeat.clone(),
+            flow: e.flow.clone(),
+            cleanup: e.cleanup,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Times {
+    pub(super) clock: String,
+    pub(super) date: String,
+    pub(super) amount: String,
+    pub(super) unit: char,
+    pub(super) weekday: &'static str,
+}
+
+impl Times {
+    pub(super) fn of(entry: Option<&Entry>) -> Self {
+        let at = entry.and_then(|e| local(e.at));
+        let repeat = entry.and_then(|e| e.repeat.as_deref()).and_then(Repeat::parse);
+        let (amount, unit) = match (&repeat, entry) {
+            (Some(Repeat::Every { amount, unit, .. }), _) => (amount.to_string(), *unit),
+            (None, Some(e)) if !e.is_routine() => (String::new(), 'h'),
+            _ => ("1".to_string(), 'h'),
+        };
+        let weekday = if let Some(Repeat::Week(day, _)) = &repeat { *day } else { DAYS[0] };
+        let clock = repeat.as_ref().and_then(Repeat::clock).map(str::to_string);
+        Self {
+            clock: clock.or_else(|| at.map(|c| c.clock())).unwrap_or_default(),
+            date: at.map(|c| c.date()).unwrap_or_default(),
+            amount,
+            unit,
+            weekday,
+        }
+    }
+}
+
 pub(super) struct Form {
     pub(super) edit: Option<u64>,
     pub(super) issue: bool,
@@ -32,14 +86,16 @@ pub(super) struct Form {
     pub(super) date: Entity<TextField>,
     pub(super) amount: Entity<TextField>,
     pub(super) unit: char,
+    pub(super) weekday: &'static str,
     pub(super) project: Option<u64>,
     pub(super) spot: Spot,
     pub(super) branch: Entity<TextField>,
     pub(super) agent: Option<String>,
     pub(super) mode: Option<String>,
+    pub(super) flow: Option<String>,
+    pub(super) cleanup: bool,
     pub(super) name: Entity<TextField>,
-    pub(super) old_name: String,
-    pub(super) old_prompt: String,
+    pub(super) old: Old,
     pub(super) error: Option<String>,
     pub(super) busy: bool,
     _subscriptions: Vec<Subscription>,
@@ -90,13 +146,13 @@ impl Form {
         window: &mut Window,
         cx: &mut Context<QueuePanel>,
     ) -> Self {
-        let at = entry.and_then(|e| local(e.at));
+        let times = Times::of(entry);
         let mut f = Fields::default();
         let prompt = f.add("What the agent should do", entry.map_or("", |e| &e.prompt), window, cx);
         let issue_key = f.add("https://github.com/org/repo/issues/12, #12 or ENG-42", "", window, cx);
-        let clock = f.add("14:30", &at.map(|c| c.clock()).unwrap_or_default(), window, cx);
-        let date = f.add("2026-10-24", &at.map(|c| c.date()).unwrap_or_default(), window, cx);
-        let amount = f.add("1", if entry.is_some() { "" } else { "1" }, window, cx);
+        let clock = f.add("14:30", &times.clock, window, cx);
+        let date = f.add("2026-10-24", &times.date, window, cx);
+        let amount = f.add("1", &times.amount, window, cx);
         let branch = f.add("feat/my-branch", "", window, cx);
         let name = f.add("the tab's name (optional)", entry.map_or("", |e| &e.label), window, cx);
         let (project, spot) = start_place(entry, session);
@@ -110,15 +166,17 @@ impl Form {
             clock,
             date,
             amount,
-            unit: 'h',
+            unit: times.unit,
+            weekday: times.weekday,
             project,
             spot,
             branch,
             agent: None,
             mode: None,
+            flow: None,
+            cleanup: entry.is_some_and(|e| e.cleanup),
             name,
-            old_name: entry.map(|e| e.label.clone()).unwrap_or_default(),
-            old_prompt: entry.map(|e| e.prompt.clone()).unwrap_or_default(),
+            old: Old::of(entry),
             error: None,
             busy: false,
             _subscriptions: f.subscriptions,
@@ -129,26 +187,55 @@ impl Form {
         self.edit.is_some()
     }
 
+    pub(super) fn repeats(&self) -> bool {
+        self.when.repeats() || self.old.repeat.is_some()
+    }
+
+    pub(super) fn runs_flow(&self) -> bool {
+        self.flow.is_some() || (self.agent.is_none() && self.old.flow.is_some())
+    }
+
+    pub(super) fn choose_when(&mut self, kind: When) {
+        self.when = kind;
+        if !self.repeats() {
+            self.flow = None;
+        }
+    }
+
+    pub(super) fn fit_repository(&mut self, session: &Session) {
+        if !self.repeats() || self.spot == Spot::Keep {
+            return;
+        }
+        let fitting = repository_for(self.project, session);
+        if fitting != self.project {
+            self.project = fitting;
+            self.spot = Spot::NewWorktree;
+        }
+    }
+
     fn target(&self, cx: &App) -> Target {
         match (self.spot, self.project) {
-            (Spot::Workspace(id), _) => Target::Workspace(id),
+            (Spot::Keep, _) => Target::Keep,
+            (_, Some(project)) if self.repeats() => Target::Repository(project),
+            (Spot::Workspace(id), _) if !self.repeats() => Target::Workspace(id),
             (Spot::NewWorktree, Some(project)) => Target::Worktree { project, branch: self.branch.read(cx).text() },
-            (Spot::Keep | Spot::NewWorktree, _) => Target::Keep,
+            _ => Target::Keep,
         }
     }
 
     fn draft(&self, cx: &App) -> Draft {
         let text = |f: &Entity<TextField>| f.read(cx).text();
         let editing = self.editing();
-        let mut body = if self.issue { text(&self.issue_key) } else { text(&self.prompt) };
-        if editing && !self.issue && body.trim() == self.old_prompt.trim() {
+        let issue = self.issue && !self.repeats();
+        let mut body = if issue { text(&self.issue_key) } else { text(&self.prompt) };
+        if editing && !issue && body.trim() == self.old.prompt.trim() {
             body.clear();
         }
         let name = text(&self.name);
-        let name = if editing && name.trim() == self.old_name.trim() { None } else { Some(name) };
+        let name = if editing && name.trim() == self.old.name.trim() { None } else { Some(name) };
         Draft {
             edit: self.edit,
-            issue: self.issue,
+            issue,
             text: body,
             source: self.source.clone(),
             when: self.when,
@@ -156,11 +243,36 @@ impl Form {
             date: text(&self.date),
             amount: text(&self.amount),
             unit: self.unit,
+            weekday: self.weekday.to_string(),
             target: self.target(cx),
             agent: self.agent.clone(),
             mode: self.mode.clone(),
+            flow: self.flow.clone().filter(|_| self.repeats()),
+            cleanup: cleanup_flag(self.repeats(), self.cleanup, editing.then_some(self.old.cleanup)),
             name,
         }
+    }
+}
+
+#[derive(Default)]
+pub(super) struct FlowChoices {
+    asked: bool,
+    project: Option<u64>,
+    pub(super) names: Option<Vec<String>>,
+}
+
+impl FlowChoices {
+    fn asked_for(&self, project: Option<u64>) -> bool {
+        self.asked && self.project == project
+    }
+}
+
+fn saved_text(editing: bool, routine: bool) -> &'static str {
+    match (editing, routine) {
+        (true, true) => "Routine saved",
+        (true, false) => "Queue entry saved",
+        (false, true) => "Routine scheduled",
+        (false, false) => "Scheduled",
     }
 }
 
@@ -173,6 +285,7 @@ impl QueuePanel {
         let form = Form::new(entry, session.as_ref(), window, cx);
         let focus = form.prompt.read(cx).focus_handle(cx);
         self.form = Some(form);
+        self.flows = FlowChoices::default();
         window.focus(&focus);
         cx.notify();
     }
@@ -184,6 +297,29 @@ impl QueuePanel {
                 cx.notify();
             }
         });
+    }
+
+    pub(super) fn sync_flows(&mut self, cx: &mut Context<Self>) {
+        let Some(project) = self.form.as_ref().filter(|f| f.repeats()).map(|f| f.project) else { return };
+        if self.flows.asked_for(project) {
+            return;
+        }
+        self.flows = FlowChoices { asked: true, project, names: None };
+        let mut command = args(&["flow", "list", "--json"]);
+        command.extend(project_args(project));
+        store::run(cx, command, move |this: &mut Self, result, cx| this.flows_listed(project, result, cx));
+    }
+
+    fn flows_listed(&mut self, project: Option<u64>, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+        if !self.flows.asked_for(project) {
+            return;
+        }
+        let names = result.and_then(|out| parse_listing(&out)).map(|listing| flow_names(&listing.flows));
+        self.flows.names = Some(names.unwrap_or_else(|e| {
+            toast_error(&e, cx);
+            Vec::new()
+        }));
+        cx.notify();
     }
 
     pub(super) fn close_form(&mut self, cx: &mut Context<Self>) {
@@ -204,25 +340,24 @@ impl QueuePanel {
         };
         form.busy = true;
         form.error = None;
-        let editing = draft.edit.is_some();
+        let text = saved_text(draft.edit.is_some(), form.repeats());
         store::run_json(cx, command, move |this: &mut Self, answer, cx| match answer {
-            Ok(_) => this.saved(editing, cx),
-            Err(e) => this.save_failed(&e.to_string(), cx),
+            Ok(_) => this.saved(text, cx),
+            Err(e) => this.save_failed(cli::reason(&e), cx),
         });
         cx.notify();
     }
 
-    fn saved(&mut self, editing: bool, cx: &mut Context<Self>) {
+    fn saved(&mut self, text: &'static str, cx: &mut Context<Self>) {
         self.form = None;
-        let text = if editing { "Queue entry saved" } else { "Scheduled" };
         Store::get(cx).update(cx, |s, cx| s.toast(text, ToastKind::Done, cx));
         cx.notify();
     }
 
-    fn save_failed(&mut self, error: &str, cx: &mut Context<Self>) {
+    fn save_failed(&mut self, error: String, cx: &mut Context<Self>) {
         if let Some(form) = self.form.as_mut() {
             form.busy = false;
-            form.error = Some(error.strip_prefix("cornercase queue: ").unwrap_or(error).to_string());
+            form.error = Some(error);
         }
         cx.notify();
     }

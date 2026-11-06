@@ -126,6 +126,11 @@ fn agent_entries(tab: &Tab, switch: Option<Entry>) -> Vec<Entry> {
     let pane = agent.id;
     let mut entries = vec![Entry::Separator, mark];
     entries.extend(switch);
+    entries.extend(
+        dialogs::context_choices(tab)
+            .into_iter()
+            .map(|(pane, label)| item(label, move |_, window, cx| dialogs::view_context(pane, window, cx))),
+    );
     entries.push(danger("Close agent…", move |_, window, cx| crate::sidebar::close_agent(pane, window, cx)));
     entries
 }

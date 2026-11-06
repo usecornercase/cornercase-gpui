@@ -13,8 +13,14 @@ const HEADING: &str = "Start agents later, on their own";
 const LEAD: &str = "Nothing is queued yet. Queue a prompt or an issue, and cornercase starts an agent on it when you \
                     say, in any of your projects, even while you are away.";
 
-const POINTS: [(Icon, &str, &str); 4] = [
+const POINTS: [(Icon, &str, &str); 5] = [
     (Icon::Queue, "When you say", "At a time, in a while, or when your Claude or Codex limits reset."),
+    (
+        Icon::Repeat,
+        "Again and again",
+        "A routine repeats on the schedule you choose. It only runs while cornercase's server runs, each run gets a \
+         fresh worktree from the up-to-date default branch, and only git repositories can have routines.",
+    ),
     (
         Icon::Message,
         "From a prompt or an issue",

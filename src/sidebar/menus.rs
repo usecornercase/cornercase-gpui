@@ -10,7 +10,7 @@ use crate::cli;
 use crate::context_menu::{Entry, act, act_busy, danger, item, submenu};
 use crate::desktop;
 use crate::dialogs;
-use crate::model::{Project, PullRequest, Session, Workspace};
+use crate::model::{PaneInfo, Project, PullRequest, Session, Workspace};
 use crate::panels::PanelKind;
 use crate::panels::flows::{FlowStart, start_flow};
 use crate::platform::Os;
@@ -175,6 +175,12 @@ pub(crate) fn reopening(workspace: u64, name: &str) -> (Busy, Vec<String>) {
     (busy, cmd(&["agents", "reopen", "--workspace", &workspace.to_string()]))
 }
 
+fn context_item(pane: &PaneInfo) -> Option<Entry> {
+    let id = pane.id;
+    let offered = pane.agent.is_some();
+    offered.then(|| item(dialogs::VIEW_CONTEXT, move |_, window, cx| dialogs::view_context(id, window, cx)))
+}
+
 fn agent_items(ws: &Workspace) -> Vec<Entry> {
     let (ids, name) = (ws.id.to_string(), ws.name.clone());
     let mut entries = Vec::new();
@@ -303,6 +309,7 @@ impl Root {
             entries.push(fold_item(Fold::Pane(pane), info.collapsed));
         }
         entries.extend(self.switch_account_item(pane, cx));
+        entries.extend(context_item(info));
         entries.push(Entry::Separator);
         entries.push(danger("Close agent…", move |_, window, cx| forms::close_agent(pane, window, cx)));
         entries
