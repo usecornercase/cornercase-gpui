@@ -1,10 +1,10 @@
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::store::{Store, args};
+
 pub(super) const SETTING: &str = "discord_forum";
 pub(super) const BOT: &str = "discord";
-pub(super) const PICKING: &str = "Choosing among several servers still takes cornercase's own window, Settings › \
-                                  Remote: needs usecornercase/cornercase-terminal#668.";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -14,6 +14,28 @@ pub(super) struct Forum {
     guild: Option<String>,
     channel: Option<String>,
     pending: Option<String>,
+    pub servers: Vec<Server>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub(super) struct Server {
+    id: String,
+    pub name: String,
+}
+
+impl Server {
+    pub(super) fn picking(&self) -> String {
+        format!("forum-server:{}", self.id)
+    }
+
+    pub(super) fn pick_args(&self) -> Vec<String> {
+        args(&["config", "forum-server", "--json", "--", &self.id])
+    }
+}
+
+pub(super) fn picked(out: &str) -> anyhow::Result<String> {
+    Ok(serde_json::from_str::<Server>(out)?.name)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +67,10 @@ impl Forum {
             (Stage::Waiting, Some(pending)) => format!("Forum not ready: {pending}"),
             (Stage::Waiting, None) => "Forum not ready: setting it up".to_string(),
         }
+    }
+
+    pub(super) fn picking(&self, store: &Store) -> bool {
+        self.servers.iter().any(|server| store.busy(&server.picking()))
     }
 
     pub(super) fn address(&self) -> Option<String> {

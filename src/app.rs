@@ -277,6 +277,7 @@ impl Root {
             font_size: self.font_size,
         };
         let left = cli::connect(target);
+        plugins::follow_window_processes(cx);
         cli::kill_all();
         cli::leave(&left);
         self.take_back_colours();
@@ -408,6 +409,9 @@ impl Root {
     }
 
     fn handle(&mut self, msg: Msg, cx: &mut Context<Self>) {
+        if matches!(msg, Msg::Started(_)) {
+            plugins::follow_window_processes(cx);
+        }
         match msg {
             Msg::Started(Ok(_)) => self.open_view(cx),
             Msg::Missing(missing) => self.drop_connection(Conn::Missing(missing), cx),

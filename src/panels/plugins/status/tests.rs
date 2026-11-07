@@ -21,8 +21,8 @@ fn colours_follow_the_service_state() {
 #[test]
 fn a_plugin_without_services_or_unknown_has_none() {
     let status = status();
-    assert!(status.services("gpui.test").is_empty());
-    assert!(status.services("unknown").is_empty());
+    assert_eq!(status.services("gpui.test"), []);
+    assert_eq!(status.services("unknown"), []);
 }
 
 #[test]

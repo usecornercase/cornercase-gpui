@@ -2,11 +2,23 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.30
+## 0.1.32
 
 - **The agents section lists a machine's agents too.** With the section on, each linked machine's agents are rows, tagged with the machine, after the agents of the project they share with you, and those of a project only on the machine come last. A child sits under the agent that started it on that machine. While the link is down the rows stay, dimmed, and say when they were last seen.
 - **A click shows that agent's tab**, live, as a click on its tab row does. Nothing moves on the machine.
 - **Folding one folds it on the machine**, with its arrow or Collapse and Expand in its menu, so the machine's own window shows the same. A folded row says how many it hides and whether one of them needs you. If the machine fell, restarted or no longer has that agent, a message says so and nothing is sent.
+
+## 0.1.31
+
+- **Pair a phone from Settings › Remote.** Paired browsers, Telegram phone and Discord phone each have a button that opens a dialog with a QR code to scan, the address under it to copy or open, and what to do next, in cornercase's own words. Closing the dialog drops the code. Once the phone connects, the dialog closes and says so, and the row shows the chat's name.
+- **When it cannot pair, the dialog says why**: remote access is off, Tailscale is not ready, or the bot's token is missing, with `Try again` once that is fixed.
+- **Pick the server of the Discord forum in Settings › Remote.** When the bot is in several of your servers, they are listed under the forum's line: click one, and the forum is made there.
+- This works on another machine's server too, with `--remote`.
+
+## 0.1.30
+
+- **A plugin's button now acts on what this window shows.** Its action gets the project, workspace, tab and folder you are looking at here, not those of cornercase's own window, and a popup opens here without that window, at a size taken from this one. Over a machine's tab a button acts on your tab behind it, and its tooltip says so; a popup goes back to that tab.
+- **What a plugin keeps running beside a window now runs beside this one.** The processes plugins declare as `[[window]]` run while the window is on this computer: they stop when it closes or moves to another server, and start again when it comes back. A machine's tab does not count as leaving. Each plugin's card shows them: running with their pid, or stopped with the seconds until they start again.
 
 ## 0.1.29
 

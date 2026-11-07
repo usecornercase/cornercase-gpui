@@ -1,0 +1,3 @@
+{"lines":["starting Tailscale…"],"url":null}
+{"lines":["scan the code with your phone's camera.","the phone needs the Tailscale app, logged in as ana@example.com."],"url":"https://ana.tail0.ts.net:8443/pair?t=00112233445566778899aabbccddeeff"}
+{"paired":true}

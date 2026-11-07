@@ -62,11 +62,11 @@ fn opens_menu(slot: Stateful<Div>, entries: Vec<Entry>, cx: &mut Context<Root>) 
     )
 }
 
-fn plugin_slot(button: Button, tips: bool, cx: &mut Context<Root>) -> AnyElement {
+fn plugin_slot(button: Button, says: Option<String>, cx: &mut Context<Root>) -> AnyElement {
     let id = SharedString::from(format!("rail-plugin-{}", button.plugin));
     let running = button.running(cx);
     let slot = if running { ui::busy_tool(id, SLOT) } else { ui::letter_button(id, button.glyph(), SLOT) };
-    let slot = slot.when(tips, |slot| slot.tooltip(tip(button.tip())));
+    let slot = slot.when_some(says, |slot, says| slot.tooltip(tip(says)));
     match <[Run; 1]>::try_from(button.runs) {
         Ok(_) if running => slot,
         Ok([run]) => slot.on_click(cx.listener(move |_, _: &ClickEvent, _, cx| run_action(&run, cx, |_, _| {}))),
@@ -113,7 +113,14 @@ impl Root {
     fn plugin_slots(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let buttons = self.store.read(cx).plugins.buttons();
         let tips = self.side.menu.is_none();
-        buttons.into_iter().map(|button| plugin_slot(button, tips, cx)).collect()
+        let machine = self.side.machine_place.as_ref().map(|place| place.machine.clone());
+        buttons
+            .into_iter()
+            .map(|button| {
+                let says = tips.then(|| button.tip(machine.as_deref()));
+                plugin_slot(button, says, cx)
+            })
+            .collect()
     }
 
     fn docked_kinds(&self, cx: &Context<Self>) -> Vec<PanelKind> {
