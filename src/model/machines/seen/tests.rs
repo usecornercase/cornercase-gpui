@@ -3,6 +3,7 @@ use crate::model::PaneInfo;
 use crate::test_util::fixture;
 
 const SEEN: &str = "2026-11-06T01:23:55.000Z";
+const TRY_IN_4_S: &str = "2026-11-06T01:25:59.139Z";
 
 fn session() -> Session {
     serde_json::from_str(fixture!("machines/view.json")).expect("a view line")
@@ -146,21 +147,71 @@ fn an_agent_on_a_machine_that_is_down_lets_them_rest() {
 #[test]
 fn a_rename_names_the_id_and_takes_any_text_as_the_name() {
     let aim = Aim { machine: "vps".into(), boot: "b".into(), workspace: ThereId(7) };
-    assert_eq!(aim.rename_args("-x y"), ["rename", "--workspace", "7", "--", "-x y"]);
+    assert_eq!(aim.rename_args("-x y"), ["rename", "--workspace", "7", "--boot", "b", "--", "-x y"]);
 }
 
 #[test]
 fn a_close_and_its_check_name_the_id() {
     let aim = Aim { machine: "vps".into(), boot: "b".into(), workspace: ThereId(7) };
-    assert_eq!(aim.close_args(), ["close", "--workspace", "7"]);
-    assert_eq!(aim.check_args(), ["close", "--workspace", "7", "--remove-worktree", "--check", "--json"]);
+    assert_eq!(aim.close_args(), ["close", "--workspace", "7", "--boot", "b"]);
+    assert_eq!(
+        aim.check_args(),
+        ["close", "--workspace", "7", "--boot", "b", "--remove-worktree", "--check", "--json"]
+    );
 }
 
 #[test]
 fn a_removal_adds_what_was_acknowledged() {
     let aim = Aim { machine: "vps".into(), boot: "b".into(), workspace: ThereId(7) };
-    assert_eq!(aim.remove_args(false, false), ["close", "--workspace", "7", "--remove-worktree"]);
-    assert_eq!(aim.remove_args(true, true), ["close", "--workspace", "7", "--remove-worktree", "--force", "--unlock"]);
+    let removal = ["close", "--workspace", "7", "--boot", "b", "--remove-worktree"];
+    assert_eq!(aim.remove_args(false, false), removal);
+    assert_eq!(aim.remove_args(true, true), [&removal[..], &["--force", "--unlock"]].concat());
+}
+
+#[test]
+fn every_act_on_a_machine_says_which_run_of_its_server_the_id_is_from() {
+    let aim = Aim { machine: "vps".into(), boot: "4242-1".into(), workspace: ThereId(7) };
+    let acts = [aim.rename_args("x"), aim.close_args(), aim.check_args(), aim.remove_args(true, true)];
+    for act in acts {
+        let at = act.iter().position(|word| word == "--boot").expect("--boot");
+        assert_eq!(act[at + 1], "4242-1");
+    }
+}
+
+#[test]
+fn a_view_line_says_when_a_fallen_link_tries_next() {
+    let seen: MachineSeen = serde_json::from_str(fixture!("machines/seen_fallen.json")).expect("a machine");
+    assert_eq!(seen.next_try(now()), Some(NextTry::In(4)));
+}
+
+#[test]
+fn a_tab_on_a_fallen_link_counts_down_before_saying_when_it_was_seen() {
+    let seen = MachineSeen { retry_at: Some(TRY_IN_4_S.into()), ..down(Some(SEEN)) };
+    let note = seen.tab_note(&agent_tab("waiting"), now());
+    assert_eq!(note.as_deref(), Some("waiting · reconnecting in 4 s · seen 2 min ago"));
+}
+
+#[test]
+fn a_tab_on_a_link_whose_try_is_under_way_says_so() {
+    let seen = MachineSeen { retry_at: Some(TRY_IN_4_S.into()), ..down(Some(SEEN)) };
+    let note = seen.tab_note(&agent_tab("waiting"), now() + 4);
+    assert_eq!(note.as_deref(), Some("waiting · reconnecting… · seen 2 min ago"));
+}
+
+#[test]
+fn a_tab_note_counts_while_it_shows_a_time_that_moves() {
+    let tab = agent_tab("waiting");
+    assert!(down(Some(SEEN)).tab_note_counts(&tab, now()));
+    let never_seen = MachineSeen { retry_at: Some(TRY_IN_4_S.into()), ..down(None) };
+    assert!(never_seen.tab_note_counts(&tab, now()));
+    assert!(!never_seen.tab_note_counts(&tab, now() + 4));
+}
+
+#[test]
+fn nothing_counts_on_a_linked_machine_or_a_tab_with_no_note() {
+    let linked = MachineSeen { state: LinkState::Linked, ..down(Some(SEEN)) };
+    assert!(!linked.tab_note_counts(&agent_tab("waiting"), now()));
+    assert!(!down(Some(SEEN)).tab_note_counts(&Tab::default(), now()));
 }
 
 #[test]

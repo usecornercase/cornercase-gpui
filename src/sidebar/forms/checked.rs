@@ -143,13 +143,21 @@ impl RemoveWorktree {
                 cx.notify();
             }
             Err(e) => {
-                let text = format!("{}: nothing was removed", cli::reason(&e));
+                let text = self.check_failed(&e);
                 Store::get(cx).update(cx, |s, cx| {
                     s.toast(text, ToastKind::Error, cx);
                     s.close_dialog(cx);
                 });
             }
         }
+    }
+
+    fn check_failed(&self, error: &anyhow::Error) -> String {
+        let stale = match &self.whose {
+            Whose::There(aim) => store::stale_note(&aim.machine, error),
+            Whose::Here(_) => None,
+        };
+        stale.unwrap_or_else(|| format!("{}: nothing was removed", cli::reason(error)))
     }
 
     fn folder(&self, path: &str, cx: &App) -> String {
