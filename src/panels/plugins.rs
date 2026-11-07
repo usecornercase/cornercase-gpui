@@ -34,7 +34,7 @@ use window_processes::{Card, WindowProcesses};
 #[cfg(test)]
 pub(crate) use offers::listed_offers;
 pub(crate) use offers::{Button, Group, Offers, Run, Spot, read_offers, run_action};
-pub(crate) use window_processes::keep_window_processes;
+pub(crate) use window_processes::follow_window_processes;
 
 const LOG_LINES: &str = "60";
 const WARNING: &str = "A plugin runs as you and can do anything you can, including typing into every terminal. \

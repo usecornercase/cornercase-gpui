@@ -1,9 +1,10 @@
 use std::time::{Duration, Instant};
 
-use super::{Card, ENDED, Seen};
+use super::{Card, ENDED, Seen, Step, WindowProcesses};
 use crate::test_util::fixture;
 
 const NOTES: &str = "acme.notes";
+const AWAY: Option<&str> = Some("devbox");
 
 fn lines() -> Vec<&'static str> {
     fixture!("plugins/windows.jsonl").lines().collect()
@@ -115,4 +116,110 @@ fn the_commands_end_takes_every_process_with_it_and_says_why() {
 #[test]
 fn an_end_with_nothing_on_its_error_output_names_the_command() {
     assert_eq!(Seen::default().end(""), ENDED);
+}
+
+#[test]
+fn a_window_on_this_computer_starts_them() {
+    assert_eq!(WindowProcesses::default().step(None), Step::Start);
+}
+
+#[test]
+fn a_window_on_this_computer_keeps_the_one_it_has() {
+    let mut windows = WindowProcesses::default();
+    windows.began();
+    assert_eq!(windows.step(None), Step::Stay);
+}
+
+#[test]
+fn a_window_opened_on_another_server_starts_nothing() {
+    assert_eq!(WindowProcesses::default().step(AWAY), Step::Stay);
+}
+
+#[test]
+fn moving_to_another_server_stops_them() {
+    let mut windows = WindowProcesses::default();
+    windows.began();
+    assert_eq!(windows.step(AWAY), Step::Stop);
+}
+
+#[test]
+fn coming_back_starts_them_again() {
+    let mut windows = WindowProcesses::default();
+    windows.began();
+    windows.stopped();
+    assert_eq!(windows.step(AWAY), Step::Stay);
+    assert_eq!(windows.step(None), Step::Start);
+}
+
+#[test]
+fn a_retry_due_while_away_starts_nothing() {
+    let mut windows = WindowProcesses::default();
+    let run = windows.began();
+    windows.ended(run, "it fell over").expect("it fell");
+    assert_eq!(windows.step(AWAY), Step::Stay);
+}
+
+#[test]
+fn stopping_forgets_every_process_and_leaves_nothing_to_say() {
+    let now = Instant::now();
+    let mut windows = WindowProcesses::default();
+    let run = windows.began();
+    windows.read_line(run, lines()[0], now).expect("the line parses");
+    windows.stopped();
+    assert_eq!(windows.seen.card(NOTES, now), Card::Starting);
+}
+
+#[test]
+fn the_end_of_a_run_that_was_stopped_says_nothing_and_tries_nothing() {
+    let now = Instant::now();
+    let mut windows = WindowProcesses::default();
+    let run = windows.began();
+    windows.stopped();
+    assert!(windows.ended(run, "it ended").is_none());
+    assert_eq!(windows.seen.card(NOTES, now), Card::Starting);
+    assert_eq!(windows.step(AWAY), Step::Stay);
+}
+
+#[test]
+fn the_end_of_a_stopped_run_leaves_the_next_run_kept() {
+    let mut windows = WindowProcesses::default();
+    let stopped = windows.began();
+    windows.stopped();
+    windows.began();
+    assert!(windows.ended(stopped, "it ended").is_none());
+    assert_eq!(windows.step(None), Step::Stay);
+}
+
+#[test]
+fn a_line_of_a_run_that_was_stopped_is_dropped() {
+    let now = Instant::now();
+    let mut windows = WindowProcesses::default();
+    let stopped = windows.began();
+    windows.stopped();
+    windows.began();
+    windows.read_line(stopped, lines()[0], now).expect("dropped");
+    assert_eq!(windows.seen.card(NOTES, now), Card::Starting);
+}
+
+#[test]
+fn a_run_that_fell_is_told_once_and_waits_longer_each_time() {
+    let mut windows = WindowProcesses::default();
+    let run = windows.began();
+    let first = windows.ended(run, "it fell over").expect("it fell");
+    assert_eq!(first.say.as_deref(), Some("The plugins' window processes stopped: it fell over"));
+    let run = windows.began();
+    let second = windows.ended(run, "it fell over").expect("it fell");
+    assert_eq!(second.say, None);
+    assert!(second.wait > first.wait);
+}
+
+#[test]
+fn a_line_between_two_falls_tells_the_next_one_again() {
+    let now = Instant::now();
+    let mut windows = WindowProcesses::default();
+    let run = windows.began();
+    windows.ended(run, "it fell over").expect("it fell");
+    let run = windows.began();
+    windows.read_line(run, lines()[0], now).expect("the line parses");
+    assert!(windows.ended(run, "it fell over").expect("it fell").say.is_some());
 }

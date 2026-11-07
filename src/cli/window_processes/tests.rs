@@ -53,6 +53,19 @@ mod on_unix {
         KEPT.stop();
         assert_eq!(next(&heard), "asked to end\n");
         assert_eq!(next(&heard), "ended: ");
+        assert!(KEPT.children.lock().is_empty());
+    }
+
+    #[test]
+    fn one_that_ends_leaves_the_next_one_there_to_be_stopped() {
+        static KEPT: Kept = Kept::empty();
+        let newer = start(&KEPT, CATCHES_THE_END);
+        assert_eq!(next(&newer), "ready\n");
+        let older = start(&KEPT, "exit 0");
+        assert_eq!(next(&older), "ended: ");
+        KEPT.stop();
+        assert_eq!(next(&newer), "asked to end\n");
+        assert_eq!(next(&newer), "ended: ");
     }
 
     #[test]
@@ -60,6 +73,6 @@ mod on_unix {
         static KEPT: Kept = Kept::empty();
         let heard = start(&KEPT, "echo no such thing >&2; exit 3");
         assert_eq!(next(&heard), "ended: no such thing\n");
-        assert!(KEPT.0.lock().is_none());
+        assert!(KEPT.children.lock().is_empty());
     }
 }

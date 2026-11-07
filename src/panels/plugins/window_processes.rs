@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
 use futures::channel::mpsc;
@@ -88,10 +88,24 @@ enum Heard {
     End(String),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum Step {
+    Start,
+    Stop,
+    Stay,
+}
+
+#[derive(Debug)]
+struct Fell {
+    say: Option<String>,
+    wait: Duration,
+}
+
 #[derive(Default)]
 pub(crate) struct WindowProcesses {
     pub(super) seen: Seen,
     kept: bool,
+    run: u64,
     tries: u32,
 }
 
@@ -107,17 +121,67 @@ pub(super) fn get(cx: &mut App) -> Entity<WindowProcesses> {
     entity
 }
 
-pub(crate) fn keep_window_processes(cx: &mut App) {
-    get(cx).update(cx, WindowProcesses::keep);
+pub(crate) fn follow_window_processes(cx: &mut App) {
+    get(cx).update(cx, WindowProcesses::follow);
 }
 
 impl WindowProcesses {
-    fn keep(&mut self, cx: &mut Context<Self>) {
-        if self.kept {
-            return;
+    fn step(&self, host: Option<&str>) -> Step {
+        match (host, self.kept) {
+            (None, false) => Step::Start,
+            (Some(_), true) => Step::Stop,
+            _ => Step::Stay,
         }
+    }
+
+    fn began(&mut self) -> u64 {
         self.kept = true;
+        self.run += 1;
         self.seen.ended = None;
+        self.run
+    }
+
+    fn stopped(&mut self) {
+        self.kept = false;
+        self.run += 1;
+        self.tries = 0;
+        self.seen = Seen::default();
+    }
+
+    fn read_line(&mut self, run: u64, text: &str, now: Instant) -> serde_json::Result<()> {
+        if run != self.run {
+            return Ok(());
+        }
+        self.tries = 0;
+        self.seen.read(text, now)
+    }
+
+    fn ended(&mut self, run: u64, why: &str) -> Option<Fell> {
+        if run != self.run {
+            return None;
+        }
+        self.kept = false;
+        let why = self.seen.end(why);
+        let say = (self.tries == 0).then(|| format!("The plugins' window processes stopped: {why}"));
+        let wait = cli::backoff(self.tries);
+        self.tries += 1;
+        Some(Fell { say, wait })
+    }
+
+    fn follow(&mut self, cx: &mut Context<Self>) {
+        match self.step(cli::host().as_deref()) {
+            Step::Start => self.keep(cx),
+            Step::Stop => {
+                self.stopped();
+                cli::stop_window_processes();
+                cx.notify();
+            }
+            Step::Stay => {}
+        }
+    }
+
+    fn keep(&mut self, cx: &mut Context<Self>) {
+        let run = self.began();
         let (tx, mut rx) = mpsc::unbounded();
         let ending = tx.clone();
         let started = cli::keep_window_processes(
@@ -129,44 +193,38 @@ impl WindowProcesses {
             },
         );
         if let Err(e) = started {
-            self.fell(&e.to_string(), cx);
+            self.fell(run, &e.to_string(), cx);
             return;
         }
         cx.spawn(async move |this, cx| {
             while let Some(heard) = rx.next().await
-                && this.update(cx, |this, cx| this.heard(heard, cx)).is_ok()
+                && this.update(cx, |this, cx| this.heard(run, heard, cx)).is_ok()
             {}
         })
         .detach();
         cx.notify();
     }
 
-    fn heard(&mut self, heard: Heard, cx: &mut Context<Self>) {
+    fn heard(&mut self, run: u64, heard: Heard, cx: &mut Context<Self>) {
         match heard {
-            Heard::Line(text) => self.line(&text, cx),
-            Heard::End(why) => self.fell(&why, cx),
+            Heard::Line(text) => {
+                if let Err(e) = self.read_line(run, &text, Instant::now()) {
+                    say(format!("Could not read a plugin's window process: {e}"), cx);
+                }
+                cx.notify();
+            }
+            Heard::End(why) => self.fell(run, &why, cx),
         }
     }
 
-    fn line(&mut self, text: &str, cx: &mut Context<Self>) {
-        self.tries = 0;
-        if let Err(e) = self.seen.read(text, Instant::now()) {
-            say(format!("Could not read a plugin's window process: {e}"), cx);
+    fn fell(&mut self, run: u64, why: &str, cx: &mut Context<Self>) {
+        let Some(fell) = self.ended(run, why) else { return };
+        if let Some(text) = fell.say {
+            say(text, cx);
         }
-        cx.notify();
-    }
-
-    fn fell(&mut self, why: &str, cx: &mut Context<Self>) {
-        self.kept = false;
-        let why = self.seen.end(why);
-        if self.tries == 0 {
-            say(format!("The plugins' window processes stopped: {why}"), cx);
-        }
-        let wait = cli::backoff(self.tries);
-        self.tries += 1;
         cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(wait).await;
-            let _ = this.update(cx, Self::keep);
+            cx.background_executor().timer(fell.wait).await;
+            let _ = this.update(cx, Self::follow);
         })
         .detach();
         cx.notify();

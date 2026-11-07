@@ -1,4 +1,5 @@
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::Result;
 use parking_lot::Mutex;
@@ -7,11 +8,14 @@ use super::{Target, read_output, spawn};
 
 static KEPT: Kept = Kept::empty();
 
-struct Kept(Mutex<Option<Child>>);
+struct Kept {
+    children: Mutex<Vec<(u64, Child)>>,
+    next: AtomicU64,
+}
 
 impl Kept {
     const fn empty() -> Self {
-        Self(Mutex::new(None))
+        Self { children: Mutex::new(Vec::new()), next: AtomicU64::new(1) }
     }
 
     fn start(
@@ -20,27 +24,30 @@ impl Kept {
         on_line: impl FnMut(String) + Send + 'static,
         on_end: impl FnOnce(String) + Send + 'static,
     ) -> Result<()> {
-        let mut slot = self.0.lock();
+        let mut children = self.children.lock();
         let mut child = spawn(&mut command)?;
+        let id = self.next.fetch_add(1, Ordering::Relaxed);
         read_output(&mut child, on_line, move |why| {
-            self.reap();
+            self.reap(id);
             on_end(why);
         })?;
-        *slot = Some(child);
+        children.push((id, child));
         Ok(())
     }
 
-    fn reap(&self) {
-        let ended = self.0.lock().take();
-        if let Some(mut child) = ended {
+    fn reap(&self, id: u64) {
+        let ended = {
+            let mut children = self.children.lock();
+            children.iter().position(|(kept, _)| *kept == id).map(|at| children.swap_remove(at))
+        };
+        if let Some((_, mut child)) = ended {
             let _ = child.wait();
         }
     }
 
     fn stop(&self) {
-        let kept = self.0.lock().take();
-        if let Some(mut child) = kept {
-            ask_to_end(&mut child);
+        for (_, child) in self.children.lock().iter_mut() {
+            ask_to_end(child);
         }
     }
 }
