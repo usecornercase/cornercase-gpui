@@ -16,7 +16,7 @@ use crate::model::{Aim, MachinePlace, MachineSeen, Session, Tab, ThereId, ThereP
 use crate::theme::colours;
 use crate::ui::{self, badge};
 
-const DOWN_OPACITY: f32 = 0.55;
+pub(super) const DOWN_OPACITY: f32 = 0.55;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct FoldThere {
@@ -93,11 +93,11 @@ fn there_tab_text(name: Div, note: Option<String>, details: Option<String>) -> D
         .child(div().text_size(px(11.)).text_color(colours::faint()).child(ui::one_line(note)))
 }
 
-fn status_of(seen: &MachineSeen, status: Option<&str>) -> Div {
+pub(super) fn status_of(seen: &MachineSeen, status: Option<&str>) -> Div {
     if seen.linked() { badge(status) } else { ui::still_badge(status) }
 }
 
-fn machine_tag(seen: &MachineSeen) -> Div {
+pub(super) fn machine_tag(seen: &MachineSeen) -> Div {
     div()
         .flex()
         .min_w_0()
@@ -109,7 +109,7 @@ fn machine_tag(seen: &MachineSeen) -> Div {
         .child(div().min_w_0().child(ui::one_line(seen.name.clone())))
 }
 
-fn row_end(end: End, hovered: bool) -> Div {
+pub(super) fn row_end(end: End, hovered: bool) -> Div {
     trailing(end, hovered).max_w(relative(0.5)).min_w_0()
 }
 
@@ -122,7 +122,7 @@ fn fold_lead(id: SharedString, fold: Option<(FoldThere, bool)>, cx: &mut Context
     }))
 }
 
-fn pick_on_click(row: Stateful<Div>, place: MachinePlace, cx: &mut Context<Root>) -> Stateful<Div> {
+pub(super) fn pick_on_click(row: Stateful<Div>, place: MachinePlace, cx: &mut Context<Root>) -> Stateful<Div> {
     row.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
         let place = place.clone();
         this.store.update(cx, |s, cx| s.pick_machine_place(place, cx));

@@ -1,11 +1,13 @@
 use serde::Deserialize;
 
 use super::{LinkState, MachineIcon, seen_ago};
-use crate::model::{Project, Session, Tab, loudest_of, needs_you, status_rank, works};
+use crate::model::{PaneInfo, Project, Session, Tab, loudest_of, needs_you, status_rank, works};
 use crate::store::args;
 
+mod agents;
 mod spot;
 
+pub(crate) use agents::{PaneAim, SectionRow, ThereAgent, ThereRow, sighted_pane};
 pub(crate) use spot::{LoginTab, Spot};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize)]
@@ -109,13 +111,21 @@ impl MachineSeen {
         }
     }
 
-    pub(crate) fn tab_note(&self, tab: &Tab<ThereId>, now: i64) -> Option<String> {
+    fn status_note(&self, status: Option<&str>, now: i64) -> Option<String> {
         if self.linked() {
             return None;
         }
-        tab.agent_pane()?;
-        let status = tab.loudest().unwrap_or("idle");
+        let status = status.unwrap_or("idle");
         Some(seen_ago(self.seen.as_deref(), now).map_or_else(|| status.to_string(), |ago| format!("{status} · {ago}")))
+    }
+
+    pub(crate) fn tab_note(&self, tab: &Tab<ThereId>, now: i64) -> Option<String> {
+        tab.agent_pane()?;
+        self.status_note(tab.loudest(), now)
+    }
+
+    pub(crate) fn pane_note(&self, pane: &PaneInfo<ThereId>, now: i64) -> Option<String> {
+        self.status_note(pane.status.as_deref(), now)
     }
 
     pub(crate) fn workspaces(&self) -> impl Iterator<Item = &ThereWorkspace> + Clone {
@@ -289,11 +299,15 @@ impl Session {
         self.machines.iter().find(|machine| machine.name == name)
     }
 
-    pub(crate) fn paired_with(&self, project: u64) -> impl Iterator<Item = (&MachineSeen, &ThereWorkspace)> {
+    pub(crate) fn paired_projects(&self, project: u64) -> impl Iterator<Item = (&MachineSeen, &ThereProject)> {
         self.machines.iter().flat_map(move |seen| {
             let paired = seen.projects.iter().filter(move |there| there.paired == Some(project));
-            paired.flat_map(|there| &there.workspaces).map(move |ws| (seen, ws))
+            paired.map(move |there| (seen, there))
         })
+    }
+
+    pub(crate) fn paired_with(&self, project: u64) -> impl Iterator<Item = (&MachineSeen, &ThereWorkspace)> {
+        self.paired_projects(project).flat_map(|(seen, there)| there.workspaces.iter().map(move |ws| (seen, ws)))
     }
 
     pub(crate) fn alone(&self) -> impl Iterator<Item = (&MachineSeen, &ThereProject)> {

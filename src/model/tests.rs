@@ -247,8 +247,14 @@ fn the_session_tree_hangs_a_child_under_its_parent_in_another_workspace() {
         ],
         ..Default::default()
     };
-    let rows: Vec<(u64, u64, usize)> =
-        session.agent_rows(&[2, 1]).iter().map(|r| (r.pane.id, r.workspace, r.depth)).collect();
+    let rows: Vec<(u64, u64, usize)> = session
+        .section_agents(&[2, 1], |_| false)
+        .iter()
+        .filter_map(|row| match row {
+            SectionRow::Here(row) => Some((row.pane.id, row.workspace, row.depth)),
+            SectionRow::There(_) => None,
+        })
+        .collect();
     assert_eq!(rows, [(22, 14, 0), (21, 12, 1), (20, 10, 0)]);
 }
 

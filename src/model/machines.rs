@@ -129,6 +129,37 @@ fn seen_ago(seen: Option<&str>, now: i64) -> Option<String> {
     Some(format!("seen {} ago", ago(now - seen)))
 }
 
+fn in_host(c: char) -> bool {
+    c.is_alphanumeric() || matches!(c, '-' | '_' | '@' | '.')
+}
+
+fn whole(text: &str, at: usize, end: usize) -> bool {
+    let mut after = text[end..].chars();
+    let goes_on = match after.next() {
+        Some('.') => after.next().is_some_and(in_host),
+        next => next.is_some_and(in_host),
+    };
+    !text[..at].chars().next_back().is_some_and(in_host) && !goes_on
+}
+
+fn hide_word(text: &str, hidden: &str, name: &str) -> String {
+    let mut shown = String::with_capacity(text.len());
+    let mut from = 0;
+    for (at, _) in text.match_indices(hidden).filter(|(at, _)| whole(text, *at, at + hidden.len())) {
+        shown.push_str(&text[from..at]);
+        shown.push_str(name);
+        from = at + hidden.len();
+    }
+    shown.push_str(&text[from..]);
+    shown
+}
+
+pub(crate) fn hide_destination(text: &str, name: &str, destination: &str) -> String {
+    let host = destination.rsplit_once('@').map_or(destination, |(_, host)| host);
+    let hidden = [destination, host].into_iter().filter(|hidden| !hidden.is_empty());
+    hidden.fold(text.to_string(), |text, hidden| hide_word(&text, hidden, name))
+}
+
 impl Machine {
     pub(crate) fn linked(&self) -> bool {
         self.problem.is_none() && self.state == LinkState::Linked

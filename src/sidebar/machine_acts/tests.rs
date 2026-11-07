@@ -59,3 +59,19 @@ fn a_machine_that_is_not_linked_says_why_and_rests_the_rename() {
     let entries = there_entries(Err("vps unreachable".to_string()), aim());
     assert_eq!(labels(&entries), [("vps unreachable".to_string(), false), (RENAME_WORKSPACE.to_string(), false)]);
 }
+
+fn pane_aim(collapse: bool) -> PaneAim {
+    PaneAim { machine: "vps".into(), boot: "b".into(), pane: ThereId::heard(9), collapse }
+}
+
+#[test]
+fn a_machines_agent_offers_only_its_fold() {
+    assert_eq!(labels(&there_agent_entries(Ok(()), pane_aim(true))), [("Collapse".to_string(), true)]);
+    assert_eq!(labels(&there_agent_entries(Ok(()), pane_aim(false))), [("Expand".to_string(), true)]);
+}
+
+#[test]
+fn a_machine_out_of_reach_says_why_and_greys_the_fold() {
+    let entries = there_agent_entries(Err("vps unreachable".into()), pane_aim(true));
+    assert_eq!(labels(&entries), [("vps unreachable".to_string(), false), ("Collapse".to_string(), false)]);
+}

@@ -5,6 +5,7 @@ mod folds;
 mod forms;
 mod look;
 mod machine_acts;
+mod machine_agents;
 mod machine_rows;
 mod menus;
 pub(crate) mod order;

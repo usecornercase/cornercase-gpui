@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.25
+
+- **The agents section lists a machine's agents too.** With the section on, each linked machine's agents are rows, tagged with the machine, after the agents of the project they share with you, and those of a project only on the machine come last. A child sits under the agent that started it on that machine. While the link is down the rows stay, dimmed, and say when they were last seen.
+- **A click shows that agent's tab**, live, as a click on its tab row does. Nothing moves on the machine.
+- **Folding one folds it on the machine**, with its arrow or Collapse and Expand in its menu, so the machine's own window shows the same. A folded row says how many it hides and whether one of them needs you. If the machine fell, restarted or no longer has that agent, a message says so and nothing is sent.
+
 ## 0.1.24
 
 - **Copying from Changes keeps tabs.** A selection copied in the Changes panel now has the file's own tabs, on this computer and on a machine's workspace, so a Makefile rule or a Go line pastes as it was. A part of a line selected by characters copies the characters you see, each tab as one tab. A hunk's Copy still writes four spaces.

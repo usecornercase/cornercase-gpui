@@ -11,6 +11,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, bail};
 use locate::{Inputs, System};
@@ -23,6 +24,8 @@ pub(crate) use partial::{run_partial, run_printed};
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
 use typist::{OnError, Typist};
+
+const ANSWER_POLL: Duration = Duration::from_millis(40);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) enum Target {
@@ -163,13 +166,32 @@ pub(crate) fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&
     {
         let _ = pipe.write_all(text);
     }
-    let out = child.wait_with_output()?;
+    answer_of(&child.wait_with_output()?, args)
+}
+
+fn answer_of<S: AsRef<str>>(out: &Output, args: &[S]) -> Result<String> {
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
         let name = args.first().map(AsRef::as_ref).unwrap_or_default();
         bail!("cornercase {name}: {}", if err.is_empty() { "failed".to_string() } else { err });
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+pub(crate) fn run_on_within<S: AsRef<str>>(target: &Target, args: &[S], cap: Duration) -> Result<String> {
+    let mut cmd = target.command(args);
+    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = spawn(&mut cmd)?;
+    let started = Instant::now();
+    while child.try_wait()?.is_none() {
+        if started.elapsed() >= cap {
+            let _ = child.kill();
+            let _ = child.wait();
+            bail!("no answer in {} s", cap.as_secs());
+        }
+        thread::sleep(ANSWER_POLL);
+    }
+    answer_of(&child.wait_with_output()?, args)
 }
 
 pub(crate) fn quit() {
