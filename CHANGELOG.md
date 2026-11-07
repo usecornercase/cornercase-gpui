@@ -2,11 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.30
+## 0.1.31
 
 - **Run setup, in a worktree's menu.** It runs the project's setup again in a new tab, to retry after a fix, and the menu offers it when cornercase's own does: on a worktree of a project with a setup that isn't already running it. The status bar says it is running, and a setup that fails says so with its exit status.
 - **Import a VS Code workspace.** Import VS Code workspace…, in the Projects `+` and in a group's menu, turns a `.code-workspace` file into a group with each folder as a project, or puts them in that group. A message says how many went in, and how many folders were not found or could not open. On a server on another machine it asks for the file's path there.
 - **Adding a project to a group takes one step**, so a failure can't leave it outside the group. A file picker that cannot open now says why instead of doing nothing.
+
+## 0.1.30
+
+- **A plugin's button now acts on what this window shows.** Its action gets the project, workspace, tab and folder you are looking at here, not those of cornercase's own window, and a popup opens here without that window, at a size taken from this one. Over a machine's tab a button acts on your tab behind it, and its tooltip says so; a popup goes back to that tab.
+- **What a plugin keeps running beside a window now runs beside this one.** The processes plugins declare as `[[window]]` run while the window is on this computer: they stop when it closes or moves to another server, and start again when it comes back. A machine's tab does not count as leaving. Each plugin's card shows them: running with their pid, or stopped with the seconds until they start again.
 
 ## 0.1.29
 
