@@ -222,11 +222,9 @@ fn an_answer_with_no_id_is_a_failure() {
 }
 
 #[test]
-fn only_an_agent_can_hold_its_answer_while_it_asks_something() {
+fn an_agent_is_still_starting_when_its_tab_answers() {
     let agent = Starting::Agent { agent: "claude".into(), issue: "#7".into() };
-    assert!(agent.waits_for_its_agent());
-    assert!(!Starting::Flow { name: "Quick".into() }.waits_for_its_agent());
-    assert!(!Starting::Workspace { name: "notes".into() }.waits_for_its_agent());
+    assert_eq!(agent.done("vps", &answer(fixture!("machines/there_started.json"))), "claude is starting on #7 on vps");
 }
 
 #[test]
@@ -279,25 +277,6 @@ fn a_workspace_the_machine_lists_is_selected_on_its_active_tab() {
 }
 
 #[test]
-fn a_new_tab_in_the_project_is_selected_while_the_agent_holds_its_answer() {
-    let mut session = session();
-    let mut spot = spot_of_shop(&session);
-    spot.tabs.remove(&ThereId::heard(14));
-    let awaited = Awaited::new_tab_in(&spot, Some(1), at());
-    let Look::Listed(place) = awaited.look(&session.machines, at()) else { panic!("listed") };
-    assert_eq!(place.tab, Some(ThereId::heard(14)));
-    session.machines[0].projects[1].workspaces.clear();
-    assert_eq!(awaited.look(&session.machines, at()), Look::NotYet);
-}
-
-#[test]
-fn no_new_tab_means_nothing_to_select_yet() {
-    let session = session();
-    let awaited = Awaited::new_tab_in(&spot_of_shop(&session), Some(1), at());
-    assert_eq!(awaited.look(&session.machines, at()), Look::NotYet);
-}
-
-#[test]
 fn a_machine_that_restarted_drops_what_was_awaited() {
     let mut session = session();
     let awaited = awaited_answer(&spot_of_shop(&session), fixture!("machines/there_started.json"), at());
@@ -318,14 +297,4 @@ fn what_never_shows_is_given_up_after_a_while() {
     let now = at();
     let awaited = awaited_answer(&spot_of_shop(&session), fixture!("machines/there_started.json"), now);
     assert_eq!(awaited.look(&session.machines, now + Duration::from_secs(31)), Look::Gone);
-}
-
-#[test]
-fn only_the_early_wait_of_that_project_takes_the_answer() {
-    let session = session();
-    let spot = spot_of_shop(&session);
-    assert!(Awaited::new_tab_in(&spot, Some(1), at()).takes_answer_of(&spot));
-    assert!(!awaited_answer(&spot, fixture!("machines/there_started.json"), at()).takes_answer_of(&spot));
-    let other = Spot { project: ThereId::heard(4), ..spot.clone() };
-    assert!(!Awaited::new_tab_in(&spot, Some(1), at()).takes_answer_of(&other));
 }

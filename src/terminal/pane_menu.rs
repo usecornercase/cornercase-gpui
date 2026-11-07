@@ -4,7 +4,7 @@ use serde_json::json;
 use crate::app::Root;
 use crate::context_menu::{Entry, act, danger, item, submenu};
 use crate::dialogs;
-use crate::model::{MouseMode, PaneInfo};
+use crate::model::{MouseMode, PaneInfo, Session};
 use crate::panels::plugins::Spot;
 use crate::render::moving::{Aim, Place};
 use crate::sidebar::{cmd, path_items};
@@ -25,6 +25,12 @@ pub(super) fn move_pane_args(pane: u64, aim: Aim) -> Vec<String> {
 
 fn program_of(info: Option<&PaneInfo>) -> Option<String> {
     info.and_then(|i| i.agent.clone().or(i.program.clone()))
+}
+
+pub(super) fn pane_label(session: Option<&Session>, id: u64) -> String {
+    let Some(info) = session.and_then(|s| s.pane(id)) else { return format!("pane {id}") };
+    let program = program_of(Some(info)).unwrap_or_else(|| "shell".into());
+    format!("{program} (pane {id})")
 }
 
 fn move_places(pane: u64, target: u64) -> Vec<Entry> {
@@ -90,11 +96,6 @@ impl Root {
         entries
     }
 
-    fn pane_label(&self, id: u64) -> String {
-        let program = program_of(self.session.as_ref().and_then(|s| s.pane(id))).unwrap_or_else(|| "shell".into());
-        format!("{program} (pane {id})")
-    }
-
     fn move_pane_menu(&self, pane: u64) -> Option<Entry> {
         let others: Vec<u64> = self
             .session
@@ -105,8 +106,8 @@ impl Root {
         if others.is_empty() {
             return None;
         }
-        let targets =
-            others.into_iter().map(|target| submenu(self.pane_label(target), move_places(pane, target))).collect();
+        let named = |target| pane_label(self.session.as_ref(), target);
+        let targets = others.into_iter().map(|target| submenu(named(target), move_places(pane, target))).collect();
         Some(submenu("Move pane", targets))
     }
 }

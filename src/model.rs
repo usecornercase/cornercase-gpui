@@ -144,6 +144,8 @@ pub(crate) struct PaneInfo<Id = u64> {
     pub account_restart: Option<String>,
     pub conversation: Option<String>,
     pub held_sends: u32,
+    pub held_from: Option<Id>,
+    pub held_queued: bool,
     pub draft: bool,
     pub compacted: bool,
     pub memory: Option<u64>,

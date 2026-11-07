@@ -4,11 +4,14 @@ use gpui::{
 };
 
 use super::WorktreesPanel;
-use super::actions::{checking, freeing};
+use super::actions::{checking, freeing, removing};
 use super::data::{Tone, Worktree};
+use super::removal::{Said, Style};
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui;
+
+const RUN_ROLE: &str = "A role of a running flow: it goes with the run's workspace.";
 
 fn mark(text: String, tone: Tone) -> Div {
     let colour = match tone {
@@ -19,16 +22,19 @@ fn mark(text: String, tone: Tone) -> Div {
     div().px(px(6.)).rounded(px(radius::CHIP)).bg(colours::sidebar()).text_size(px(11.)).text_color(colour).child(text)
 }
 
-pub(super) fn activity(worktree: &Worktree, store: &Store) -> Option<(&'static str, ui::Tone)> {
-    if worktree.workspace.is_some_and(|workspace| store.removing(workspace)) {
-        Some(("Removing…", ui::Tone::Danger))
-    } else if store.busy(&checking(&worktree.path)) {
-        Some(("Measuring builds…", ui::Tone::Plain))
-    } else if store.busy(&freeing(&worktree.path)) {
-        Some(("Freeing builds…", ui::Tone::Plain))
-    } else {
-        None
+fn said_line((text, style): &Said) -> Div {
+    let line = div().text_size(px(12.)).child(text.clone());
+    match style {
+        Style::Heading => line.mt(px(6.)).font_weight(FontWeight::SEMIBOLD).text_color(colours::text()),
+        Style::Risky => line.mt(px(6.)).font_weight(FontWeight::SEMIBOLD).text_color(colours::waiting()),
+        Style::Line => line.pl(px(10.)).text_color(colours::muted()),
+        Style::Lost => line.pl(px(10.)).text_color(colours::failed()),
+        Style::Note => line.mt(px(10.)).text_color(colours::muted()),
     }
+}
+
+pub(super) fn said_lines(said: &[Said]) -> AnyElement {
+    div().flex().flex_col().gap(px(2.)).children(said.iter().map(said_line)).into_any_element()
 }
 
 fn heading(worktree: &Worktree, now: i64, measuring: bool) -> Div {
@@ -50,17 +56,44 @@ fn details(worktree: &Worktree) -> Div {
         .flex_col()
         .gap(px(2.))
         .child(ui::dim(ui::home_relative(&worktree.path)))
+        .when(worktree.run_role, |d| d.child(ui::dim(RUN_ROLE)))
         .children(risks.map(|r| div().text_size(px(12.)).text_color(colours::waiting()).child(r)))
         .children(worktree.error.clone().map(|e| div().text_size(px(12.)).text_color(colours::failed()).child(e)))
 }
 
 impl WorktreesPanel {
-    fn row_buttons(worktree: &Worktree, busy: Option<(&'static str, ui::Tone)>, cx: &mut Context<Self>) -> Div {
+    pub(super) fn activity(&self, worktree: &Worktree, store: &Store) -> Option<(&'static str, ui::Tone)> {
+        let path = worktree.path.as_str();
+        if store.busy(&removing(path)) || worktree.workspace.is_some_and(|workspace| store.removing(workspace)) {
+            Some(("Removing…", ui::Tone::Danger))
+        } else if self.asking.iter().any(|asked| asked == path) {
+            Some(("Checking…", ui::Tone::Plain))
+        } else if store.busy(&checking(path)) {
+            Some(("Measuring builds…", ui::Tone::Plain))
+        } else if store.busy(&freeing(path)) {
+            Some(("Freeing builds…", ui::Tone::Plain))
+        } else {
+            None
+        }
+    }
+
+    fn remove_button(&self, worktree: &Worktree, cx: &mut Context<Self>) -> AnyElement {
+        let id = SharedString::from(format!("remove-{}", worktree.path));
+        if !self.asking.is_empty() {
+            return ui::resting_button(id, "Remove…", ui::Tone::Danger).into_any_element();
+        }
+        let path = worktree.path.clone();
+        ui::danger_button(id, "Remove…")
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.check_remove(vec![path.clone()], cx)))
+            .into_any_element()
+    }
+
+    fn row_buttons(&self, worktree: &Worktree, busy: Option<(&'static str, ui::Tone)>, cx: &mut Context<Self>) -> Div {
         let id = |what: &str| SharedString::from(format!("{what}-{}", worktree.path));
         if let Some((label, tone)) = busy {
             return div().flex().child(ui::busy_button(id("busy"), label, tone));
         }
-        let (freed, removed) = (worktree.clone(), worktree.clone());
+        let freed = worktree.clone();
         div()
             .flex()
             .gap(px(6.))
@@ -73,16 +106,12 @@ impl WorktreesPanel {
                         .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| Self::check_free(freed.clone(), cx))),
                 )
             })
-            .when(worktree.removable(), |d| {
-                d.child(ui::danger_button(id("remove"), "Remove…").on_click(cx.listener(
-                    move |_, _: &ClickEvent, window, cx| Self::ask_remove(std::slice::from_ref(&removed), window, cx),
-                )))
-            })
+            .when(worktree.removable(), |d| d.child(self.remove_button(worktree, cx)))
     }
 
     pub(super) fn row(&self, worktree: &Worktree, now: i64, cx: &mut Context<Self>) -> AnyElement {
         let path = worktree.path.clone();
-        let busy = activity(worktree, Store::get(cx).read(cx));
+        let busy = self.activity(worktree, Store::get(cx).read(cx));
         let ticked = self.ticked.contains(&path) && busy.is_none();
         let tick = ui::checkbox(SharedString::from(format!("tick-{path}")), ticked, "");
         let tick = if worktree.removable() && busy.is_none() {
@@ -109,7 +138,7 @@ impl WorktreesPanel {
                     .gap(px(4.))
                     .child(heading(worktree, now, self.measuring).when(busy.is_some(), |d| d.opacity(0.6)))
                     .child(details(worktree))
-                    .child(Self::row_buttons(worktree, busy, cx)),
+                    .child(self.row_buttons(worktree, busy, cx)),
             )
             .into_any_element()
     }

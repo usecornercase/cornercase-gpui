@@ -47,7 +47,7 @@ fn lists_rows_with_gaps_folded_or_read() {
     assert_eq!(rows_folded[0], Row::Hunk(0));
     assert_eq!(rows_folded[6], Row::Gap { hunk: 1, lines: 4 });
     assert_eq!(rows_folded.len(), 1 + 5 + 1 + 1 + 2);
-    let gap_line = |n| GapLine { old: n, new: n, text: "u".into(), syntax: None };
+    let gap_line = |n| GapLine { old: n, new: n, text: "u".into(), ..GapLine::default() };
     gaps.insert(1, Gap { lines: vec![gap_line(7), gap_line(8)], ..Gap::default() });
     let rows_read = rows(&hunks, &gaps);
     assert_eq!(&rows_read[6..9], &[Row::GapLine { hunk: 1, line: 0 }, Row::GapLine { hunk: 1, line: 1 }, Row::Hunk(1)]);

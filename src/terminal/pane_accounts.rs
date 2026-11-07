@@ -123,7 +123,7 @@ pub(super) fn place(
     (placed, taken)
 }
 
-fn face(metrics: &Metrics) -> Div {
+pub(super) fn face(metrics: &Metrics) -> Div {
     div()
         .flex()
         .flex_none()

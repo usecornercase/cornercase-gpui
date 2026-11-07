@@ -1,0 +1,261 @@
+{
+  "added": 4,
+  "digest": "052c38c25641d25b",
+  "fold": "open",
+  "hunks": [
+    {
+      "context": "",
+      "lines": [
+        {
+          "kind": "context",
+          "new": 1,
+          "old": 1,
+          "syntax": [
+            {
+              "style": 1,
+              "text": "all"
+            },
+            {
+              "style": 0,
+              "text": ":"
+            }
+          ],
+          "text": "all:"
+        },
+        {
+          "kind": "context",
+          "new": 2,
+          "old": 2,
+          "raw": "\techo hi",
+          "syntax": [
+            {
+              "style": 0,
+              "text": "    echo hi"
+            }
+          ],
+          "text": "    echo hi"
+        },
+        {
+          "emphasis": [
+            [
+              9,
+              12
+            ]
+          ],
+          "kind": "removed",
+          "new": null,
+          "old": 3,
+          "raw": "\techo two\t# end",
+          "syntax": [
+            {
+              "style": 0,
+              "text": "    echo two    "
+            },
+            {
+              "style": 2,
+              "text": "# end"
+            }
+          ],
+          "text": "    echo two    # end"
+        },
+        {
+          "emphasis": [
+            [
+              9,
+              12
+            ]
+          ],
+          "kind": "added",
+          "new": 3,
+          "old": null,
+          "raw": "\techo bye\t# end",
+          "syntax": [
+            {
+              "style": 0,
+              "text": "    echo bye    "
+            },
+            {
+              "style": 2,
+              "text": "# end"
+            }
+          ],
+          "text": "    echo bye    # end"
+        },
+        {
+          "kind": "context",
+          "new": 4,
+          "old": 4,
+          "syntax": [
+            {
+              "style": 0,
+              "text": "1"
+            }
+          ],
+          "text": "1"
+        },
+        {
+          "kind": "context",
+          "new": 5,
+          "old": 5,
+          "syntax": [
+            {
+              "style": 0,
+              "text": "2"
+            }
+          ],
+          "text": "2"
+        },
+        {
+          "kind": "context",
+          "new": 6,
+          "old": 6,
+          "syntax": [
+            {
+              "style": 0,
+              "text": "3"
+            }
+          ],
+          "text": "3"
+        }
+      ],
+      "new_start": 1,
+      "old_start": 1
+    },
+    {
+      "context": "all:",
+      "lines": [
+        {
+          "kind": "context",
+          "new": 16,
+          "old": 16,
+          "syntax": [
+            {
+              "style": 0,
+              "text": "13"
+            }
+          ],
+          "text": "13"
+        },
+        {
+          "kind": "context",
+          "new": 17,
+          "old": 17,
+          "syntax": [
+            {
+              "style": 0,
+              "text": "14"
+            }
+          ],
+          "text": "14"
+        },
+        {
+          "kind": "context",
+          "new": 18,
+          "old": 18,
+          "syntax": [
+            {
+              "style": 0,
+              "text": "last:"
+            }
+          ],
+          "text": "last:"
+        },
+        {
+          "emphasis": [
+            [
+              10,
+              11
+            ]
+          ],
+          "kind": "removed",
+          "new": null,
+          "old": 19,
+          "raw": "\tcc\ta.c",
+          "syntax": [
+            {
+              "style": 0,
+              "text": "    cc    a.c"
+            }
+          ],
+          "text": "    cc    a.c"
+        },
+        {
+          "emphasis": [
+            [
+              10,
+              11
+            ]
+          ],
+          "kind": "added",
+          "new": 19,
+          "old": null,
+          "raw": "\tcc\tb.c",
+          "syntax": [
+            {
+              "style": 0,
+              "text": "    "
+            },
+            {
+              "style": 1,
+              "text": "cc"
+            },
+            {
+              "style": 0,
+              "text": "    b.c"
+            }
+          ],
+          "text": "    cc    b.c"
+        },
+        {
+          "kind": "added",
+          "new": 20,
+          "old": null,
+          "syntax": [
+            {
+              "style": 0,
+              "text": "new:"
+            }
+          ],
+          "text": "new:"
+        },
+        {
+          "kind": "added",
+          "new": 21,
+          "old": null,
+          "raw": "\ttéa\tñu",
+          "syntax": [
+            {
+              "style": 0,
+              "text": "    téa    ñu"
+            }
+          ],
+          "text": "    téa    ñu"
+        }
+      ],
+      "new_start": 16,
+      "old_start": 16
+    }
+  ],
+  "mode": "uncommitted",
+  "old_path": null,
+  "path": "Makefile",
+  "removed": 2,
+  "staged": "no",
+  "status": "modified",
+  "styles": [
+    {},
+    {
+      "fg": {
+        "index": 4
+      }
+    },
+    {
+      "fg": {
+        "index": 8
+      },
+      "italic": true
+    }
+  ],
+  "viewed": false,
+  "workspace": 7
+}

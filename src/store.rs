@@ -280,8 +280,13 @@ impl Store {
     }
 
     pub(crate) fn act_busy(&mut self, busy: Busy, args: Vec<String>, cx: &mut Context<Self>) {
+        let (queue, args) = (self.queue.clone(), self.with_view(args));
+        self.cmd_busy_on(&queue, busy, args, cx);
+    }
+
+    pub(crate) fn cmd_busy_on(&mut self, queue: &Queue, busy: Busy, args: Vec<String>, cx: &mut Context<Self>) {
         let id = self.start_job(busy, cx);
-        let reply = reply_of(&self.queue, self.with_view(args));
+        let reply = reply_of(queue, args);
         cx.spawn(async move |this, cx| {
             let result = reply.await;
             let _ = this.update(cx, |s, cx| s.answered(id, result.ok(), cx));
@@ -411,11 +416,15 @@ impl Store {
         run_job(cx, id, args, move |this, result, cx| this.settle_removal(workspace, &result, cx));
     }
 
-    pub(crate) fn settle_removal(&mut self, workspace: u64, result: &anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn settle_removal(&mut self, workspace: u64, result: &anyhow::Result<String>, cx: &mut Context<Self>) {
         match result {
-            Ok(_) => self.jobs.removed(workspace),
+            Ok(_) => self.worktree_went(workspace, cx),
             Err(e) => self.toast(e.to_string(), ToastKind::Error, cx),
         }
+    }
+
+    pub(crate) fn worktree_went(&mut self, workspace: u64, cx: &mut Context<Self>) {
+        self.jobs.removed(workspace);
         cx.notify();
     }
 
