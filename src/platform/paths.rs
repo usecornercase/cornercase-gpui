@@ -133,13 +133,34 @@ fn under<'a>(path: &'a str, folder: &str, style: Style) -> Option<&'a str> {
     (same && (rest.is_empty() || rest.starts_with(|c| style.is_separator(c)))).then_some(rest)
 }
 
+fn without_end_separators(path: &str, style: Style) -> &str {
+    path.trim_end_matches(|c| style.is_separator(c))
+}
+
 pub(crate) fn home_relative(path: &str, home: &str) -> String {
     let style = Style::of_path(home);
-    let home = home.trim_end_matches(|c| style.is_separator(c));
+    let home = without_end_separators(home, style);
     match under(path, home, style).filter(|_| !home.is_empty()) {
         Some(rest) => format!("~{rest}"),
         None => path.to_string(),
     }
+}
+
+pub(crate) fn expand_home(path: &str, home: &str) -> String {
+    let style = Style::of_path(home);
+    let home = without_end_separators(home, style);
+    match path.strip_prefix('~') {
+        Some(rest) if !home.is_empty() && (rest.is_empty() || rest.starts_with(|c| style.is_separator(c))) => {
+            format!("{home}{rest}")
+        }
+        _ => path.to_string(),
+    }
+}
+
+pub(crate) fn same_path(a: &str, b: &str) -> bool {
+    let style = if windows_rooted(a) { Style::Windows } else { Style::of_path(b) };
+    let a = without_end_separators(a, style);
+    !a.is_empty() && under(a, without_end_separators(b, style), style) == Some("")
 }
 
 #[cfg(test)]

@@ -117,14 +117,52 @@ fn auto_names_no_default_agent() {
     assert_eq!(parse(text).expect("a look").default_agent, None);
 }
 
+fn project(id: u64, path: &str) -> Project {
+    Project { id, path: path.to_string(), ..Project::default() }
+}
+
+fn scripts(entry: &str) -> Look {
+    parse(&format!(r#"{{"projects":[{entry}]}}"#)).expect("a look")
+}
+
 #[test]
 fn a_project_with_a_setup_script_is_known_by_its_folder() {
     let look = parse(crate::test_util::fixture!("settings/config.json")).expect("a look");
-    assert_eq!(look.setups, ["/code/shop"]);
+    assert!(look.has_setup(&project(99, "/code/shop"), None));
+}
+
+#[test]
+fn a_project_opened_after_the_settings_were_read_is_known_by_its_folder() {
+    let look = scripts(r#"{"folder":"/code/shop","project":null,"setup":"npm ci"}"#);
+    assert!(look.has_setup(&project(7, "/code/shop"), None));
+}
+
+#[test]
+fn a_project_is_known_by_its_id_whatever_its_folder_reads() {
+    let look = scripts(r#"{"folder":"/elsewhere","project":7,"setup":"npm ci"}"#);
+    assert!(look.has_setup(&project(7, "/code/shop"), None));
+}
+
+#[test]
+fn a_project_whose_folder_was_moved_is_known_by_the_key_its_script_is_under() {
+    let look = parse(crate::test_util::fixture!("settings/config-moved-project.json")).expect("a look");
+    assert!(look.has_setup(&project(8, "/home/ana/code/shop"), Some("/home/ana")));
+}
+
+#[test]
+fn a_windows_folder_matches_with_other_separators_and_drive_case() {
+    let look = scripts(r#"{"folder":"c:/code/shop","setup":"npm ci"}"#);
+    assert!(look.has_setup(&project(7, r"C:\code\shop"), None));
+}
+
+#[test]
+fn another_project_has_no_setup_of_its_own() {
+    let look = scripts(r#"{"folder":"/code/shop","key":"~/code/shop","project":4,"setup":"npm ci"}"#);
+    assert!(!look.has_setup(&project(7, "/code/notes"), Some("/home/ana")));
 }
 
 #[test]
 fn a_blank_setup_script_counts_as_none() {
-    let look = parse(r#"{"projects":[{"folder":"/code/shop","setup":"  \n"}]}"#).expect("a look");
-    assert_eq!(look.setups, Vec::<String>::new());
+    let look = scripts(r#"{"folder":"/code/shop","project":7,"setup":"  \n"}"#);
+    assert!(!look.has_setup(&project(7, "/code/shop"), None));
 }

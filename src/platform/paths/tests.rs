@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use super::{Style, home_relative, on_a_drive, rooted};
+use super::{Style, expand_home, home_relative, on_a_drive, rooted, same_path};
 use crate::platform::Os;
 
 #[test]
@@ -113,4 +113,40 @@ fn a_windows_home_matches_in_any_case_and_keeps_its_backslashes() {
     assert_eq!(home_relative(r"C:\Users\meg\x", r"C:\Users\me"), r"C:\Users\meg\x");
     assert_eq!(home_relative(r"C:\Users\Émile\x", r"C:\Users\émile"), r"~\x");
     assert_eq!(home_relative("/home/me/proj", r"C:\Users\me"), "/home/me/proj");
+}
+
+#[test]
+fn the_same_unix_path_is_the_same_only_when_it_reads_the_same() {
+    assert!(same_path("/code/shop", "/code/shop"));
+    assert!(same_path("/code/shop/", "/code/shop"));
+    assert!(!same_path("/code/Shop", "/code/shop"));
+    assert!(!same_path("/code/shop", "/code/shop-moved"));
+}
+
+#[test]
+fn a_windows_path_is_the_same_across_separators_and_case() {
+    assert!(same_path(r"C:\code\shop", "c:/code/shop"));
+    assert!(same_path(r"\\host\share\shop", "//host/share/shop"));
+    assert!(same_path("//host/share/shop", r"\\host\share\shop"));
+    assert!(!same_path(r"C:\code\shop", r"D:\code\shop"));
+}
+
+#[test]
+fn an_empty_path_names_nothing() {
+    assert!(!same_path("", ""));
+    assert!(!same_path("", "/"));
+}
+
+#[test]
+fn a_tilde_expands_to_the_home_folder() {
+    assert_eq!(expand_home("~/code/shop", "/home/ana"), "/home/ana/code/shop");
+    assert_eq!(expand_home("~", "/home/ana/"), "/home/ana");
+    assert_eq!(expand_home(r"~\code", r"C:\Users\ana"), r"C:\Users\ana\code");
+}
+
+#[test]
+fn only_a_leading_home_folder_is_expanded() {
+    assert_eq!(expand_home("/code/shop", "/home/ana"), "/code/shop");
+    assert_eq!(expand_home("~ana/code", "/home/ana"), "~ana/code");
+    assert_eq!(expand_home("~/code", ""), "~/code");
 }

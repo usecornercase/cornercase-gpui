@@ -4,6 +4,7 @@ use crate::model::{PaneInfo, Session};
 use crate::panels::files::open::{Found, Launch, Opener};
 use crate::panels::plugins::{Offers, Spot, listed_offers};
 use crate::sidebar::Target;
+use crate::sidebar::look::parse;
 
 const PROJECT: &str = r#"{"groups":[{"id":7,"name":"team"}],"projects":[{"id":1,"name":"shop","path":"/home/ana/code/shop","workspaces":[
     {"id":2,"name":"plain","path":"/home/ana/notes"},
@@ -29,12 +30,14 @@ fn chosen(entries: &[Entry]) -> Vec<String> {
         .collect()
 }
 
-fn labels_with(workspace: u64, setups: &[String]) -> Vec<String> {
-    chosen(&workspace_menu(&session(), workspace, &[], setups))
+fn labels_with(workspace: u64, setup_of: &str) -> Vec<String> {
+    let config = format!(r#"{{"projects":[{{"folder":"{setup_of}","setup":"npm ci"}}]}}"#);
+    let look = parse(&config).expect("a config");
+    chosen(&workspace_menu(&session(), workspace, &[], &look))
 }
 
 fn labels(workspace: u64) -> Vec<String> {
-    labels_with(workspace, &["/home/ana/code/shop".to_string()])
+    labels_with(workspace, "/home/ana/code/shop")
 }
 
 fn offers_setup(labels: &[String]) -> bool {
@@ -91,7 +94,7 @@ fn a_workspace_without_a_worktree_has_no_setup_to_run() {
 
 #[test]
 fn a_worktree_of_a_project_without_a_setup_has_none_to_run() {
-    assert!(!offers_setup(&labels_with(4, &["/home/ana/code/other".to_string()])));
+    assert!(!offers_setup(&labels_with(4, "/home/ana/code/other")));
 }
 
 #[test]

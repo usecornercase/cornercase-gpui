@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use futures::channel::oneshot;
 use gpui::{App, Context, PathPromptOptions, Window};
@@ -86,15 +86,23 @@ fn import_args(path: &str, group: Option<u64>) -> Vec<String> {
     args
 }
 
+fn path_as_text(path: &Path) -> Result<&str, String> {
+    path.to_str().ok_or_else(|| format!("{} is not valid UTF-8, so it cannot be passed to cornercase", path.display()))
+}
+
+fn take_picked(root: &mut Root, paths: &[PathBuf], group: Option<u64>, then: Act, cx: &mut Context<Root>) {
+    let Some(path) = paths.first() else { return };
+    match path_as_text(path) {
+        Ok(path) => then(root, path, group, cx),
+        Err(why) => root.say(&why, cx),
+    }
+}
+
 fn on_picked(picked: Picked, group: Option<u64>, then: Act, cx: &mut Context<Root>) {
     cx.spawn(async move |this, cx| {
         let answer = picked.await;
         let _ = this.update(cx, |this, cx| match answer {
-            Ok(Ok(Some(paths))) => {
-                if let Some(path) = paths.first() {
-                    then(this, &path.to_string_lossy(), group, cx);
-                }
-            }
+            Ok(Ok(Some(paths))) => take_picked(this, &paths, group, then, cx),
             Ok(Err(e)) => this.say(&format!("The file picker could not open: {e}"), cx),
             _ => {}
         });

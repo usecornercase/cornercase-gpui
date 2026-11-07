@@ -1,6 +1,7 @@
 use gpui::{App, Context, Pixels, Point, SharedString, Window};
 
 use super::actions::{into_group, ungroup};
+use super::look::Look;
 use super::workspace::plural;
 use super::{Fold, Target, cmd, forms};
 use crate::app::Root;
@@ -264,13 +265,14 @@ fn run_setup(root: &mut Root, workspace: u64, name: &str, cx: &mut Context<Root>
     });
 }
 
-fn run_setup_item(project: &Project, ws: &Workspace, setups: &[String]) -> Option<Entry> {
-    let offered = ws.worktree && ws.setup.as_deref() != Some("running") && setups.contains(&project.path);
+fn run_setup_item(session: &Session, project: &Project, ws: &Workspace, look: &Look) -> Option<Entry> {
+    let has_setup = look.has_setup(project, session.home.as_deref());
+    let offered = ws.worktree && ws.setup.as_deref() != Some("running") && has_setup;
     let (id, name) = (ws.id, ws.name.clone());
     offered.then(|| item("Run setup", move |this, _, cx| run_setup(this, id, &name, cx)))
 }
 
-fn workspace_menu(session: &Session, id: u64, openers: &[Found], setups: &[String]) -> Vec<Entry> {
+fn workspace_menu(session: &Session, id: u64, openers: &[Found], look: &Look) -> Vec<Entry> {
     let Some((project, ws)) = session.workspace(id) else { return Vec::new() };
     let ids = id.to_string();
     let mut entries = vec![
@@ -291,7 +293,7 @@ fn workspace_menu(session: &Session, id: u64, openers: &[Found], setups: &[Strin
     entries.push(Entry::Separator);
     entries.extend(path_items(&ws.path, openers));
     entries.push(panel_item("Ports…", PanelKind::Ports, Some(("workspace", id))));
-    entries.extend(run_setup_item(project, ws, setups));
+    entries.extend(run_setup_item(session, project, ws, look));
     entries.push(Entry::Separator);
     if ws.worktree {
         let name = ws.name.clone();
@@ -351,7 +353,7 @@ impl Root {
         match target {
             Target::Group(id) => group_menu(session, id),
             Target::Project(id) => project_menu(session, id, &openers),
-            Target::Workspace(id) => workspace_menu(session, id, &openers, &self.side.look.current.setups),
+            Target::Workspace(id) => workspace_menu(session, id, &openers, &self.side.look.current),
             Target::Tab(id) => self.tab_menu(id, cx),
         }
     }

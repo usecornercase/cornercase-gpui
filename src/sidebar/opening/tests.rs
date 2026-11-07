@@ -1,4 +1,4 @@
-use super::{Imported, import_args, imported_name, is_code_workspace, not_a_code_workspace, open_args};
+use super::{Imported, import_args, imported_name, is_code_workspace, not_a_code_workspace, open_args, path_as_text};
 use crate::store::ToastKind;
 use crate::test_util::fixture;
 
@@ -105,4 +105,18 @@ fn an_import_is_named_after_the_file_without_its_extension() {
 #[test]
 fn a_file_with_nothing_before_the_extension_keeps_its_whole_name() {
     assert_eq!(imported_name("/code/.code-workspace"), ".code-workspace");
+}
+
+#[test]
+fn a_picked_path_in_utf8_passes_as_it_is() {
+    assert_eq!(path_as_text(std::path::Path::new("/code/team.code-workspace")), Ok("/code/team.code-workspace"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_picked_path_that_is_not_utf8_is_refused_rather_than_altered() {
+    use std::os::unix::ffi::OsStrExt as _;
+    let path = std::path::Path::new(std::ffi::OsStr::from_bytes(b"/code/te\xffam.code-workspace"));
+    let why = path_as_text(path).expect_err("a refusal");
+    assert!(why.contains("not valid UTF-8"), "{why}");
 }
