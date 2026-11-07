@@ -1,5 +1,13 @@
 use super::data::{List, Manifest, Plugin, Ran, duration};
+use super::remote_note;
 use crate::store::ToastKind;
+
+#[test]
+fn the_note_on_another_machine_names_what_doing_it_from_here_waits_on() {
+    let note = remote_note("vps");
+    assert!(note.starts_with("These are the plugins of vps."), "{note}");
+    assert!(note.ends_with("needs usecornercase/cornercase-terminal#703."), "{note}");
+}
 
 #[test]
 fn reads_the_plugin_list() {

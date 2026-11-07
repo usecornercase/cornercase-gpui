@@ -2,6 +2,8 @@ pub(super) use crate::model::accounts::{Account, AccountsInfo, Login, LoginState
 use crate::platform::{Os, paths};
 use crate::store::args;
 
+const LOGIN_WAITS: &str = "Logging it in from here needs usecornercase/cornercase-terminal#702";
+
 pub(super) const fn kept_login(os: Os) -> &'static str {
     match os {
         Os::Mac => "The keychain item stays",
@@ -147,6 +149,10 @@ impl<'a> Row<'a> {
             }
             LoginState::SignedIn | LoginState::Unknown => None,
         }
+    }
+
+    pub(super) fn login_waits(self, checking: bool) -> Option<&'static str> {
+        matches!(self.status(checking), Status::Login { state: LoginState::SignedOut, .. }).then_some(LOGIN_WAITS)
     }
 
     pub(super) fn remove_ask(self) -> Ask {

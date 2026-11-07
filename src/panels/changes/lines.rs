@@ -20,7 +20,7 @@ pub(super) struct Numbered<'a> {
 
 impl<'a> Numbered<'a> {
     fn own(&self, shown: Range<usize>) -> &'a str {
-        match self.raw.filter(|raw| selection::tabs_drawn(raw) == self.text) {
+        match selection::own_if_drawn(self.raw, self.text) {
             Some(raw) => selection::own_part(raw, shown),
             None => self.text.get(shown).unwrap_or_default(),
         }

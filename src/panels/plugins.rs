@@ -502,7 +502,7 @@ fn remote_note(host: &str) -> String {
     format!(
         "These are the plugins of {host}. Installing, updating, removing, linking, turning them on or off and \
          their logs act on that machine's files, which cornercase does not take through --remote: \
-         run `cornercase plugin …` on {host}."
+         run `cornercase plugin …` on {host}. Doing it from here needs usecornercase/cornercase-terminal#703."
     )
 }
 

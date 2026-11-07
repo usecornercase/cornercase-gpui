@@ -26,6 +26,8 @@ const CLEANUP: &str = "remove the workspace when it finishes";
 const CLEANUP_NOTE: &str = "Once the agent has been done for 3 minutes, the run's workspace and branch go. The \
                             workspace stays, and the run says why, when anything would be lost: uncommitted or \
                             unpushed work, or a lock. Looking at the run's tab, or a server restart, keeps it too.";
+const CLEANUP_WAITS: &str = "An agent cornercase cannot read is refused on saving; knowing which beforehand needs \
+                             usecornercase/cornercase-terminal#704.";
 
 fn pick(el: Stateful<Div>, cx: &mut Context<QueuePanel>, change: impl Fn(&mut Form) + 'static) -> AnyElement {
     el.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.update_form(&change, cx))).into_any_element()
@@ -236,7 +238,11 @@ fn repositories(form: &Form, session: Option<&Session>, cx: &mut Context<QueuePa
 
 fn cleanup(form: &Form, cx: &mut Context<QueuePanel>) -> Div {
     let checkbox = ui::checkbox("q-cleanup", form.cleanup, CLEANUP).text_size(px(12.5));
-    stack().gap(px(4.)).child(pick(checkbox, cx, |f| f.cleanup = !f.cleanup)).child(ui::dim(CLEANUP_NOTE))
+    stack()
+        .gap(px(4.))
+        .child(pick(checkbox, cx, |f| f.cleanup = !f.cleanup))
+        .child(ui::dim(CLEANUP_NOTE))
+        .child(ui::dim(CLEANUP_WAITS))
 }
 
 fn projects(
