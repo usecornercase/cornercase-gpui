@@ -30,6 +30,8 @@ is back, it takes no input and `cornercase send` refuses it (`resuming` in the J
 `(collapsed)` is an agent whose children are hidden in the agents section (`collapsed` in the JSON).
 `Opus 5.5 · compacted` is an agent whose conversation was just compacted: its context is empty
 until its next reply and comes back then (`compacted` in the JSON, there only while true).
+The JSON also names the conversation a pane's agent is in (`conversation`, the id `places` gives in
+`cornercase recap --json`), null until the agent has one and always for opencode.
 
 With --panes it prints one line per pane instead, for scripts, in the sidebar's order: a header
 line naming the columns, then one row per pane, its columns separated by tabs. The columns are
@@ -37,9 +39,13 @@ pane, tab, workspace, project (their ids), program, agent, status, background_sh
 at_prompt, model, context, caller (the pane running the command), shown (the pane the window
 shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name,
 path, survey (Claude Code's feedback survey shows), resuming (the agent is coming back in its
-conversation), parent (the pane that started it), subagents (how many it still runs) and role (the
-role it plays in a flow, from its run) and compacted (true while the context is empty because the
-conversation was just compacted, the last column); new ones only ever go at the end. Values are as in the
+conversation), parent (the pane that started it), subagents (how many it still runs), role (the
+role it plays in a flow, from its run), held_sends (how many messages `cornercase send` holds until
+the person in the pane is done typing), draft (true while it has text a person typed and has not sent),
+account_restart (waiting while it waits for its turn to end to restart on another account), pid (its
+shell's process id), memory (the bytes its shell and the programs under it use, while that setting is
+on) and compacted (true while the context is empty because the conversation was just compacted);
+new ones only ever go at the end. Values are as in the
 JSON (true or false, context as a number, full paths), with - where there is none and a space for a tab or line break in a name.
 With --json, it prints {"panes": [...]}, one object per pane with the columns as keys and null
 where there is no value.
@@ -55,12 +61,15 @@ is the state then, so nothing is missed. A reader that falls behind reads at mos
 lines, then the latest state.
 
 With --app it prints, as JSON, what is outside the session: `todos` (as `todo list --json`), `queue`
-(the entries of `queue list --json`), `away` (one row per chat app: `platform`, `ready`, `away`),
+(the entries of `queue list --json`), `away` (one row per chat app: `platform`, `ready`, `away`, and
+on Discord `forum`, its setup, with `servers` while it waits for `config forum-server ID`),
 `update` (the release found and its notes, why there is none, whether a check or an install runs,
 and how installing works here) and `keep_awake` (null while the setting is off), with the server's
-`version` and `boot`. With --follow it keeps running and prints one such line first and again each
-time one of them changes, each with a `revision` that grows by one per line, built at most twice a
-second while someone follows; rules for ending and for slow readers are --follow's.
+`version` and `boot`. `accounts_revision` moves each time `account list` would name other accounts,
+and is left out until it first does, so a client lists them again only when it moves. With --follow
+it keeps running and prints one such line first and again each time one of them changes, each with
+a `revision` that grows by one per line, built at most twice a second while someone follows; rules
+for ending and for slow readers are --follow's.
 
 Examples:
   cornercase status
@@ -71,38 +80,65 @@ Examples:
   cornercase status --app --follow | jq -c '[.revision, (.todos | length)]'
 
 ================================================================ cornercase open
-Open a folder as a project, or find the open one, and print its id
+Open a folder as a project, or find the open one, and print its id; import a .code-workspace file as a group
 
 Usage: cornercase open [OPTIONS] <PATH>
 
 Arguments:
-  <PATH>  The folder
+  <PATH>  The folder, or a VS Code .code-workspace file to import as a group
 
 Options:
-      --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
+      --into <GROUP>              Put it in this group, as the group's add project does
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
+PATH is a folder, or a VS Code .code-workspace file, which is read on the server's machine and
+imported as the folder picker does: into a group named after the file (a group of that name is
+reused), each of its folders a project there, in order. A folder already open moves into the group
+instead of opening twice, a folder's `name` names a project that has no name of its own, and a
+folder that is gone is skipped. So is one on another machine (a vscode-remote:// address, a network
+path on Windows), as in the picker: it counts nowhere and changes no exit status.
+
+A file prints the group's id, and with --json {"group", "name", "projects", "missing", "failed"}:
+the group (null when nothing could go in a new one), its name, the projects' ids, how many folders
+are gone and how many could not start a shell. It exits with 3 when either count is not 0 or
+nothing was imported, after printing that; without --json, a warning on stderr says what happened.
+--focus shows its first project.
+
+--into GROUP puts what it opens in that group, as the group's add project does, a folder or a file.
+A folder already open moves there.
+
+With --remote, PATH is the other machine's, and so is the file: absolute, or starting with ~/,
+quoted so that this machine's shell leaves it alone.
+
 Examples:
   cornercase open ~/src/shop
   cornercase open . --focus
+  cornercase open ~/src/team.code-workspace --focus
+  cornercase open ~/src/docs --into 3
+  cornercase --remote devbox open '~/src/team.code-workspace' --json
 
 ================================================================ cornercase clone
 Clone a git repository into a folder, open it as a project, and print its path
 
 Usage: cornercase clone [OPTIONS] <URL> [FOLDER]
+       cornercase clone --list-ignored [--from <FOLDER>] [--json]
 
 Arguments:
-  <URL>     The repository, as `git clone` takes it
+  [URL]     The repository, as `git clone` takes it
   [FOLDER]  The folder the clone goes in, as a new folder named after the repository [default: the current one; with --remote, the home folder there]
 
 Options:
-      --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
+      --file <PATH>               A file of the repository here to copy into the clone, such as the git-ignored .env, by its path from the repository's root; repeat it for more
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --from <FOLDER>             The repository here that --file and --list-ignored read, on this machine also with --remote [default: the current folder]
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --list-ignored              Print the git-ignored files in that folder that --file can copy, and clone nothing; it needs no server, and --remote changes nothing for it
+      --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -118,10 +154,29 @@ ssh keys and git credentials must already reach the repository. With --remote, F
 repository's path are the other machine's (absolute, or starting with ~/), and without FOLDER the
 clone goes in that machine's home folder.
 
+--file copies a file of the repository here into the new clone once git is done, such as the
+git-ignored .env a project needs to run, as the Clone on machine dialog does with the ones you
+tick. This command reads it, on the machine it runs on also with --remote, and sends it with its
+permissions. PATH goes from the root of the repository that --from is in (the current folder by
+default). Refused by name before anything is cloned: a path that is absolute, goes up with `..` or
+into `.git` (status 2); a file that is missing, a folder, a link or a file over 1 MiB (status 1),
+and more than 200 files or 8 MiB in all. A file the clone could not take, such as one the
+repository has, leaves the clone done and is not written: it is named on standard error, or under
+"unwritten" with --json, and the command exits 3.
+
+--list-ignored prints the git-ignored files in that folder, which the dialog offers, and clones
+nothing: each from the repository's root with its size, and `too big to copy` over 1 MiB, then how
+many more past the 200th. With --json: {"root", "files": [{"path", "size", "mode", "too_big"}],
+"left_out"}. It reads this machine's folder, since the files are here even when the clone goes
+elsewhere, so it needs no server, and --remote changes nothing for it. On Windows --file and
+--list-ignored say they are not supported yet.
+
 Examples:
   cornercase clone git@github.com:acme/shop.git ~/src
   cornercase clone https://github.com/acme/shop --focus
   cornercase --remote devbox clone git@github.com:acme/shop.git ~/src --json
+  cornercase clone --list-ignored --from ~/code/shop --json
+  cornercase --remote devbox clone git@github.com:acme/shop.git '~/src' --file .env --from ~/code/shop
 
 ================================================================ cornercase new-workspace
 Add a workspace to a project, or a git worktree, and print its id
@@ -246,6 +301,39 @@ Examples:
   cornercase split -- htop
   cornercase split --pane 7 --down -- tail -f server.log
 
+================================================================ cornercase setup
+Run a worktree's setup again in a new tab, as its menu's run setup does, and print its pane's id when done
+
+Usage: cornercase setup [OPTIONS]
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
+      --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
+      --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Runs the project's setup again in a new tab of a worktree's workspace, as run setup in the
+workspace's menu does, to retry after a fix. It runs as it does when the worktree is made, with
+CORNERCASE_ROOT, CORNERCASE_WORKTREE and CORNERCASE_BRANCH set, and the tab then becomes a shell.
+Meanwhile `status --json` shows the workspace's setup as running, its failed mark is gone, and
+agents started in the workspace wait for it.
+
+The command returns once the setup is done, however long it takes, and prints the pane's id; --json
+prints {"project", "workspace", "tab", "pane"}. A setup that fails exits with 1, naming its exit
+status and the pane to read, and so does one whose tab closes before it ended. It also exits with 1,
+saying why, for what the menu does not offer: a workspace that is not a worktree, a project with no
+setup (`cornercase config project`), or a setup already running. Stopping the command does not stop
+the setup: press Ctrl+C in its tab (`cornercase keys --pane N ctrl+c`) or close the tab.
+
+Examples:
+  cornercase setup
+  cornercase setup --worktree fix/login --focus
+  cornercase setup --workspace 16 --json
+
 ================================================================ cornercase start
 Start a coding agent in a new tab, give it a prompt, and print its pane's id
 
@@ -305,6 +393,9 @@ Options:
       --timeout <SECONDS>
           Give up after this long, with status 1
 
+      --placed
+          Answer as soon as the tab is open, with the same ids, while the launch goes on: for a program that shows the new tab itself
+
       --issue <KEY>
           Work on this issue instead: a key such as #482, sc-48 or ENG-42, or its URL, with the prompt the Issues dialog's start uses and its branch (settings → Worktrees → issue branches; --worktree names another)
 
@@ -361,6 +452,24 @@ are the machine's own. --wait, --until and --timeout are refused: follow the age
 `cornercase --remote`. --focus shows its tab in this window once the machine lists it. It needs a
 server that knows the `machine-start` feature.
 
+With --placed the command answers as soon as the tab is open, after its worktree is made or its
+issue read, with the same ids, and the launch goes on, here or on a machine, as the window's dialogs
+do: a trust question then waits in the tab, not in this command, and the prompt follows its answer.
+It is for a program that shows the new tab itself, and it can no longer say that the agent never
+showed up. --wait, --until and --timeout are refused, since nothing is waited for. It needs a server
+that knows the `machine-start` feature, which came with it.
+
+`cornercase wait` and `send` only work once that launch is over, and the answer does not mean it
+is. Until the agent runs, wait says the pane runs no agent; until its prompt is typed, wait can end
+on idle; and send goes to whatever reads the pane then, the shell, or the trust question, which it
+would answer. `status --json` has no field for the launch, so read the pane there (under machines
+for one on a machine): `agent` is null until the agent runs and reports, and `at_prompt` true while
+its shell still waits for it; `agent` with the status idle only says it runs, since it may still be
+asking its question and its prompt may not be typed; and the status working says it took its prompt,
+so the launch is over. Without a prompt, or with an agent that reports no status, only its
+screen says so (`cornercase read`). To send or wait right after the command, leave --placed out: its
+answer then comes when the launch is over.
+
 Examples:
   cornercase start claude --issue '#482'
   cornercase start codex --issue ENG-42 --project 3
@@ -368,6 +477,7 @@ Examples:
   cornercase start codex --prompt-file task.md --wait --timeout 1800
   cornercase start claude --mode plan --model opus --prompt 'Plan the login rework'
   cornercase start claude --issue '#482' --project 2 --machine vps --focus
+  cornercase start claude --issue '#482' --project 2 --machine vps --placed --json
 
 ================================================================ cornercase send
 Paste text into a pane, and press Enter with --enter
@@ -430,7 +540,8 @@ its shell mode instead of its input box (`dialog` in `cornercase status --json`)
 `survey` in the JSON), where a digit sent alone would answer it: dismiss it with
 `cornercase keys --pane N 0`, or pass --force. So is a pane whose agent is resuming its conversation
 after a restart (`resuming` in the JSON), where the text would reach its shell or its start-up:
-send again once it is back, or pass --force.
+send again once it is back, or pass --force. While a person is typing in the pane the text waits for them
+and goes right after their prompt (`held_sends` in the JSON); `cornercase held` acts on it from elsewhere.
 
 With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI,
 Vibe CLI or GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
@@ -475,6 +586,46 @@ Keys are encoded the way the program in the pane asked for.
 Examples:
   cornercase keys --pane 12 ctrl+c
   cornercase keys --pane 12 down enter
+
+================================================================ cornercase held
+Send now a message that `send` holds for a person typing in a pane, or say it can wait its turn
+
+Usage: cornercase held [OPTIONS] <--send-now|--wait-turn>
+
+Options:
+      --pane <ID>                 The pane [default: the one this runs in, else the shown one]
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --tab <ID>                  A tab: its agent's pane, else its active one
+      --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
+      --send-now                  Send the first held message at once, as `send --force` does, still after an earlier Enter
+      --wait-turn                 Only say the person saw it: the messages held so far still go after their prompt
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+`cornercase send` holds a message while a person is typing in the pane, and the window's bar on that
+pane offers two buttons. This is what they do, for a program that draws that bar itself: --send-now
+is its send now, --wait-turn its wait turn. Give exactly one.
+
+--send-now sends the first held message at once, as `send --force` does: after what the person has
+typed, whatever the pane shows. Its sender gets the usual answer, or the refusal when the pane cannot
+take it (an agent asking a question). If an earlier message is between its paste and its Enter, it goes
+right after that Enter, so held_sends may only drop a moment later. The other held messages keep waiting.
+
+--wait-turn only says the person saw it: nothing goes earlier or later. It covers the messages held so
+far, so one held later turns held_queued off again.
+
+Both exit with status 1 and say why when nothing is held in the pane: the message may just have gone
+out. --send-now also refuses a pane that is restarting or resuming its agent, where the window has no bar.
+
+It prints what is held now. With --json it prints {"pane", "held_sends", "held_from", "held_queued"},
+what `status --json`, `status --follow` and `view` have on each pane: held_from is the pane that sent the
+first held message (null for a sender outside a pane; a pane since closed keeps its id, and ids last one
+run of the server), and held_queued is true once --wait-turn covers the newest held message.
+
+Examples:
+  cornercase held --pane 9 --send-now
+  cornercase held --pane 9 --wait-turn --json
 
 ================================================================ cornercase read
 Print the screen of a pane as text, or its last lines
@@ -613,6 +764,7 @@ Options:
       --unlock                    Unlock a locked worktree first, as the window's unlock and remove does; changes still need --force
       --check                     Only say what removing it would lose, or with --agent what would close, as the window's dialog does; nothing stops
       --json                      Print the check, or with --agent what was closed, as JSON
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Its shells stop, as with its ×, but nothing asks first, not even for a project. A worktree's
@@ -627,6 +779,9 @@ and the tabs of the agents it started in the same workspace, at any depth. For a
 run, its whole team closes and the run ends. Agents it started elsewhere keep running. Nothing is
 removed from disk, a worktree and its branch stay (close --workspace ID --remove-worktree removes
 a worktree). With --check it only says what would stop and keep running.
+--boot BOOT says which run of the server the id is from: `boot` in `status --json`, or in a machine's
+entry there. Ids last one run, so a server that restarted since refuses, nothing closes, and the
+command prints why and exits with 4.
 
 Examples:
   cornercase close --tab 9
@@ -636,6 +791,7 @@ Examples:
   cornercase close --worktree fix/login --remove-worktree --unlock
   cornercase close --agent --pane 12 --check
   cornercase close --agent --pane 12
+  cornercase --remote vps close --workspace 7 --boot 4242-1700000000
 
 ================================================================ cornercase rename
 Rename a tab, workspace, project or group
@@ -654,11 +810,17 @@ Options:
       --project <ID>              Rename this project instead
       --group <ID>                Rename this group instead
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
+
+--boot BOOT says which run of the server the id is from: `boot` in `status --json`, or in a machine's
+entry there. Ids last one run, so a server that restarted since refuses, nothing is renamed, and the
+command prints why and exits with 4.
 
 Examples:
   cornercase rename 'review #42'
   cornercase rename --workspace 5 ''
+  cornercase --remote vps rename --workspace 7 docs --boot 4242-1700000000
 
 ================================================================ cornercase focus
 Show a pane, tab, workspace or project in the window
@@ -1721,8 +1883,9 @@ Programs that drive cornercase without this command line (an editor extension, a
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run. Each command is listed with whether it is available, and each stream
-with its version. A server without this command is older than the contract.
+since ids last only one run; close and rename take it as --boot, and then act only in that run. Each
+command is listed with whether it is available, and each stream with its version. A server without
+this command is older than the contract.
 
 Examples:
   cornercase contract
@@ -1801,9 +1964,9 @@ id, projection, active, cols, rows, shown (the project, workspace, tab and pane 
 controls (whether it sizes its tab's terminals now). The view lives while this command runs:
 stopping it closes the view and gives its tabs back. The first line is the state now; the view's id
 is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
-read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `start`,
-`send`, `keys`, `read`, `wait`, `status`, `rename`, `mark`, `go` or `surface`: the view's tab is their
-default and --focus moves it.
+read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `setup`, `start`,
+`send`, `keys`, `held`, `read`, `wait`, `status`, `rename`, `mark`, `go`, `plugin run` or `surface`: the view's
+tab is their default and --focus moves it.
 
 While the view is active, has a size and is not hidden, the tab it shows counts as seen like the
 window's: an agent there gets no done mark, toast or desktop notification. --hidden starts it hidden
@@ -1919,7 +2082,7 @@ Options:
 For programs that send many commands, such as a window that draws cornercase itself (see `cornercase view`): it keeps one connection, and with --remote one ssh connection, and runs each line of standard input as it arrives, in order, until standard input ends. A line is a command as the command line takes it, in JSON, with what it reads from - in stdin:
   {"args": ["focus", "--tab", "6", "--view", "21"]}
   {"args": ["send", "--pane", "5", "-"], "stdin": "cargo test"}
-Other keys are refused, so a typo never runs a command without its text. Each line gets one answer line, in order: status (the exit status the command would have had), json (what it printed with --json) or text, stderr (its warnings) and error. A wrong or refused line does not stop the next ones. Streams (events, surface, view, changes list, every --follow), start-server, update, restart, kill-server and logs need a process of their own and are refused with 2, as is --remote on a line. A line that waits (wait, send --wait, start --wait) holds the lines after it until it is answered. It exits with 0 when every line had 0, 3 when some did not, 1 when the server stops or the connection drops (it never reconnects: ids change with a restart), and 0 once what reads its answers is gone.
+Other keys are refused, so a typo never runs a command without its text. Each line gets one answer line, in order: status (the exit status the command would have had), json (what it printed with --json) or text, stderr (its warnings) and error. A wrong or refused line does not stop the next ones. Streams (events, surface, view, changes list, config pair, every --follow), start-server, update, restart, kill-server and logs need a process of their own and are refused with 2, as is --remote on a line. A line that waits (wait, send --wait, start --wait) holds the lines after it until it is answered. It exits with 0 when every line had 0, 3 when some did not, 1 when the server stops or the connection drops (it never reconnects: ids change with a restart), and 0 once what reads its answers is gone.
 
 Examples:
   cornercase requests --follow -
@@ -2134,14 +2297,16 @@ Read and change settings, tokens and project commands
 Usage: cornercase config [OPTIONS] [COMMAND]
 
 Commands:
-  search   Find settings by the start of each word, as the search of the settings modal does
-  set      Change settings: KEY VALUE pairs, checked together, all or none
-  project  Set the commands a project runs when it makes a worktree and before it removes one
-  secret   Check and save a tracker's token or a bot's, read from standard input
-  remove   Remove a token, a bot, a paired chat or the paired browsers
-  export   Write the settings to share with a colleague, without tokens or personal ones
-  import   Import settings a colleague shared, after showing what changes
-  help     Print this message or the help of the given subcommand(s)
+  search        Find settings by the start of each word, as the search of the settings modal does
+  set           Change settings: KEY VALUE pairs, checked together, all or none
+  project       Set the commands a project runs when it makes a worktree and before it removes one
+  secret        Check and save a tracker's token or a bot's, read from standard input
+  remove        Remove a token, a bot, a paired chat or the paired browsers
+  pair          Pair a phone: print the address its QR code holds, then wait for it
+  forum-server  Pick the server of the Discord forum, once the forum's setup waits for that
+  export        Write the settings to share with a colleague, without tokens or personal ones
+  import        Import settings a colleague shared, after showing what changes
+  help          Print this message or the help of the given subcommand(s)
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
@@ -2159,7 +2324,13 @@ false for a switch, a whole number, a comma-separated list for issue_tabs, other
 
 A token is never an argument: `secret` reads it from standard input (hidden on a terminal), checks it
 with its service as the dialog does, and says which account accepted it, never the token. `remove`
-forgets a token, a bot, a paired chat or the paired browsers.
+forgets a token, a bot, a paired chat or the paired browsers. `pair` connects a phone to a chat or a
+browser: `cornercase config pair --help`.
+
+`forum-server` picks the server of the Discord forum, when forum mode waits for one and the app is in
+several: `status --app` lists them as `servers`, in Discord's `forum`, and this is a click on one in the
+forum's dialog. It answers once the pick is taken: the channel is made next, and `status --app --follow`
+goes on to `ready`. An id that is not listed, or a moment when no pick waits, is refused and says why.
 
 `export` writes the settings a colleague can use, as TOML, and says on standard error what it left
 out: tokens, accounts, personal keys. `import` shows what a shared file would change and asks first;
@@ -2178,6 +2349,8 @@ Examples:
   cornercase config set issue_tabs github,linear
   printf '%s' "$LINEAR_API_KEY" | cornercase config secret linear
   cornercase config remove linear
+  cornercase config pair browsers --json
+  cornercase config forum-server 1041234567890123459
   cornercase config project ~/code/web-shop --setup 'npm ci'
   cornercase config export --to team.toml
   cornercase config import team.toml --only agents,worktrees
@@ -2250,6 +2423,59 @@ Usage: cornercase config remove [OPTIONS] <KEY>
 
 Arguments:
   <KEY>  The connection, such as linear, telegram.chat or browsers
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+================================================================ cornercase config pair
+Pair a phone: print the address its QR code holds, then wait for it
+
+Usage: cornercase config pair [OPTIONS] <KEY>
+
+Arguments:
+  <KEY>  What to pair: browsers, telegram.chat or discord.chat
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Does what the window's dialog does, for a program that draws cornercase itself: for browsers what
+opening More > remote... > open in your phone's browser does, for a chat what Enter on the phone row
+in Settings > Remote does. It prints the address the dialog's QR code holds and the lines under it,
+and again whenever they change, such as Discord's advice and failures. With --json each is one line:
+{"url", "lines"}, url null while there is none yet (Tailscale still starting). Draw the QR code from url.
+
+It stays open while it waits. A browser that takes the code ends it with {"paired": true}, a chat
+with {"paired": true, "chat": NAME}, and status 0. Once nothing can pair it ends with
+{"paired": false, "error"} and status 1: remote access turned off, Tailscale not ready, the bot's
+token removed or refused, or ten minutes gone by without a phone. Why it cannot start at all goes to
+standard error, also with status 1: remote access off, Tailscale not installed, the port taken, no bot yet.
+
+The code is dropped when the command ends, also when whoever reads its output goes. While the window's
+dialog or another `config pair` holds the same key they share one code: it lives ten minutes from the
+last one that came, and it is dropped when the last one goes. Nothing opens in the window; once paired
+it says so as it does for its dialog. The address holds a code, so treat it as a secret: it is never
+written to server.log. Discord has no code: its owner is asked for while this runs.
+
+Examples:
+  cornercase config set remote true
+  cornercase config pair browsers --json
+  printf '%s' "$BOT_TOKEN" | cornercase config secret telegram
+  cornercase config pair telegram.chat --json
+  cornercase --remote devbox config pair discord.chat
+
+================================================================ cornercase config forum-server
+Pick the server of the Discord forum, once the forum's setup waits for that
+
+Usage: cornercase config forum-server [OPTIONS] <ID>
+
+Arguments:
+  <ID>  The server's id, from `forum.servers` in `cornercase status --app`
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
@@ -2635,6 +2861,25 @@ Options:
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
+Prints one file's diff as a unified diff, with tabs as four spaces.
+
+With --json it prints {"workspace", "mode", "path", "old_path", "status", "added", "removed", "fold",
+"viewed", "staged", "digest", "styles", "hunks"}. A hunk is {"old_start", "new_start", "context",
+"lines"} and a line is {"kind", "old", "new", "text", "raw", "emphasis", "syntax"}: kind is context,
+removed or added; old and new are its numbers, null where it is not on that side; text is what a
+window draws, with tabs as four spaces; raw is the line as it is in the file, tabs included, left out
+when it would be the same as text; emphasis is the words that changed, as [start, end) pairs in
+characters of text, left out when there are none; syntax is runs of {"style", "text"} over text,
+style being an index into styles, left out where the line is not highlighted.
+
+To copy a line as the file has it, take its raw, or its text when it has none. A tab of raw is always
+four characters of text, so a selection made in text maps back to raw.
+
+Examples:
+  cornercase changes file src/main.rs
+  cornercase changes file src/main.rs --mode commits --json
+  cornercase changes file Makefile --json | jq -r '.hunks[].lines[] | .raw // .text'
+
 ================================================================ cornercase changes gap
 Print the unchanged lines between a hunk of a file and the one before
 
@@ -2652,6 +2897,17 @@ Options:
       --mode <MODE>               What to compare: uncommitted, commits or all [default: uncommitted] [possible values: uncommitted, commits, all]
       --json                      Print JSON instead of text
   -h, --help                      Print help
+
+Prints the unchanged lines between a hunk and the one before it, each with its old and new numbers
+and its text, with tabs as four spaces.
+
+With --json it prints {"workspace", "path", "hunk", "styles", "lines"} and a line is {"old", "new",
+"text", "raw", "syntax"}, as in `changes file --help`: text is what a window draws, raw the line as
+it is in the file, left out when it would be the same as text.
+
+Examples:
+  cornercase changes gap src/main.rs --hunk 1
+  cornercase changes gap src/main.rs --hunk 1 --json
 
 ================================================================ cornercase changes base
 List the branches to compare with, or choose one
@@ -3078,7 +3334,9 @@ With --json it prints {"range", "day", "label", "from", "to", "zone", "written_a
 "agent", "title", "account", "model", "effort", "language", "tokens", "conversations", "text",
 "places", "dossier", "loading", "progress", "empty", "error"}. text keeps the ids ([c3], [p1]);
 places maps each id to {kind, project, workspace, branch, tab, agent, conversation, pane, boot,
-number, url, state}. `cornercase events` reports a recap starting, finishing or failing.
+number, url, state}. The pane a conversation is in now is the one in `cornercase status --json` with
+its agent and conversation; a null conversation matches nothing, and then pane is worth trying
+while boot is the server's. `cornercase events` reports a recap starting, finishing or failing.
 
 Examples:
   cornercase recap
@@ -3158,7 +3416,7 @@ Examples:
   cornercase processes stop 48211 --started 81240 --json
 
 ================================================================ cornercase worktrees
-List the worktrees on disk and what makes each safe to remove, measure one, and free its build folders
+List the worktrees on disk and what makes each safe to remove, measure one, free its build folders, and remove them
 
 Usage: cornercase worktrees [OPTIONS] <COMMAND>
 
@@ -3166,6 +3424,7 @@ Commands:
   list         List every worktree on disk with what makes it safe to remove and its size
   size         Measure the disk a worktree takes and its build folders
   free-builds  Delete the git-ignored build folders of a worktree and keep the worktree
+  remove       Remove worktrees as the Worktrees dialog does, open or not, and their branches when asked
   help         Print this message or the help of the given subcommand(s)
 
 Options:
@@ -3175,12 +3434,14 @@ Options:
 
 Commands for the worktrees cornercase makes for workspaces. `list` shows every worktree on disk
 and what makes each safe to remove; `size` reports the disk a worktree takes and how much of it is
-build and dependency folders; `free-builds` deletes those folders.
+build and dependency folders; `free-builds` deletes those folders; `remove` removes what `list`
+shows, as the Worktrees dialog does.
 
 Examples:
   cornercase worktrees list
   cornercase worktrees size --worktree feat/login
   cornercase worktrees free-builds --worktree feat/login --check
+  cornercase worktrees remove --path ~/.cornercase/worktrees/shop/feat-login --check
 
 ================================================================ cornercase worktrees list
 List every worktree on disk with what makes it safe to remove and its size
@@ -3274,6 +3535,63 @@ Examples:
   cornercase worktrees free-builds --worktree feat/login
   cornercase worktrees free-builds --path ~/.cornercase/worktrees/shop/feat-login --force
 
+================================================================ cornercase worktrees remove
+Remove worktrees as the Worktrees dialog does, open or not, and their branches when asked
+
+Usage: cornercase worktrees remove [OPTIONS] --path <FOLDER>...
+
+Options:
+      --path <FOLDER>...          The worktrees by their folders, as `cornercase worktrees list` names them
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --check                     Print what the Worktrees dialog's confirmation names for each folder, and stop and delete nothing
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --force                     Go on when a folder has uncommitted files, programs in it or commits that would be lost
+      --unlock                    Unlock a locked worktree and remove it
+      --delete-branch             Also delete the branch checked out there, never the default branch or the main checkout's
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Removes worktrees as the Worktrees dialog does, one or more, each named by its folder as
+`worktrees list` prints it, open in cornercase or not: an open workspace stops its programs, runs
+its project's teardown and goes, a closed project's worktree runs that teardown too, a prunable
+entry leaves git's list, and a folder whose repository is gone or that git no longer knows is
+deleted. Only a folder `worktrees list` knows is touched: anything else, a repository's main
+checkout and a project's own folder included, is refused and left alone, as is a worktree git
+records at a symbolic link, which git would delete through, and a folder holding another listed
+worktree or an open project, which would go with it unseen (remove or close that one first). So is
+what the dialog cannot tick:
+a worktree of a role of a live flow run (it goes with the run's workspace), one being removed or
+closed, one whose build folders are being freed, and an open workspace git no longer knows (close
+it, then remove the folder).
+
+--check prints what the dialog's confirmation names for each folder (files changed, commits not
+pushed, a lock, the programs that stop, processes outside cornercase and in other tabs, the
+teardown, with --delete-branch a branch that would lose commits), and what removing it takes. It
+stops and deletes nothing. Without it the folders are checked again the same way, and one that is
+at risk is refused: --force goes on when it has uncommitted files or could not be checked, when
+programs work in it, when its files are all that is left (repository gone, unknown to git), when
+it holds commits on no branch, or when --delete-branch would lose commits; --unlock is needed for a
+locked one and does not imply --force. --delete-branch deletes the branch checked out there after
+the worktree is gone, and a run's workspace its roles' branches too, never the default branch or
+the main checkout's, and only the branch still checked out when the removal starts, at the commit
+the check saw.
+
+It waits until every removal has ended and prints one line per folder: removed, could not remove
+or did not remove, and why. It exits 3 when some folder was not removed, its branch was kept or
+could not be deleted, its teardown failed, or only git's entry went and its folder stays (with
+--check, when some folder or role cannot be removed or checked), after printing the rest. A
+command that goes away before the removals start leaves everything as it was; one that goes away
+later leaves them running. With --json it prints {"check", "folders": [...]}, one per --path in
+order, each with "path", "outcome" (removed, failed, refused; removable with --check), "why",
+"needs" (force, unlock), "removed_with", "branches" (deleted), "kept" (branches kept and why),
+"warnings", "lines", "lost", "unchecked", "teardown", "roles" and "worktree" (the row `worktrees
+list` prints).
+
+Examples:
+  cornercase worktrees remove --path ~/.cornercase/worktrees/shop/feat-old --check
+  cornercase worktrees remove --path ~/.cornercase/worktrees/shop/feat-old --delete-branch
+  cornercase worktrees remove --path ~/.cornercase/worktrees/shop/a ~/.cornercase/worktrees/shop/b --force --unlock
+
 ================================================================ cornercase machines
 List the machines work can start on with the state of each link, and add, change or remove them
 
@@ -3306,10 +3624,12 @@ forwards nothing, so connect once by hand to accept the host key.
 
 The states are connecting, linked (with the version there), unreachable (since when, and why) and
 older. With --json it prints {"here": {"icon", "version"}, "machines": [{"name", "icon",
-"destination", "folder", "state", "version", "server_version", "seen", "error", "updating",
-"problem"}]}: version is the cornercase installed there and server_version the one its server
-runs, seen when the link was last up (UTC), error why it is down, and problem what is wrong with an
-entry of config.json, which then gets no link. Every subcommand prints the list the same way.
+"destination", "folder", "state", "version", "server_version", "seen", "retry_at", "error",
+"updating", "problem"}]}: version is the cornercase installed there and server_version the one
+its server runs, seen when the link was last up (UTC), retry_at when a link that fell tries next
+(UTC; a time that has passed means that try is under way; left out while the link is up or
+connecting, and while a person has to act there), error why it is down, and problem what is wrong
+with an entry of config.json, which then gets no link. Every subcommand prints the list the same way.
 
 Examples:
   cornercase machines
@@ -4027,9 +4347,10 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --share                     Print a link to a card made locally in the browser
       --machine <NAME>            Read a machine's stats through the server, or with `all` this computer's and every machine's summed
+      --cached                    With --machine, print the server's last copy of the machines' stats, with its age, without asking them
   -h, --help                      Print help
 
-Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). --machine needs the server, which asks the machine over ssh; with `all` it sums the machines it could read and lists each. Merged pull requests need a running server and gh or glab.
+Counts only agents in cornercase, from when counting started. With no server, reads stats.json (here; with --remote the server there must run). --machine needs the server, which asks the machine over ssh; with `all` it sums the machines it could read and lists each. With --cached it asks nothing and answers at once from the server's last copy of each machine: a machine with no copy fails when named and is left out of the sum under `all`; with no --machine, --cached changes nothing. Merged pull requests need a running server and gh or glab.
 
 Examples:
   cornercase stats
@@ -4037,6 +4358,7 @@ Examples:
   cornercase stats --share
   cornercase stats --machine vps
   cornercase stats --machine all --json
+  cornercase stats --cached --machine all --json
 
 ================================================================ cornercase plugin
 Install, add, list, turn on and off the plugins that extend cornercase
@@ -4052,8 +4374,9 @@ Commands:
   list         List the plugins, whether they are on, and what they run
   status       Show the plugins as Settings › Plugins does, including what each service is doing; asks the server
   actions      List the actions plugins add to the menus, for one kind of row or every one; asks the server
-  run          Run a plugin's action on a project, workspace, tab or pane as its menu entry does, or a button's on what the window shows; asks the server
+  run          Run a plugin's action on a project, workspace, tab or pane as its menu entry does, or a button's on what the window or a view shows; asks the server
   popup-close  Close the plugin popup that is open; asks the server
+  windows      Keep the plugins' window processes running until it ends, for a program that draws its own window
   enable       Turn a plugin on: it runs as you, with access to every terminal
   disable      Turn a plugin off, stopping what it runs
   logs         Print what a plugin's commands wrote, and when cornercase started and stopped them
@@ -4074,7 +4397,11 @@ A plugin runs as you and can do anything you can, including typing into every te
 
 `actions` lists what plugins add to the menus, for a kind of row (--context) or all of them, and `run` runs one on a project, workspace, tab or pane as its menu entry does: in the workspace's folder, with the ids of what you name, stopped after 5 minutes, its output in the plugin's log. Both ask the running server; `run` waits for the action and exits with 1 when it fails. An action on a plugin's button runs with no target, on what the window shows. A popup action waits until its popup closes, and needs a window attached; `popup-close` closes it. An action listed before the plugins changed is refused (pass the --revision `actions --json` printed, or none for the current one).
 
+A program that draws cornercase itself passes `run` the --view ID of its `cornercase view`: a button's action then runs on what that view shows, in its workspace's folder. A popup action opens with no window attached too, sized from that view while none is, and following it; it stays open if the view goes, as when the last window leaves, so the program that comes back shows it (`status --app`, `surface --popup`) or closes it with `popup-close`.
+
 `status` prints the plugins as Settings › Plugins shows them: on, off or cannot run, the label and the note, and what each service is doing (running, restarting or still starting), and why `plugins.json` cannot be read. It asks the running server. `list` still reads the files and works with no server.
+
+`windows` keeps the plugins' window processes running until it ends, as a window of cornercase does, for a program that draws its own window. See `cornercase plugin windows --help`.
 
 Examples:
   cornercase plugin install acme/notes
@@ -4091,7 +4418,9 @@ Examples:
   cornercase plugin actions --context pane
   cornercase plugin run acme.notes open --pane 5
   cornercase plugin run acme.notes browse
+  cornercase plugin run acme.notes browse --view 21
   cornercase plugin popup-close
+  cornercase plugin windows --json
   cornercase plugin logs my-plugin --follow
   cornercase plugin disable my-plugin
   cornercase plugin update
@@ -4205,7 +4534,7 @@ Options:
   -h, --help                      Print help
 
 ================================================================ cornercase plugin run
-Run a plugin's action on a project, workspace, tab or pane as its menu entry does, or a button's on what the window shows; asks the server
+Run a plugin's action on a project, workspace, tab or pane as its menu entry does, or a button's on what the window or a view shows; asks the server
 
 Usage: cornercase plugin run [OPTIONS] <PLUGIN> <ACTION>
 
@@ -4221,6 +4550,7 @@ Options:
       --workspace <ID>            A workspace and its tabs
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --project <ID>              A project and its workspaces
+      --view <ID>                 Act for this view (see `cornercase view`): a button action with no target runs on what it shows, and a popup opens with no window attached, sized from it
       --revision <N>              The revision `plugin actions --json` printed; refused once the plugins changed. Left out, the current one
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -4234,6 +4564,46 @@ Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
+
+================================================================ cornercase plugin windows
+Keep the plugins' window processes running until it ends, for a program that draws its own window
+
+Usage: cornercase plugin windows [OPTIONS]
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+For a program that draws cornercase itself. Keep this command running for as long as your window is
+open, and what each plugin that is on declares as [[window]] runs beside it, as beside a window of
+cornercase: it starts what is wanted, reloads within a second when plugins change, starts again what
+stops (after 1, 2, 4… up to 60 s) and keeps the files `plugin remove` reads. Two programs run two
+copies, as two windows do. It reads the plugins of this machine, not a server: with no server, or no
+plugin that has a window process, it keeps running and waits for one. An update does not restart it:
+it stays the old version until you start it again.
+
+It stops them all and exits with 0 on SIGTERM, SIGINT, SIGHUP or SIGQUIT (on Windows Ctrl+C, taskkill
+without /f or its console closing), and when the reader of its standard output leaves: read it
+through a pipe, and closing that pipe, or your program dying, ends it. Rust's Child::kill sends
+SIGKILL, which nothing can catch: what it runs then keeps running on Linux and macOS, so close the
+pipe instead. On Windows a process killed that way takes them along, but a reader that left is seen
+only at the next line.
+
+It prints a line for each change, such as `acme.notes panel: running, pid 4242`, `acme.notes panel:
+stopped, restarts in 2s`, or `acme.notes panel: stopped` once it will not start again (the plugin
+was turned off or lost that entry). With --json each line is a JSON object: plugin, id, state
+(running or stopped), pid and restart_in (the seconds until it starts again, null once it will
+not). Its output ends once everything has stopped. `plugin logs ID` says why one stopped.
+
+It takes no --remote, and cannot run on a line of `requests`: window processes run on the machine
+that shows the window.
+
+Examples:
+  cornercase plugin windows
+  cornercase plugin windows --json
+  cornercase plugin windows --json | your-window
 
 ================================================================ cornercase plugin enable
 Turn a plugin on: it runs as you, with access to every terminal

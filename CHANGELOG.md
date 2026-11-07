@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.23
+
+- **This window now needs cornercase 0.13.19 or newer.** That release has the commands that let it do what only cornercase's own window could: pairing a phone, removing any worktree, running a worktree's setup again, importing a VS Code workspace, a plugin's window processes, sending a held message now and more. The next versions of the window turn them on. If yours is older, the window says so and how to update it.
+
 ## 0.1.22
 
 - **Changes and Files read a machine's workspace.** With a machine's workspace picked in the sidebar, these two panels show what is on that machine, and say `on vps` at the top. Changes follows its diff live in Uncommitted, Commits and All, with the filter, the gaps and selecting and copying lines. Files browses its tree, opens its files, searches names and text, and ⇧⌘P finds a file there. Nothing on your computer is read for them, even where the same path exists here. A window connected to another server can't reach that server's machines: the panels say so and read nothing.

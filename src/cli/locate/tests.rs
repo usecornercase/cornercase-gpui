@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use super::{
     Binary, Inputs, MINIMUM, Missing, Origin, Probe, Problem, closed, installer_dirs, locate, merged, parse_version,
-    shell_args, shell_path, unix_dirs,
+    shell_args, shell_path, unix_dirs, verdict,
 };
 use crate::platform::Os;
 
@@ -51,7 +51,7 @@ impl Probe for Fake {
     }
 }
 
-const GOOD: &str = "cornercase 0.13.1";
+const GOOD: &str = "cornercase 0.13.19";
 
 fn inputs(os: Os) -> Inputs {
     Inputs {
@@ -103,8 +103,14 @@ fn versions_compare_as_numbers() {
 }
 
 #[test]
-fn every_platform_needs_the_release_with_routines() {
-    assert_eq!(MINIMUM.to_string(), "0.13.1");
+fn every_platform_needs_the_release_with_every_command_the_window_uses() {
+    assert_eq!(MINIMUM.to_string(), "0.13.19");
+}
+
+#[test]
+fn the_release_before_the_minimum_is_too_old_and_the_minimum_is_enough() {
+    assert!(matches!(verdict(Ok(lines(&["cornercase 0.13.18"]))), Err(Problem::TooOld(_))));
+    assert!(verdict(Ok(lines(&["cornercase 0.13.19"]))).is_ok());
 }
 
 #[test]
