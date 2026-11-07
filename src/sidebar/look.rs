@@ -2,8 +2,9 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::app::Root;
-use crate::model::PaneInfo;
 use crate::model::accounts::pick::AccountSettings;
+use crate::model::{PaneInfo, Project};
+use crate::platform::paths::{expand_home, same_path};
 use crate::store::{self, ToastKind};
 use crate::theme::fades;
 
@@ -31,6 +32,7 @@ pub(crate) struct Look {
     pub dim_inactive_panes: bool,
     pub account_picker: bool,
     pub default_agent: Option<String>,
+    pub setups: Vec<ProjectScripts>,
     pub boot: String,
     pub revision: u64,
 }
@@ -45,6 +47,7 @@ impl Default for Look {
             account_switcher: false,
             account_picker: false,
             default_agent: None,
+            setups: Vec::new(),
             model: true,
             context: true,
             counts: true,
@@ -69,6 +72,10 @@ impl Look {
     pub(crate) fn fades(&self, several: bool, active: bool) -> bool {
         fades(self.dim_inactive_panes, several, active)
     }
+
+    pub(crate) fn has_setup(&self, project: &Project, home: Option<&str>) -> bool {
+        self.setups.iter().any(|scripts| scripts.names(project, home.unwrap_or_default()))
+    }
 }
 
 #[derive(Deserialize)]
@@ -77,6 +84,29 @@ struct Described {
     revision: u64,
     #[serde(default)]
     settings: Vec<Setting>,
+    #[serde(default)]
+    projects: Vec<ProjectScripts>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub(crate) struct ProjectScripts {
+    #[serde(default)]
+    project: Option<u64>,
+    #[serde(default)]
+    folder: String,
+    #[serde(default)]
+    key: String,
+    #[serde(default)]
+    setup: String,
+}
+
+impl ProjectScripts {
+    fn names(&self, project: &Project, home: &str) -> bool {
+        let path = &project.path;
+        self.project == Some(project.id)
+            || same_path(&self.folder, path)
+            || same_path(&expand_home(&self.key, home), path)
+    }
 }
 
 #[derive(Deserialize)]
@@ -112,6 +142,7 @@ pub(crate) fn parse(text: &str) -> anyhow::Result<Look> {
         account_switcher: on("account_switcher"),
         account_picker: on("account_picker"),
         default_agent: value("agent").and_then(Value::as_str).and_then(named_agent),
+        setups: described.projects.iter().filter(|p| !p.setup.trim().is_empty()).cloned().collect(),
         model: on("model"),
         context: on("context"),
         counts: on("counts"),

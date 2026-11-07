@@ -1,11 +1,12 @@
-use super::{context_item, open_in_item, plugin_items, projects_menu, spot_of, workspace_menu};
+use super::{context_item, group_menu, open_in_item, plugin_items, projects_menu, setup_args, spot_of, workspace_menu};
 use crate::context_menu::Entry;
 use crate::model::{PaneInfo, Session};
 use crate::panels::files::open::{Found, Launch, Opener};
 use crate::panels::plugins::{Offers, Spot, listed_offers};
 use crate::sidebar::Target;
+use crate::sidebar::look::parse;
 
-const PROJECT: &str = r#"{"projects":[{"id":1,"name":"shop","workspaces":[
+const PROJECT: &str = r#"{"groups":[{"id":7,"name":"team"}],"projects":[{"id":1,"name":"shop","path":"/home/ana/code/shop","workspaces":[
     {"id":2,"name":"plain","path":"/home/ana/notes"},
     {"id":3,"name":"main","path":"/home/ana/code/shop","branch":"main"},
     {"id":4,"name":"dark","path":"/home/ana/code/dark","branch":"dark","worktree":true,
@@ -13,29 +14,34 @@ const PROJECT: &str = r#"{"projects":[{"id":1,"name":"shop","workspaces":[
     {"id":5,"name":"fresh","path":"/home/ana/code/fresh","branch":"fresh","worktree":true,"setup":"running"},
     {"id":6,"name":"broken","path":"/home/ana/code/broken","branch":"broken","worktree":true,"setup":"failed"}]}]}"#;
 
-fn menu(workspace: u64) -> Vec<Entry> {
-    let session: Session = serde_json::from_str(PROJECT).expect("a view line");
-    workspace_menu(&session, workspace, &[])
+const IMPORT: &str = "Import VS Code workspace…";
+
+fn session() -> Session {
+    serde_json::from_str(PROJECT).expect("a view line")
 }
 
-fn labels(workspace: u64) -> Vec<String> {
-    menu(workspace)
-        .iter()
-        .filter_map(|entry| match entry {
-            Entry::Item { label, .. } | Entry::Submenu { label, .. } => Some(label.to_string()),
-            Entry::Heading(_) | Entry::Note(_) | Entry::Resting { .. } | Entry::Separator => None,
-        })
-        .collect()
-}
-
-fn notes(entries: &[Entry]) -> Vec<String> {
+fn chosen(entries: &[Entry]) -> Vec<String> {
     entries
         .iter()
         .filter_map(|entry| match entry {
-            Entry::Note(text) => Some(text.to_string()),
-            _ => None,
+            Entry::Item { label, .. } | Entry::Submenu { label, .. } => Some(label.to_string()),
+            Entry::Heading(_) | Entry::Resting { .. } | Entry::Separator => None,
         })
         .collect()
+}
+
+fn labels_with(workspace: u64, setup_of: &str) -> Vec<String> {
+    let config = format!(r#"{{"projects":[{{"folder":"{setup_of}","setup":"npm ci"}}]}}"#);
+    let look = parse(&config).expect("a config");
+    chosen(&workspace_menu(&session(), workspace, &[], &look))
+}
+
+fn labels(workspace: u64) -> Vec<String> {
+    labels_with(workspace, "/home/ana/code/shop")
+}
+
+fn offers_setup(labels: &[String]) -> bool {
+    labels.iter().any(|label| label == "Run setup")
 }
 
 fn offers_the_check(labels: &[String]) -> bool {
@@ -60,28 +66,51 @@ fn the_merge_check_comes_after_the_pull_request() {
 }
 
 #[test]
-fn a_worktree_says_what_running_its_setup_again_waits_on() {
-    assert_eq!(notes(&menu(4)), ["Run setup\nneeds usecornercase/cornercase-terminal#672"]);
+fn a_worktree_of_a_project_with_a_setup_offers_to_run_it_again() {
+    assert!(offers_setup(&labels(4)));
 }
 
 #[test]
-fn a_worktree_whose_setup_failed_says_what_retrying_it_waits_on() {
-    assert_eq!(notes(&menu(6)), ["Run setup\nneeds usecornercase/cornercase-terminal#672"]);
+fn a_worktree_whose_setup_failed_offers_to_retry_it() {
+    assert!(offers_setup(&labels(6)));
 }
 
 #[test]
-fn a_worktree_still_running_its_setup_has_nothing_to_say_about_it() {
-    assert_eq!(notes(&menu(5)), Vec::<String>::new());
+fn run_setup_sits_after_ports_as_in_the_rest_of_the_workspaces_menu() {
+    let labels = labels(4);
+    let setup = labels.iter().position(|label| label == "Run setup").expect("the entry");
+    assert_eq!(labels[setup - 1], "Ports…");
+}
+
+#[test]
+fn a_worktree_still_running_its_setup_offers_no_second_run() {
+    assert!(!offers_setup(&labels(5)));
 }
 
 #[test]
 fn a_workspace_without_a_worktree_has_no_setup_to_run() {
-    assert_eq!(notes(&menu(3)), Vec::<String>::new());
+    assert!(!offers_setup(&labels(3)));
 }
 
 #[test]
-fn the_projects_menu_says_what_importing_a_vs_code_workspace_waits_on() {
-    assert_eq!(notes(&projects_menu()), ["Importing a VS Code workspace\nneeds usecornercase/cornercase-terminal#673"]);
+fn a_worktree_of_a_project_without_a_setup_has_none_to_run() {
+    assert!(!offers_setup(&labels_with(4, "/home/ana/code/other")));
+}
+
+#[test]
+fn running_a_setup_shows_its_tab_and_names_the_workspace() {
+    assert_eq!(setup_args(4), ["setup", "--workspace", "4", "--json", "--focus"]);
+}
+
+#[test]
+fn the_projects_menu_offers_importing_a_vs_code_workspace() {
+    assert_eq!(chosen(&projects_menu()), ["Open project…", "New group…", IMPORT]);
+}
+
+#[test]
+fn a_groups_menu_offers_importing_a_vs_code_workspace_after_adding_a_project() {
+    let labels = chosen(&group_menu(&session(), 7));
+    assert_eq!(labels[..2], ["Add project…", IMPORT]);
 }
 
 #[test]
@@ -97,7 +126,7 @@ fn a_pane_whose_agent_left_offers_no_context() {
 
 fn plugin_row(entry: &Entry) -> String {
     match entry {
-        Entry::Item { label, .. } | Entry::Submenu { label, .. } | Entry::Note(label) => label.to_string(),
+        Entry::Item { label, .. } | Entry::Submenu { label, .. } => label.to_string(),
         Entry::Heading(name) => format!("[{name}]"),
         Entry::Resting { label } => format!("({label})"),
         Entry::Separator => "---".to_string(),
@@ -131,7 +160,7 @@ fn a_group_offers_no_actions() {
 fn opener_labels(openers: &[Found]) -> Option<(String, Vec<String>)> {
     let label = |entry: &Entry| match entry {
         Entry::Item { label, .. } | Entry::Submenu { label, .. } => label.to_string(),
-        Entry::Heading(_) | Entry::Note(_) | Entry::Resting { .. } | Entry::Separator => String::new(),
+        Entry::Heading(_) | Entry::Resting { .. } | Entry::Separator => String::new(),
     };
     open_in_item("/work/shop", openers).map(|entry| match &entry {
         Entry::Submenu { entries, .. } => (label(&entry), entries.iter().map(label).collect()),

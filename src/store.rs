@@ -619,13 +619,17 @@ pub(crate) fn run_busy<T: 'static>(
     args: Vec<String>,
     then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
 ) {
-    let id = Store::get(cx).update(cx, |s, cx| {
-        if cli::moves_view(&args) {
+    let id = start_view_job(cx, busy, &args);
+    run_job(cx, id, args, then);
+}
+
+fn start_view_job<T: 'static>(cx: &mut Context<T>, busy: Busy, args: &[String]) -> u64 {
+    Store::get(cx).update(cx, |s, cx| {
+        if cli::moves_view(args) {
             s.leave_machine_place(cx);
         }
         s.start_job(busy, cx)
-    });
-    run_job(cx, id, args, then);
+    })
 }
 
 pub(crate) fn run_on<T: 'static>(
@@ -665,7 +669,7 @@ pub(crate) fn run_partial_busy<T: 'static>(
     args: Vec<String>,
     then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
 ) {
-    let id = Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx));
+    let id = start_view_job(cx, busy, &args);
     let job = (Store::get(cx), id);
     run_with(cx, Some(job), move || cli::run_partial(&args), then);
 }

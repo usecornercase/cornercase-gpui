@@ -1,0 +1,8 @@
+{
+  "revision": 3,
+  "settings": [],
+  "projects": [
+    {"builds":["node_modules","target"],"folder":"/home/ana/code/shop-moved","key":"~/code/shop","project":null,"repository":true,"setup":"npm ci","teardown":""},
+    {"builds":["node_modules","target"],"folder":"/home/ana/code/shop","key":"","project":8,"repository":true,"setup":"","teardown":""}
+  ]
+}
