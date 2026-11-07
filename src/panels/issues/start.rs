@@ -74,7 +74,6 @@ pub(super) struct StartForm {
 
 pub(super) fn open(setup: Setup, window: &mut Window, cx: &mut Context<IssuesPanel>) {
     let store = Store::get(cx);
-    store.update(cx, Store::list_accounts);
     let form = cx.new(|cx| StartForm::new(setup, cx));
     let focus = {
         let form = form.read(cx);

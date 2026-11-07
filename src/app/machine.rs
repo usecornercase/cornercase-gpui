@@ -352,7 +352,7 @@ impl Root {
             (Plan::Steer, Some(_)) => self.steer_machine(cx),
             _ => {}
         }
-        self.activation_changed(window.is_window_active(), cx);
+        self.activation_changed(window.is_window_active());
         cx.notify();
     }
 

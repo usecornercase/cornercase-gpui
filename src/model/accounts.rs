@@ -1,6 +1,6 @@
 pub(crate) mod pick;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -98,16 +98,21 @@ impl Selection {
     }
 }
 
-pub(crate) type Stamp = (u64, BTreeSet<(String, String)>);
+#[derive(Debug, Default)]
+pub(crate) struct ListMoves {
+    accounts: Option<u64>,
+    config: Option<u64>,
+}
 
-impl Session {
-    pub(crate) fn accounts_stamp(&self) -> Stamp {
-        let panes = self.tabs().flat_map(|t| &t.panes);
-        let in_use = panes.flat_map(|pane| {
-            let running = pane.agent.iter().zip(&pane.account).map(|(agent, account)| (agent.clone(), account.clone()));
-            running.chain(pane.accounts.iter().map(|(agent, account)| (agent.clone(), account.clone())))
-        });
-        (self.config.revision, in_use.collect())
+impl ListMoves {
+    pub(crate) fn app_line(&mut self, app: &Value) -> bool {
+        let now = app.get("accounts_revision").and_then(Value::as_u64).unwrap_or(0);
+        self.accounts.replace(now) != Some(now)
+    }
+
+    pub(crate) fn view_line(&mut self, session: &Session) -> bool {
+        let now = session.config.revision;
+        self.config.replace(now).is_some_and(|before| before != now)
     }
 }
 

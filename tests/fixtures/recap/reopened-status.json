@@ -1,0 +1,123 @@
+{
+  "boot": "3124750-1794015672644531686",
+  "config": {
+    "revision": 1
+  },
+  "projects": [
+    {
+      "active": false,
+      "collapsed": false,
+      "custom_name": null,
+      "group": null,
+      "id": 5,
+      "name": "shop",
+      "path": "/home/ana/code/shop",
+      "remotes": [
+        {
+          "name": "origin",
+          "url": "https://github.com/acme/shop.git"
+        }
+      ],
+      "repo": "github.com/acme/shop",
+      "workspaces": [
+        {
+          "active": true,
+          "behind": 0,
+          "branch": "main",
+          "collapsed": false,
+          "custom_name": null,
+          "id": 6,
+          "name": "main",
+          "path": "/home/ana/code/shop",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 8,
+              "layout": {
+                "leaf": 7
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "conversation": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_from": null,
+                  "held_queued": false,
+                  "held_sends": 0,
+                  "id": 7,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/ana/code/shop",
+                  "pid": 3124783,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            },
+            {
+              "active": false,
+              "controller": 11,
+              "custom_name": null,
+              "id": 13,
+              "layout": {
+                "leaf": 12
+              },
+              "name": "claude",
+              "panes": [
+                {
+                  "account": "custom",
+                  "active": true,
+                  "agent": "claude",
+                  "at_prompt": false,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "conversation": "conv-rate-limit",
+                  "dialog": false,
+                  "draft": false,
+                  "held_from": null,
+                  "held_queued": false,
+                  "held_sends": 0,
+                  "id": 12,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/ana/code/shop",
+                  "pid": 3153793,
+                  "program": "claude",
+                  "resumes": true,
+                  "resuming": false,
+                  "role": null,
+                  "status": "idle",
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": "idle"
+            }
+          ],
+          "worktree": false
+        }
+      ]
+    }
+  ],
+  "version": "0.13.19"
+}

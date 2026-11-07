@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.28
+
+- **A Recap's link finds its conversation wherever it went.** After a restart, or after closing an agent and reopening it, a link goes to the pane that holds that conversation now, where it used to stop at the workspace with a note that it could not look. A conversation that is really gone takes you to its workspace or its project, and if that is closed too, it says so.
+- **Accounts show up by themselves.** An account added or removed from a shell, by another window or by a program shows within a second in the Accounts sheet, on the panes and in the forms that start agents, with no click and no need to come back to the window.
+
 ## 0.1.27
 
 - **The Worktrees sheet removes any worktree on disk.** An open workspace, a closed project's worktree with its teardown, an entry whose folder is gone, a folder whose repository is gone or that git no longer knows: every row can be ticked and removed now.

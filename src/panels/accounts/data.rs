@@ -10,6 +10,43 @@ pub(super) const fn kept_login(os: Os) -> &'static str {
     }
 }
 
+#[derive(Debug, Default)]
+pub(super) struct Asking {
+    list: bool,
+    check: bool,
+    latest: u64,
+}
+
+impl Asking {
+    pub(super) fn running(&self) -> bool {
+        self.list || self.check
+    }
+
+    pub(super) fn list(&mut self) -> u64 {
+        self.latest += 1;
+        self.list = true;
+        self.check = false;
+        self.latest
+    }
+
+    pub(super) fn list_answered(&mut self, asked: u64) -> bool {
+        let latest = asked == self.latest;
+        self.list &= !latest;
+        latest
+    }
+
+    pub(super) fn check(&mut self) -> u64 {
+        self.check = true;
+        self.latest
+    }
+
+    pub(super) fn check_answered(&mut self, asked: u64) -> bool {
+        let latest = asked == self.latest;
+        self.check &= !latest;
+        latest
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Target {
     Account(String, String),
