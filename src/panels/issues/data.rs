@@ -574,7 +574,7 @@ impl StartPlan {
         let mut a = self.start_words();
         a.extend(spot.starting_args());
         self.start_flags(&mut a);
-        a.push("--json".into());
+        a.extend(["--placed".into(), "--json".into()]);
         a
     }
 

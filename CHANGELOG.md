@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.24
+
+- **Starting an agent on a machine shows its tab at once.** The dialog closes as soon as the tab is open there, even while the agent asks to trust the folder, so you answer it in that tab. The window no longer guesses which new tab is the one it started.
+- **Clone on a machine can bring the files git ignores.** The Clone form lists this project's git-ignored files, such as `.env`, with their sizes, and copies the ones you tick into the new clone with their permissions. Nothing is ticked at first. A file over 1 MiB is shown but cannot be copied, and a clone takes 8 MiB in all. **Skip files** clones without them. If the machine could not write one, the toast names it and says why. On Windows the form says these files stay behind, as cornercase does not read them there yet.
+
 ## 0.1.23
 
 - **This window now needs cornercase 0.13.19 or newer.** That release has the commands that let it do what only cornercase's own window could: pairing a phone, removing any worktree, running a worktree's setup again, importing a VS Code workspace, a plugin's window processes, sending a held message now and more. The next versions of the window turn them on. If yours is older, the window says so and how to update it.
