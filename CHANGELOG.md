@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.27
+
+- **The Worktrees sheet removes any worktree on disk.** An open workspace, a closed project's worktree with its teardown, an entry whose folder is gone, a folder whose repository is gone or that git no longer knows: every row can be ticked and removed now.
+- **It looks again before it asks.** Remove checks the rows first and then says what is at stake for each one: uncommitted files, programs working in it, commits not pushed, a lock, a teardown. The button says what it will do, such as `Remove anyway` or `Unlock and remove`, and only the folders you were warned about are forced, so one that changes after you were asked stays where it is and the sheet tells you.
+- **Also delete the branch.** Tick it in the question to delete the branches too. Commits that would be lost show in red first. The default branch and the main checkout's are never deleted.
+- **It says what happened, by name.** Removing runs in the background, each row leaving as it goes, and one message at the end names what went, a branch that was kept, a teardown that failed and a folder that could not be removed.
+
 ## 0.1.26
 
 - **Starting an agent on a machine shows its tab at once.** The dialog closes as soon as the tab is open there, even while the agent asks to trust the folder, so you answer it in that tab. The window no longer guesses which new tab is the one it started.

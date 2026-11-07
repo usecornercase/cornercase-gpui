@@ -409,11 +409,15 @@ impl Store {
         run_job(cx, id, args, move |this, result, cx| this.settle_removal(workspace, &result, cx));
     }
 
-    pub(crate) fn settle_removal(&mut self, workspace: u64, result: &anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn settle_removal(&mut self, workspace: u64, result: &anyhow::Result<String>, cx: &mut Context<Self>) {
         match result {
-            Ok(_) => self.jobs.removed(workspace),
+            Ok(_) => self.worktree_went(workspace, cx),
             Err(e) => self.toast(e.to_string(), ToastKind::Error, cx),
         }
+    }
+
+    pub(crate) fn worktree_went(&mut self, workspace: u64, cx: &mut Context<Self>) {
+        self.jobs.removed(workspace);
         cx.notify();
     }
 
