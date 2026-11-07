@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use super::{LinkState, MachineIcon, seen_ago};
+use super::{LinkState, MachineIcon, NextTry, seen_ago};
 use crate::model::{Project, Session, Tab, loudest_of, needs_you, status_rank, works};
 use crate::store::args;
 
@@ -29,6 +29,7 @@ pub(crate) struct MachineSeen {
     pub icon: MachineIcon,
     pub state: LinkState,
     pub seen: Option<String>,
+    pub retry_at: Option<String>,
     pub boot: String,
     pub projects: Vec<ThereProject>,
 }
@@ -95,8 +96,13 @@ impl MachineSeen {
         self.linked() && self.workspaces().flat_map(|ws| &ws.tabs).any(works)
     }
 
-    pub(crate) fn counts_up(&self) -> bool {
-        !self.linked() && self.seen.is_some()
+    pub(crate) fn next_try(&self, now: i64) -> Option<NextTry> {
+        NextTry::at(self.retry_at.as_deref(), now)
+    }
+
+    pub(crate) fn tab_note_counts(&self, tab: &Tab<ThereId>, now: i64) -> bool {
+        let counts = self.seen.is_some() || self.next_try(now).is_some_and(NextTry::counts);
+        !self.linked() && counts && tab.agent_pane().is_some()
     }
 
     pub(crate) fn link_note(&self) -> String {
@@ -114,8 +120,9 @@ impl MachineSeen {
             return None;
         }
         tab.agent_pane()?;
-        let status = tab.loudest().unwrap_or("idle");
-        Some(seen_ago(self.seen.as_deref(), now).map_or_else(|| status.to_string(), |ago| format!("{status} · {ago}")))
+        let status = tab.loudest().unwrap_or("idle").to_string();
+        let parts = [Some(status), self.next_try(now).map(NextTry::words), seen_ago(self.seen.as_deref(), now)];
+        Some(parts.into_iter().flatten().collect::<Vec<_>>().join(" · "))
     }
 
     pub(crate) fn workspaces(&self) -> impl Iterator<Item = &ThereWorkspace> + Clone {
@@ -160,19 +167,19 @@ impl Aim {
     }
 
     pub(crate) fn rename_args(&self, name: &str) -> Vec<String> {
-        args(&["rename", "--workspace", &self.id(), "--", name])
+        args(&["rename", "--workspace", &self.id(), "--boot", &self.boot, "--", name])
     }
 
     pub(crate) fn close_args(&self) -> Vec<String> {
-        args(&["close", "--workspace", &self.id()])
+        args(&["close", "--workspace", &self.id(), "--boot", &self.boot])
     }
 
     pub(crate) fn check_args(&self) -> Vec<String> {
-        args(&["close", "--workspace", &self.id(), "--remove-worktree", "--check", "--json"])
+        args(&["close", "--workspace", &self.id(), "--boot", &self.boot, "--remove-worktree", "--check", "--json"])
     }
 
     pub(crate) fn remove_args(&self, force: bool, unlock: bool) -> Vec<String> {
-        let mut command = args(&["close", "--workspace", &self.id(), "--remove-worktree"]);
+        let mut command = args(&["close", "--workspace", &self.id(), "--boot", &self.boot, "--remove-worktree"]);
         command.extend(force.then(|| "--force".to_string()));
         command.extend(unlock.then(|| "--unlock".to_string()));
         command

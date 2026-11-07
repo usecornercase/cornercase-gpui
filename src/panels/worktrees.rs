@@ -1,5 +1,6 @@
 mod actions;
 mod data;
+mod removal;
 mod rows;
 
 use std::collections::HashSet;
@@ -17,13 +18,16 @@ use crate::store::{self, Store, ToastKind};
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
 use data::{List, Order, Worktree, list_command, scope_note, shown, total};
-use rows::activity;
+use removal::Folder;
 
 const NO_WORKTREES: &str = "No worktrees on disk. Workspaces made with a worktree of their own show here.";
 const NO_MATCH: &str = "No worktree matches the filter.";
-const CLOSED_NOTE: &str = "Worktrees of closed projects, and leftovers git no longer knows, are listed to show what \
-                           they take; removing them here needs usecornercase/cornercase-terminal#671.";
-pub(crate) const BRANCH_NOTE: &str = "Deleting branches here needs usecornercase/cornercase-terminal#671.";
+
+#[derive(Default)]
+struct Removals {
+    running: usize,
+    answers: Vec<Folder>,
+}
 
 pub(crate) struct WorktreesPanel {
     project: Option<u64>,
@@ -33,6 +37,8 @@ pub(crate) struct WorktreesPanel {
     generation: u64,
     order: Order,
     ticked: HashSet<String>,
+    asking: Vec<String>,
+    removals: Removals,
     filter: Entity<TextField>,
     open: bool,
 }
@@ -60,6 +66,8 @@ impl WorktreesPanel {
             generation: 0,
             order: Order::default(),
             ticked: HashSet::new(),
+            asking: Vec::new(),
+            removals: Removals::default(),
             filter,
             open: true,
         };
@@ -158,13 +166,24 @@ impl WorktreesPanel {
         )
     }
 
-    fn footer(&self, worktrees: &[Worktree], cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn remove_ticked(&self, worktrees: &[Worktree], cx: &mut Context<Self>) -> Option<AnyElement> {
+        if self.ticked.iter().any(|path| self.asking.contains(path)) {
+            return Some(ui::busy_button("remove-ticked", "Checking…", ui::Tone::Danger).into_any_element());
+        }
         let store = Store::get(cx);
-        let ticked: Vec<Worktree> = worktrees
+        let ticked: Vec<String> = worktrees
             .iter()
-            .filter(|w| self.ticked.contains(&w.path) && w.removable() && activity(w, store.read(cx)).is_none())
-            .cloned()
+            .filter(|w| self.ticked.contains(&w.path) && w.removable() && self.activity(w, store.read(cx)).is_none())
+            .map(|w| w.path.clone())
             .collect();
+        (!ticked.is_empty()).then(|| {
+            ui::danger_button("remove-ticked", format!("Remove {}…", ticked.len()))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.check_remove(ticked.clone(), cx)))
+                .into_any_element()
+        })
+    }
+
+    fn footer(&self, worktrees: &[Worktree], cx: &mut Context<Self>) -> impl IntoElement + use<> {
         div()
             .flex()
             .items_center()
@@ -172,14 +191,7 @@ impl WorktreesPanel {
             .child(ui::dim(total(worktrees, now())))
             .when(self.measuring, |d| d.child(ui::busy("measuring", "measuring").text_size(px(11.))))
             .child(div().flex_1())
-            .when(!ticked.is_empty(), |d| {
-                let label = format!("Remove {}…", ticked.len());
-                d.child(
-                    ui::danger_button("remove-ticked", label).on_click(
-                        cx.listener(move |_, _: &ClickEvent, window, cx| Self::ask_remove(&ticked, window, cx)),
-                    ),
-                )
-            })
+            .children(self.remove_ticked(worktrees, cx))
     }
 
     fn list(&self, worktrees: &[Worktree], cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -222,7 +234,6 @@ impl Render for WorktreesPanel {
             .child(toolbar)
             .children(scope)
             .children(body)
-            .child(ui::dim(CLOSED_NOTE))
     }
 }
 

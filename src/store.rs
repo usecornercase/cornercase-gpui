@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
-use crate::model::accounts::{AccountsInfo, RestartAnswer, Selection, Stamp, Switch, switching_key};
+use crate::model::accounts::{AccountsInfo, ListMoves, RestartAnswer, Selection, Switch, switching_key};
 use crate::model::machines::run_on::Awaited;
 use crate::model::machines::run_on::clone::Cloned;
 use crate::model::machines::{self, Machine};
@@ -30,7 +30,7 @@ pub(crate) use jobs::Busy;
 use jobs::Jobs;
 pub(crate) use machine_read::{MachineRead, Reach};
 use machines_there::Homes;
-pub(crate) use machines_there::{MachineAct, NoticeThere};
+pub(crate) use machines_there::{MachineAct, NoticeThere, stale_note};
 pub(crate) use run_on::{CloneThere, StartThere};
 
 const NO_FLOW: &str = "This workspace runs no flow";
@@ -74,8 +74,9 @@ pub(crate) struct Store {
     pub accounts: AccountsInfo,
     pub selection: Selection,
     pub account_settings: AccountSettings,
+    pub accounts_changes: u64,
     accounts_asked: u64,
-    accounts_stamp: Option<Stamp>,
+    list_moves: ListMoves,
     next_toast: u64,
     app_stream: Option<Stream>,
 }
@@ -165,8 +166,9 @@ impl Store {
             accounts: AccountsInfo::default(),
             selection: Selection::default(),
             account_settings: AccountSettings::default(),
+            accounts_changes: 0,
             accounts_asked: 0,
-            accounts_stamp: None,
+            list_moves: ListMoves::default(),
             next_toast: 1,
             app_stream: None,
         });
@@ -180,14 +182,22 @@ impl Store {
     }
 
     pub(crate) fn follow_app(&mut self, cx: &mut Context<Self>) {
+        self.list_moves = ListMoves::default();
         self.app_stream = follow(cx, args(&["status", "--app", "--follow"]), |this, line, cx| {
             if let Ok(value) = serde_json::from_str::<Value>(&line) {
-                this.machines = machines::in_app(&value);
-                this.selection = Selection::of(&value);
-                this.app = Some(value);
-                cx.notify();
+                this.take_app(value, cx);
             }
         });
+    }
+
+    fn take_app(&mut self, value: Value, cx: &mut Context<Self>) {
+        self.machines = machines::in_app(&value);
+        self.selection = Selection::of(&value);
+        if self.list_moves.app_line(&value) {
+            self.list_accounts(cx);
+        }
+        self.app = Some(value);
+        cx.notify();
     }
 
     pub(crate) fn take_machines(&mut self, machines: Vec<Machine>, cx: &mut Context<Self>) {
@@ -195,7 +205,7 @@ impl Store {
         cx.notify();
     }
 
-    pub(crate) fn list_accounts(&mut self, cx: &mut Context<Self>) {
+    fn list_accounts(&mut self, cx: &mut Context<Self>) {
         self.accounts_asked += 1;
         let asked = self.accounts_asked;
         run(cx, args(&["account", "list", "--json"]), move |this, result, cx| {
@@ -211,6 +221,7 @@ impl Store {
             Ok(accounts) if accounts == self.accounts => {}
             Ok(accounts) => {
                 self.accounts = accounts;
+                self.accounts_changes += 1;
                 cx.notify();
             }
             Err(e) => self.toast(format!("Could not list the accounts: {}", cli::reason(&e)), ToastKind::Error, cx),
@@ -229,8 +240,7 @@ impl Store {
     }
 
     pub(crate) fn follow_accounts(&mut self, session: &Session, cx: &mut Context<Self>) {
-        let stamp = session.accounts_stamp();
-        if self.accounts_stamp.replace(stamp.clone()).is_some_and(|before| before != stamp) {
+        if self.list_moves.view_line(session) {
             self.list_accounts(cx);
         }
     }
@@ -249,10 +259,7 @@ impl Store {
                 let kind = if said.refused { ToastKind::Error } else { ToastKind::Info };
                 self.toast(said.text, kind, cx);
             }
-            Err(e) => {
-                self.toast(cli::reason(&e), ToastKind::Error, cx);
-                self.list_accounts(cx);
-            }
+            Err(e) => self.toast(cli::reason(&e), ToastKind::Error, cx),
         }
     }
 
@@ -409,11 +416,15 @@ impl Store {
         run_job(cx, id, args, move |this, result, cx| this.settle_removal(workspace, &result, cx));
     }
 
-    pub(crate) fn settle_removal(&mut self, workspace: u64, result: &anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn settle_removal(&mut self, workspace: u64, result: &anyhow::Result<String>, cx: &mut Context<Self>) {
         match result {
-            Ok(_) => self.jobs.removed(workspace),
+            Ok(_) => self.worktree_went(workspace, cx),
             Err(e) => self.toast(e.to_string(), ToastKind::Error, cx),
         }
+    }
+
+    pub(crate) fn worktree_went(&mut self, workspace: u64, cx: &mut Context<Self>) {
+        self.jobs.removed(workspace);
         cx.notify();
     }
 

@@ -2,10 +2,27 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.27
+## 0.1.30
 
 - **A plugin's button now acts on what this window shows.** Its action gets the project, workspace, tab and folder you are looking at here, not those of cornercase's own window, and a popup opens here without that window, at a size taken from this one. Over a machine's tab a button acts on your tab behind it, and its tooltip says so; a popup goes back to that tab.
 - **What a plugin keeps running beside a window now runs beside this one.** The processes plugins declare as `[[window]]` run while the window is on this computer: they stop when it closes or moves to another server, and start again when it comes back. A machine's tab does not count as leaving. Each plugin's card shows them: running with their pid, or stopped with the seconds until they start again.
+
+## 0.1.29
+
+- **A machine whose link dropped says when it tries again.** Its card, its row in the Machines sheet and the tabs of its agents in the sidebar count down, `reconnecting in 4 s`, and say `reconnecting…` while the try runs. When only you can fix it, such as cornercase missing there, it says why instead of promising a try.
+- **Closing or renaming a workspace on a machine can no longer hit the wrong one.** If the server there restarted while the action was on its way, it refuses and nothing changes: `vps restarted: nothing was sent`. The same goes for removing a worktree there.
+
+## 0.1.28
+
+- **A Recap's link finds its conversation wherever it went.** After a restart, or after closing an agent and reopening it, a link goes to the pane that holds that conversation now, where it used to stop at the workspace with a note that it could not look. A conversation that is really gone takes you to its workspace or its project, and if that is closed too, it says so.
+- **Accounts show up by themselves.** An account added or removed from a shell, by another window or by a program shows within a second in the Accounts sheet, on the panes and in the forms that start agents, with no click and no need to come back to the window.
+
+## 0.1.27
+
+- **The Worktrees sheet removes any worktree on disk.** An open workspace, a closed project's worktree with its teardown, an entry whose folder is gone, a folder whose repository is gone or that git no longer knows: every row can be ticked and removed now.
+- **It looks again before it asks.** Remove checks the rows first and then says what is at stake for each one: uncommitted files, programs working in it, commits not pushed, a lock, a teardown. The button says what it will do, such as `Remove anyway` or `Unlock and remove`, and only the folders you were warned about are forced, so one that changes after you were asked stays where it is and the sheet tells you.
+- **Also delete the branch.** Tick it in the question to delete the branches too. Commits that would be lost show in red first. The default branch and the main checkout's are never deleted.
+- **It says what happened, by name.** Removing runs in the background, each row leaving as it goes, and one message at the end names what went, a branch that was kept, a teardown that failed and a folder that could not be removed.
 
 ## 0.1.26
 

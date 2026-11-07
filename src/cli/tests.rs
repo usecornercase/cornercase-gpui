@@ -6,8 +6,8 @@ use std::sync::{Arc, mpsc};
 use serde_json::json;
 
 use super::{
-    BINARY, Binary, CALLER, Job, Queue, QueueTap, Remote, Target, Worker, gather_input, gather_scroll, moves_view,
-    spawn_failure, use_binary,
+    BINARY, Binary, CALLER, Job, Queue, QueueTap, Remote, Target, Worker, failure, gather_input, gather_scroll,
+    moves_view, spawn_failure, stale_boot, use_binary,
 };
 
 fn args(cmd: &Command) -> Vec<&str> {
@@ -192,4 +192,18 @@ fn what_a_machines_queue_is_asked_to_show_does_not_leave_its_place() {
     let (queue, tap) = QueueTap::new();
     queue.cmd(vec!["focus".into(), "--tab".into(), "3".into()]);
     assert_eq!(tap.commands(), [["focus", "--tab", "3"]]);
+}
+
+#[test]
+fn a_command_ending_with_status_four_was_refused_for_its_boot() {
+    let stale = failure("close", Some(4), b"error: this request is for the cornercase server started as 1-2\n");
+    assert!(stale_boot(&stale));
+    assert_eq!(super::reason(&stale), "this request is for the cornercase server started as 1-2");
+}
+
+#[test]
+fn a_command_failing_any_other_way_was_not_refused_for_its_boot() {
+    assert!(!stale_boot(&failure("close", Some(1), b"error: no such workspace")));
+    assert!(!stale_boot(&failure("close", None, b"")));
+    assert_eq!(super::reason(&failure("close", Some(1), b"")), "failed");
 }

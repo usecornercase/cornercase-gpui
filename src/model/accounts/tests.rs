@@ -287,22 +287,65 @@ fn session_of(panes: Vec<PaneInfo>, revision: u64) -> Session {
     Session { projects: vec![project], config: super::super::ConfigInfo { revision }, ..Default::default() }
 }
 
-#[test]
-fn the_stamp_stays_while_the_panes_keep_their_accounts() {
-    let before = session_of(vec![pane(AGENT_ON_WORK)], 3);
-    let mut after = pane(AGENT_ON_WORK);
-    after.status = Some("working".into());
-    assert_eq!(before.accounts_stamp(), session_of(vec![after], 3).accounts_stamp());
+fn without_revision() -> Value {
+    serde_json::from_str(fixture!("app/snapshot.json")).expect("the feed")
+}
+
+fn with_revision() -> Value {
+    serde_json::from_str(fixture!("app/accounts-revision.json")).expect("the feed")
 }
 
 #[test]
-fn the_stamp_changes_with_the_config() {
-    let before = session_of(vec![pane(AGENT_ON_WORK)], 3);
-    assert_ne!(before.accounts_stamp(), session_of(vec![pane(AGENT_ON_WORK)], 4).accounts_stamp());
+fn the_first_line_of_the_app_stream_lists_the_accounts() {
+    assert!(ListMoves::default().app_line(&without_revision()));
+    assert!(ListMoves::default().app_line(&with_revision()));
 }
 
 #[test]
-fn the_stamp_changes_when_a_pane_uses_an_account_it_had_not_seen() {
-    let before = session_of(vec![pane(PLAIN_SHELL)], 3);
-    assert_ne!(before.accounts_stamp(), session_of(vec![pane(PLAIN_SHELL), pane(SHELL_ON_WORK)], 3).accounts_stamp());
+fn a_line_with_no_revision_after_one_with_none_lists_nothing() {
+    let mut moves = ListMoves::default();
+    moves.app_line(&without_revision());
+    assert!(!moves.app_line(&without_revision()));
+}
+
+#[test]
+fn the_revision_s_first_move_lists_again() {
+    let mut moves = ListMoves::default();
+    moves.app_line(&without_revision());
+    assert!(moves.app_line(&with_revision()));
+}
+
+#[test]
+fn a_line_that_keeps_the_revision_lists_nothing() {
+    let mut moves = ListMoves::default();
+    moves.app_line(&with_revision());
+    assert!(!moves.app_line(&with_revision()));
+}
+
+#[test]
+fn a_revision_that_moves_again_lists_again() {
+    let mut moves = ListMoves::default();
+    moves.app_line(&with_revision());
+    let mut next = with_revision();
+    next["accounts_revision"] = 2.into();
+    assert!(moves.app_line(&next));
+}
+
+#[test]
+fn the_view_s_first_line_leaves_the_list_to_the_app_stream() {
+    assert!(!ListMoves::default().view_line(&session_of(vec![pane(AGENT_ON_WORK)], 3)));
+}
+
+#[test]
+fn a_view_line_that_moves_the_config_lists_again() {
+    let mut moves = ListMoves::default();
+    moves.view_line(&session_of(vec![pane(AGENT_ON_WORK)], 3));
+    assert!(moves.view_line(&session_of(vec![pane(AGENT_ON_WORK)], 4)));
+}
+
+#[test]
+fn a_pane_on_an_account_not_seen_before_lists_nothing() {
+    let mut moves = ListMoves::default();
+    moves.view_line(&session_of(vec![pane(PLAIN_SHELL)], 3));
+    assert!(!moves.view_line(&session_of(vec![pane(PLAIN_SHELL), pane(SHELL_ON_WORK)], 3)));
 }
