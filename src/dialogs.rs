@@ -16,6 +16,7 @@ use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
 mod context;
 mod merge_check;
+mod pairing;
 mod pull_request;
 mod remote;
 mod run_on;
@@ -23,6 +24,7 @@ mod shortcuts;
 
 pub(crate) use context::{VIEW_CONTEXT, context_choices, view_context};
 pub(crate) use merge_check::merge_check;
+pub(crate) use pairing::{PairKey, pairing};
 pub(crate) use pull_request::{pull_request, pull_tag, shown_pull_request, stack_tag};
 pub(crate) use remote::{PathQuestion, ask_path, connect, ssh_hosts};
 pub(crate) use run_on::{Gate, RunOn, RunOnEvent, accounts_of, agent_line, starting_there};

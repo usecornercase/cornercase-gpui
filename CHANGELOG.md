@@ -2,11 +2,18 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.31
+## 0.1.32
 
 - **Run setup, in a worktree's menu.** It runs the project's setup again in a new tab, to retry after a fix, and the menu offers it when cornercase's own does: on a worktree of a project with a setup that isn't already running it. The status bar says it is running, and a setup that fails says so with its exit status.
 - **Import a VS Code workspace.** Import VS Code workspace…, in the Projects `+` and in a group's menu, turns a `.code-workspace` file into a group with each folder as a project, or puts them in that group. A message says how many went in, and how many folders were not found or could not open. On a server on another machine it asks for the file's path there.
 - **Adding a project to a group takes one step**, so a failure can't leave it outside the group. A file picker that cannot open now says why instead of doing nothing.
+
+## 0.1.31
+
+- **Pair a phone from Settings › Remote.** Paired browsers, Telegram phone and Discord phone each have a button that opens a dialog with a QR code to scan, the address under it to copy or open, and what to do next, in cornercase's own words. Closing the dialog drops the code. Once the phone connects, the dialog closes and says so, and the row shows the chat's name.
+- **When it cannot pair, the dialog says why**: remote access is off, Tailscale is not ready, or the bot's token is missing, with `Try again` once that is fixed.
+- **Pick the server of the Discord forum in Settings › Remote.** When the bot is in several of your servers, they are listed under the forum's line: click one, and the forum is made there.
+- This works on another machine's server too, with `--remote`.
 
 ## 0.1.30
 
