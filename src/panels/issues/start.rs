@@ -7,7 +7,7 @@ use gpui::{
 use super::IssuesPanel;
 use super::data::{Agents, Choice, EFFORT_AGENTS, Issue, Place, Sources, StartPlan, When};
 use crate::cli;
-use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, starting_there};
+use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts};
 use crate::model::Spot;
 use crate::model::machines::run_on::Starting;
 use crate::model::machines::run_on::checks::Wanted;
@@ -256,7 +256,7 @@ impl StartForm {
     }
 
     fn submit(&mut self, cx: &mut Context<Self>) {
-        if starting_there(cx) {
+        if dialog_starts(cx) {
             return;
         }
         let plan = match self.plan(cx) {
@@ -272,17 +272,15 @@ impl StartForm {
     }
 
     fn submit_here(&mut self, plan: &StartPlan, cx: &mut Context<Self>) {
-        let panel = self.panel.clone();
         if !self.schedule {
-            close(cx);
-            let _ = panel.update(cx, |p, cx| p.start(plan, cx));
+            Store::get(cx).update(cx, |s, cx| s.start_here(plan.start_here(), cx));
             return;
         }
         let Some(at) = self.when.at(&self.at.read(cx).text()) else {
             return self.fail(format!("Say when: {}.", self.when.placeholder().unwrap_or_default()), cx);
         };
         close(cx);
-        let _ = panel.update(cx, |_, cx| IssuesPanel::schedule(plan, at, cx));
+        let _ = self.panel.update(cx, |_, cx| IssuesPanel::schedule(plan, at, cx));
     }
 
     fn submit_there(plan: &StartPlan, spot: Spot, cx: &mut Context<Self>) {
@@ -423,7 +421,7 @@ impl StartForm {
     }
 
     fn go_button(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
-        if starting_there(cx) {
+        if dialog_starts(cx) {
             return ui::busy_button("start-go", "Starting…", Tone::Primary);
         }
         let (glyph, label) = if self.schedule { (Icon::Queue, "Schedule") } else { (Icon::Play, "Start") };

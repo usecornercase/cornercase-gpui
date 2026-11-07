@@ -118,7 +118,7 @@ fn tools(window_frame: Frame, terminal: &FocusHandle, cx: &mut Context<Root>) ->
 fn new_tab_menu() -> Vec<Entry> {
     vec![
         act("New shell tab", cmd(&["new-tab", "--focus"])),
-        act("Start the default agent", cmd(&["start", "--focus"])),
+        act("Start the default agent", dialogs::start_in(&[])),
         item("Start an agent…", |_, window, cx| dialogs::start_agent(window, cx)),
     ]
 }

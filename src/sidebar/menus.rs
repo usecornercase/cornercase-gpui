@@ -1,11 +1,12 @@
 use gpui::{App, Context, Pixels, Point, SharedString, Window};
 
 use super::actions::{into_group, ungroup};
+use super::look::Look;
 use super::workspace::plural;
 use super::{Fold, Target, cmd, forms};
 use crate::app::Root;
 use crate::cli;
-use crate::context_menu::{Entry, act, act_busy, danger, item, note, submenu};
+use crate::context_menu::{Entry, act, act_busy, danger, item, submenu};
 use crate::dialogs;
 use crate::model::{PaneInfo, Project, PullRequest, Session, Workspace};
 use crate::panels::PanelKind;
@@ -15,8 +16,7 @@ use crate::panels::plugins::{Group, Run, Spot, run_action};
 use crate::store::{self, Busy, ToastKind};
 use crate::ui;
 
-const VS_CODE_NOTE: &str = "Importing a VS Code workspace\nneeds usecornercase/cornercase-terminal#673";
-const RUN_SETUP_NOTE: &str = "Run setup\nneeds usecornercase/cornercase-terminal#672";
+const IMPORT_VS_CODE: &str = "Import VS Code workspace…";
 
 fn rename_item(label: &str, target: Target) -> Entry {
     item(label.to_string(), move |this, window, cx| this.start_rename(target, window, cx))
@@ -85,7 +85,7 @@ pub(super) fn projects_menu() -> Vec<Entry> {
         item("Open project…", Root::open_project),
         item("New group…", |_, window, cx| forms::new_group(None, window, cx)),
         Entry::Separator,
-        note(VS_CODE_NOTE),
+        item(IMPORT_VS_CODE, |_, window, cx| Root::import_code_workspace(None, window, cx)),
     ]
 }
 
@@ -119,6 +119,7 @@ fn group_menu(session: &Session, id: u64) -> Vec<Entry> {
     let count = session.projects.iter().filter(|p| p.group == Some(id)).count();
     vec![
         item("Add project…", move |_, window, cx| Root::open_project_into(Some(id), window, cx)),
+        item(IMPORT_VS_CODE, move |_, window, cx| Root::import_code_workspace(Some(id), window, cx)),
         Entry::Separator,
         rename_item("Rename group", target),
         item("Icon and colour…", move |_, window, cx| forms::group_style(id, style_name.clone(), window, cx)),
@@ -151,7 +152,7 @@ fn project_menu(session: &Session, id: u64, openers: &[Found]) -> Vec<Entry> {
     let mut entries = vec![
         new_workspace_item(Some(id)),
         start_flow_item(Some(id)),
-        act_busy("Start agent here", dialogs::starting(""), cmd(&["start", "--project", &id.to_string(), "--focus"])),
+        act_busy("Start agent here", dialogs::starting(""), dialogs::start_in(&["--project", &id.to_string()])),
         Entry::Separator,
         rename_item("Rename project", target),
         submenu("Move to group", move_to_group_items(session, project)),
@@ -250,16 +251,33 @@ fn agent_items(ws: &Workspace) -> Vec<Entry> {
     entries
 }
 
-fn run_setup_note(ws: &Workspace) -> Option<Entry> {
-    (ws.worktree && ws.setup.as_deref() != Some("running")).then(|| note(RUN_SETUP_NOTE))
+fn setup_args(workspace: u64) -> Vec<String> {
+    cmd(&["setup", "--workspace", &workspace.to_string(), "--json", "--focus"])
 }
 
-fn workspace_menu(session: &Session, id: u64, openers: &[Found]) -> Vec<Entry> {
-    let Some((_, ws)) = session.workspace(id) else { return Vec::new() };
+fn run_setup(root: &mut Root, workspace: u64, name: &str, cx: &mut Context<Root>) {
+    let busy = Busy::new(format!("setup:{workspace}"), format!("Running the setup of {name}…"));
+    let args = root.store.read(cx).with_view(setup_args(workspace));
+    store::run_busy(cx, busy, args, |this: &mut Root, result, cx| {
+        if let Err(e) = result {
+            this.say(&cli::reason(&e), cx);
+        }
+    });
+}
+
+fn run_setup_item(session: &Session, project: &Project, ws: &Workspace, look: &Look) -> Option<Entry> {
+    let has_setup = look.has_setup(project, session.home.as_deref());
+    let offered = ws.worktree && ws.setup.as_deref() != Some("running") && has_setup;
+    let (id, name) = (ws.id, ws.name.clone());
+    offered.then(|| item("Run setup", move |this, _, cx| run_setup(this, id, &name, cx)))
+}
+
+fn workspace_menu(session: &Session, id: u64, openers: &[Found], look: &Look) -> Vec<Entry> {
+    let Some((project, ws)) = session.workspace(id) else { return Vec::new() };
     let ids = id.to_string();
     let mut entries = vec![
         act("New tab here", cmd(&["new-tab", "--workspace", &ids, "--focus"])),
-        act_busy("Start agent here", dialogs::starting(""), cmd(&["start", "--workspace", &ids, "--focus"])),
+        act_busy("Start agent here", dialogs::starting(""), dialogs::start_in(&["--workspace", &ids])),
     ];
     entries.extend(agent_items(ws));
     entries.push(Entry::Separator);
@@ -275,7 +293,7 @@ fn workspace_menu(session: &Session, id: u64, openers: &[Found]) -> Vec<Entry> {
     entries.push(Entry::Separator);
     entries.extend(path_items(&ws.path, openers));
     entries.push(panel_item("Ports…", PanelKind::Ports, Some(("workspace", id))));
-    entries.extend(run_setup_note(ws));
+    entries.extend(run_setup_item(session, project, ws, look));
     entries.push(Entry::Separator);
     if ws.worktree {
         let name = ws.name.clone();
@@ -335,7 +353,7 @@ impl Root {
         match target {
             Target::Group(id) => group_menu(session, id),
             Target::Project(id) => project_menu(session, id, &openers),
-            Target::Workspace(id) => workspace_menu(session, id, &openers),
+            Target::Workspace(id) => workspace_menu(session, id, &openers, &self.side.look.current),
             Target::Tab(id) => self.tab_menu(id, cx),
         }
     }

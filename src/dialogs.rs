@@ -27,7 +27,7 @@ pub(crate) use merge_check::merge_check;
 pub(crate) use pairing::{PairKey, pairing};
 pub(crate) use pull_request::{pull_request, pull_tag, shown_pull_request, stack_tag};
 pub(crate) use remote::{PathQuestion, ask_path, connect, ssh_hosts};
-pub(crate) use run_on::{Gate, RunOn, RunOnEvent, accounts_of, agent_line, starting_there};
+pub(crate) use run_on::{Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts};
 pub(crate) use shortcuts::shortcuts;
 
 pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> Div {
@@ -139,7 +139,7 @@ fn workspace_args_there(name: &str, worktree: bool, spot: &Spot) -> Vec<String> 
 impl NewWorkspace {
     fn submit(&mut self, cx: &mut Context<Self>) {
         let name = self.name.read(cx).text().trim().to_string();
-        if name.is_empty() || starting_there(cx) {
+        if name.is_empty() || dialog_starts(cx) {
             return;
         }
         let back = self.name.read(cx).focus_handle(cx);
@@ -170,7 +170,7 @@ impl NewWorkspace {
     }
 
     fn create_button(cx: &Context<Self>) -> Stateful<Div> {
-        if starting_there(cx) {
+        if dialog_starts(cx) {
             return ui::busy_button("create", "Creating…", Tone::Primary);
         }
         ui::primary_button("create", "Create").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
@@ -218,12 +218,21 @@ pub(crate) struct StartAgent {
     accounts: AccountPickers,
 }
 
+const SHOWN_ONCE_OPEN: [&str; 2] = ["--focus", "--placed"];
+
+pub(crate) fn start_in(place: &[&str]) -> Vec<String> {
+    let mut a = args(&["start"]);
+    a.extend(args(place));
+    a.extend(args(&SHOWN_ONCE_OPEN));
+    a
+}
+
 fn start_args(agent: &str, prompt: &str, worktree: &str, picks: &[AccountPick]) -> Vec<String> {
     let mut a = args(&["start"]);
     if !agent.is_empty() {
         a.push(agent.to_string());
     }
-    a.push("--focus".into());
+    a.extend(args(&SHOWN_ONCE_OPEN));
     if !prompt.is_empty() {
         a.extend(args(&["--prompt", prompt]));
     }

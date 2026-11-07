@@ -134,9 +134,50 @@ impl Render for Connect {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PathKind {
+    Folder,
+    CodeWorkspace,
+}
+
+impl PathKind {
+    fn placeholder(self) -> &'static str {
+        match self {
+            Self::Folder => "~/src/my-project",
+            Self::CodeWorkspace => "~/src/team.code-workspace",
+        }
+    }
+
+    fn label(self, host: &str) -> String {
+        match self {
+            Self::Folder => format!("Folder on {host}"),
+            Self::CodeWorkspace => format!("File on {host}"),
+        }
+    }
+
+    fn hint(self, here: &str) -> String {
+        let picker = match self {
+            Self::Folder => "folder",
+            Self::CodeWorkspace => "file",
+        };
+        format!("From its home folder, or its full path there. The {picker} picker only sees this {here}'s disk.")
+    }
+}
+
 pub(crate) struct PathQuestion {
-    pub title: String,
-    pub button: &'static str,
+    title: String,
+    button: &'static str,
+    kind: PathKind,
+}
+
+impl PathQuestion {
+    pub(crate) fn folder(title: String, button: &'static str) -> Self {
+        Self { title, button, kind: PathKind::Folder }
+    }
+
+    pub(crate) fn code_workspace(title: String, button: &'static str) -> Self {
+        Self { title, button, kind: PathKind::CodeWorkspace }
+    }
 }
 
 type Then = Rc<dyn Fn(String, &mut Window, &mut App)>;
@@ -156,8 +197,8 @@ pub(crate) fn ask_path(
 ) {
     let host = cli::host().unwrap_or_default();
     let view = cx.new(|cx| {
-        let field =
-            text_field("~/src/my-project", cx, |this: &mut AskPath, window, cx| this.submit(window, cx), window);
+        let placeholder = question.kind.placeholder();
+        let field = text_field(placeholder, cx, |this: &mut AskPath, window, cx| this.submit(window, cx), window);
         AskPath { question, host, field, then: Rc::new(then) }
     });
     let focus = view.read(cx).field.read(cx).focus_handle(cx);
@@ -181,13 +222,13 @@ impl Render for AskPath {
             .flex()
             .flex_col()
             .gap(px(8.))
-            .child(ui::field(format!("Folder on {}", self.host), ui::boxed(&self.field, window, cx)))
-            .child(ui::dim(format!(
-                "From its home folder, or its full path there. The folder picker only sees this {}'s disk.",
-                desktop::here()
-            )));
+            .child(ui::field(self.question.kind.label(&self.host), ui::boxed(&self.field, window, cx)))
+            .child(ui::dim(self.question.kind.hint(desktop::here())));
         let button = ui::primary_button("ask-path", self.question.button)
             .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.submit(window, cx)));
         frame(self.question.title.clone(), body, cancel_and(button))
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -2,11 +2,22 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.32
+## 0.1.34
 
 - **The agents section lists a machine's agents too.** With the section on, each linked machine's agents are rows, tagged with the machine, after the agents of the project they share with you, and those of a project only on the machine come last. A child sits under the agent that started it on that machine. While the link is down the rows stay, dimmed, and say when they were last seen.
 - **A click shows that agent's tab**, live, as a click on its tab row does. Nothing moves on the machine.
 - **Folding one folds it on the machine**, with its arrow or Collapse and Expand in its menu, so the machine's own window shows the same. A folded row says how many it hides and whether one of them needs you. If the machine fell, restarted or no longer has that agent, a message says so and nothing is sent.
+
+## 0.1.33
+
+- **Run setup, in a worktree's menu.** It runs the project's setup again in a new tab, to retry after a fix, and the menu offers it when cornercase's own does: on a worktree of a project with a setup that isn't already running it. The status bar says it is running, and a setup that fails says so with its exit status.
+- **Import a VS Code workspace.** Import VS Code workspace…, in the Projects `+` and in a group's menu, turns a `.code-workspace` file into a group with each folder as a project, or puts them in that group. A message says how many went in, and how many folders were not found or could not open. On a server on another machine it asks for the file's path there.
+- **Adding a project to a group takes one step**, so a failure can't leave it outside the group. A file picker that cannot open now says why instead of doing nothing.
+
+## 0.1.32
+
+- **Starting an agent no longer waits on its folder question.** The new tab opens at once, from `+`, ⌘G, a row's Start agent here and an issue's Start, and if the agent asks whether to trust the folder you answer it right there. Until now, from `+`, ⌘G or a row, what you typed never reached that question, and Starting an agent… stayed in the status bar.
+- **Starting work on an issue stays in its form until the tab opens.** The button says Starting… while the issue is read and the worktree made, then the form and the sheet close on the new tab. If the start is refused, the form stays with what you typed. The message now says `claude is starting on #7`, since what happens next shows in the tab.
 
 ## 0.1.31
 
