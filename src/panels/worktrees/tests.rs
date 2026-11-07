@@ -1,6 +1,5 @@
 use super::data::{
-    Freed, List, Order, Tone, Worktree, free_command, free_message, list_command, remove_message, scope_note, shown,
-    total,
+    Freed, List, Order, Tone, Worktree, free_command, free_message, last_folder, list_command, scope_note, shown, total,
 };
 use crate::panels::flows::model::epoch;
 use crate::test_util::fixture;
@@ -37,7 +36,6 @@ fn a_leftover_cornercase_could_not_scan_is_still_listed() {
     let list = serde_json::from_str::<List>(fixture!("worktrees/leftovers.json")).expect("the list parses").worktrees;
     assert_eq!(list[0].marks(), [("repository gone".to_string(), Tone::Warn)]);
     assert_eq!(list[0].size_label(false), "8.0 KB");
-    assert_eq!(list[0].remove_command(), None);
 }
 
 #[test]
@@ -50,20 +48,29 @@ fn the_size_names_the_part_in_build_folders() {
 }
 
 #[test]
-fn only_an_open_workspace_can_be_removed_here() {
+fn every_kind_of_row_can_be_removed() {
     let list = worktrees();
     assert!(named(&list, "feat/try").removable());
-    assert!(!named(&list, "old/thing").removable());
-    assert_eq!(named(&list, "old/thing").remove_command(), None);
+    assert!(named(&list, "old/thing").removable());
+    let leftovers = serde_json::from_str::<List>(fixture!("worktrees/leftovers.json")).expect("the list parses");
+    assert!(leftovers.worktrees[0].removable());
 }
 
 #[test]
-fn removing_forces_only_when_files_changed() {
-    let list = worktrees();
-    let risky = named(&list, "feat/try").remove_command().expect("removable");
-    assert_eq!(risky, ["close", "--workspace", "22", "--remove-worktree", "--force"]);
-    let clean = named(&list, "feat/merged").remove_command().expect("removable");
-    assert_eq!(clean, ["close", "--workspace", "25", "--remove-worktree"]);
+fn a_role_of_a_running_flow_and_a_row_being_removed_cannot_be_ticked() {
+    assert!(!Worktree { run_role: true, ..Worktree::default() }.removable());
+    assert!(!Worktree { removing: true, ..Worktree::default() }.removable());
+}
+
+#[test]
+fn a_row_with_no_branch_goes_by_its_folder() {
+    let leftover = Worktree {
+        project_name: "shop".into(),
+        path: "/home/ana/.cornercase/worktrees/shop/gone-repo".into(),
+        ..Worktree::default()
+    };
+    assert_eq!(leftover.title(), "shop › gone-repo");
+    assert_eq!(last_folder("C:\\Users\\ana\\gone"), "gone");
 }
 
 #[test]
@@ -109,13 +116,6 @@ fn freeing_warns_about_what_runs_in_the_worktree() {
     let text = free_message(&freed);
     assert!(text.starts_with("Frees 296.0 KB: node_modules 296.0 KB."));
     assert!(text.ends_with("Python runs in it and may still use them."));
-}
-
-#[test]
-fn removing_ends_by_saying_what_deleting_the_branch_waits_on() {
-    let list = worktrees();
-    let text = remove_message(&[named(&list, "feat/merged")]);
-    assert!(text.ends_with("Deleting branches here needs usecornercase/cornercase-terminal#671."), "{text}");
 }
 
 #[test]

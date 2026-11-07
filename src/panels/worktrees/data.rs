@@ -3,7 +3,6 @@ use std::fmt::Write as _;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::BRANCH_NOTE;
 use crate::panels::files::disk::human_size;
 use crate::panels::flows::model::{ago, epoch};
 
@@ -82,7 +81,7 @@ pub(super) enum Order {
 
 impl Worktree {
     pub(super) fn title(&self) -> String {
-        format!("{} › {}", self.project_name, self.branch.as_deref().unwrap_or("(no branch)"))
+        format!("{} › {}", self.project_name, self.branch.as_deref().unwrap_or_else(|| last_folder(&self.path)))
     }
 
     pub(super) fn matches(&self, filter: &str) -> bool {
@@ -168,21 +167,12 @@ impl Worktree {
     }
 
     pub(super) fn removable(&self) -> bool {
-        self.workspace.is_some() && !self.run_role && !self.removing
+        !self.run_role && !self.removing
     }
+}
 
-    pub(super) fn remove_command(&self) -> Option<Vec<String>> {
-        let id = self.workspace.filter(|_| self.removable())?;
-        let mut command: Vec<String> =
-            ["close", "--workspace", &id.to_string(), "--remove-worktree"].map(str::to_string).to_vec();
-        if self.changed.is_some_and(|n| n > 0) {
-            command.push("--force".into());
-        }
-        if self.lock.is_some() {
-            command.push("--unlock".into());
-        }
-        Some(command)
-    }
+pub(super) fn last_folder(path: &str) -> &str {
+    path.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
 pub(super) fn free_command(path: &str, check: bool, force: bool) -> Vec<String> {
@@ -244,19 +234,4 @@ pub(super) fn free_message(freed: &Freed) -> String {
         let _ = write!(text, " {} runs in it and may still use them.", freed.running.join(", "));
     }
     text
-}
-
-pub(super) fn remove_message(worktrees: &[&Worktree]) -> String {
-    let lines: Vec<String> = worktrees
-        .iter()
-        .map(|w| {
-            let risks = if w.risks.is_empty() { "nothing is lost".to_string() } else { w.risks.join("; ") };
-            format!("{}: {risks}.", w.title())
-        })
-        .collect();
-    format!(
-        "Their tabs stop and the project's teardown runs, then git removes each folder. The branches stay. {} \
-         {BRANCH_NOTE}",
-        lines.join(" ")
-    )
 }
