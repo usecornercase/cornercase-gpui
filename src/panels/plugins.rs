@@ -4,14 +4,16 @@ mod fetch;
 mod install;
 mod offers;
 mod status;
+mod window_processes;
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, FontWeight,
+    AnyElement, AnyView, App, AppContext as _, AsyncApp, ClickEvent, Context, Div, Entity, Focusable as _, FontWeight,
     InteractiveElement as _, IntoElement, ParentElement as _, PathPromptOptions, Render, Rgba, SharedString, Stateful,
-    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::cli;
@@ -25,12 +27,14 @@ use ask::{Question, text_box};
 use data::{List, Plugin, first_line};
 use fetch::Checked;
 use install::{FETCHING, INSTALLING, LINKING, UPDATING_ALL, checking};
-use offers::{Action, VIEW_WAITS, target};
-use status::Health;
+use offers::{Action, target};
+use status::{Health, Service};
+use window_processes::{Card, WindowProcesses};
 
 #[cfg(test)]
 pub(crate) use offers::listed_offers;
 pub(crate) use offers::{Button, Group, Offers, Run, Spot, read_offers, run_action};
+pub(crate) use window_processes::keep_window_processes;
 
 const LOG_LINES: &str = "60";
 const WARNING: &str = "A plugin runs as you and can do anything you can, including typing into every terminal. \
@@ -38,6 +42,7 @@ const WARNING: &str = "A plugin runs as you and can do anything you can, includi
 const NO_PLUGINS: &str = "No plugins yet. Install one from GitHub or a git address above, or link a folder of \
                           yours while you write one.";
 const NO_STATUS: &str = "What its services are doing needs the server, which did not answer";
+const COUNTS_EVERY: Duration = Duration::from_secs(1);
 
 pub(crate) struct PluginsPanel {
     plugins: Option<Vec<Plugin>>,
@@ -45,6 +50,7 @@ pub(crate) struct PluginsPanel {
     logs: HashMap<String, String>,
     checks: HashMap<String, Checked>,
     source: Entity<TextField>,
+    windows: Entity<WindowProcesses>,
     open: bool,
 }
 
@@ -83,6 +89,23 @@ fn health_colour(health: Health) -> Rgba {
     }
 }
 
+fn service_chips(services: &[Service]) -> Vec<Div> {
+    services.iter().map(|s| chip(s.describe(), health_colour(s.health()))).collect()
+}
+
+fn chips_row(label: &'static str, chips: Vec<Div>) -> Div {
+    div().flex().flex_wrap().items_center().gap(px(6.)).child(ui::dim(label)).children(chips)
+}
+
+async fn keep_counting(this: WeakEntity<PluginsPanel>, cx: &mut AsyncApp) {
+    loop {
+        cx.background_executor().timer(COUNTS_EVERY).await;
+        if this.update(cx, PluginsPanel::count_down).is_err() {
+            return;
+        }
+    }
+}
+
 fn removal(plugin: &Plugin) -> (Question, Vec<String>) {
     let (title, message, button, verb) = if plugin.source.installed() {
         ("Remove", "It is stopped and its installed copy deleted; its settings and data stay.", "Remove", "remove")
@@ -118,10 +141,26 @@ impl PluginsPanel {
             this.open = open;
         })
         .detach();
-        let mut this =
-            Self { plugins: None, error: None, logs: HashMap::new(), checks: HashMap::new(), source, open: true };
+        let windows = window_processes::get(cx);
+        cx.observe(&windows, |_, _, cx| cx.notify()).detach();
+        cx.spawn(async move |this, cx| keep_counting(this, cx).await).detach();
+        let mut this = Self {
+            plugins: None,
+            error: None,
+            logs: HashMap::new(),
+            checks: HashMap::new(),
+            source,
+            windows,
+            open: true,
+        };
         this.reload(cx);
         this
+    }
+
+    fn count_down(&mut self, cx: &mut Context<Self>) {
+        if self.open && self.windows.read(cx).seen.counting() {
+            cx.notify();
+        }
     }
 
     fn reload(&mut self, cx: &mut Context<Self>) {
@@ -287,9 +326,19 @@ impl PluginsPanel {
         }
         let store = Store::get(cx);
         let Some(status) = &store.read(cx).plugins.status else { return Some(ui::dim(NO_STATUS)) };
-        let chips: Vec<Div> =
-            status.services(&plugin.id).iter().map(|s| chip(s.describe(), health_colour(s.health()))).collect();
-        Some(div().flex().flex_wrap().items_center().gap(px(6.)).child(ui::dim("Services")).children(chips))
+        Some(chips_row("Services", service_chips(status.services(&plugin.id))))
+    }
+
+    fn window_processes_row(&self, plugin: &Plugin, cx: &App) -> Option<Div> {
+        if cli::host().is_some() || !plugin.keeps_window_processes() {
+            return None;
+        }
+        let chips = match self.windows.read(cx).seen.card(&plugin.id, Instant::now()) {
+            Card::Starting => vec![chip("starting", colours::waiting())],
+            Card::NotRunning(why) => vec![chip(format!("not running, trying again: {why}"), colours::failed())],
+            Card::Processes(services) => service_chips(&services),
+        };
+        Some(chips_row("Window processes", chips))
     }
 
     fn action_button(action: Action, shown: Shown, cx: &mut Context<Self>) -> AnyElement {
@@ -318,12 +367,6 @@ impl PluginsPanel {
         let buttons: Vec<AnyElement> =
             actions.into_iter().map(|action| Self::action_button(action, shown, cx)).collect();
         Some(div().flex().flex_wrap().items_center().gap(px(6.)).pt(px(2.)).child(ui::dim("Actions")).children(buttons))
-    }
-
-    fn view_note(cx: &App) -> Option<Div> {
-        let store = Store::get(cx);
-        let waits = store.read(cx).plugins.list.actions.iter().any(Action::waits_on_the_view);
-        waits.then(|| div().text_size(px(12.)).text_color(colours::muted()).child(VIEW_WAITS))
     }
 
     fn plugin_buttons(&self, plugin: &Plugin, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -376,8 +419,8 @@ impl PluginsPanel {
             .children(description.map(|d| div().text_size(px(12.)).text_color(colours::muted()).child(d)))
             .children(plugin.error.clone().map(|e| div().text_size(px(12.)).text_color(colours::failed()).child(e)))
             .child(ui::dim(plugin.facts()))
-            .children(plugin.window_note().filter(|_| cli::host().is_none()).map(ui::dim))
             .children(Self::services_row(plugin, cx))
+            .children(self.window_processes_row(plugin, cx))
             .children(Self::action_buttons(plugin, cx))
             .when(cli::host().is_none(), |d| d.child(self.plugin_buttons(plugin, cx)))
             .children(self.logs.get(&plugin.id).map(|text| log_view(&plugin.id, text)))
@@ -479,7 +522,6 @@ impl Render for PluginsPanel {
             .flex_col()
             .gap(px(10.))
             .child(div().text_size(px(12.)).text_color(colours::muted()).child(WARNING))
-            .children(Self::view_note(cx))
             .child(install)
             .child(ui::section("Installed"))
             .children(Self::problem(cx))

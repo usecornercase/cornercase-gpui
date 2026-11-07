@@ -3,6 +3,7 @@ mod partial;
 mod remote;
 mod requests;
 mod typist;
+mod window_processes;
 
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
@@ -23,6 +24,7 @@ pub(crate) use partial::{run_partial, run_printed};
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
 use typist::{OnError, Typist};
+pub(crate) use window_processes::{keep_window_processes, stop_window_processes};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) enum Target {
@@ -237,15 +239,23 @@ pub(crate) fn stream_on<S: AsRef<str>>(
     let mut cmd = target.command(args);
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = spawn(&mut cmd)?;
+    read_output(&mut child, on_line, on_end)?;
+    Ok(keep(child))
+}
+
+fn read_output(
+    child: &mut Child,
+    on_line: impl FnMut(String) + Send + 'static,
+    on_end: impl FnOnce(String) + Send + 'static,
+) -> Result<()> {
     let stdout = child.stdout.take().context("no stdout")?;
     let stderr = child.stderr.take().context("no stderr")?;
-    let stream = keep(child);
     let err_reader = thread::spawn(move || read_all(stderr));
     thread::spawn(move || {
         read_lines(stdout, on_line);
         on_end(err_reader.join().unwrap_or_default());
     });
-    Ok(stream)
+    Ok(())
 }
 
 fn keep(child: Child) -> Stream {

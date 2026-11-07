@@ -22,7 +22,7 @@ pub(super) struct Face {
     pub(super) icon: String,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(super) struct Service {
     pub(super) id: String,

@@ -35,21 +35,29 @@ fn assert_installed(b: &Plugin) {
     assert_eq!(b.error.as_deref(), Some("bin/x is missing"));
 }
 
-#[test]
-fn a_plugin_with_window_processes_says_what_running_them_here_waits_on() {
-    let plugin: Plugin = serde_json::from_str(
-        r#"{"id": "acme.panel", "manifest": {"name": "Panel", "window": [{"id": "panel", "command": ["bin/panel"]}]}}"#,
-    )
-    .expect("the plugin parses");
-    let note = plugin.window_note().expect("a note");
-    assert!(note.ends_with("needs usecornercase/cornercase-terminal#674."), "{note}");
+fn with_window_process(enabled: bool, error: Option<&str>) -> Plugin {
+    let manifest = serde_json::from_str(r#"{"name": "Panel", "window": [{"id": "panel", "command": ["bin/panel"]}]}"#)
+        .expect("the manifest parses");
+    Plugin { enabled, error: error.map(str::to_string), manifest: Some(manifest), ..Plugin::default() }
 }
 
 #[test]
-fn a_plugin_without_window_processes_has_nothing_to_say_about_them() {
-    let plugin: Plugin = serde_json::from_str(r#"{"id": "acme.notes", "manifest": {"name": "Notes", "window": []}}"#)
-        .expect("the plugin parses");
-    assert_eq!(plugin.window_note(), None);
+fn a_plugin_that_is_on_keeps_its_window_processes() {
+    assert!(with_window_process(true, None).keeps_window_processes());
+}
+
+#[test]
+fn a_plugin_that_is_off_or_cannot_run_keeps_no_window_process() {
+    assert!(!with_window_process(false, None).keeps_window_processes());
+    assert!(!with_window_process(true, Some("bin/panel is missing")).keeps_window_processes());
+}
+
+#[test]
+fn a_plugin_without_window_processes_keeps_none() {
+    let plugin: Plugin =
+        serde_json::from_str(r#"{"id": "acme.notes", "enabled": true, "manifest": {"name": "Notes", "window": []}}"#)
+            .expect("the plugin parses");
+    assert!(!plugin.keeps_window_processes());
 }
 
 #[test]

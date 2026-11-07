@@ -4,8 +4,6 @@ use serde_json::Value;
 use crate::store::ToastKind;
 
 const CLOSED: &str = "closed";
-const WINDOW_NOTE: &str = "Window processes run only beside cornercase's own window; running them beside this one \
-                           needs usecornercase/cornercase-terminal#674.";
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -55,8 +53,8 @@ impl Plugin {
         self.manifest.as_ref().is_some_and(|m| !m.service.is_empty())
     }
 
-    pub(super) fn window_note(&self) -> Option<&'static str> {
-        self.manifest.as_ref().is_some_and(|m| !m.window.is_empty()).then_some(WINDOW_NOTE)
+    pub(super) fn keeps_window_processes(&self) -> bool {
+        self.enabled && self.error.is_none() && self.manifest.as_ref().is_some_and(|m| !m.window.is_empty())
     }
 }
 

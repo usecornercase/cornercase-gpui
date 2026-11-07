@@ -411,6 +411,9 @@ impl Root {
     }
 
     fn handle(&mut self, msg: Msg, cx: &mut Context<Self>) {
+        if matches!(msg, Msg::Started(_)) {
+            plugins::keep_window_processes(cx);
+        }
         match msg {
             Msg::Started(Ok(_)) => self.open_view(cx),
             Msg::Missing(missing) => self.drop_connection(Conn::Missing(missing), cx),
