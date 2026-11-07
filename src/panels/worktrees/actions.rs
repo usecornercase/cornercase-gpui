@@ -10,6 +10,8 @@ use crate::panels::files::disk::human_size;
 use crate::panels::poll::parse_text;
 use crate::store::{self, Busy, Store, ToastKind};
 
+const NO_WINDOW: &str = "Nothing was removed: there is no window to ask in.";
+
 fn toast(text: String, kind: ToastKind, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
 }
@@ -79,9 +81,14 @@ impl WorktreesPanel {
             self.reload(cx);
             return;
         }
-        let Some(window) = cx.active_window() else { return };
+        let Some(window) = cx.active_window().or_else(|| cx.windows().first().copied()) else {
+            toast(NO_WINDOW.to_string(), ToastKind::Error, cx);
+            return;
+        };
         let question = Self::remove_question(folders, cx);
-        let _ = window.update(cx, |_, window, cx| dialogs::confirm(question, window, cx));
+        if window.update(cx, |_, window, cx| dialogs::confirm(question, window, cx)).is_err() {
+            toast(NO_WINDOW.to_string(), ToastKind::Error, cx);
+        }
     }
 
     fn remove_question(folders: Vec<Folder>, cx: &mut Context<Self>) -> Question {
