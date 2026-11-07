@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.24
+
+- **Copying from Changes keeps tabs.** A selection copied in the Changes panel now has the file's own tabs, on this computer and on a machine's workspace, so a Makefile rule or a Go line pastes as it was. A part of a line selected by characters copies the characters you see, each tab as one tab. A hunk's Copy still writes four spaces.
+- **Usage opens on numbers.** The stats of a machine or of `all` show the last numbers at once and then the fresh ones, instead of a spinner while the slowest machine answers. A machine with no numbers yet is left out of `all`'s sum and says `not read yet`.
+
 ## 0.1.23
 
 - **This window now needs cornercase 0.13.19 or newer.** That release has the commands that let it do what only cornercase's own window could: pairing a phone, removing any worktree, running a worktree's setup again, importing a VS Code workspace, a plugin's window processes, sending a held message now and more. The next versions of the window turn them on. If yours is older, the window says so and how to update it.

@@ -9,7 +9,6 @@ const EVERY: &str = "all";
 const NOT_SEEN: &str = "not seen yet";
 const NOT_SUMMED: &str = "not summed";
 const PEAK: &str = "most at once: the largest peak of one machine, not a sum";
-const LAST_NUMBERS_FIRST: &str = "showing the last numbers first needs usecornercase/cornercase-terminal#675";
 const NO_TOKENS: &str = "with no prompt and no tokens. Cursor CLI, Gemini CLI, opencode, Grok Build and Copilot have no \
                          plan limits cornercase can read.";
 
@@ -62,6 +61,10 @@ impl Pick {
         self.command(&["stats"], "--json")
     }
 
+    pub(super) fn cached_stats(&self) -> Option<Vec<String>> {
+        (*self != Self::Here).then(|| self.command(&["stats", "--cached"], "--json"))
+    }
+
     pub(super) fn share(&self) -> Vec<String> {
         self.command(&["stats"], "--share")
     }
@@ -71,14 +74,6 @@ impl Pick {
             Self::Here => "Asking Claude Code and Codex for their limits…".to_string(),
             Self::Machine(name) => format!("Asking {name} for its limits…"),
             Self::All => "Asking every machine for its limits…".to_string(),
-        }
-    }
-
-    pub(super) fn asking_stats(&self) -> String {
-        match self {
-            Self::Here => "Reading the stats…".to_string(),
-            Self::Machine(name) => format!("Asking {name} for its stats… {LAST_NUMBERS_FIRST}"),
-            Self::All => format!("Asking every machine for its stats… {LAST_NUMBERS_FIRST}"),
         }
     }
 

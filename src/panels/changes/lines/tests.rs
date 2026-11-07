@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
+use crate::test_util::fixture;
 use crate::ui::selection::{Caret, Selection};
 
 use super::super::diff::{self, Part, Spot};
 use super::super::wire::{Gap, GapLine, Hunk, Line, LineKind, Mode, Patch};
 use super::super::{DiffData, Selected, Whose};
-use super::copied_toast;
 
 fn line(kind: LineKind, old: Option<u32>, new: Option<u32>, text: &str) -> Line {
     Line { kind, old, new, text: text.into(), ..Line::default() }
@@ -34,12 +34,27 @@ fn data() -> DiffData {
             ],
         },
     ];
-    let gap = Gap { lines: vec![GapLine { old: 6, new: 6, text: "between".into(), syntax: None }], ..Gap::default() };
+    let gap =
+        Gap { lines: vec![GapLine { old: 6, new: 6, text: "between".into(), ..GapLine::default() }], ..Gap::default() };
+    opened(Patch { hunks, ..Patch::default() }, gap)
+}
+
+fn opened(patch: Patch, gap: Gap) -> DiffData {
     let gaps = HashMap::from([(1, (gap.clone(), Vec::new()))]);
     let gap_lines = HashMap::from([(1, gap)]);
-    let rows = diff::rows(&hunks, &gap_lines);
+    let rows = diff::rows(&patch.hunks, &gap_lines);
     let selected = Selected { workspace: Whose::Here(7), path: "src/a.rs".into(), mode: Mode::Uncommitted };
-    DiffData { selected, patch: Patch { hunks, ..Patch::default() }, looks: Vec::new(), gaps, rows }
+    DiffData { selected, patch, looks: Vec::new(), gaps, rows }
+}
+
+fn makefile() -> DiffData {
+    let patch = serde_json::from_str(fixture!("changes/file_tabs.json")).expect("the patch parses");
+    let gap = serde_json::from_str(fixture!("changes/gap_tabs.json")).expect("the gap parses");
+    opened(patch, gap)
+}
+
+fn one_line_chars(spot: Spot, from: usize, to: usize) -> Selection<Spot> {
+    chars((spot, from), (spot, to))
 }
 
 fn patch(hunk: usize, line: usize) -> Spot {
@@ -135,11 +150,60 @@ fn a_selection_of_lines_no_longer_there_names_nothing() {
 }
 
 #[test]
-fn copying_text_with_a_run_of_spaces_says_tabs_may_have_become_spaces() {
-    assert!(copied_toast("line 4", "    x").contains("cornercase-terminal#667"));
+fn a_selected_line_with_a_tab_copies_it_as_the_file_has_it() {
+    assert_eq!(makefile().selected_text(Selection::line(patch(0, 1))), "\techo hi");
 }
 
 #[test]
-fn copying_text_with_no_run_of_spaces_says_only_what_it_copied() {
-    assert_eq!(copied_toast("line 4", "a b"), "Copied line 4");
+fn a_range_copies_each_line_as_the_file_has_it_over_removed_and_added() {
+    let copied = makefile().selected_text(lines(patch(0, 0), patch(0, 3)));
+    assert_eq!(copied, "all:\n\techo hi\n\techo two\t# end\n\techo bye\t# end");
+}
+
+#[test]
+fn an_open_gap_s_line_copies_its_tab() {
+    assert_eq!(makefile().selected_text(Selection::line(gap(1, 4))), "8\tgap");
+}
+
+#[test]
+fn characters_after_a_tab_copy_what_is_drawn_there() {
+    assert_eq!(makefile().selected_text(one_line_chars(patch(0, 1), 4, 8)), "echo");
+}
+
+#[test]
+fn characters_crossing_a_tab_copy_the_tab_once() {
+    assert_eq!(makefile().selected_text(one_line_chars(patch(0, 3), 9, 17)), "bye\t#");
+}
+
+#[test]
+fn characters_ending_inside_a_tab_take_the_whole_tab() {
+    assert_eq!(makefile().selected_text(one_line_chars(patch(0, 3), 9, 14)), "bye\t");
+}
+
+#[test]
+fn characters_starting_inside_a_tab_take_the_whole_tab() {
+    assert_eq!(makefile().selected_text(one_line_chars(patch(0, 1), 2, 8)), "\techo");
+}
+
+#[test]
+fn characters_across_lines_keep_each_line_s_tabs() {
+    let copied = makefile().selected_text(chars((patch(0, 2), 9), (patch(0, 3), 8)));
+    assert_eq!(copied, "two\t# end\n\techo");
+}
+
+#[test]
+fn characters_after_a_tab_keep_whole_accented_letters() {
+    assert_eq!(makefile().selected_text(one_line_chars(patch(1, 6), 5, 14)), "éa\tñ");
+}
+
+#[test]
+fn characters_of_a_line_without_a_tab_copy_what_is_drawn() {
+    assert_eq!(makefile().selected_text(one_line_chars(patch(0, 0), 0, 3)), "all");
+}
+
+#[test]
+fn a_line_whose_own_text_does_not_draw_as_shown_copies_what_is_shown() {
+    let mut data = data();
+    data.patch.hunks[0].lines[0].raw = Some("\tsomething else".into());
+    assert_eq!(data.selected_text(Selection::line(patch(0, 0))), "alpha");
 }

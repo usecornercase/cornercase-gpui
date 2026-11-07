@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use gpui::{AnyElement, ClickEvent, ClipboardItem, Context, IntoElement, StatefulInteractiveElement as _};
 
 use crate::store::{Store, ToastKind};
@@ -8,13 +10,21 @@ use super::pieces::toast;
 use super::wire::FileStatus;
 use super::{ChangesPanel, DiffData, Whose};
 
-const NO_OWN_TEXT: &str = "tabs may have become spaces: needs usecornercase/cornercase-terminal#667";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Numbered<'a> {
     old: Option<u32>,
     new: Option<u32>,
     text: &'a str,
+    raw: Option<&'a str>,
+}
+
+impl<'a> Numbered<'a> {
+    fn own(&self, shown: Range<usize>) -> &'a str {
+        match self.raw.filter(|raw| selection::tabs_drawn(raw) == self.text) {
+            Some(raw) => selection::own_part(raw, shown),
+            None => self.text.get(shown).unwrap_or_default(),
+        }
+    }
 }
 
 impl DiffData {
@@ -22,11 +32,11 @@ impl DiffData {
         match spot.part {
             Part::Gap => {
                 let line = self.gaps.get(&spot.hunk)?.0.lines.get(spot.line)?;
-                Some(Numbered { old: Some(line.old), new: Some(line.new), text: &line.text })
+                Some(Numbered { old: Some(line.old), new: Some(line.new), text: &line.text, raw: line.raw.as_deref() })
             }
             Part::Patch => {
                 let line = self.patch.hunks.get(spot.hunk)?.lines.get(spot.line)?;
-                Some(Numbered { old: line.old, new: line.new, text: &line.text })
+                Some(Numbered { old: line.old, new: line.new, text: &line.text, raw: line.raw.as_deref() })
             }
         }
     }
@@ -41,9 +51,8 @@ impl DiffData {
 
     pub(super) fn selected_text(&self, selection: Selection<Spot>) -> String {
         let parts = selection.parts(self.shown_lines().map(|(spot, line)| (spot, line.text)));
-        let cut = |(spot, range): (Spot, std::ops::Range<usize>)| {
-            self.line_at(spot).and_then(|line| line.text.get(range)).unwrap_or_default()
-        };
+        let cut =
+            |(spot, range): (Spot, Range<usize>)| self.line_at(spot).map(|line| line.own(range)).unwrap_or_default();
         parts.into_iter().map(cut).collect::<Vec<_>>().join("\n")
     }
 
@@ -70,10 +79,6 @@ impl DiffData {
             None => number(|line| line.old).map(|lines| format!("removed {}", selection::lines_label(lines))),
         }
     }
-}
-
-pub(super) fn copied_toast(label: &str, text: &str) -> String {
-    if text.contains("    ") { format!("Copied {label}; {NO_OWN_TEXT}") } else { format!("Copied {label}") }
 }
 
 impl Selects for ChangesPanel {
@@ -110,7 +115,7 @@ impl ChangesPanel {
         let Some(data) = self.open.data.clone() else { return false };
         let text = data.selected_text(selection);
         let label = data.selection_label(selection).unwrap_or_else(|| "the selection".to_string());
-        toast(copied_toast(&label, &text), ToastKind::Info, cx);
+        toast(format!("Copied {label}"), ToastKind::Info, cx);
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         true
     }
