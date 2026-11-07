@@ -11,7 +11,6 @@ pub(crate) mod text;
 mod toolbar;
 
 use std::collections::{HashMap, HashSet};
-use std::time::{Duration, Instant};
 
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClipboardItem, Context, Div, Entity, Focusable as _,
@@ -20,7 +19,7 @@ use gpui::{
 };
 
 use crate::panels::{PanelKind, flows};
-use crate::store::{self, Busy, Store, ToastKind};
+use crate::store::{self, Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{self, Icon, TextField, TextFieldEvent, glass};
@@ -77,12 +76,6 @@ enum BodyView {
 type IssueId = (String, String);
 type Asked = (u64, IssueId);
 
-struct Following {
-    project: u64,
-    known: HashSet<u64>,
-    since: Instant,
-}
-
 pub(crate) struct IssuesPanel {
     project: Option<u64>,
     sources: Option<Sources>,
@@ -102,7 +95,6 @@ pub(crate) struct IssuesPanel {
     people_lists: HashMap<String, Result<data::People, String>>,
     agents: Option<Agents>,
     was_open: bool,
-    following: Option<Following>,
     list_width: Split,
     rows: Rows,
     _subscriptions: Vec<Subscription>,
@@ -132,7 +124,6 @@ impl IssuesPanel {
             people_lists: HashMap::new(),
             agents: None,
             was_open: true,
-            following: None,
             list_width: LIST,
             rows: Rows::new(),
             _subscriptions: subscriptions,
@@ -177,7 +168,6 @@ impl IssuesPanel {
             self.close_picker(cx);
         }
         self.was_open = open;
-        self.follow_start(store.read(cx));
     }
 
     fn show_project(&mut self, project: Option<u64>, cx: &mut Context<Self>) {
@@ -313,38 +303,6 @@ impl IssuesPanel {
         flows::start_flow(data::flow_start(issue, sources, repository, read), window, cx);
     }
 
-    fn start(&mut self, plan: &StartPlan, cx: &mut Context<Self>) {
-        let (agent, key) = (plan.agent.clone(), plan.issue.key.clone());
-        let store = Store::get(cx);
-        if let Some(project) = plan.place.as_ref().map(|p| p.project) {
-            let known = tab_ids(store.read(cx), project);
-            self.following = Some(Following { project, known, since: Instant::now() });
-        }
-        let busy = Busy::new(format!("issue-start:{key}"), format!("Starting {agent} on {key}…"));
-        let (command, job) = store.update(cx, |s, cx| {
-            s.close_sheet(cx);
-            (s.with_view(plan.start_args()), s.start_job(busy, cx))
-        });
-        ask(cx, command, move |this, out, cx| {
-            Store::get(cx).update(cx, |s, cx| s.end_job(job, cx));
-            this.following = None;
-            started(&out, &agent, &key, cx);
-        });
-    }
-
-    fn follow_start(&mut self, store: &Store) {
-        let Some(following) = &self.following else { return };
-        if following.since.elapsed() > Duration::from_secs(300) {
-            self.following = None;
-            return;
-        }
-        let new = tab_ids(store, following.project).into_iter().find(|t| !following.known.contains(t));
-        if let Some(tab) = new {
-            store.focus("tab", tab);
-            self.following = None;
-        }
-    }
-
     fn schedule(plan: &StartPlan, at: String, cx: &mut Context<Self>) {
         let key = plan.issue.key.clone();
         ask(cx, plan.queue_args(&at), move |_, out, cx| {
@@ -430,27 +388,8 @@ fn virtual_list(count: usize) -> gpui::ListState {
     gpui::ListState::new(count, ListAlignment::Top, px(OVERDRAW))
 }
 
-fn started(out: &Result<String, String>, agent: &str, key: &str, cx: &mut App) {
-    let (text, kind) = match out {
-        Ok(_) => (format!("{agent} is working on {key}"), ToastKind::Done),
-        Err(e) => (format!("Could not start {key}: {e}"), ToastKind::Error),
-    };
-    Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
-}
-
 fn shown_project(store: &Store) -> Option<u64> {
     store.session.as_ref().and_then(|s| s.shown().project)
-}
-
-fn tab_ids(store: &Store, project: u64) -> HashSet<u64> {
-    let projects = store.session.as_ref().map(|s| s.projects.as_slice()).unwrap_or_default();
-    projects
-        .iter()
-        .filter(|p| p.id == project)
-        .flat_map(|p| &p.workspaces)
-        .flat_map(|w| &w.tabs)
-        .map(|t| t.id)
-        .collect()
 }
 
 fn shown_project_name(cx: &App) -> String {
