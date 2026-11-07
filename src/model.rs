@@ -142,6 +142,7 @@ pub(crate) struct PaneInfo<Id = u64> {
     pub account: Option<String>,
     pub accounts: BTreeMap<String, String>,
     pub account_restart: Option<String>,
+    pub conversation: Option<String>,
     pub held_sends: u32,
     pub draft: bool,
     pub compacted: bool,

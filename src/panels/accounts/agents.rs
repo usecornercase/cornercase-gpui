@@ -140,7 +140,7 @@ impl AccountsPanel {
     }
 
     fn login_status(&self, row: Row) -> AnyElement {
-        match row.status(self.asking.list || self.asking.check) {
+        match row.status(self.asking.running()) {
             Status::Login { state, headline, plan } => login_line(row, state, headline, plan).into_any_element(),
             Status::Checking => {
                 ui::busy(SharedString::from(row.id("checking")), "Checking the login…").into_any_element()

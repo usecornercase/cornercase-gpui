@@ -237,7 +237,6 @@ pub(crate) fn start_agent(window: &mut Window, cx: &mut App) {
     if store.read(cx).view_id.is_none() {
         return;
     }
-    store.update(cx, Store::list_accounts);
     let view = cx.new(|cx| {
         let submit = |this: &mut StartAgent, _: &mut Window, cx: &mut Context<StartAgent>| this.submit(cx);
         let agent = text_field("the default agent (settings → agents)", cx, submit, window);

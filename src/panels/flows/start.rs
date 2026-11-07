@@ -81,7 +81,6 @@ fn open(preset: FlowStart, known: Option<Known>, window: &mut Window, cx: &mut A
         session.projects.iter().map(|p| (p.id, ProjectChoice { name: p.name.clone(), path: p.path.clone() })).collect();
     let projects = preset.choices(&open);
     let project = preset.chosen(&projects, session.shown().project);
-    store.update(cx, Store::list_accounts);
     let view = cx.new(|cx| StartFlow::new(preset, (projects, project), known, window, cx));
     let focus = view.read(cx).fields.prompt.read(cx).focus_handle(cx);
     store.update(cx, |s, cx| s.show_dialog(view.into(), cx));

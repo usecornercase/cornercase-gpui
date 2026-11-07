@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.24
+
+- **A Recap's link finds its conversation wherever it went.** After a restart, or after closing an agent and reopening it, a link goes to the pane that holds that conversation now, where it used to stop at the workspace with a note that it could not look. A conversation that is really gone takes you to its workspace or its project, and if that is closed too, it says so.
+- **Accounts show up by themselves.** An account added or removed from a shell, by another window or by a program shows within a second in the Accounts sheet, on the panes and in the forms that start agents, with no click and no need to come back to the window.
+
 ## 0.1.23
 
 - **This window now needs cornercase 0.13.19 or newer.** That release has the commands that let it do what only cornercase's own window could: pairing a phone, removing any worktree, running a worktree's setup again, importing a VS Code workspace, a plugin's window processes, sending a held message now and more. The next versions of the window turn them on. If yours is older, the window says so and how to update it.

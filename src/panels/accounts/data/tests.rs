@@ -202,3 +202,38 @@ fn a_signed_out_row_says_how_to_log_in_again() {
     assert!(hint.ends_with("cornercase new-tab --account claude=home"));
     assert_eq!(home.login_hint(LoginState::SignedIn), None);
 }
+
+#[test]
+fn asking_runs_until_the_check_of_the_latest_list_answers() {
+    let mut asking = Asking::default();
+    let list = asking.list();
+    assert!(asking.running());
+    assert!(asking.list_answered(list));
+    assert!(!asking.running());
+    let check = asking.check();
+    assert!(asking.running());
+    assert!(asking.check_answered(check));
+    assert!(!asking.running());
+}
+
+#[test]
+fn a_list_asked_before_the_latest_is_dropped() {
+    let mut asking = Asking::default();
+    let older = asking.list();
+    let latest = asking.list();
+    assert!(!asking.list_answered(older));
+    assert!(asking.running());
+    assert!(asking.list_answered(latest));
+}
+
+#[test]
+fn a_check_asked_before_the_latest_list_is_dropped() {
+    let mut asking = Asking::default();
+    let list = asking.list();
+    asking.list_answered(list);
+    let older = asking.check();
+    let latest = asking.list();
+    assert!(!asking.check_answered(older));
+    assert!(asking.list_answered(latest));
+    assert!(!asking.running());
+}
