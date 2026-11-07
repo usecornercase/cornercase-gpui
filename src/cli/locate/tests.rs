@@ -51,7 +51,7 @@ impl Probe for Fake {
     }
 }
 
-const GOOD: &str = "cornercase 0.13.1";
+const GOOD: &str = "cornercase 0.13.19";
 
 fn inputs(os: Os) -> Inputs {
     Inputs {
@@ -103,8 +103,8 @@ fn versions_compare_as_numbers() {
 }
 
 #[test]
-fn every_platform_needs_the_release_with_routines() {
-    assert_eq!(MINIMUM.to_string(), "0.13.1");
+fn every_platform_needs_the_release_with_every_command_the_window_uses() {
+    assert_eq!(MINIMUM.to_string(), "0.13.19");
 }
 
 #[test]

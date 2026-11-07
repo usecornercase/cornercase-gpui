@@ -117,7 +117,7 @@ impl Found {
     }
 }
 
-pub(crate) const MINIMUM: Version = Version { major: 0, minor: 13, patch: 1 };
+pub(crate) const MINIMUM: Version = Version { major: 0, minor: 13, patch: 19 };
 
 impl Version {
     pub(crate) fn parse(text: &str) -> Option<Self> {

@@ -5,7 +5,7 @@ import { DOCS, DOWNLOAD, FILES, INSTALLS, RELEASES, REPO } from '../data/links';
 
 const platforms = [
   { id: 'mac', name: 'macOS', file: FILES.mac, facts: ['macOS 12 or later', 'Apple silicon or Intel', 'Signed and notarized by Apple'], asks: 'Open it and drag cornercase to Applications.' },
-  { id: 'windows', name: 'Windows', file: FILES.windows, facts: ['Windows 10 or 11, x64', 'No runtime to install', 'Needs cornercase 0.13.1 or newer'], asks: 'Not signed yet: SmartScreen asks the first time, and Smart App Control blocks it.' },
+  { id: 'windows', name: 'Windows', file: FILES.windows, facts: ['Windows 10 or 11, x64', 'No runtime to install', 'Needs cornercase 0.13.19 or newer'], asks: 'Not signed yet: SmartScreen asks the first time, and Smart App Control blocks it.' },
   { id: 'linux', name: 'Linux', file: FILES.linux, facts: ['x86_64, glibc 2.35 or newer', 'X11 or Wayland, with Vulkan', 'Updates itself in place'], asks: 'Not signed yet. Your system may ask the first time.' },
 ];
 ---
@@ -33,7 +33,7 @@ const platforms = [
   <div class="need">
     <div class="need__text">
       <h3>It needs cornercase</h3>
-      <p>cornercase 0.13.1 or newer, which keeps your agents running. The window finds it by itself, and says so if it is missing. <a href={DOCS}>Installation guide</a></p>
+      <p>cornercase 0.13.19 or newer, which keeps your agents running. The window finds it by itself, and says so if it is missing. <a href={DOCS}>Installation guide</a></p>
     </div>
     <div class="install" data-install>
       <div class="install__ways" role="group" aria-label="How to install cornercase">
