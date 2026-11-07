@@ -61,6 +61,36 @@ fn writes_a_hunk_as_a_patch() {
     assert_eq!(patch(&h), "@@ -3,3 +3,4 @@ fn main()\n a\n-b\n+B\n+C\n d\n");
 }
 
+fn with_raw(mut line: Line, raw: &str) -> Line {
+    line.raw = Some(raw.into());
+    line
+}
+
+#[test]
+fn a_patch_keeps_the_tabs_of_a_line_that_has_them() {
+    let lines = vec![
+        line(LineKind::Context, Some(1), Some(1), "all:"),
+        with_raw(line(LineKind::Removed, Some(2), None, "    echo a"), "\techo a"),
+        with_raw(line(LineKind::Added, None, Some(2), "    echo b"), "\techo b"),
+    ];
+    assert_eq!(patch(&hunk(1, 1, lines)), "@@ -1,2 +1,2 @@\n all:\n-\techo a\n+\techo b\n");
+}
+
+#[test]
+fn a_patch_writes_what_is_drawn_when_a_raw_draws_as_another_line() {
+    let lines = vec![with_raw(line(LineKind::Added, None, Some(1), "shown"), "\tother")];
+    assert_eq!(patch(&hunk(1, 1, lines)), "@@ -1,0 +1,1 @@\n+shown\n");
+}
+
+#[test]
+fn a_patch_read_from_a_makefile_has_its_tabs() {
+    let read: crate::panels::changes::wire::Patch =
+        serde_json::from_str(crate::test_util::fixture!("changes/file_tabs.json")).expect("the patch parses");
+    let text = patch(&read.hunks[0]);
+    assert!(text.contains("\n \techo hi\n"), "{text}");
+    assert!(!text.contains("    echo hi"), "{text}");
+}
+
 #[test]
 fn references_the_changed_lines() {
     let hunks = sample();

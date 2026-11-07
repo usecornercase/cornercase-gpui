@@ -334,6 +334,10 @@ pub(crate) fn tabs_drawn(own: &str) -> String {
     own.replace('\t', &" ".repeat(TAB_WIDTH))
 }
 
+pub(crate) fn own_if_drawn<'a>(raw: Option<&'a str>, drawn: &str) -> Option<&'a str> {
+    raw.filter(|raw| tabs_drawn(raw) == drawn)
+}
+
 pub(crate) fn own_part(own: &str, shown: Range<usize>) -> &str {
     let (mut at, mut start, mut end) = (0, None, own.len());
     for (ix, c) in own.char_indices() {

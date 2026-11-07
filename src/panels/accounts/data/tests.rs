@@ -204,6 +204,16 @@ fn a_signed_out_row_says_how_to_log_in_again() {
 }
 
 #[test]
+fn only_a_signed_out_row_names_what_logging_in_from_here_waits_on() {
+    let info = parse(SAMPLE).expect("parses");
+    let mut rows = Row::of(&info.providers[0]);
+    let (work, home) = (rows.nth(1).expect("the work account"), rows.next().expect("the home account"));
+    assert_eq!(home.login_waits(false), Some(LOGIN_WAITS));
+    assert!(LOGIN_WAITS.ends_with("usecornercase/cornercase-terminal#702"));
+    assert_eq!(work.login_waits(false), None);
+}
+
+#[test]
 fn asking_runs_until_the_check_of_the_latest_list_answers() {
     let mut asking = Asking::default();
     let list = asking.list();

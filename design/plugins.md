@@ -20,7 +20,7 @@ Code: `src/panels/plugins.rs`, `src/panels/plugins/`, `src/cli/window_processes.
 
 - **What runs is a job in the store** (`plugin:` keys, `design/connection.md`): the card's on/off chip turns into a spinner, and an action, Update, Install, Link folder and Update all become busy buttons that say what they do (`Fetching…`, `Installing…`, `Checking…`, `Linking…`); the status bar names it, so a popup action that closed the sheet still shows. Checking for updates has its own key: it shared the plugin's, so Update read `Checking…` while the plugin turned on or off.
 - **The log shows the last 60 lines** (`plugin logs ID -n 60`) and is read again with the list.
-- **On another machine the sheet only reads and runs**: cornercase's `plugin` commands that install, update, remove, link, turn on or off, list or show logs act on the files of the machine they run on and refuse `--remote`; only `plugin status`, `actions` and `run` ask the server. So there the list comes from `plugin status --json` (it carries every plugin's fields), the switches and the install, update, remove and log buttons are gone, and a note says to run `cornercase plugin …` on that machine. Noted for upstream.
+- **On another machine the sheet only reads and runs**: cornercase's `plugin` commands that install, update, remove, link, turn on or off, list or show logs act on the files of the machine they run on and refuse `--remote`; only `plugin status`, `actions` and `run` ask the server. So there the list comes from `plugin status --json` (it carries every plugin's fields), the switches and the install, update, remove and log buttons are gone, and a note says to run `cornercase plugin …` on that machine and that doing it from here needs #703 upstream.
 
 ## Window processes
 

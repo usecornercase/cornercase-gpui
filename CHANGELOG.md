@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.35
+
+- **A hunk's Copy keeps tabs.** A hunk copied in the Changes panel now has the file's own tabs, so a Makefile's hunk applies. `patch` takes it as copied; `git apply` takes it once `--- a/FILE` and `+++ b/FILE` go above it, since it refuses any hunk with no file header. A hunk of a CRLF file, or one on a last line with no newline, still does not apply.
+- **Free builds no longer gives up in silence.** If the window went behind others while the builds were measured, the question now opens anyway, and with no window to ask in, a message says nothing was freed.
+- **The window names more of what waits on cornercase**, in a muted line where you would look for it: managing plugins on another machine in the Plugins sheet, logging in on a signed-out account's row, which agents can remove their workspace under a routine's cleanup box, picking an agent, model and effort in the flow editor, and the machines cornercase's own window has reached in the Connect dialog.
+
 ## 0.1.34
 
 - **The agents section lists a machine's agents too.** With the section on, each linked machine's agents are rows, tagged with the machine, after the agents of the project they share with you, and those of a project only on the machine come last. A child sits under the agent that started it on that machine. While the link is down the rows stay, dimmed, and say when they were last seen.

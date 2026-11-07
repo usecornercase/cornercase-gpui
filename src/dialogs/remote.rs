@@ -24,6 +24,8 @@ const HOW: &str = "Every command runs as ssh DESTINATION cornercase …, with yo
                    the server starts there if none runs. It never asks for a password: use a key or an agent.";
 const WHERE: &str = "The shells, agents and files stay on that machine. cornercase is looked for on its PATH, in \
                      ~/.local/bin, ~/.cargo/bin and Homebrew's folders.";
+const REACHED_WAITS: &str = "The machines cornercase's own window has reached are not listed: listing them needs \
+                             usecornercase/cornercase-terminal#705.";
 
 fn machines_note() -> String {
     let keys = keymap::keys_of(Command::Panel(PanelKind::Machines), Os::CURRENT).unwrap_or_default();
@@ -125,7 +127,8 @@ impl Render for Connect {
                     .gap(px(4.))
                     .child(ui::dim(HOW))
                     .child(ui::dim(WHERE))
-                    .child(ui::dim(machines_note())),
+                    .child(ui::dim(machines_note()))
+                    .child(ui::dim(REACHED_WAITS)),
             );
         let button = ui::primary_button("connect", "Connect")
             .when(!ready, |b| b.opacity(0.5))

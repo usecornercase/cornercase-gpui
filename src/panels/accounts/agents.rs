@@ -41,6 +41,12 @@ fn unshared_note(row: Row) -> Option<Div> {
     Some(ui::warning_line(data::unshared_text(&account.unshared)))
 }
 
+fn row_notes(row: Row, checking: bool) -> Option<Div> {
+    let waits = row.login_waits(checking).map(ui::dim);
+    let notes: Vec<Div> = unshared_note(row).into_iter().chain(waits).collect();
+    (!notes.is_empty()).then(|| div().flex().flex_col().gap(px(2.)).children(notes))
+}
+
 fn login_colour(state: LoginState) -> Option<Rgba> {
     match state {
         LoginState::SignedIn => Some(colours::done()),
@@ -114,7 +120,7 @@ impl AccountsPanel {
             .child(account_name(row))
             .child(self.status_cell(row, doing))
             .child(self.account_actions(row, cx));
-        self.settled(line, unshared_note(row), &target)
+        self.settled(line, row_notes(row, self.asking.running()), &target)
     }
 
     fn default_radio(&self, row: Row, cx: &mut Context<Self>) -> Stateful<Div> {

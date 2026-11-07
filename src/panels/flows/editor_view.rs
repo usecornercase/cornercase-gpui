@@ -11,6 +11,9 @@ use super::widgets::{alert, error_text, icon_action, panel_box};
 use crate::theme::colours;
 use crate::ui::{self, Icon, TextField, Tone, boxed};
 
+const TYPED_WAITS: &str = "Agent, model and effort are typed: picking from what each agent takes needs \
+                           usecornercase/cornercase-terminal#704.";
+
 fn labelled(label: &str, field: &gpui::Entity<TextField>, window: &Window, cx: &App) -> Div {
     ui::field(label.to_string(), boxed(field, window, cx)).flex_1().min_w_0()
 }
@@ -151,6 +154,7 @@ impl FlowEditor {
         let lead = &self.orchestrator;
         block(Icon::Waypoints, "Orchestrator")
             .child(Self::agent_line(lead, window, cx))
+            .child(ui::dim(TYPED_WAITS))
             .child(Self::command_line(lead, window, cx))
             .child(text_control("Prompt", &lead.prompt, window, cx))
     }

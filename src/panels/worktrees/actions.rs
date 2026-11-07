@@ -10,10 +10,20 @@ use crate::panels::files::disk::human_size;
 use crate::panels::poll::parse_text;
 use crate::store::{self, Busy, Store, ToastKind};
 
-const NO_WINDOW: &str = "Nothing was removed: there is no window to ask in.";
+const NOT_REMOVED: &str = "Nothing was removed: there is no window to ask in.";
+const NOT_FREED: &str = "Nothing was freed: there is no window to ask in.";
 
 fn toast(text: String, kind: ToastKind, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
+}
+
+fn ask(question: Question, unasked: &str, cx: &mut App) {
+    let window = cx.active_window().or_else(|| cx.windows().first().copied());
+    let asked =
+        window.is_some_and(|window| window.update(cx, |_, window, cx| dialogs::confirm(question, window, cx)).is_ok());
+    if !asked {
+        toast(unasked.to_string(), ToastKind::Error, cx);
+    }
 }
 
 pub(super) fn checking(path: &str) -> String {
@@ -81,14 +91,8 @@ impl WorktreesPanel {
             self.reload(cx);
             return;
         }
-        let Some(window) = cx.active_window().or_else(|| cx.windows().first().copied()) else {
-            toast(NO_WINDOW.to_string(), ToastKind::Error, cx);
-            return;
-        };
         let question = Self::remove_question(folders, cx);
-        if window.update(cx, |_, window, cx| dialogs::confirm(question, window, cx)).is_err() {
-            toast(NO_WINDOW.to_string(), ToastKind::Error, cx);
-        }
+        ask(question, NOT_REMOVED, cx);
     }
 
     fn remove_question(folders: Vec<Folder>, cx: &mut Context<Self>) -> Question {
@@ -154,7 +158,6 @@ impl WorktreesPanel {
     }
 
     fn ask_free(worktree: &Worktree, freed: &Freed, cx: &mut Context<Self>) {
-        let Some(window) = cx.active_window() else { return };
         let force = !freed.running.is_empty();
         let command = free_command(&worktree.path, false, force);
         let title = format!("Free the build folders of {}?", worktree.title());
@@ -164,6 +167,6 @@ impl WorktreesPanel {
         let question = Question::new(title, free_message(freed), button, Vec::new()).on_yes(move |cx| {
             this.update(cx, |_, cx| store::run_busy(cx, busy.clone(), command.clone(), after_free));
         });
-        let _ = window.update(cx, |_, window, cx| dialogs::confirm(question, window, cx));
+        ask(question, NOT_FREED, cx);
     }
 }

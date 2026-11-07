@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use super::wire::{FileInfo, FileStatus, Gap, Hunk, LineKind, Segment};
+use crate::ui::selection;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Row {
@@ -90,7 +91,7 @@ pub(super) fn patch(hunk: &Hunk) -> String {
             LineKind::Removed => '-',
             LineKind::Added => '+',
         });
-        text.push_str(&line.text);
+        text.push_str(selection::own_if_drawn(line.raw.as_deref(), &line.text).unwrap_or(&line.text));
     }
     text.push('\n');
     text
