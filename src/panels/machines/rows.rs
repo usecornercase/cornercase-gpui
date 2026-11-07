@@ -6,10 +6,13 @@ use super::data::{self, Doing, Listed, Note};
 use super::form::Draft;
 use super::{Form, MachinesPanel};
 use crate::cli;
-use crate::model::machines::{LinkState, Machine, MachineIcon};
+use crate::model::machines::{LinkState, Machine, MachineIcon, NextTry};
 use crate::panels::accounts::widgets::{self, STATUS};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone};
+
+const DOT: f32 = 7.;
+const DOT_GAP: f32 = 7.;
 
 fn state_colour(machine: &Machine) -> Option<Rgba> {
     if machine.problem.is_some() {
@@ -23,18 +26,35 @@ fn state_colour(machine: &Machine) -> Option<Rgba> {
     }
 }
 
-fn state_line(machine: &Machine, now: i64) -> Div {
+fn state_words(machine: &Machine, now: i64) -> Div {
     let colour = state_colour(machine);
     let ink = if machine.linked() { colours::soft() } else { colour.unwrap_or_else(colours::muted) };
+    div()
+        .flex()
+        .items_center()
+        .gap(px(DOT_GAP))
+        .child(ui::dot(colour))
+        .child(div().flex_1().min_w_0().text_color(ink).child(ui::one_line(machine.words(now))))
+}
+
+fn next_try_line(next: NextTry, at: usize) -> Div {
+    let line = div().pl(px(DOT + DOT_GAP)).text_size(px(11.5)).text_color(colours::muted());
+    if next.counts() {
+        return line.child(ui::one_line(next.words()));
+    }
+    line.child(ui::busy(SharedString::from(format!("machine-trying-{at}")), next.words()).text_size(px(11.5)))
+}
+
+fn state_line(machine: &Machine, at: usize, now: i64) -> Div {
     div()
         .flex_1()
         .min_w_0()
         .flex()
-        .items_center()
-        .gap(px(7.))
+        .flex_col()
+        .gap(px(2.))
         .text_size(px(12.))
-        .child(ui::dot(colour))
-        .child(div().flex_1().min_w_0().text_color(ink).child(ui::one_line(machine.words(now))))
+        .child(state_words(machine, now))
+        .children(machine.next_try(now).map(|next| next_try_line(next, at)))
 }
 
 fn lead(glyph: Icon) -> Div {
@@ -114,7 +134,7 @@ impl MachinesPanel {
             _ if machine.in_progress() => {
                 return cell.child(ui::busy(spinner, machine.words(now)));
             }
-            _ => state_line(machine, now),
+            _ => state_line(machine, row.at, now),
         };
         cell.child(line).children(Self::link_buttons(row, doing, cx))
     }

@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.26
+
+- **A machine whose link dropped says when it tries again.** Its card, its row in the Machines sheet and the tabs of its agents in the sidebar count down, `reconnecting in 4 s`, and say `reconnecting…` while the try runs. When only you can fix it, such as cornercase missing there, it says why instead of promising a try.
+- **Closing or renaming a workspace on a machine can no longer hit the wrong one.** If the server there restarted while the action was on its way, it refuses and nothing changes: `vps restarted: nothing was sent`. The same goes for removing a worktree there.
+
 ## 0.1.25
 
 - **A message held for you can be sent or left to wait from its pane.** When a script or another agent sends a message to the pane you are typing in, the pane's card now says who sent it, as in `1 message waiting from claude (pane 9) · goes after yours`, with two buttons: ` send now ` and ` wait turn `, which then reads as chosen. They work on a machine's tab too, and clicking them leaves your keyboard in the pane.

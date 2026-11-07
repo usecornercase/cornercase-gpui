@@ -392,10 +392,10 @@ fn a_live_tab_with_a_frame_shows_no_card() {
 }
 
 #[test]
-fn a_link_that_fell_says_it_reconnects_without_a_time() {
+fn a_link_that_fell_leaves_its_words_to_the_list() {
     let (mut tab, _tap) = live(20, 5);
     tab.fall(Lost::Link);
-    assert_eq!(tab.standing(Instant::now()), Standing::Reconnecting);
+    assert_eq!(tab.standing(Instant::now()), Standing::LinkDown);
 }
 
 #[test]

@@ -30,7 +30,7 @@ pub(crate) use jobs::Busy;
 use jobs::Jobs;
 pub(crate) use machine_read::{MachineRead, Reach};
 use machines_there::Homes;
-pub(crate) use machines_there::{MachineAct, NoticeThere};
+pub(crate) use machines_there::{MachineAct, NoticeThere, stale_note};
 pub(crate) use run_on::{CloneThere, StartThere};
 
 const NO_FLOW: &str = "This workspace runs no flow";

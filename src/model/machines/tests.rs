@@ -17,6 +17,11 @@ fn seen_two_minutes_ago() -> Machine {
     Machine { seen: Some(SEEN.to_string()), ..machine(LinkState::Unreachable) }
 }
 
+fn never_seen_trying_at(seconds_from_now: i64) -> Machine {
+    let retry_at = format!("2026-11-06T01:25:{:02}.139Z", 55 + seconds_from_now);
+    Machine { retry_at: Some(retry_at), ..machine(LinkState::Unreachable) }
+}
+
 #[test]
 fn the_list_of_machines_reads_here_and_each_link() {
     let list = parse_list(fixture!("machines/list.json")).expect("parses");
@@ -170,4 +175,52 @@ fn only_an_unreachable_machine_once_seen_counts_up() {
     assert!(seen_two_minutes_ago().counts_up());
     assert!(!machine(LinkState::Unreachable).counts_up());
     assert!(!Machine { seen: Some(SEEN.to_string()), ..machine(LinkState::Linked) }.counts_up());
+}
+
+#[test]
+fn a_link_that_fell_says_when_it_tries_next_and_one_that_is_up_does_not() {
+    let list = parse_list(fixture!("machines/fallen.json")).expect("parses");
+    assert_eq!(list.machines[0].next_try(now()), Some(NextTry::In(4)));
+    assert_eq!(list.machines[1].next_try(now()), None);
+}
+
+#[test]
+fn the_next_try_counts_down_in_the_words_of_upstreams_window() {
+    assert_eq!(never_seen_trying_at(4).next_try(now()).map(NextTry::words).as_deref(), Some("reconnecting in 4 s"));
+    assert_eq!(never_seen_trying_at(1).next_try(now()).map(NextTry::words).as_deref(), Some("reconnecting in 1 s"));
+}
+
+#[test]
+fn a_next_try_far_off_reads_in_minutes() {
+    assert_eq!(NextTry::In(90).words(), "reconnecting in 1 min");
+}
+
+#[test]
+fn a_time_reached_or_passed_means_the_try_is_under_way() {
+    for passed in [0, -1, -20] {
+        let next = never_seen_trying_at(passed).next_try(now());
+        assert_eq!(next, Some(NextTry::UnderWay));
+        assert_eq!(next.map(NextTry::words).as_deref(), Some("reconnecting…"));
+    }
+}
+
+#[test]
+fn a_link_with_no_time_or_one_it_cannot_read_promises_no_try() {
+    assert_eq!(machine(LinkState::Unreachable).next_try(now()), None);
+    assert_eq!(Machine { retry_at: Some("soon".into()), ..machine(LinkState::Unreachable) }.next_try(now()), None);
+}
+
+#[test]
+fn a_row_changes_by_itself_while_it_counts_down_or_up() {
+    assert!(never_seen_trying_at(4).counts(now()));
+    assert!(seen_two_minutes_ago().counts(now()));
+}
+
+#[test]
+fn a_row_with_nothing_to_count_needs_no_timer() {
+    assert!(!never_seen_trying_at(0).counts(now()));
+    assert!(!machine(LinkState::Unreachable).counts(now()));
+    assert!(!machine(LinkState::Linked).counts(now()));
+    assert!(!machine(LinkState::Older).counts(now()));
+    assert!(!machine(LinkState::Connecting).counts(now()));
 }

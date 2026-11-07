@@ -6,8 +6,8 @@ mod rows;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, AnyView, App, AsyncApp, ClickEvent, Context, Div, Entity, Focusable as _, IntoElement, Render,
-    ScrollAnchor, ScrollHandle, Task, WeakEntity, Window, div, prelude::*, px,
+    AnyElement, AnyView, App, ClickEvent, Context, Div, Entity, Focusable as _, IntoElement, Render, ScrollAnchor,
+    ScrollHandle, Window, div, prelude::*, px,
 };
 
 use self::data::{Ask, Doing};
@@ -26,7 +26,6 @@ const INTRO: &str = "Other computers your agents can run on. cornercase keeps an
 const EMPTY_HEADING: &str = "No machines yet";
 const EMPTY_FOR: &str = "A machine is another computer your agents can run on, which cornercase links to through your \
                          own ssh.";
-const COUNTS_EVERY: Duration = Duration::from_secs(1);
 const RETRY_SHOWN: Duration = Duration::from_secs(2);
 
 struct Running {
@@ -72,16 +71,6 @@ pub(crate) struct MachinesPanel {
     scroll: ScrollHandle,
     form_place: ScrollAnchor,
     was_open: bool,
-    _counting: Task<()>,
-}
-
-async fn keep_counting(this: WeakEntity<MachinesPanel>, cx: &mut AsyncApp) {
-    loop {
-        cx.background_executor().timer(COUNTS_EVERY).await;
-        if this.update(cx, MachinesPanel::count_up).is_err() {
-            return;
-        }
-    }
 }
 
 fn toast_failure(error: &anyhow::Error, cx: &mut App) {
@@ -104,7 +93,6 @@ impl MachinesPanel {
             form_place: ScrollAnchor::for_handle(scroll.clone()),
             scroll,
             was_open: true,
-            _counting: cx.spawn(async move |this, cx| keep_counting(this, cx).await),
         };
         this.load(cx);
         this
@@ -129,12 +117,6 @@ impl MachinesPanel {
         }
         self.was_open = open;
         if open {
-            cx.notify();
-        }
-    }
-
-    fn count_up(&mut self, cx: &mut Context<Self>) {
-        if self.was_open && Store::get(cx).read(cx).machines.iter().any(Machine::counts_up) {
             cx.notify();
         }
     }

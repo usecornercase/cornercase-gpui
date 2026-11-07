@@ -30,6 +30,7 @@ pub(crate) enum Standing {
     Shown,
     Connecting,
     Reconnecting,
+    LinkDown,
     RetryIn(u64, Option<String>),
     NoTab,
     NoWay(String),
@@ -196,7 +197,7 @@ impl MachineTab {
 
     pub(crate) fn standing(&self, now: Instant) -> Standing {
         match &self.state {
-            TabState::Down(Lost::Link) => Standing::Reconnecting,
+            TabState::Down(Lost::Link) => Standing::LinkDown,
             TabState::Down(Lost::Stream { next, why, .. }) => {
                 let left = next.saturating_duration_since(now);
                 Standing::RetryIn(left.as_secs() + u64::from(left.subsec_nanos() > 0), why.clone())
