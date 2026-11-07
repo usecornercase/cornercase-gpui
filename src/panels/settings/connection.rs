@@ -1,18 +1,19 @@
 use gpui::{
-    AnyElement, Context, Div, Focusable as _, IntoElement, Rgba, SharedString, Stateful, Window, div, prelude::*, px,
+    AnyElement, ClickEvent, Context, Div, Focusable as _, IntoElement, Rgba, SharedString, Stateful, Window, div,
+    prelude::*, px,
 };
 
 use super::data::{self, Connection, ConnectionKind, Tone};
-use super::forum::{self, Forum, Stage};
+use super::forum::{self, Forum, Server, Stage};
 use super::pages::Slot;
 use super::{Role, SettingsPanel, widgets};
-use crate::store::Store;
+use crate::cli;
+use crate::dialogs::{self, PairKey};
+use crate::store::{self, Busy, Store, ToastKind};
 use crate::theme::colours;
 use crate::ui::{self, Icon};
 
 const TOKEN: f32 = 230.;
-const BROWSER_PAIRING: &str = "Pair one from cornercase's own window, More › remote… › open in your phone's browser. \
-                               Pairing here needs usecornercase/cornercase-terminal#669.";
 
 fn tone_dot(tone: Tone) -> (Option<Rgba>, Rgba) {
     match tone {
@@ -22,30 +23,15 @@ fn tone_dot(tone: Tone) -> (Option<Rgba>, Rgba) {
     }
 }
 
-fn pairing_note(c: &Connection) -> Option<String> {
-    match c.kind {
-        ConnectionKind::Browsers => Some(BROWSER_PAIRING.to_string()),
-        ConnectionKind::Chat if c.state != data::State::Connected => {
-            let what = c.note.strip_prefix("enter ").unwrap_or("shows a code to scan");
-            Some(format!(
-                "Pair it from cornercase's own window, Settings › Remote: it {what}. Pairing here needs \
-                 usecornercase/cornercase-terminal#670."
-            ))
-        }
-        _ => None,
-    }
-}
-
 fn connection_label(c: &Connection) -> Div {
     let (status, tone) = c.status();
     let (dot, ink) = tone_dot(tone);
-    let note = if c.note.starts_with("enter ") { String::new() } else { widgets::capitalised(&c.note) };
     let title = div().flex().flex_col().gap(px(4.)).child(widgets::capitalised(&c.label)).child(widgets::status(
         widgets::capitalised(&status),
         dot,
         ink,
     ));
-    widgets::labelled(title, note).children(pairing_note(c).map(|n| ui::dim(n).text_size(px(11.5))))
+    widgets::labelled(title, widgets::capitalised(&c.note_here()))
 }
 
 fn forum_status(forum: &Forum) -> Div {
@@ -57,26 +43,64 @@ fn forum_status(forum: &Forum) -> Div {
     }
 }
 
-fn forum_lines(forum: &Forum) -> Div {
+fn pair_control(c: &Connection) -> Div {
+    let offer = PairKey::of(&c.key).zip(c.pairing_offer()).map(|(key, label)| {
+        ui::button(SharedString::from(format!("pair-{}", c.key)), label)
+            .on_click(move |_: &ClickEvent, window, cx| dialogs::pairing(key, window, cx))
+    });
+    div().children(offer)
+}
+
+fn server_row(at: usize, server: &Server, forum: &Forum, cx: &Context<SettingsPanel>) -> Stateful<Div> {
+    let store = Store::get(cx);
+    let store = store.read(cx);
+    let id = SharedString::from(format!("forum-server-{at}"));
+    let row = ui::row(id.clone(), false)
+        .child(ui::icon(Icon::Server, 13.).text_color(colours::muted()))
+        .child(div().flex_1().min_w_0().child(ui::one_line(server.name.clone())));
+    if store.busy(&server.picking()) {
+        return row.child(ui::spinner(id, 12., colours::muted()));
+    }
+    let picking = forum.picking(store);
+    let server = server.clone();
+    row.on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+        if !picking {
+            pick_server(&server, cx);
+        }
+    }))
+}
+
+fn pick_server(server: &Server, cx: &mut Context<SettingsPanel>) {
+    let busy = Busy::new(server.picking(), format!("Picking {} for the forum…", server.name));
+    store::run_busy(cx, busy, server.pick_args(), |_, result, cx| {
+        let (words, kind) = match result.and_then(|out| forum::picked(&out)) {
+            Ok(name) => (format!("The forum goes in {name}"), ToastKind::Done),
+            Err(e) => (widgets::capitalised(&cli::reason(&e)), ToastKind::Error),
+        };
+        Store::get(cx).update(cx, |s, cx| s.toast(words, kind, cx));
+    });
+}
+
+fn forum_lines(forum: &Forum, cx: &Context<SettingsPanel>) -> Div {
     let opening = forum.address().map(|address| {
         ui::row_action("forum-open", Icon::External, "Open the forum in Discord", false)
             .on_click(move |_, _, cx| cx.open_url(&address))
     });
-    let picking = (forum.stage() == Stage::Waiting).then(|| ui::dim(forum::PICKING).text_size(px(11.5)));
     let line = div().flex().items_center().gap(px(6.)).child(forum_status(forum)).children(opening);
-    widgets::under(div().flex().flex_col().gap(px(4.)).child(line).children(picking))
+    let servers = forum.servers.iter().enumerate().map(|(at, server)| server_row(at, server, forum, cx));
+    widgets::under(div().flex().flex_col().gap(px(4.)).child(line).children(servers))
 }
 
 impl SettingsPanel {
     pub(super) fn forum_under(&self, key: &str, cx: &Context<Self>) -> Option<Div> {
         let place = if self.setting(forum::SETTING).is_some() { forum::SETTING } else { forum::BOT };
         let forum = forum::of_app(Store::get(cx).read(cx).app.as_ref()).filter(|_| key == place)?;
-        Some(forum_lines(&forum))
+        Some(forum_lines(&forum, cx))
     }
 
     pub(super) fn render_connection(&self, c: &Connection, slot: Slot<'_>, cx: &mut Context<Self>) -> AnyElement {
         let role = Role::Secret(c.key.clone());
-        let control = if c.takes_secret() { self.token_control(c, slot.window, cx) } else { div() };
+        let control = if c.takes_secret() { self.token_control(c, slot.window, cx) } else { pair_control(c) };
         div()
             .flex()
             .flex_col()
@@ -128,13 +152,14 @@ impl SettingsPanel {
         if !c.removable || busy {
             return div().into_any_element();
         }
-        let hint = if c.kind == ConnectionKind::Browsers { "Forget every paired browser…" } else { "Remove…" };
+        let hint = match c.kind {
+            ConnectionKind::Browsers => "Forget every paired browser…",
+            ConnectionKind::Chat => "Forget…",
+            _ => "Remove…",
+        };
         let connection = c.clone();
         ui::row_action(SharedString::from(format!("remove-{}", c.key)), Icon::Trash, hint, true)
             .on_click(cx.listener(move |_, _, window, cx| Self::ask_remove(&connection, window, cx)))
             .into_any_element()
     }
 }
-
-#[cfg(test)]
-mod tests;

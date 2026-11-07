@@ -284,3 +284,51 @@ fn the_project_asked_for_comes_first_and_the_others_keep_their_order() {
     assert_eq!(order(None), [Some(1), None, Some(3), Some(4)]);
     assert_eq!(order(Some(9)), [Some(1), None, Some(3), Some(4)]);
 }
+
+fn chat(state: State, note: &str) -> Connection {
+    Connection { kind: ConnectionKind::Chat, state, note: note.to_string(), ..Connection::default() }
+}
+
+#[test]
+fn an_unpaired_chat_says_what_pairing_it_shows_without_the_tuis_key() {
+    let row = chat(State::Missing, "enter shows a code to scan with your phone");
+    assert_eq!(row.note_here(), "shows a code to scan with your phone");
+    assert_eq!(row.pairing_offer(), Some("Pair…"));
+}
+
+#[test]
+fn a_paired_chat_says_what_it_is_for_and_offers_another() {
+    let row = chat(State::Connected, "agents message it while you are away · enter pairs another");
+    assert_eq!(row.note_here(), "agents message it while you are away");
+    assert_eq!(row.pairing_offer(), Some("Pair another…"));
+}
+
+#[test]
+fn a_paired_chat_shows_its_name() {
+    let row = Connection { account: Some("Ana".to_string()), ..chat(State::Connected, "") };
+    assert_eq!(row.status(), ("connected as Ana".to_string(), Tone::Good));
+}
+
+#[test]
+fn browsers_drop_the_tuis_key_and_offer_to_pair() {
+    let none = Connection {
+        kind: ConnectionKind::Browsers,
+        count: Some(0),
+        note: "enter forgets them all".to_string(),
+        ..Connection::default()
+    };
+    assert_eq!(none.note_here(), "");
+    assert_eq!(none.pairing_offer(), Some("Pair a browser…"));
+    let some = Connection { count: Some(2), ..none };
+    assert_eq!(some.pairing_offer(), Some("Pair another…"));
+}
+
+#[test]
+fn a_tracker_or_a_bot_offers_no_pairing_and_keeps_only_its_own_note() {
+    let tracker = Connection { note: "enter pastes one".to_string(), ..Connection::default() };
+    assert_eq!(tracker.note_here(), "");
+    assert_eq!(tracker.pairing_offer(), None);
+    let bot = Connection { kind: ConnectionKind::Bot, note: "paste its token".to_string(), ..Connection::default() };
+    assert_eq!(bot.note_here(), "paste its token");
+    assert_eq!(bot.pairing_offer(), None);
+}

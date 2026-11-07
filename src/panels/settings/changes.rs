@@ -89,6 +89,11 @@ impl SettingsPanel {
                 message: "Each one has to be paired again to reach this computer.".into(),
                 button: "Forget",
             },
+            ConnectionKind::Chat => Ask {
+                title: format!("Forget the {}?", c.label),
+                message: "Agents stop messaging it, and it has to be paired again.".into(),
+                button: "Forget",
+            },
             _ => Ask {
                 title: format!("Remove the {}?", c.label),
                 message: "cornercase forgets it, and it has to be pasted again to be used.".into(),
