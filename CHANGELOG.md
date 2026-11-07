@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.26
+
+- **Starting an agent on a machine shows its tab at once.** The dialog closes as soon as the tab is open there, even while the agent asks to trust the folder, so you answer it in that tab. The window no longer guesses which new tab is the one it started.
+- **Clone on a machine can bring the files git ignores.** The Clone form lists this project's git-ignored files, such as `.env`, with their sizes, and copies the ones you tick into the new clone with their permissions. Nothing is ticked at first. A file over 1 MiB is shown but cannot be copied, and a clone takes 8 MiB in all. **Skip files** clones without them. If the machine could not write one, the toast names it and says why. On Windows the form says these files stay behind, as cornercase does not read them there yet.
+
 ## 0.1.25
 
 - **A message held for you can be sent or left to wait from its pane.** When a script or another agent sends a message to the pane you are typing in, the pane's card now says who sent it, as in `1 message waiting from claude (pane 9) · goes after yours`, with two buttons: ` send now ` and ` wait turn `, which then reads as chosen. They work on a machine's tab too, and clicking them leaves your keyboard in the pane.

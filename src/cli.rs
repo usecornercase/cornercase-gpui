@@ -19,7 +19,7 @@ use parking_lot::Mutex;
 #[cfg(test)]
 pub(crate) use locate::parse_version;
 pub(crate) use locate::{Binary, INSTALL_GUIDE, MINIMUM, Missing, Origin, Problem, Version};
-pub(crate) use partial::{run_partial, run_printed};
+pub(crate) use partial::{run_partial, run_partial_on, run_printed};
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
 use typist::{OnError, Typist};
