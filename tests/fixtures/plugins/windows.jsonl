@@ -1,0 +1,6 @@
+{"plugin":"acme.notes","id":"flaky","state":"running","pid":4210,"restart_in":null}
+{"plugin":"acme.notes","id":"panel","state":"running","pid":4211,"restart_in":null}
+{"plugin":"acme.notes","id":"flaky","state":"stopped","pid":null,"restart_in":2}
+{"plugin":"acme.notes","id":"flaky","state":"running","pid":4329,"restart_in":null}
+{"plugin":"acme.notes","id":"flaky","state":"stopped","pid":null,"restart_in":null}
+{"plugin":"acme.notes","id":"panel","state":"stopped","pid":null,"restart_in":null}

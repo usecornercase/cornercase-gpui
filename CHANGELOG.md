@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.30
+
+- **A plugin's button now acts on what this window shows.** Its action gets the project, workspace, tab and folder you are looking at here, not those of cornercase's own window, and a popup opens here without that window, at a size taken from this one. Over a machine's tab a button acts on your tab behind it, and its tooltip says so; a popup goes back to that tab.
+- **What a plugin keeps running beside a window now runs beside this one.** The processes plugins declare as `[[window]]` run while the window is on this computer: they stop when it closes or moves to another server, and start again when it comes back. A machine's tab does not count as leaving. Each plugin's card shows them: running with their pid, or stopped with the seconds until they start again.
+
 ## 0.1.29
 
 - **A machine whose link dropped says when it tries again.** Its card, its row in the Machines sheet and the tabs of its agents in the sidebar count down, `reconnecting in 4 s`, and say `reconnecting…` while the try runs. When only you can fix it, such as cornercase missing there, it says why instead of promising a try.

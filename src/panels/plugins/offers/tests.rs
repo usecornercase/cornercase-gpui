@@ -103,8 +103,11 @@ fn a_failure_of_an_older_read_is_not_told_and_changes_nothing() {
 #[test]
 fn a_run_names_its_plugin_action_revision_and_target() {
     let groups = offers().offered(Spot::Pane(5));
-    let command = groups[0].runs[0].command();
-    assert_eq!(command, ["plugin", "run", "acme.notes", "say", "--json", "--revision", "2", "--pane", "5"]);
+    let command = groups[0].runs[0].command(9);
+    assert_eq!(
+        command,
+        ["plugin", "run", "acme.notes", "say", "--json", "--revision", "2", "--pane", "5", "--view", "9"]
+    );
 }
 
 #[test]
@@ -116,10 +119,20 @@ fn each_kind_of_row_is_named_by_its_own_flag() {
 }
 
 #[test]
-fn a_buttons_action_runs_with_no_target() {
+fn a_buttons_action_names_no_target_and_acts_for_this_windows_view() {
     let buttons = offers().buttons();
-    let command = buttons[1].runs[0].command();
-    assert_eq!(command, ["plugin", "run", "acme.deploy", "go", "--json", "--revision", "2"]);
+    let command = buttons[1].runs[0].command(9);
+    assert_eq!(command, ["plugin", "run", "acme.deploy", "go", "--json", "--revision", "2", "--view", "9"]);
+}
+
+#[test]
+fn a_buttons_tip_is_its_title() {
+    assert_eq!(offers().buttons()[0].tip(None), "Notes board");
+}
+
+#[test]
+fn over_a_machines_tab_a_buttons_tip_says_it_acts_on_the_tab_behind() {
+    assert_eq!(offers().buttons()[0].tip(Some("vps")), "Notes board: acts on the tab behind vps's");
 }
 
 #[test]
@@ -166,7 +179,7 @@ fn an_icon_from_a_private_font_gives_way_to_the_titles_initial() {
 
 #[test]
 fn a_finished_run_says_so_and_reads_nothing_again() {
-    let told = told("Say where", false, Ok(r#"{"plugin": "p", "error": null, "ms": 51}"#.to_string()));
+    let told = told("Say where", Ok(r#"{"plugin": "p", "error": null, "ms": 51}"#.to_string()));
     let (text, kind) = told.said.expect("it says so");
     assert_eq!(text, "Say where: done in 51 ms");
     assert!(kind == ToastKind::Info);
@@ -175,7 +188,7 @@ fn a_finished_run_says_so_and_reads_nothing_again() {
 
 #[test]
 fn a_failed_run_is_told_from_its_outcome() {
-    let told = told("Fail on purpose", false, Ok(fixture!("plugins/run-failed.json").to_string()));
+    let told = told("Fail on purpose", Ok(fixture!("plugins/run-failed.json").to_string()));
     let (text, kind) = told.said.expect("it says so");
     assert_eq!(text, "Fail on purpose: exit status: 3; `cornercase plugin logs acme.notes` says more");
     assert!(kind == ToastKind::Error);
@@ -184,26 +197,11 @@ fn a_failed_run_is_told_from_its_outcome() {
 
 #[test]
 fn a_refused_run_is_told_and_reads_the_list_again() {
-    let told =
-        told("Say where", false, Err(anyhow::anyhow!("cornercase plugin: the plugins changed since revision 1")));
+    let told = told("Say where", Err(anyhow::anyhow!("cornercase plugin: the plugins changed since revision 1")));
     let (text, kind) = told.said.expect("it says so");
     assert_eq!(text, "Say where: cornercase plugin: the plugins changed since revision 1");
     assert!(kind == ToastKind::Error);
     assert!(told.refused);
-}
-
-#[test]
-fn a_refused_popup_says_what_it_waits_for() {
-    let told = told("Open board", true, Err(anyhow::anyhow!("cornercase plugin: no window is attached")));
-    let (text, _) = told.said.expect("it says so");
-    assert!(text.starts_with("Open board: cornercase plugin: no window is attached ("), "{text}");
-    assert!(text.ends_with("usecornercase/cornercase-terminal#666)"), "{text}");
-}
-
-#[test]
-fn a_popup_that_opened_adds_nothing_to_its_outcome() {
-    let told = told("Open board", true, Ok(r#"{"plugin": "p", "error": null, "ms": 51}"#.to_string()));
-    assert_eq!(told.said.expect("it says so").0, "Open board: done in 51 ms");
 }
 
 #[test]
