@@ -26,6 +26,7 @@ use crate::theme::colours;
 use crate::ui;
 
 const EMPTY: &str = "nothing counted yet: agents running in cornercase count from now on";
+const READING_STATS: &str = "Reading the stats…";
 const TICK: Duration = Duration::from_secs(20);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,6 +67,14 @@ impl<T> Load<T> {
         }
     }
 
+    fn cached(&mut self, result: anyhow::Result<T>) {
+        if self.value.is_none()
+            && let Ok(value) = result
+        {
+            self.value = Some(value);
+        }
+    }
+
     fn missing(&self, title: &'static str, waiting: String, cx: &Context<UsagePanel>) -> AnyElement {
         match self.error.as_deref().filter(|_| !self.loading) {
             Some(e) => failure(title, e, cx).into_any_element(),
@@ -78,6 +87,11 @@ impl<T> Load<T> {
 struct Readings {
     stats: Load<Stats>,
     plans: Load<Plans>,
+}
+
+struct Asks {
+    cached: Option<Vec<String>>,
+    fresh: Vec<String>,
 }
 
 pub(crate) struct UsagePanel {
@@ -152,51 +166,48 @@ impl UsagePanel {
     fn refresh(&mut self, forced: bool, cx: &mut Context<Self>) {
         match self.page {
             Page::Limits => self.load_plans(forced, cx),
-            Page::Stats | Page::Agents => self.load_stats(cx),
+            Page::Stats | Page::Agents => self.load_stats(forced, cx),
         }
     }
 
-    fn load_stats(&mut self, cx: &mut Context<Self>) {
+    fn load_stats(&mut self, forced: bool, cx: &mut Context<Self>) {
         let pick = self.shown();
-        let load = &mut self.reading_of(&pick).stats;
-        if load.loading {
-            return;
-        }
-        load.loading = true;
-        cx.notify();
-        run_json(cx, pick.stats(), move |this, result: anyhow::Result<Stats>, cx| {
-            this.reading_of(&pick).stats.done(result);
-            cx.notify();
-        });
+        let asks = Asks { cached: pick.cached_stats(), fresh: pick.stats() };
+        self.read(|reading| &mut reading.stats, forced, asks, cx);
     }
 
     fn load_plans(&mut self, forced: bool, cx: &mut Context<Self>) {
         let pick = self.shown();
-        let load = &mut self.reading_of(&pick).plans;
+        let asks = Asks { cached: Some(pick.usage(true)), fresh: pick.usage(false) };
+        self.read(|reading| &mut reading.plans, forced, asks, cx);
+    }
+
+    fn read<T: serde::de::DeserializeOwned + 'static>(
+        &mut self,
+        slot: fn(&mut Readings) -> &mut Load<T>,
+        forced: bool,
+        asks: Asks,
+        cx: &mut Context<Self>,
+    ) {
+        let pick = self.shown();
+        let load = slot(self.reading_of(&pick));
         if load.loading {
             return;
         }
-        let cached_first = !forced && load.value.is_none();
+        let cached_first = asks.cached.filter(|_| !forced && load.value.is_none());
         load.loading = true;
         cx.notify();
-        if cached_first {
-            let cached = pick.clone();
-            run_json(cx, pick.usage(true), move |this, result, cx| this.cached_plans(&cached, result, cx));
+        if let Some(cached) = cached_first {
+            let asked = pick.clone();
+            run_json(cx, cached, move |this, result, cx| {
+                slot(this.reading_of(&asked)).cached(result);
+                cx.notify();
+            });
         }
-        run_json(cx, pick.usage(false), move |this, result: anyhow::Result<Plans>, cx| {
-            this.reading_of(&pick).plans.done(result);
+        run_json(cx, asks.fresh, move |this, result, cx| {
+            slot(this.reading_of(&pick)).done(result);
             cx.notify();
         });
-    }
-
-    fn cached_plans(&mut self, pick: &Pick, result: anyhow::Result<Plans>, cx: &mut Context<Self>) {
-        let load = &mut self.reading_of(pick).plans;
-        if load.value.is_none()
-            && let Ok(plans) = result
-        {
-            load.value = Some(plans);
-            cx.notify();
-        }
     }
 
     fn switch(&mut self, page: Page, cx: &mut Context<Self>) {
@@ -340,9 +351,9 @@ impl UsagePanel {
     }
 
     fn stats_page(&self, cx: &Context<Self>) -> AnyElement {
-        let (shown, load) = (self.shown(), &self.reading().stats);
+        let load = &self.reading().stats;
         let Some(stats) = &load.value else {
-            return load.missing("Could not read the stats", shown.asking_stats(), cx);
+            return load.missing("Could not read the stats", READING_STATS.to_string(), cx);
         };
         let now = data::now();
         let days = stats.days(now);
@@ -388,7 +399,7 @@ impl UsagePanel {
     fn agents_page(&self, cx: &Context<Self>) -> AnyElement {
         let (shown, load) = (self.shown(), &self.reading().stats);
         let Some(stats) = &load.value else {
-            return load.missing("Could not read the stats", shown.asking_stats(), cx);
+            return load.missing("Could not read the stats", READING_STATS.to_string(), cx);
         };
         let key = WINDOWS[self.window.min(WINDOWS.len() - 1)].0;
         let agents = stats.agents(key);
@@ -471,3 +482,6 @@ fn run_json<T: serde::de::DeserializeOwned + 'static>(
         then(this, out.and_then(|out| Ok(serde_json::from_str::<T>(&out)?)), cx);
     });
 }
+
+#[cfg(test)]
+mod tests;
