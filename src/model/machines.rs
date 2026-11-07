@@ -87,6 +87,7 @@ pub(crate) struct Machine {
     pub version: Option<String>,
     pub server_version: Option<String>,
     pub seen: Option<String>,
+    pub retry_at: Option<String>,
     pub error: Option<String>,
     pub updating: bool,
     pub problem: Option<String>,
@@ -160,6 +161,30 @@ pub(crate) fn hide_destination(text: &str, name: &str, destination: &str) -> Str
     hidden.fold(text.to_string(), |text, hidden| hide_word(&text, hidden, name))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NextTry {
+    In(i64),
+    UnderWay,
+}
+
+impl NextTry {
+    fn at(retry_at: Option<&str>, now: i64) -> Option<Self> {
+        let left = epoch(retry_at?)? - now;
+        Some(if left > 0 { Self::In(left) } else { Self::UnderWay })
+    }
+
+    pub(crate) fn words(self) -> String {
+        match self {
+            Self::In(left) => format!("reconnecting in {}", ago(left)),
+            Self::UnderWay => "reconnecting…".to_string(),
+        }
+    }
+
+    pub(crate) fn counts(self) -> bool {
+        matches!(self, Self::In(_))
+    }
+}
+
 impl Machine {
     pub(crate) fn linked(&self) -> bool {
         self.problem.is_none() && self.state == LinkState::Linked
@@ -177,8 +202,16 @@ impl Machine {
         self.problem.is_none() && (self.updating || self.state == LinkState::Connecting)
     }
 
-    pub(crate) fn counts_up(&self) -> bool {
+    fn counts_up(&self) -> bool {
         self.problem.is_none() && self.state == LinkState::Unreachable && self.seen.is_some()
+    }
+
+    pub(crate) fn next_try(&self, now: i64) -> Option<NextTry> {
+        NextTry::at(self.retry_at.as_deref(), now)
+    }
+
+    pub(crate) fn counts(&self, now: i64) -> bool {
+        self.counts_up() || self.next_try(now).is_some_and(NextTry::counts)
     }
 
     pub(crate) fn seen_ago(&self, now: i64) -> Option<String> {

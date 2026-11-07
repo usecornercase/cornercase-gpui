@@ -42,6 +42,7 @@ mod selection;
 mod steps;
 
 pub(crate) use links::Pointer;
+pub(crate) use machine_card::Counting;
 use pane_accounts::PaneChips;
 use pane_notes::PaneNotes;
 use popup::Popup;
@@ -416,7 +417,7 @@ impl Root {
         let entity = cx.entity();
         let grid = self.frame_shown().then(|| self.shown().grid.clone());
         let (layout, moves) = (self.layout.clone(), self.moves.clone());
-        let (chips, notes) = (self.pane_chips(cx), self.pane_notes());
+        let (chips, notes) = (self.pane_chips(cx), self.pane_notes(cx));
         let root = entity.downgrade();
         let wanted = self.shown().size;
         let fit = Fit { layout, moves: moves.clone(), wanted, root, metrics, grid: grid.clone(), chips, notes };

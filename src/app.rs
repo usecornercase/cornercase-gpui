@@ -31,7 +31,7 @@ use crate::render::moving::Moves;
 use crate::self_update;
 use crate::sidebar::{Arrangement, Fold, SideState};
 use crate::store::{Store, ToastKind};
-use crate::terminal::Pointer;
+use crate::terminal::{Counting, Pointer};
 use crate::theme::{self, colours, radius};
 use crate::ui;
 use crate::ui::motion::{self, Leaving, Way};
@@ -128,6 +128,7 @@ pub(crate) struct Root {
     title: String,
     pub(crate) dock_focus: FocusHandle,
     beat: Rc<motion::Beat>,
+    pub(crate) counting: Counting,
 }
 
 impl Focusable for Root {
@@ -221,14 +222,13 @@ impl Root {
         .detach();
         cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)).detach();
         cx.observe_window_activation(window, |this, window, cx| {
-            this.activation_changed(window.is_window_active(), cx);
+            this.activation_changed(window.is_window_active());
             cx.notify();
         })
         .detach();
         let mut root = Self::fresh((focus, cx.focus_handle()), store, tx, queue, notifier);
         kept.apply(&mut root);
         root.start(cx);
-        Self::keep_seen_counting(cx);
         Self::take_back_colours_on_quit(cx);
         root
     }
@@ -323,6 +323,7 @@ impl Root {
             title: String::new(),
             dock_focus,
             beat: Rc::default(),
+            counting: Counting::default(),
         }
     }
 
@@ -350,7 +351,7 @@ impl Root {
         .detach();
     }
 
-    pub(crate) fn activation_changed(&mut self, active: bool, cx: &mut Context<Self>) {
+    pub(crate) fn activation_changed(&mut self, active: bool) {
         self.window_active = active;
         self.tell_machine_visible();
         let visible = active && self.machine.is_none();
@@ -358,9 +359,6 @@ impl Root {
             return;
         }
         self.visible = visible;
-        if visible && self.conn == Conn::Connected {
-            self.store.update(cx, Store::list_accounts);
-        }
         self.own.tell_visible(visible && !self.had.full);
     }
 
@@ -391,7 +389,6 @@ impl Root {
         }
         self.store.update(cx, |s, cx| {
             s.follow_app(cx);
-            s.list_accounts(cx);
             plugins::read_offers(s, cx);
         });
     }
@@ -895,6 +892,7 @@ impl Render for Root {
             .children(self.render_leaving(window_frame, window, cx))
             .child(crate::tour::Guide::get(cx))
             .child(self.render_toasts(cx));
+        self.keep_counting(cx);
         frame::framed(content, window_frame, window)
     }
 }

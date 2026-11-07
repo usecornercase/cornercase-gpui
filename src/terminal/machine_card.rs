@@ -1,7 +1,8 @@
+use std::cell::Cell;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, AsyncApp, Context, Div, IntoElement as _, ParentElement as _, Styled as _, WeakEntity, div,
+    AnyElement, AsyncApp, Context, Div, IntoElement as _, ParentElement as _, Styled as _, Task, WeakEntity, div,
     prelude::FluentBuilder as _, px,
 };
 
@@ -9,13 +10,34 @@ use super::no_tab::{heading, lead_text};
 use crate::app::Root;
 use crate::app::machine::Standing;
 use crate::desktop;
-use crate::model::machines::LinkState;
+use crate::model::machines::{LinkState, NextTry};
 use crate::model::{MachinePlace, MachineSeen, Tab, ThereId};
+use crate::panels::{PanelKind, queue};
 use crate::platform::paths;
 use crate::theme::{colours, radius};
 use crate::ui;
 
-const SEEN_EVERY: Duration = Duration::from_secs(1);
+const COUNTS_EVERY: Duration = Duration::from_secs(1);
+
+#[derive(Default)]
+pub(crate) struct Counting {
+    drawn: Cell<bool>,
+    next: Option<Task<()>>,
+}
+
+impl Counting {
+    pub(crate) fn drawn(&self) {
+        self.drawn.set(true);
+    }
+}
+
+async fn next_count(this: WeakEntity<Root>, cx: &mut AsyncApp) {
+    cx.background_executor().timer(COUNTS_EVERY).await;
+    let _ = this.update(cx, |this, cx| {
+        this.counting.next = None;
+        cx.notify();
+    });
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct CardText {
@@ -32,10 +54,26 @@ pub(super) enum CardState {
     Said(String),
 }
 
-fn state_of(standing: &Standing) -> Option<CardState> {
+pub(super) struct Told<'a> {
+    pub(super) home: Option<&'a str>,
+    pub(super) error: Option<&'a str>,
+    pub(super) now: i64,
+}
+
+fn link_state(seen: &MachineSeen, told: &Told<'_>) -> Option<CardState> {
+    match seen.next_try(told.now) {
+        Some(next) if next.counts() => Some(CardState::Said(next.words())),
+        Some(next) => Some(CardState::Running(next.words())),
+        None if seen.state == LinkState::Connecting => Some(CardState::Running(NextTry::UnderWay.words())),
+        None => told.error.map(|why| CardState::Said(why.to_string())),
+    }
+}
+
+fn state_of(standing: &Standing, seen: &MachineSeen, told: &Told<'_>) -> Option<CardState> {
     match standing {
         Standing::Connecting => Some(CardState::Running("connecting…".to_string())),
-        Standing::Reconnecting => Some(CardState::Running("reconnecting…".to_string())),
+        Standing::Reconnecting => Some(CardState::Running(NextTry::UnderWay.words())),
+        Standing::LinkDown => link_state(seen, told),
         Standing::RetryIn(seconds, _) => Some(CardState::Said(format!("reconnecting in {seconds} s"))),
         Standing::Elsewhere(why) | Standing::NoWay(why) => Some(CardState::Said(why.clone())),
         Standing::NoTab | Standing::Shown => None,
@@ -73,22 +111,21 @@ fn doing(status: Option<&str>) -> String {
     }
 }
 
-pub(super) fn card_text(place: &MachinePlace, seen: &MachineSeen, home: Option<&str>, standing: &Standing) -> CardText {
+pub(super) fn card_text(place: &MachinePlace, seen: &MachineSeen, told: &Told<'_>, standing: &Standing) -> CardText {
     let tab = seen.workspace(place.workspace).and_then(|ws| ws.tab(place.tab));
     let agent = tab.and_then(agent_of);
-    let folder = home.map_or_else(|| place.path().to_string(), |home| paths::home_relative(place.path(), home));
+    let folder = told.home.map_or_else(|| place.path().to_string(), |home| paths::home_relative(place.path(), home));
     let title = if seen.linked() { format!("runs on {}", seen.name) } else { seen.link_note() };
     let why = if let Standing::RetryIn(_, why) = standing { why.clone() } else { None };
-    let state = state_of(standing).filter(|_| seen.state != LinkState::Older);
+    let state = state_of(standing, seen, told).filter(|_| seen.state != LinkState::Older);
     CardText { title, line: line_of(seen, agent, standing), folder, state, why }
 }
 
-async fn keep_counting(this: WeakEntity<Root>, cx: &mut AsyncApp) {
-    loop {
-        cx.background_executor().timer(SEEN_EVERY).await;
-        if this.update(cx, Root::count_seen_up).is_err() {
-            return;
-        }
+fn card_counts(standing: &Standing, seen: &MachineSeen, now: i64) -> bool {
+    match standing {
+        Standing::RetryIn(..) => true,
+        Standing::LinkDown => seen.next_try(now).is_some_and(NextTry::counts),
+        _ => false,
     }
 }
 
@@ -128,20 +165,27 @@ impl Root {
         }
         let place = self.side.machine_place.as_ref()?;
         let seen = self.session.as_ref()?.machine(&place.machine)?;
-        let text = card_text(place, seen, self.store.read(cx).machine_home(&place.boot), &standing);
+        let store = self.store.read(cx);
+        let error = store.machines.iter().find(|machine| machine.name == seen.name).and_then(|m| m.error.as_deref());
+        let told = Told { home: store.machine_home(&place.boot), error, now: queue::now() };
+        let text = card_text(place, seen, &told, &standing);
+        if card_counts(&standing, seen, told.now) {
+            self.counting.drawn();
+        }
         Some(machine_card(&text, seen).into_any_element())
     }
 
-    pub(crate) fn keep_seen_counting(cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| keep_counting(this, cx).await).detach();
-    }
-
-    fn count_seen_up(&mut self, cx: &mut Context<Self>) {
-        let counting =
-            self.machine.as_ref().is_some_and(|tab| matches!(tab.standing(Instant::now()), Standing::RetryIn(..)));
-        if counting || self.session.as_ref().is_some_and(|session| session.machines.iter().any(MachineSeen::counts_up))
-        {
-            cx.notify();
+    pub(crate) fn keep_counting(&mut self, cx: &mut Context<Self>) {
+        let store = self.store.read(cx);
+        let listed = store.sheet == Some(PanelKind::Machines) || store.dialog.is_some();
+        let now = queue::now();
+        if listed && store.machines.iter().any(|machine| machine.counts(now)) {
+            self.counting.drawn();
+        }
+        if !self.counting.drawn.take() {
+            self.counting.next = None;
+        } else if self.counting.next.is_none() {
+            self.counting.next = Some(cx.spawn(async move |this, cx| next_count(this, cx).await));
         }
     }
 }

@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use gpui::{AnyView, Context, FocusHandle};
 
-use super::{Busy, Store, ToastKind, run_job_on};
+use super::{Busy, Store, ToastKind, run_job_on, run_with};
 use crate::cli::{self, Target};
-use crate::model::machines::run_on::clone::{Cloned, clone_args, parse_clone};
+use crate::model::machines::run_on::clone::{Cloned, Unwritten, clone_args, cloned_note, parse_clone};
 use crate::model::machines::run_on::{self, Answer, Awaited, Look, Looking, Offer, Starting, There, parse_answer};
 use crate::model::{Project, Spot, ThereId};
 
@@ -22,6 +22,8 @@ pub(crate) struct CloneThere {
     pub name: String,
     pub url: String,
     pub folder: String,
+    pub from: String,
+    pub files: Vec<String>,
 }
 
 struct CloneJob {
@@ -81,8 +83,6 @@ impl Store {
 
     pub(crate) fn start_there(&mut self, start: StartThere, cx: &mut Context<Self>) {
         let dialog = self.shown_dialog();
-        let early = start.select && start.starting.waits_for_its_agent();
-        self.awaited = early.then(|| Awaited::new_tab_in(&start.spot, dialog, Instant::now()));
         let busy = Busy::new(start_key(dialog.unwrap_or_default()), start.starting.doing(&start.spot.machine));
         let id = self.start_job(busy, cx);
         let (target, command) = (start.target.clone(), start.command.clone());
@@ -107,12 +107,12 @@ impl Store {
                     self.toast(note, ToastKind::Info, cx);
                 }
                 self.toast(start.starting.done(machine, &answer), ToastKind::Done, cx);
-                self.await_answer(start, &answer, cx);
+                if start.select {
+                    self.awaited = Awaited::answered(&start.spot, &answer, Instant::now());
+                    self.follow_awaited(cx);
+                }
             }
-            Err(why) => {
-                self.toast(format!("{machine}: {why}"), ToastKind::Error, cx);
-                self.drop_awaited_of(&start.spot);
-            }
+            Err(why) => self.toast(format!("{machine}: {why}"), ToastKind::Error, cx),
         }
     }
 
@@ -125,34 +125,18 @@ impl Store {
         }
     }
 
-    fn await_answer(&mut self, start: &StartThere, answer: &Answer, cx: &mut Context<Self>) {
-        let followed_early = start.starting.waits_for_its_agent();
-        let still_waits = self.awaited.as_ref().is_some_and(|awaited| awaited.takes_answer_of(&start.spot));
-        if start.select && (!followed_early || still_waits) {
-            self.awaited = Awaited::answered(&start.spot, answer, Instant::now());
-            self.follow_awaited(cx);
-        }
-    }
-
-    fn drop_awaited_of(&mut self, spot: &Spot) {
-        self.awaited.take_if(|awaited| awaited.takes_answer_of(spot));
-    }
-
     pub(crate) fn follow_awaited(&mut self, cx: &mut Context<Self>) {
         let Some(awaited) = self.awaited.take() else { return };
         let machines = self.session.as_ref().map_or(&[][..], |session| &session.machines);
         match awaited.look(machines, Instant::now()) {
-            Look::Listed(place) => {
-                self.close_started(awaited.dialog, true, cx);
-                self.select_there(place, cx);
-            }
+            Look::Listed(place) => self.select_there(place, cx),
             Look::NotYet => self.awaited = Some(awaited),
             Look::Gone => {}
         }
     }
 
     pub(crate) fn clone_there(&mut self, clone: CloneThere, cx: &mut Context<Self>) {
-        let CloneThere { machine, project, name, url, folder } = clone;
+        let CloneThere { machine, project, name, url, folder, from, files } = clone;
         let target = match self.target_of(&machine) {
             Ok(target) => target,
             Err(why) => return self.not_sent(&why, cx),
@@ -162,17 +146,26 @@ impl Store {
         let busy = Busy::new(clone_key(&machine, project), format!("Cloning {name} on {machine}…"));
         let id = self.start_job(busy, cx);
         let job = CloneJob { machine, boot, project, name };
-        run_job_on(cx, id, target, clone_args(&url, &folder), move |this: &mut Self, result, cx| {
+        let command = clone_args(&url, &folder, &files, &from);
+        let running = (cx.entity(), id);
+        let work = move || cli::run_partial_on(&target, &command);
+        run_with(cx, Some(running), work, move |this: &mut Self, result, cx| {
             let answer = result.map_err(|e| cli::reason(&e)).and_then(|out| parse_clone(&out));
             this.cloned_there(job, answer, cx);
         });
     }
 
-    fn cloned_there(&mut self, job: CloneJob, answer: Result<ThereId, String>, cx: &mut Context<Self>) {
+    fn cloned_there(
+        &mut self,
+        job: CloneJob,
+        answer: Result<(ThereId, Vec<Unwritten>), String>,
+        cx: &mut Context<Self>,
+    ) {
         let CloneJob { machine, boot, project, name } = job;
         match answer {
-            Ok(there) => {
-                self.toast(format!("Cloned {name} on {machine}"), ToastKind::Done, cx);
+            Ok((there, unwritten)) => {
+                let kind = if unwritten.is_empty() { ToastKind::Done } else { ToastKind::Error };
+                self.toast(cloned_note(&name, &machine, &unwritten), kind, cx);
                 self.cloned.push(Cloned { machine, boot, project, there, at: Instant::now() });
             }
             Err(why) => self.toast(format!("The clone on {machine} failed: {why}"), ToastKind::Error, cx),

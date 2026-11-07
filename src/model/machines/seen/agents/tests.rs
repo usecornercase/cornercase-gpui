@@ -3,6 +3,7 @@ use crate::model::machines::LinkState;
 use crate::test_util::fixture;
 
 const VPS_BOOT: &str = "3085888-1794015402206399212";
+const SEEN: &str = "2026-11-06T01:23:55.000Z";
 
 fn session() -> Session {
     serde_json::from_str(fixture!("machines/agents_status.json")).expect("parses")
@@ -263,6 +264,56 @@ fn the_link_is_looked_at_before_the_run_and_the_run_before_the_pane() {
 fn folding_a_machine_no_longer_listed_says_so() {
     let refused = sighted_pane(&[], &aim(9)).map(|_| ());
     assert_eq!(refused, Err("vps is no longer listed".to_string()));
+}
+
+fn fallen(retry_in: Option<i64>, seen: Option<&str>) -> (Session, i64) {
+    let mut session = session();
+    let now = crate::panels::flows::model::epoch(SEEN).expect("a time") + 120;
+    let vps = &mut session.machines[0];
+    vps.state = LinkState::Unreachable;
+    vps.seen = seen.map(str::to_string);
+    vps.retry_at = retry_in.map(|left| format!("2026-11-06T01:25:{:02}.000Z", 55 + left));
+    (session, now)
+}
+
+fn note(session: &Session, now: i64) -> Option<String> {
+    let rows = rows(session);
+    let row = there_row(&rows, "vps", 9);
+    row.agent.seen.pane_note(row.agent.pane, now)
+}
+
+#[test]
+fn a_fallen_machines_row_says_the_status_and_when_it_was_seen_and_leaves_the_next_try_to_its_tab() {
+    let (session, now) = fallen(Some(4), Some(SEEN));
+    assert_eq!(note(&session, now).as_deref(), Some("idle · seen 2 min ago"));
+    let rows = rows(&session);
+    let row = there_row(&rows, "vps", 9);
+    let tab = row.agent.seen.tab_note(row.agent.tab, now);
+    assert_eq!(tab.as_deref(), Some("idle · reconnecting in 4 s · seen 2 min ago"));
+}
+
+#[test]
+fn a_fallen_machines_row_never_seen_says_only_the_status() {
+    let (never, now) = fallen(Some(4), None);
+    assert_eq!(note(&never, now).as_deref(), Some("idle"));
+}
+
+#[test]
+fn a_linked_machines_row_has_no_note() {
+    assert_eq!(note(&session(), 0), None);
+}
+
+#[test]
+fn a_row_counts_while_it_says_when_the_machine_was_seen() {
+    let (seen, _) = fallen(None, Some(SEEN));
+    assert!(seen.machines[0].pane_note_counts());
+}
+
+#[test]
+fn a_row_with_nothing_that_moves_needs_no_clock() {
+    let (never, _) = fallen(Some(4), None);
+    assert!(!never.machines[0].pane_note_counts());
+    assert!(!session().machines[0].pane_note_counts());
 }
 
 #[test]

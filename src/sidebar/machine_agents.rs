@@ -118,6 +118,9 @@ impl Root {
         let lit = listing.place.as_ref().is_some_and(|shown| row.lit_by(shown));
         let title = pane.agent_title().unwrap_or_else(|| tab.name.clone());
         let line = there_line(row, place, &self.side.look.current, listing.now);
+        if seen.pane_note_counts() {
+            self.counting.drawn();
+        }
         let frame = ui::row(gid.clone(), lit)
             .group(gid.clone())
             .gap(px(GAP))

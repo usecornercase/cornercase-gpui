@@ -304,7 +304,6 @@ impl QueuePanel {
             Self::load_config(cx);
         }
         let store = Store::get(cx);
-        store.update(cx, Store::list_accounts);
         let session = store.read(cx).session.clone();
         let form = Form::new(entry, session.as_ref(), window, cx);
         let focus = form.prompt.read(cx).focus_handle(cx);

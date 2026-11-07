@@ -181,6 +181,9 @@ impl Root {
         let row = ThereRow { seen, ws, aim, chosen, folded, leaving, look };
         let children =
             if folded { Vec::new() } else { ws.tabs.iter().map(|tab| there_tab(&row, tab, listing, cx)).collect() };
+        if !folded && ws.tabs.iter().any(|tab| seen.tab_note_counts(tab, listing.now)) {
+            self.counting.drawn();
+        }
         div()
             .flex()
             .flex_col()

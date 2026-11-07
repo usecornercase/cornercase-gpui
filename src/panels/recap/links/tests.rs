@@ -1,4 +1,4 @@
-use super::{Go, go, left_its_pane, out_of_reach};
+use super::{Go, go, out_of_reach};
 use crate::model::Session;
 use crate::panels::recap::data::{Answer, Named, Place};
 use crate::test_util::fixture;
@@ -16,6 +16,63 @@ fn session() -> Session {
 fn place(id: &str) -> Place {
     let answer: Answer = serde_json::from_str(fixture!("recap/now.json")).expect("an answer");
     answer.places.get(id).cloned().expect("a place")
+}
+
+fn moved() -> Place {
+    let answer: Answer = serde_json::from_str(fixture!("recap/moved.json")).expect("an answer");
+    answer.places.get("c1").cloned().expect("a place")
+}
+
+fn reopened() -> Session {
+    serde_json::from_str(fixture!("recap/reopened-status.json")).expect("a session")
+}
+
+const REOPENED_PANE: u64 = 12;
+const SHELL_PANE: u64 = 7;
+
+#[test]
+fn a_conversation_reopened_in_another_pane_goes_to_that_pane() {
+    assert_eq!(go(&moved(), Some(&reopened())), Go::Pane(REOPENED_PANE));
+}
+
+#[test]
+fn a_conversation_that_came_back_after_a_restart_goes_to_its_pane() {
+    let earlier = Place { boot: Some("1-earlier".to_string()), ..moved() };
+    assert_eq!(go(&earlier, Some(&reopened())), Go::Pane(REOPENED_PANE));
+}
+
+#[test]
+fn the_conversation_counts_before_the_pane_the_place_names() {
+    let boot = reopened().boot;
+    let named = Place { pane: Some(SHELL_PANE), boot: Some(boot), ..moved() };
+    assert_eq!(go(&named, Some(&reopened())), Go::Pane(REOPENED_PANE));
+}
+
+#[test]
+fn another_agent_s_conversation_of_that_id_is_not_it() {
+    let other = Place { agent: Some("codex".to_string()), ..moved() };
+    assert_eq!(go(&other, Some(&reopened())), Go::Workspace(6));
+}
+
+#[test]
+fn a_pane_that_reports_no_agent_is_named_by_its_conversation_alone() {
+    let mut session = reopened();
+    let panes = session.projects.iter_mut().flat_map(|p| &mut p.workspaces).flat_map(|w| &mut w.tabs);
+    panes.flat_map(|t| &mut t.panes).for_each(|pane| pane.agent = None);
+    assert_eq!(go(&moved(), Some(&session)), Go::Pane(REOPENED_PANE));
+}
+
+#[test]
+fn a_place_without_a_conversation_still_tries_its_pane() {
+    let boot = reopened().boot;
+    let opencode = Place { conversation: None, pane: Some(SHELL_PANE), boot: Some(boot), ..moved() };
+    assert_eq!(go(&opencode, Some(&reopened())), Go::Pane(SHELL_PANE));
+}
+
+#[test]
+fn a_place_without_a_conversation_is_not_in_a_pane_without_one() {
+    let opencode = Place { conversation: None, ..moved() };
+    assert_eq!(go(&opencode, Some(&reopened())), Go::Workspace(6));
 }
 
 #[test]
@@ -78,20 +135,10 @@ fn a_pull_request_without_a_web_address_cannot_be_reached() {
 
 #[test]
 fn a_conversation_out_of_reach_says_it_is_closed() {
-    assert_eq!(
-        out_of_reach("api › login › claude", &place("c1")),
-        "api › login › claude cannot be reached: it is closed"
-    );
+    assert_eq!(out_of_reach("api › login › claude", &place("c1")), "api › login › claude is closed");
 }
 
 #[test]
 fn a_pull_request_out_of_reach_says_it_has_no_address() {
     assert_eq!(out_of_reach("#212", &place("p1")), "#212 cannot be reached: it has no web address");
-}
-
-#[test]
-fn leaving_its_pane_names_the_issue_it_waits_on() {
-    let note = left_its_pane("shop › main › checkout", "workspace");
-    assert!(note.starts_with("shop › main › checkout is not in its pane any more: showing its workspace."), "{note}");
-    assert!(note.ends_with("needs usecornercase/cornercase-terminal#664"), "{note}");
 }
