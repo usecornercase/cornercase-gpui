@@ -151,7 +151,7 @@ fn project_menu(session: &Session, id: u64, openers: &[Found]) -> Vec<Entry> {
     let mut entries = vec![
         new_workspace_item(Some(id)),
         start_flow_item(Some(id)),
-        act_busy("Start agent here", dialogs::starting(""), cmd(&["start", "--project", &id.to_string(), "--focus"])),
+        act_busy("Start agent here", dialogs::starting(""), dialogs::start_in(&["--project", &id.to_string()])),
         Entry::Separator,
         rename_item("Rename project", target),
         submenu("Move to group", move_to_group_items(session, project)),
@@ -259,7 +259,7 @@ fn workspace_menu(session: &Session, id: u64, openers: &[Found]) -> Vec<Entry> {
     let ids = id.to_string();
     let mut entries = vec![
         act("New tab here", cmd(&["new-tab", "--workspace", &ids, "--focus"])),
-        act_busy("Start agent here", dialogs::starting(""), cmd(&["start", "--workspace", &ids, "--focus"])),
+        act_busy("Start agent here", dialogs::starting(""), dialogs::start_in(&["--workspace", &ids])),
     ];
     entries.extend(agent_items(ws));
     entries.push(Entry::Separator);

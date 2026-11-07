@@ -27,7 +27,7 @@ fn a_dialog_body_grows_with_the_window_within_limits() {
 
 #[test]
 fn an_agent_started_without_a_pick_names_no_account() {
-    assert_eq!(start_args("", "", "", &[]), ["start", "--focus"]);
+    assert_eq!(start_args("", "", "", &[]), ["start", "--focus", "--placed"]);
 }
 
 #[test]
@@ -35,6 +35,28 @@ fn an_agent_started_with_a_pick_names_it_with_the_rest() {
     let picks = [AccountPick { agent: "claude".into(), folder: String::new() }];
     assert_eq!(
         start_args("claude", "fix it", "feat/x", &picks),
-        ["start", "claude", "--focus", "--prompt", "fix it", "--worktree", "feat/x", "--account", "claude="]
+        [
+            "start",
+            "claude",
+            "--focus",
+            "--placed",
+            "--prompt",
+            "fix it",
+            "--worktree",
+            "feat/x",
+            "--account",
+            "claude="
+        ]
     );
+}
+
+#[test]
+fn the_default_agent_answers_once_its_tab_is_open() {
+    assert_eq!(start_in(&[]), ["start", "--focus", "--placed"]);
+}
+
+#[test]
+fn an_agent_started_in_a_place_names_it() {
+    assert_eq!(start_in(&["--project", "4"]), ["start", "--project", "4", "--focus", "--placed"]);
+    assert_eq!(start_in(&["--workspace", "7"]), ["start", "--workspace", "7", "--focus", "--placed"]);
 }

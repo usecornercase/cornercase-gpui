@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use gpui::{AnyView, Context, FocusHandle};
 
-use super::{Busy, Store, ToastKind, run_job_on, run_with};
+use super::{Busy, Store, ToastKind, run_job, run_job_on, run_with};
 use crate::cli::{self, Target};
 use crate::model::machines::run_on::clone::{Cloned, Unwritten, clone_args, cloned_note, parse_clone};
 use crate::model::machines::run_on::{self, Answer, Awaited, Look, Looking, Offer, Starting, There, parse_answer};
@@ -14,6 +14,13 @@ pub(crate) struct StartThere {
     pub command: Vec<String>,
     pub target: Target,
     pub select: bool,
+}
+
+pub(crate) struct StartHere {
+    pub doing: String,
+    pub done: String,
+    pub failed: String,
+    pub command: Vec<String>,
 }
 
 pub(crate) struct CloneThere {
@@ -34,7 +41,7 @@ struct CloneJob {
 }
 
 fn start_key(dialog: u64) -> String {
-    format!("start-there:{dialog}")
+    format!("dialog-start:{dialog}")
 }
 
 fn clone_key(machine: &str, project: u64) -> String {
@@ -69,7 +76,7 @@ impl Store {
         self.machine_target(seen.ok_or_else(|| format!("{machine} is not linked"))?)
     }
 
-    pub(crate) fn starting_there(&self, dialog: u64) -> bool {
+    pub(crate) fn dialog_starts(&self, dialog: u64) -> bool {
         self.jobs.busy(&start_key(dialog))
     }
 
@@ -78,7 +85,7 @@ impl Store {
     }
 
     pub(crate) fn shown_dialog_starts(&self) -> bool {
-        self.shown_dialog().is_some_and(|dialog| self.starting_there(dialog))
+        self.shown_dialog().is_some_and(|dialog| self.dialog_starts(dialog))
     }
 
     pub(crate) fn start_there(&mut self, start: StartThere, cx: &mut Context<Self>) {
@@ -114,6 +121,21 @@ impl Store {
             }
             Err(why) => self.toast(format!("{machine}: {why}"), ToastKind::Error, cx),
         }
+    }
+
+    pub(crate) fn start_here(&mut self, start: StartHere, cx: &mut Context<Self>) {
+        let StartHere { doing, done, failed, command } = start;
+        let dialog = self.shown_dialog();
+        let id = self.start_job(Busy::new(start_key(dialog.unwrap_or_default()), doing), cx);
+        let command = self.with_view(command);
+        run_job(cx, id, command, move |this: &mut Self, result, cx| match result {
+            Ok(_) => {
+                this.leave_machine_place(cx);
+                this.close_started(dialog, true, cx);
+                this.toast(done, ToastKind::Done, cx);
+            }
+            Err(e) => this.toast(format!("{failed}: {}", cli::reason(&e)), ToastKind::Error, cx),
+        });
     }
 
     fn close_started(&mut self, dialog: Option<u64>, select: bool, cx: &mut Context<Self>) {

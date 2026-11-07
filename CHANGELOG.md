@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.30
+
+- **Starting an agent no longer waits on its folder question.** The new tab opens at once, from `+`, ⌘G, a row's Start agent here and an issue's Start, and if the agent asks whether to trust the folder you answer it right there. Until now, from `+`, ⌘G or a row, what you typed never reached that question, and Starting an agent… stayed in the status bar.
+- **Starting work on an issue stays in its form until the tab opens.** The button says Starting… while the issue is read and the worktree made, then the form and the sheet close on the new tab. If the start is refused, the form stays with what you typed. The message now says `claude is starting on #7`, since what happens next shows in the tab.
+
 ## 0.1.29
 
 - **A machine whose link dropped says when it tries again.** Its card, its row in the Machines sheet and the tabs of its agents in the sidebar count down, `reconnecting in 4 s`, and say `reconnecting…` while the try runs. When only you can fix it, such as cornercase missing there, it says why instead of promising a try.

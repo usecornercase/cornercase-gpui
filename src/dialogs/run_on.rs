@@ -52,8 +52,8 @@ fn refused(why: &str, cx: &mut App) -> Gate {
     Gate::Held
 }
 
-pub(crate) fn starting_there<T: 'static>(cx: &Context<T>) -> bool {
-    Store::get(cx).read(cx).starting_there(cx.entity_id().as_u64())
+pub(crate) fn dialog_starts<T: 'static>(cx: &Context<T>) -> bool {
+    Store::get(cx).read(cx).dialog_starts(cx.entity_id().as_u64())
 }
 
 impl RunOn {
