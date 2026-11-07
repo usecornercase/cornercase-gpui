@@ -1,17 +1,19 @@
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 use gpui::Context;
 use serde_json::Value;
 
-use super::jobs::{leaving_key, renaming_key};
-use super::{Busy, Store, ToastKind, args, run_job_on, run_on};
+use super::jobs::{folding_key, leaving_key, renaming_key};
+use super::{Busy, Store, ToastKind, args, run_job_on, run_on, run_with};
 use crate::cli::{self, Remote, Target};
 use crate::desktop;
-use crate::model::machines::Machine;
-use crate::model::machines::seen::sighted;
-use crate::model::{Aim, MachinePlace, MachineSeen, ThereId};
+use crate::model::machines::seen::{sighted, sighted_pane};
+use crate::model::machines::{Machine, hide_destination};
+use crate::model::{Aim, MachinePlace, MachineSeen, PaneAim, ThereId};
 
 const NOTHING_SENT: &str = "nothing was sent";
+const FOLD_CAP: Duration = Duration::from_secs(15);
 
 #[derive(Default)]
 pub(super) struct Homes {
@@ -206,6 +208,32 @@ impl Store {
             self.jobs.left_there(aim);
         }
         cx.notify();
+    }
+
+    pub(crate) fn reach_pane(&self, aim: &PaneAim) -> Result<Target, String> {
+        let machines = self.session.as_ref().map_or(&[][..], |session| &session.machines);
+        self.machine_target(sighted_pane(machines, aim)?)
+    }
+
+    pub(crate) fn folding_on_machine(&self, aim: &PaneAim) -> bool {
+        self.jobs.busy(&folding_key(aim))
+    }
+
+    pub(crate) fn fold_on_machine(&mut self, aim: PaneAim, cx: &mut Context<Self>) {
+        let target = match self.reach_pane(&aim) {
+            Ok(target) => target,
+            Err(why) => return self.not_sent(&why, cx),
+        };
+        let job = (Store::get(cx), self.start_job(Busy::new(folding_key(&aim), aim.running()), cx));
+        let command = aim.args();
+        let destination = target.host().unwrap_or_default().to_string();
+        let answer = move || cli::run_on_within(&target, &command, FOLD_CAP);
+        run_with(cx, Some(job), answer, move |this: &mut Self, result, cx| {
+            if let Err(e) = result {
+                let reason = hide_destination(&cli::reason(&e), &aim.machine, &destination);
+                this.toast(aim.failed(&reason), ToastKind::Error, cx);
+            }
+        });
     }
 
     pub(crate) fn machine_home(&self, boot: &str) -> Option<&str> {

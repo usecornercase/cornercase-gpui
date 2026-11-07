@@ -132,6 +132,14 @@ impl Root {
             ))
     }
 
+    pub(super) fn main_card_width(&self) -> f32 {
+        if self.side.look.current.arrangement == Arrangement::SideBySide {
+            self.pair_width.size() - GAP - self.projects_column()
+        } else {
+            self.sidebar_width.size()
+        }
+    }
+
     fn projects_column(&self) -> f32 {
         ((self.pair_width.size() - GAP) * PROJECTS_SHARE).clamp(PROJECTS_MIN, PROJECTS_MAX).round()
     }

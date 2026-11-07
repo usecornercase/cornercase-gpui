@@ -375,7 +375,7 @@ fn agent_fold(row: &AgentRow<'_>, scope: &str, cx: &mut Context<Root>) -> Statef
     }))
 }
 
-fn agent_text(title: String, details: String, selected: bool) -> Div {
+pub(super) fn agent_text(title: String, details: String, selected: bool) -> Div {
     let line = |text: String| div().child(ui::one_line(text));
     div()
         .flex_1()

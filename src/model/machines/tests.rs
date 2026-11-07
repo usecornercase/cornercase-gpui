@@ -178,6 +178,22 @@ fn only_an_unreachable_machine_once_seen_counts_up() {
 }
 
 #[test]
+fn a_reason_names_the_machine_and_not_its_address() {
+    let reason = "ssh: connect to host vps.example.com port 22: Connection refused";
+    assert_eq!(
+        hide_destination(reason, "vps", "ana@vps.example.com"),
+        "ssh: connect to host vps port 22: Connection refused"
+    );
+    assert_eq!(hide_destination("ana@vps.example.com: denied.", "vps", "ana@vps.example.com"), "vps: denied.");
+}
+
+#[test]
+fn a_word_that_only_holds_the_address_stays() {
+    let reason = "myvps.example.com is not vps.example.com.au";
+    assert_eq!(hide_destination(reason, "vps", "vps.example.com"), reason);
+}
+
+#[test]
 fn a_link_that_fell_says_when_it_tries_next_and_one_that_is_up_does_not() {
     let list = parse_list(fixture!("machines/fallen.json")).expect("parses");
     assert_eq!(list.machines[0].next_try(now()), Some(NextTry::In(4)));

@@ -5,7 +5,7 @@ use crate::app::Root;
 use crate::context_menu::{Entry, item, resting};
 use crate::dialogs::{self, Question};
 use crate::model::machines::seen::sighted;
-use crate::model::{Aim, ThereWorkspace};
+use crate::model::{Aim, PaneAim, ThereWorkspace};
 use crate::store::{MachineAct, Store};
 
 const RENAME_WORKSPACE: &str = "Rename workspace";
@@ -36,7 +36,28 @@ fn there_entries(reach: Result<(), String>, aim: Aim) -> Vec<Entry> {
     }
 }
 
+fn there_agent_entries(reach: Result<(), String>, aim: PaneAim) -> Vec<Entry> {
+    let label = aim.label();
+    match reach {
+        Ok(()) => vec![item(label, move |this, _, cx| {
+            this.store.update(cx, |s, cx| s.fold_on_machine(aim.clone(), cx));
+        })],
+        Err(why) => vec![resting(why), resting(label)],
+    }
+}
+
 impl Root {
+    pub(super) fn open_there_agent_menu(
+        &mut self,
+        aim: &PaneAim,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let reach = self.store.read(cx).reach_pane(aim).map(|_| ());
+        self.open_menu(at, there_agent_entries(reach, aim.clone()), window, cx);
+    }
+
     pub(super) fn open_there_menu(
         &mut self,
         aim: &Aim,

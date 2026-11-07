@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
-use crate::model::Aim;
+use crate::model::{Aim, PaneAim};
 
 pub(crate) const SHOW_AFTER: Duration = Duration::from_millis(300);
 
@@ -35,6 +35,10 @@ pub(crate) fn leaving_key(aim: &Aim) -> String {
 
 pub(crate) fn renaming_key(aim: &Aim) -> String {
     format!("machine-renaming:{}", aim.key())
+}
+
+pub(crate) fn folding_key(aim: &PaneAim) -> String {
+    format!("machine-fold:{}", aim.key())
 }
 
 #[derive(Default)]

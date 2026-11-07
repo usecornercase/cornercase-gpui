@@ -1,0 +1,649 @@
+{
+  "boot": "3085927-1794015402243387608",
+  "caller": null,
+  "config": {
+    "revision": 1
+  },
+  "groups": [],
+  "home": "/home/ana",
+  "machines": [
+    {
+      "boot": "3085888-1794015402206399212",
+      "icon": "☁",
+      "name": "vps",
+      "projects": [
+        {
+          "active": true,
+          "collapsed": false,
+          "custom_name": null,
+          "group": null,
+          "id": 4,
+          "machine": "vps",
+          "name": "work",
+          "paired": null,
+          "path": "/home/ana/work",
+          "workspaces": [
+            {
+              "active": true,
+              "behind": 0,
+              "branch": null,
+              "collapsed": false,
+              "custom_name": null,
+              "id": 3,
+              "machine": "vps",
+              "name": "default",
+              "path": "/home/ana/work",
+              "pull_request": null,
+              "run_dir": null,
+              "setup": null,
+              "tabs": [
+                {
+                  "active": true,
+                  "custom_name": null,
+                  "id": 2,
+                  "layout": {
+                    "leaf": 1
+                  },
+                  "name": "zsh",
+                  "panes": [
+                    {
+                      "active": true,
+                      "agent": null,
+                      "at_prompt": true,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "conversation": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_from": null,
+                      "held_queued": false,
+                      "held_sends": 0,
+                      "id": 1,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/work",
+                      "pid": 1001,
+                      "program": "zsh",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": null,
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": null
+                },
+                {
+                  "active": false,
+                  "custom_name": null,
+                  "id": 19,
+                  "layout": {
+                    "leaf": 18
+                  },
+                  "name": "fake-agent",
+                  "panes": [
+                    {
+                      "account": "custom",
+                      "active": true,
+                      "agent": "claude",
+                      "at_prompt": false,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "conversation": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_from": null,
+                      "held_queued": false,
+                      "held_sends": 0,
+                      "id": 18,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/work",
+                      "pid": 1018,
+                      "program": "fake-agent",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": "idle",
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": "idle"
+                }
+              ],
+              "worktree": false
+            }
+          ]
+        },
+        {
+          "active": false,
+          "collapsed": false,
+          "custom_name": null,
+          "group": null,
+          "id": 8,
+          "machine": "vps",
+          "name": "shop",
+          "paired": 8,
+          "path": "/home/ana/code/shop",
+          "remotes": [
+            {
+              "name": "origin",
+              "url": "https://github.com/acme/shop.git"
+            }
+          ],
+          "repo": "github.com/acme/shop",
+          "workspaces": [
+            {
+              "active": true,
+              "behind": 0,
+              "branch": "main",
+              "collapsed": false,
+              "custom_name": null,
+              "id": 7,
+              "machine": "vps",
+              "name": "main",
+              "path": "/home/ana/code/shop",
+              "pull_request": null,
+              "run_dir": null,
+              "setup": null,
+              "tabs": [
+                {
+                  "active": true,
+                  "custom_name": null,
+                  "id": 6,
+                  "layout": {
+                    "leaf": 5
+                  },
+                  "name": "zsh",
+                  "panes": [
+                    {
+                      "active": true,
+                      "agent": null,
+                      "at_prompt": true,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "conversation": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_from": null,
+                      "held_queued": false,
+                      "held_sends": 0,
+                      "id": 5,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/code/shop",
+                      "pid": 1005,
+                      "program": "zsh",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": null,
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": null
+                },
+                {
+                  "active": false,
+                  "custom_name": null,
+                  "id": 10,
+                  "layout": {
+                    "leaf": 9
+                  },
+                  "name": "fake-agent",
+                  "panes": [
+                    {
+                      "account": "custom",
+                      "active": true,
+                      "agent": "claude",
+                      "at_prompt": false,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "conversation": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_from": null,
+                      "held_queued": false,
+                      "held_sends": 0,
+                      "id": 9,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/code/shop",
+                      "pid": 1009,
+                      "program": "fake-agent",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": "idle",
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": "idle"
+                },
+                {
+                  "active": false,
+                  "custom_name": null,
+                  "id": 12,
+                  "layout": {
+                    "leaf": 11
+                  },
+                  "name": "fake-agent",
+                  "panes": [
+                    {
+                      "account": "custom",
+                      "active": true,
+                      "agent": "claude",
+                      "at_prompt": false,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "conversation": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_from": null,
+                      "held_queued": false,
+                      "held_sends": 0,
+                      "id": 11,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/code/shop",
+                      "pid": 1011,
+                      "program": "fake-agent",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": "idle",
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": "idle"
+                },
+                {
+                  "active": false,
+                  "custom_name": null,
+                  "id": 14,
+                  "layout": {
+                    "leaf": 13
+                  },
+                  "name": "fake-agent",
+                  "panes": [
+                    {
+                      "account": "custom",
+                      "active": true,
+                      "agent": "claude",
+                      "at_prompt": false,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "conversation": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_from": null,
+                      "held_queued": false,
+                      "held_sends": 0,
+                      "id": 13,
+                      "model": null,
+                      "parent": 9,
+                      "path": "/home/ana/code/shop",
+                      "pid": 1013,
+                      "program": "fake-agent",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": "idle",
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": "idle"
+                }
+              ],
+              "worktree": false
+            },
+            {
+              "active": false,
+              "behind": 0,
+              "branch": "main",
+              "collapsed": false,
+              "custom_name": "docs",
+              "id": 17,
+              "machine": "vps",
+              "name": "docs",
+              "path": "/home/ana/code/shop",
+              "pull_request": null,
+              "run_dir": null,
+              "setup": null,
+              "tabs": [
+                {
+                  "active": true,
+                  "custom_name": null,
+                  "id": 16,
+                  "layout": {
+                    "leaf": 15
+                  },
+                  "name": "zsh",
+                  "panes": [
+                    {
+                      "active": true,
+                      "agent": null,
+                      "at_prompt": true,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "conversation": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_from": null,
+                      "held_queued": false,
+                      "held_sends": 0,
+                      "id": 15,
+                      "model": null,
+                      "parent": null,
+                      "path": "/home/ana/code/shop",
+                      "pid": 1015,
+                      "program": "zsh",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": null,
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": null
+                },
+                {
+                  "active": false,
+                  "custom_name": null,
+                  "id": 21,
+                  "layout": {
+                    "leaf": 20
+                  },
+                  "name": "fake-agent",
+                  "panes": [
+                    {
+                      "account": "custom",
+                      "active": true,
+                      "agent": "claude",
+                      "at_prompt": false,
+                      "background_shell": false,
+                      "caller": false,
+                      "context": null,
+                      "conversation": null,
+                      "dialog": false,
+                      "draft": false,
+                      "held_from": null,
+                      "held_queued": false,
+                      "held_sends": 0,
+                      "id": 20,
+                      "model": null,
+                      "parent": 9,
+                      "path": "/home/ana/code/shop",
+                      "pid": 1020,
+                      "program": "fake-agent",
+                      "resumes": false,
+                      "resuming": false,
+                      "role": null,
+                      "status": "idle",
+                      "subagents": 0,
+                      "survey": false,
+                      "title": null
+                    }
+                  ],
+                  "status": "idle"
+                }
+              ],
+              "worktree": false
+            }
+          ]
+        }
+      ],
+      "seen": "2026-11-07T01:45:55.000Z",
+      "state": "linked"
+    }
+  ],
+  "projects": [
+    {
+      "active": true,
+      "collapsed": false,
+      "custom_name": null,
+      "group": null,
+      "id": 4,
+      "name": "work",
+      "path": "/home/ana/work",
+      "workspaces": [
+        {
+          "active": true,
+          "behind": 0,
+          "branch": null,
+          "collapsed": false,
+          "custom_name": null,
+          "id": 3,
+          "name": "default",
+          "path": "/home/ana/work",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 2,
+              "layout": {
+                "leaf": 1
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "conversation": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_from": null,
+                  "held_queued": false,
+                  "held_sends": 0,
+                  "id": 1,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/ana/work",
+                  "pid": 1001,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            },
+            {
+              "active": false,
+              "custom_name": null,
+              "id": 12,
+              "layout": {
+                "leaf": 11
+              },
+              "name": "fake-agent",
+              "panes": [
+                {
+                  "account": "custom",
+                  "active": true,
+                  "agent": "claude",
+                  "at_prompt": false,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "conversation": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_from": null,
+                  "held_queued": false,
+                  "held_sends": 0,
+                  "id": 11,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/ana/work",
+                  "pid": 1011,
+                  "program": "fake-agent",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": "idle",
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": "idle"
+            }
+          ],
+          "worktree": false
+        }
+      ]
+    },
+    {
+      "active": false,
+      "collapsed": false,
+      "custom_name": null,
+      "group": null,
+      "id": 8,
+      "name": "shop",
+      "path": "/home/ana/code/shop",
+      "remotes": [
+        {
+          "name": "origin",
+          "url": "https://github.com/acme/shop.git"
+        }
+      ],
+      "repo": "github.com/acme/shop",
+      "workspaces": [
+        {
+          "active": true,
+          "behind": 0,
+          "branch": "main",
+          "collapsed": false,
+          "custom_name": null,
+          "id": 7,
+          "name": "main",
+          "path": "/home/ana/code/shop",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "tabs": [
+            {
+              "active": true,
+              "custom_name": null,
+              "id": 6,
+              "layout": {
+                "leaf": 5
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "conversation": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_from": null,
+                  "held_queued": false,
+                  "held_sends": 0,
+                  "id": 5,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/ana/code/shop",
+                  "pid": 1005,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            },
+            {
+              "active": false,
+              "custom_name": null,
+              "id": 10,
+              "layout": {
+                "leaf": 9
+              },
+              "name": "fake-agent",
+              "panes": [
+                {
+                  "account": "custom",
+                  "active": true,
+                  "agent": "claude",
+                  "at_prompt": false,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "conversation": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_from": null,
+                  "held_queued": false,
+                  "held_sends": 0,
+                  "id": 9,
+                  "model": null,
+                  "parent": null,
+                  "path": "/home/ana/code/shop",
+                  "pid": 1009,
+                  "program": "fake-agent",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": "idle",
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": "idle"
+            }
+          ],
+          "worktree": false
+        }
+      ]
+    }
+  ],
+  "shown": {
+    "pane": 1,
+    "project": 4,
+    "tab": 2,
+    "workspace": 3
+  },
+  "version": "0.13.19"
+}

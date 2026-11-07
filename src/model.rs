@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
@@ -13,6 +13,7 @@ pub(crate) mod machines;
 mod pull_request;
 mod shared;
 mod surface;
+mod tree;
 
 pub(crate) use agent_context::{Breakdown, Category, ContextAnswer, Messages, Slot};
 #[cfg(test)]
@@ -20,7 +21,10 @@ pub(crate) use agent_context::{McpServer, Skills};
 pub(crate) use details::memory_size;
 pub(crate) use grid::{Applied, Grid, PaneGrid, Run};
 pub(crate) use link::Link;
-pub(crate) use machines::seen::{Aim, MachinePlace, MachineSeen, Spot, ThereId, ThereProject, ThereWorkspace};
+pub(crate) use machines::seen::{
+    Aim, MachinePlace, MachineSeen, PaneAim, SectionRow, Spot, ThereAgent, ThereId, ThereProject, ThereRow,
+    ThereWorkspace,
+};
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};
 pub(crate) use shared::Shared;
 pub(crate) use surface::{
@@ -302,25 +306,17 @@ fn agents_of(ws: &Workspace) -> impl Iterator<Item = Placed<'_>> {
 }
 
 fn agent_tree<'a>(agents: &[Placed<'a>], through_folds: bool) -> Vec<AgentRow<'a>> {
-    let known = |id: Option<u64>| id.filter(|id| agents.iter().any(|(_, _, p)| p.id == *id));
-    let children = |id: u64| agents.iter().filter(|(_, _, p)| known(p.parent) == Some(id)).count();
-    let mut rows = Vec::new();
-    let mut seen = HashSet::new();
-    let mut stack: Vec<(Placed<'a>, usize)> =
-        agents.iter().rev().filter(|(_, _, p)| known(p.parent).is_none()).map(|a| (*a, 0)).collect();
-    while let Some(((workspace, tab, pane), depth)) = stack.pop() {
-        if !seen.insert(pane.id) {
-            continue;
-        }
-        rows.push(AgentRow { pane, workspace, tab, depth, children: children(pane.id) });
-        if pane.collapsed && !through_folds {
-            continue;
-        }
-        for a in agents.iter().rev().filter(|(_, _, p)| known(p.parent) == Some(pane.id)) {
-            stack.push((*a, depth + 1));
-        }
-    }
-    rows
+    let item = |(_, _, pane): &Placed<'a>| tree::Item {
+        key: pane.id,
+        parent: pane.parent,
+        folded: pane.collapsed && !through_folds,
+    };
+    let items: Vec<_> = agents.iter().map(item).collect();
+    let row = |node: tree::Node| {
+        let (workspace, tab, pane) = agents[node.at];
+        AgentRow { pane, workspace, tab, depth: node.depth, children: node.children }
+    };
+    tree::order(&items).into_iter().map(row).collect()
 }
 
 impl Workspace {
@@ -337,10 +333,6 @@ impl Session {
             .flat_map(|p| &p.workspaces)
             .flat_map(agents_of)
             .collect()
-    }
-
-    pub(crate) fn agent_rows(&self, order: &[u64]) -> Vec<AgentRow<'_>> {
-        agent_tree(&self.placed_agents(order), false)
     }
 }
 

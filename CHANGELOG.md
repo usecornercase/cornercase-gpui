@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.34
+
+- **The agents section lists a machine's agents too.** With the section on, each linked machine's agents are rows, tagged with the machine, after the agents of the project they share with you, and those of a project only on the machine come last. A child sits under the agent that started it on that machine. While the link is down the rows stay, dimmed, and say when they were last seen.
+- **A click shows that agent's tab**, live, as a click on its tab row does. Nothing moves on the machine.
+- **Folding one folds it on the machine**, with its arrow or Collapse and Expand in its menu, so the machine's own window shows the same. A folded row says how many it hides and whether one of them needs you. If the machine fell, restarted or no longer has that agent, a message says so and nothing is sent.
+
 ## 0.1.33
 
 - **Run setup, in a worktree's menu.** It runs the project's setup again in a new tab, to retry after a fix, and the menu offers it when cornercase's own does: on a worktree of a project with a setup that isn't already running it. The status bar says it is running, and a setup that fails says so with its exit status.
