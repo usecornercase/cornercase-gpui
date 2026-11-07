@@ -2,10 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.25
+## 0.1.26
 
 - **A plugin's button now acts on what this window shows.** Its action gets the project, workspace, tab and folder you are looking at here, not those of cornercase's own window, and a popup opens here without that window, at a size taken from this one. Over a machine's tab a button acts on your tab behind it, and its tooltip says so; a popup goes back to that tab.
-- **What a plugin keeps running beside a window now runs beside this one.** The processes plugins declare as `[[window]]` start when the window opens and stop when it closes, on this computer, whichever server the window is on. Each plugin's card shows them: running with their pid, or stopped with the seconds until they start again.
+- **What a plugin keeps running beside a window now runs beside this one.** The processes plugins declare as `[[window]]` run while the window is on this computer: they stop when it closes or moves to another server, and start again when it comes back. A machine's tab does not count as leaving. Each plugin's card shows them: running with their pid, or stopped with the seconds until they start again.
+
+## 0.1.25
+
+- **A message held for you can be sent or left to wait from its pane.** When a script or another agent sends a message to the pane you are typing in, the pane's card now says who sent it, as in `1 message waiting from claude (pane 9) · goes after yours`, with two buttons: ` send now ` and ` wait turn `, which then reads as chosen. They work on a machine's tab too, and clicking them leaves your keyboard in the pane.
+- **` send now ` takes your unsent line with it.** cornercase sends the message after what you have typed and presses Enter, so the two go as one line. The card says so while you have a line in progress. Keeping it back waits on cornercase (usecornercase/cornercase-terminal#708).
 
 ## 0.1.24
 
