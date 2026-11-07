@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.24
+
+- **A message held for you can be sent or left to wait from its pane.** When a script or another agent sends a message to the pane you are typing in, the pane's card now says who sent it, as in `1 message waiting from claude (pane 9) · goes after yours`, with two buttons: ` send now ` and ` wait turn `, which then reads as chosen. They work on a machine's tab too, and clicking them leaves your keyboard in the pane.
+- **` send now ` takes your unsent line with it.** cornercase sends the message after what you have typed and presses Enter, so the two go as one line. The card says so while you have a line in progress. Keeping it back waits on cornercase (usecornercase/cornercase-terminal#708).
+
 ## 0.1.23
 
 - **This window now needs cornercase 0.13.19 or newer.** That release has the commands that let it do what only cornercase's own window could: pairing a phone, removing any worktree, running a worktree's setup again, importing a VS Code workspace, a plugin's window processes, sending a held message now and more. The next versions of the window turn them on. If yours is older, the window says so and how to update it.
