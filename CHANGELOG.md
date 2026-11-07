@@ -2,12 +2,22 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.25
+## 0.1.27
 
 - **The Worktrees sheet removes any worktree on disk.** An open workspace, a closed project's worktree with its teardown, an entry whose folder is gone, a folder whose repository is gone or that git no longer knows: every row can be ticked and removed now.
 - **It looks again before it asks.** Remove checks the rows first and then says what is at stake for each one: uncommitted files, programs working in it, commits not pushed, a lock, a teardown. The button says what it will do, such as `Remove anyway` or `Unlock and remove`, and only the folders you were warned about are forced, so one that changes after you were asked stays where it is and the sheet tells you.
 - **Also delete the branch.** Tick it in the question to delete the branches too. Commits that would be lost show in red first. The default branch and the main checkout's are never deleted.
 - **It says what happened, by name.** Removing runs in the background, each row leaving as it goes, and one message at the end names what went, a branch that was kept, a teardown that failed and a folder that could not be removed.
+
+## 0.1.26
+
+- **Starting an agent on a machine shows its tab at once.** The dialog closes as soon as the tab is open there, even while the agent asks to trust the folder, so you answer it in that tab. The window no longer guesses which new tab is the one it started.
+- **Clone on a machine can bring the files git ignores.** The Clone form lists this project's git-ignored files, such as `.env`, with their sizes, and copies the ones you tick into the new clone with their permissions. Nothing is ticked at first. A file over 1 MiB is shown but cannot be copied, and a clone takes 8 MiB in all. **Skip files** clones without them. If the machine could not write one, the toast names it and says why. On Windows the form says these files stay behind, as cornercase does not read them there yet.
+
+## 0.1.25
+
+- **A message held for you can be sent or left to wait from its pane.** When a script or another agent sends a message to the pane you are typing in, the pane's card now says who sent it, as in `1 message waiting from claude (pane 9) · goes after yours`, with two buttons: ` send now ` and ` wait turn `, which then reads as chosen. They work on a machine's tab too, and clicking them leaves your keyboard in the pane.
+- **` send now ` takes your unsent line with it.** cornercase sends the message after what you have typed and presses Enter, so the two go as one line. The card says so while you have a line in progress. Keeping it back waits on cornercase (usecornercase/cornercase-terminal#708).
 
 ## 0.1.24
 

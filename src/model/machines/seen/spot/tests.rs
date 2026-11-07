@@ -17,14 +17,6 @@ fn starting_on_a_machine_names_it_and_its_project() {
 }
 
 #[test]
-fn a_spot_knows_every_tab_of_the_project_there() {
-    let tabs = shop_on_vps().tabs;
-    let known = [6, 10, 16, 14].map(ThereId::heard);
-    assert_eq!(tabs.len(), known.len());
-    assert!(known.iter().all(|tab| tabs.contains(tab)));
-}
-
-#[test]
 fn the_login_tab_opens_in_the_workspace_at_the_projects_root() {
     let tab = LoginTab { agent: "claude", account: Some("work"), command: Some("/home/ana/bin/claude") };
     assert_eq!(

@@ -50,6 +50,7 @@ fn starting_on_a_machine_names_its_project_and_moves_no_window() {
             "fix-it",
             "--account",
             "claude=home",
+            "--placed",
             "--json"
         ]
     );
