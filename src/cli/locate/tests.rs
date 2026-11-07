@@ -108,6 +108,12 @@ fn every_platform_needs_the_release_with_every_command_the_window_uses() {
 }
 
 #[test]
+fn the_release_before_the_minimum_is_too_old_and_the_minimum_is_enough() {
+    assert!(matches!(verdict(Ok(lines(&["cornercase 0.13.18"]))), Err(Problem::TooOld(_))));
+    assert!(verdict(Ok(lines(&["cornercase 0.13.19"]))).is_ok());
+}
+
+#[test]
 fn the_installers_folders_on_a_mac() {
     let dirs = installer_dirs(Os::Mac, Some(Path::new("/Users/ana")), None);
     let expected = ["/Users/ana/.local/bin", "/Users/ana/.cargo/bin", "/opt/homebrew/bin", "/usr/local/bin"];
