@@ -1,0 +1,24 @@
+{
+  "root": "/home/ana/code/shop",
+  "files": [
+    {
+      "path": ".env",
+      "size": 9,
+      "mode": 384,
+      "too_big": false
+    },
+    {
+      "path": "big.bin",
+      "size": 2097152,
+      "mode": 436,
+      "too_big": true
+    },
+    {
+      "path": "web/.env.local",
+      "size": 4,
+      "mode": 416,
+      "too_big": false
+    }
+  ],
+  "left_out": 0
+}

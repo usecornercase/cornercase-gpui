@@ -4,11 +4,9 @@ use gpui::App;
 
 use super::data::Place;
 use super::names;
-use crate::model::Session;
 use crate::model::link::is_web;
+use crate::model::{PaneInfo, Session};
 use crate::store::{Store, ToastKind};
-
-const MOVED_ISSUE: &str = "usecornercase/cornercase-terminal#664";
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Go {
@@ -24,8 +22,20 @@ pub(super) fn go(place: &Place, session: Option<&Session>) -> Go {
         return place.url.clone().filter(|url| is_web(url)).map_or(Go::Nowhere, Go::Address);
     }
     session
-        .and_then(|session| live_pane(place, session).or_else(|| where_it_was(place, session)))
+        .and_then(|session| {
+            pane_in_conversation(place, session)
+                .or_else(|| live_pane(place, session))
+                .or_else(|| where_it_was(place, session))
+        })
         .unwrap_or(Go::Nowhere)
+}
+
+fn pane_in_conversation(place: &Place, session: &Session) -> Option<Go> {
+    let (agent, conversation) = (place.agent.as_deref()?, place.conversation.as_deref()?);
+    let holds = |pane: &&PaneInfo| {
+        pane.conversation.as_deref() == Some(conversation) && pane.agent.as_deref().is_none_or(|a| a == agent)
+    };
+    session.tabs().flat_map(|tab| &tab.panes).find(holds).map(|pane| Go::Pane(pane.id))
 }
 
 fn live_pane(place: &Place, session: &Session) -> Option<Go> {
@@ -41,13 +51,12 @@ fn where_it_was(place: &Place, session: &Session) -> Option<Go> {
     Some(workspace.map_or(Go::Project(project.id), |workspace| Go::Workspace(workspace.id)))
 }
 
-pub(super) fn left_its_pane(name: &str, what: &str) -> String {
-    format!("{name} is not in its pane any more: showing its {what}. Finding a pane it moved to needs {MOVED_ISSUE}")
-}
-
 pub(super) fn out_of_reach(name: &str, place: &Place) -> String {
-    let why = if place.is_pull() { "it has no web address" } else { "it is closed" };
-    format!("{name} cannot be reached: {why}")
+    if place.is_pull() {
+        format!("{name} cannot be reached: it has no web address")
+    } else {
+        format!("{name} is closed")
+    }
 }
 
 pub(super) fn follow(link: &str, places: &BTreeMap<String, Place>, cx: &mut App) {
@@ -59,18 +68,14 @@ pub(super) fn follow(link: &str, places: &BTreeMap<String, Place>, cx: &mut App)
 
 fn reach(id: &str, place: &Place, cx: &mut App) {
     let store = Store::get(cx);
-    let name = names::label(id, place);
-    let (kind, shown, note) = match go(place, store.read(cx).session.as_ref()) {
+    let (kind, shown) = match go(place, store.read(cx).session.as_ref()) {
         Go::Address(url) => return cx.open_url(&url),
-        Go::Nowhere => return tell(out_of_reach(&name, place), cx),
-        Go::Pane(pane) => ("pane", pane, None),
-        Go::Workspace(workspace) => ("workspace", workspace, Some(left_its_pane(&name, "workspace"))),
-        Go::Project(project) => ("project", project, Some(left_its_pane(&name, "project"))),
+        Go::Nowhere => return tell(out_of_reach(&names::label(id, place), place), cx),
+        Go::Pane(pane) => ("pane", pane),
+        Go::Workspace(workspace) => ("workspace", workspace),
+        Go::Project(project) => ("project", project),
     };
     store.update(cx, |s, cx| s.show_in_terminal(kind, shown, cx));
-    if let Some(note) = note {
-        tell(note, cx);
-    }
 }
 
 fn open(address: &str, cx: &mut App) {

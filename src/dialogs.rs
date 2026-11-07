@@ -1,7 +1,7 @@
 use gpui::{
-    AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _,
-    Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Stateful,
+    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::cli;
@@ -239,7 +239,6 @@ pub(crate) fn start_agent(window: &mut Window, cx: &mut App) {
     if store.read(cx).view_id.is_none() {
         return;
     }
-    store.update(cx, Store::list_accounts);
     let view = cx.new(|cx| {
         let submit = |this: &mut StartAgent, _: &mut Window, cx: &mut Context<StartAgent>| this.submit(cx);
         let agent = text_field("the default agent (settings → agents)", cx, submit, window);
@@ -296,6 +295,24 @@ impl Render for StartAgent {
 
 type Reply = Box<dyn FnOnce(anyhow::Result<String>, &mut App)>;
 type OnYes = Box<dyn Fn(&mut App)>;
+type Body = Box<dyn Fn(bool) -> AnyElement>;
+
+pub(crate) struct Tick {
+    label: String,
+    button: String,
+    on_yes: OnYes,
+    on: bool,
+}
+
+impl Tick {
+    pub(crate) fn new(
+        label: impl Into<String>,
+        button: impl Into<String>,
+        on_yes: impl Fn(&mut App) + 'static,
+    ) -> Self {
+        Self { label: label.into(), button: button.into(), on_yes: Box::new(on_yes), on: false }
+    }
+}
 
 pub(crate) struct Question {
     title: String,
@@ -305,6 +322,8 @@ pub(crate) struct Question {
     reply: Option<Reply>,
     on_yes: Option<OnYes>,
     busy: Option<Busy>,
+    body: Option<Body>,
+    tick: Option<Tick>,
 }
 
 impl Question {
@@ -315,7 +334,17 @@ impl Question {
         command: Vec<String>,
     ) -> Self {
         let (title, message, button) = (title.into(), message.into(), button.into());
-        Self { title, message, button, command, reply: None, on_yes: None, busy: None }
+        Self { title, message, button, command, reply: None, on_yes: None, busy: None, body: None, tick: None }
+    }
+
+    pub(crate) fn body(mut self, body: impl Fn(bool) -> AnyElement + 'static) -> Self {
+        self.body = Some(Box::new(body));
+        self
+    }
+
+    pub(crate) fn tick(mut self, tick: Tick) -> Self {
+        self.tick = Some(tick);
+        self
     }
 
     pub(crate) fn busy(mut self, busy: Busy) -> Self {
@@ -346,7 +375,43 @@ pub(crate) fn confirm(question: Question, window: &mut Window, cx: &mut App) {
 }
 
 impl Confirm {
+    fn ticked(&self) -> Option<&Tick> {
+        self.question.tick.as_ref().filter(|tick| tick.on)
+    }
+
+    fn toggle_tick(&mut self, cx: &mut Context<Self>) {
+        if let Some(tick) = &mut self.question.tick {
+            tick.on = !tick.on;
+            cx.notify();
+        }
+    }
+
+    fn said(&self, window: &Window) -> AnyElement {
+        let Some(body) = &self.question.body else {
+            return div().text_color(colours::muted()).child(self.question.message.clone()).into_any_element();
+        };
+        div()
+            .id("question-body")
+            .max_h(px(body_height(f32::from(window.viewport_size().height))))
+            .overflow_y_scroll()
+            .child(body(self.ticked().is_some()))
+            .into_any_element()
+    }
+
+    fn tick_box(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
+        let tick = self.question.tick.as_ref()?;
+        Some(
+            ui::checkbox("question-tick", tick.on, tick.label.clone())
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.toggle_tick(cx))),
+        )
+    }
+
     fn run(&mut self, cx: &mut Context<Self>) {
+        if let Some(tick) = self.question.tick.take_if(|tick| tick.on) {
+            Store::get(cx).update(cx, Store::close_dialog);
+            (tick.on_yes)(cx);
+            return;
+        }
         let command = self.question.command.clone();
         if let Some(then) = self.question.on_yes.take() {
             Store::get(cx).update(cx, Store::close_dialog);
@@ -373,7 +438,10 @@ impl Confirm {
 }
 
 impl Render for Confirm {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let button = self.ticked().map_or(&self.question.button, |tick| &tick.button).clone();
+        let said = self.said(window);
+        let tick = self.tick_box(cx);
         div()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| {
@@ -383,9 +451,9 @@ impl Render for Confirm {
             }))
             .child(frame(
                 self.question.title.clone(),
-                div().text_color(colours::muted()).child(self.question.message.clone()),
+                div().flex().flex_col().gap(px(12.)).child(said).children(tick),
                 cancel_and(
-                    ui::danger_button("confirm", self.question.button.clone())
+                    ui::danger_button("confirm", button)
                         .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx))),
                 ),
             ))

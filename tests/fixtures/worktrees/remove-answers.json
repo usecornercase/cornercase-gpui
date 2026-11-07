@@ -1,0 +1,303 @@
+{
+  "check": false,
+  "folders": [
+    {
+      "branches": [
+        "cap/clean"
+      ],
+      "kept": [],
+      "lines": [
+        "teardown runs first"
+      ],
+      "lost": [],
+      "needs": [],
+      "outcome": "removed",
+      "path": "/home/ana/.cornercase/worktrees/shop/cap-clean",
+      "removed_with": null,
+      "roles": [],
+      "teardown": true,
+      "unchecked": [],
+      "warnings": [],
+      "why": null,
+      "worktree": {
+        "branch": "cap/clean",
+        "changed": 0,
+        "error": null,
+        "kind": "linked",
+        "last_changed": "2026-11-07T01:34:20.000Z",
+        "lock": null,
+        "merged": false,
+        "no_commits": true,
+        "other_tabs": [],
+        "outside": [],
+        "path": "/home/ana/.cornercase/worktrees/shop/cap-clean",
+        "project": 8,
+        "project_name": "shop",
+        "removing": false,
+        "repository": "/home/ana/code/shop",
+        "risks": [
+          "teardown runs first"
+        ],
+        "run_role": false,
+        "running": [],
+        "safe": true,
+        "size": null,
+        "size_error": null,
+        "unpushed": 0,
+        "upstream_gone": false,
+        "workspace": 45
+      }
+    },
+    {
+      "branches": [
+        "cap/ok"
+      ],
+      "kept": [],
+      "lines": [
+        "teardown runs first"
+      ],
+      "lost": [],
+      "needs": [],
+      "outcome": "removed",
+      "path": "/home/ana/.cornercase/worktrees/shop/cap-ok",
+      "removed_with": null,
+      "roles": [],
+      "teardown": true,
+      "unchecked": [],
+      "warnings": [],
+      "why": null,
+      "worktree": {
+        "branch": "cap/ok",
+        "changed": 0,
+        "error": null,
+        "kind": "linked",
+        "last_changed": "2026-11-07T01:34:20.000Z",
+        "lock": null,
+        "merged": false,
+        "no_commits": true,
+        "other_tabs": [],
+        "outside": [],
+        "path": "/home/ana/.cornercase/worktrees/shop/cap-ok",
+        "project": 8,
+        "project_name": "shop",
+        "removing": false,
+        "repository": "/home/ana/code/shop",
+        "risks": [
+          "teardown runs first"
+        ],
+        "run_role": false,
+        "running": [],
+        "safe": true,
+        "size": null,
+        "size_error": null,
+        "unpushed": 0,
+        "upstream_gone": false,
+        "workspace": 57
+      }
+    },
+    {
+      "branches": [],
+      "kept": [],
+      "lines": [
+        "teardown runs first"
+      ],
+      "lost": [],
+      "needs": [],
+      "outcome": "removed",
+      "path": "/home/ana/.cornercase/worktrees/shop/feat-onmain",
+      "removed_with": null,
+      "roles": [],
+      "teardown": true,
+      "unchecked": [],
+      "warnings": [
+        "could not delete the branch main: refusing to delete the branch main, the main checkout's or the default"
+      ],
+      "why": null,
+      "worktree": {
+        "branch": "main",
+        "changed": 0,
+        "error": null,
+        "kind": "linked",
+        "last_changed": "2026-11-07T01:34:20.000Z",
+        "lock": null,
+        "merged": true,
+        "no_commits": false,
+        "other_tabs": [],
+        "outside": [],
+        "path": "/home/ana/.cornercase/worktrees/shop/feat-onmain",
+        "project": 8,
+        "project_name": "shop",
+        "removing": false,
+        "repository": "/home/ana/code/shop",
+        "risks": [
+          "teardown runs first"
+        ],
+        "run_role": false,
+        "running": [],
+        "safe": true,
+        "size": null,
+        "size_error": null,
+        "unpushed": 0,
+        "upstream_gone": false,
+        "workspace": 33
+      }
+    },
+    {
+      "branches": [],
+      "kept": [],
+      "lines": [
+        "teardown runs first"
+      ],
+      "lost": [],
+      "needs": [],
+      "outcome": "removed",
+      "path": "/home/ana/.cornercase/worktrees/shop/cap-bad",
+      "removed_with": null,
+      "roles": [],
+      "teardown": true,
+      "unchecked": [],
+      "warnings": [
+        "cap/bad: exit status 4: broken"
+      ],
+      "why": null,
+      "worktree": {
+        "branch": "cap/bad",
+        "changed": 0,
+        "error": null,
+        "kind": "linked",
+        "last_changed": "2026-11-07T01:34:20.000Z",
+        "lock": null,
+        "merged": false,
+        "no_commits": true,
+        "other_tabs": [],
+        "outside": [],
+        "path": "/home/ana/.cornercase/worktrees/shop/cap-bad",
+        "project": 8,
+        "project_name": "shop",
+        "removing": false,
+        "repository": "/home/ana/code/shop",
+        "risks": [
+          "teardown runs first"
+        ],
+        "run_role": false,
+        "running": [],
+        "safe": true,
+        "size": null,
+        "size_error": null,
+        "unpushed": 0,
+        "upstream_gone": false,
+        "workspace": 51
+      }
+    },
+    {
+      "branches": [],
+      "kept": [],
+      "lines": [
+        "teardown runs first"
+      ],
+      "lost": [],
+      "needs": [],
+      "outcome": "failed",
+      "path": "/home/ana/.cornercase/worktrees/shop/cap-writes",
+      "removed_with": null,
+      "roles": [],
+      "teardown": true,
+      "unchecked": [],
+      "warnings": [],
+      "why": "'/home/ana/.cornercase/worktrees/shop/cap-writes' contains modified or untracked files, use --force to delete it",
+      "worktree": {
+        "branch": "cap/writes",
+        "changed": 0,
+        "error": null,
+        "kind": "linked",
+        "last_changed": "2026-11-07T01:34:20.000Z",
+        "lock": null,
+        "merged": false,
+        "no_commits": true,
+        "other_tabs": [],
+        "outside": [],
+        "path": "/home/ana/.cornercase/worktrees/shop/cap-writes",
+        "project": 8,
+        "project_name": "shop",
+        "removing": false,
+        "repository": "/home/ana/code/shop",
+        "risks": [
+          "teardown runs first"
+        ],
+        "run_role": false,
+        "running": [],
+        "safe": true,
+        "size": null,
+        "size_error": null,
+        "unpushed": 0,
+        "upstream_gone": false,
+        "workspace": 48
+      }
+    },
+    {
+      "branches": [],
+      "kept": [],
+      "lines": [
+        "1 file changed",
+        "teardown runs first"
+      ],
+      "lost": [],
+      "needs": [
+        "force"
+      ],
+      "outcome": "refused",
+      "path": "/home/ana/.cornercase/worktrees/shop/feat-dirty",
+      "removed_with": null,
+      "roles": [],
+      "teardown": true,
+      "unchecked": [],
+      "warnings": [],
+      "why": "1 file changed; add --force to remove it anyway",
+      "worktree": {
+        "branch": "feat/dirty",
+        "changed": 1,
+        "error": null,
+        "kind": "linked",
+        "last_changed": "2026-11-07T01:35:55.000Z",
+        "lock": null,
+        "merged": false,
+        "no_commits": true,
+        "other_tabs": [],
+        "outside": [],
+        "path": "/home/ana/.cornercase/worktrees/shop/feat-dirty",
+        "project": 8,
+        "project_name": "shop",
+        "removing": false,
+        "repository": "/home/ana/code/shop",
+        "risks": [
+          "1 file changed",
+          "teardown runs first"
+        ],
+        "run_role": false,
+        "running": [],
+        "safe": false,
+        "size": null,
+        "size_error": null,
+        "unpushed": 0,
+        "upstream_gone": false,
+        "workspace": 12
+      }
+    },
+    {
+      "branches": [],
+      "kept": [],
+      "lines": [],
+      "lost": [],
+      "needs": [],
+      "outcome": "refused",
+      "path": "/home/ana/.cornercase/worktrees/nowhere",
+      "removed_with": null,
+      "roles": [],
+      "teardown": false,
+      "unchecked": [],
+      "warnings": [],
+      "why": "nothing is there, and no repository lists a worktree there",
+      "worktree": null
+    }
+  ]
+}

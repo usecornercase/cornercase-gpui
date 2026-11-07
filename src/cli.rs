@@ -5,6 +5,7 @@ mod requests;
 mod typist;
 
 use std::ffi::OsStr;
+use std::fmt;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Output, Stdio};
 use std::sync::OnceLock;
@@ -12,14 +13,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result, anyhow};
 use locate::{Inputs, System};
 use parking_lot::Mutex;
 
 #[cfg(test)]
 pub(crate) use locate::parse_version;
 pub(crate) use locate::{Binary, INSTALL_GUIDE, MINIMUM, Missing, Origin, Problem, Version};
-pub(crate) use partial::{run_partial, run_printed};
+pub(crate) use partial::{run_partial, run_partial_on, run_printed};
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
 use typist::{OnError, Typist};
@@ -69,6 +70,18 @@ impl Target {
 }
 
 const CALLER: [&str; 3] = ["CORNERCASE_PANE", "CORNERCASE_SERVER", "CORNERCASE_REMOTE"];
+const STALE_BOOT: i32 = 4;
+
+#[derive(Debug)]
+struct StaleBoot(String);
+
+impl fmt::Display for StaleBoot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for StaleBoot {}
 
 struct Current {
     target: Target,
@@ -165,11 +178,20 @@ pub(crate) fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&
     }
     let out = child.wait_with_output()?;
     if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
         let name = args.first().map(AsRef::as_ref).unwrap_or_default();
-        bail!("cornercase {name}: {}", if err.is_empty() { "failed".to_string() } else { err });
+        return Err(failure(name, out.status.code(), &out.stderr));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+pub(crate) fn failure(name: &str, code: Option<i32>, stderr: &[u8]) -> anyhow::Error {
+    let err = String::from_utf8_lossy(stderr).trim().to_string();
+    let said = format!("cornercase {name}: {}", if err.is_empty() { "failed".to_string() } else { err });
+    if code == Some(STALE_BOOT) { StaleBoot(said).into() } else { anyhow!(said) }
+}
+
+pub(crate) fn stale_boot(error: &anyhow::Error) -> bool {
+    error.is::<StaleBoot>()
 }
 
 pub(crate) fn quit() {

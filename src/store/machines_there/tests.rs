@@ -60,6 +60,18 @@ fn what_was_refused_says_nothing_was_sent() {
 }
 
 #[test]
+fn a_boot_refused_there_reads_as_a_machine_that_restarted() {
+    let error = cli::failure("close", Some(4), b"error: this request is for the cornercase server started as 1-2");
+    assert_eq!(stale_note("vps", &error).as_deref(), Some("vps restarted: nothing was sent"));
+}
+
+#[test]
+fn any_other_refusal_keeps_its_own_words() {
+    let error = cli::failure("close", Some(1), b"error: no workspace 7");
+    assert_eq!(stale_note("vps", &error), None);
+}
+
+#[test]
 fn each_act_runs_its_command() {
     let aim = aim();
     assert_eq!(MachineAct::Close.args(&aim), aim.close_args());

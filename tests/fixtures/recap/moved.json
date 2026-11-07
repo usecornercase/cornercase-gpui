@@ -1,0 +1,51 @@
+{
+  "account": null,
+  "age": 0,
+  "agent": "claude",
+  "conversations": 1,
+  "day": null,
+  "dossier": null,
+  "effort": "low",
+  "empty": null,
+  "error": null,
+  "from": "2026-11-06T01:43:09.000Z",
+  "label": "sat 7 nov 01:43",
+  "language": "auto",
+  "loading": false,
+  "model": "claude-sonnet-4-5",
+  "places": {
+    "c1": {
+      "agent": "claude",
+      "boot": "3124750-1794015672644531686",
+      "branch": "main",
+      "conversation": "conv-rate-limit",
+      "kind": "conversation",
+      "number": null,
+      "pane": 9,
+      "project": {
+        "label": "shop",
+        "path": "/home/ana/code/shop"
+      },
+      "state": null,
+      "tab": "claude",
+      "url": null,
+      "workspace": {
+        "label": "main",
+        "path": "/home/ana/code/shop"
+      }
+    }
+  },
+  "progress": null,
+  "range": "now",
+  "text": "## On you\n- [c1] asked \"add a rate limit\"",
+  "title": "Claude Code",
+  "to": "2026-11-07T01:43:09.000Z",
+  "tokens": {
+    "cache_read": 0,
+    "cache_write": 0,
+    "input": 3,
+    "output": 4
+  },
+  "written_at": "2026-11-07T01:43:09.000Z",
+  "zone": "Etc/UTC"
+}

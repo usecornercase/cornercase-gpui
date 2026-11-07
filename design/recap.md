@@ -36,12 +36,13 @@ The Recap panel shows what `cornercase recap` answers: a summary of what your ag
 - **Only what the reader would misread is touched before**: an id followed by `(` or `[` gets a space (`[c1]([p1])`), or `[c1](…)` would be an inline link to `[p1]`.
 - **`[c9]` with no place stays as written**, as the TUI's and `cornercase recap`'s text do.
 - **The names are the CLI's**: `project › workspace › tab`, `#212`, the id for a place with no name.
-- **A link's rule is upstream's `recap_go`, less what no command says** (`links::go`, tested without a window):
+- **A link's rule is upstream's `recap_go`** (`links::go`, tested without a window), but for a pull request:
   1. A pull request opens its `url`, as asked for on 2026-11-06 (upstream opens the workspace's dialog while the workspace is open, else copies the address); it works the same for one merged days ago in a worktree long gone, and `is_web` keeps an agent's text from opening other schemes.
-  2. A conversation goes to its `pane` when `boot` is this server's and the pane still exists: the number means nothing on another boot.
-  3. Else to the workspace whose path matches, in the project whose path matches; else to that project. A worktree removed or a project closed since still lands near the work, and a toast says the pane is gone.
-  4. Else a toast: `api › login › claude cannot be reached: it is closed`.
-- **Upstream's first step needs #664**: the TUI looks first for the live pane whose agent and conversation match, which also finds a conversation that moved (`restart`, `agents reopen`). `status --json` and `view` do not name a pane's conversation, so here a conversation that moved falls to step 3; the toast says so, with the issue's number (`design/upstream-gaps.md`). Once it lands, matching `agent` and `conversation` goes before step 2, and `Place` reads them.
+  2. A conversation goes to the first pane whose `agent` and `conversation` match (#664, `conversation` on each pane of `status --json`, `status --follow` and `view`, cornercase 0.13.3), so one that `restart`, or `agents close` and `agents reopen`, moved is found.
+  3. Else to its `pane` while `boot` is this server's and the pane still exists: the number means nothing on another boot.
+  4. Else to the workspace whose path matches, in the project whose path matches; else to that project. A worktree removed or a project closed since still lands near the work, and nothing is said, as upstream's window says nothing: where the view went shows it.
+  5. Else a toast, in upstream's words: `api › login › claude is closed`.
+- **Two places where a client differs from the TUI, as upstream's `design/recap.md` says it can**: a pane's `agent` is `null` while nothing reports its state (Gemini CLI with its window title off, Vibe before its first report), where the TUI compares the reader's kind, which no command shows, so `conversation` alone names such a pane. A place with no `conversation` (opencode) tries step 3 here, where the TUI goes straight to step 4.
 - **Following a link gives the keys to the terminal** (`Store::show_in_terminal`): the click left the focus in the dock, and the reason to follow a link that says "waits on you" is to answer. `focus` runs with `--view`, so only this window moves.
 - **A link in the text that is neither a place nor a web address** says so in a toast rather than doing nothing.
 
@@ -56,9 +57,15 @@ On 2026-11-06, with cornercase 0.13.1, Linux x86_64 under Xvfb with lavapipe, on
 
 - The rail's icon, Ctrl+Alt+Shift+H both ways and `CORNERCASE_GPUI_OPEN=recap`; the three real `empty` answers on a server with no journal.
 - A run of 14 s: the line and the spinner, the status bar's job, the panel closed meanwhile and the text there on coming back. `↻` over a text: the text stays under the line, then is replaced.
-- A live conversation's link: the view moved to its tab and typed keys reached the agent in that pane. A conversation with another boot: its workspace and the toast with #664. A closed project: the toast. A pull request and a web link in the text: the window asked to open each address (`gio` said so in the window's log; the bench has no browser).
+- A live conversation's link: the view moved to its tab and typed keys reached the agent in that pane. A conversation with another boot: its workspace. A closed project: the toast. A pull request and a web link in the text: the window asked to open each address (`gio` said so in the window's log; the bench has no browser).
 - A failed run (exit 3, `Not logged in`): the callout above the last text, Try again. A server without `recap`, played by a wrapper around the binary that prints the refusal upstream's `use_recap` words and exits 1: the same callout, with and without a text.
 - Settings › Agents shows its Recap section with all six rows, and nothing here had to change.
 - **A link needs a frame between press and release**: gpui's `InteractiveText` adds its mouse-up listener only when it draws after the mouse-down, so `xdotool click`, which sends both at once under a slow software GPU, is lost, and a press held for a moment works. Issues' links are the same; a person's click lasts longer than a frame.
 
 Not checked: macOS, Windows, a real Claude Code or Codex writing the text, a real `ssh`.
+
+On 2026-11-07, following a conversation with cornercase 0.13.19, Linux x86_64 under Xvfb with lavapipe, a private server. `agent_commands` pointed `claude` at a script that writes what upstream's `tests/e2e/recap.rs` writes (a session file with its id and a transcript with a prompt, in a `CLAUDE_CONFIG_DIR` of the bench's), takes its id back from `--resume`, and answers `-p` with a recap naming `[c1]`, so the journal, `places` and the panes' `conversation` were the server's own. The recap was written with the agent in pane 9, and the panel kept that answer throughout.
+
+- `agents close`: the link went to the workspace, on its shell tab, with no toast. `agents reopen`, the conversation now in pane 12, the view on another project: the link went to pane 12's tab, and typed keys reached that agent.
+- `restart`, with the answer's `boot` now an earlier one: the window reconnected and the link went to the pane the conversation came back in.
+- A closed project: `shop › main › claude is closed`.
