@@ -11,10 +11,7 @@ use crate::cli;
 use crate::model::Shown;
 use crate::store::{self, Store, ToastKind, args};
 
-const POPUP_WAITS: &str = "a popup needs cornercase's own window open: needs usecornercase/cornercase-terminal#666";
-pub(super) const VIEW_WAITS: &str = "A button's action runs on what cornercase's own window shows, and a popup needs \
-                                     that window open: needs usecornercase/cornercase-terminal#666";
-const BUTTON_WAITS: &str = "on what cornercase's own window shows, needs usecornercase/cornercase-terminal#666";
+const NO_VIEW: &str = "the window is not connected to its server";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Spot {
@@ -75,10 +72,6 @@ impl Action {
         self.placement == "popup"
     }
 
-    pub(super) fn waits_on_the_view(&self) -> bool {
-        self.popup() || self.offered_on(Spot::Button)
-    }
-
     fn offered_on(&self, spot: Spot) -> bool {
         self.contexts.iter().any(|context| context == spot.context())
     }
@@ -100,10 +93,11 @@ impl Run {
         &self.action.title
     }
 
-    fn command(&self) -> Vec<String> {
+    fn command(&self, view: u64) -> Vec<String> {
         let (plugin, action, revision) = (&self.action.plugin, &self.action.id, self.revision.to_string());
         let mut command = args(&["plugin", "run", plugin, action, "--json", "--revision", &revision]);
         command.extend(self.spot.args());
+        command.extend(args(&["--view", &view.to_string()]));
         command
     }
 }
@@ -124,8 +118,11 @@ pub(crate) struct Button {
 }
 
 impl Button {
-    pub(crate) fn tip(&self) -> String {
-        format!("{}: {BUTTON_WAITS}", self.title)
+    pub(crate) fn tip(&self, machine: Option<&str>) -> String {
+        match machine {
+            Some(machine) => format!("{}: acts on the tab behind {machine}'s", self.title),
+            None => self.title.clone(),
+        }
     }
 
     pub(crate) fn glyph(&self) -> String {
@@ -236,10 +233,9 @@ fn refused(text: String) -> Told {
     Told { said: Some((text, ToastKind::Error)), refused: true }
 }
 
-fn told(title: &str, popup: bool, answer: Result<String>) -> Told {
+fn told(title: &str, answer: Result<String>) -> Told {
     let out = match answer {
         Ok(out) => out,
-        Err(e) if popup => return refused(format!("{title}: {e} ({POPUP_WAITS})")),
         Err(e) => return refused(format!("{title}: {e}")),
     };
     let said = match serde_json::from_str::<Ran>(&out) {
@@ -254,15 +250,23 @@ pub(crate) fn run_action<T: 'static>(
     cx: &mut Context<T>,
     then: impl FnOnce(&mut T, &mut Context<T>) + 'static,
 ) {
+    let title = run.title().to_string();
+    let store = Store::get(cx);
+    let Some(view) = store.read(cx).view_id else {
+        store.update(cx, |s, cx| s.toast(format!("{title}: {NO_VIEW}"), ToastKind::Error, cx));
+        return;
+    };
     if run.action.popup() {
-        Store::get(cx).update(cx, Store::close_sheet);
+        store.update(cx, |s, cx| {
+            s.close_sheet(cx);
+            s.leave_machine_place(cx);
+        });
     }
-    let (title, popup) = (run.title().to_string(), run.action.popup());
-    let command = run.command();
+    let command = run.command(view);
     let doing = job(&run.action.key(), format!("{title}…"));
     let work = move || cli::run_printed(&command);
     store::run_local_busy(cx, doing, work, move |this, answer, cx| {
-        let told = told(&title, popup, answer);
+        let told = told(&title, answer);
         Store::get(cx).update(cx, |s, cx| {
             if let Some((text, kind)) = told.said {
                 s.toast(text, kind, cx);
