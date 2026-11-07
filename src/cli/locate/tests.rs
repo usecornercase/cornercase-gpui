@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use super::{
     Binary, Inputs, MINIMUM, Missing, Origin, Probe, Problem, closed, installer_dirs, locate, merged, parse_version,
-    shell_args, shell_path, unix_dirs,
+    shell_args, shell_path, unix_dirs, verdict,
 };
 use crate::platform::Os;
 
