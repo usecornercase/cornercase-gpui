@@ -2,11 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.29
+## 0.1.30
 
 - **Run setup, in a worktree's menu.** It runs the project's setup again in a new tab, to retry after a fix, and the menu offers it when cornercase's own does: on a worktree of a project with a setup that isn't already running it. The status bar says it is running, and a setup that fails says so with its exit status.
 - **Import a VS Code workspace.** Import VS Code workspace…, in the Projects `+` and in a group's menu, turns a `.code-workspace` file into a group with each folder as a project, or puts them in that group. A message says how many went in, and how many folders were not found or could not open. On a server on another machine it asks for the file's path there.
 - **Adding a project to a group takes one step**, so a failure can't leave it outside the group. A file picker that cannot open now says why instead of doing nothing.
+
+## 0.1.29
+
+- **A machine whose link dropped says when it tries again.** Its card, its row in the Machines sheet and the tabs of its agents in the sidebar count down, `reconnecting in 4 s`, and say `reconnecting…` while the try runs. When only you can fix it, such as cornercase missing there, it says why instead of promising a try.
+- **Closing or renaming a workspace on a machine can no longer hit the wrong one.** If the server there restarted while the action was on its way, it refuses and nothing changes: `vps restarted: nothing was sent`. The same goes for removing a worktree there.
 
 ## 0.1.28
 

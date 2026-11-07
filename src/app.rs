@@ -31,7 +31,7 @@ use crate::render::moving::Moves;
 use crate::self_update;
 use crate::sidebar::{Arrangement, Fold, SideState};
 use crate::store::{Store, ToastKind};
-use crate::terminal::Pointer;
+use crate::terminal::{Counting, Pointer};
 use crate::theme::{self, colours, radius};
 use crate::ui;
 use crate::ui::motion::{self, Leaving, Way};
@@ -128,6 +128,7 @@ pub(crate) struct Root {
     title: String,
     pub(crate) dock_focus: FocusHandle,
     beat: Rc<motion::Beat>,
+    pub(crate) counting: Counting,
 }
 
 impl Focusable for Root {
@@ -228,7 +229,6 @@ impl Root {
         let mut root = Self::fresh((focus, cx.focus_handle()), store, tx, queue, notifier);
         kept.apply(&mut root);
         root.start(cx);
-        Self::keep_seen_counting(cx);
         Self::take_back_colours_on_quit(cx);
         root
     }
@@ -323,6 +323,7 @@ impl Root {
             title: String::new(),
             dock_focus,
             beat: Rc::default(),
+            counting: Counting::default(),
         }
     }
 
@@ -891,6 +892,7 @@ impl Render for Root {
             .children(self.render_leaving(window_frame, window, cx))
             .child(crate::tour::Guide::get(cx))
             .child(self.render_toasts(cx));
+        self.keep_counting(cx);
         frame::framed(content, window_frame, window)
     }
 }

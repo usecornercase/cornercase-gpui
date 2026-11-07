@@ -25,9 +25,15 @@ fn machine(state: LinkState, panes: Vec<PaneInfo<ThereId>>) -> MachineSeen {
     MachineSeen { name: "vps".into(), state, projects: vec![project], ..MachineSeen::default() }
 }
 
+const NOW: i64 = 1_000;
+
+fn told(home: Option<&str>) -> Told<'_> {
+    Told { home, error: None, now: NOW }
+}
+
 fn text_of(seen: &MachineSeen, home: Option<&str>) -> CardText {
     let ws = seen.workspace(ThereId::heard(1)).expect("the workspace");
-    card_text(&MachinePlace::at(seen, ws, None), seen, home, &Standing::Connecting)
+    card_text(&MachinePlace::at(seen, ws, None), seen, &told(home), &Standing::Connecting)
 }
 
 #[test]
@@ -83,7 +89,20 @@ fn while_down_the_card_of_a_shell_says_its_shells_keep_running() {
 fn standing_on(state: LinkState, standing: &Standing) -> CardText {
     let seen = machine(state, vec![agent(3, Some("working"), true)]);
     let ws = seen.workspace(ThereId::heard(1)).expect("the workspace");
-    card_text(&MachinePlace::at(&seen, ws, None), &seen, None, standing)
+    card_text(&MachinePlace::at(&seen, ws, None), &seen, &told(None), standing)
+}
+
+const TRIES_AT: &str = "1970-01-01T00:16:44.139Z";
+
+fn fallen(retry_at: Option<&str>) -> MachineSeen {
+    let seen = machine(LinkState::Unreachable, vec![agent(3, Some("working"), true)]);
+    MachineSeen { retry_at: retry_at.map(str::to_string), ..seen }
+}
+
+fn fallen_says(retry_at: Option<&str>, told: &Told<'_>) -> CardText {
+    let seen = fallen(retry_at);
+    let ws = seen.workspace(ThereId::heard(1)).expect("the workspace");
+    card_text(&MachinePlace::at(&seen, ws, None), &seen, told, &Standing::LinkDown)
 }
 
 #[test]
@@ -93,11 +112,49 @@ fn the_card_says_it_connects_until_the_first_frame() {
 }
 
 #[test]
-fn the_card_over_a_link_that_fell_says_it_reconnects() {
-    let text = standing_on(LinkState::Unreachable, &Standing::Reconnecting);
+fn the_card_over_a_link_that_fell_counts_down_to_its_next_try() {
+    let text = fallen_says(Some(TRIES_AT), &told(None));
     assert_eq!(text.title, "vps unreachable");
     assert_eq!(text.line, "claude keeps working there");
+    assert_eq!(text.state, Some(CardState::Said("reconnecting in 4 s".to_string())));
+}
+
+#[test]
+fn the_card_says_the_try_is_under_way_once_its_time_has_passed() {
+    let later = Told { now: NOW + 4, ..told(None) };
+    assert_eq!(fallen_says(Some(TRIES_AT), &later).state, Some(CardState::Running("reconnecting…".to_string())));
+    let long_after = Told { now: NOW + 60, ..told(None) };
+    assert_eq!(fallen_says(Some(TRIES_AT), &long_after).state, Some(CardState::Running("reconnecting…".to_string())));
+}
+
+#[test]
+fn the_card_over_a_link_that_waits_on_a_person_says_why_and_promises_no_try() {
+    let error = "cornercase was not found on vps";
+    let text = fallen_says(None, &Told { error: Some(error), ..told(None) });
+    assert_eq!(text.state, Some(CardState::Said(error.to_string())));
+    assert_eq!(fallen_says(None, &told(None)).state, None);
+}
+
+#[test]
+fn the_card_over_a_link_that_is_connecting_says_it_reconnects() {
+    let text = standing_on(LinkState::Connecting, &Standing::LinkDown);
     assert_eq!(text.state, Some(CardState::Running("reconnecting…".to_string())));
+}
+
+#[test]
+fn the_card_over_a_try_of_its_own_says_it_reconnects() {
+    let text = standing_on(LinkState::Linked, &Standing::Reconnecting);
+    assert_eq!(text.state, Some(CardState::Running("reconnecting…".to_string())));
+}
+
+#[test]
+fn the_card_asks_for_a_tick_only_while_it_shows_a_time() {
+    let counting = fallen(Some(TRIES_AT));
+    assert!(card_counts(&Standing::LinkDown, &counting, NOW));
+    assert!(!card_counts(&Standing::LinkDown, &counting, NOW + 4));
+    assert!(!card_counts(&Standing::LinkDown, &fallen(None), NOW));
+    assert!(card_counts(&Standing::RetryIn(4, None), &fallen(None), NOW));
+    assert!(!card_counts(&Standing::Shown, &counting, NOW));
 }
 
 #[test]
@@ -124,7 +181,7 @@ fn the_card_of_a_window_on_another_server_says_what_it_needs() {
 
 #[test]
 fn the_card_of_an_older_machine_waits_on_a_person_and_promises_nothing() {
-    let text = standing_on(LinkState::Older, &Standing::Reconnecting);
+    let text = standing_on(LinkState::Older, &Standing::LinkDown);
     assert_eq!(text.title, "vps runs an older cornercase");
     assert_eq!(text.state, None);
 }
