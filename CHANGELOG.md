@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.32
+
+- **Starting an agent no longer waits on its folder question.** The new tab opens at once, from `+`, ⌘G, a row's Start agent here and an issue's Start, and if the agent asks whether to trust the folder you answer it right there. Until now, from `+`, ⌘G or a row, what you typed never reached that question, and Starting an agent… stayed in the status bar.
+- **Starting work on an issue stays in its form until the tab opens.** The button says Starting… while the issue is read and the worktree made, then the form and the sheet close on the new tab. If the start is refused, the form stays with what you typed. The message now says `claude is starting on #7`, since what happens next shows in the tab.
+
 ## 0.1.31
 
 - **Pair a phone from Settings › Remote.** Paired browsers, Telegram phone and Discord phone each have a button that opens a dialog with a QR code to scan, the address under it to copy or open, and what to do next, in cornercase's own words. Closing the dialog drops the code. Once the phone connects, the dialog closes and says so, and the row shows the chat's name.

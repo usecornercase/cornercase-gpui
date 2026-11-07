@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::model::Spot;
 use crate::model::accounts::pick::{AccountPick, account_args};
 use crate::panels::flows::{FlowStart, IssueTask};
+use crate::store::StartHere;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -566,8 +567,18 @@ impl StartPlan {
         let mut a = self.start_words();
         self.place_args(&mut a);
         self.start_flags(&mut a);
-        a.extend(["--focus".into(), "--json".into()]);
+        a.extend(["--focus".into(), "--placed".into(), "--json".into()]);
         a
+    }
+
+    pub(super) fn start_here(&self) -> StartHere {
+        let (agent, key) = (&self.agent, &self.issue.key);
+        StartHere {
+            doing: format!("Starting {agent} on {key}…"),
+            done: format!("{agent} is starting on {key}"),
+            failed: format!("Could not start {key}"),
+            command: self.start_args(),
+        }
     }
 
     pub(super) fn start_args_there(&self, spot: &Spot) -> Vec<String> {

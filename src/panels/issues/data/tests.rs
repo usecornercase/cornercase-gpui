@@ -57,6 +57,16 @@ fn starting_on_a_machine_names_its_project_and_moves_no_window() {
 }
 
 #[test]
+fn a_start_here_says_it_is_starting_and_shows_its_tab_from_the_answer() {
+    let start = worktree_plan().start_here();
+    assert_eq!(start.doing, "Starting claude on #456…");
+    assert_eq!(start.done, "claude is starting on #456");
+    assert_eq!(start.failed, "Could not start #456");
+    assert_eq!(start.command, worktree_plan().start_args());
+    assert!(start.command.ends_with(&["--focus".into(), "--placed".into(), "--json".into()]));
+}
+
+#[test]
 fn sources() {
     let sources: Sources = parse(SOURCES).expect("parses");
     assert_eq!(sources.project, 4);
@@ -252,6 +262,7 @@ fn check_worktree_plan() {
             "--workspace-name",
             "Popups",
             "--focus",
+            "--placed",
             "--json"
         ]
     );
@@ -300,6 +311,7 @@ fn check_tab_plan() {
             "--effort",
             "high",
             "--focus",
+            "--placed",
             "--json"
         ]
     );

@@ -16,7 +16,7 @@ use super::dialog::{Submit, boxed, buttons, field, filled_field};
 use super::model::{self, FlowInfo, Listing, Started, project_args};
 use super::widgets::{error_text, flow_summary, glyph};
 use crate::cli;
-use crate::dialogs::{self, Gate, RunOn, accounts_of, starting_there};
+use crate::dialogs::{self, Gate, RunOn, accounts_of, dialog_starts};
 use crate::store::{self, Store, args};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::account_picker::AccountPickers;
@@ -106,7 +106,7 @@ impl Fields {
 
 impl Submit for StartFlow {
     fn submit(&mut self, cx: &mut Context<Self>) {
-        if self.busy || starting_there(cx) {
+        if self.busy || dialog_starts(cx) {
             return;
         }
         let back = self.fields.prompt.read(cx).focus_handle(cx);
@@ -434,7 +434,7 @@ impl Render for StartFlow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let choices = self.run_on.read(cx).account_choices(cx);
         self.accounts.follow(choices, Self::clear_error, cx);
-        let busy = (self.busy || starting_there(cx)).then_some("Starting…");
+        let busy = (self.busy || dialog_starts(cx)).then_some("Starting…");
         let title = if self.issue.is_some() { "Start a flow on an issue" } else { "Start a flow" };
         let height = dialogs::body_height(f32::from(window.viewport_size().height));
         dialogs::frame(
