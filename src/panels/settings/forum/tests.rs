@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use super::{Forum, Stage, of_app};
+use super::{Forum, Stage, of_app, picked};
 use crate::test_util::fixture;
 
 fn feed(name: &str) -> Option<Forum> {
@@ -14,6 +14,10 @@ fn ready() -> Forum {
 
 fn waiting() -> Forum {
     feed(fixture!("settings/forum-pending.json")).expect("a forum")
+}
+
+fn picking() -> Forum {
+    feed(fixture!("settings/forum-pick.json")).expect("a forum")
 }
 
 #[test]
@@ -56,4 +60,42 @@ fn a_forum_kept_while_off_links_nowhere() {
     let off = Forum { on: false, ..forum };
     assert_eq!(off.stage(), Stage::Off);
     assert_eq!(off.address(), None);
+}
+
+#[test]
+fn a_forum_that_waits_for_a_pick_lists_its_servers_and_says_so_in_the_tuis_words() {
+    let forum = picking();
+    assert_eq!(forum.stage(), Stage::Waiting);
+    assert_eq!(forum.words(), "Forum not ready: pick the server for the forum");
+    let names: Vec<&str> = forum.servers.iter().map(|server| server.name.as_str()).collect();
+    assert_eq!(names, ["Ana's server", "Side projects"]);
+}
+
+#[test]
+fn a_forum_with_no_pick_waiting_lists_no_servers() {
+    assert_eq!(waiting().servers, Vec::new());
+    assert_eq!(ready().servers, Vec::new());
+}
+
+#[test]
+fn a_server_is_picked_by_its_id() {
+    let forum = picking();
+    assert_eq!(forum.servers[1].pick_args(), ["config", "forum-server", "--json", "--", "1100000000000000002"]);
+}
+
+#[test]
+fn each_server_has_a_job_of_its_own() {
+    let forum = picking();
+    assert_ne!(forum.servers[0].picking(), forum.servers[1].picking());
+}
+
+#[test]
+fn a_taken_pick_answers_with_the_servers_name() {
+    let answer = r#"{"id":"1100000000000000001","name":"Ana's server"}"#;
+    assert_eq!(picked(answer).expect("an answer"), "Ana's server");
+}
+
+#[test]
+fn an_answer_that_is_not_json_is_an_error_and_not_a_silent_pick() {
+    assert!(picked("the forum goes in Ana's server").is_err());
 }

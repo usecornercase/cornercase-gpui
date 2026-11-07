@@ -2,10 +2,22 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.30
+## 0.1.32
 
 - **Starting an agent no longer waits on its folder question.** The new tab opens at once, from `+`, ⌘G, a row's Start agent here and an issue's Start, and if the agent asks whether to trust the folder you answer it right there. Until now, from `+`, ⌘G or a row, what you typed never reached that question, and Starting an agent… stayed in the status bar.
 - **Starting work on an issue stays in its form until the tab opens.** The button says Starting… while the issue is read and the worktree made, then the form and the sheet close on the new tab. If the start is refused, the form stays with what you typed. The message now says `claude is starting on #7`, since what happens next shows in the tab.
+
+## 0.1.31
+
+- **Pair a phone from Settings › Remote.** Paired browsers, Telegram phone and Discord phone each have a button that opens a dialog with a QR code to scan, the address under it to copy or open, and what to do next, in cornercase's own words. Closing the dialog drops the code. Once the phone connects, the dialog closes and says so, and the row shows the chat's name.
+- **When it cannot pair, the dialog says why**: remote access is off, Tailscale is not ready, or the bot's token is missing, with `Try again` once that is fixed.
+- **Pick the server of the Discord forum in Settings › Remote.** When the bot is in several of your servers, they are listed under the forum's line: click one, and the forum is made there.
+- This works on another machine's server too, with `--remote`.
+
+## 0.1.30
+
+- **A plugin's button now acts on what this window shows.** Its action gets the project, workspace, tab and folder you are looking at here, not those of cornercase's own window, and a popup opens here without that window, at a size taken from this one. Over a machine's tab a button acts on your tab behind it, and its tooltip says so; a popup goes back to that tab.
+- **What a plugin keeps running beside a window now runs beside this one.** The processes plugins declare as `[[window]]` run while the window is on this computer: they stop when it closes or moves to another server, and start again when it comes back. A machine's tab does not count as leaving. Each plugin's card shows them: running with their pid, or stopped with the seconds until they start again.
 
 ## 0.1.29
 

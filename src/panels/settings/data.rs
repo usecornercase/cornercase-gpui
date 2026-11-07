@@ -313,6 +313,24 @@ impl Connection {
         hint_of(self.field.as_deref(), &self.label, &self.note)
     }
 
+    pub(super) fn note_here(&self) -> String {
+        let note = self.note.split(" · enter ").next().unwrap_or_default();
+        match note.strip_prefix("enter ") {
+            Some(what) if self.kind == ConnectionKind::Chat => what.to_string(),
+            Some(_) => String::new(),
+            None => note.to_string(),
+        }
+    }
+
+    pub(super) fn pairing_offer(&self) -> Option<&'static str> {
+        match self.kind {
+            ConnectionKind::Browsers if self.count.unwrap_or(0) == 0 => Some("Pair a browser…"),
+            ConnectionKind::Chat if self.state != State::Connected => Some("Pair…"),
+            ConnectionKind::Browsers | ConnectionKind::Chat => Some("Pair another…"),
+            _ => None,
+        }
+    }
+
     pub(super) fn token_from_env(&self) -> bool {
         self.from.as_deref() == Some("env")
     }

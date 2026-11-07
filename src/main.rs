@@ -124,6 +124,7 @@ fn open_window(cx: &mut App) {
 }
 
 fn leave(relaunch: Option<self_update::Relaunch>) {
+    cli::stop_window_processes();
     match relaunch {
         Some(relaunch) => {
             cli::kill_all();

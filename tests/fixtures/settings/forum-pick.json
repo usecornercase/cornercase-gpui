@@ -1,0 +1,1 @@
+{"away": [{"away": false, "platform": "telegram", "ready": false}, {"away": false, "forum": {"channel": null, "guild": null, "on": true, "pending": "pick the server for the forum", "ready": false, "servers": [{"id": "1100000000000000001", "name": "Ana's server"}, {"id": "1100000000000000002", "name": "Side projects"}]}, "platform": "discord", "ready": true}]}
