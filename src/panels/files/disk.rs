@@ -7,10 +7,11 @@ use std::time::SystemTime;
 
 use gpui::ImageFormat;
 
+use crate::ui::selection::{own_part, tabs_drawn};
+
 pub(super) const MAX_BYTES: u64 = 8 * 1024 * 1024;
 pub(super) const MAX_IMAGE_BYTES: u64 = 32 * 1024 * 1024;
 const BINARY_PROBE: usize = 8000;
-const TAB_WIDTH: usize = 4;
 
 #[derive(Debug, Clone)]
 pub(super) enum Content {
@@ -36,22 +37,6 @@ impl Text {
             None => self.lines.get(line).and_then(|text| text.get(shown)).unwrap_or_default(),
         }
     }
-}
-
-fn own_part(own: &str, shown: Range<usize>) -> &str {
-    let (mut at, mut start, mut end) = (0, None, own.len());
-    for (ix, c) in own.char_indices() {
-        let width = if c == '\t' { TAB_WIDTH } else { c.len_utf8() };
-        if start.is_none() && at + width > shown.start {
-            start = Some(ix);
-        }
-        if at >= shown.end {
-            end = ix;
-            break;
-        }
-        at += width;
-    }
-    start.map_or("", |start| &own[start..end.max(start)])
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,7 +125,7 @@ pub(super) fn text(source: &str) -> Text {
         if line.contains('\t') {
             tabbed.insert(lines.len(), line.to_string());
         }
-        lines.push(line.replace('\t', &" ".repeat(TAB_WIDTH)));
+        lines.push(tabs_drawn(line));
     }
     if lines.len() > 1 && lines.last().is_some_and(String::is_empty) {
         lines.pop();
