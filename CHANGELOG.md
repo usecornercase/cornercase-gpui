@@ -2,10 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.26
+## 0.1.27
 
 - **A plugin's button now acts on what this window shows.** Its action gets the project, workspace, tab and folder you are looking at here, not those of cornercase's own window, and a popup opens here without that window, at a size taken from this one. Over a machine's tab a button acts on your tab behind it, and its tooltip says so; a popup goes back to that tab.
 - **What a plugin keeps running beside a window now runs beside this one.** The processes plugins declare as `[[window]]` run while the window is on this computer: they stop when it closes or moves to another server, and start again when it comes back. A machine's tab does not count as leaving. Each plugin's card shows them: running with their pid, or stopped with the seconds until they start again.
+
+## 0.1.26
+
+- **Starting an agent on a machine shows its tab at once.** The dialog closes as soon as the tab is open there, even while the agent asks to trust the folder, so you answer it in that tab. The window no longer guesses which new tab is the one it started.
+- **Clone on a machine can bring the files git ignores.** The Clone form lists this project's git-ignored files, such as `.env`, with their sizes, and copies the ones you tick into the new clone with their permissions. Nothing is ticked at first. A file over 1 MiB is shown but cannot be copied, and a clone takes 8 MiB in all. **Skip files** clones without them. If the machine could not write one, the toast names it and says why. On Windows the form says these files stay behind, as cornercase does not read them there yet.
 
 ## 0.1.25
 

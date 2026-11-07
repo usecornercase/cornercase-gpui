@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use super::{MachineSeen, ThereId, ThereProject};
 use crate::model::Project;
 use crate::store::args;
@@ -12,7 +10,6 @@ pub(crate) struct Spot {
     pub name: String,
     pub path: String,
     pub root: Option<ThereId>,
-    pub tabs: HashSet<ThereId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,7 +79,6 @@ impl MachineSeen {
             name: there.name.clone(),
             path: there.path.clone(),
             root: root.map(|ws| ws.id),
-            tabs: there.workspaces.iter().flat_map(|ws| &ws.tabs).map(|tab| tab.id).collect(),
         }
     }
 }

@@ -349,9 +349,11 @@ pub(crate) fn bar(fraction: f32, colour: impl Into<Hsla>, height: f32) -> Div {
     })
 }
 
-pub(crate) fn checkbox(id: impl Into<ElementId>, checked: bool, label: impl Into<SharedString>) -> Stateful<Div> {
-    let tick = div()
-        .size(px(15.))
+pub(crate) const TICK_BOX: f32 = 15.;
+
+pub(crate) fn tick_box(checked: bool) -> Div {
+    div()
+        .size(px(TICK_BOX))
         .flex_none()
         .rounded(px(radius::CHIP))
         .flex()
@@ -365,8 +367,11 @@ pub(crate) fn checkbox(id: impl Into<ElementId>, checked: bool, label: impl Into
                 .text_size(px(10.))
                 .text_color(colours::on_brand())
                 .child("✓")
-        });
-    div().id(id).flex().items_center().gap(px(8.)).cursor_pointer().child(tick).child(label.into())
+        })
+}
+
+pub(crate) fn checkbox(id: impl Into<ElementId>, checked: bool, label: impl Into<SharedString>) -> Stateful<Div> {
+    div().id(id).flex().items_center().gap(px(8.)).cursor_pointer().child(tick_box(checked)).child(label.into())
 }
 
 pub(crate) fn segments(items: Vec<AnyElement>) -> Div {
