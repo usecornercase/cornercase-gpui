@@ -85,3 +85,23 @@ fn a_summary_names_the_run_of_the_server_it_came_from() {
     let s = summary(crate::test_util::fixture!("changes/list.json")).expect("parses");
     assert_eq!(s.boot, "28257-1793303771316290000");
 }
+
+#[test]
+fn a_patch_line_holding_a_tab_has_its_own_text_beside_what_is_drawn() {
+    let patch: Patch = serde_json::from_str(crate::test_util::fixture!("changes/file_tabs.json")).expect("parses");
+    let line = &patch.hunks[0].lines[1];
+    assert_eq!((line.text.as_str(), line.raw.as_deref()), ("    echo hi", Some("\techo hi")));
+}
+
+#[test]
+fn a_patch_line_without_a_tab_has_no_own_text() {
+    let patch: Patch = serde_json::from_str(crate::test_util::fixture!("changes/file_tabs.json")).expect("parses");
+    assert_eq!(patch.hunks[0].lines[0].raw, None);
+}
+
+#[test]
+fn a_gap_line_holding_a_tab_has_its_own_text_beside_what_is_drawn() {
+    let gap: Gap = serde_json::from_str(crate::test_util::fixture!("changes/gap_tabs.json")).expect("parses");
+    let line = &gap.lines[4];
+    assert_eq!((line.text.as_str(), line.raw.as_deref()), ("8    gap", Some("8\tgap")));
+}

@@ -1,0 +1,110 @@
+{
+  "hunk": 1,
+  "lines": [
+    {
+      "new": 7,
+      "old": 7,
+      "syntax": [
+        {
+          "style": 0,
+          "text": "4"
+        }
+      ],
+      "text": "4"
+    },
+    {
+      "new": 8,
+      "old": 8,
+      "syntax": [
+        {
+          "style": 0,
+          "text": "5"
+        }
+      ],
+      "text": "5"
+    },
+    {
+      "new": 9,
+      "old": 9,
+      "syntax": [
+        {
+          "style": 0,
+          "text": "6"
+        }
+      ],
+      "text": "6"
+    },
+    {
+      "new": 10,
+      "old": 10,
+      "syntax": [
+        {
+          "style": 0,
+          "text": "7"
+        }
+      ],
+      "text": "7"
+    },
+    {
+      "new": 11,
+      "old": 11,
+      "raw": "8\tgap",
+      "syntax": [
+        {
+          "style": 0,
+          "text": "8    gap"
+        }
+      ],
+      "text": "8    gap"
+    },
+    {
+      "new": 12,
+      "old": 12,
+      "syntax": [
+        {
+          "style": 0,
+          "text": "9"
+        }
+      ],
+      "text": "9"
+    },
+    {
+      "new": 13,
+      "old": 13,
+      "syntax": [
+        {
+          "style": 0,
+          "text": "10"
+        }
+      ],
+      "text": "10"
+    },
+    {
+      "new": 14,
+      "old": 14,
+      "syntax": [
+        {
+          "style": 0,
+          "text": "11"
+        }
+      ],
+      "text": "11"
+    },
+    {
+      "new": 15,
+      "old": 15,
+      "syntax": [
+        {
+          "style": 0,
+          "text": "12"
+        }
+      ],
+      "text": "12"
+    }
+  ],
+  "path": "Makefile",
+  "styles": [
+    {}
+  ],
+  "workspace": 7
+}

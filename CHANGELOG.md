@@ -2,10 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.24
+## 0.1.25
 
 - **A message held for you can be sent or left to wait from its pane.** When a script or another agent sends a message to the pane you are typing in, the pane's card now says who sent it, as in `1 message waiting from claude (pane 9) · goes after yours`, with two buttons: ` send now ` and ` wait turn `, which then reads as chosen. They work on a machine's tab too, and clicking them leaves your keyboard in the pane.
 - **` send now ` takes your unsent line with it.** cornercase sends the message after what you have typed and presses Enter, so the two go as one line. The card says so while you have a line in progress. Keeping it back waits on cornercase (usecornercase/cornercase-terminal#708).
+
+## 0.1.24
+
+- **Copying from Changes keeps tabs.** A selection copied in the Changes panel now has the file's own tabs, on this computer and on a machine's workspace, so a Makefile rule or a Go line pastes as it was. A part of a line selected by characters copies the characters you see, each tab as one tab. A hunk's Copy still writes four spaces.
+- **Usage opens on numbers.** The stats of a machine or of `all` show the last numbers at once and then the fresh ones, instead of a spinner while the slowest machine answers. A machine with no numbers yet is left out of `all`'s sum and says `not read yet`.
 
 ## 0.1.23
 
