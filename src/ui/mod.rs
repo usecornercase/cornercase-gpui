@@ -6,6 +6,7 @@ pub(crate) mod icons;
 pub(crate) mod menu;
 pub(crate) mod motion;
 pub(crate) mod one_line;
+pub(crate) mod qr;
 pub(crate) mod selection;
 pub(crate) mod signs;
 pub(crate) mod split;

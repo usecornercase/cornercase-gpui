@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.25
+
+- **Pair a phone from Settings › Remote.** Paired browsers, Telegram phone and Discord phone each have a button that opens a dialog with a QR code to scan, the address under it to copy or open, and what to do next, in cornercase's own words. Closing the dialog drops the code. Once the phone connects, the dialog closes and says so, and the row shows the chat's name.
+- **When it cannot pair, the dialog says why**: remote access is off, Tailscale is not ready, or the bot's token is missing, with `Try again` once that is fixed.
+- **Pick the server of the Discord forum in Settings › Remote.** When the bot is in several of your servers, they are listed under the forum's line: click one, and the forum is made there.
+- This works on another machine's server too, with `--remote`.
+
 ## 0.1.24
 
 - **Copying from Changes keeps tabs.** A selection copied in the Changes panel now has the file's own tabs, on this computer and on a machine's workspace, so a Makefile rule or a Go line pastes as it was. A part of a line selected by characters copies the characters you see, each tab as one tab. A hunk's Copy still writes four spaces.
