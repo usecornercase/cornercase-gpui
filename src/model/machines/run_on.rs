@@ -1,9 +1,8 @@
-use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 
-use super::seen::{MachinePlace, MachineSeen, Spot, ThereId, ThereWorkspace};
+use super::seen::{MachinePlace, MachineSeen, Spot, ThereId};
 use super::{Machine, MachineIcon};
 use crate::model::Project;
 
@@ -16,7 +15,6 @@ pub(crate) const NO_REMOTE: &str = "This project has no git remote, so it runs o
 const ANSWER_UNREAD: &str = "its answer could not be read";
 const FROM_ANOTHER_SERVER: &str = "Its address means nothing from this computer";
 const AWAITED_FOR: Duration = Duration::from_secs(30);
-const NEW_TAB_FOR: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Offer {
@@ -131,7 +129,7 @@ impl Starting {
 
     pub(crate) fn done(&self, machine: &str, answer: &Answer) -> String {
         match self {
-            Self::Agent { agent, issue } => format!("{agent} started on {issue} on {machine}"),
+            Self::Agent { agent, issue } => format!("{agent} is starting on {issue} on {machine}"),
             Self::Workspace { name } => format!("Created {name} on {machine}"),
             Self::Flow { name } => format!(
                 "Started {name} on {machine}{}. Follow it in its tab: the run page reads this computer's runs",
@@ -139,10 +137,6 @@ impl Starting {
             ),
             Self::LoginTab { agent } => format!("Opened a tab for {agent} on {machine}"),
         }
-    }
-
-    pub(crate) fn waits_for_its_agent(&self) -> bool {
-        matches!(self, Self::Agent { .. })
     }
 }
 
@@ -179,7 +173,6 @@ impl Answer {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Item {
-    NewIn { project: ThereId, known: HashSet<ThereId> },
     Tab(ThereId),
     Workspace(ThereId),
 }
@@ -188,7 +181,6 @@ pub(crate) enum Item {
 pub(crate) struct Awaited {
     pub machine: String,
     pub boot: String,
-    pub dialog: Option<u64>,
     item: Item,
     until: Instant,
 }
@@ -200,38 +192,14 @@ pub(crate) enum Look {
     Gone,
 }
 
-fn new_tab_in(seen: &MachineSeen, workspaces: &[ThereWorkspace], known: &HashSet<ThereId>) -> Option<MachinePlace> {
-    workspaces.iter().find_map(|ws| {
-        let tab = ws.tabs.iter().find(|tab| !known.contains(&tab.id))?;
-        Some(MachinePlace::at(seen, ws, Some(tab.id)))
-    })
-}
-
 impl Awaited {
-    pub(crate) fn new_tab_in(spot: &Spot, dialog: Option<u64>, now: Instant) -> Self {
-        Self {
-            machine: spot.machine.clone(),
-            boot: spot.boot.clone(),
-            dialog,
-            item: Item::NewIn { project: spot.project, known: spot.tabs.clone() },
-            until: now + NEW_TAB_FOR,
-        }
-    }
-
     pub(crate) fn answered(spot: &Spot, answer: &Answer, now: Instant) -> Option<Self> {
         Some(Self {
             machine: spot.machine.clone(),
             boot: spot.boot.clone(),
-            dialog: None,
             item: answer.item()?,
             until: now + AWAITED_FOR,
         })
-    }
-
-    pub(crate) fn takes_answer_of(&self, spot: &Spot) -> bool {
-        self.machine == spot.machine
-            && self.boot == spot.boot
-            && matches!(&self.item, Item::NewIn { project, .. } if *project == spot.project)
     }
 
     pub(crate) fn look(&self, machines: &[MachineSeen], now: Instant) -> Look {
@@ -247,7 +215,6 @@ impl Awaited {
 
     fn listed(&self, seen: &MachineSeen) -> Option<MachinePlace> {
         match &self.item {
-            Item::NewIn { project, known } => new_tab_in(seen, &seen.project(*project)?.workspaces, known),
             Item::Tab(id) => {
                 let ws = seen.workspaces().find(|ws| ws.tabs.iter().any(|tab| tab.id == *id))?;
                 Some(MachinePlace::at(seen, ws, Some(*id)))

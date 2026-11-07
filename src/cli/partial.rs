@@ -1,9 +1,15 @@
 use anyhow::{Result, bail};
 
+use super::Target;
+
 const PARTIAL: i32 = 3;
 
 pub(crate) fn run_partial<S: AsRef<str>>(args: &[S]) -> Result<String> {
-    let out = super::output(&mut super::command(args))?;
+    run_partial_on(&super::target(), args)
+}
+
+pub(crate) fn run_partial_on<S: AsRef<str>>(target: &Target, args: &[S]) -> Result<String> {
+    let out = super::output(&mut target.command(args))?;
     let name = args.first().map(AsRef::as_ref).unwrap_or_default();
     answer(name, out.status.code(), &out.stdout, &out.stderr)
 }

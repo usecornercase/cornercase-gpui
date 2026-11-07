@@ -10,7 +10,7 @@ use gpui::{
     Stateful, Window, div, prelude::*, px,
 };
 
-use self::data::{AccountsInfo, Ask, Target};
+use self::data::{AccountsInfo, Ask, Asking, Target};
 use crate::cli;
 use crate::dialogs::{self, Question};
 use crate::notify::tip;
@@ -23,12 +23,6 @@ const INTRO: &str = "Each agent can keep several logins, each in a folder of its
                      default one; open panes keep the account they started with until you switch them on the pane.";
 const TOKENS_NOTE: &str = "A token variable wins over every account: an agent that reads it uses it, whichever \
                            account it starts with.";
-
-#[derive(Default)]
-struct Asking {
-    list: bool,
-    check: bool,
-}
 
 struct Running {
     target: Option<Target>,
@@ -56,18 +50,19 @@ pub(crate) struct AccountsPanel {
     form: Option<OpenField>,
     rename: Option<OpenField>,
     was_open: bool,
+    store_changes: u64,
 }
 
 impl AccountsPanel {
     pub(crate) fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         cx.observe(&store, |this, store, cx| {
-            let open = store.read(cx).sheet == Some(PanelKind::Accounts);
-            if open && !this.was_open {
+            let store = store.read(cx);
+            let open = store.sheet == Some(PanelKind::Accounts);
+            let changed = store.accounts_changes != this.store_changes;
+            this.store_changes = store.accounts_changes;
+            if open && (changed || !this.was_open) {
                 this.load(cx);
-            }
-            if !open && this.was_open {
-                store.update(cx, Store::list_accounts);
             }
             this.was_open = open;
         })
@@ -83,6 +78,7 @@ impl AccountsPanel {
             form: None,
             rename: None,
             was_open: true,
+            store_changes: store.read(cx).accounts_changes,
         };
         this.load(cx);
         this
@@ -124,13 +120,12 @@ impl AccountsPanel {
     }
 
     fn load(&mut self, cx: &mut Context<Self>) {
-        if self.asking.list {
-            return;
-        }
-        self.asking.list = true;
+        let asked = self.asking.list();
         cx.notify();
-        store::run(cx, args(&["account", "list", "--json"]), |this, result, cx| {
-            this.asking.list = false;
+        store::run(cx, args(&["account", "list", "--json"]), move |this, result, cx| {
+            if !this.asking.list_answered(asked) {
+                return;
+            }
             match result.and_then(|out| data::parse(&out)) {
                 Ok(info) => {
                     this.load_error = None;
@@ -144,12 +139,11 @@ impl AccountsPanel {
     }
 
     fn check(&mut self, cx: &mut Context<Self>) {
-        if self.asking.check {
-            return;
-        }
-        self.asking.check = true;
-        store::run(cx, args(&["account", "list", "--check", "--json"]), |this, result, cx| {
-            this.asking.check = false;
+        let asked = self.asking.check();
+        store::run(cx, args(&["account", "list", "--check", "--json"]), move |this, result, cx| {
+            if !this.asking.check_answered(asked) {
+                return;
+            }
             match result.and_then(|out| data::parse(&out)) {
                 Ok(info) if this.busy.is_none() => {
                     this.check_error = None;
@@ -320,7 +314,7 @@ impl AccountsPanel {
 
 impl AccountsPanel {
     fn refresh_button(&self, cx: &mut Context<Self>) -> AnyElement {
-        if self.asking.list || self.asking.check {
+        if self.asking.running() {
             return div()
                 .size(px(28.))
                 .flex_none()

@@ -221,7 +221,7 @@ impl Root {
         .detach();
         cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)).detach();
         cx.observe_window_activation(window, |this, window, cx| {
-            this.activation_changed(window.is_window_active(), cx);
+            this.activation_changed(window.is_window_active());
             cx.notify();
         })
         .detach();
@@ -350,7 +350,7 @@ impl Root {
         .detach();
     }
 
-    pub(crate) fn activation_changed(&mut self, active: bool, cx: &mut Context<Self>) {
+    pub(crate) fn activation_changed(&mut self, active: bool) {
         self.window_active = active;
         self.tell_machine_visible();
         let visible = active && self.machine.is_none();
@@ -358,9 +358,6 @@ impl Root {
             return;
         }
         self.visible = visible;
-        if visible && self.conn == Conn::Connected {
-            self.store.update(cx, Store::list_accounts);
-        }
         self.own.tell_visible(visible && !self.had.full);
     }
 
@@ -391,7 +388,6 @@ impl Root {
         }
         self.store.update(cx, |s, cx| {
             s.follow_app(cx);
-            s.list_accounts(cx);
             plugins::read_offers(s, cx);
         });
     }

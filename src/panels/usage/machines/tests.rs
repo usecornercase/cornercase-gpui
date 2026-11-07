@@ -96,14 +96,22 @@ fn all_asks_every_machine() {
 #[test]
 fn what_is_awaited_names_the_pick() {
     assert_eq!(vps().asking_limits(), "Asking vps for its limits…");
-    assert!(Pick::All.asking_stats().starts_with("Asking every machine for its stats…"));
     assert!(vps().asked_on().starts_with("Asked on vps with no prompt"));
 }
 
 #[test]
-fn a_machines_first_read_of_stats_names_the_issue_it_waits_on() {
-    assert!(vps().asking_stats().ends_with("needs usecornercase/cornercase-terminal#675"));
-    assert_eq!(Pick::Here.asking_stats(), "Reading the stats…");
+fn this_computer_has_no_cached_stats_to_ask_for_since_its_stats_never_wait() {
+    assert_eq!(Pick::Here.cached_stats(), None);
+}
+
+#[test]
+fn a_machines_last_stats_are_asked_for_by_its_name() {
+    assert_eq!(vps().cached_stats().expect("asked"), ["stats", "--cached", "--machine", "vps", "--json"]);
+}
+
+#[test]
+fn every_machines_last_stats_are_asked_for_with_all() {
+    assert_eq!(Pick::All.cached_stats().expect("asked"), ["stats", "--cached", "--machine", "all", "--json"]);
 }
 
 #[test]
@@ -156,4 +164,27 @@ fn an_answer_with_a_machine_down_or_failing_is_old() {
     assert!(stats(fixture!("usage/stats_one_failed.json")).old());
     assert!(plans(fixture!("usage/limits_all.json")).old());
     assert!(plans(fixture!("usage/limits_one_unreachable.json")).old());
+}
+
+#[test]
+fn a_cached_sum_leaves_out_a_machine_not_read_yet_and_says_so() {
+    let notes = stats(fixture!("usage/stats_all_cached.json")).notes(five_minutes_after(SEEN));
+    let vps = format!("vps: {NOT_SUMMED} · not read yet");
+    assert_eq!(notes, [PEAK.to_string(), vps, format!("down: {NOT_SUMMED} · {DOWN}")]);
+}
+
+#[test]
+fn a_cached_sum_with_a_machine_not_read_yet_is_old() {
+    assert!(stats(fixture!("usage/stats_all_cached.json")).old());
+}
+
+#[test]
+fn one_machines_cached_copy_says_when_it_was_seen() {
+    let notes = stats(fixture!("usage/stats_one_cached.json")).notes(five_minutes_after("2026-11-07T01:49:00.000Z"));
+    assert_eq!(notes, ["vps: seen 5 min ago".to_string()]);
+}
+
+#[test]
+fn one_machines_cached_copy_keeps_its_numbers() {
+    assert_eq!(stats(fixture!("usage/stats_one_cached.json")).window("total").counts.agents, 3);
 }

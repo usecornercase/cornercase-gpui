@@ -73,6 +73,8 @@ pub(super) struct Named {
 #[serde(default)]
 pub(super) struct Place {
     pub kind: String,
+    pub agent: Option<String>,
+    pub conversation: Option<String>,
     pub project: Option<Named>,
     pub workspace: Option<Named>,
     pub tab: Option<String>,
