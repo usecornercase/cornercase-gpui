@@ -140,6 +140,7 @@ pub(super) struct Line {
     pub old: Option<u32>,
     pub new: Option<u32>,
     pub text: String,
+    pub raw: Option<String>,
     pub emphasis: Vec<[usize; 2]>,
     pub syntax: Option<Vec<Segment>>,
 }
@@ -170,6 +171,7 @@ pub(super) struct GapLine {
     pub old: u32,
     pub new: u32,
     pub text: String,
+    pub raw: Option<String>,
     pub syntax: Option<Vec<Segment>>,
 }
 

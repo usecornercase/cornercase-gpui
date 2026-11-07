@@ -14,6 +14,7 @@ pub(crate) use pointer::{Laid, Off, Selecting, Selects, action, action_bar, body
 
 const BAR_GAP: f32 = 4.;
 const BAR_MARGIN: f32 = 8.;
+const TAB_WIDTH: usize = 4;
 
 pub(crate) type Styles = Vec<(Range<usize>, HighlightStyle)>;
 
@@ -327,6 +328,26 @@ pub(crate) fn overlay(styles: Styles, lit: &[Range<usize>], paint: HighlightStyl
         out.push((piece, style));
     }
     out
+}
+
+pub(crate) fn tabs_drawn(own: &str) -> String {
+    own.replace('\t', &" ".repeat(TAB_WIDTH))
+}
+
+pub(crate) fn own_part(own: &str, shown: Range<usize>) -> &str {
+    let (mut at, mut start, mut end) = (0, None, own.len());
+    for (ix, c) in own.char_indices() {
+        let width = if c == '\t' { TAB_WIDTH } else { c.len_utf8() };
+        if start.is_none() && at + width > shown.start {
+            start = Some(ix);
+        }
+        if at >= shown.end {
+            end = ix;
+            break;
+        }
+        at += width;
+    }
+    start.map_or("", |start| &own[start..end.max(start)])
 }
 
 pub(crate) fn reference<N: Display + PartialEq>(path: &str, (first, last): (N, N)) -> String {
