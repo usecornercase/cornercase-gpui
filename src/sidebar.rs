@@ -7,6 +7,7 @@ mod look;
 mod machine_acts;
 mod machine_rows;
 mod menus;
+mod opening;
 pub(crate) mod order;
 pub(crate) mod rail;
 mod rows;

@@ -1,14 +1,10 @@
-use gpui::{App, AppContext as _, Context, Focusable as _, PathPromptOptions, Window};
-use serde_json::Value;
+use gpui::{AppContext as _, Context, Focusable as _, Window};
 
 use super::order::{self, Place};
 use super::{Fold, Rename, Renaming, Target, cmd};
 use crate::app::{Msg, Root};
-use crate::cli;
-use crate::dialogs::{self, PathQuestion};
 use crate::model::Session;
-use crate::platform::paths::Style;
-use crate::store::{Busy, MachineAct};
+use crate::store::MachineAct;
 use crate::ui::{TextField, TextFieldEvent};
 
 pub(super) fn into_group(project: u64, group: u64) -> Vec<String> {
@@ -25,11 +21,6 @@ pub(super) fn place_args(dragged: Target, place: Place) -> Vec<String> {
         Place::Before(before) => cmd(&["move", dragged.flag(), &id, "--before", &before.to_string()]),
         Place::End => cmd(&["move", dragged.flag(), &id, "--last"]),
     }
-}
-
-fn opening(path: &str) -> Busy {
-    let name = Some(Style::of_path(path).name(path)).filter(|n| !n.is_empty()).unwrap_or(path);
-    Busy::new(format!("open:{path}"), format!("Opening {name}…"))
 }
 
 fn existing_group_of(session: &Session, project: u64) -> Option<u64> {
@@ -188,68 +179,6 @@ impl Root {
         let Some(session) = &self.session else { return };
         if let Some(args) = drop_command(session, dragged, target) {
             self.own.queue.cmd(args);
-        }
-    }
-
-    #[expect(clippy::unused_self, reason = "a menu item's action and ⌘O call it as a method of the window")]
-    pub(crate) fn open_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        Self::open_project_into(None, window, cx);
-    }
-
-    pub(super) fn open_project_into(group: Option<u64>, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(host) = cli::host() {
-            Self::open_remote_project(&host, group, window, cx);
-            return;
-        }
-        let rx = cx.prompt_for_paths(PathPromptOptions {
-            files: false,
-            directories: true,
-            multiple: false,
-            prompt: Some(if group.is_some() { "Add project".into() } else { "Open project".into() }),
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = rx.await else { return };
-            let Some(path) = paths.first() else { return };
-            let path = path.to_string_lossy().into_owned();
-            let _ = this.update(cx, |this, cx| this.open_folder(path, group, cx));
-        })
-        .detach();
-    }
-
-    fn open_remote_project(host: &str, group: Option<u64>, window: &mut Window, cx: &mut Context<Self>) {
-        let button = if group.is_some() { "Add" } else { "Open" };
-        let question = PathQuestion { title: format!("{button} a project on {host}"), button };
-        let root = cx.entity();
-        let then = move |path: String, _: &mut Window, cx: &mut App| {
-            root.update(cx, |this, cx| this.open_folder(path, group, cx));
-        };
-        dialogs::ask_path(question, then, window, cx);
-    }
-
-    fn open_folder(&mut self, path: String, group: Option<u64>, cx: &mut Context<Self>) {
-        let busy = opening(&path);
-        let Some(group) = group else {
-            self.store.update(cx, |s, cx| s.act_busy(busy, vec!["open".into(), path, "--focus".into()], cx));
-            return;
-        };
-        let mut args = vec!["open".into(), path, "--focus".into(), "--json".into()];
-        if let Some(view) = self.own.view_id {
-            args.extend(["--view".into(), view.to_string()]);
-        }
-        crate::store::run_busy(cx, busy, args, move |this: &mut Root, result, cx| {
-            let value = result.and_then(|out| serde_json::from_str::<Value>(&out).map_err(Into::into));
-            this.opened_into(value, group, cx);
-        });
-    }
-
-    fn opened_into(&mut self, result: anyhow::Result<Value>, group: u64, cx: &mut Context<Self>) {
-        match result {
-            Ok(v) => {
-                let Some(project) = v.get("project").and_then(Value::as_u64) else { return };
-                self.own.queue.cmd(into_group(project, group));
-                self.set_folded(Fold::Group(group), false);
-            }
-            Err(e) => self.say(&e.to_string(), cx),
         }
     }
 }

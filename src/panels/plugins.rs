@@ -190,7 +190,7 @@ impl PluginsPanel {
 
     fn link(window: &mut Window, cx: &mut Context<Self>) {
         if let Some(host) = cli::host() {
-            let question = PathQuestion { title: format!("Link a plugin on {host}"), button: "Link" };
+            let question = PathQuestion::folder(format!("Link a plugin on {host}"), "Link");
             let this = cx.entity();
             let then = move |path: String, _: &mut Window, cx: &mut App| {
                 this.update(cx, |_, cx| Self::link_path(&path, cx));

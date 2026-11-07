@@ -31,6 +31,7 @@ pub(crate) struct Look {
     pub dim_inactive_panes: bool,
     pub account_picker: bool,
     pub default_agent: Option<String>,
+    pub setups: Vec<String>,
     pub boot: String,
     pub revision: u64,
 }
@@ -45,6 +46,7 @@ impl Default for Look {
             account_switcher: false,
             account_picker: false,
             default_agent: None,
+            setups: Vec::new(),
             model: true,
             context: true,
             counts: true,
@@ -77,6 +79,15 @@ struct Described {
     revision: u64,
     #[serde(default)]
     settings: Vec<Setting>,
+    #[serde(default)]
+    projects: Vec<ProjectScripts>,
+}
+
+#[derive(Deserialize)]
+struct ProjectScripts {
+    folder: String,
+    #[serde(default)]
+    setup: String,
 }
 
 #[derive(Deserialize)]
@@ -112,6 +123,7 @@ pub(crate) fn parse(text: &str) -> anyhow::Result<Look> {
         account_switcher: on("account_switcher"),
         account_picker: on("account_picker"),
         default_agent: value("agent").and_then(Value::as_str).and_then(named_agent),
+        setups: described.projects.iter().filter(|p| !p.setup.trim().is_empty()).map(|p| p.folder.clone()).collect(),
         model: on("model"),
         context: on("context"),
         counts: on("counts"),

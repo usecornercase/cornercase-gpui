@@ -116,3 +116,15 @@ fn auto_names_no_default_agent() {
     let text = r#"{"settings":[{"key":"agent","value":"auto"}]}"#;
     assert_eq!(parse(text).expect("a look").default_agent, None);
 }
+
+#[test]
+fn a_project_with_a_setup_script_is_known_by_its_folder() {
+    let look = parse(crate::test_util::fixture!("settings/config.json")).expect("a look");
+    assert_eq!(look.setups, ["/code/shop"]);
+}
+
+#[test]
+fn a_blank_setup_script_counts_as_none() {
+    let look = parse(r#"{"projects":[{"folder":"/code/shop","setup":"  \n"}]}"#).expect("a look");
+    assert_eq!(look.setups, Vec::<String>::new());
+}

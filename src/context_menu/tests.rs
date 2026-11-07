@@ -1,8 +1,7 @@
 use gpui::{point, px};
 
 use super::{
-    ABOVE_POINTER, Entry, FRAME_PADDING, ROW_HEIGHT, SEPARATOR_HEIGHT, above, choice, item, note, resting, step,
-    submenu,
+    ABOVE_POINTER, Entry, FRAME_PADDING, ROW_HEIGHT, SEPARATOR_HEIGHT, above, choice, item, resting, step, submenu,
 };
 
 fn entries() -> Vec<Entry> {
@@ -28,13 +27,6 @@ fn the_keys_wrap_around_the_menu() {
 #[test]
 fn a_menu_of_separators_has_nothing_to_choose() {
     assert_eq!(step(&[Entry::Separator], None, true), None);
-}
-
-#[test]
-fn the_keys_skip_a_note() {
-    let entries = [item("Copy", |_, _, _| {}), note("Paste needs a command"), item("Close", |_, _, _| {})];
-    assert_eq!(step(&entries, Some(0), true), Some(2));
-    assert_eq!(step(&entries, Some(2), false), Some(0));
 }
 
 #[test]
