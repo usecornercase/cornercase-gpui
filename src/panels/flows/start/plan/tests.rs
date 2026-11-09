@@ -88,9 +88,25 @@ fn an_emptied_branch_or_workspace_name_keeps_the_issue_ones() {
 }
 
 #[test]
-fn the_issue_task_is_prefilled_on_one_line_as_the_field_holds_it() {
-    assert_eq!(issue().task(), "Fix https://github.com/o/r/issues/482 on issue-482-returns-page-crashes");
+fn the_issue_task_is_prefilled_with_its_line_breaks() {
+    assert_eq!(issue().task(), "Fix https://github.com/o/r/issues/482\non issue-482-returns-page-crashes");
+    let ended = IssueTask { prompt: Some("Fix it\n".into()), ..issue() };
+    assert_eq!(ended.task(), "Fix it");
     assert_eq!(IssueTask { prompt: None, ..issue() }.task(), "");
+}
+
+#[test]
+fn a_task_of_several_lines_runs_whole() {
+    let plan = plan("Quick", Some(3), None, &task(" Fix the login form\nthen test it\n", "", "")).expect("plans");
+    assert_eq!(plan.args().last().map(String::as_str), Some("--prompt=Fix the login form\nthen test it"));
+}
+
+#[test]
+fn a_task_added_to_keeps_the_issues_lines() {
+    let issue = issue();
+    let typed = format!("{}\nTest first.", issue.task());
+    let plan = plan("Quick", Some(4), Some(&issue), &retold(&typed, &issue.branch, "")).expect("plans");
+    assert_eq!(plan.task, Task::Issue { key: "#482".into(), source: Some("github".into()), prompt: Some(typed) });
 }
 
 #[test]

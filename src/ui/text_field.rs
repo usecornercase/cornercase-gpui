@@ -528,19 +528,31 @@ fn line_bindings(os: Os) -> Vec<KeyBinding> {
         KeyBinding::new("shift-home", SelectHome, ctx),
         KeyBinding::new("shift-end", SelectEnd, ctx),
     ];
+    keys.push(KeyBinding::new(send_key(os).0, Submit, ctx));
     keys.extend(match os {
-        Os::Mac => [
-            KeyBinding::new("cmd-enter", Submit, ctx),
-            KeyBinding::new("cmd-up", TextStart, ctx),
-            KeyBinding::new("cmd-down", TextEnd, ctx),
-        ],
-        Os::Linux | Os::Windows => [
-            KeyBinding::new("ctrl-enter", Submit, ctx),
-            KeyBinding::new("ctrl-home", TextStart, ctx),
-            KeyBinding::new("ctrl-end", TextEnd, ctx),
-        ],
+        Os::Mac => [KeyBinding::new("cmd-up", TextStart, ctx), KeyBinding::new("cmd-down", TextEnd, ctx)],
+        Os::Linux | Os::Windows => {
+            [KeyBinding::new("ctrl-home", TextStart, ctx), KeyBinding::new("ctrl-end", TextEnd, ctx)]
+        }
     });
     keys
+}
+
+const PROMPT_ROWS: RangeInclusive<usize> = 3..=12;
+
+pub(crate) fn send_key(os: Os) -> (&'static str, &'static str) {
+    match os {
+        Os::Mac => ("cmd-enter", "⌘↩"),
+        Os::Linux | Os::Windows => ("ctrl-enter", "Ctrl+Enter"),
+    }
+}
+
+pub(crate) fn prompt_keys(os: Os, verb: &str) -> String {
+    let new_line = match os {
+        Os::Mac => "↩",
+        Os::Linux | Os::Windows => "Enter",
+    };
+    format!("{new_line} for a new line, {} to {verb}", send_key(os).1)
 }
 
 fn mac_bindings(ctx: Option<&str>) -> Vec<KeyBinding> {
@@ -629,6 +641,10 @@ impl TextField {
         self.options.wraps = true;
         self.options.rows = Some(rows);
         self
+    }
+
+    pub(crate) fn prompt(self) -> Self {
+        self.multiline(PROMPT_ROWS)
     }
 
     pub(crate) fn inside(mut self, scroller: ScrollHandle) -> Self {

@@ -494,3 +494,11 @@ fn on_linux_ctrl_alt_shift_f_stays_the_flow_panel_in_the_viewer() {
 fn a_plain_ctrl_f_still_reaches_the_program() {
     assert_eq!(shortcut(&pressed("f", CTRL), false, Os::Linux, false).map(|s| s.command), None);
 }
+
+#[test]
+fn the_keys_list_says_how_a_prompt_is_sent() {
+    for os in [Os::Mac, Os::Linux, Os::Windows] {
+        let sent = crate::ui::text_field::send_key(os).1;
+        assert!(other_keys(os).iter().any(|(keys, _)| *keys == sent), "{os:?} lists no {sent}");
+    }
+}

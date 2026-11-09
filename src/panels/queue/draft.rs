@@ -190,7 +190,7 @@ impl Draft {
                     push(a, "--source", source);
                 }
             }
-            (false, false) => push(a, "--prompt", text),
+            (false, false) => a.push(format!("--prompt={text}")),
             (true, true) if self.edit.is_none() => return Err("paste an issue URL or key".into()),
             (false, true) if self.edit.is_none() => return Err(self.no_prompt().into()),
             _ => {}

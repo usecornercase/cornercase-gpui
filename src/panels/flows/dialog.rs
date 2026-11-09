@@ -1,6 +1,6 @@
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, Div, Entity, ParentElement as _, StatefulInteractiveElement as _,
-    Styled as _, Window, div, px,
+    App, AppContext as _, ClickEvent, Context, Div, Entity, ParentElement as _, ScrollHandle,
+    StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 use crate::store::Store;
@@ -25,15 +25,47 @@ pub(super) fn field<T: Submit>(placeholder: &str, cx: &mut Context<T>, window: &
     subscribed(field, cx, window)
 }
 
+pub(super) fn field_in<T: Submit>(
+    placeholder: &str,
+    scroller: &ScrollHandle,
+    cx: &mut Context<T>,
+    window: &mut Window,
+) -> Entity<TextField> {
+    let scroller = scroller.clone();
+    shaped((placeholder, ""), move |field| field.inside(scroller), cx, window)
+}
+
 pub(super) fn filled_field<T: Submit>(
     placeholder: &str,
     text: &str,
+    scroller: &ScrollHandle,
+    cx: &mut Context<T>,
+    window: &mut Window,
+) -> Entity<TextField> {
+    let scroller = scroller.clone();
+    shaped((placeholder, text), move |field| field.wraps().inside(scroller), cx, window)
+}
+
+pub(super) fn prompt_field<T: Submit>(
+    placeholder: &str,
+    text: &str,
+    scroller: &ScrollHandle,
+    cx: &mut Context<T>,
+    window: &mut Window,
+) -> Entity<TextField> {
+    let scroller = scroller.clone();
+    shaped((placeholder, text), move |field| field.prompt().inside(scroller), cx, window)
+}
+
+fn shaped<T: Submit>(
+    (placeholder, text): (&str, &str),
+    shape: impl FnOnce(TextField) -> TextField,
     cx: &mut Context<T>,
     window: &mut Window,
 ) -> Entity<TextField> {
     let text = text.to_string();
     let field = cx.new(|cx| {
-        let mut field = TextField::new(placeholder.to_string(), cx).in_tab_order().wraps();
+        let mut field = shape(TextField::new(placeholder.to_string(), cx).in_tab_order());
         field.set_text(text, cx);
         field
     });

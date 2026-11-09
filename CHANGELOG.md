@@ -7,6 +7,12 @@ Every pull request that changes the app adds a section here for its new version.
 - **The window opens where you left it.** Its size, its place on your displays and whether it was maximised or full screen come back at every launch, and after an update's restart. If that display is gone, or the place would be off screen, it opens centred as before. On Linux it keeps its size and state, and your desktop places it.
 - **The sidebar and the docked panels keep their widths.** The widths you drag the sidebar to (or its two columns), Changes, Files, TODO and Recap, the Browser and the Flow panel are there at the next launch. A double click on the edge brings back the default. In a window too narrow for them, the terminal keeps its room first, and your widths come back at a later launch in a window wide enough for them.
 
+## 0.1.40
+
+- **Prompts take several lines.** In the Queue's form, Start a flow and Start an agent (⌘G), Enter now starts a new line instead of scheduling or starting the agent on half a prompt. ⌘Enter (Ctrl+Enter on Linux and Windows) or the form's button sends it, as the line under the field says. The field starts three lines high, grows to twelve, then scrolls, and a paste keeps its lines. The other fields (times, branches, names, an issue's key) still send on Enter.
+- **An issue's task keeps its lines.** Start a flow on an issue fills the task from Settings' prompt template with its line breaks, where they used to become spaces.
+- **A prompt may start with a dash.** Schedule and Start an agent no longer refuse a prompt that starts with `-`, such as a list.
+
 ## 0.1.39
 
 - **Choose the shell new panes start.** With cornercase 0.13.21 or newer, Settings › UI › shell lists the shells found on the computer cornercase runs on: open the list with its arrow or ↓, and choosing one saves it. Or type any program (a full path, one starting with `~/`, or a name on the `PATH`) and press Enter; cornercase says why when it cannot use it. `default` brings back your usual shell. Shell arguments takes options such as `-l` or `--login`, and changing the shell clears them. New tabs, splits and workspaces start it; panes already open keep theirs.

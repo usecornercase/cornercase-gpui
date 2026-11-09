@@ -35,18 +35,7 @@ fn an_agent_started_with_a_pick_names_it_with_the_rest() {
     let picks = [AccountPick { agent: "claude".into(), folder: String::new() }];
     assert_eq!(
         start_args("claude", "fix it", "feat/x", &picks),
-        [
-            "start",
-            "claude",
-            "--focus",
-            "--placed",
-            "--prompt",
-            "fix it",
-            "--worktree",
-            "feat/x",
-            "--account",
-            "claude="
-        ]
+        ["start", "claude", "--focus", "--placed", "--prompt=fix it", "--worktree", "feat/x", "--account", "claude="]
     );
 }
 
@@ -59,4 +48,12 @@ fn the_default_agent_answers_once_its_tab_is_open() {
 fn an_agent_started_in_a_place_names_it() {
     assert_eq!(start_in(&["--project", "4"]), ["start", "--project", "4", "--focus", "--placed"]);
     assert_eq!(start_in(&["--workspace", "7"]), ["start", "--workspace", "7", "--focus", "--placed"]);
+}
+
+#[test]
+fn an_agent_started_with_a_prompt_of_several_lines_gets_it_whole() {
+    assert_eq!(
+        start_args("", "- fix it\nthen test", "", &[]),
+        ["start", "--focus", "--placed", "--prompt=- fix it\nthen test"]
+    );
 }

@@ -2,7 +2,7 @@ use gpui::px;
 
 use super::{
     Rows, Span, clamp_scroll, line_breaks, one_line, previous_grapheme, rows_shown, scroll_to_show,
-    shown_without_controls, thumb,
+    scroll_to_show_with_margins, shown_without_controls, thumb,
 };
 
 fn wrapped() -> Rows {
@@ -184,4 +184,23 @@ fn the_thumb_shows_the_share_in_view_and_where_it_is() {
 #[test]
 fn a_very_long_text_keeps_a_thumb_to_see() {
     assert_eq!(thumb(px(0.), px(10_000.), px(100.)).map(|(_, length)| length), Some(px(16.)));
+}
+
+#[test]
+fn a_view_with_room_keeps_the_margins_around_the_caret() {
+    let margins = (px(12.), px(32.));
+    assert_eq!(scroll_to_show_with_margins(px(0.), (px(180.), px(16.)), margins, px(200.)), px(28.));
+}
+
+#[test]
+fn a_view_too_short_for_the_margins_still_shows_the_caret() {
+    let (caret, line, view) = (px(300.), px(16.), px(40.));
+    let scroll = scroll_to_show_with_margins(px(0.), (caret, line), (px(12.), px(32.)), view);
+    assert!(scroll <= caret && caret + line <= scroll + view, "caret at {caret:?} is out of {scroll:?}+{view:?}");
+}
+
+#[test]
+fn a_view_shorter_than_a_row_follows_the_caret_row() {
+    let margins = (px(12.), px(32.));
+    assert_eq!(scroll_to_show_with_margins(px(0.), (px(300.), px(16.)), margins, px(10.)), px(306.));
 }
