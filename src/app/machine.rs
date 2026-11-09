@@ -102,7 +102,7 @@ pub(crate) struct MachineTab {
     arriving: Option<Arriving>,
     attempts: u32,
     tries: u32,
-    themed: bool,
+    pub(super) themed: bool,
     told_visible: bool,
     opened_visible: bool,
     host_events: Option<Stream>,

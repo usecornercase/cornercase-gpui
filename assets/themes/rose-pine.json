@@ -1,0 +1,42 @@
+{
+  "name": "Rosé Pine",
+  "extends": "cornercase-dark",
+  "terminal": {
+    "foreground": "#e0def4",
+    "background": "#191724",
+    "black": "#26233a",
+    "red": "#eb6f92",
+    "green": "#31748f",
+    "yellow": "#f6c177",
+    "blue": "#9ccfd8",
+    "magenta": "#c4a7e7",
+    "cyan": "#ebbcba",
+    "white": "#e0def4",
+    "bright_black": "#6e6a86",
+    "bright_red": "#eb6f92",
+    "bright_green": "#31748f",
+    "bright_yellow": "#f6c177",
+    "bright_blue": "#9ccfd8",
+    "bright_magenta": "#c4a7e7",
+    "bright_cyan": "#ebbcba",
+    "bright_white": "#e0def4"
+  },
+  "chrome": {
+    "glass": "#13111b",
+    "raised": "#252330",
+    "surface": "#312f3d",
+    "text": "#e9e8f7",
+    "soft": "#e0def4",
+    "muted": "#9a98ab",
+    "faint": "#7c7a8c",
+    "veil": "#0c0c12",
+    "brand": "#c4a7e7",
+    "on_brand": "#191724",
+    "accent": "#d9c6ef",
+    "working": "#f6c177",
+    "waiting": "#ebbcba",
+    "done": "#31748f",
+    "failed": "#eb6f92",
+    "merged": "#c4a7e7"
+  }
+}

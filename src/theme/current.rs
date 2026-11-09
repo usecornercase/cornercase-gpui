@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock};
 
 use parking_lot::RwLock;
@@ -48,14 +47,4 @@ pub(crate) fn opacity_from(value: Option<&str>) -> Option<f32> {
 
 pub(crate) fn opacity_override() -> Option<f32> {
     *OPACITY_OVERRIDE
-}
-
-pub(crate) fn lookup_of(files: BTreeMap<String, String>) -> impl Lookup {
-    struct Both(BTreeMap<String, String>);
-    impl Lookup for Both {
-        fn text(&self, id: &str) -> Option<String> {
-            presets::text(id).map(str::to_string).or_else(|| self.0.get(id).cloned())
-        }
-    }
-    Both(files)
 }

@@ -1,6 +1,7 @@
 mod connection;
 mod dock;
 pub(crate) mod frame;
+mod looks;
 pub(crate) mod machine;
 mod status;
 mod surface;
@@ -129,6 +130,8 @@ pub(crate) struct Root {
     pub(crate) dock_focus: FocusHandle,
     beat: Rc<motion::Beat>,
     pub(crate) counting: Counting,
+    given_palette: Option<String>,
+    palette_settled: u64,
 }
 
 impl Focusable for Root {
@@ -229,6 +232,7 @@ impl Root {
         let mut root = Self::fresh((focus, cx.focus_handle()), store, tx, queue, notifier);
         kept.apply(&mut root);
         root.start(cx);
+        root.follow_appearance(window, cx);
         Self::take_back_colours_on_quit(cx);
         root
     }
@@ -325,6 +329,8 @@ impl Root {
             dock_focus,
             beat: Rc::default(),
             counting: Counting::default(),
+            given_palette: Some(theme::terminal_json()),
+            palette_settled: 0,
         }
     }
 
@@ -869,7 +875,7 @@ impl Render for Root {
             let s = self.store.read(cx);
             (s.sheet, s.dialog.clone())
         };
-        let sheet = sheet.map(|kind| self.render_sheet(kind, window_frame, window, cx));
+        let sheet = sheet.map(|kind| self.sheet_or_peek(kind, window_frame, window, cx));
         let content = div()
             .size_full()
             .relative()

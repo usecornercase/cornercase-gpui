@@ -40,7 +40,7 @@ fn a_translucent_colour_over_another_blends_by_its_alpha() {
     let below = from_bytes([0, 0, 0]);
     let seen = over(top, below);
     assert!(close(seen.r, 0.5) && close(seen.a, 1.));
-    assert!(close(over(below, top).r, 0.5));
+    assert!(close(over(below, top).r, 0.));
 }
 
 #[test]

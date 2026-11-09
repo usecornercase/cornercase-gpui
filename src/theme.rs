@@ -1,6 +1,7 @@
 mod fonts;
 
 pub(crate) mod colour;
+pub(crate) mod contrast;
 pub(crate) mod current;
 pub(crate) mod file;
 pub(crate) mod presets;
@@ -117,11 +118,11 @@ pub(crate) mod colours {
     }
 
     pub(crate) fn card_top() -> Rgba {
-        read(|t| Rgba { a: t.opacity.floating, ..mix(t.chrome.raised, opaque(t.chrome.glass), 0.05) })
+        read(|t| super::card_edges(t).0)
     }
 
     pub(crate) fn card_bottom() -> Rgba {
-        read(|t| Rgba { a: (t.opacity.floating + 0.03).min(1.), ..mix(t.chrome.raised, opaque(t.chrome.glass), 0.7) })
+        read(|t| super::card_edges(t).1)
     }
 
     pub(crate) fn sunk() -> Rgba {
@@ -144,6 +145,13 @@ pub(crate) mod colours {
     pub(crate) fn code_ink() -> Rgba {
         from_bytes([0, 0, 0])
     }
+}
+
+pub(crate) fn card_edges(theme: &Theme) -> (Rgba, Rgba) {
+    let (raised, glass) = (theme.chrome.raised, opaque(theme.chrome.glass));
+    let top = Rgba { a: theme.opacity.floating, ..colour::mix(raised, glass, 0.05) };
+    let bottom = Rgba { a: (theme.opacity.floating + 0.03).min(1.), ..colour::mix(raised, glass, 0.7) };
+    (top, bottom)
 }
 
 pub(crate) fn shade(alpha: f32) -> Hsla {
