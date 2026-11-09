@@ -1,11 +1,12 @@
 use gpui::{Context, Pixels, Point, Window};
 
-use super::{Renaming, forms};
+use super::Renaming;
 use crate::app::Root;
 use crate::context_menu::{Entry, item, resting};
 use crate::dialogs::{self, Question};
 use crate::model::machines::seen::sighted;
 use crate::model::{Aim, PaneAim, ThereWorkspace};
+use crate::panels::worktrees::{self, Whose, WorktreeRow};
 use crate::store::{MachineAct, Store};
 
 const RENAME_WORKSPACE: &str = "Rename workspace";
@@ -81,19 +82,15 @@ impl Root {
     }
 
     pub(super) fn close_there(&mut self, aim: &Aim, window: &mut Window, cx: &mut Context<Self>) {
-        let target = match self.store.read(cx).reach_machine(aim) {
-            Ok(target) => target,
-            Err(why) => {
-                self.store.update(cx, |s, cx| s.not_sent(&why, cx));
-                return;
-            }
-        };
+        if let Err(why) = self.store.read(cx).reach_machine(aim) {
+            self.store.update(cx, |s, cx| s.not_sent(&why, cx));
+            return;
+        }
         let machines = self.session.as_ref().map_or(&[][..], |session| &session.machines);
         let Ok((seen, ws)) = sighted(machines, aim) else { return };
         if ws.worktree {
-            let (machine, name) = (seen.name.clone(), ws.name.clone());
-            self.store.update(cx, |s, cx| s.ask_machine_home(&machine, cx));
-            forms::remove_worktree_there((aim.clone(), target), name, window, cx);
+            let row = WorktreeRow { whose: Whose::There(aim.clone()), path: ws.path.clone(), name: ws.name.clone() };
+            worktrees::remove_worktree(row, window, cx);
             return;
         }
         let (title, message) = close_question(ws, &seen.name);

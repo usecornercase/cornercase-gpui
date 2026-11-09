@@ -151,27 +151,15 @@ fn a_rename_names_the_id_and_takes_any_text_as_the_name() {
 }
 
 #[test]
-fn a_close_and_its_check_name_the_id() {
+fn a_close_names_the_id() {
     let aim = Aim { machine: "vps".into(), boot: "b".into(), workspace: ThereId(7) };
     assert_eq!(aim.close_args(), ["close", "--workspace", "7", "--boot", "b"]);
-    assert_eq!(
-        aim.check_args(),
-        ["close", "--workspace", "7", "--boot", "b", "--remove-worktree", "--check", "--json"]
-    );
-}
-
-#[test]
-fn a_removal_adds_what_was_acknowledged() {
-    let aim = Aim { machine: "vps".into(), boot: "b".into(), workspace: ThereId(7) };
-    let removal = ["close", "--workspace", "7", "--boot", "b", "--remove-worktree"];
-    assert_eq!(aim.remove_args(false, false), removal);
-    assert_eq!(aim.remove_args(true, true), [&removal[..], &["--force", "--unlock"]].concat());
 }
 
 #[test]
 fn every_act_on_a_machine_says_which_run_of_its_server_the_id_is_from() {
     let aim = Aim { machine: "vps".into(), boot: "4242-1".into(), workspace: ThereId(7) };
-    let acts = [aim.rename_args("x"), aim.close_args(), aim.check_args(), aim.remove_args(true, true)];
+    let acts = [aim.rename_args("x"), aim.close_args()];
     for act in acts {
         let at = act.iter().position(|word| word == "--boot").expect("--boot");
         assert_eq!(act[at + 1], "4242-1");

@@ -1,6 +1,7 @@
 mod actions;
 mod data;
 mod removal;
+mod row_removal;
 mod rows;
 
 use std::collections::HashSet;
@@ -19,6 +20,7 @@ use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
 use data::{List, Order, Worktree, list_command, scope_note, shown, total};
 use removal::Folder;
+pub(crate) use row_removal::{Whose, WorktreeRow, remove_worktree};
 
 const NO_WORKTREES: &str = "No worktrees on disk. Workspaces made with a worktree of their own show here.";
 const NO_MATCH: &str = "No worktree matches the filter.";

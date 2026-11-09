@@ -16,7 +16,6 @@ use crate::ui::{self, TextField, TextFieldEvent};
 
 pub(super) use agents::close_agents;
 pub(crate) use checked::close_agent;
-pub(super) use checked::{remove_worktree, remove_worktree_there};
 pub(super) use style::group_style;
 
 fn close(cx: &mut App) {

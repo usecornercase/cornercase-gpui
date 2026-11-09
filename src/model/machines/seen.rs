@@ -187,17 +187,6 @@ impl Aim {
     pub(crate) fn close_args(&self) -> Vec<String> {
         args(&["close", "--workspace", &self.id(), "--boot", &self.boot])
     }
-
-    pub(crate) fn check_args(&self) -> Vec<String> {
-        args(&["close", "--workspace", &self.id(), "--boot", &self.boot, "--remove-worktree", "--check", "--json"])
-    }
-
-    pub(crate) fn remove_args(&self, force: bool, unlock: bool) -> Vec<String> {
-        let mut command = args(&["close", "--workspace", &self.id(), "--boot", &self.boot, "--remove-worktree"]);
-        command.extend(force.then(|| "--force".to_string()));
-        command.extend(unlock.then(|| "--unlock".to_string()));
-        command
-    }
 }
 
 pub(crate) fn sighted<'a>(

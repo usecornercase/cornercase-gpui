@@ -277,7 +277,7 @@ fn a_folder_that_changed_after_the_question_is_left_alone_and_said_in_words() {
     assert_eq!(
         text,
         "Did not remove shop › feat/dirty: it changed since you were asked (1 file changed; teardown runs first). \
-         Remove… asks again."
+         Remove it again to be asked again."
     );
     assert!(!text.contains("--force"), "{text}");
     assert!(kind == ToastKind::Error);
@@ -314,4 +314,46 @@ fn an_answer_that_names_no_row_keeps_the_one_asked_about() {
     let folder = asked.answered(Ok(Answer { folders: vec![answer] }));
     assert_eq!(folder.title(), "shop › feat/clean");
     assert!(!folder.removed());
+}
+
+const FEAT_CLEAN: &str = "/home/ana/.cornercase/worktrees/shop/feat-clean";
+const CAP_CLEAN: &str = "/home/ana/.cornercase/worktrees/shop/cap-clean";
+
+fn on_vps(path: &str, folders: &[Folder], end: &str) -> Folder {
+    Folder::asked(path, Some("vps")).answered(Ok(Answer { folders: vec![at(folders, end)] }))
+}
+
+#[test]
+fn a_folder_on_a_machine_says_where_it_is() {
+    let folder = on_vps(FEAT_CLEAN, &checked(), "feat-clean");
+    assert_eq!(folder.title(), "shop › feat/clean on vps");
+    assert_eq!(title(&only(folder)), "Remove the worktree shop › feat/clean on vps?");
+}
+
+#[test]
+fn a_folder_on_a_machine_never_lends_its_workspace_id() {
+    let folder = on_vps(FEAT_CLEAN, &checked(), "feat-clean");
+    assert_eq!(folder.workspace(), None);
+    let said = said(&only(folder), false);
+    assert_eq!(said.last(), Some(&("Its workspace closes, with its tabs.".to_string(), Style::Note)));
+}
+
+#[test]
+fn what_went_on_a_machine_says_where() {
+    let folder = on_vps(CAP_CLEAN, &answers(), "cap-clean");
+    assert_eq!(summary(&only(folder)).0, "Removed shop › cap/clean on vps and the branch cap/clean");
+}
+
+#[test]
+fn a_check_that_failed_names_the_folder_asked_about() {
+    let folder = Folder::asked(FEAT_CLEAN, None).answered(Err("cornercase worktrees: no such command".into()));
+    assert!(!folder.goes());
+    assert_eq!(cannot_go(&only(folder)), "Cannot remove feat-clean: cornercase worktrees: no such command");
+}
+
+#[test]
+fn an_answer_with_no_folder_is_no_answer() {
+    let folder = Folder::asked(FEAT_CLEAN, None).answered(Ok(Answer::default()));
+    assert!(!folder.goes());
+    assert_eq!(cannot_go(&only(folder)), "Cannot remove feat-clean: cornercase gave no answer for it");
 }

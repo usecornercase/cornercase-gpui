@@ -76,23 +76,20 @@ fn each_act_runs_its_command() {
     let aim = aim();
     assert_eq!(MachineAct::Close.args(&aim), aim.close_args());
     assert_eq!(MachineAct::Rename("x".into()).args(&aim), aim.rename_args("x"));
-    assert_eq!(MachineAct::Remove { force: true, unlock: false }.args(&aim), aim.remove_args(true, false));
 }
 
 #[test]
-fn a_close_and_a_removal_leave_the_list_and_a_rename_does_not() {
+fn a_close_leaves_the_list_and_a_rename_does_not() {
     assert!(MachineAct::Close.leaves());
-    assert!(MachineAct::Remove { force: false, unlock: false }.leaves());
     assert!(!MachineAct::Rename("x".into()).leaves());
 }
 
 #[test]
-fn a_close_and_a_removal_wait_under_one_key_and_a_rename_under_its_own() {
+fn a_close_waits_under_the_leaving_key_and_a_rename_under_its_own() {
     let aim = aim();
     let close = MachineAct::Close.job(&aim, "notes");
-    let remove = MachineAct::Remove { force: false, unlock: false }.job(&aim, "notes");
     let rename = MachineAct::Rename("x".into()).job(&aim, "notes");
-    assert_eq!(close.key(), remove.key());
+    assert_eq!(close.key(), Busy::leaving(&aim, "x").key());
     assert_ne!(close.key(), rename.key());
 }
 
@@ -100,7 +97,6 @@ fn a_close_and_a_removal_wait_under_one_key_and_a_rename_under_its_own() {
 fn what_an_act_did_names_the_machine() {
     let aim = aim();
     assert_eq!(MachineAct::Close.done(&aim, "notes").as_deref(), Some("Closed notes on vps"));
-    assert_eq!(MachineAct::Remove { force: false, unlock: true }.done(&aim, "f").as_deref(), Some("Removed f on vps"));
     assert_eq!(MachineAct::Rename("x".into()).done(&aim, "notes"), None);
 }
 

@@ -33,6 +33,8 @@ pub(super) struct Folder {
     teardown: bool,
     roles: Vec<Value>,
     worktree: Option<Worktree>,
+    #[serde(skip)]
+    machine: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,12 +49,24 @@ pub(super) enum Style {
 pub(super) type Said = (String, Style);
 
 impl Folder {
+    pub(super) fn asked(path: &str, machine: Option<&str>) -> Self {
+        Self { path: path.to_string(), machine: machine.map(str::to_string), ..Self::default() }
+    }
+
     pub(super) fn title(&self) -> String {
-        self.worktree.as_ref().map_or_else(|| last_folder(&self.path).to_string(), Worktree::title)
+        let title = self.worktree.as_ref().map_or_else(|| last_folder(&self.path).to_string(), Worktree::title);
+        match &self.machine {
+            Some(machine) => format!("{title} on {machine}"),
+            None => title,
+        }
     }
 
     pub(super) fn workspace(&self) -> Option<u64> {
-        self.worktree.as_ref().and_then(|w| w.workspace)
+        self.worktree.as_ref().filter(|_| self.machine.is_none()).and_then(|w| w.workspace)
+    }
+
+    fn open(&self) -> bool {
+        self.worktree.as_ref().is_some_and(|w| w.workspace.is_some())
     }
 
     pub(super) fn goes(&self) -> bool {
@@ -120,10 +134,10 @@ impl Folder {
             Ok(answer) => (answer.folders.into_iter().next(), None),
             Err(e) => (None, Some(e)),
         };
-        let worktree = self.worktree;
+        let (worktree, machine) = (self.worktree, self.machine);
         match answer {
-            Some(answer) => Self { worktree: answer.worktree.or(worktree), ..answer },
-            None => Self { path: self.path, outcome: "failed".into(), why, worktree, ..Self::default() },
+            Some(answer) => Self { worktree: answer.worktree.or(worktree), machine, ..answer },
+            None => Self { path: self.path, outcome: "failed".into(), why, worktree, machine, ..Self::default() },
         }
     }
 
@@ -132,7 +146,7 @@ impl Folder {
         match self.outcome.as_str() {
             REMOVED => None,
             REFUSED if !self.needs.is_empty() => Some(format!(
-                "Did not remove {title}: it changed since you were asked ({}). Remove… asks again.",
+                "Did not remove {title}: it changed since you were asked ({}). Remove it again to be asked again.",
                 self.lines.join("; ")
             )),
             REFUSED => Some(format!("Did not remove {title}: {}", self.reason())),
@@ -196,7 +210,7 @@ pub(super) fn branch_label(folders: &[Folder]) -> Option<String> {
 
 pub(super) fn said(folders: &[Folder], branches: bool) -> Vec<Said> {
     let mut said: Vec<Said> = folders.iter().flat_map(|folder| folder.said(branches)).collect();
-    let open = going(folders).filter(|folder| folder.workspace().is_some()).count();
+    let open = going(folders).filter(|folder| folder.open()).count();
     match open {
         0 => {}
         1 => said.push(("Its workspace closes, with its tabs.".to_string(), Style::Note)),
