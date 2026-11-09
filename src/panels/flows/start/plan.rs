@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use crate::model::Spot;
 use crate::model::accounts::pick::{AccountPick, account_args};
+use crate::model::machines::run_on::issue::IssueThere;
 use crate::panels::flows::model::project_args;
 use crate::store::args;
 
@@ -33,10 +34,16 @@ impl IssueTask {
         self.prompt.as_deref().unwrap_or_default().trim_end().to_string()
     }
 
-    pub(super) fn learn(&mut self, prompt: Option<String>, typed: &str) -> Option<String> {
+    pub(super) fn learn(&mut self, prompt: Option<String>) {
         self.prompt = prompt;
-        let task = self.task();
-        (typed.trim().is_empty() && !task.is_empty()).then_some(task)
+    }
+
+    pub(super) fn there(&self, read: Option<&IssueThere>) -> Self {
+        Self {
+            prompt: read.map(IssueThere::task),
+            branch: read.map(|read| read.branch().to_string()).unwrap_or_default(),
+            ..self.clone()
+        }
     }
 
     fn edited(&self, typed: &str) -> Option<String> {
@@ -47,6 +54,20 @@ impl IssueTask {
         let mut command = args(&["issue", "read", &self.key, "--source", &self.source, "--json"]);
         command.extend(project_args(project));
         command
+    }
+}
+
+pub(super) fn issue_note(machine: Option<&str>) -> String {
+    let whose = machine.map_or_else(|| "settings'".to_string(), |machine| format!("{machine}'s"));
+    format!("The task starts as the issue's, through {whose} prompt template.")
+}
+
+pub(super) fn issue_hints(machine: Option<&str>) -> (String, String) {
+    match machine {
+        Some(machine) => {
+            (format!("The issue's, through {machine}'s prompt template"), format!("The issue's branch on {machine}"))
+        }
+        None => ("The issue's, through settings' prompt template".to_string(), "The issue's branch".to_string()),
     }
 }
 

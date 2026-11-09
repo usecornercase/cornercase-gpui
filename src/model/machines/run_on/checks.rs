@@ -1,7 +1,9 @@
 use serde::Deserialize;
 
 use super::super::seen::{Spot, ThereId};
+use super::issue::IssueThere;
 use crate::model::accounts::{AccountsInfo, LoginState, Provider};
+use crate::model::agent_settings::Agents;
 use crate::store::args;
 
 const UNREADABLE: &str = "its answer could not be read";
@@ -52,11 +54,22 @@ impl<T> Asked<T> {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[expect(clippy::struct_excessive_bools, reason = "one flag per check a dialog wants, as the checks are")]
 pub(crate) struct Wanted {
     pub accounts: bool,
     pub accounts_hold: bool,
     pub tracker: Option<String>,
     pub flows: bool,
+    pub modes: bool,
+    pub issue: Option<String>,
+}
+
+impl Wanted {
+    fn issue_args(&self) -> Vec<String> {
+        let key = self.issue.as_deref().unwrap_or_default();
+        let source = self.tracker.as_deref().unwrap_or_default();
+        args(&["issue", "read", key, "--source", source, "--json"])
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,15 +77,19 @@ pub(crate) enum Check {
     Accounts,
     Trackers,
     Flows,
+    Modes,
+    Issue,
 }
 
 impl Check {
-    pub(crate) fn args(self, spot: Option<&Spot>) -> Vec<String> {
+    pub(crate) fn args(self, spot: Option<&Spot>, wanted: &Wanted) -> Vec<String> {
         let project = spot.map(Spot::asking_args).unwrap_or_default();
         match self {
             Self::Accounts => args(&["account", "list", "--check", "--json"]),
             Self::Trackers => [args(&["issue", "sources", "--json"]), project].concat(),
             Self::Flows => [args(&["flow", "list", "--json"]), project].concat(),
+            Self::Modes => args(&["config", "--json"]),
+            Self::Issue => [wanted.issue_args(), project].concat(),
         }
     }
 
@@ -81,6 +98,8 @@ impl Check {
             Self::Accounts => format!("Asking {machine} for its accounts…"),
             Self::Trackers => format!("Checking the tracker on {machine}…"),
             Self::Flows => format!("Reading the flows on {machine}…"),
+            Self::Modes => format!("Reading the modes on {machine}…"),
+            Self::Issue => format!("Reading the issue on {machine}…"),
         }
     }
 
@@ -89,6 +108,8 @@ impl Check {
             Self::Accounts => "its accounts",
             Self::Trackers => "its trackers",
             Self::Flows => "its flows",
+            Self::Modes => "its modes",
+            Self::Issue => "the issue",
         };
         format!("Could not read {what} on {machine}: {why}")
     }
@@ -109,6 +130,8 @@ pub(crate) struct Checks {
     pub accounts: Asked<AccountsInfo>,
     pub trackers: Asked<Trackers>,
     pub flows: Asked<()>,
+    pub modes: Asked<Agents>,
+    pub issue: Asked<IssueThere>,
 }
 
 impl Checks {
@@ -121,7 +144,7 @@ impl Checks {
     }
 
     pub(crate) fn current(&self, generation: u64, check: Check, project: Option<ThereId>) -> bool {
-        generation == self.generation && (check == Check::Accounts || project == self.project)
+        generation == self.generation && (matches!(check, Check::Accounts | Check::Modes) || project == self.project)
     }
 
     pub(crate) fn follow(&mut self, boot: &str, linked: bool, project: Option<ThereId>) {
@@ -134,6 +157,7 @@ impl Checks {
         if project != self.project {
             self.trackers = Asked::Unasked;
             self.flows = Asked::Unasked;
+            self.issue = Asked::Unasked;
         }
         self.boot = Some(boot.to_string());
         self.linked = linked;
@@ -144,15 +168,34 @@ impl Checks {
         self.accounts.forget_failure();
         self.trackers.forget_failure();
         self.flows.forget_failure();
+        self.modes.forget_failure();
+        self.issue.forget_failure();
     }
 
     pub(crate) fn due(&self, wanted: &Wanted) -> Vec<Check> {
         let accounts = (wanted.accounts && self.accounts == Asked::Unasked).then_some(Check::Accounts);
-        let there = self.project.is_some();
-        let trackers =
-            (there && wanted.tracker.is_some() && self.trackers == Asked::Unasked).then_some(Check::Trackers);
-        let flows = (there && wanted.flows && self.flows == Asked::Unasked).then_some(Check::Flows);
-        [accounts, trackers, flows].into_iter().flatten().collect()
+        let modes = (wanted.modes && self.modes == Asked::Unasked).then_some(Check::Modes);
+        [accounts, self.due_there(wanted), self.due_flows(wanted), modes, self.due_issue(wanted)]
+            .into_iter()
+            .flatten()
+            .collect()
+    }
+
+    fn due_there(&self, wanted: &Wanted) -> Option<Check> {
+        let asks = self.project.is_some() && wanted.tracker.is_some() && self.trackers == Asked::Unasked;
+        asks.then_some(Check::Trackers)
+    }
+
+    fn due_flows(&self, wanted: &Wanted) -> Option<Check> {
+        let asks = self.project.is_some() && wanted.flows && self.flows == Asked::Unasked;
+        asks.then_some(Check::Flows)
+    }
+
+    fn due_issue(&self, wanted: &Wanted) -> Option<Check> {
+        let source = wanted.tracker.as_deref()?;
+        let asks = self.project.is_some() && wanted.issue.is_some() && self.issue == Asked::Unasked;
+        let readable = self.trackers.read().is_some_and(|trackers| trackers.readable(source));
+        (asks && readable).then_some(Check::Issue)
     }
 
     pub(crate) fn asked(&mut self, check: Check) {
@@ -160,6 +203,8 @@ impl Checks {
             Check::Accounts => self.accounts = Asked::Asking,
             Check::Trackers => self.trackers = Asked::Asking,
             Check::Flows => self.flows = Asked::Asking,
+            Check::Modes => self.modes = Asked::Asking,
+            Check::Issue => self.issue = Asked::Asking,
         }
     }
 
@@ -168,6 +213,8 @@ impl Checks {
             Check::Accounts => self.accounts = read(answer),
             Check::Trackers => self.trackers = read(answer),
             Check::Flows => self.flows = answer.map_or_else(|why| Asked::Failed(clipped(&why)), |_| Asked::Read(())),
+            Check::Modes => self.modes = read(answer),
+            Check::Issue => self.issue = read(answer),
         }
     }
 
@@ -195,6 +242,8 @@ impl Checks {
             (self.accounts.asking(), Check::Accounts),
             (self.trackers.asking(), Check::Trackers),
             (self.flows.asking(), Check::Flows),
+            (self.modes.asking(), Check::Modes),
+            (self.issue.asking(), Check::Issue),
         ];
         asking.into_iter().filter(|(asking, _)| *asking).map(|(_, check)| check).collect()
     }
@@ -204,6 +253,8 @@ impl Checks {
             (self.accounts.failure(), Check::Accounts),
             (self.trackers.failure(), Check::Trackers),
             (self.flows.failure(), Check::Flows),
+            (self.modes.failure(), Check::Modes),
+            (self.issue.failure(), Check::Issue),
         ];
         failed.into_iter().filter_map(|(why, check)| Some((check, why?))).collect()
     }
@@ -254,6 +305,11 @@ pub(crate) struct Trackers {
 }
 
 impl Trackers {
+    fn readable(&self, source: &str) -> bool {
+        let states = [TrackerState::Connected, TrackerState::Failing];
+        self.sources.iter().any(|tracker| tracker.source == source && states.contains(&tracker.state))
+    }
+
     fn failing(&self, source: &str) -> bool {
         self.sources.iter().any(|tracker| tracker.source == source && tracker.state == TrackerState::Failing)
     }

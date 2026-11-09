@@ -16,13 +16,14 @@ use gpui::{
     Render, SharedString, Styled as _, Subscription, Svg, Window, div, px,
 };
 
+use crate::model::agent_settings::Agents;
 use crate::panels::{PanelKind, flows};
 use crate::store::{self, Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{self, Icon, TextField, TextFieldEvent, glass};
 
-use data::{Agents, Issue, Listed, SourceState, Sources, StartPlan, Who};
+use data::{Issue, Listed, SourceState, Sources, StartPlan, Who};
 use list::Rows;
 use page::Read;
 

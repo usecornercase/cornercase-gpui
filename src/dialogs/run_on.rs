@@ -9,15 +9,17 @@ use crate::cli::{self, Target};
 use crate::model::Spot;
 use crate::model::ThereId;
 use crate::model::accounts::pick::{AccountPick, AgentChoices};
+use crate::model::agent_settings::Agents;
 use crate::model::machines::THIS_COMPUTER;
 use crate::model::machines::run_on::checks::{AgentNote, Check, Checks, Hold, Wanted};
-use crate::model::machines::run_on::{NO_REMOTE, Offer, Starting, There};
+use crate::model::machines::run_on::issue::{IssueThere, follow};
+use crate::model::machines::run_on::{NO_REMOTE, Offer, Source, Starting, There};
 use crate::model::machines::seen::LoginTab;
 use crate::notify::tip;
 use crate::platform::paths;
 use crate::store::{self, Busy, StartThere, Store};
 use crate::theme::colours;
-use crate::ui::{self, Icon, Tone};
+use crate::ui::{self, Icon, TextField, Tone};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RunOnEvent {
@@ -98,6 +100,27 @@ impl RunOn {
         }
     }
 
+    pub(crate) fn modes_source(&self) -> Source<'_, Agents> {
+        match self.chosen {
+            Some(_) => Source::There(self.checks.modes.read()),
+            None => Source::Here,
+        }
+    }
+
+    pub(crate) fn issue_source(&self) -> Source<'_, IssueThere> {
+        match self.chosen {
+            Some(_) => Source::There(self.checks.issue.read()),
+            None => Source::Here,
+        }
+    }
+
+    pub(crate) fn issue_there(&self) -> Option<&IssueThere> {
+        match self.issue_source() {
+            Source::There(read) => read,
+            Source::Here => None,
+        }
+    }
+
     fn choose(&mut self, machine: Option<String>, cx: &mut Context<Self>) {
         let moved = self.chosen != machine;
         if !moved && machine.is_none() {
@@ -135,9 +158,15 @@ impl RunOn {
         self.checks.asked(check);
         let asked = (self.checks.generation(), reach.spot.map(|spot| spot.project));
         let busy = Busy::new(format!("run-on:{}:{check:?}", cx.entity_id()), check.doing(reach.machine));
-        store::run_on_busy(cx, busy, reach.target.clone(), check.args(reach.spot), move |this, result, cx| {
-            this.heard(check, asked, result.map_err(|e| cli::reason(&e)), cx);
-        });
+        store::run_on_busy(
+            cx,
+            busy,
+            reach.target.clone(),
+            check.args(reach.spot, &self.wanted),
+            move |this, result, cx| {
+                this.heard(check, asked, result.map_err(|e| cli::reason(&e)), cx);
+            },
+        );
     }
 
     fn heard(
@@ -154,6 +183,7 @@ impl RunOn {
         if check == Check::Flows {
             cx.emit(RunOnEvent::Flows(answer));
         }
+        self.ask_due(cx);
         cx.notify();
     }
 
@@ -304,6 +334,22 @@ impl Render for RunOn {
             div().flex().flex_col().gap(px(6.)).child(self.chips(blocked, cx)).children(self.notes(blocked, cx)),
         )
     }
+}
+
+pub(crate) fn follow_field(
+    field: &Entity<TextField>,
+    hint: String,
+    (was, now): (&str, String),
+    cx: &mut App,
+) -> String {
+    let fill = follow(&field.read(cx).text(), was, &now);
+    field.update(cx, |field, cx| {
+        field.set_placeholder(hint, cx);
+        if let Some(text) = fill {
+            field.set_text(text, cx);
+        }
+    });
+    now
 }
 
 pub(crate) fn accounts_of(run_on: &Entity<RunOn>, fields: Option<Div>, cx: &App) -> Option<Div> {

@@ -1,7 +1,8 @@
 use gpui::Context;
 
-use super::data::{self, Agents, Issue, Lists, People, ReadIssue, SourceInfo, Sources, Who};
+use super::data::{self, Issue, Lists, People, ReadIssue, SourceInfo, Sources, Who};
 use super::{IssuesPanel, ListKey, ListState, Tab, ask, first_line, page};
+use crate::model::agent_settings::Agents;
 use crate::store::args;
 
 impl IssuesPanel {

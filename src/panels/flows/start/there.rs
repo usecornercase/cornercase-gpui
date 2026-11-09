@@ -1,9 +1,9 @@
 use gpui::{App, AppContext as _, Context, Div, Entity, ParentElement as _, div};
 
 use super::StartFlow;
-use super::plan::IssueTask;
+use super::plan::{IssueTask, issue_hints};
 use crate::cli;
-use crate::dialogs::{RunOn, RunOnEvent, agent_line};
+use crate::dialogs::{RunOn, RunOnEvent, agent_line, follow_field};
 use crate::model::Spot;
 use crate::model::machines::run_on::checks::Wanted;
 use crate::model::machines::run_on::{Starting, There};
@@ -16,9 +16,14 @@ const NOT_LISTED: &str = "The flows there show once the machine has this project
 
 pub(super) fn run_on_of(issue: Option<&IssueTask>, project: Option<u64>, cx: &mut Context<StartFlow>) -> Entity<RunOn> {
     let tracker = issue.map(|issue| issue.source.clone());
-    let wanted = Wanted { accounts: true, accounts_hold: true, tracker, flows: true };
+    let issue = issue.map(|issue| issue.key.clone());
+    let wanted = Wanted { accounts: true, accounts_hold: true, tracker, flows: true, modes: false, issue };
     let run_on = cx.new(|cx| RunOn::new(project, wanted, cx));
-    cx.observe(&run_on, |_, _, cx| cx.notify()).detach();
+    cx.observe(&run_on, |this, _, cx| {
+        this.follow_there(cx);
+        cx.notify();
+    })
+    .detach();
     cx.subscribe(&run_on, |this, _, event, cx| this.run_on_event(event, cx)).detach();
     run_on
 }
@@ -45,6 +50,25 @@ impl StartFlow {
         if !self.on_machine(cx) {
             self.load(cx);
         }
+        self.follow_there(cx);
+    }
+
+    pub(super) fn shown_issue(&self, cx: &App) -> Option<IssueTask> {
+        let issue = self.issue.as_ref()?;
+        let run_on = self.run_on.read(cx);
+        Some(match run_on.machine() {
+            Some(_) => issue.there(run_on.issue_there()),
+            None => issue.clone(),
+        })
+    }
+
+    pub(super) fn follow_there(&mut self, cx: &mut Context<Self>) {
+        let Some(shown) = self.shown_issue(cx) else { return };
+        let (task_hint, branch_hint) = issue_hints(self.run_on.read(cx).machine());
+        let was = &self.prefill;
+        let task = follow_field(&self.fields.prompt, task_hint, (&was.0, shown.task()), cx);
+        let branch = follow_field(&self.fields.branch, branch_hint, (&was.1, shown.branch.clone()), cx);
+        self.prefill = (task, branch);
     }
 
     fn flows_there(&mut self, answer: &Result<String, String>) {

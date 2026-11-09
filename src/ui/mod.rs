@@ -434,18 +434,28 @@ pub(crate) fn icon_segment(
         .child(label.into())
 }
 
+fn resting_shape(id: impl Into<ElementId>, selected: bool) -> Stateful<Div> {
+    segment_shape(id).text_color(colours::faint()).when(selected, |d| d.bg(colours::selected()))
+}
+
+pub(crate) fn resting_segment(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    selected: bool,
+) -> Stateful<Div> {
+    resting_shape(id, selected).child(label.into())
+}
+
 pub(crate) fn resting_icon_segment(
     id: impl Into<ElementId>,
     glyph: Icon,
     label: impl Into<SharedString>,
     selected: bool,
 ) -> Stateful<Div> {
-    segment_shape(id)
+    resting_shape(id, selected)
         .flex()
         .items_center()
         .gap(px(6.))
-        .text_color(colours::faint())
-        .when(selected, |d| d.bg(colours::selected()))
         .child(icon(glyph, 14.).text_color(colours::faint()))
         .child(label.into())
 }

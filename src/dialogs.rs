@@ -29,7 +29,7 @@ pub(crate) use merge_check::merge_check;
 pub(crate) use pairing::{PairKey, pairing};
 pub(crate) use pull_request::{pull_request, pull_tag, shown_pull_request, stack_tag};
 pub(crate) use remote::{PathQuestion, ask_path, connect, ssh_hosts};
-pub(crate) use run_on::{Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts};
+pub(crate) use run_on::{Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts, follow_field};
 pub(crate) use shortcuts::shortcuts;
 
 pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> Div {
