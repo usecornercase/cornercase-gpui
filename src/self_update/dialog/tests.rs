@@ -15,15 +15,23 @@ fn asset() -> Asset {
 #[test]
 fn each_way_says_how_it_updates() {
     let replace = how(&Way::Replace { asset: asset() }, Os::Windows);
-    assert!(replace.contains("Restart window then opens it again"));
+    assert!(replace.contains("Restart opens it on the same tab"));
     let bundle = how(&Way::Download { url: "u".into(), why: Why::Bundle }, Os::Mac);
     assert!(bundle.contains("drag cornercase to Applications"));
     let folder = how(&Way::Download { url: "u".into(), why: Why::Folder(PathBuf::from("/opt/apps")) }, Os::Linux);
-    assert!(folder.contains("cannot write to /opt/apps") && folder.contains("in place of cornercase-gpui."));
+    assert!(
+        folder.contains("cornercase-gpui cannot write to /opt/apps") && folder.contains("in place of cornercase-gpui.")
+    );
+    let applications =
+        how(&Way::Download { url: "u".into(), why: Why::Folder(PathBuf::from("/Applications")) }, Os::Mac);
+    assert!(
+        applications.contains("cannot write to /Applications")
+            && applications.contains("drag cornercase to Applications")
+    );
     let none = how(&Way::Download { url: "u".into(), why: Why::NoDownload }, Os::Linux);
     assert!(none.contains("no download for this machine"));
     let command = how(&Way::Command("cargo install x".into()), Os::Linux);
-    assert_eq!(command, "This window was built from source. Update it with:\ncargo install x");
+    assert_eq!(command, "This copy was built from source. Update it with:\ncargo install x");
 }
 
 #[test]
@@ -40,7 +48,7 @@ fn the_status_follows_the_install() {
     assert_eq!(text(&InstallState::Running, None).as_deref(), Some("Downloading and installing…"));
     assert_eq!(
         text(&InstallState::Done("0.2.0".into()), None).as_deref(),
-        Some("cornercase-gpui 0.2.0 is installed. Restart the window to use it.")
+        Some("cornercase-gpui 0.2.0 is installed. Restart to use it.")
     );
     assert_eq!(text(&InstallState::Failed("no".into()), None).as_deref(), Some("no"));
     assert_eq!(text(&InstallState::Idle, Some("offline")).as_deref(), Some("The last check failed: offline"));
@@ -50,7 +58,7 @@ fn the_status_follows_the_install() {
 fn a_copy_already_on_disk_says_it_is_installed() {
     let found = found(Way::Command("c".into()), true);
     let said = status(&InstallState::Idle, &found, None).map(|(text, _)| text);
-    assert_eq!(said.as_deref(), Some("cornercase-gpui 0.2.0 is installed. Restart the window to use it."));
+    assert_eq!(said.as_deref(), Some("cornercase-gpui 0.2.0 is installed. Restart to use it."));
 }
 
 #[test]

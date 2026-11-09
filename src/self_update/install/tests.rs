@@ -35,10 +35,30 @@ fn a_downloaded_build_installs_itself_on_windows_and_linux() {
     }
 }
 
+fn app_exe() -> PathBuf {
+    PathBuf::from("/Applications/cornercase.app/Contents/MacOS/cornercase-gpui")
+}
+
 #[test]
-fn a_bundle_on_macos_offers_the_download() {
-    let Way::Download { url, why } = ways(true, (Os::Mac, "aarch64"), true) else { panic!("a download") };
+fn the_app_on_macos_installs_itself() {
+    let way =
+        way(true, (Os::Mac, "aarch64"), Some(&app_exe()), &latest(), |folder| folder == Path::new("/Applications"));
+    let Way::Replace { asset } = way else { panic!("an install") };
+    assert!(asset.name.ends_with("apple-darwin.dmg"));
+}
+
+#[test]
+fn an_app_in_a_folder_that_cannot_be_written_offers_the_download() {
+    let Way::Download { url, why } = way(true, (Os::Mac, "aarch64"), Some(&app_exe()), &latest(), |_| false) else {
+        panic!("a download")
+    };
     assert!(url.ends_with("apple-darwin.dmg"));
+    assert_eq!(why, Why::Folder(PathBuf::from("/Applications")));
+}
+
+#[test]
+fn a_mac_program_outside_the_app_offers_the_download() {
+    let Way::Download { why, .. } = ways(true, (Os::Mac, "aarch64"), true) else { panic!("a download") };
     assert_eq!(why, Why::Bundle);
 }
 
@@ -164,7 +184,7 @@ fn old_copies_beside_the_program_are_removed() {
     let (exe, _) = pair(scratch.path());
     fs::write(old_copy(&exe, 0), "x").expect("a file");
     fs::write(old_copy(&exe, 3), "x").expect("a file");
-    sweep(&exe);
+    sweep(Os::Linux, &exe);
     assert!(exe.exists() && !old_copy(&exe, 0).exists() && !old_copy(&exe, 3).exists());
 }
 
@@ -174,8 +194,39 @@ fn a_fresh_staging_folder_is_left_to_the_window_using_it() {
     let (exe, _) = pair(scratch.path());
     let stage = scratch.path().join(format!("{STAGE_PREFIX}1234"));
     fs::create_dir(&stage).expect("a folder");
-    sweep(&exe);
+    sweep(Os::Linux, &exe);
     assert!(stage.exists());
     assert!(is_stage(OsStr::new(".cornercase-gpui-update-1234")));
     assert!(!is_stage(OsStr::new("cornercase-gpui.exe")));
+}
+
+#[test]
+fn a_new_app_takes_the_old_ones_place_and_the_old_one_waits_aside() {
+    let scratch = Scratch::folder("apps").expect("a folder");
+    let (old, new, aside) =
+        (scratch.path().join("cornercase.app"), scratch.path().join("new.app"), scratch.path().join("aside"));
+    for (app, text) in [(&old, "old"), (&new, "new")] {
+        fs::create_dir(app).expect("a folder");
+        fs::write(app.join("Info.plist"), text).expect("a file");
+    }
+    replace(&new, &old, &aside).expect("replaced");
+    assert_eq!(fs::read_to_string(old.join("Info.plist")).expect("the new app"), "new");
+    assert_eq!(fs::read_to_string(aside.join("Info.plist")).expect("the old app"), "old");
+    assert!(!new.exists());
+}
+
+#[test]
+fn old_apps_beside_the_app_are_removed_once_their_window_has_quit() {
+    let scratch = Scratch::folder("sweep-apps").expect("a folder");
+    let app = scratch.path().join("cornercase.app");
+    let exe = app.join("Contents").join("MacOS").join("cornercase-gpui");
+    fs::create_dir_all(exe.parent().expect("a folder")).expect("folders");
+    fs::write(&exe, "x").expect("a file");
+    let (gone, running) =
+        (scratch.path().join(".cornercase-gpui-old-1-2"), scratch.path().join(".cornercase-gpui-old-7-2"));
+    for old in [&gone, &running] {
+        fs::create_dir_all(old.join("Contents")).expect("an old app");
+    }
+    sweep_with(Os::Mac, &exe, |pid| pid == 7);
+    assert!(!gone.exists() && running.exists() && exe.exists());
 }

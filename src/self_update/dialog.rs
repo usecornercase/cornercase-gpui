@@ -6,7 +6,7 @@ use gpui::{
 
 use super::install::{Way, Why, program_name};
 use super::release::Found;
-use super::{CURRENT, Updater};
+use super::{CURRENT, NAME, Updater};
 use crate::dialogs::frame;
 use crate::notify::{InstallState, update};
 use crate::platform::Os;
@@ -60,39 +60,45 @@ fn fallback(install: &InstallState, found: &Found) -> Option<String> {
 fn how(way: &Way, os: Os) -> String {
     match way {
         Way::Replace { .. } => {
-            "Installing replaces this window's program; Restart window then opens it again, and the terminals and agents keep running."
+            "Install puts the new version in place of this one, and Restart opens it on the same tab; \
+            the terminals and agents keep running."
                 .to_string()
         }
         Way::Download { why: Why::Bundle, .. } => "Open the download and drag cornercase to Applications, replacing \
             this one. macOS asks before it opens it, as it did the first time."
             .to_string(),
+        Way::Download { why: Why::Folder(folder), .. } if os == Os::Mac => format!(
+            "{NAME} cannot write to {}, so it cannot replace itself: open the download and drag cornercase to \
+             Applications, replacing this one.",
+            folder.display()
+        ),
         Way::Download { why: Why::Folder(folder), .. } => format!(
-            "This window cannot write to {}, so it cannot replace itself: download the new version and put it in \
-             place of {}.",
+            "{NAME} cannot write to {}, so it cannot replace itself: download the new version and put it in place \
+             of {}.",
             folder.display(),
             program_name(os)
         ),
-        Way::Download { why: Why::Unplaced, .. } => "This window cannot tell where its program is, so it cannot \
-            replace itself: download the new version."
-            .to_string(),
+        Way::Download { why: Why::Unplaced, .. } => {
+            format!("{NAME} cannot tell where its program is, so it cannot replace itself: download the new version.")
+        }
         Way::Download { why: Why::NoDownload, .. } => {
             "There is no download for this machine: see the release.".to_string()
         }
-        Way::Command(command) => {
-            let note = if os == Os::Windows {
-                "\nClose the window first: Windows does not let a running program be replaced."
-            } else {
-                ""
-            };
-            format!("This window was built from source. Update it with:\n{command}{note}")
-        }
+        Way::Command(command) => from_source(command, os),
     }
 }
 
-fn status(install: &InstallState, found: &Found, error: Option<&str>) -> Option<(String, Rgba)> {
-    let installed = |version: &str| {
-        (format!("cornercase-gpui {version} is installed. Restart the window to use it."), colours::done())
+fn from_source(command: &str, os: Os) -> String {
+    let note = if os == Os::Windows {
+        "\nClose the window first: Windows does not let a running program be replaced."
+    } else {
+        ""
     };
+    format!("This copy was built from source. Update it with:\n{command}{note}")
+}
+
+fn status(install: &InstallState, found: &Found, error: Option<&str>) -> Option<(String, Rgba)> {
+    let installed = |version: &str| (format!("{NAME} {version} is installed. Restart to use it."), colours::done());
     match install {
         InstallState::Running => Some(("Downloading and installing…".to_string(), colours::muted())),
         InstallState::Done(version) => Some(installed(version)),
@@ -113,7 +119,7 @@ impl Render for UpdateDialog {
         let Some(found) = updater.found.clone() else {
             return dialog.child(frame(
                 "No update",
-                ui::dim("This window runs the latest release."),
+                ui::dim(format!("{NAME} {CURRENT} is the latest release.")),
                 ui::button("close", "Close").on_click(|_: &ClickEvent, _, cx| close(cx)),
             ));
         };
@@ -124,11 +130,11 @@ impl Render for UpdateDialog {
             .flex()
             .flex_col()
             .gap(px(10.))
-            .child(ui::dim(format!("This window runs {CURRENT}. What changed since:")))
+            .child(ui::dim(format!("You run {NAME} {CURRENT}. What changed since:")))
             .child(update::release_notes(&found.release()))
             .when_some(how, |d, how| d.child(div().text_size(px(12.)).text_color(colours::muted()).child(how)))
             .when_some(done, |d, (text, colour)| d.child(div().text_size(px(12.)).text_color(colour).child(text)));
-        let title = format!("cornercase-gpui {} is out", found.latest.version);
+        let title = format!("{NAME} {} is out", found.latest.version);
         dialog.child(frame(
             title,
             body,
@@ -140,7 +146,7 @@ impl Render for UpdateDialog {
 fn buttons(updater: Entity<Updater>, act: Action, fallback: Option<String>, version: &str) -> impl IntoElement + use<> {
     let action = match act {
         Action::Busy => ui::busy_button("installing", "Installing…", ui::Tone::Primary),
-        Action::Restart => ui::danger_button("restart", "Restart window")
+        Action::Restart => ui::danger_button("restart", format!("Restart {NAME}"))
             .on_click(move |_: &ClickEvent, _, cx| updater.update(cx, Updater::restart)),
         Action::Install => ui::primary_button("install", format!("Install {version}"))
             .on_click(move |_: &ClickEvent, _, cx| updater.update(cx, Updater::install)),

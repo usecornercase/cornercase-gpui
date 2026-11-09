@@ -13,7 +13,7 @@ use gpui::{
     div, px,
 };
 
-use crate::cli::Stream;
+use crate::cli::{self, Stream, Version};
 use crate::desktop;
 use crate::model::Session;
 use crate::platform::Os;
@@ -27,6 +27,7 @@ const FLASH: Duration = Duration::from_millis(160);
 const BELL_TOAST_EVERY: Duration = Duration::from_secs(30);
 const SOUND_EVERY: Duration = Duration::from_secs(1);
 const RETRY: Duration = Duration::from_secs(3);
+const DISK_EVERY: Duration = Duration::from_secs(20);
 
 #[derive(Clone, PartialEq)]
 pub(crate) enum InstallState {
@@ -52,12 +53,31 @@ pub(crate) struct Notifier {
     flashing: bool,
     pub install: InstallState,
     restart: Option<Stream>,
+    disk: OnDisk,
+}
+
+#[derive(Default)]
+struct OnDisk {
+    version: Option<Version>,
+    reading: bool,
 }
 
 impl Notifier {
     pub(crate) fn new(store: Entity<Store>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         cx.observe(&store, |this, _, cx| this.store_changed(cx)).detach();
-        cx.observe_window_activation(window, |this, window, _| this.active = window.is_window_active()).detach();
+        cx.observe_window_activation(window, |this, window, cx| {
+            this.active = window.is_window_active();
+            if this.active {
+                this.read_disk(cx);
+            }
+        })
+        .detach();
+        cx.spawn(async move |this, cx| {
+            while this.update(cx, Self::read_disk).is_ok() {
+                cx.background_executor().timer(DISK_EVERY).await;
+            }
+        })
+        .detach();
         Self {
             store,
             events: None,
@@ -74,6 +94,7 @@ impl Notifier {
             flashing: false,
             install: InstallState::Idle,
             restart: None,
+            disk: OnDisk::default(),
         }
     }
 
@@ -89,6 +110,7 @@ impl Notifier {
         if let Some(app) = app {
             self.app = app;
             self.app_key = app_key;
+            self.read_disk(cx);
             cx.notify();
         }
         if boot.is_some() && boot != self.boot {
@@ -274,11 +296,31 @@ impl Notifier {
     }
 
     pub(crate) fn installed_version(&self) -> Option<String> {
-        if let InstallState::Done(v) = &self.install {
-            Some(v.clone())
-        } else {
-            let update = self.app.update.as_ref()?;
-            update.installed.then(|| update.release.as_ref().map(|r| r.version.clone())).flatten()
+        update::installed(&self.install, self.app.update.as_ref(), self.disk.version)
+    }
+
+    fn read_disk(&mut self, cx: &mut Context<Self>) {
+        let offered = self.app.update.as_ref().is_some_and(|u| u.release.is_some() && !u.installed);
+        if !offered || cli::host().is_some() {
+            self.disk.version = None;
+            return;
+        }
+        if std::mem::replace(&mut self.disk.reading, true) {
+            return;
+        }
+        let read = cx.background_spawn(async { cli::installed_version() });
+        cx.spawn(async move |this, cx| {
+            let version = read.await;
+            let _ = this.update(cx, |this, cx| this.disk_read(version, cx));
+        })
+        .detach();
+    }
+
+    fn disk_read(&mut self, version: Option<Version>, cx: &mut Context<Self>) {
+        self.disk.reading = false;
+        if self.disk.version != version {
+            self.disk.version = version;
+            cx.notify();
         }
     }
 
@@ -318,39 +360,28 @@ impl Notifier {
     }
 
     fn update_item(&self, this: &Entity<Self>) -> Option<AnyElement> {
+        let state =
+            update::Chip::of(self.restart.is_some(), self.installed_version(), self.app.release(), &self.install)?;
         let n = this.clone();
-        if self.restart.is_some() {
-            return Some(
-                chip("restart-pending", "↻ restart pending", dot(Some(colours::working())), colours::working())
-                    .tooltip(tip("Restarts once no agent is in the middle of a turn. Click to cancel."))
-                    .on_click(move |_: &ClickEvent, _, cx| n.update(cx, Notifier::cancel_restart))
-                    .into_any_element(),
-            );
-        }
-        if let Some(version) = self.installed_version() {
-            return Some(
-                chip("restart", format!("↻ restart for {version}"), None, colours::accent())
-                    .tooltip(tip(format!(
-                        "cornercase {version} is installed; the server runs the old one until it restarts."
-                    )))
-                    .on_click(move |_: &ClickEvent, window, cx| update::show_restart(n.clone(), window, cx))
-                    .into_any_element(),
-            );
-        }
-        let release = self.app.release()?;
-        let (label, lead) = match self.install {
-            InstallState::Running => (
-                format!("installing {}…", release.version),
+        let (id, lead, text) = match state {
+            update::Chip::Pending => ("restart-pending", dot(Some(colours::working())), colours::working()),
+            update::Chip::Restart(_) => ("restart", None, colours::accent()),
+            update::Chip::Installing(_) => (
+                "update",
                 Some(ui::spinner("installing", 10., colours::accent()).into_any_element()),
+                colours::accent(),
             ),
-            _ => (format!("↑ {}", release.version), None),
+            update::Chip::Found(_) => ("update", None, colours::accent()),
         };
-        Some(
-            chip("update", label, lead, colours::accent())
-                .tooltip(tip(format!("cornercase {} is out: see what changed", release.version)))
-                .on_click(move |_: &ClickEvent, window, cx| update::show_update(n.clone(), window, cx))
-                .into_any_element(),
-        )
+        let item = chip(id, state.label(), lead, text).tooltip(tip(state.tip()));
+        let item = match state {
+            update::Chip::Pending => item.on_click(move |_: &ClickEvent, _, cx| n.update(cx, Notifier::cancel_restart)),
+            update::Chip::Restart(_) => {
+                item.on_click(move |_: &ClickEvent, window, cx| update::show_restart(n.clone(), window, cx))
+            }
+            _ => item.on_click(move |_: &ClickEvent, window, cx| update::show_update(n.clone(), window, cx)),
+        };
+        Some(item.into_any_element())
     }
 
     fn away_item(&self) -> Option<AnyElement> {

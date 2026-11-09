@@ -16,10 +16,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, anyhow, bail};
-use locate::{Inputs, System};
+use locate::{Inputs, Probe as _, System};
 use parking_lot::Mutex;
 
-#[cfg(test)]
 pub(crate) use locate::parse_version;
 pub(crate) use locate::{Binary, INSTALL_GUIDE, MINIMUM, Missing, Origin, Problem, Version};
 pub(crate) use partial::{run_partial, run_partial_on, run_printed};
@@ -153,6 +152,12 @@ pub(crate) fn ensure_binary(chosen: Option<String>) -> Result<(), Missing> {
     }
     use_binary(locate::locate(&Inputs::here(chosen), &System::here())?);
     Ok(())
+}
+
+pub(crate) fn installed_version() -> Option<Version> {
+    let binary = binary();
+    let lines = System::here().version(&binary.path, binary.path_env.as_deref()).ok()?;
+    parse_version(lines.first()?)
 }
 
 pub(crate) fn check_chosen(path: std::path::PathBuf) -> Result<Binary, Missing> {
