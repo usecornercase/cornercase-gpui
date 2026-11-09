@@ -3,6 +3,12 @@ use crate::theme::current::Presets;
 use crate::theme::resolve::resolve;
 
 #[test]
+fn the_built_in_fallback_is_cornercase_dark_and_resolves() {
+    assert_eq!(crate::theme::current::fallback().id, crate::theme::resolve::ROOT);
+    assert!(is_preset(crate::theme::resolve::ROOT));
+}
+
+#[test]
 fn every_preset_resolves_without_warnings() {
     for (id, _) in PRESETS {
         let resolved = resolve(id, &Presets).expect(id);

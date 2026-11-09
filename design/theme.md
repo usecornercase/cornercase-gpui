@@ -61,7 +61,8 @@ Cornercase dark (the root, today's colours exactly), cornercase light, Tokyo Nig
 - **The picker** (`ui/colour_picker.rs`): gpui gradients have two stops, so the hue strip is six segments side by side and the square is a white-to-hue gradient under a transparent-to-black one, which matches HSV exactly since gpui blends in the colours' own space. Drags use `on_drag` and `on_drag_move` with one drag type per part; the bounds come from `ui/track.rs`, which a canvas fills on every frame, because a mouse-down handler has none.
 - **Sliders** (`ui/slider.rs`) carry the slider's key in the drag value, so a drag moves only its own.
 - Global search lists the page as one row when every word matches its words, a preset's name or a token's label, before cornercase's settings and even when `config search` fails.
-- Local file reads and writes are small and run on the main thread, not as jobs.
+- Local file reads and writes (save, import, export) are small and run on the main thread, not as jobs (`store::run_busy`); the exception is recorded because an import from a slow or network path would block the window for that long, which no one asked to avoid yet.
+- The palette given to cornercase is forgotten when the server is started again (`Root::given`), so a restarted or reconnected server gets it at the next change as well as through `start-server --theme -`.
 - Not in Export and Import (`design/settings.md`): the setup is cornercase's; a theme is a file.
 
 ## Contrast

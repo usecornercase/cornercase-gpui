@@ -5,6 +5,27 @@ use crate::appearance::{self, Appearance};
 use crate::store::{ToastKind, args};
 use crate::theme;
 
+#[derive(Default)]
+pub(super) struct Given(Option<String>);
+
+impl Given {
+    pub(super) fn of(json: String) -> Given {
+        Given(Some(json))
+    }
+
+    pub(super) fn needs(&self, json: &str) -> bool {
+        self.0.as_deref() != Some(json)
+    }
+
+    pub(super) fn gave(&mut self, json: String) {
+        self.0 = Some(json);
+    }
+
+    pub(super) fn forget(&mut self) {
+        self.0 = None;
+    }
+}
+
 impl Root {
     pub(super) fn follow_appearance(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let appearance = Appearance::get(cx);
@@ -33,14 +54,14 @@ impl Root {
 
     fn give_palette(&mut self) {
         let json = theme::terminal_json();
-        if self.given_palette.as_deref() == Some(json.as_str()) {
+        if !self.given.needs(&json) {
             return;
         }
         self.own.queue.cmd_with_stdin(args(&["theme", "-"]), json.clone().into_bytes());
         if let Some(tab) = self.machine.as_ref().filter(|tab| tab.themed) {
             tab.conn.queue.cmd_with_stdin(args(&["theme", "-"]), json.clone().into_bytes());
         }
-        self.given_palette = Some(json);
+        self.given.gave(json);
     }
 
     pub(super) fn sheet_or_peek(
@@ -59,3 +80,6 @@ impl Root {
         frame::round(layer, window_frame).into_any_element()
     }
 }
+
+#[cfg(test)]
+mod tests;

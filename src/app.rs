@@ -130,7 +130,7 @@ pub(crate) struct Root {
     pub(crate) dock_focus: FocusHandle,
     beat: Rc<motion::Beat>,
     pub(crate) counting: Counting,
-    given_palette: Option<String>,
+    given: looks::Given,
     palette_settled: u64,
 }
 
@@ -329,7 +329,7 @@ impl Root {
             dock_focus,
             beat: Rc::default(),
             counting: Counting::default(),
-            given_palette: Some(theme::terminal_json()),
+            given: looks::Given::of(theme::terminal_json()),
             palette_settled: 0,
         }
     }
@@ -416,6 +416,7 @@ impl Root {
 
     fn handle(&mut self, msg: Msg, cx: &mut Context<Self>) {
         if matches!(msg, Msg::Started(_)) {
+            self.given.forget();
             plugins::follow_window_processes(cx);
         }
         match msg {
