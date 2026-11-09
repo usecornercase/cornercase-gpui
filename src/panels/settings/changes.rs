@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Context as _;
 use gpui::{AppContext as _, ClipboardItem, Context, Window};
 
-use super::data::{self, Connection, ConnectionKind, Kind, Script};
+use super::data::{self, Connection, ConnectionKind, Kind, Script, Setting};
 use super::{Role, SettingsPanel, links};
 use crate::cli;
 use crate::dialogs::{self, Question};
@@ -69,6 +69,10 @@ impl SettingsPanel {
 
     pub(super) fn choose(&mut self, key: String, value: String, window: &mut Window, cx: &mut Context<Self>) {
         self.choice = None;
+        if self.setting(&key).is_some_and(Setting::suggests) {
+            self.take_suggestion(&key, &value, window, cx);
+            return;
+        }
         let note = self.setting(&key).and_then(|s| s.choice(&value)).filter(|c| c.dangerous).map(|c| c.note.clone());
         let Some(note) = note else {
             self.save(&key, &value, cx);

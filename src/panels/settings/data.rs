@@ -167,7 +167,40 @@ impl Setting {
     }
 
     pub(super) fn as_segments(&self) -> bool {
-        self.choices.len() <= 4 && self.choices.iter().all(|c| c.value.chars().count() <= 18 && !c.dangerous)
+        self.kind == Kind::Choice
+            && self.choices.len() <= 4
+            && self.choices.iter().all(|c| c.value.chars().count() <= 18 && !c.dangerous)
+    }
+
+    pub(super) fn suggests(&self) -> bool {
+        self.edited_as_text() && !self.choices.is_empty()
+    }
+
+    pub(super) fn offered(&self) -> Vec<Choice> {
+        if !self.suggests() {
+            return self.choices.clone();
+        }
+        let default = value_text(&self.default);
+        let first = Choice { value: default.clone(), ..Choice::default() };
+        let rest = self.choices.iter().filter(|c| c.value != default).cloned();
+        std::iter::once(first).chain(rest).collect()
+    }
+
+    pub(super) fn offered_label(&self, choice: &Choice) -> String {
+        match (self.suggests(), choice.value.is_empty()) {
+            (false, _) => spoken(&choice.value),
+            (true, true) => "default".to_string(),
+            (true, false) => choice.value.clone(),
+        }
+    }
+
+    pub(super) fn in_use(&self) -> Option<usize> {
+        let text = self.text();
+        self.offered().iter().position(|c| c.value == text)
+    }
+
+    pub(super) fn warns(&self) -> bool {
+        self.dangerous && !self.note.is_empty()
     }
 
     pub(super) fn choice(&self, value: &str) -> Option<&Choice> {
@@ -203,6 +236,13 @@ pub(super) fn placeholder(setting: &Setting) -> String {
         (true, false) => setting.shown.clone(),
         (false, _) => setting.label.clone(),
     }
+}
+
+pub(super) fn reset_hint(setting: &Setting) -> String {
+    if setting.suggests() && value_text(&setting.default).is_empty() {
+        return format!("Back to the default {}", setting.label);
+    }
+    format!("Back to the default: {}", default_shown(setting))
 }
 
 pub(super) fn default_shown(setting: &Setting) -> String {

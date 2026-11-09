@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.38
+
+- **Choose the shell new panes start.** With cornercase 0.13.21 or newer, Settings › UI › shell lists the shells found on the computer cornercase runs on: open the list with its arrow or ↓, and choosing one saves it. Or type any program (a full path, one starting with `~/`, or a name on the `PATH`) and press Enter; cornercase says why when it cannot use it. `default` brings back your usual shell. Shell arguments takes options such as `-l` or `--login`, and changing the shell clears them. New tabs, splits and workspaces start it; panes already open keep theirs.
+- **A setting cornercase warns about shows in red**, with its note: a chosen shell that can no longer start (new panes start the default meanwhile), an issue branch template GitLab will not close issues from, or a prefix key that clashes.
+
 ## 0.1.37
 
 - **Update notes read as formatted text.** The update dialogs, for cornercase and for this app, now show what changed with its bold, `code`, links, lists and headings, as cornercase's own window does, instead of the raw Markdown with its `**` and backticks. A link in the notes opens in the browser.

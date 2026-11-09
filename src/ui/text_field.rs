@@ -1,4 +1,5 @@
 use std::ops::{Range, RangeInclusive};
+use std::rc::Rc;
 
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, Div, EntityInputHandler, EventEmitter, FocusHandle, Focusable,
@@ -67,6 +68,8 @@ pub(crate) struct TextField {
 
 const LINES_CONTEXT: &str = "TextField Multiline";
 
+type DownHook = Rc<dyn Fn(&mut Window, &mut App) -> bool>;
+
 #[derive(Default)]
 struct Options {
     masked: bool,
@@ -74,6 +77,7 @@ struct Options {
     wraps: bool,
     rows: Option<RangeInclusive<usize>>,
     scroller: Option<ScrollHandle>,
+    on_down: Option<DownHook>,
 }
 
 #[derive(Default)]
@@ -601,6 +605,11 @@ impl TextField {
         self
     }
 
+    pub(crate) fn on_down(mut self, hook: impl Fn(&mut Window, &mut App) -> bool + 'static) -> Self {
+        self.options.on_down = Some(Rc::new(hook));
+        self
+    }
+
     pub(crate) fn in_tab_order(mut self) -> Self {
         self.focus_handle = self.focus_handle.tab_stop(true);
         self
@@ -634,6 +643,14 @@ impl TextField {
 
     pub(crate) fn edited(&self) -> bool {
         self.saved.as_ref().is_some_and(|saved| *saved != self.content)
+    }
+
+    pub(crate) fn set_placeholder(&mut self, text: impl Into<SharedString>, cx: &mut Context<Self>) {
+        let text = text.into();
+        if self.placeholder != text {
+            self.placeholder = text;
+            cx.notify();
+        }
     }
 
     pub(crate) fn keep_saved(&mut self, text: impl Into<SharedString>, cx: &mut Context<Self>) {
@@ -716,7 +733,7 @@ impl TextField {
     fn line_keys(root: Div, cx: &mut Context<Self>) -> Div {
         root.on_action(cx.listener(|this, _: &NewLine, window, cx| this.replace_text_in_range(None, "\n", window, cx)))
             .on_action(cx.listener(|this, _: &Up, _, cx| this.step_row(true, false, cx)))
-            .on_action(cx.listener(|this, _: &Down, _, cx| this.step_row(false, false, cx)))
+            .on_action(cx.listener(Self::down))
             .on_action(cx.listener(|this, _: &SelectUp, _, cx| this.step_row(true, true, cx)))
             .on_action(cx.listener(|this, _: &SelectDown, _, cx| this.step_row(false, true, cx)))
             .on_action(cx.listener(Self::select_home))
@@ -741,6 +758,13 @@ impl TextField {
         let layout = self.last_layout.as_ref().filter(|_| !self.content.is_empty())?;
         let row = layout.rows.get(layout.rows.row_of(self.cursor_offset()))?;
         Some((row.start, row.last_caret(&self.content)))
+    }
+
+    fn down(&mut self, _: &Down, window: &mut Window, cx: &mut Context<Self>) {
+        let taken = self.options.on_down.clone().is_some_and(|hook| hook(window, cx));
+        if !taken {
+            self.step_row(false, false, cx);
+        }
     }
 
     fn step_row(&mut self, up: bool, select: bool, cx: &mut Context<Self>) {

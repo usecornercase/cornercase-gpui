@@ -12,19 +12,21 @@ use crate::ui::{self, Icon};
 pub(super) struct Look {
     pub width: f32,
     pub mono: bool,
+    pub suggests: bool,
+    pub warn: bool,
 }
 
 impl Look {
-    pub(super) const SCRIPT: Look = Look { width: 300., mono: true };
-    pub(super) const ARGUMENTS: Look = Look { width: 230., mono: true };
+    pub(super) const SCRIPT: Look = Look { width: 300., mono: true, suggests: false, warn: false };
+    pub(super) const ARGUMENTS: Look = Look { width: 230., mono: true, suggests: false, warn: false };
 
-    fn of(kind: Kind) -> Self {
-        let width = match kind {
+    fn of(setting: &Setting) -> Self {
+        let width = match setting.kind {
             Kind::Number => 84.,
             Kind::Key => 170.,
             _ => 300.,
         };
-        Self { width, mono: false }
+        Self { width, mono: false, suggests: setting.suggests(), warn: setting.dangerous }
     }
 }
 
@@ -54,7 +56,8 @@ impl SettingsPanel {
 
     fn text_setting(&self, setting: &Setting, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let role = Role::Setting(setting.key.clone());
-        let field = self.render_text(&role, Look::of(setting.kind), window, cx);
+        let field = self.render_text(&role, Look::of(setting), window, cx);
+        let field = if setting.suggests() { self.suggested(setting, field, cx) } else { field };
         let Some(unit) = setting.unit() else { return field.into_any_element() };
         div()
             .flex()
@@ -106,9 +109,13 @@ impl SettingsPanel {
     pub(super) fn render_text(&self, role: &Role, look: Look, window: &Window, cx: &mut Context<Self>) -> Div {
         let Some(field) = self.fields.get(role) else { return div() };
         let focused = field.read(cx).focus_handle(cx).is_focused(window);
+        let open = self.choice.as_ref().is_some_and(|c| matches!(role, Role::Setting(key) if *key == c.key));
         let tail = self.field_tail(role, cx);
+        let opener = look.suggests.then(|| self.suggestions_opener(role, cx)).flatten();
         let inner = div().flex().items_center().gap(px(4.)).child(div().flex_1().min_w_0().child(field.clone()));
-        ui::input_box(inner.children(tail), focused)
+        ui::input_box(inner.children(tail).children(opener), focused)
+            .when(open, |d| d.border_color(colours::accent()))
+            .when(look.warn && !focused && !open, |d| d.border_color(ui::menu::edge(false, true)))
             .w(px(look.width))
             .py(px(5.))
             .overflow_hidden()

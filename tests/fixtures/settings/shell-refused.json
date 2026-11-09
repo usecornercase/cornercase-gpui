@@ -1,0 +1,102 @@
+{
+ "revision": 11,
+ "path": "/home/me/.config/cornercase/config.json",
+ "problem": null,
+ "settings": [
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "dim_inactive_panes",
+   "label": "inactive panes",
+   "note": "in a split tab",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] dimmed",
+   "type": "switch",
+   "value": true
+  },
+  {
+   "choices": [
+    {
+     "dangerous": false,
+     "note": "bash",
+     "value": "/bin/bash"
+    },
+    {
+     "dangerous": false,
+     "note": "csh",
+     "value": "/bin/csh"
+    },
+    {
+     "dangerous": false,
+     "note": "dash",
+     "value": "/bin/dash"
+    },
+    {
+     "dangerous": false,
+     "note": "ksh",
+     "value": "/bin/ksh"
+    },
+    {
+     "dangerous": false,
+     "note": "sh",
+     "value": "/bin/sh"
+    },
+    {
+     "dangerous": false,
+     "note": "tcsh",
+     "value": "/bin/tcsh"
+    },
+    {
+     "dangerous": false,
+     "note": "zsh",
+     "value": "/bin/zsh"
+    }
+   ],
+   "dangerous": true,
+   "default": "",
+   "field": "the shell new panes start: a full path, one starting with ~/, or a name on the PATH (empty is the default)",
+   "key": "shell",
+   "label": "shell",
+   "note": "cannot start: there is no program there; new panes start zsh",
+   "page": "UI",
+   "question": "Which shell should new panes start?",
+   "restart": false,
+   "section": "",
+   "shown": "/usr/local/bin/fish",
+   "type": "text",
+   "value": "/usr/local/bin/fish"
+  },
+  {
+   "dangerous": false,
+   "default": "",
+   "field": "arguments of the shell, such as -NoLogo or --login; quote a word with a space or a \\ in single quotes (empty: none)",
+   "key": "shell.args",
+   "label": "shell arguments",
+   "note": "given to the shell when a pane starts, such as -NoLogo or --login",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "none",
+   "type": "text",
+   "value": ""
+  },
+  {
+   "dangerous": false,
+   "default": true,
+   "key": "model",
+   "label": "model",
+   "note": "under an agent's tab, such as Opus 5.5",
+   "page": "UI",
+   "restart": false,
+   "section": "",
+   "shown": "[x] shown",
+   "type": "switch",
+   "value": true
+  }
+ ],
+ "connections": [],
+ "projects": [],
+ "notices": []
+}
