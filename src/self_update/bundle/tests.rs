@@ -82,6 +82,14 @@ fn an_old_app_is_kept_while_its_window_runs() {
     assert!(!is_free_old(OsStr::new("cornercase.app"), |_| false));
 }
 
+#[test]
+fn only_a_pid_ps_does_not_find_counts_as_gone() {
+    assert!(gone(Some(1)));
+    for code in [Some(0), Some(2), None] {
+        assert!(!gone(code), "{code:?}");
+    }
+}
+
 struct Fake {
     signed: bool,
     done: RefCell<Vec<&'static str>>,

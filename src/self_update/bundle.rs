@@ -16,7 +16,8 @@ const HDIUTIL: &str = "/usr/bin/hdiutil";
 const DITTO: &str = "/usr/bin/ditto";
 const CODESIGN: &str = "/usr/bin/codesign";
 const OPEN: &str = "/usr/bin/open";
-const KILL: &str = "/bin/kill";
+const PS: &str = "/bin/ps";
+const NO_SUCH_PROCESS: i32 = 1;
 const REOPEN: &str =
     r#"pid=$1 app=$2; shift 2; while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done; exec "$0" -n "$app" --args "$@""#;
 
@@ -43,9 +44,13 @@ pub(crate) fn is_free_old(file_name: &OsStr, alive: impl Fn(u32) -> bool) -> boo
 }
 
 pub(crate) fn alive(pid: u32) -> bool {
-    let mut cmd = platform::command(KILL);
-    cmd.args(["-0", &pid.to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
-    cmd.status().is_ok_and(|status| status.success())
+    let mut cmd = platform::command(PS);
+    cmd.args(["-p", &pid.to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    !gone(cmd.status().ok().and_then(|status| status.code()))
+}
+
+pub(crate) fn gone(ps_code: Option<i32>) -> bool {
+    ps_code == Some(NO_SUCH_PROCESS)
 }
 
 pub(super) trait Steps {
