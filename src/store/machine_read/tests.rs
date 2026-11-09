@@ -25,10 +25,16 @@ fn listed() -> Vec<Machine> {
 }
 
 fn read(state: LinkState, window: &Target) -> MachineRead {
-    let seen = seen(state);
-    let ws = seen.workspace(ThereId::heard(7)).expect("a workspace");
-    read_of(&MachinePlace::at(&seen, ws, None), &seen, window, &listed(), Some("/home/ana"))
+    read_seen(&seen(state), window)
 }
+
+fn read_seen(seen: &MachineSeen, window: &Target) -> MachineRead {
+    let ws = seen.workspace(ThereId::heard(7)).expect("a workspace");
+    read_of(&MachinePlace::at(seen, ws, None), seen, window, &listed(), Some("/home/ana"))
+}
+
+const TRIES_AT: &str = "1970-01-01T00:16:44.139Z";
+const NOW: i64 = 1_000;
 
 fn other_server() -> Target {
     Target::Remote(Remote::new("devbox", "").expect("a destination"))
@@ -123,4 +129,15 @@ fn a_machine_gone_from_the_list_has_no_destination() {
     let ws = seen.workspace(ThereId::heard(7)).expect("a workspace");
     let read = read_of(&MachinePlace::at(&seen, ws, None), &seen, &Target::Local, &[], None);
     assert_eq!(read.destination, "");
+}
+
+#[test]
+fn a_read_of_a_link_that_fell_says_when_it_tries_next() {
+    let fell = MachineSeen { retry_at: Some(TRIES_AT.into()), ..seen(LinkState::Unreachable) };
+    assert_eq!(read_seen(&fell, &Target::Local).next_try(NOW), Some(NextTry::In(4)));
+}
+
+#[test]
+fn a_read_of_a_linked_machine_promises_no_try() {
+    assert_eq!(read(LinkState::Linked, &Target::Local).next_try(NOW), None);
 }

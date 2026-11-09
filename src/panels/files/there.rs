@@ -225,7 +225,7 @@ impl FilesPanel {
     }
 
     pub(super) fn machine_strip(&self) -> Option<Div> {
-        self.machine.as_ref().map(|read| on_machine::strip(read, &self.retry))
+        self.machine.as_ref().map(|read| on_machine::strip(read, &self.retry, &self.counting))
     }
 
     pub(super) fn no_place_note(&self) -> String {

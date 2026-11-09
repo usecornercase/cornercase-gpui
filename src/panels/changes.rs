@@ -24,6 +24,7 @@ use crate::cli::Stream;
 use crate::model::{Aim, Session};
 use crate::panels::on_machine;
 use crate::store::{MachineRead, Store};
+use crate::ui::counting::Counting;
 use crate::ui::selection::Selecting;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{TextField, TextFieldEvent};
@@ -141,6 +142,7 @@ pub(crate) struct ChangesPanel {
     diff_list: ListState,
     wraps: bool,
     files_height: Split,
+    counting: Counting,
     filter: Entity<TextField>,
     files_scroll: ScrollHandle,
 }
@@ -169,6 +171,7 @@ impl ChangesPanel {
             diff_list: ListState::new(0, ListAlignment::Top, px(400.)),
             wraps: true,
             files_height: FILES,
+            counting: Counting::default(),
             filter,
             files_scroll: ScrollHandle::new(),
         };
@@ -226,6 +229,10 @@ fn files_box(selected: bool, height: Option<f32>) -> Div {
     frame.flex().flex_col()
 }
 
+fn counting(panel: &mut ChangesPanel) -> &mut Counting {
+    &mut panel.counting
+}
+
 fn files_height(panel: &mut ChangesPanel) -> &mut Split {
     &mut panel.files_height
 }
@@ -250,15 +257,17 @@ impl Render for ChangesPanel {
         self.follow_wrap(cx);
         let session = Store::get(cx).read(cx).session.clone();
         let session = session.as_ref();
-        div()
+        let panel = div()
             .size_full()
             .flex()
             .flex_col()
             .text_size(px(12.))
-            .children(self.machine_shown().map(|read| on_machine::strip(read, &self.hearing.retry)))
+            .children(self.machine_shown().map(|read| on_machine::strip(read, &self.hearing.retry, &self.counting)))
             .child(self.render_header(session, window, cx))
             .child(self.render_body(session, cx))
-            .child(self.render_footer())
+            .child(self.render_footer());
+        self.counting.keep(counting, cx);
+        panel
     }
 }
 

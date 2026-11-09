@@ -42,7 +42,6 @@ mod selection;
 mod steps;
 
 pub(crate) use links::Pointer;
-pub(crate) use machine_card::Counting;
 use pane_accounts::PaneChips;
 use pane_notes::PaneNotes;
 use popup::Popup;

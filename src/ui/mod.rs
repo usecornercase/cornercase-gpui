@@ -1,6 +1,7 @@
 pub(crate) mod account_picker;
 pub(crate) mod brand;
 pub(crate) mod colour_picker;
+pub(crate) mod counting;
 pub(crate) mod file_icons;
 pub(crate) mod glass;
 pub(crate) mod icons;
