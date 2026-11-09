@@ -186,10 +186,6 @@ pub(crate) fn ground(theme: &Theme, os: Os, backdrop: bool) -> Rgba {
     }
 }
 
-pub(crate) fn translucent_ground() -> bool {
-    colours::glass().a < 1.
-}
-
 pub(crate) fn over_ground(wanted: Rgba, ground: Rgba) -> Rgba {
     if ground.a >= 1. {
         return wanted;

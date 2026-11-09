@@ -170,3 +170,9 @@ fn a_row_below_the_view_comes_up_to_a_third_of_it() {
 fn a_row_above_the_view_comes_down_to_a_third_of_it() {
     assert!((offset_showing((0., 50.), (100., 700.), -500.) + 200.).abs() < f32::EPSILON);
 }
+
+#[test]
+fn landing_on_appearance_marks_nothing_and_says_nothing() {
+    let found = FoundSetting { title: "Appearance".into(), page: "Appearance".into(), ..FoundSetting::default() };
+    assert_eq!(spot(&described(), &found), Spot::default());
+}

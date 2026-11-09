@@ -174,6 +174,10 @@ impl Store {
             next_toast: 1,
             app_stream: None,
         });
+        Self::publish(store, cx)
+    }
+
+    fn publish(store: Entity<Store>, cx: &mut App) -> Entity<Store> {
         cx.set_global(GlobalStore(store.clone()));
         store.update(cx, |_, cx| detect_openers(cx));
         store

@@ -275,7 +275,7 @@ impl SearchPanel {
 
     fn name_rows(&mut self, names: Vec<Ranked>, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let first = names.len();
-        let found = self.settings.hits().to_vec();
+        let found = self.settings.hits();
         self.selected = self.selected.min((first + found.len()).saturating_sub(1));
         let selected = self.selected;
         let mut rows: Vec<AnyElement> =

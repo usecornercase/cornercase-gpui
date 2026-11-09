@@ -110,3 +110,21 @@ fn hits_of_another_query_are_stale_until_the_answer() {
     assert!(asked.waiting_for("soun"));
     assert!(!asked.waiting_for("sou"));
 }
+
+fn appearance_row() -> FoundSetting {
+    FoundSetting { title: "Appearance".into(), page: "Appearance".into(), ..FoundSetting::default() }
+}
+
+#[test]
+fn appearance_is_listed_for_its_words_before_cornercase_s_settings() {
+    let asked = Asked { own: vec![appearance_row()], hits: sound(), ..Asked::default() };
+    assert_eq!(asked.hits().len(), 5);
+    assert_eq!(asked.hits()[0], appearance_row());
+}
+
+#[test]
+fn appearance_stays_listed_when_config_search_fails() {
+    let failed = Asked { own: vec![appearance_row()], error: Some("the server is gone".into()), ..Asked::default() };
+    assert_eq!(failed.hits().len(), 1);
+    assert!(failed.failed());
+}

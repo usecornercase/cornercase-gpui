@@ -1,5 +1,6 @@
 pub(crate) mod account_picker;
 pub(crate) mod brand;
+pub(crate) mod colour_picker;
 pub(crate) mod file_icons;
 pub(crate) mod glass;
 pub(crate) mod icons;
@@ -10,8 +11,10 @@ pub(crate) mod one_line;
 pub(crate) mod qr;
 pub(crate) mod selection;
 pub(crate) mod signs;
+pub(crate) mod slider;
 pub(crate) mod split;
 pub(crate) mod text_field;
+pub(crate) mod track;
 
 use gpui::{
     AnimationElement, AnyElement, App, Div, ElementId, Entity, Focusable as _, FontWeight, Hsla,
@@ -473,4 +476,37 @@ pub(crate) fn emblem(glyph: Icon) -> Div {
         .border_1()
         .border_color(glass::tint(colours::brand_light(), 0.35))
         .child(icon(glyph, 24.).text_color(colours::accent()))
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "a handful of cells"
+)]
+pub(crate) fn checker(width: f32, height: f32, cell: f32) -> Div {
+    let light = Rgba { r: 0.85, g: 0.85, b: 0.85, a: 1. };
+    let dark = Rgba { r: 0.6, g: 0.6, b: 0.6, a: 1. };
+    let columns = (width / cell).ceil() as u32;
+    let rows = (height / cell).ceil() as u32;
+    let cells = (0..rows).flat_map(move |row| {
+        (0..columns).map(move |column| {
+            let ink = if (row + column) % 2 == 0 { light } else { dark };
+            div().absolute().left(px(column as f32 * cell)).top(px(row as f32 * cell)).size(px(cell)).bg(ink)
+        })
+    });
+    div().absolute().inset_0().overflow_hidden().children(cells)
+}
+
+pub(crate) fn swatch(colour: Rgba, size: f32) -> Div {
+    div()
+        .relative()
+        .size(px(size))
+        .flex_none()
+        .rounded(px(radius::chip()))
+        .overflow_hidden()
+        .border_1()
+        .border_color(colours::edge())
+        .child(checker(size, size, (size / 2.).max(3.)))
+        .child(div().absolute().inset_0().bg(colour))
 }

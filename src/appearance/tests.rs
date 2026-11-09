@@ -47,7 +47,7 @@ fn a_new_problem_is_noticed_once() {
     this.problem_changed(Some("themes/x.json: oops".to_string()));
     assert_eq!(this.take_notices().len(), 1);
     this.problem_changed(None);
-    assert!(this.take_notices().is_empty());
+    assert_eq!(this.take_notices(), Vec::<String>::new());
 }
 
 #[test]

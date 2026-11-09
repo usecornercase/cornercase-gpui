@@ -15,7 +15,7 @@ fn a_file_whose_time_or_size_moved_is_read_again() {
     let before = seen(&[("a", stamp(1, 10)), ("b", stamp(1, 10))]);
     let now = seen(&[("a", stamp(2, 10)), ("b", stamp(1, 11))]);
     assert_eq!(changed(&before, &now), vec![PathBuf::from("a"), PathBuf::from("b")]);
-    assert!(changed(&before, &before).is_empty());
+    assert_eq!(changed(&before, &before), Vec::<PathBuf>::new());
 }
 
 #[test]

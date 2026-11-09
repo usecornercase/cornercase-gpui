@@ -8,9 +8,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
-use gpui::{App, AppContext as _, Context, Entity, Global, Rgba, WindowAppearance};
-use serde_json::{Value, json};
+use anyhow::Result;
+use gpui::{App, AppContext as _, AsyncApp, Context, Entity, Global, WeakEntity, WindowAppearance};
 
 use crate::prefs;
 use crate::theme::colour::{hex, opaque};
@@ -63,6 +62,17 @@ pub(crate) struct Appearance {
     settled: u64,
     seen: watch::Seen,
     pending: BTreeMap<PathBuf, Option<String>>,
+}
+
+async fn watching(this: WeakEntity<Appearance>, cx: &mut AsyncApp, folder: PathBuf) {
+    loop {
+        cx.background_executor().timer(POLL).await;
+        let at = folder.clone();
+        let seen = cx.background_spawn(async move { watch::snapshot(&at) }).await;
+        if this.update(cx, |this, cx| this.poll(seen, cx)).is_err() {
+            return;
+        }
+    }
 }
 
 struct GlobalAppearance(Entity<Appearance>);
@@ -118,17 +128,7 @@ impl Appearance {
 
     fn watch(cx: &mut Context<Self>) {
         let folder = files::folder();
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor().timer(POLL).await;
-                let folder = folder.clone();
-                let seen = cx.background_spawn(async move { watch::snapshot(&folder) }).await;
-                if this.update(cx, |this, cx| this.poll(seen, cx)).is_err() {
-                    return;
-                }
-            }
-        })
-        .detach();
+        cx.spawn(async move |this, cx| watching(this, cx, folder).await).detach();
     }
 
     fn poll(&mut self, seen: watch::Seen, cx: &mut Context<Self>) {
@@ -137,8 +137,8 @@ impl Appearance {
         }
         let paths = watch::changed(&self.seen, &seen);
         self.seen = seen;
-        let touched = paths.iter().fold(false, |touched, path| self.reload(path) || touched);
-        if touched {
+        let touched: Vec<bool> = paths.iter().map(|path| self.reload(path)).collect();
+        if touched.contains(&true) {
             self.apply(cx);
         }
     }

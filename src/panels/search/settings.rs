@@ -3,7 +3,7 @@ use gpui::{AnyElement, App, ClickEvent, Context, Div, IntoElement as _, SharedSt
 use super::names::find;
 use super::{DEBOUNCE, SearchPanel, highlighted, labelled_chip};
 use crate::cli;
-use crate::panels::settings::{FoundSetting, parse_found, sheet_of};
+use crate::panels::settings::{FoundSetting, appearance_found, parse_found, sheet_of};
 use crate::store::{self, Store, args};
 use crate::theme::colours;
 use crate::ui::{self, Icon};
@@ -31,14 +31,15 @@ pub(super) struct Asked {
     generation: u64,
     answers: String,
     asking: bool,
+    own: Vec<FoundSetting>,
     hits: Vec<FoundSetting>,
     error: Option<String>,
     enter: bool,
 }
 
 impl Asked {
-    pub(super) fn hits(&self) -> &[FoundSetting] {
-        &self.hits
+    pub(super) fn hits(&self) -> Vec<FoundSetting> {
+        self.own.iter().chain(&self.hits).cloned().collect()
     }
 
     pub(super) fn asking(&self) -> bool {
@@ -62,9 +63,9 @@ impl Asked {
             return format!("{listing} · {error}");
         }
         if self.waiting_for(query) {
-            return if names == 0 { LOOKING.into() } else { listing };
+            return if names == 0 && self.own.is_empty() { LOOKING.into() } else { listing };
         }
-        match (names, self.hits.len()) {
+        match (names, self.own.len() + self.hits.len()) {
             (_, 0) => listing,
             (0, n) => settings_count(n),
             (_, n) => format!("{listing} · {}", settings_count(n)),
@@ -80,6 +81,10 @@ impl SearchPanel {
         settings.asking = false;
         settings.enter = false;
         settings.error = None;
+        let theme = crate::appearance::Appearance::get(cx).read(cx).in_use().name.clone();
+        let own = if query.is_empty() { None } else { appearance_found(&query, &theme) };
+        let settings = &mut self.settings;
+        settings.own = own.into_iter().collect();
         if query.is_empty() {
             *settings = Asked { generation: settings.generation, ..Asked::default() };
             return;
@@ -135,11 +140,12 @@ impl SearchPanel {
     }
 
     pub(super) fn submit_setting(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.settings.waiting_for(&self.query(cx)) {
+        let own = index < self.settings.own.len();
+        if !own && self.settings.waiting_for(&self.query(cx)) {
             self.settings.enter = true;
             return;
         }
-        if let Some(found) = self.settings.hits.get(index) {
+        if let Some(found) = self.settings.hits().get(index) {
             open_setting(found.clone(), cx);
         }
     }

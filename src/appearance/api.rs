@@ -74,7 +74,7 @@ impl Appearance {
         &self.folder
     }
 
-    pub(crate) fn theme_file(&self, id: &str) -> Option<std::path::PathBuf> {
+    pub(crate) fn theme_file(&self, id: &str) -> Option<PathBuf> {
         self.user.contains_key(id).then(|| files::theme_path(&self.folder, id))
     }
 
@@ -83,10 +83,6 @@ impl Appearance {
         let text = self.user.get(&id)?;
         let base = parse(text).ok()?.extends.unwrap_or_else(|| ROOT.to_string());
         self.theme_of(&base)
-    }
-
-    pub(crate) fn base_name(&self) -> Option<String> {
-        self.base().map(|theme| theme.name.clone())
     }
 
     pub(crate) fn editing_a_copy_of(&self) -> Option<String> {
@@ -197,10 +193,6 @@ impl Appearance {
         self.choice = Choice { follow_system: self.choice.follow_system, ..Choice::default() };
         self.save_choice();
         self.apply(cx);
-    }
-
-    pub(crate) fn warn(&mut self, text: String) {
-        self.notices.push(text);
     }
 }
 

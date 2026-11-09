@@ -40,7 +40,7 @@ fn resetting_the_theme_keeps_its_name_and_base() {
 
 #[test]
 fn an_edit_keeps_keys_this_version_does_not_know() {
-    let mut file = crate::theme::file::parse(r#"{"later": 1}"#).expect("theme");
+    let mut file = parse(r#"{"later": 1}"#).expect("theme");
     set(&mut file, Part::Chrome, "brand", json!("#ff0000"));
     assert_eq!(file.other.get("later"), Some(&json!(1)));
 }
@@ -54,7 +54,7 @@ fn export_merges_user_bases_and_keeps_a_preset_base() {
     let flat = flatten("a", &Both(files)).expect("flat");
     assert_eq!(flat.extends.as_deref(), Some("nord"));
     assert!(flat.chrome.contains_key("text") && flat.chrome.contains_key("soft"));
-    assert!(flat.chrome.len() == 2);
+    assert_eq!(flat.chrome.len(), 2);
 }
 
 #[test]

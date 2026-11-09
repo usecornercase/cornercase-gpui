@@ -1,4 +1,5 @@
 mod agents;
+mod appearance;
 mod changes;
 mod choice;
 mod connection;
@@ -23,6 +24,7 @@ use gpui::{
     ScrollHandle, Window, div, point, prelude::*, px,
 };
 
+pub(crate) use self::appearance::found_for as appearance_found;
 use self::data::{Described, Script, Setting};
 pub(crate) use self::landing::{FoundSetting, parse_found, sheet_of};
 use crate::cli;
@@ -72,12 +74,14 @@ pub(crate) struct SettingsPanel {
     landed: Option<landing::Landed>,
     landings: u64,
     spot: landing::Spot,
+    look: appearance::Look,
 }
 
 impl SettingsPanel {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let store = Store::get(cx);
         cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)).detach();
+        cx.observe(&crate::appearance::Appearance::get(cx), |_, _, cx| cx.notify()).detach();
         let search = Self::search_field(window, cx);
         window.focus(&search.read(cx).focus_handle(cx));
         let mut this = Self {
@@ -103,6 +107,7 @@ impl SettingsPanel {
             landed: None,
             landings: 0,
             spot: landing::Spot::default(),
+            look: appearance::Look::default(),
         };
         this.open_asked_project(&store, cx);
         this.load(cx);
@@ -161,6 +166,7 @@ impl SettingsPanel {
 
     fn opened(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.choice = None;
+        self.look.picker = None;
         self.landed = None;
         self.first_project = None;
         self.search.update(cx, TextField::clear);
@@ -201,7 +207,7 @@ impl SettingsPanel {
             self.sync_scripts(project, cx);
         }
         let pages = data::pages(&described);
-        if !pages.contains(&self.page) && self.page != data::PROJECTS && self.page != data::SHARE {
+        if !pages.contains(&self.page) && !data::OWN_PAGES.contains(&self.page.as_str()) {
             self.page = pages.into_iter().next().unwrap_or_else(|| data::PROJECTS.into());
         }
         self.described = Some(described);
@@ -325,7 +331,13 @@ impl Render for SettingsPanel {
             .size_full()
             .relative()
             .flex()
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, _: &MouseDownEvent, _, cx| this.close_choice(cx)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _: &MouseDownEvent, _, cx| {
+                    this.close_choice(cx);
+                    this.close_picker(cx);
+                }),
+            )
             .on_drag_move(split::follow::<_, NavGrip>(Edge::Right, PAGE_KEEP, nav_width, cx))
             .child(self.render_nav(window, cx))
             .child(widgets::page("settings-page", &self.scroll).child(self.render_page(window, cx)))

@@ -1,8 +1,9 @@
 use anyhow::{Context as _, Result, bail};
 use gpui::Context;
 
+use super::api::refuse;
 use super::edit;
-use super::*;
+use super::{Appearance, ROOT, Texts, files, is_preset, parse, resolve};
 
 impl Appearance {
     pub(crate) fn export_text(&self) -> Result<String> {
@@ -12,7 +13,7 @@ impl Appearance {
     }
 
     pub(crate) fn import(&mut self, text: &str, fallback_name: &str, cx: &mut Context<Self>) -> Result<String> {
-        super::api::refuse(text)?;
+        refuse(text)?;
         let file = parse(text).context("this is not a theme")?;
         let name = file.name.clone().unwrap_or_else(|| fallback_name.to_string());
         let mut named = file.clone();

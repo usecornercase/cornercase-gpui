@@ -55,7 +55,7 @@ pub(crate) fn free_stem(wanted: &str, taken: &dyn Fn(&str) -> bool) -> String {
     if !blocked(&base) {
         return base;
     }
-    (2..).map(|n| format!("{base}-{n}")).find(|stem| !blocked(stem)).unwrap_or(base)
+    (2..10_000).map(|n| format!("{base}-{n}")).find(|stem| !blocked(stem)).unwrap_or(base)
 }
 
 #[cfg(test)]

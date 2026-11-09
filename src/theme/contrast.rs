@@ -76,7 +76,7 @@ pub(crate) fn fix(colour: Rgba, over_what: &[(&'static str, Rgba)], needed: f32)
     }
     let (mut near, mut far) = (start.l, towards);
     for _ in 0..24 {
-        let middle = (near + far) / 2.;
+        let middle = f32::midpoint(near, far);
         if passes(middle) {
             far = middle;
         } else {
