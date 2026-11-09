@@ -30,6 +30,7 @@ pub(crate) use signs::{
 };
 pub(crate) use text_field::{TextField, TextFieldEvent};
 
+use crate::platform::Os;
 use crate::theme::{colours, radius};
 
 fn button_base(id: impl Into<ElementId>) -> Stateful<Div> {
@@ -332,6 +333,15 @@ pub(crate) fn input_box(field: impl IntoElement, focused: bool) -> Div {
 
 pub(crate) fn boxed(field: &Entity<TextField>, window: &Window, cx: &App) -> Div {
     input_box(field.clone(), field.read(cx).focus_handle(cx).is_focused(window))
+}
+
+pub(crate) fn prompt_box(field: &Entity<TextField>, verb: &str, window: &Window, cx: &App) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(6.))
+        .child(boxed(field, window, cx))
+        .child(div().text_size(px(11.)).text_color(colours::muted()).child(text_field::prompt_keys(Os::CURRENT, verb)))
 }
 
 pub(crate) fn search_field(field: Entity<TextField>, focused: bool, clear: Option<Stateful<Div>>) -> Div {

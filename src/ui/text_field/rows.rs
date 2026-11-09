@@ -103,6 +103,18 @@ pub(super) fn scroll_to_show(scroll: Pixels, top: Pixels, bottom: Pixels, height
     }
 }
 
+pub(super) fn scroll_to_show_with_margins(
+    scroll: Pixels,
+    (caret, line_height): (Pixels, Pixels),
+    (above, below): (Pixels, Pixels),
+    height: Pixels,
+) -> Pixels {
+    let free = (height - line_height).max(px(0.));
+    let above = above.min(free / 2.);
+    let below = below.min(free - above);
+    scroll_to_show(scroll, caret - above, caret + line_height + below, height)
+}
+
 pub(super) fn clamp_scroll(scroll: Pixels, content: Pixels, height: Pixels) -> Pixels {
     scroll.min(content - height).max(px(0.))
 }

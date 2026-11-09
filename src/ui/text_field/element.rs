@@ -7,7 +7,7 @@ use gpui::{
 };
 
 use super::TextField;
-use super::rows::{Row, Rows, clamp_scroll, rows_shown, scroll_to_show, thumb};
+use super::rows::{Row, Rows, clamp_scroll, rows_shown, scroll_to_show, scroll_to_show_with_margins, thumb};
 use crate::theme::colours;
 
 const CARET_WIDTH: Pixels = px(2.);
@@ -15,6 +15,7 @@ const BREAK_WIDTH: Pixels = px(6.);
 const THUMB_WIDTH: Pixels = px(3.);
 const THUMB_GAP: Pixels = px(4.);
 const SCROLLER_MARGIN: Pixels = px(12.);
+const PROMPT_MARGIN: Pixels = px(32.);
 
 pub(super) struct Layout {
     lines: Vec<WrappedLine>,
@@ -254,7 +255,8 @@ impl TextElement {
         };
         layout.scroll_top = clamp_scroll(shown, layout.content_height(), height);
         if let Some(scroller) = input.options.scroller.as_ref().filter(|_| reveal && focused) {
-            show_in_scroller(scroller, layout.text_top() + caret, layout.line_height, window);
+            let below = if input.options.rows.is_some() { PROMPT_MARGIN } else { SCROLLER_MARGIN };
+            show_in_scroller(scroller, (layout.text_top() + caret, layout.line_height, below), window);
         }
         let scroll_top = layout.scroll_top;
         self.input.update(cx, |input, _| {
@@ -282,13 +284,13 @@ impl TextElement {
     }
 }
 
-fn show_in_scroller(scroller: &ScrollHandle, caret: Pixels, line_height: Pixels, window: &Window) {
+fn show_in_scroller(scroller: &ScrollHandle, (caret, line_height, below): (Pixels, Pixels, Pixels), window: &Window) {
     let view = scroller.bounds();
     let offset = scroller.offset();
     let scroll = -offset.y;
     let top = caret - view.top() + scroll;
-    let bottom = top + line_height + SCROLLER_MARGIN;
-    let next = scroll_to_show(scroll, top - SCROLLER_MARGIN, bottom, view.size.height).max(px(0.));
+    let margins = (SCROLLER_MARGIN, below);
+    let next = scroll_to_show_with_margins(scroll, (top, line_height), margins, view.size.height).max(px(0.));
     if next != scroll {
         scroller.set_offset(point(offset.x, -next));
         window.request_animation_frame();

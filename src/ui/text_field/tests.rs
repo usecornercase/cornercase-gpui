@@ -1,6 +1,8 @@
-use gpui::KeyContext;
+use gpui::{KeyBinding, KeyContext};
 
-use super::{Escaped, LINES_CONTEXT, NewLine, Submit, bindings, escaped, shared, word_end, word_start};
+use super::{
+    Escaped, LINES_CONTEXT, NewLine, Submit, bindings, escaped, prompt_keys, send_key, shared, word_end, word_start,
+};
 use crate::platform::Os;
 
 #[test]
@@ -57,4 +59,23 @@ fn enter_breaks_the_line_before_it_can_submit() {
 fn a_field_of_several_lines_answers_to_both_key_contexts() {
     let context = KeyContext::parse(LINES_CONTEXT).expect("context");
     assert!(context.contains("TextField") && context.contains("Multiline"));
+}
+
+#[test]
+fn a_prompt_names_the_keys_that_break_and_send_it() {
+    assert_eq!(prompt_keys(Os::Mac, "schedule"), "↩ for a new line, ⌘↩ to schedule");
+    assert_eq!(prompt_keys(Os::Linux, "start"), "Enter for a new line, Ctrl+Enter to start");
+    assert_eq!(prompt_keys(Os::Windows, "start"), prompt_keys(Os::Linux, "start"));
+}
+
+#[test]
+fn a_prompt_is_sent_by_the_key_it_names() {
+    assert_eq!(send_key(Os::Mac), ("cmd-enter", "⌘↩"));
+    assert_eq!(send_key(Os::Linux), ("ctrl-enter", "Ctrl+Enter"));
+    for os in [Os::Mac, Os::Linux, Os::Windows] {
+        let wanted = KeyBinding::new(send_key(os).0, Submit, None);
+        let bound =
+            bindings(os).iter().any(|key| key.action().partial_eq(&Submit) && key.keystrokes() == wanted.keystrokes());
+        assert!(bound, "{os:?} binds {}", send_key(os).0);
+    }
 }

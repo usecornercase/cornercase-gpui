@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use std::ops::RangeInclusive;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -17,7 +16,6 @@ use super::model::{self, FlowInfo, FlowSpec};
 use crate::ui::{TextField, TextFieldEvent};
 
 const CHECK_DELAY: Duration = Duration::from_millis(400);
-const PROMPT_ROWS: RangeInclusive<usize> = 3..=12;
 
 pub(super) struct RoleFields {
     base: Value,
@@ -172,7 +170,7 @@ impl Inputs {
     }
 
     fn lines(&self, text: &str, hint: &str, window: &mut Window, cx: &mut Context<FlowEditor>) -> Entity<TextField> {
-        self.field((text, hint), |field| field.multiline(PROMPT_ROWS), window, cx)
+        self.field((text, hint), TextField::prompt, window, cx)
     }
 
     fn sentence(&self, text: &str, hint: &str, window: &mut Window, cx: &mut Context<FlowEditor>) -> Entity<TextField> {

@@ -79,16 +79,20 @@ fn section(glyph: Icon, title: &'static str, control: impl IntoElement) -> Div {
     stack().child(head).child(control)
 }
 
+fn prompt(form: &Form, window: &Window, cx: &App) -> Div {
+    ui::prompt_box(&form.prompt, if form.editing() { "save" } else { "schedule" }, window, cx)
+}
+
 fn what(form: &Form, window: &Window, cx: &mut Context<QueuePanel>) -> impl IntoElement + use<> {
     if form.repeats() {
         let note = form.runs_flow().then(|| ui::dim(FLOW_TASK));
-        return section(Icon::Message, "What", stack().child(boxed(&form.prompt, window, cx)).children(note));
+        return section(Icon::Message, "What", stack().child(prompt(form, window, cx)).children(note));
     }
     let kinds = ui::segments(vec![
         seg("q-what-prompt", "Prompt", !form.issue, cx, |f| f.issue = false),
         seg("q-what-issue", "Issue", form.issue, cx, |f| f.issue = true),
     ]);
-    let body = if form.issue { issue(form, window, cx) } else { boxed(&form.prompt, window, cx).into_any_element() };
+    let body = if form.issue { issue(form, window, cx) } else { prompt(form, window, cx).into_any_element() };
     section(Icon::Message, "What", stack().child(hug(kinds)).child(body))
 }
 
@@ -458,7 +462,8 @@ impl QueuePanel {
             .child(section(Icon::Branch, "Where", place(form, session.as_ref(), window, cx)))
             .child(agent_section(form, self.config.as_ref(), flows, cx))
             .child(section(Icon::Pencil, "Name", boxed(&form.name, window, cx)));
-        let body = div().id("queue-form").flex_1().min_h_0().overflow_y_scroll().child(fields);
+        let body =
+            div().id("queue-form").flex_1().min_h_0().overflow_y_scroll().track_scroll(&form.scroller).child(fields);
         Some(frame(self.form_width.size()).child(header(form)).child(body).child(footer(form, cx)).into_any_element())
     }
 }

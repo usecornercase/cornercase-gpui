@@ -193,6 +193,7 @@ const MAC_OTHER_KEYS: &[(&str, &str)] = &[
     ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
     ("Tab", "Next field of a dialog, ⇧Tab back"),
     ("↑ ↓ ↩", "Choose in a menu"),
+    ("⌘↩", "Send a prompt, where ↩ breaks the line"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("⌘-click", "Open a link or a path with macOS"),
 ];
@@ -201,6 +202,7 @@ const LINUX_OTHER_KEYS: &[(&str, &str)] = &[
     ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
     ("Tab", "Next field of a dialog, Shift+Tab back"),
     ("↑ ↓ Enter", "Choose in a menu"),
+    ("Ctrl+Enter", "Send a prompt, where Enter breaks the line"),
     ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("Ctrl+click", "Open a link or a path with its default app"),
@@ -211,6 +213,7 @@ const WINDOWS_OTHER_KEYS: &[(&str, &str)] = &[
     ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
     ("Tab", "Next field of a dialog, Shift+Tab back"),
     ("↑ ↓ Enter", "Choose in a menu"),
+    ("Ctrl+Enter", "Send a prompt, where Enter breaks the line"),
     ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("Ctrl+click", "Open a link or a path with its default app"),
