@@ -1,9 +1,12 @@
 use std::ops::Range;
 
-use gpui::{AnyElement, ClickEvent, ClipboardItem, Context, IntoElement, StatefulInteractiveElement as _};
+use gpui::{
+    AnyElement, ClickEvent, ClipboardItem, Context, IntoElement, ListOffset, Pixels, StatefulInteractiveElement as _,
+    px,
+};
 
 use crate::store::{Store, ToastKind};
-use crate::ui::selection::{self, Edge, Selecting, Selection, Selects};
+use crate::ui::selection::{self, Caret, Edge, Fit, Off, Selecting, Selection, Selects, ShownLines, Step};
 
 use super::diff::{self, Part, Spot};
 use super::pieces::toast;
@@ -67,6 +70,14 @@ impl DiffData {
         self.patch.hunks.get(spot.hunk).map(diff::changed)
     }
 
+    pub(super) fn copied(&self, selection: Selection<Spot>) -> Option<(String, String)> {
+        if selection.is_empty() {
+            return None;
+        }
+        let label = self.selection_label(selection).unwrap_or_else(|| "the selection".to_string());
+        Some((self.selected_text(selection), label))
+    }
+
     pub(super) fn selection_label(&self, selection: Selection<Spot>) -> Option<String> {
         let covered = self.covered(selection);
         let number = |pick: fn(&Numbered<'_>) -> Option<u32>| {
@@ -78,6 +89,27 @@ impl DiffData {
             Some(lines) => Some(selection::lines_label(lines)),
             None => number(|line| line.old).map(|lines| format!("removed {}", selection::lines_label(lines))),
         }
+    }
+}
+
+impl ShownLines<Spot> for DiffData {
+    fn text(&self, spot: Spot) -> Option<&str> {
+        self.line_at(spot).map(|line| line.text)
+    }
+
+    fn after(&self, spot: Spot) -> Option<Spot> {
+        diff::line_after(&self.rows, spot)
+    }
+
+    fn before(&self, spot: Spot) -> Option<Spot> {
+        diff::line_before(&self.rows, spot)
+    }
+}
+
+pub(super) fn top_under(ix: usize, before: Option<Pixels>) -> (usize, Pixels) {
+    match (ix.checked_sub(1), before) {
+        (Some(above), Some(height)) => (above, (height - px(selection::CODE_ROW)).max(px(0.))),
+        _ => (ix, px(0.)),
     }
 }
 
@@ -93,7 +125,7 @@ impl Selects for ChangesPanel {
     }
 
     fn line_text(&self, spot: Spot) -> Option<&str> {
-        self.open.data.as_ref()?.line_at(spot).map(|line| line.text)
+        ShownLines::text(&**self.open.data.as_ref()?, spot)
     }
 
     fn selected_text(&self) -> Option<String> {
@@ -103,7 +135,7 @@ impl Selects for ChangesPanel {
 
 impl ChangesPanel {
     pub(crate) fn escape(&mut self, cx: &mut Context<Self>) -> bool {
-        let gone = self.open.selecting.selection.take().is_some();
+        let gone = self.open.selecting.clear();
         if gone {
             cx.notify();
         }
@@ -113,11 +145,59 @@ impl ChangesPanel {
     pub(crate) fn copy_selection(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(selection) = self.open.selecting.selection else { return false };
         let Some(data) = self.open.data.clone() else { return false };
-        let text = data.selected_text(selection);
-        let label = data.selection_label(selection).unwrap_or_else(|| "the selection".to_string());
+        let Some((text, label)) = data.copied(selection) else { return false };
         toast(format!("Copied {label}"), ToastKind::Info, cx);
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         true
+    }
+
+    pub(super) fn fit(&self) -> Fit {
+        Fit::of(self.wraps, self.open.selecting.laid().body().size.width)
+    }
+
+    fn first_shown(&self, data: &DiffData) -> Option<Caret<Spot>> {
+        if let Some(shown) = self.open.selecting.laid().first_shown(0.) {
+            return Some(shown);
+        }
+        let spot = diff::first_line_from(&data.rows, self.diff_list.logical_scroll_top().item_ix)?;
+        Some(Caret { spot, at: 0 })
+    }
+
+    pub(crate) fn extend_selection(&mut self, step: Step, cx: &mut Context<Self>) -> bool {
+        let Some(data) = self.open.data.clone() else { return false };
+        let Some(top) = self.first_shown(&data) else { return false };
+        let fit = self.fit();
+        if let Some(head) = self.open.selecting.step((step, top), &*data, fit) {
+            self.follow_head(&data, head);
+        }
+        selection::to_primary(self, cx);
+        cx.notify();
+        true
+    }
+
+    fn follow_head(&self, data: &DiffData, head: Caret<Spot>) {
+        let laid = self.open.selecting.laid();
+        let row = diff::row_of(&data.rows, head.spot);
+        let mut off = laid.past_edge(head.spot, head.at, 0.);
+        if off == Off::Gone {
+            let bounds = row.and_then(|ix| self.diff_list.bounds_for_item(ix));
+            off = bounds.map_or(Off::Gone, |bounds| laid.past_edge_of(bounds, 0.));
+        }
+        match (off, row) {
+            (Off::By(distance), _) => self.diff_list.scroll_by(distance),
+            (Off::Gone, Some(ix)) => self.line_to_top(ix),
+            (Off::InView | Off::Gone, _) => {}
+        }
+    }
+
+    fn line_to_top(&self, ix: usize) {
+        let mut above = None;
+        if let Some(before) = ix.checked_sub(1) {
+            self.diff_list.scroll_to(ListOffset { item_ix: before, offset_in_item: px(0.) });
+            above = self.diff_list.bounds_for_item(before).map(|row| row.size.height);
+        }
+        let (item_ix, offset_in_item) = top_under(ix, above);
+        self.diff_list.scroll_to(ListOffset { item_ix, offset_in_item });
     }
 
     fn ask_about_selection(&mut self, cx: &mut Context<Self>) {

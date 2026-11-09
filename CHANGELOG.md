@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.46
+
+- **Select with the keyboard in the Changes diff.** Click in the Changes panel, then ⇧← ⇧→ select a character more or less and ⇧↑ ⇧↓ a line (Shift with the arrows on Linux and Windows), as in the Files viewer. The selection goes on across hunks and open gaps, over removed and added lines in the order they show, and with nothing selected it starts from the top of what the diff shows. Lines picked by their numbers grow and shrink by whole lines, and the view follows the end you move.
+- **It works like a selection made with the mouse.** Copy, Ask agent and Open float beside it, ⌘C copies it and Esc clears it, also on a machine's workspace, where Copy is the one offered. In the terminal and in the filter field the keys do what they did before.
+
 ## 0.1.45
 
 - **Close a pane or a tab on another machine's tab.** ⌘W closes the pane and ⇧⌘W the tab you see from a machine, as they do here: a shell closes at once, and a pane or tab running an agent asks first, naming the machine. If that machine's cornercase restarted in the meantime, nothing is closed and a toast says so.

@@ -38,13 +38,12 @@ struct CodeLine<'a> {
 
 pub(super) fn diff_list(
     state: &ListState,
-    wraps: bool,
+    fit: Fit,
     data: Rc<DiffData>,
     panel: WeakEntity<ChangesPanel>,
     selecting: &Selecting<Spot>,
 ) -> AnyElement {
     let laid = selecting.laid().clone();
-    let fit = Fit::of(wraps, laid.body().size.width);
     let picked = Picked { selection: selecting.selection, laid, fit };
     list(state.clone(), move |ix, _window, _cx| diff_row(&data, ix, &panel, &picked)).size_full().into_any_element()
 }

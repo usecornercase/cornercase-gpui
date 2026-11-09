@@ -48,12 +48,19 @@ impl Root {
 
     pub(super) fn dock_select(&mut self, ks: &Keystroke, window: &Window, cx: &mut Context<Self>) -> bool {
         let Some(step) = Step::of(ks) else { return false };
-        if self.focused_dock(window, cx) != Some(PanelKind::Files) {
-            return false;
+        let card = self.dock_focus.is_focused(window);
+        match self.focused_dock(window, cx) {
+            Some(PanelKind::Files) => self.files_panel().is_some_and(|files| {
+                (card || files.read(cx).has_focus_itself(window))
+                    && files.update(cx, |files, cx| files.extend_selection(step, cx))
+            }),
+            Some(PanelKind::Changes) => {
+                card && self
+                    .changes_panel()
+                    .is_some_and(|changes| changes.update(cx, |changes, cx| changes.extend_selection(step, cx)))
+            }
+            _ => false,
         }
-        let Some(files) = self.files_panel() else { return false };
-        let its_own = self.dock_focus.is_focused(window) || files.read(cx).has_focus_itself(window);
-        its_own && files.update(cx, |files, cx| files.extend_selection(step, cx))
     }
 
     pub(super) fn dock_copy(&mut self, window: &Window, cx: &mut Context<Self>) -> bool {

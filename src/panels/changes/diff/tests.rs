@@ -189,3 +189,55 @@ fn the_diff_and_the_list_name_the_same_version() {
         crate::panels::changes::wire::summary(crate::test_util::fixture!("changes/list.json")).expect("parses");
     assert_eq!(read_patch().file.digest, listed.workspaces[0].files[0].digest);
 }
+
+fn patch_spot(hunk: usize, line: usize) -> Spot {
+    Spot { hunk, part: Part::Patch, line }
+}
+
+fn gap_spot(hunk: usize, line: usize) -> Spot {
+    Spot { hunk, part: Part::Gap, line }
+}
+
+fn rows_with_an_open_gap() -> Vec<Row> {
+    let gap_line = |n| GapLine { old: n, new: n, text: "u".into(), ..GapLine::default() };
+    let gaps = HashMap::from([(1, Gap { lines: vec![gap_line(7), gap_line(8)], ..Gap::default() })]);
+    rows(&sample(), &gaps)
+}
+
+#[test]
+fn the_line_after_a_hunk_s_last_is_the_next_hunk_s_first_past_its_header_and_a_closed_gap() {
+    let rows = rows(&sample(), &HashMap::new());
+    assert_eq!(line_after(&rows, patch_spot(0, 4)), Some(patch_spot(1, 0)));
+    assert_eq!(line_before(&rows, patch_spot(1, 0)), Some(patch_spot(0, 4)));
+}
+
+#[test]
+fn an_open_gap_s_lines_come_between_two_hunks() {
+    let rows = rows_with_an_open_gap();
+    assert_eq!(line_after(&rows, patch_spot(0, 4)), Some(gap_spot(1, 0)));
+    assert_eq!(line_after(&rows, gap_spot(1, 1)), Some(patch_spot(1, 0)));
+    assert_eq!(line_before(&rows, patch_spot(1, 0)), Some(gap_spot(1, 1)));
+}
+
+#[test]
+fn nothing_comes_before_the_first_line_or_after_the_last() {
+    let rows = rows(&sample(), &HashMap::new());
+    assert_eq!(line_before(&rows, patch_spot(0, 0)), None);
+    assert_eq!(line_after(&rows, patch_spot(1, 1)), None);
+}
+
+#[test]
+fn a_spot_not_shown_has_no_neighbours() {
+    let rows = rows(&sample(), &HashMap::new());
+    assert_eq!(line_after(&rows, gap_spot(1, 0)), None);
+    assert_eq!(line_before(&rows, gap_spot(1, 0)), None);
+}
+
+#[test]
+fn the_first_line_from_a_row_passes_headers_and_closed_gaps() {
+    let rows = rows(&sample(), &HashMap::new());
+    assert_eq!(first_line_from(&rows, 0), Some(patch_spot(0, 0)));
+    assert_eq!(first_line_from(&rows, 6), Some(patch_spot(1, 0)));
+    assert_eq!(first_line_from(&rows, 99), Some(patch_spot(1, 1)));
+    assert_eq!(first_line_from(&[], 0), None);
+}

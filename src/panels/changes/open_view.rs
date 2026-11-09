@@ -174,7 +174,7 @@ impl ChangesPanel {
         if data.rows.is_empty() {
             return ui::note(empty_diff_text(file)).into_any_element();
         }
-        diff_view::diff_list(&self.diff_list, self.wraps, data, cx.entity().downgrade(), &self.open.selecting)
+        diff_view::diff_list(&self.diff_list, self.fit(), data, cx.entity().downgrade(), &self.open.selecting)
     }
 
     pub(super) fn render_footer(&self) -> impl IntoElement + use<> {

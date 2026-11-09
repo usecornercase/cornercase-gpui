@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
+use gpui::px;
+
 use crate::test_util::fixture;
-use crate::ui::selection::{Caret, Selection};
+use crate::ui::selection::{Caret, Fit, Selecting, Selection, Step};
 
 use super::super::diff::{self, Part, Spot};
 use super::super::wire::{Gap, GapLine, Hunk, Line, LineKind, Mode, Patch};
 use super::super::{DiffData, Selected, Whose};
+use super::top_under;
 
 fn line(kind: LineKind, old: Option<u32>, new: Option<u32>, text: &str) -> Line {
     Line { kind, old, new, text: text.into(), ..Line::default() }
@@ -206,4 +209,107 @@ fn a_line_whose_own_text_does_not_draw_as_shown_copies_what_is_shown() {
     let mut data = data();
     data.patch.hunks[0].lines[0].raw = Some("\tsomething else".into());
     assert_eq!(data.selected_text(Selection::line(patch(0, 0))), "alpha");
+}
+
+fn keyed_in(data: &DiffData, from: Selection<Spot>, keys: &[Step]) -> Selection<Spot> {
+    let mut selecting = Selecting::new(Some(from));
+    for key in keys {
+        selecting.step((*key, Caret { spot: patch(0, 0), at: 0 }), data, Fit::Cut);
+    }
+    selecting.selection.expect("a selection")
+}
+
+fn keyed(from: Selection<Spot>, keys: &[Step]) -> Selection<Spot> {
+    keyed_in(&data(), from, keys)
+}
+
+fn head_of(selection: Selection<Spot>) -> (Spot, usize) {
+    let head = selection.head_caret();
+    (head.spot, head.at)
+}
+
+#[test]
+fn whole_lines_grow_and_shrink_across_a_hunk_s_header_and_an_open_gap() {
+    let from = lines(patch(0, 3), patch(0, 3));
+    assert_eq!(keyed(from, &[Step::Down]), lines(patch(0, 3), gap(1, 0)));
+    assert_eq!(keyed(from, &[Step::Down, Step::Down]), lines(patch(0, 3), patch(1, 0)));
+    assert_eq!(keyed(from, &[Step::Down, Step::Down, Step::Up]), lines(patch(0, 3), gap(1, 0)));
+}
+
+#[test]
+fn the_column_comes_back_after_a_removed_and_an_added_line() {
+    let from = chars((patch(0, 0), 5), (patch(0, 0), 5));
+    let heads: Vec<_> = (1..=3).map(|n| head_of(keyed(from, &vec![Step::Down; n]))).collect();
+    assert_eq!(heads, [(patch(0, 1), 4), (patch(0, 2), 4), (patch(0, 3), 5)]);
+}
+
+#[test]
+fn right_at_a_hunk_s_last_line_goes_on_to_the_open_gap() {
+    let from = chars((patch(0, 3), 5), (patch(0, 3), 5));
+    assert_eq!(head_of(keyed(from, &[Step::Right])), (gap(1, 0), 0));
+}
+
+#[test]
+fn left_at_a_hunk_s_first_line_goes_back_over_its_header() {
+    let from = chars((patch(1, 0), 0), (patch(1, 0), 0));
+    assert_eq!(head_of(keyed(from, &[Step::Left])), (gap(1, 0), 7));
+}
+
+#[test]
+fn nothing_moves_past_the_diff_s_first_or_last_line() {
+    let first = chars((patch(0, 0), 0), (patch(0, 0), 0));
+    assert_eq!(head_of(keyed(first, &[Step::Left])), (patch(0, 0), 0));
+    assert_eq!(head_of(keyed(first, &[Step::Up])), (patch(0, 0), 0));
+    let last = chars((patch(1, 1), 4), (patch(1, 1), 4));
+    assert_eq!(head_of(keyed(last, &[Step::Right])), (patch(1, 1), 4));
+    assert_eq!(head_of(keyed(last, &[Step::Down])), (patch(1, 1), 4));
+}
+
+#[test]
+fn characters_made_with_the_keys_copy_and_name_their_lines() {
+    let from = chars((patch(0, 0), 2), (patch(0, 0), 2));
+    let made = keyed(from, &[Step::Down, Step::Down]);
+    assert_eq!(made, chars((patch(0, 0), 2), (patch(0, 2), 2)));
+    assert_eq!(data().selected_text(made), "pha\nbeta\nBE");
+    assert_eq!(data().selection_label(made), Some("lines 3-4".to_string()));
+}
+
+#[test]
+fn four_steps_cross_a_tab_and_copy_it_as_the_file_has_it() {
+    let data = makefile();
+    let from = chars((patch(0, 1), 0), (patch(0, 1), 0));
+    let made = keyed_in(&data, from, &[Step::Right; 4]);
+    assert_eq!(head_of(made), (patch(0, 1), 4));
+    assert_eq!(data.selected_text(made), "\t");
+}
+
+#[test]
+fn a_selection_of_nothing_copies_nothing() {
+    assert_eq!(data().copied(chars((patch(0, 0), 2), (patch(0, 0), 2))), None);
+}
+
+#[test]
+fn a_selection_copies_its_text_with_its_label() {
+    let copied = data().copied(lines(patch(0, 0), patch(0, 2)));
+    assert_eq!(copied, Some(("alpha\nbeta\nBETA".to_string(), "lines 3-4".to_string())));
+}
+
+#[test]
+fn a_line_brought_in_from_above_shows_the_last_row_of_what_is_above_it() {
+    assert_eq!(top_under(5, Some(px(28.))), (4, px(10.)));
+}
+
+#[test]
+fn what_is_above_shorter_than_a_row_shows_whole() {
+    assert_eq!(top_under(5, Some(px(12.))), (4, px(0.)));
+}
+
+#[test]
+fn with_nothing_measured_above_it_a_line_goes_to_the_top() {
+    assert_eq!(top_under(5, None), (5, px(0.)));
+}
+
+#[test]
+fn the_first_row_goes_to_the_top() {
+    assert_eq!(top_under(0, Some(px(30.))), (0, px(0.)));
 }

@@ -1,7 +1,7 @@
-use gpui::{point, px};
+use gpui::{Bounds, point, px, size};
 
 use super::super::{Caret, Selection};
-use super::{Fit, Selecting, Step, far_enough};
+use super::{Fit, Laid, Off, Selecting, Step, far_enough};
 
 fn caret(spot: usize, at: usize) -> Caret<usize> {
     Caret { spot, at }
@@ -43,4 +43,38 @@ fn the_column_holds_only_while_the_keys_made_the_selection() {
     selecting.selection = Some(chars((2, 1), (2, 1)));
     let up = selecting.step((Step::Up, caret(0, 0)), &text()[..], Fit::Cut);
     assert_eq!(up, Some(caret(1, 1)));
+}
+
+fn laid_over(body_top: f32) -> Laid<usize> {
+    let laid = Laid::<usize>::default();
+    laid.set_body(Bounds::new(point(px(40.), px(body_top)), size(px(300.), px(400.))));
+    laid
+}
+
+fn row_at(top: f32) -> Bounds<gpui::Pixels> {
+    Bounds::new(point(px(40.), px(top)), size(px(300.), px(18.)))
+}
+
+#[test]
+fn a_row_measured_below_the_view_scrolls_just_enough_to_show_it_and_a_row_under_it() {
+    assert_eq!(laid_over(0.).past_edge_of(row_at(410.), 0.), Off::By(px(46.)));
+}
+
+#[test]
+fn a_row_measured_above_the_view_scrolls_back_to_keep_a_row_over_it() {
+    assert_eq!(laid_over(0.).past_edge_of(row_at(-40.), 0.), Off::By(px(-58.)));
+}
+
+#[test]
+fn clearing_a_selection_says_it_selected_something() {
+    let mut selecting = Selecting::<usize>::new(Some(Selection::line(1)));
+    assert!(selecting.clear());
+    assert_eq!(selecting.selection, None);
+}
+
+#[test]
+fn clearing_a_selection_of_nothing_is_no_step() {
+    let mut selecting = Selecting::new(Some(chars((1, 2), (1, 2))));
+    assert!(!selecting.clear());
+    assert_eq!(selecting.selection, None);
 }
