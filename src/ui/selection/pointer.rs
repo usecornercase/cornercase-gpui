@@ -129,6 +129,10 @@ impl<S: Copy + Ord> Laid<S> {
         self.off_by(spot, at, inset, off_edge)
     }
 
+    pub(crate) fn past_edge_of(&self, row: Bounds<Pixels>, inset: f32) -> Off {
+        off_edge((row.top(), row.top(), row.bottom()), self.body(), px(inset)).map_or(Off::InView, Off::By)
+    }
+
     fn off_by(&self, spot: S, at: usize, inset: f32, rule: Rule) -> Off {
         let frame = self.0.borrow();
         let Some(drawn) = frame.rows.get(&spot) else { return Off::Gone };
@@ -212,6 +216,10 @@ impl<S: Copy + Ord> Selecting<S> {
 
     pub(crate) fn laid(&self) -> &Laid<S> {
         &self.laid
+    }
+
+    pub(crate) fn clear(&mut self) -> bool {
+        self.selection.take().is_some_and(|selection| !selection.is_empty())
     }
 
     pub(crate) fn lit(&self, spot: S, line: &str) -> Lit {

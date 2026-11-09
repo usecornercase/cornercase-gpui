@@ -50,6 +50,25 @@ pub(super) fn rows(hunks: &[Hunk], gaps: &HashMap<usize, Gap>) -> Vec<Row> {
     rows
 }
 
+pub(super) fn row_of(rows: &[Row], spot: Spot) -> Option<usize> {
+    rows.iter().position(|row| row.spot() == Some(spot))
+}
+
+pub(super) fn line_after(rows: &[Row], spot: Spot) -> Option<Spot> {
+    let ix = row_of(rows, spot)?;
+    rows.get(ix + 1..)?.iter().find_map(|row| row.spot())
+}
+
+pub(super) fn line_before(rows: &[Row], spot: Spot) -> Option<Spot> {
+    let ix = row_of(rows, spot)?;
+    rows.get(..ix)?.iter().rev().find_map(|row| row.spot())
+}
+
+pub(super) fn first_line_from(rows: &[Row], ix: usize) -> Option<Spot> {
+    let from = rows.get(ix..).unwrap_or_default();
+    from.iter().find_map(|row| row.spot()).or_else(|| rows.iter().rev().find_map(|row| row.spot()))
+}
+
 fn count(hunk: &Hunk, skip: LineKind) -> u32 {
     u32::try_from(hunk.lines.iter().filter(|l| l.kind != skip).count()).unwrap_or(u32::MAX)
 }

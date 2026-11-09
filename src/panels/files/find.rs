@@ -348,7 +348,7 @@ impl FilesPanel {
         }
         let Some(viewer) = self.viewer_mut() else { return false };
         let field_closed = viewer.find.take().is_some();
-        let gone = field_closed || viewer.selecting.selection.take().is_some_and(|selection| !selection.is_empty());
+        let gone = field_closed || viewer.selecting.clear();
         if field_closed {
             self.remeasure_first_line();
         }
