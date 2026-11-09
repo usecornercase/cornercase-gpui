@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.37
+
+- **Update notes read as formatted text.** The update dialogs, for cornercase and for this app, now show what changed with its bold, `code`, links, lists and headings, as cornercase's own window does, instead of the raw Markdown with its `**` and backticks. A link in the notes opens in the browser.
+
 ## 0.1.36
 
 - **The app updates itself on macOS too.** Install in its update dialog now downloads the release, checks it was signed by cornercase's developer and puts it in place of `cornercase.app`; Restart opens the new version on the same tab, and your terminals and agents keep running. No more opening the DMG and dragging the app to Applications. If the app sits in a folder it cannot write, the dialog still offers the download.

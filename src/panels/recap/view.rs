@@ -9,8 +9,8 @@ use super::RecapPanel;
 use super::data::{Choice, Page, writing};
 use super::links;
 use crate::notify::tip;
-use crate::panels::issues::text::{self, OnLink};
 use crate::theme::colours;
+use crate::ui::markdown::text::{self, OnLink};
 use crate::ui::{self, Icon};
 
 const SIDE: f32 = 14.;

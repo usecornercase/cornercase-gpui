@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 
 use super::data::Place;
-use crate::panels::issues::markdown::{self, Block, Inline, Mark};
+use crate::ui::markdown::{self, Block, Inline, Mark};
 
 type Places = BTreeMap<String, Place>;
 

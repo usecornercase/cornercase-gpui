@@ -11,6 +11,7 @@ use crate::dialogs::frame;
 use crate::store::{Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
+use crate::ui::markdown::{self, text};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Chip {
@@ -147,10 +148,11 @@ pub(crate) fn release_notes(release: &Release) -> impl IntoElement + use<> {
 }
 
 fn notes_section(section: &Notes) -> impl IntoElement + use<> {
+    let blocks = markdown::parse(&section.text);
     div()
         .flex()
         .flex_col()
-        .gap(px(4.))
+        .gap(px(6.))
         .child(div().text_size(px(12.)).text_color(colours::accent()).child(section.version.clone()))
         .child(
             div()
@@ -158,7 +160,8 @@ fn notes_section(section: &Notes) -> impl IntoElement + use<> {
                 .text_color(colours::text())
                 .flex()
                 .flex_col()
-                .children(section.text.lines().map(|l| div().child(l.to_string()))),
+                .gap(px(6.))
+                .children(text::blocks(&format!("notes-{}", section.version), &blocks)),
         )
 }
 

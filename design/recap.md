@@ -28,7 +28,7 @@ The Recap panel shows what `cornercase recap` answers: a summary of what your ag
   - `empty` with no text is a page of its own, with what a recap is; beside a text (nothing new to sum up, the last recap still there) it is a note above it, since upstream's window hides it and the line then reads as if that recap were current.
   - A failure with no text keeps what the panel had; `empty` with no text drops it, since the server then holds nothing.
 - **The heading is the range's `label`** (`yesterday · wed 4 nov`, the real date), then who wrote it and what it read: `Claude Code · claude-sonnet-4-5 · read 3 conversations · written 5m ago`, redrawn every 20 s while open. Tokens, which upstream's line also has, are not shown (see Left out).
-- **The text is drawn by Issues' Markdown** (`issues/markdown.rs`, `issues/text.rs`, `design/issues.md`), in a gpui `list` as there, since a week's recap can run long. The prompt asks for `##` headings and `-` bullets, which it reads; a block's link goes to an `OnLink` the panel gives, where Issues' opens the address. Moving both files to `ui/` was left for when a third user comes.
+- **The text is drawn by the window's Markdown** (`ui/markdown.rs`, `ui/markdown/text.rs`, `design/widgets.md`), in a gpui `list` as Issues' is, since a week's recap can run long. The prompt asks for `##` headings and `-` bullets, which it reads; a block's link goes to an `OnLink` the panel gives, where Issues' opens the address.
 
 ## Names and links
 

@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use super::{Places, blocks, label};
-use crate::panels::issues::markdown::{Block, Inline, Mark};
 use crate::panels::recap::data::{Answer, Named, Place};
 use crate::test_util::fixture;
+use crate::ui::markdown::{Block, Inline, Mark};
 
 fn places() -> Places {
     let named = |label: &str| Some(Named { label: label.to_string(), path: format!("/home/ana/code/{label}") });

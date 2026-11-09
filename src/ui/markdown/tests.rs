@@ -82,3 +82,14 @@ fn multibyte_text() {
     let start = line.text.find("wörld").expect("in the text");
     assert_eq!(line.marks, vec![(start..start + "wörld".len(), Mark::Bold)]);
 }
+
+#[test]
+fn a_changelog_section_reads_as_items_with_their_marks() {
+    let blocks = parse("- **Each update says what it updates.** It reads `↑ cornercase 0.13.19` now.\n- Another.");
+    let [Block::Item(0, bullet, first), Block::Item(0, _, second)] = blocks.as_slice() else { panic!("{blocks:?}") };
+    assert_eq!((bullet.as_str(), second.text.as_str()), ("•", "Another."));
+    assert_eq!(first.text, "Each update says what it updates. It reads ↑ cornercase 0.13.19 now.");
+    let at = |s: &str| first.text.find(s).map(|i| i..i + s.len()).expect("in the text");
+    assert!(first.marks.contains(&(at("Each update says what it updates."), Mark::Bold)));
+    assert!(first.marks.contains(&(at("↑ cornercase 0.13.19"), Mark::Code)));
+}

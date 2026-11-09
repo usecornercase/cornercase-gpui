@@ -26,7 +26,7 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 - [Code layout](design/code-layout.md) (`tests/layers.rs`, `clippy.toml`): no comments, where code goes, 1,000 lines per file, small functions, `pub(crate)`.
 - [Upstream gaps](design/upstream-gaps.md): no workarounds, filing issues upstream, where things stand, what the window cannot do because cornercase lacks it, stopgaps until a fix lands.
 - [Notifications](design/notifications.md) (`notify/`): agent notices, toasts, macOS notifications, sounds, bells, updates.
-- [Widgets](design/widgets.md) (`ui/`, `theme.rs`, `dialogs.rs`): shared widgets, the text field, selecting in a text that is no field, dialogs, the look (usecornercase.dev's colours, glass on one ground, rounded shapes and air, cobalt, the mark), motion.
+- [Widgets](design/widgets.md) (`ui/`, `theme.rs`, `dialogs.rs`): shared widgets, the text field, selecting in a text that is no field, Markdown, dialogs, the look (usecornercase.dev's colours, glass on one ground, rounded shapes and air, cobalt, the mark), motion.
 - [Session model](design/session-model.md) (`model.rs`, `model/`): the `view` and `surface` JSON, applying frames and patches.
 - [Terminal](design/terminal.md) (`terminal.rs`, `terminal/`, `render.rs`, `render/`, `keys.rs`, `tabs.rs`, `context_menu.rs`): keys and the input method, ⌘ shortcuts, the panes' floating cards, drawing the grid, mouse and selection, moving panes by their handle, tabs, the context menu.
 - [Sidebar](design/sidebar.md) (`sidebar.rs`, `sidebar/`): the panel rail, the floating card, rows, drag and drop, menus and inline forms.

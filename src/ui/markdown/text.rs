@@ -6,21 +6,21 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 
-use super::markdown::{Block, Inline, Mark};
+use super::{Block, Inline, Mark};
 use crate::theme::FONT_FAMILY;
 use crate::theme::{colours, radius};
 
 pub(crate) type OnLink = Rc<dyn Fn(&str, &mut App)>;
 
-pub(super) fn blocks(id: &str, blocks: &[Block]) -> Vec<AnyElement> {
+pub(crate) fn blocks(id: &str, blocks: &[Block]) -> Vec<AnyElement> {
     blocks.iter().enumerate().map(|(i, b)| block(SharedString::from(format!("{id}-{i}")), b)).collect()
 }
 
-pub(super) fn raw(source: &str) -> AnyElement {
+pub(crate) fn raw(source: &str) -> AnyElement {
     code_box(source)
 }
 
-pub(super) fn block(id: SharedString, block: &Block) -> AnyElement {
+pub(crate) fn block(id: SharedString, block: &Block) -> AnyElement {
     let opens_the_address: OnLink = Rc::new(|url, cx| cx.open_url(url));
     linked_block(id, block, &opens_the_address)
 }
