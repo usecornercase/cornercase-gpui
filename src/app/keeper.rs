@@ -104,17 +104,23 @@ impl Keeper {
         }
     }
 
-    pub(crate) fn init(cx: &mut App) -> Saved {
+    pub(crate) fn init(cx: &mut App) -> placement::Options {
         let path = path_in(&prefs::folder());
         let saved = std::fs::read_to_string(&path).map(|text| Saved::parse(&text)).unwrap_or_default();
-        let entity = cx.new(|_| Keeper::new(path, saved.clone()));
+        let options = placement::window_options(saved.window.as_ref(), cx);
+        let opened = options.opened.clone();
+        let entity = cx.new(|_| {
+            let mut keeper = Keeper::new(path, saved);
+            keeper.opened_at(opened);
+            keeper
+        });
         cx.set_global(GlobalKeeper(entity.clone()));
         cx.on_app_quit(move |cx| {
             entity.update(cx, Keeper::flush);
             async {}
         })
         .detach();
-        saved
+        options
     }
 
     pub(crate) fn get(cx: &App) -> Entity<Keeper> {
@@ -133,7 +139,7 @@ impl Keeper {
         self.seen = shown;
     }
 
-    pub(crate) fn opened_at(&mut self, placed: Placed) {
+    fn opened_at(&mut self, placed: Placed) {
         self.opened = Some(placed);
     }
 

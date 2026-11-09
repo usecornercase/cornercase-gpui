@@ -93,9 +93,7 @@ fn system_keys(cx: &mut App) {
 }
 
 fn open_window(cx: &mut App) {
-    let saved = app::keeper::Keeper::init(cx);
-    let options = app::placement::window_options(saved.window.as_ref(), cx);
-    app::keeper::Keeper::get(cx).update(cx, |keeper, _| keeper.opened_at(options.opened.clone()));
+    let options = app::keeper::Keeper::init(cx);
     let width = options.width;
     let wayland = cx.compositor_name() == "Wayland";
     let opened = cx.open_window(
