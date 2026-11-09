@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.38
+
+- **Themes.** Settings › Appearance changes how the window looks: eleven themes, each shown as a small preview, apply with a click, to the window and to its terminals, so Claude Code, Neovim and delta pick a matching look.
+- **Make one yours.** Click any colour for a picker. Text that would be hard to read says so, and Fix makes it readable. Hold Peek to see the window behind Settings. Sliders set how see-through the glass, the panes, the cards and the dimming are, and corners can be compact or round.
+- **Light and dark.** cornercase light is new, and the window can follow the system, with a theme for each.
+- **Share a theme.** Save it to a file, copy it as JSON, or import one. Your themes are files beside the window's settings, and editing one in an editor redraws the window.
+
 ## 0.1.37
 
 - **Update notes read as formatted text.** The update dialogs, for cornercase and for this app, now show what changed with its bold, `code`, links, lists and headings, as cornercase's own window does, instead of the raw Markdown with its `**` and backticks. A link in the notes opens in the browser.
