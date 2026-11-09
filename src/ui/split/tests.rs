@@ -81,3 +81,26 @@ fn following_the_pointer_keeps_room_for_the_neighbour() {
     split.follow(Edge::Bottom, container(), point(px(0.), px(250.)), 120.);
     assert_size(split, 260.);
 }
+
+#[test]
+fn a_saved_size_comes_back_within_the_limits() {
+    assert_size(LIST.restored(Some(900.), 5000.), 800.);
+    assert_size(LIST.restored(Some(10.), 5000.), 260.);
+}
+
+#[test]
+fn a_saved_size_leaves_room_for_the_other_side() {
+    assert_size(LIST.restored(Some(700.), 500.), 500.);
+}
+
+#[test]
+fn a_saved_size_comes_back_to_a_whole_pixel() {
+    assert_size(LIST.restored(Some(512.4), 5000.), 512.);
+}
+
+#[test]
+fn nothing_saved_keeps_the_default() {
+    let split = LIST.restored(None, 5000.);
+    assert_eq!(split.chosen(), None);
+    assert_size(split, 400.);
+}

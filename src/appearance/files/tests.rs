@@ -1,4 +1,5 @@
 use super::*;
+use crate::prefs::folder_of;
 
 #[test]
 fn a_name_becomes_a_file_stem() {

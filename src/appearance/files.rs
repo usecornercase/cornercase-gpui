@@ -1,19 +1,10 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::prefs;
 use crate::theme::presets::is_preset;
 
 const CHOICE: &str = "theme.json";
 const FOLDER: &str = "themes";
-
-pub(crate) fn folder_of(settings: &Path) -> PathBuf {
-    settings.parent().map(Path::to_path_buf).unwrap_or_default()
-}
-
-pub(crate) fn folder() -> PathBuf {
-    folder_of(&prefs::path())
-}
 
 pub(crate) fn choice_path(folder: &Path) -> PathBuf {
     folder.join(CHOICE)

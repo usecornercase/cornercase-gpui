@@ -26,16 +26,13 @@ mod tour;
 mod ui;
 
 use gpui::{
-    App, AppContext, Application, Bounds, KeyBinding, Menu, MenuItem, TitlebarOptions, Window, WindowBounds,
-    WindowOptions, actions, point, px,
+    App, AppContext, Application, KeyBinding, Menu, MenuItem, TitlebarOptions, Window, WindowOptions, actions, point,
+    px,
 };
 
 use crate::platform::Os;
 
 actions!(cornercase_gpui, [Quit, Hide, HideOthers, ShowAll, Minimise, Zoom, FullScreen]);
-
-const SHOWN: (f32, f32) = (1280., 800.);
-const LEAST: (f32, f32) = (640., 360.);
 
 fn on_window(cx: &mut App, act: fn(&mut Window, &mut App)) {
     if let Some(window) = cx.active_window() {
@@ -96,13 +93,15 @@ fn system_keys(cx: &mut App) {
 }
 
 fn open_window(cx: &mut App) {
-    let screen = cx.primary_display().map(|display| display.bounds().size);
-    let shown = app::frame::opening_size(SHOWN, LEAST, screen);
-    let bounds = Bounds::centered(None, app::frame::outer(Os::CURRENT, shown), cx);
+    let saved = app::keeper::Keeper::init(cx);
+    let options = app::placement::window_options(saved.window.as_ref(), cx);
+    app::keeper::Keeper::get(cx).update(cx, |keeper, _| keeper.opened_at(options.opened.clone()));
+    let width = options.width;
     let wayland = cx.compositor_name() == "Wayland";
     let opened = cx.open_window(
         WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            window_bounds: Some(options.bounds),
+            display_id: options.display,
             titlebar: Some(TitlebarOptions {
                 title: Some("cornercase".into()),
                 appears_transparent: true,
@@ -111,12 +110,12 @@ fn open_window(cx: &mut App) {
             window_background: app::frame::background(Os::CURRENT),
             window_decorations: app::frame::decorations(Os::CURRENT),
             app_id: Some(app::frame::APP_ID.into()),
-            window_min_size: Some(app::frame::min_size(Os::CURRENT, wayland, LEAST)),
+            window_min_size: Some(app::frame::min_size(Os::CURRENT, wayland, app::placement::LEAST)),
             ..Default::default()
         },
         move |window, cx| {
             app::frame::fit_to_frame(Os::CURRENT, wayland, window);
-            cx.new(|cx| app::Root::new(window, cx))
+            cx.new(|cx| app::Root::new(window, width, cx))
         },
     );
     if let Err(why) = opened {

@@ -84,7 +84,7 @@ pub(crate) fn dark(appearance: WindowAppearance) -> bool {
 
 impl Appearance {
     pub(crate) fn init(cx: &mut App) {
-        let folder = files::folder();
+        let folder = prefs::folder();
         let system_dark = dark(cx.window_appearance());
         let entity = cx.new(|cx| {
             let mut this = Appearance::read(folder, system_dark);
@@ -127,7 +127,7 @@ impl Appearance {
     }
 
     fn watch(cx: &mut Context<Self>) {
-        let folder = files::folder();
+        let folder = prefs::folder();
         cx.spawn(async move |this, cx| watching(this, cx, folder).await).detach();
     }
 
