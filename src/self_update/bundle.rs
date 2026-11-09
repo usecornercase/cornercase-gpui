@@ -1,11 +1,13 @@
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 
 use super::install::{self, Stage};
+use crate::platform;
 
 const REQUIREMENT: &str =
     r#"anchor apple generic and identifier "dev.usecornercase.gpui" and certificate leaf[subject.OU] = "P7C3YXZT2N""#;
@@ -14,6 +16,7 @@ const HDIUTIL: &str = "/usr/bin/hdiutil";
 const DITTO: &str = "/usr/bin/ditto";
 const CODESIGN: &str = "/usr/bin/codesign";
 const OPEN: &str = "/usr/bin/open";
+const KILL: &str = "/bin/kill";
 const REOPEN: &str =
     r#"pid=$1 app=$2; shift 2; while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done; exec "$0" -n "$app" --args "$@""#;
 
@@ -30,19 +33,53 @@ pub(crate) fn program_in(bundle: &Path) -> PathBuf {
     bundle.join("Contents").join("MacOS").join(install::PROGRAM)
 }
 
-pub(crate) fn is_old(file_name: &OsStr) -> bool {
-    file_name.to_string_lossy().starts_with(OLD_PREFIX)
+pub(crate) fn old_pid(file_name: &OsStr) -> Option<u32> {
+    let name = file_name.to_string_lossy();
+    name.strip_prefix(OLD_PREFIX)?.split('-').next()?.parse().ok()
+}
+
+pub(crate) fn is_free_old(file_name: &OsStr, alive: impl Fn(u32) -> bool) -> bool {
+    old_pid(file_name).is_some_and(|pid| !alive(pid))
+}
+
+pub(crate) fn alive(pid: u32) -> bool {
+    let mut cmd = platform::command(KILL);
+    cmd.args(["-0", &pid.to_string()]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    cmd.status().is_ok_and(|status| status.success())
+}
+
+pub(super) trait Steps {
+    fn copy_out(&self, image: &[u8], stage: &Path) -> Result<PathBuf>;
+    fn verify(&self, app: &Path) -> Result<()>;
+    fn check_version(&self, program: &Path, version: &str) -> Result<()>;
+}
+
+struct Tools;
+
+impl Steps for Tools {
+    fn copy_out(&self, image: &[u8], stage: &Path) -> Result<PathBuf> {
+        copied_out(image, stage)
+    }
+
+    fn verify(&self, app: &Path) -> Result<()> {
+        let failed = "the downloaded app is not signed by cornercase's developer, so it was not installed";
+        install::run_tool(Path::new(CODESIGN), &verify_args(app), failed)
+    }
+
+    fn check_version(&self, program: &Path, version: &str) -> Result<()> {
+        install::check_binary(program, version)
+    }
 }
 
 pub(super) fn install(image: &[u8], bundle: &Path, version: &str) -> Result<()> {
+    install_with(&Tools, image, bundle, version)
+}
+
+pub(super) fn install_with(steps: &impl Steps, image: &[u8], bundle: &Path, version: &str) -> Result<()> {
     let stage = Stage::beside(bundle)?;
-    let new = copied_out(image, stage.path())?;
-    install::run_tool(
-        Path::new(CODESIGN),
-        &verify_args(&new),
-        "the downloaded app is not signed by cornercase's developer, so it was not installed",
-    )?;
-    install::check_binary(&program_in(&new), version)?;
+    let new = steps.copy_out(image, stage.path())?;
+    steps.verify(&new)?;
+    steps.check_version(&program_in(&new), version)?;
     install::replace(&new, bundle, &aside(bundle)?)
 }
 
@@ -59,7 +96,7 @@ fn copied_out(image: &[u8], stage: &Path) -> Result<PathBuf> {
         &[app.into(), new.clone().into()],
         "could not copy the app out of the download",
     )?;
-    drop(opened);
+    opened.close()?;
     Ok(new)
 }
 
@@ -99,23 +136,33 @@ pub(crate) fn reopen(bundle: &Path, pid: u32, args: &[String]) -> (PathBuf, Vec<
     (PathBuf::from("/bin/sh"), lead.into_iter().chain(place).chain(args).collect())
 }
 
-struct Mount(PathBuf);
+struct Mount(Option<PathBuf>);
 
 impl Mount {
     fn attach(image: &Path, at: &Path) -> Result<Self> {
         install::run_tool(Path::new(HDIUTIL), &attach_args(image, at), "could not open the download")?;
-        Ok(Self(at.to_path_buf()))
+        Ok(Self(Some(at.to_path_buf())))
     }
 
-    fn detach(&self, force: bool) -> bool {
-        install::run_tool(Path::new(HDIUTIL), &detach_args(&self.0, force), "could not close the download").is_ok()
+    fn close(mut self) -> Result<()> {
+        let Some(at) = self.0.take() else { return Ok(()) };
+        if detach(&at, false) || detach(&at, true) {
+            return Ok(());
+        }
+        bail!("could not close the download, which is still open at {}; eject it with hdiutil detach", at.display())
     }
+}
+
+fn detach(at: &Path, force: bool) -> bool {
+    install::run_tool(Path::new(HDIUTIL), &detach_args(at, force), "could not close the download").is_ok()
 }
 
 impl Drop for Mount {
     fn drop(&mut self) {
-        if !self.detach(false) {
-            self.detach(true);
+        if let Some(at) = self.0.take()
+            && !detach(&at, false)
+        {
+            detach(&at, true);
         }
     }
 }

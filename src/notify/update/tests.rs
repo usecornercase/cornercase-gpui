@@ -27,6 +27,13 @@ fn there_is_no_chip_without_a_release() {
 }
 
 #[test]
+fn the_chip_keeps_installing_while_the_update_runs() {
+    let out = release("0.13.19");
+    let seen = Chip::of(false, Some("0.13.19".into()), Some(&out), &InstallState::Running);
+    assert_eq!(seen, Some(Chip::Installing("0.13.19".into())));
+}
+
+#[test]
 fn the_chip_follows_the_install() {
     let out = release("0.13.19");
     let running = Chip::of(false, None, Some(&out), &InstallState::Running);
@@ -49,7 +56,7 @@ fn an_install_by_the_server_or_this_window_offers_the_restart() {
 fn a_cornercase_already_on_disk_offers_the_restart() {
     let update = offered("0.13.19", false);
     assert_eq!(installed(&InstallState::Idle, Some(&update), disk("0.13.19")).as_deref(), Some("0.13.19"));
-    assert_eq!(installed(&InstallState::Idle, Some(&update), disk("0.13.20")).as_deref(), Some("0.13.19"));
+    assert_eq!(installed(&InstallState::Idle, Some(&update), disk("0.13.20")).as_deref(), Some("0.13.20"));
 }
 
 #[test]

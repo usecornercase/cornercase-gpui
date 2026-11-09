@@ -227,14 +227,18 @@ fn stale(path: &Path) -> bool {
 }
 
 pub(crate) fn sweep(os: Os, exe: &Path) {
+    sweep_with(os, exe, bundle::alive);
+}
+
+pub(crate) fn sweep_with(os: Os, exe: &Path, alive: impl Fn(u32) -> bool) {
     let home = home(os, exe).unwrap_or_else(|| exe.to_path_buf());
     let Some(entries) = home.parent().and_then(|folder| fs::read_dir(folder).ok()) else { return };
     for entry in entries.flatten() {
-        let name = entry.file_name();
+        let (name, path) = (entry.file_name(), entry.path());
         if is_old_copy(&name, exe) {
-            let _ = fs::remove_file(entry.path());
-        } else if bundle::is_old(&name) || (is_stage(&name) && stale(&entry.path())) {
-            let _ = fs::remove_dir_all(entry.path());
+            let _ = fs::remove_file(path);
+        } else if bundle::is_free_old(&name, &alive) || (is_stage(&name) && stale(&path)) {
+            let _ = fs::remove_dir_all(path);
         }
     }
 }

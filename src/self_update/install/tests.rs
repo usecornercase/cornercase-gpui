@@ -216,14 +216,17 @@ fn a_new_app_takes_the_old_ones_place_and_the_old_one_waits_aside() {
 }
 
 #[test]
-fn old_apps_beside_the_app_are_removed_at_start() {
+fn old_apps_beside_the_app_are_removed_once_their_window_has_quit() {
     let scratch = Scratch::folder("sweep-apps").expect("a folder");
     let app = scratch.path().join("cornercase.app");
     let exe = app.join("Contents").join("MacOS").join("cornercase-gpui");
     fs::create_dir_all(exe.parent().expect("a folder")).expect("folders");
     fs::write(&exe, "x").expect("a file");
-    let old = scratch.path().join(".cornercase-gpui-old-1-2");
-    fs::create_dir_all(old.join("Contents")).expect("an old app");
-    sweep(Os::Mac, &exe);
-    assert!(!old.exists() && exe.exists());
+    let (gone, running) =
+        (scratch.path().join(".cornercase-gpui-old-1-2"), scratch.path().join(".cornercase-gpui-old-7-2"));
+    for old in [&gone, &running] {
+        fs::create_dir_all(old.join("Contents")).expect("an old app");
+    }
+    sweep_with(Os::Mac, &exe, |pid| pid == 7);
+    assert!(!gone.exists() && running.exists() && exe.exists());
 }

@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fs;
 
 use super::*;
@@ -67,8 +68,83 @@ fn the_restart_waits_for_this_window_then_opens_the_app() {
 }
 
 #[test]
-fn old_apps_are_told_from_other_files() {
-    assert!(is_old(OsStr::new(".cornercase-gpui-old-12-345")));
-    assert!(!is_old(OsStr::new("cornercase.app")));
-    assert!(!is_old(OsStr::new(".cornercase-gpui-update-12")));
+fn an_old_app_names_the_window_that_set_it_aside() {
+    assert_eq!(old_pid(OsStr::new(".cornercase-gpui-old-12-345")), Some(12));
+    assert_eq!(old_pid(OsStr::new("cornercase.app")), None);
+    assert_eq!(old_pid(OsStr::new(".cornercase-gpui-update-12")), None);
+}
+
+#[test]
+fn an_old_app_is_kept_while_its_window_runs() {
+    let name = OsStr::new(".cornercase-gpui-old-12-345");
+    assert!(!is_free_old(name, |pid| pid == 12));
+    assert!(is_free_old(name, |_| false));
+    assert!(!is_free_old(OsStr::new("cornercase.app"), |_| false));
+}
+
+struct Fake {
+    signed: bool,
+    done: RefCell<Vec<&'static str>>,
+}
+
+impl Fake {
+    fn new(signed: bool) -> Self {
+        Self { signed, done: RefCell::new(Vec::new()) }
+    }
+}
+
+impl Steps for Fake {
+    fn copy_out(&self, _: &[u8], stage: &Path) -> Result<PathBuf> {
+        self.done.borrow_mut().push("copy");
+        let app = stage.join("cornercase.app");
+        fs::create_dir(&app)?;
+        fs::write(app.join("Info.plist"), "new")?;
+        Ok(app)
+    }
+
+    fn verify(&self, _: &Path) -> Result<()> {
+        self.done.borrow_mut().push("verify");
+        if self.signed { Ok(()) } else { anyhow::bail!("not signed") }
+    }
+
+    fn check_version(&self, _: &Path, _: &str) -> Result<()> {
+        self.done.borrow_mut().push("version");
+        Ok(())
+    }
+}
+
+fn installed_app(scratch: &Scratch) -> PathBuf {
+    let app = scratch.path().join("cornercase.app");
+    fs::create_dir(&app).expect("the app");
+    fs::write(app.join("Info.plist"), "old").expect("its plist");
+    app
+}
+
+fn old_apps(folder: &Path) -> Vec<PathBuf> {
+    let entries = fs::read_dir(folder).expect("the folder").flatten();
+    entries.map(|entry| entry.path()).filter(|path| old_pid(path.file_name().unwrap_or_default()).is_some()).collect()
+}
+
+#[test]
+fn an_app_without_the_teams_signature_is_not_installed() {
+    let scratch = Scratch::folder("unsigned").expect("a folder");
+    let app = installed_app(&scratch);
+    let steps = Fake::new(false);
+    assert!(install_with(&steps, b"dmg", &app, "0.2.0").is_err());
+    assert_eq!(*steps.done.borrow(), ["copy", "verify"]);
+    assert_eq!(fs::read_to_string(app.join("Info.plist")).expect("the old app"), "old");
+    assert_eq!(old_apps(scratch.path()), Vec::<PathBuf>::new());
+}
+
+#[test]
+fn a_signed_app_takes_the_old_ones_place_once_checked() {
+    let scratch = Scratch::folder("signed").expect("a folder");
+    let app = installed_app(&scratch);
+    let steps = Fake::new(true);
+    install_with(&steps, b"dmg", &app, "0.2.0").expect("installed");
+    assert_eq!(*steps.done.borrow(), ["copy", "verify", "version"]);
+    assert_eq!(fs::read_to_string(app.join("Info.plist")).expect("the new app"), "new");
+    let aside = old_apps(scratch.path());
+    assert_eq!(aside.len(), 1);
+    assert_eq!(fs::read_to_string(aside[0].join("Info.plist")).expect("the old app"), "old");
 }

@@ -30,11 +30,12 @@ impl Chip {
         if pending {
             return Some(Self::Pending);
         }
-        if let Some(version) = installed {
-            return Some(Self::Restart(version));
+        let out = release.map(|release| release.version.clone());
+        match (install, installed) {
+            (InstallState::Running, installed) => out.or(installed).map(Self::Installing),
+            (_, Some(version)) => Some(Self::Restart(version)),
+            (_, None) => out.map(Self::Found),
         }
-        let version = release?.version.clone();
-        Some(if *install == InstallState::Running { Self::Installing(version) } else { Self::Found(version) })
     }
 
     pub(crate) fn label(&self) -> String {
@@ -64,8 +65,11 @@ pub(crate) fn installed(install: &InstallState, update: Option<&Update>, on_disk
     }
     let update = update?;
     let release = update.release.as_ref()?;
-    let there = on_disk.zip(Version::parse(&release.version)).is_some_and(|(disk, out)| disk >= out);
-    (update.installed || there).then(|| release.version.clone())
+    if update.installed {
+        return Some(release.version.clone());
+    }
+    let out = Version::parse(&release.version)?;
+    on_disk.filter(|disk| *disk >= out).map(|disk| disk.to_string())
 }
 
 pub(crate) fn close(cx: &mut App) {
@@ -181,13 +185,13 @@ fn update_buttons(
     version: &str,
 ) -> impl IntoElement + use<> {
     let action = match (command, install) {
+        (_, InstallState::Running) => ui::busy_button("installing", "Installing…", ui::Tone::Primary),
         _ if installed => ui::danger_button("restart", "Restart…")
             .on_click(move |_: &ClickEvent, window, cx| show_restart(notifier.clone(), window, cx)),
         (Some(cmd), _) => ui::primary_button("copy", "Copy command").on_click(move |_: &ClickEvent, _, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(cmd.clone()));
             Store::get(cx).update(cx, |s, cx| s.toast("Copied", ToastKind::Info, cx));
         }),
-        (None, InstallState::Running) => ui::busy_button("installing", "Installing…", ui::Tone::Primary),
         (None, _) => ui::primary_button("install", format!("Install {version}"))
             .on_click(move |_: &ClickEvent, _, cx| notifier.update(cx, Notifier::install)),
     };
