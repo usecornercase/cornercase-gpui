@@ -86,7 +86,16 @@ impl SettingsPanel {
             })),
         );
         let cards: Vec<AnyElement> = snap.listed.iter().map(|listed| Self::theme_card(listed, snap, cx)).collect();
-        let gallery = div().flex().flex_wrap().gap(px(10.)).py(px(12.)).children(cards);
+        let mut cards = cards.into_iter();
+        let mut lines = Vec::new();
+        loop {
+            let line: Vec<AnyElement> = cards.by_ref().take(4).collect();
+            if line.is_empty() {
+                break;
+            }
+            lines.push(div().flex().gap(px(10.)).children(line));
+        }
+        let gallery = div().flex().flex_col().gap(px(10.)).py(px(12.)).children(lines);
         widgets::group("Theme", widgets::card().child(follow).child(gallery))
     }
 }
