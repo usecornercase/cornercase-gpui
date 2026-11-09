@@ -120,3 +120,18 @@ fn a_window_still_where_it_opened_writes_nothing() {
     keeper.take_window(placed(116.));
     assert_eq!(keeper.pending(), None);
 }
+
+#[test]
+fn a_change_reaches_the_file_and_a_second_write_has_nothing_to_add() {
+    let folder = std::env::temp_dir().join(format!("cornercase-gpui-keeper-{}", std::process::id()));
+    let path = path_in(&folder);
+    let mut keeper = Keeper::new(path.clone(), Saved::default());
+    keeper.start(Widths::default());
+    keeper.take_widths(widths(Some(321.), None));
+    keeper.take_window(placed(55.));
+    keeper.write().expect("the layout is written");
+    let on_disk = Saved::parse(&std::fs::read_to_string(&path).expect("the file exists"));
+    assert_eq!(on_disk, keeper.kept);
+    assert_eq!(keeper.pending(), None);
+    std::fs::remove_dir_all(&folder).expect("the folder is removed");
+}
