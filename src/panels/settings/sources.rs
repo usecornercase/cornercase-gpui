@@ -49,7 +49,7 @@ impl Source {
             .pl(px(8.))
             .pr(px(2.))
             .py(px(1.))
-            .rounded(px(radius::CONTROL))
+            .rounded(px(radius::control()))
             .hover(|s| s.bg(colours::hover()))
             .child(self.toggle(cx))
             .child(self.mover(-1, cx))

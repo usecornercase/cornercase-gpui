@@ -6,7 +6,7 @@ use gpui::{
 };
 
 use crate::notify::tip;
-use crate::theme::{ANSI, colours, hsla};
+use crate::theme::{ansi, colours};
 use crate::ui;
 use crate::ui::selection::{self, Fit};
 
@@ -37,7 +37,7 @@ fn edge_bar() -> Div {
 fn mark_bar(mark: Mark) -> Div {
     match mark {
         Mark::Added => line_bar(colours::done()),
-        Mark::Changed => line_bar(hsla(ANSI[4])),
+        Mark::Changed => line_bar(ansi(4)),
         Mark::Removed => edge_bar().bottom_0(),
         Mark::RemovedAbove => edge_bar().top_0(),
     }

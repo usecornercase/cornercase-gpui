@@ -144,7 +144,7 @@ fn port_row(port: &Port, row: Row<'_>) -> AnyElement {
         .items_center()
         .gap(px(12.))
         .p(px(12.))
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .bg(colours::terminal())
         .border_1()
         .border_color(colours::border())

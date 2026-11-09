@@ -22,7 +22,7 @@ fn team_colours(flow: &FlowSpec) -> (Rgba, Rgba) {
 }
 
 fn aurora(colour: Rgba, angle: f32, strength: f32) -> Div {
-    div().absolute().top_0().left_0().size_full().rounded(px(radius::CARD)).bg(linear_gradient(
+    div().absolute().top_0().left_0().size_full().rounded(px(radius::card())).bg(linear_gradient(
         angle,
         linear_color_stop(tint(colour, strength), 0.),
         linear_color_stop(tint(colour, 0.), 0.7),
@@ -30,7 +30,7 @@ fn aurora(colour: Rgba, angle: f32, strength: f32) -> Div {
 }
 
 fn shine() -> Div {
-    div().absolute().top_0().left(px(radius::CARD)).right(px(radius::CARD)).h(px(1.)).bg(linear_gradient(
+    div().absolute().top_0().left(px(radius::card())).right(px(radius::card())).h(px(1.)).bg(linear_gradient(
         90.,
         linear_color_stop(tint(colours::text(), 0.22), 0.),
         linear_color_stop(tint(colours::text(), 0.02), 1.),

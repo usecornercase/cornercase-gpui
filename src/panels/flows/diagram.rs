@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{
     Animation, AnimationExt as _, AnyElement, Div, FontWeight, IntoElement, ParentElement as _, Rgba, SharedString,
-    Styled as _, WeakEntity, div, ease_in_out, px, rgb, rgba,
+    Styled as _, WeakEntity, div, ease_in_out, px,
 };
 
 use super::FlowsPanel;
@@ -13,10 +13,10 @@ use super::cards::{ground, lead_card, role_card};
 use super::graph::{self, Curve, Graph, Label, Rect, Spot, Wire};
 use super::model::{Edge, FlowSpec, Member, Progress, Run, Step};
 use super::wires::{self, Ink, Line};
-use crate::theme::{colours, radius};
+use crate::theme::colour::mix;
+use crate::theme::{colours, palette_rgba, radius};
 use crate::ui::{self, Icon, glass, glass::tint, motion};
 
-const ROLE_COLOURS: [u32; 6] = [0x007a_a2f7, 0x00bb_9af7, 0x007d_cfff, 0x009e_ce6a, 0x0073_daca, 0x00e0_af68];
 const ENTER: Duration = Duration::from_millis(340);
 const STAGGER: Duration = Duration::from_millis(80);
 const TRAVEL: Duration = Duration::from_secs(1);
@@ -24,9 +24,20 @@ const RISE: f32 = 12.;
 const MARK: f32 = 24.;
 const BOARD_PAD: f32 = 18.;
 
+fn role_palette(index: usize) -> Rgba {
+    match index % 6 {
+        0 => palette_rgba(4),
+        1 => palette_rgba(5),
+        2 => palette_rgba(6),
+        3 => palette_rgba(2),
+        4 => mix(palette_rgba(2), palette_rgba(6), 0.5),
+        _ => palette_rgba(3),
+    }
+}
+
 pub(super) fn role_colour(flow: &FlowSpec, role: &str) -> Rgba {
     match flow.colour_index(role) {
-        Some(i) => rgb(ROLE_COLOURS[i % ROLE_COLOURS.len()]),
+        Some(i) => role_palette(i),
         None => colours::soft(),
     }
 }
@@ -133,12 +144,12 @@ fn board(room: Rc<Cell<f32>>) -> Div {
         .gap(px(14.))
         .py(px(26.))
         .px(px(BOARD_PAD))
-        .rounded(px(radius::CARD))
-        .bg(rgba(0x00_00_00_33))
+        .rounded(px(radius::card()))
+        .bg(colours::inset())
         .border_1()
         .border_color(colours::border())
         .overflow_hidden()
-        .child(wires::backdrop(rgba(0xff_ff_ff_10), room))
+        .child(wires::backdrop(colours::hover(), room))
 }
 
 fn layer() -> Div {
@@ -245,7 +256,7 @@ fn rail(plan: Plan, graph: &Graph, stage: usize) -> Line {
     let ink = if reached {
         Ink { glow: 0.18, ..Ink::plain(colours::brand_light(), colours::brand(), 2.) }
     } else {
-        Ink::plain(rgba(0xff_ff_ff_1c), rgba(0xff_ff_ff_1c), 2.)
+        Ink::plain(colours::selected(), colours::selected(), 2.)
     };
     let gap = MARK / 2. + 4.;
     let curve = Curve::line(Spot { x: from.x, y: from.y + gap }, Spot { x: to.x, y: to.y - gap });
@@ -255,7 +266,7 @@ fn rail(plan: Plan, graph: &Graph, stage: usize) -> Line {
 fn divider(graph: &Graph) -> Line {
     let (left, right) = graph.column;
     let y = graph.divider;
-    let faint = rgba(0xff_ff_ff_24);
+    let faint = colours::border();
     let curve = Curve::line(Spot { x: left, y }, Spot { x: right, y });
     Line { curves: vec![curve], tip: None, ink: Ink { dashed: true, ..Ink::plain(faint, faint, 1.) } }
 }
@@ -350,7 +361,7 @@ fn loop_colour(plan: Plan, stage: usize) -> Rgba {
 }
 
 fn end_layer(plan: Plan, graph: &Graph) -> Div {
-    let colour = if plan.ended() { colours::accent() } else { rgba(0xff_ff_ff_38) };
+    let colour = if plan.ended() { colours::accent() } else { colours::edge() };
     layer().child(wires::diamond(graph.end_marker(), 6., colour)).child(end_pill(plan, graph.end))
 }
 

@@ -2,7 +2,7 @@ use std::path::Path;
 
 use gpui::{Hsla, Styled as _, Svg, px, svg};
 
-use crate::theme::{ANSI, colours, hsla};
+use crate::theme::{ansi, colours};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tint {
@@ -18,12 +18,12 @@ pub(crate) enum Tint {
 impl Tint {
     fn colour(self) -> Hsla {
         match self {
-            Tint::Red => hsla(ANSI[1]),
-            Tint::Green => hsla(ANSI[2]),
-            Tint::Yellow => hsla(ANSI[3]),
-            Tint::Blue => hsla(ANSI[4]),
-            Tint::Magenta => hsla(ANSI[5]),
-            Tint::Cyan => hsla(ANSI[6]),
+            Tint::Red => ansi(1),
+            Tint::Green => ansi(2),
+            Tint::Yellow => ansi(3),
+            Tint::Blue => ansi(4),
+            Tint::Magenta => ansi(5),
+            Tint::Cyan => ansi(6),
             Tint::Soft => colours::soft().into(),
         }
     }

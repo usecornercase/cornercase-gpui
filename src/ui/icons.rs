@@ -62,6 +62,11 @@ pub(crate) enum Icon {
     Stop,
     Terminal,
     Download,
+    Palette,
+    Sun,
+    Moon,
+    SunMoon,
+    Upload,
     Waypoints,
     Message,
     ChevronRight,
@@ -108,7 +113,7 @@ pub(crate) enum Icon {
 }
 
 impl Icon {
-    const ALL: [Icon; 92] = [
+    const ALL: [Icon; 97] = [
         Icon::Changes,
         Icon::Files,
         Icon::Todo,
@@ -158,6 +163,11 @@ impl Icon {
         Icon::Stop,
         Icon::Terminal,
         Icon::Download,
+        Icon::Palette,
+        Icon::Sun,
+        Icon::Moon,
+        Icon::SunMoon,
+        Icon::Upload,
         Icon::Waypoints,
         Icon::Message,
         Icon::ChevronRight,
@@ -310,6 +320,11 @@ impl Icon {
             Icon::Devices => asset!("monitor-smartphone"),
             Icon::Rotate => asset!("rotate-cw-square"),
             Icon::Reload => asset!("rotate-cw"),
+            Icon::Palette => asset!("palette"),
+            Icon::Sun => asset!("sun"),
+            Icon::Moon => asset!("moon"),
+            Icon::SunMoon => asset!("sun-moon"),
+            Icon::Upload => asset!("upload"),
             _ => return None,
         })
     }

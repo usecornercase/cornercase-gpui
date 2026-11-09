@@ -73,7 +73,7 @@ fn paint(matrix: &Matrix, fit: Fit, bounds: Bounds<Pixels>, window: &mut Window)
     let scale = window.scale_factor();
     let (left, top) = (snapped(bounds.origin.x, scale), snapped(bounds.origin.y, scale));
     let ground = square(left, top, fit.side, fit.side);
-    window.paint_quad(fill(ground, colours::code_ground()).corner_radii(px(radius::CONTROL)));
+    window.paint_quad(fill(ground, colours::code_ground()).corner_radii(px(radius::control())));
     let at = |module: u16| f32::from(QUIET + module) * fit.module;
     for run in matrix.runs() {
         let bar = square(left + at(run.x), top + at(run.y), f32::from(run.length) * fit.module, fit.module);

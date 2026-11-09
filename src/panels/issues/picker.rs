@@ -36,7 +36,7 @@ impl IssuesPanel {
 
     fn picker_card(&self, index: usize, field: &str, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
         let (rows, note) = self.who_rows(index, cx);
-        let card = glass::card(radius::CARD)
+        let card = glass::card(radius::card())
             .id("issues-picker")
             .occlude()
             .w(px(280.))
@@ -133,7 +133,7 @@ fn who_row(
         .gap(px(8.))
         .px(px(10.))
         .py(px(5.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .cursor_pointer()
         .text_color(colours::text())
         .hover(|s| s.bg(glass::cobalt()).text_color(colours::on_brand()))

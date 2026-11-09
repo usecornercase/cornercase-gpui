@@ -391,7 +391,7 @@ fn error_note(text: String) -> Div {
         .items_start()
         .gap(px(8.))
         .bg(glass::tint(colours::failed(), 0.08))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .px(px(10.))
         .py(px(7.))
         .text_size(px(12.))
@@ -438,8 +438,8 @@ fn frame(width: f32) -> Div {
         .flex_col()
         .border_l_1()
         .border_color(colours::border())
-        .rounded_br(px(radius::SHEET - 1.))
-        .bg(colours::sidebar())
+        .rounded_br(px(radius::sheet() - 1.))
+        .bg(colours::inset())
 }
 
 impl QueuePanel {

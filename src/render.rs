@@ -76,7 +76,7 @@ pub(crate) struct Surface<'a> {
 }
 
 pub(crate) fn card(bounds: Bounds<Pixels>, colour: impl Into<Hsla>, edge: Rgba, window: &mut Window) {
-    let corner = px(radius::CARD);
+    let corner = px(radius::card());
     window.paint_quad(fill(bounds, colour.into()).corner_radii(corner));
     window.paint_quad(quad(bounds, corner, transparent_black(), px(1.), edge, BorderStyle::Solid));
 }
@@ -99,7 +99,7 @@ pub(crate) fn paint(grid: &Grid, surface: &Surface<'_>, window: &mut Window, cx:
 }
 
 fn pane_card(bounds: Bounds<Pixels>, (fill_colour, edge): (Hsla, Rgba), look: Look, window: &mut Window) {
-    let corner = px(radius::CARD);
+    let corner = px(radius::card());
     window.paint_quad(fill(bounds, faded(fill_colour, 1. - 0.6 * look.hollow)).corner_radii(corner));
     let solid = faded(edge.into(), look.shown * (1. - look.hollow));
     window.paint_quad(quad(bounds, corner, transparent_black(), px(1.), solid, BorderStyle::Solid));
@@ -112,7 +112,7 @@ fn pane_card(bounds: Bounds<Pixels>, (fill_colour, edge): (Hsla, Rgba), look: Lo
 fn paint_pane(pane: &PaneGrid, card: &Card, surface: &Surface<'_>, window: &mut Window, cx: &mut App) {
     let (at, look) = surface.stage.shown(card);
     let several = surface.layout.cards.len() > 1;
-    let painter = Painter { colours: &pane.colours };
+    let painter = Painter::new(&pane.colours);
     let edge = if several && pane.active { colours::edge() } else { colours::border() };
     let dim = if surface.dimmed { DIMMED } else { 1. };
     let fade = if fades(surface.dim_inactive, several, pane.active) { INACTIVE } else { 1. } * look.shown * dim;
@@ -163,7 +163,7 @@ fn hline(window: &mut Window, at: Point<Pixels>, width: Pixels, colour: Hsla) {
 
 impl<'a> PaneCanvas<'a> {
     fn plain(pane: &'a PaneGrid, metrics: &'a Metrics, top_left: Point<Pixels>, fade: f32) -> Self {
-        let painter = Painter { colours: &pane.colours };
+        let painter = Painter::new(&pane.colours);
         let default_bg = hsla(painter.default_bg());
         Self { metrics, painter, top_left, default_bg, cursor: None, focused: false, fade }
     }

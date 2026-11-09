@@ -110,14 +110,18 @@ pub(crate) fn load() -> Prefs {
     std::fs::read_to_string(path()).map(|text| Prefs::parse(&text)).unwrap_or_default()
 }
 
-pub(crate) fn save(prefs: &Prefs) -> Result<()> {
-    let path = path();
-    let folder = path.parent().context("the settings file has no folder")?;
+pub(crate) fn write_atomic(path: &Path, text: &str) -> Result<()> {
+    let folder = path.parent().context("the file has no folder")?;
     std::fs::create_dir_all(folder).with_context(|| format!("could not create {}", folder.display()))?;
-    let written = path.with_extension("json.new");
-    std::fs::write(&written, serde_json::to_string_pretty(prefs)? + "\n")
-        .with_context(|| format!("could not write {}", written.display()))?;
-    std::fs::rename(&written, &path).with_context(|| format!("could not save {}", path.display()))
+    let mut name = path.file_name().map(std::ffi::OsString::from).unwrap_or_default();
+    name.push(".new");
+    let written = path.with_file_name(name);
+    std::fs::write(&written, text).with_context(|| format!("could not write {}", written.display()))?;
+    std::fs::rename(&written, path).with_context(|| format!("could not save {}", path.display()))
+}
+
+pub(crate) fn save(prefs: &Prefs) -> Result<()> {
+    write_atomic(&path(), &(serde_json::to_string_pretty(prefs)? + "\n"))
 }
 
 #[cfg(test)]

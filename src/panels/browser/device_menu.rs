@@ -47,7 +47,7 @@ impl Browser {
 
     fn device_popover(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let rows: Vec<_> = PRESETS.iter().map(|p| self.device_row(Device::of(Some(*p)), cx)).collect();
-        let card = glass::card(radius::CARD)
+        let card = glass::card(radius::card())
             .id("browser-devices-menu")
             .occlude()
             .w(px(MENU_WIDTH))
@@ -87,7 +87,7 @@ impl Browser {
             .h(px(ROW))
             .px(px(8.))
             .text_color(colours::text())
-            .rounded(px(radius::CONTROL))
+            .rounded(px(radius::control()))
             .hover(|s| s.bg(glass::cobalt()).text_color(colours::on_brand()))
             .cursor_pointer()
             .child(tick(current, &group))

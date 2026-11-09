@@ -1,6 +1,6 @@
 use gpui::{
     ClickEvent, Context, Div, FontWeight, InteractiveElement as _, ParentElement as _, Stateful,
-    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px, rgba,
+    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
 use super::FlowsPanel;
@@ -185,8 +185,8 @@ fn prompt(role: &RoleSpec) -> Div {
         .mx(px(12.))
         .mb(px(12.))
         .p(px(12.))
-        .rounded(px(radius::CONTROL))
-        .bg(rgba(0x00_00_00_38))
+        .rounded(px(radius::control()))
+        .bg(colours::inset())
         .border_1()
         .border_color(colours::border())
         .text_size(px(12.))

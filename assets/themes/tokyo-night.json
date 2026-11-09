@@ -1,0 +1,42 @@
+{
+  "name": "Tokyo Night",
+  "extends": "cornercase-dark",
+  "terminal": {
+    "foreground": "#c0caf5",
+    "background": "#1a1b26",
+    "black": "#15161e",
+    "red": "#f7768e",
+    "green": "#9ece6a",
+    "yellow": "#e0af68",
+    "blue": "#7aa2f7",
+    "magenta": "#bb9af7",
+    "cyan": "#7dcfff",
+    "white": "#a9b1d6",
+    "bright_black": "#565f89",
+    "bright_red": "#f7768e",
+    "bright_green": "#9ece6a",
+    "bright_yellow": "#e0af68",
+    "bright_blue": "#7aa2f7",
+    "bright_magenta": "#bb9af7",
+    "bright_cyan": "#7dcfff",
+    "bright_white": "#c0caf5"
+  },
+  "chrome": {
+    "glass": "#16161e",
+    "raised": "#1f2335",
+    "surface": "#2e303f",
+    "text": "#d3daf8",
+    "soft": "#c0caf5",
+    "muted": "#868dad",
+    "faint": "#6d728e",
+    "veil": "#0d0e13",
+    "brand": "#7aa2f7",
+    "on_brand": "#1a1b26",
+    "accent": "#a9c3fa",
+    "working": "#e0af68",
+    "waiting": "#ff9e64",
+    "done": "#9ece6a",
+    "failed": "#f7768e",
+    "merged": "#bb9af7"
+  }
+}

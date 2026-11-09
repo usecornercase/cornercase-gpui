@@ -107,7 +107,7 @@ fn command(index: usize, hint: String) -> Div {
         .pl(px(10.))
         .pr(px(3.))
         .py(px(3.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(colours::field())
         .border_1()
         .border_color(colours::border())

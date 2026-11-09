@@ -37,7 +37,7 @@ fn toast_view(store: &Entity<Store>, toast: Toast) -> Stateful<Div> {
     let id = toast.id;
     let (go, dismiss) = (store.clone(), store.clone());
     let colour = toast_colour(toast.kind);
-    ui::glass::card(radius::CARD)
+    ui::glass::card(radius::card())
         .id(SharedString::from(format!("toast-{id}")))
         .w(px(348.))
         .flex()
@@ -74,7 +74,7 @@ fn toast_count(count: u32) -> impl IntoElement {
     div()
         .flex_none()
         .px(px(6.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .bg(colours::selected())
         .text_size(px(11.))
         .text_color(colours::muted())

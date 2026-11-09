@@ -40,7 +40,7 @@ fn script_lines(text: &str) -> Div {
         .w(px(Look::SCRIPT.width))
         .px(px(10.))
         .py(px(6.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(colours::field())
         .border_1()
         .border_color(colours::edge())

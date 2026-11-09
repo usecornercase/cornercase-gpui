@@ -28,7 +28,7 @@ pub(super) fn parse<T: DeserializeOwned>(result: anyhow::Result<String>) -> anyh
 
 pub(super) fn looks(styles: &[Style]) -> Vec<Look> {
     let colours = Colours::default();
-    let painter = Painter { colours: &colours };
+    let painter = Painter::new(&colours);
     styles.iter().map(|style| Look { fg: painter.resolve(style).0, bold: style.bold, italic: style.italic }).collect()
 }
 

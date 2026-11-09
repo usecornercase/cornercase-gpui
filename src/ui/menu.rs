@@ -47,7 +47,7 @@ pub(crate) fn dropdown(id: impl Into<ElementId>, edge: Rgba) -> Stateful<Div> {
         .gap(px(8.))
         .px(px(10.))
         .py(px(5.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .text_size(px(12.))
         .bg(colours::hover())
         .border_1()
@@ -79,7 +79,7 @@ pub(crate) fn backdrop(
 }
 
 pub(crate) fn card(id: impl Into<ElementId>, focus: &FocusHandle, scroll: &ScrollHandle) -> Stateful<Div> {
-    glass::card(radius::CARD)
+    glass::card(radius::card())
         .id(id)
         .track_focus(focus)
         .track_scroll(scroll)
@@ -101,7 +101,7 @@ pub(crate) fn entry(id: impl Into<ElementId>, lit: bool, check: Option<Svg>) -> 
         .gap(px(8.))
         .px(px(10.))
         .py(px(6.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .cursor_pointer()
         .when(lit, |d| d.bg(glass::cobalt()))
         .child(div().w(px(13.)).pt(px(2.)).flex_none().children(check))

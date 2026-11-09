@@ -19,7 +19,7 @@ pub(super) fn dock_card(kind: PanelKind, view: AnyView, store: &Entity<Store>, w
         .size_full()
         .flex()
         .flex_col()
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .bg(colours::surface())
         .border_1()
         .border_color(colours::border())

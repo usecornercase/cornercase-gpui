@@ -383,7 +383,7 @@ pub(crate) fn action(id: impl Into<ElementId>, label: &'static str) -> Stateful<
     div()
         .id(id)
         .px(px(6.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .text_size(px(11.))
         .text_color(colours::muted())
         .cursor_pointer()

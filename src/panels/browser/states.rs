@@ -48,7 +48,7 @@ fn code(text: &'static str) -> Div {
     div()
         .px(px(8.))
         .py(px(3.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .bg(colours::panel())
         .border_1()
         .border_color(colours::border())

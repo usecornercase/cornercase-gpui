@@ -213,6 +213,26 @@ fn relative_fixture(source: &Source) -> bool {
     source.path != "src/test_util.rs" && source.code.contains("include_str!(\"")
 }
 
+fn makes_a_colour(source: &Source) -> bool {
+    let themed = source.path == "src/theme.rs" || source.path.starts_with("src/theme/");
+    let tests =
+        source.path.starts_with("tests/") || source.path.ends_with("/tests.rs") || source.path.contains("/tests/");
+    if themed || tests {
+        return false;
+    }
+    ["rgb(", "rgba("].iter().any(|call| {
+        source.code.match_indices(call).any(|(at, _)| {
+            let before = source.code[..at].chars().next_back();
+            !before.is_some_and(|c| c.is_alphanumeric() || c == '_') || source.code[..at].ends_with("gpui::")
+        })
+    })
+}
+
+#[test]
+fn colours_come_from_the_theme() {
+    check("a colour made outside the theme", &[], makes_a_colour);
+}
+
 #[test]
 fn files_stay_within_the_line_limit() {
     check("over 1,000 lines", LONG_FILES, |s| s.text.lines().count() > MAX_LINES);

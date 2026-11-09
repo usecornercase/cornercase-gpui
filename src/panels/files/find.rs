@@ -404,7 +404,7 @@ impl FilesPanel {
         let find = viewer.find.as_ref().filter(|_| self.can_find())?;
         let focused = find.field.read(cx).focus_handle(cx).is_focused(window);
         let blank = find.field.read(cx).text().trim().is_empty();
-        let card = ui::glass::card(radius::CARD)
+        let card = ui::glass::card(radius::card())
             .flex()
             .items_center()
             .gap(px(4.))

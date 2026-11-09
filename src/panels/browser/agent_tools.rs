@@ -37,7 +37,7 @@ fn entry(id: impl Into<gpui::ElementId>, glyph: Icon, label: impl Into<SharedStr
 }
 
 fn menu_card(id: &'static str, width: f32, cx: &mut Context<Browser>) -> Stateful<Div> {
-    glass::card(radius::CARD)
+    glass::card(radius::card())
         .id(id)
         .occlude()
         .w(px(width))
@@ -220,7 +220,7 @@ fn endpoint_row(endpoint: Option<String>, cx: &mut Context<Browser>) -> impl Int
         .flex()
         .items_center()
         .gap(px(6.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(colours::panel())
         .child(div().flex_1().min_w_0().flex().text_size(px(12.)).text_color(colours::text()).child(ui::one_line(url)))
         .child(ui::tool_button("browser-agents-copy", Icon::Copy, 22., false).tooltip(tip("Copy")).on_click(
@@ -232,7 +232,7 @@ fn endpoint_row(endpoint: Option<String>, cx: &mut Context<Browser>) -> impl Int
 }
 
 pub(super) fn reloaded(label: String) -> impl IntoElement {
-    let pill = glass::card(radius::CARD)
+    let pill = glass::card(radius::card())
         .flex()
         .items_center()
         .gap(px(6.))

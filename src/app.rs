@@ -1,6 +1,7 @@
 mod connection;
 mod dock;
 pub(crate) mod frame;
+mod looks;
 pub(crate) mod machine;
 mod status;
 mod surface;
@@ -129,6 +130,8 @@ pub(crate) struct Root {
     pub(crate) dock_focus: FocusHandle,
     beat: Rc<motion::Beat>,
     pub(crate) counting: Counting,
+    given: looks::Given,
+    palette_settled: u64,
 }
 
 impl Focusable for Root {
@@ -229,6 +232,7 @@ impl Root {
         let mut root = Self::fresh((focus, cx.focus_handle()), store, tx, queue, notifier);
         kept.apply(&mut root);
         root.start(cx);
+        root.follow_appearance(window, cx);
         Self::take_back_colours_on_quit(cx);
         root
     }
@@ -325,6 +329,8 @@ impl Root {
             dock_focus,
             beat: Rc::default(),
             counting: Counting::default(),
+            given: looks::Given::of(theme::terminal_json()),
+            palette_settled: 0,
         }
     }
 
@@ -410,6 +416,7 @@ impl Root {
 
     fn handle(&mut self, msg: Msg, cx: &mut Context<Self>) {
         if matches!(msg, Msg::Started(_)) {
+            self.given.forget();
             plugins::follow_window_processes(cx);
         }
         match msg {
@@ -764,7 +771,7 @@ fn bell_flash() -> Div {
     div()
         .absolute()
         .inset_0()
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .border_2()
         .border_color(colours::working())
         .bg(ui::glass::tint(colours::working(), 0.07))
@@ -787,7 +794,7 @@ fn occluder() -> Div {
 }
 
 fn sheet_card(kind: PanelKind, view: AnyView, store: &Entity<Store>) -> Stateful<Div> {
-    ui::glass::card(radius::SHEET)
+    ui::glass::card(radius::sheet())
         .id("sheet")
         .w(gpui::relative(0.82))
         .h(gpui::relative(0.86))
@@ -839,7 +846,7 @@ fn font_size_from_env() -> f32 {
 fn start_server(tx: &UnboundedSender<Msg>, (cols, rows): (u16, u16), chosen: Option<String>) {
     let msg = start_message(cli::ensure_binary(chosen), || {
         let args = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-"];
-        cli::run_with_stdin(&args, Some(&theme::theme_json())).map_err(|e| e.to_string())
+        cli::run_with_stdin(&args, Some(&theme::terminal_json())).map_err(|e| e.to_string())
     });
     let _ = tx.unbounded_send(msg);
 }
@@ -869,7 +876,7 @@ impl Render for Root {
             let s = self.store.read(cx);
             (s.sheet, s.dialog.clone())
         };
-        let sheet = sheet.map(|kind| self.render_sheet(kind, window_frame, window, cx));
+        let sheet = sheet.map(|kind| self.sheet_or_peek(kind, window_frame, window, cx));
         let content = div()
             .size_full()
             .relative()

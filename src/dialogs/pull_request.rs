@@ -244,7 +244,7 @@ fn check_line(at: usize, line: CheckLine) -> Stateful<Div> {
         .gap(px(8.))
         .px(px(8.))
         .py(px(3.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .text_size(px(12.5))
         .text_color(colours::soft())
         .child(ui::icon(glyph, 13.).text_color(ink))
