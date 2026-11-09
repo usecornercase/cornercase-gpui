@@ -6,10 +6,67 @@ use gpui::{
 
 use super::feed::{Notes, Release, Update};
 use super::{InstallState, Notifier};
+use crate::cli::Version;
 use crate::dialogs::frame;
 use crate::store::{Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Chip {
+    Pending,
+    Restart(String),
+    Installing(String),
+    Found(String),
+}
+
+impl Chip {
+    pub(crate) fn of(
+        pending: bool,
+        installed: Option<String>,
+        release: Option<&Release>,
+        install: &InstallState,
+    ) -> Option<Self> {
+        if pending {
+            return Some(Self::Pending);
+        }
+        if let Some(version) = installed {
+            return Some(Self::Restart(version));
+        }
+        let version = release?.version.clone();
+        Some(if *install == InstallState::Running { Self::Installing(version) } else { Self::Found(version) })
+    }
+
+    pub(crate) fn label(&self) -> String {
+        match self {
+            Self::Pending => "↻ cornercase restart pending".to_string(),
+            Self::Restart(version) => format!("↻ restart cornercase for {version}"),
+            Self::Installing(version) => format!("installing cornercase {version}…"),
+            Self::Found(version) => format!("↑ cornercase {version}"),
+        }
+    }
+
+    pub(crate) fn tip(&self) -> String {
+        match self {
+            Self::Pending => "Restarts once no agent is in the middle of a turn. Click to cancel.".to_string(),
+            Self::Restart(version) => {
+                format!("cornercase {version} is installed; the server runs the old one until it restarts.")
+            }
+            Self::Installing(version) => format!("Installing cornercase {version}…"),
+            Self::Found(version) => format!("cornercase {version} is out: see what changed"),
+        }
+    }
+}
+
+pub(crate) fn installed(install: &InstallState, update: Option<&Update>, on_disk: Option<Version>) -> Option<String> {
+    if let InstallState::Done(version) = install {
+        return Some(version.clone());
+    }
+    let update = update?;
+    let release = update.release.as_ref()?;
+    let there = on_disk.zip(Version::parse(&release.version)).is_some_and(|(disk, out)| disk >= out);
+    (update.installed || there).then(|| release.version.clone())
+}
 
 pub(crate) fn close(cx: &mut App) {
     Store::get(cx).update(cx, Store::close_dialog);
@@ -53,16 +110,17 @@ impl Render for UpdateDialog {
             ));
         };
         let command = update.install.as_ref().filter(|i| i.method == "command").and_then(|i| i.command.clone());
-        let status = install_status(&install, &update);
+        let installed = n.installed_version();
+        let status = install_status(&install, &update, installed.as_deref());
         let body = div()
             .flex()
             .flex_col()
             .gap(px(10.))
-            .child(ui::dim(format!("You run {running}. What changed since:")))
+            .child(ui::dim(format!("You run cornercase {running}. What changed since:")))
             .child(release_notes(&release))
             .child(div().text_size(px(12.)).text_color(colours::muted()).child(how_to_install(command.as_deref())))
             .when_some(status, |d, (text, colour)| d.child(div().text_size(px(12.)).text_color(colour).child(text)));
-        let buttons = update_buttons(self.notifier.clone(), command, &install, &release.version);
+        let buttons = update_buttons(self.notifier.clone(), (command, installed.is_some()), &install, &release.version);
         dialog.child(frame(format!("cornercase {} is out", release.version), body, buttons))
     }
 }
@@ -100,12 +158,12 @@ fn notes_section(section: &Notes) -> impl IntoElement + use<> {
         )
 }
 
-fn install_status(install: &InstallState, update: &Update) -> Option<(String, Rgba)> {
-    match install {
-        InstallState::Running => Some(("Downloading and installing…".into(), colours::muted())),
-        InstallState::Done(v) => Some((format!("cornercase {v} is installed. Restart to use it."), colours::done())),
-        InstallState::Failed(e) => Some((e.clone(), colours::failed())),
-        InstallState::Idle => update.install_error.clone().map(|e| (e, colours::failed())),
+fn install_status(install: &InstallState, update: &Update, installed: Option<&str>) -> Option<(String, Rgba)> {
+    match (install, installed) {
+        (InstallState::Running, _) => Some(("Downloading and installing…".into(), colours::muted())),
+        (InstallState::Failed(e), _) => Some((e.clone(), colours::failed())),
+        (_, Some(v)) => Some((format!("cornercase {v} is installed. Restart to use it."), colours::done())),
+        (_, None) => update.install_error.clone().map(|e| (e, colours::failed())),
     }
 }
 
@@ -118,18 +176,18 @@ fn how_to_install(command: Option<&str>) -> String {
 
 fn update_buttons(
     notifier: Entity<Notifier>,
-    command: Option<String>,
+    (command, installed): (Option<String>, bool),
     install: &InstallState,
     version: &str,
 ) -> impl IntoElement + use<> {
     let action = match (command, install) {
+        _ if installed => ui::danger_button("restart", "Restart…")
+            .on_click(move |_: &ClickEvent, window, cx| show_restart(notifier.clone(), window, cx)),
         (Some(cmd), _) => ui::primary_button("copy", "Copy command").on_click(move |_: &ClickEvent, _, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(cmd.clone()));
             Store::get(cx).update(cx, |s, cx| s.toast("Copied", ToastKind::Info, cx));
         }),
         (None, InstallState::Running) => ui::busy_button("installing", "Installing…", ui::Tone::Primary),
-        (None, InstallState::Done(_)) => ui::danger_button("restart", "Restart…")
-            .on_click(move |_: &ClickEvent, window, cx| show_restart(notifier.clone(), window, cx)),
         (None, _) => ui::primary_button("install", format!("Install {version}"))
             .on_click(move |_: &ClickEvent, _, cx| notifier.update(cx, Notifier::install)),
     };
@@ -177,3 +235,6 @@ impl Render for RestartDialog {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests;

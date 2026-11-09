@@ -1,3 +1,4 @@
+mod bundle;
 mod dialog;
 mod fetch;
 mod install;
@@ -31,6 +32,7 @@ const RELEASES_URL: &str = "https://api.github.com/repos/usecornercase/cornercas
 const URL_VARIABLE: &str = "CORNERCASE_GPUI_RELEASES_URL";
 const RELEASED: bool = option_env!("CORNERCASE_GPUI_RELEASE").is_some();
 const CURRENT: &str = env!("CARGO_PKG_VERSION");
+const NAME: &str = env!("CARGO_PKG_NAME");
 
 pub(crate) struct Updater {
     exe: Option<PathBuf>,
@@ -54,19 +56,19 @@ enum ChipState {
 impl ChipState {
     fn label(&self) -> String {
         match self {
-            Self::Installing(version) => format!("installing window {version}…"),
-            Self::Installed(version) => format!("↻ restart window for {version}"),
-            Self::Found(version) => format!("↑ window {version}"),
+            Self::Installing(version) => format!("installing {NAME} {version}…"),
+            Self::Installed(version) => format!("↻ restart {NAME} for {version}"),
+            Self::Found(version) => format!("↑ {NAME} {version}"),
         }
     }
 
     fn tip(&self) -> String {
         match self {
-            Self::Installing(version) => format!("Installing cornercase-gpui {version}…"),
+            Self::Installing(version) => format!("Installing {NAME} {version}…"),
             Self::Installed(version) => {
-                format!("cornercase-gpui {version} is installed; this window runs {CURRENT} until it restarts")
+                format!("{NAME} {version} is installed; this one runs {CURRENT} until it restarts")
             }
-            Self::Found(version) => format!("cornercase-gpui {version} is out: see what changed"),
+            Self::Found(version) => format!("{NAME} {version} is out: see what changed"),
         }
     }
 }
@@ -88,7 +90,7 @@ fn wants_check(config: Option<&Value>) -> bool {
 pub(crate) fn start(cx: &mut App) {
     let exe = std::env::current_exe().ok();
     if let Some(exe) = exe.clone() {
-        cx.background_spawn(async move { install::sweep(&exe) }).detach();
+        cx.background_spawn(async move { install::sweep(Os::CURRENT, &exe) }).detach();
     }
     let Some(url) = releases_url(std::env::var(URL_VARIABLE).ok(), cfg!(debug_assertions)) else { return };
     let updater = cx.new(|_| Updater::new(url, exe));
@@ -181,7 +183,7 @@ impl Updater {
         }
         self.install = InstallState::Running;
         cx.notify();
-        let busy = Busy::new("window-update", format!("Installing cornercase-gpui {}…", latest.version));
+        let busy = Busy::new("window-update", format!("Installing {NAME} {}…", latest.version));
         let secure = fetch::secure(&self.url);
         let work = move || install::install(&latest, &asset, &exe, Os::CURRENT, secure);
         store::run_local_busy(cx, busy, work, |this, result, cx| {

@@ -26,7 +26,7 @@ fn there_is_no_chip_without_a_release() {
 #[test]
 fn the_chip_says_what_is_out() {
     let state = chip(Some(found("0.2.0", false)), InstallState::Idle).expect("a chip");
-    assert_eq!(state.label(), "↑ window 0.2.0");
+    assert_eq!(state.label(), "↑ cornercase-gpui 0.2.0");
     assert!(state.tip().contains("0.2.0 is out"));
 }
 
@@ -34,14 +34,14 @@ fn the_chip_says_what_is_out() {
 fn the_chip_spins_while_installing() {
     let state = chip(Some(found("0.2.0", false)), InstallState::Running).expect("a chip");
     assert_eq!(state, ChipState::Installing("0.2.0".into()));
-    assert_eq!(state.label(), "installing window 0.2.0…");
+    assert_eq!(state.label(), "installing cornercase-gpui 0.2.0…");
 }
 
 #[test]
 fn the_chip_offers_the_restart_once_installed() {
     let state = chip(Some(found("0.2.0", false)), InstallState::Done("0.2.0".into())).expect("a chip");
-    assert_eq!(state.label(), "↻ restart window for 0.2.0");
-    assert!(state.tip().contains(&format!("runs {CURRENT} until it restarts")));
+    assert_eq!(state.label(), "↻ restart cornercase-gpui for 0.2.0");
+    assert!(state.tip().contains(&format!("this one runs {CURRENT} until it restarts")));
 }
 
 #[test]

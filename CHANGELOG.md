@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.36
+
+- **The app updates itself on macOS too.** Install in its update dialog now downloads the release, checks it was signed by cornercase's developer and puts it in place of `cornercase.app`; Restart opens the new version on the same tab, and your terminals and agents keep running. No more opening the DMG and dragging the app to Applications. If the app sits in a folder it cannot write, the dialog still offers the download.
+- **Each update says what it updates.** The status bar now reads `↑ cornercase 0.13.19` for cornercase and `↑ cornercase-gpui 0.1.36` for this app, instead of `↑ 0.13.19` and `↑ window 0.1.36`, and so do their installing and restart chips and dialogs.
+- **Updating cornercase with Homebrew no longer leaves the update showing.** After `brew upgrade cornercase`, or any install the server did not make itself, the chip turns into `↻ restart cornercase for 0.13.19` within seconds, since the new version is already on disk and only the restart is left. This works for the server on this computer; one on another machine keeps showing the update until it restarts.
+
 ## 0.1.35
 
 - **A hunk's Copy keeps tabs.** A hunk copied in the Changes panel now has the file's own tabs, so a Makefile's hunk applies. `patch` takes it as copied; `git apply` takes it once `--- a/FILE` and `+++ b/FILE` go above it, since it refuses any hunk with no file header. A hunk of a CRLF file, or one on a last line with no newline, still does not apply.
