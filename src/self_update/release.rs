@@ -4,7 +4,7 @@ use sha2::{Digest as _, Sha256};
 
 use super::install::Way;
 use crate::cli::Version;
-use crate::notify::{Notes, Release};
+use crate::notify::Notes;
 use crate::platform::Os;
 
 const FALLBACK_PAGE: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/releases");
@@ -31,12 +31,6 @@ pub(crate) struct Found {
     pub way: Way,
     pub on_disk: bool,
     pub changelog: bool,
-}
-
-impl Found {
-    pub(crate) fn release(&self) -> Release {
-        Release { version: self.latest.version.clone(), notes: self.notes.clone() }
-    }
 }
 
 #[derive(Deserialize)]

@@ -13,7 +13,11 @@ use crate::theme::{colours, radius};
 pub(crate) type OnLink = Rc<dyn Fn(&str, &mut App)>;
 
 pub(crate) fn blocks(id: &str, blocks: &[Block]) -> Vec<AnyElement> {
-    blocks.iter().enumerate().map(|(i, b)| block(SharedString::from(format!("{id}-{i}")), b)).collect()
+    linked_blocks(id, blocks, &opens_the_address())
+}
+
+pub(crate) fn linked_blocks(id: &str, blocks: &[Block], on_link: &OnLink) -> Vec<AnyElement> {
+    blocks.iter().enumerate().map(|(i, b)| linked_block(SharedString::from(format!("{id}-{i}")), b, on_link)).collect()
 }
 
 pub(crate) fn raw(source: &str) -> AnyElement {
@@ -21,8 +25,11 @@ pub(crate) fn raw(source: &str) -> AnyElement {
 }
 
 pub(crate) fn block(id: SharedString, block: &Block) -> AnyElement {
-    let opens_the_address: OnLink = Rc::new(|url, cx| cx.open_url(url));
-    linked_block(id, block, &opens_the_address)
+    linked_block(id, block, &opens_the_address())
+}
+
+fn opens_the_address() -> OnLink {
+    Rc::new(|url, cx| cx.open_url(url))
 }
 
 pub(crate) fn linked_block(id: SharedString, block: &Block, on_link: &OnLink) -> AnyElement {
