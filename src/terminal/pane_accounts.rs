@@ -131,7 +131,7 @@ pub(super) fn face(metrics: &Metrics) -> Div {
         .gap(px(3.))
         .h(px(HEIGHT))
         .px(px(4.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .whitespace_nowrap()
         .font_family(metrics.family.clone())
         .text_size(px(TEXT))

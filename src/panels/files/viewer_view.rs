@@ -217,7 +217,7 @@ impl FilesPanel {
         let room = viewer.room();
         let bar = self.line_bar(cx);
         let code = selection::body(cx)
-            .rounded_b(px(radius::CARD - 1.))
+            .rounded_b(px(radius::card() - 1.))
             .child(Self::viewer_body(viewer, cx))
             .children(self.find_bar(window, cx))
             .child(selection::layer(cx.weak_entity(), &viewer.selecting, bar, room));

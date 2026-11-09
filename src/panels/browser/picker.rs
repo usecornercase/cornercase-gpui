@@ -48,7 +48,7 @@ fn channel(value: f32) -> u8 {
     (value.clamp(0., 1.) * 255.).round() as u8
 }
 
-fn rgba(colour: Rgba, alpha: f32) -> Value {
+fn overlay_colour(colour: Rgba, alpha: f32) -> Value {
     json!({ "r": channel(colour.r), "g": channel(colour.g), "b": channel(colour.b), "a": alpha })
 }
 
@@ -56,10 +56,10 @@ pub(crate) fn highlight() -> Value {
     json!({
         "showInfo": true,
         "showStyles": true,
-        "contentColor": rgba(colours::brand(), 0.28),
-        "paddingColor": rgba(colours::brand(), 0.14),
-        "borderColor": rgba(colours::brand_light(), 0.9),
-        "marginColor": rgba(colours::brand(), 0.07),
+        "contentColor": overlay_colour(colours::brand(), 0.28),
+        "paddingColor": overlay_colour(colours::brand(), 0.14),
+        "borderColor": overlay_colour(colours::brand_light(), 0.9),
+        "marginColor": overlay_colour(colours::brand(), 0.07),
     })
 }
 

@@ -19,7 +19,7 @@ fn mark(text: String, tone: Tone) -> Div {
         Tone::Warn => colours::waiting(),
         Tone::Good => colours::done(),
     };
-    div().px(px(6.)).rounded(px(radius::CHIP)).bg(colours::sidebar()).text_size(px(11.)).text_color(colour).child(text)
+    div().px(px(6.)).rounded(px(radius::chip())).bg(colours::inset()).text_size(px(11.)).text_color(colour).child(text)
 }
 
 fn said_line((text, style): &Said) -> Div {
@@ -124,7 +124,7 @@ impl WorktreesPanel {
             .items_start()
             .gap(px(10.))
             .p(px(12.))
-            .rounded(px(radius::CARD))
+            .rounded(px(radius::card()))
             .bg(colours::terminal())
             .border_1()
             .border_color(colours::border())

@@ -461,7 +461,7 @@ fn pane_header(group: &PaneHits, first: bool, cx: &mut Context<SearchPanel>) -> 
         .mt(px(if first { 2. } else { 10. }))
         .px(px(10.))
         .py(px(5.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .cursor_pointer()
         .hover(|s| s.bg(colours::hover()))
         .child(ui::badge(status.as_deref()))
@@ -540,7 +540,7 @@ fn go(goto: Goto, cx: &mut App) {
 }
 
 fn chip_box(colour: impl Into<Hsla>) -> Div {
-    div().flex_none().px(px(7.)).rounded(px(radius::CHIP)).bg(colours::sidebar()).text_size(px(11.)).text_color(colour)
+    div().flex_none().px(px(7.)).rounded(px(radius::chip())).bg(colours::inset()).text_size(px(11.)).text_color(colour)
 }
 
 fn chip(text: impl Into<SharedString>, colour: Rgba) -> Div {

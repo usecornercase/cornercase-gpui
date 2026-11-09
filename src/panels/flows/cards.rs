@@ -1,21 +1,21 @@
 use gpui::{
-    BoxShadow, ClickEvent, Div, ElementId, FontWeight, Hsla, InteractiveElement as _, ParentElement as _, Rgba,
-    SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, div, linear_color_stop, linear_gradient,
-    point, prelude::FluentBuilder as _, px, rgb,
+    BoxShadow, ClickEvent, Div, ElementId, FontWeight, InteractiveElement as _, ParentElement as _, Rgba, SharedString,
+    Stateful, StatefulInteractiveElement as _, Styled as _, div, linear_color_stop, linear_gradient, point,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::diagram::{Plan, role_colour};
 use super::graph::{Card, Rect};
 use super::model::{self, Member, RoleSpec};
 use super::widgets::show_pane;
-use crate::theme::{colours, radius};
+use crate::theme::{colours, radius, shade};
 use crate::ui::{self, Icon, glass, glass::tint, status_badge};
 
 const AVATAR: f32 = 30.;
 const CONDUCTOR: f32 = 34.;
 
 pub(super) fn ground() -> Rgba {
-    rgb(0x17_1a_1f)
+    colours::sunk()
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -60,7 +60,7 @@ impl Look {
     }
 
     fn shadows(self, colour: Rgba) -> Vec<BoxShadow> {
-        let dark = Hsla { h: 0., s: 0., l: 0., a: 0.35 };
+        let dark = shade(0.35);
         let mut shadows =
             vec![BoxShadow { color: dark, offset: point(px(0.), px(6.)), blur_radius: px(14.), spread_radius: px(0.) }];
         match self {
@@ -113,13 +113,13 @@ fn shell(id: impl Into<ElementId>, rect: Rect, colour: Rgba, look: Look) -> Stat
         .top(px(rect.y))
         .w(px(rect.w))
         .h(px(rect.h))
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .bg(ground())
         .border_1()
         .border_color(look.edge(colour))
         .shadow(look.shadows(colour))
         .when(look == Look::Closed, |d| d.opacity(0.45))
-        .child(div().absolute().top_0().left_0().size_full().rounded(px(radius::CARD)).bg(linear_gradient(
+        .child(div().absolute().top_0().left_0().size_full().rounded(px(radius::card())).bg(linear_gradient(
             180.,
             linear_color_stop(tint(colour, look.sheen()), 0.),
             linear_color_stop(tint(colour, 0.02), 1.),

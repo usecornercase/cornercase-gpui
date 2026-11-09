@@ -70,7 +70,7 @@ fn gap_button(hunk: usize, lines: u32, panel: WeakEntity<ChangesPanel>) -> AnyEl
         .flex()
         .justify_center()
         .py(px(3.))
-        .bg(colours::sidebar())
+        .bg(colours::inset())
         .text_size(px(11.))
         .text_color(colours::faint())
         .cursor_pointer()
@@ -196,7 +196,7 @@ fn line_ground(tint: Option<Rgba>, selected: bool, dim: bool) -> Option<Rgba> {
         (Some(tint), true) => Some(Rgba { a: 0.26, ..tint }),
         (Some(tint), false) => Some(Rgba { a: 0.11, ..tint }),
         (None, true) => Some(colours::selected()),
-        (None, false) => dim.then(colours::sidebar),
+        (None, false) => dim.then(colours::inset),
     }
 }
 

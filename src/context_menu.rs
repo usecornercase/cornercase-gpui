@@ -196,7 +196,7 @@ impl Root {
 }
 
 fn menu_frame(focus: &FocusHandle, cx: &mut Context<Root>) -> Stateful<Div> {
-    glass::card(radius::CARD)
+    glass::card(radius::card())
         .id("context-menu")
         .track_focus(focus)
         .min_w(px(200.))
@@ -265,7 +265,7 @@ pub(crate) fn menu_row(
         .id(id)
         .px(px(10.))
         .py(px(5.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .flex()
         .items_center()
         .justify_between()

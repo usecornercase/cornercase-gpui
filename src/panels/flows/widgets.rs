@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use gpui::{
     App, ClickEvent, Div, ElementId, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, Rgba,
     SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div, linear_color_stop,
-    linear_gradient, prelude::FluentBuilder as _, px, rgb,
+    linear_gradient, prelude::FluentBuilder as _, px,
 };
 
 use super::diagram::role_colour;
@@ -25,7 +25,7 @@ pub(super) fn tag(text: &'static str) -> Div {
         .items_center()
         .gap(px(3.))
         .px(px(6.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .bg(if default { tint(colours::brand(), 0.2) } else { colours::selected() })
         .text_size(px(10.))
         .text_color(colour)
@@ -41,7 +41,7 @@ pub(super) fn chip(glyph: Option<Icon>, text: impl Into<SharedString>, colour: R
         .gap(px(4.))
         .h(px(20.))
         .px(px(7.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .bg(tint(colour, 0.1))
         .border_1()
         .border_color(tint(colour, 0.22))
@@ -102,7 +102,7 @@ pub(super) fn icon_action(
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .border_1()
         .cursor_pointer()
         .tooltip(tip(hint))
@@ -140,7 +140,11 @@ pub(super) fn glyph(flow: &FlowSpec, run: Option<&Run>, size: f32) -> Div {
         .justify_center()
         .gap(px(gap))
         .rounded(px((size * 0.27).round()))
-        .bg(linear_gradient(160., linear_color_stop(rgb(0x25_29_31), 0.), linear_color_stop(rgb(0x12_14_18), 1.)))
+        .bg(linear_gradient(
+            160.,
+            linear_color_stop(colours::raised(), 0.),
+            linear_color_stop(colours::card_bottom(), 1.),
+        ))
         .border_1()
         .border_color(colours::edge())
         .children((0..flow.stages.len()).map(|stage| glyph_row(mini, stage)))
@@ -202,7 +206,7 @@ pub(super) fn alert(text: impl Into<SharedString>, colour: Rgba) -> Div {
         .gap(px(8.))
         .px(px(12.))
         .py(px(8.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(tint(colour, 0.1))
         .border_1()
         .border_color(tint(colour, 0.3))
@@ -213,7 +217,7 @@ pub(super) fn alert(text: impl Into<SharedString>, colour: Rgba) -> Div {
 }
 
 pub(super) fn panel_box() -> Div {
-    div().rounded(px(radius::CARD)).bg(colours::panel()).border_1().border_color(colours::border())
+    div().rounded(px(radius::card())).bg(colours::panel()).border_1().border_color(colours::border())
 }
 
 pub(super) fn second_line(flow: &FlowInfo) -> Div {

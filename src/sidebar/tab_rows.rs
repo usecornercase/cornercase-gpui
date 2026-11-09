@@ -41,7 +41,7 @@ fn new_tab_row(workspace: u64, cx: &mut Context<Root>) -> AnyElement {
         .id(SharedString::from(format!("ws-new-tab-{workspace}")))
         .px(px(6.))
         .py(px(2.))
-        .rounded(px(crate::theme::radius::CONTROL))
+        .rounded(px(crate::theme::radius::control()))
         .text_size(px(11.))
         .text_color(colours::faint())
         .cursor_pointer()

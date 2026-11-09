@@ -5,7 +5,7 @@ use gpui::{
     ParentElement as _, Pixels, SharedString, Stateful, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
-use crate::theme::{ANSI, FONT_FAMILY, colours, hsla, radius};
+use crate::theme::{FONT_FAMILY, ansi, colours, radius};
 use crate::ui::selection::{CODE_CELL, CODE_ROW, Styles};
 use crate::ui::{self, Icon, OneLine, file_icons};
 
@@ -79,7 +79,7 @@ pub(super) fn clip(ranges: &[Range<usize>], within: Range<usize>) -> Vec<Range<u
 }
 
 pub(super) fn kind_style(kind: Kind) -> HighlightStyle {
-    let colour = |i: usize| HighlightStyle { color: Some(hsla(ANSI[i])), ..Default::default() };
+    let colour = |i: u8| HighlightStyle { color: Some(ansi(i)), ..Default::default() };
     match kind {
         Kind::Keyword => colour(5),
         Kind::Function => colour(4),
@@ -101,7 +101,7 @@ pub(super) fn with_alpha(mut colour: Hsla, alpha: f32) -> Hsla {
 }
 
 pub(super) fn lit_background(alpha: f32) -> Hsla {
-    with_alpha(hsla(ANSI[3]), alpha)
+    with_alpha(ansi(3), alpha)
 }
 
 pub(super) fn plural<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
@@ -142,7 +142,7 @@ pub(super) fn result_row(id: impl Into<ElementId>) -> Stateful<Div> {
         .gap(px(8.))
         .h(px(26.))
         .px(px(8.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .cursor_pointer()
         .hover(|s| s.bg(colours::hover()))
 }
@@ -152,7 +152,7 @@ pub(super) fn menu_entry(id: impl Into<ElementId>, label: impl Into<SharedString
         .id(id)
         .px(px(10.))
         .py(px(5.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .cursor_pointer()
         .whitespace_nowrap()
         .hover(|s| s.bg(ui::glass::cobalt()).text_color(colours::on_brand()))

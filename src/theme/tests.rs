@@ -1,41 +1,61 @@
 use std::collections::BTreeMap;
 
+use super::current::{fallback, opacity_from};
+use gpui::rgb;
+
 use super::*;
+
+const OPACITY: f32 = 0.65;
+const LEAST_OPACITY: f32 = 0.3;
+const RED: [u8; 3] = [247, 118, 142];
+const BACKGROUND: [u8; 3] = [26, 27, 38];
+
+fn painter(colours: &Colours) -> Painter<'_> {
+    Painter { colours, theme: Arc::new(fallback()) }
+}
+
+fn mac_ground() -> Rgba {
+    ground(&fallback(), Os::Mac, false)
+}
+
+fn linux_ground() -> Rgba {
+    ground(&fallback(), Os::Linux, true)
+}
 
 fn painter_with(bg: Option<[u8; 3]>) -> Colours {
     Colours { fg: None, bg, cursor: None, palette: BTreeMap::new() }
 }
 
 #[test]
-fn the_opacity_defaults_when_unset_or_unreadable() {
-    assert!((opacity_from(None) - OPACITY).abs() < f32::EPSILON);
-    assert!((opacity_from(Some("glassy")) - OPACITY).abs() < f32::EPSILON);
-    assert!((opacity_from(Some("NaN")) - OPACITY).abs() < f32::EPSILON);
+fn the_opacity_override_is_absent_when_unset_or_unreadable() {
+    assert_eq!(opacity_from(None), None);
+    assert_eq!(opacity_from(Some("glassy")), None);
+    assert_eq!(opacity_from(Some("NaN")), None);
 }
 
 #[test]
 fn the_opacity_is_read_and_kept_readable() {
-    assert!((opacity_from(Some(" 0.7 ")) - 0.7).abs() < f32::EPSILON);
-    assert!((opacity_from(Some("4")) - 1.).abs() < f32::EPSILON);
-    assert!((opacity_from(Some("0")) - LEAST_OPACITY).abs() < f32::EPSILON);
+    assert_eq!(opacity_from(Some(" 0.7 ")), Some(0.7));
+    assert_eq!(opacity_from(Some("4")), Some(1.));
+    assert_eq!(opacity_from(Some("0")), Some(LEAST_OPACITY));
 }
 
 #[test]
 fn a_pane_on_the_window_background_is_left_translucent() {
     let colours = painter_with(None);
-    assert_eq!(Painter { colours: &colours }.pane_fill(), None);
+    assert_eq!(painter(&colours).pane_fill(), None);
 }
 
 #[test]
 fn a_pane_whose_program_chose_a_background_is_filled_with_it() {
     let colours = painter_with(Some([255, 255, 255]));
-    assert_eq!(Painter { colours: &colours }.pane_fill(), Some(hsla([255, 255, 255])));
+    assert_eq!(painter(&colours).pane_fill(), Some(hsla([255, 255, 255])));
 }
 
 #[test]
 fn a_cell_painted_in_the_default_background_stays_translucent() {
     let colours = painter_with(None);
-    let painter = Painter { colours: &colours };
+    let painter = painter(&colours);
     assert_eq!(painter.cell_fill(hsla(BACKGROUND), true), None);
     assert_eq!(painter.cell_fill(hsla(RED), false), None);
     assert_eq!(painter.cell_fill(hsla(RED), true), Some(hsla(RED)));
@@ -53,7 +73,7 @@ fn close(a: [f32; 3], b: [f32; 3]) -> bool {
 #[test]
 fn a_pane_over_the_ground_looks_as_it_would_over_the_desktop() {
     let wanted = Rgba { a: 0.82, ..rgb(0x1a_1b_26) };
-    let ground = ground(Os::Mac, false);
+    let ground = mac_ground();
     let card = over_ground(wanted, ground);
     for desktop in [[0., 0., 0.], [1., 1., 1.], [0.2, 0.6, 0.9]] {
         assert!(close(over(card, over(ground, desktop)), over(wanted, desktop)));
@@ -63,34 +83,34 @@ fn a_pane_over_the_ground_looks_as_it_would_over_the_desktop() {
 #[test]
 fn an_opaque_pane_keeps_its_colour_over_the_ground() {
     let wanted = rgb(0x1a_1b_26);
-    assert_eq!(over_ground(wanted, ground(Os::Mac, false)), wanted);
-    assert_eq!(over_ground(wanted, ground(Os::Linux, true)), wanted);
+    assert_eq!(over_ground(wanted, mac_ground()), wanted);
+    assert_eq!(over_ground(wanted, linux_ground()), wanted);
 }
 
 #[test]
 fn a_pane_more_see_through_than_the_ground_shows_only_the_ground() {
     let wanted = Rgba { a: 0.4, ..rgb(0x1a_1b_26) };
-    assert!(over_ground(wanted, ground(Os::Mac, false)).a.abs() < f32::EPSILON);
+    assert!(over_ground(wanted, mac_ground()).a.abs() < f32::EPSILON);
 }
 
 #[test]
 fn the_ground_is_translucent_on_a_mac_and_opaque_on_linux() {
-    assert!(ground(Os::Mac, false).a < 1.);
-    assert!((ground(Os::Linux, true).a - 1.).abs() < f32::EPSILON);
-    assert_eq!(Rgba { a: 1., ..ground(Os::Mac, false) }, ground(Os::Linux, true));
+    assert!(mac_ground().a < 1.);
+    assert!((linux_ground().a - 1.).abs() < f32::EPSILON);
+    assert_eq!(Rgba { a: 1., ..mac_ground() }, linux_ground());
 }
 
 #[test]
 fn windows_takes_the_mac_glass_over_its_backdrop_and_the_opaque_ground_without_it() {
-    assert_eq!(ground(Os::Windows, true), ground(Os::Mac, false));
-    assert_eq!(ground(Os::Windows, false), ground(Os::Linux, true));
+    assert_eq!(ground(&fallback(), Os::Windows, true), mac_ground());
+    assert_eq!(ground(&fallback(), Os::Windows, false), linux_ground());
 }
 
 #[test]
 fn a_pane_on_an_opaque_ground_is_tokyo_night_at_the_terminal_opacity() {
     for opacity in [LEAST_OPACITY, OPACITY, 1.] {
         let wanted = Rgba { a: opacity, ..rgb(0x1a_1b_26) };
-        let pane = over_ground(wanted, ground(Os::Linux, true));
+        let pane = over_ground(wanted, linux_ground());
         assert_eq!(pane, wanted);
         assert!(pane.r.is_finite() && pane.g.is_finite() && pane.b.is_finite());
     }
@@ -102,7 +122,7 @@ fn lightness(colour: [f32; 3]) -> f32 {
 
 #[test]
 fn panes_and_cards_read_lighter_than_the_opaque_ground() {
-    let ground = ground(Os::Linux, true);
+    let ground = linux_ground();
     let floor = [ground.r, ground.g, ground.b];
     let pane = over_ground(Rgba { a: LEAST_OPACITY, ..rgb(0x1a_1b_26) }, ground);
     for layer in [pane, colours::surface(), colours::panel()] {
@@ -124,4 +144,33 @@ fn an_inactive_pane_fades_its_colours_without_darkening_them() {
     let dim = faded(colour, INACTIVE);
     assert!((dim.a - INACTIVE).abs() < f32::EPSILON);
     assert_eq!(Hsla { a: 1., ..dim }, colour);
+}
+
+#[test]
+fn a_pane_on_the_theme_s_background_stays_translucent_under_another_theme() {
+    let mut theme = fallback();
+    theme.terminal.background = [255, 250, 240];
+    let colours = Colours { fg: None, bg: Some([255, 250, 240]), cursor: None, palette: BTreeMap::new() };
+    let painter = Painter { colours: &colours, theme: Arc::new(theme) };
+    assert_eq!(painter.pane_fill(), None);
+}
+
+#[test]
+fn the_colour_cube_and_greys_do_not_depend_on_the_theme() {
+    let mut other = fallback();
+    other.terminal.ansi = [[9; 3]; 16];
+    let fixed = fallback();
+    for index in 16..=255u8 {
+        assert_eq!(other.terminal.palette(index), fixed.terminal.palette(index));
+    }
+    assert_ne!(other.terminal.palette(1), fixed.terminal.palette(1));
+}
+
+#[test]
+fn the_palette_given_to_cornercase_is_the_theme_s() {
+    let theme = fallback();
+    let json: serde_json::Value = serde_json::from_str(&theme.terminal.json()).expect("json");
+    assert_eq!(json["background"], serde_json::json!(BACKGROUND));
+    assert_eq!(json["palette"].as_array().map(Vec::len), Some(256));
+    assert_eq!(json["palette"][1], serde_json::json!(RED));
 }

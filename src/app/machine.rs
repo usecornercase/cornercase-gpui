@@ -269,7 +269,7 @@ impl MachineTab {
 
     fn view_opened(&mut self, tx: &UnboundedSender<Msg>) {
         self.themed = true;
-        self.conn.queue.cmd_with_stdin(args(&["theme", "-"]), theme::theme_json().into_bytes());
+        self.conn.queue.cmd_with_stdin(args(&["theme", "-"]), theme::terminal_json().into_bytes());
         if self.told_visible != self.opened_visible {
             self.conn.tell_visible(self.told_visible);
         }

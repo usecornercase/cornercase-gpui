@@ -153,7 +153,7 @@ impl Browser {
         let meta = self.tabs.active(self.workspace)?.shot.as_ref()?.meta;
         let at = from_page(choice.rect, self.input.bounds.get(), &meta);
         let rows: Vec<AnyElement> = choice.rows().into_iter().map(|row| choice_row(choice, &row, cx)).collect();
-        let list = glass::card(radius::CARD)
+        let list = glass::card(radius::card())
             .id("browser-select")
             .occlude()
             .min_w(at.size.width.max(px(160.)))

@@ -33,9 +33,9 @@ fn lifted(alpha: f32) -> Vec<BoxShadow> {
 }
 
 pub(crate) fn paint_ghost(pane: &PaneGrid, ghost: &Ghost, metrics: &Metrics, window: &mut Window, cx: &mut App) {
-    let corner = px(radius::CARD);
+    let corner = px(radius::card());
     window.paint_shadows(ghost.rect, corner.into(), &lifted(ghost.alpha));
-    let ground = hsla(Painter { colours: &pane.colours }.default_bg());
+    let ground = hsla(Painter::new(&pane.colours).default_bg());
     window.paint_quad(fill(ghost.rect, faded(ground, GHOST_GROUND * ghost.alpha)).corner_radii(corner));
     paint_ghost_text(pane, ghost, metrics, window, cx);
     let edge = tinted(colours::accent(), 0.9 * ghost.alpha);
@@ -75,7 +75,7 @@ fn paint_zone(zone: &ZoneLook, window: &mut Window) {
         return;
     }
     let (wash, edge) = tones(zone);
-    let corner = px(radius::CONTROL);
+    let corner = px(radius::control());
     let border = tinted(edge, 0.85 * alpha);
     window.paint_quad(quad(zone.shown.rect, corner, tinted(wash, 0.17 * alpha), px(1.5), border, BorderStyle::Solid));
 }
@@ -121,6 +121,6 @@ fn paint_caption(ghost: &Ghost, zone: &ZoneLook, window: &mut Window, cx: &mut A
 fn paint_glow(card: Bounds<Pixels>, strength: f32, window: &mut Window) {
     let ring = card.dilate(px(3.));
     let edge = tinted(colours::accent(), 0.9 * strength);
-    window.paint_quad(quad(ring, px(radius::CARD + 3.), transparent_black(), px(2.), edge, BorderStyle::Solid));
-    window.paint_quad(fill(card, tinted(colours::brand(), 0.1 * strength)).corner_radii(px(radius::CARD)));
+    window.paint_quad(quad(ring, px(radius::card() + 3.), transparent_black(), px(2.), edge, BorderStyle::Solid));
+    window.paint_quad(fill(card, tinted(colours::brand(), 0.1 * strength)).corner_radii(px(radius::card())));
 }

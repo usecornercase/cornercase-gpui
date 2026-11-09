@@ -764,7 +764,7 @@ fn bell_flash() -> Div {
     div()
         .absolute()
         .inset_0()
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .border_2()
         .border_color(colours::working())
         .bg(ui::glass::tint(colours::working(), 0.07))
@@ -787,7 +787,7 @@ fn occluder() -> Div {
 }
 
 fn sheet_card(kind: PanelKind, view: AnyView, store: &Entity<Store>) -> Stateful<Div> {
-    ui::glass::card(radius::SHEET)
+    ui::glass::card(radius::sheet())
         .id("sheet")
         .w(gpui::relative(0.82))
         .h(gpui::relative(0.86))
@@ -839,7 +839,7 @@ fn font_size_from_env() -> f32 {
 fn start_server(tx: &UnboundedSender<Msg>, (cols, rows): (u16, u16), chosen: Option<String>) {
     let msg = start_message(cli::ensure_binary(chosen), || {
         let args = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-"];
-        cli::run_with_stdin(&args, Some(&theme::theme_json())).map_err(|e| e.to_string())
+        cli::run_with_stdin(&args, Some(&theme::terminal_json())).map_err(|e| e.to_string())
     });
     let _ = tx.unbounded_send(msg);
 }

@@ -398,7 +398,7 @@ impl Render for Finder {
         let frame = frame_for(window.viewport_size());
         self.page = frame.page;
         let status = self.status(cx);
-        glass::card(radius::SHEET)
+        glass::card(radius::sheet())
             .w(px(frame.width))
             .h(px(frame.height))
             .flex()

@@ -25,7 +25,7 @@ fn card() -> Div {
         .flex_col()
         .px(px(CARD_PAD))
         .py(px(4.))
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .bg(colours::terminal())
         .border_1()
         .border_color(colours::border())
@@ -39,7 +39,7 @@ fn hovered_row(group: &SharedString, height: f32) -> Stateful<Div> {
         .items_center()
         .h(px(height))
         .px(px(ROW_PAD))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .hover(|s| s.bg(colours::hover()))
 }
 

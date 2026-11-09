@@ -31,7 +31,7 @@ pub(crate) use run_on::{Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog
 pub(crate) use shortcuts::shortcuts;
 
 pub(crate) fn frame(title: impl Into<SharedString>, body: impl IntoElement, buttons: impl IntoElement) -> Div {
-    ui::glass::card(radius::SHEET)
+    ui::glass::card(radius::sheet())
         .w(px(480.))
         .p(px(22.))
         .flex()

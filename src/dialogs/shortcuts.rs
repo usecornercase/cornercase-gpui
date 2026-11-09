@@ -61,7 +61,7 @@ fn keys(label: impl Into<SharedString>) -> Div {
         .flex_none()
         .px(px(6.))
         .py(px(1.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .bg(colours::selected())
         .font_family(FONT_FAMILY)
         .text_size(px(11.))

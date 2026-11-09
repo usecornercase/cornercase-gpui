@@ -76,7 +76,7 @@ impl GroupStyle {
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(radius::CONTROL))
+            .rounded(px(radius::control()))
             .border_1()
             .border_color(if selected { colours::accent() } else { colours::border() })
             .when(selected, |d| d.bg(colours::selected()))

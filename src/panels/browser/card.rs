@@ -101,7 +101,7 @@ impl Browser {
 
     fn picked_card(&self, picked: &Picked, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let ask = self.agents.ask.as_ref().map(|ask| ui::boxed(ask, window, cx));
-        let card = glass::card(radius::CARD)
+        let card = glass::card(radius::card())
             .id("browser-picked")
             .occlude()
             .p(px(12.))
@@ -148,7 +148,7 @@ impl Browser {
             .gap(px(6.))
             .px(px(8.))
             .py(px(4.))
-            .rounded(px(radius::CONTROL))
+            .rounded(px(radius::control()))
             .child(ui::icon(Icon::Agent, 13.).text_color(colours::accent()))
             .child(label)
             .when(many, |chip| {
@@ -204,7 +204,7 @@ fn banner(reading: bool, cx: &mut Context<Browser>) -> impl IntoElement + use<> 
     let cancel = ui::button("browser-pick-cancel", "Cancel").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
         this.cancel_pick(cx);
     }));
-    let pill = glass::card(radius::CARD)
+    let pill = glass::card(radius::card())
         .id("browser-picking")
         .occlude()
         .flex()

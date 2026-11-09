@@ -23,7 +23,7 @@ pub(crate) fn card() -> Div {
         .flex()
         .flex_col()
         .p(px(6.))
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .bg(colours::terminal())
         .border_1()
         .border_color(colours::border())
@@ -53,7 +53,7 @@ pub(crate) fn row(id: impl Into<ElementId>, hover: bool) -> Stateful<Div> {
         .min_h(px(52.))
         .px(px(ROW_X))
         .py(px(8.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .when(hover, |d| d.hover(|s| s.bg(colours::hover())))
 }
 

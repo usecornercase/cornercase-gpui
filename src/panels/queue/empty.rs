@@ -41,7 +41,7 @@ fn point(glyph: Icon, title: &'static str, text: &'static str) -> Div {
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(glass::tint(colours::brand(), 0.14))
         .child(ui::icon(glyph, 15.).text_color(colours::accent()));
     div().flex().items_start().gap(px(12.)).child(square).child(
@@ -68,7 +68,7 @@ fn points() -> Div {
         .bg(colours::panel())
         .border_1()
         .border_color(colours::border())
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .children(POINTS.into_iter().map(|(glyph, title, text)| point(glyph, title, text)))
 }
 

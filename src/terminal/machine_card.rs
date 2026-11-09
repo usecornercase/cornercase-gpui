@@ -130,7 +130,7 @@ fn card_counts(standing: &Standing, seen: &MachineSeen, now: i64) -> bool {
 }
 
 fn machine_card(text: &CardText, seen: &MachineSeen) -> Div {
-    let card = ui::glass::card(radius::SHEET)
+    let card = ui::glass::card(radius::sheet())
         .max_w(px(460.))
         .flex()
         .flex_col()

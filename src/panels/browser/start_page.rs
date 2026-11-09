@@ -102,7 +102,7 @@ fn port_row(
     ui::row(SharedString::from(format!("browser-port-{}", port.number)), false)
         .p(px(12.))
         .gap(px(12.))
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .bg(colours::panel())
         .border_1()
         .border_color(colours::border())

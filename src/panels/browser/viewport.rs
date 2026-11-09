@@ -218,7 +218,8 @@ impl Painting {
             window.set_window_cursor_style(cursor);
         }
         let Some(shot) = self.shot else { return };
-        let corners = Corners { bottom_left: px(radius::CARD), bottom_right: px(radius::CARD), ..Corners::default() };
+        let corners =
+            Corners { bottom_left: px(radius::card()), bottom_right: px(radius::card()), ..Corners::default() };
         let _ = window.paint_image(fit(bounds, &shot.meta), corners, shot.image.clone(), 0, false);
         let entity = self.entity.downgrade();
         let area = Area {

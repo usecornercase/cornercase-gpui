@@ -192,7 +192,7 @@ impl ChangesPanel {
                 .flex()
                 .flex_col()
                 .p(px(4.))
-                .rounded(px(radius::CONTROL))
+                .rounded(px(radius::control()))
                 .bg(colours::panel())
                 .border_1()
                 .border_color(colours::border())

@@ -52,7 +52,7 @@ fn row(pr: &PullRequest, rung: Rung<'_>, held: Option<&(u64, String)>) -> Statef
         .gap(px(8.))
         .px(px(8.))
         .py(px(4.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .text_size(px(12.5))
         .text_color(tone(layer, rung.own))
         .child(div().w(px(16.)).flex_none().text_right().text_color(colours::faint()).child(rung.position.to_string()))

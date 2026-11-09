@@ -139,7 +139,7 @@ pub(crate) fn release_notes(release: &Release) -> impl IntoElement + use<> {
         .flex_col()
         .gap(px(10.))
         .p(px(12.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(colours::terminal())
         .border_1()
         .border_color(colours::border())

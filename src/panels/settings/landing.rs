@@ -120,7 +120,7 @@ fn mark() -> Div {
         .bottom_0()
         .left(px(-MARK_BEYOND))
         .right(px(-MARK_BEYOND))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(glass::tint(accent, MARK_TINT))
         .border_1()
         .border_color(glass::tint(accent, MARK_EDGE))
