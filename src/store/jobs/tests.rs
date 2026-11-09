@@ -87,7 +87,7 @@ fn aim() -> crate::model::Aim {
 #[test]
 fn a_workspace_being_closed_on_a_machine_is_leaving_while_its_job_runs() {
     let mut jobs = Jobs::default();
-    let id = jobs.start(Busy::new(super::leaving_key(&aim()), "Closing notes on vps…"));
+    let id = jobs.start(Busy::leaving(&aim(), "Closing notes on vps…"));
     assert!(jobs.leaving_there(&aim()));
     jobs.end(id);
     assert!(!jobs.leaving_there(&aim()));

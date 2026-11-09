@@ -30,7 +30,7 @@ pub(crate) use jobs::Busy;
 use jobs::Jobs;
 pub(crate) use machine_read::{MachineRead, Reach};
 use machines_there::Homes;
-pub(crate) use machines_there::{MachineAct, NoticeThere, stale_note};
+pub(crate) use machines_there::{MachineAct, NoticeThere};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 
 const NO_FLOW: &str = "This workspace runs no flow";
@@ -417,16 +417,15 @@ impl Store {
         });
     }
 
-    pub(crate) fn remove_worktree(&mut self, workspace: u64, name: &str, args: Vec<String>, cx: &mut Context<Self>) {
-        let id = self.start_job(Busy::remove_worktree(workspace, name), cx);
-        run_job(cx, id, args, move |this, result, cx| this.settle_removal(workspace, &result, cx));
-    }
-
-    fn settle_removal(&mut self, workspace: u64, result: &anyhow::Result<String>, cx: &mut Context<Self>) {
-        match result {
-            Ok(_) => self.worktree_went(workspace, cx),
-            Err(e) => self.toast(e.to_string(), ToastKind::Error, cx),
-        }
+    pub(crate) fn run_then<R: Send + 'static>(
+        &mut self,
+        busy: Busy,
+        work: impl FnOnce() -> anyhow::Result<R> + Send + 'static,
+        then: impl FnOnce(&mut Self, anyhow::Result<R>, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        let id = self.start_job(busy, cx);
+        run_with(cx, Some((cx.entity(), id)), work, then);
     }
 
     pub(crate) fn worktree_went(&mut self, workspace: u64, cx: &mut Context<Self>) {
@@ -684,9 +683,19 @@ pub(crate) fn run_partial_busy<T: 'static>(
     args: Vec<String>,
     then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
 ) {
+    run_partial_on_busy(cx, busy, cli::target(), args, then);
+}
+
+pub(crate) fn run_partial_on_busy<T: 'static>(
+    cx: &mut Context<T>,
+    busy: Busy,
+    target: Target,
+    args: Vec<String>,
+    then: impl FnOnce(&mut T, anyhow::Result<String>, &mut Context<T>) + 'static,
+) {
     let id = start_view_job(cx, busy, &args);
     let job = (Store::get(cx), id);
-    run_with(cx, Some(job), move || cli::run_partial(&args), then);
+    run_with(cx, Some(job), move || cli::run_partial_on(&target, &args), then);
 }
 
 pub(crate) fn run_local(cx: &mut App, busy: Busy, work: impl FnOnce() -> anyhow::Result<()> + Send + 'static) {

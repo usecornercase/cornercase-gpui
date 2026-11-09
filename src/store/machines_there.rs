@@ -4,7 +4,7 @@ use std::time::Duration;
 use gpui::Context;
 use serde_json::Value;
 
-use super::jobs::{folding_key, leaving_key, renaming_key};
+use super::jobs::{folding_key, renaming_key};
 use super::{Busy, Store, ToastKind, args, run_job_on, run_on, run_with};
 use crate::cli::{self, Remote, Target};
 use crate::desktop;
@@ -33,7 +33,6 @@ pub(crate) struct NoticeThere {
 pub(crate) enum MachineAct {
     Rename(String),
     Close,
-    Remove { force: bool, unlock: bool },
 }
 
 impl MachineAct {
@@ -41,7 +40,6 @@ impl MachineAct {
         match self {
             Self::Rename(name) => aim.rename_args(name),
             Self::Close => aim.close_args(),
-            Self::Remove { force, unlock } => aim.remove_args(*force, *unlock),
         }
     }
 
@@ -53,8 +51,7 @@ impl MachineAct {
         let machine = &aim.machine;
         match self {
             Self::Rename(_) => Busy::new(renaming_key(aim), format!("Renaming {name} on {machine}…")),
-            Self::Close => Busy::new(leaving_key(aim), format!("Closing {name} on {machine}…")),
-            Self::Remove { .. } => Busy::new(leaving_key(aim), format!("Removing {name} on {machine}…")),
+            Self::Close => Busy::leaving(aim, format!("Closing {name} on {machine}…")),
         }
     }
 
@@ -63,7 +60,6 @@ impl MachineAct {
         match self {
             Self::Rename(_) => None,
             Self::Close => Some(format!("Closed {name} on {machine}")),
-            Self::Remove { .. } => Some(format!("Removed {name} on {machine}")),
         }
     }
 }
@@ -175,6 +171,11 @@ impl Store {
 
     pub(crate) fn machine_leaving(&self, aim: &Aim) -> bool {
         self.jobs.leaving_there(aim)
+    }
+
+    pub(crate) fn worktree_went_there(&mut self, aim: Aim, cx: &mut Context<Self>) {
+        self.jobs.left_there(aim);
+        cx.notify();
     }
 
     pub(crate) fn not_sent(&mut self, why: &str, cx: &mut Context<Self>) {

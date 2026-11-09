@@ -13,6 +13,7 @@ use crate::panels::PanelKind;
 use crate::panels::files::open::{self, Found, Opening};
 use crate::panels::flows::{FlowStart, start_flow};
 use crate::panels::plugins::{Group, Run, Spot, run_action};
+use crate::panels::worktrees::{self, Whose, WorktreeRow};
 use crate::store::{self, Busy, ToastKind};
 use crate::ui;
 
@@ -272,6 +273,12 @@ fn run_setup_item(session: &Session, project: &Project, ws: &Workspace, look: &L
     offered.then(|| item("Run setup", move |this, _, cx| run_setup(this, id, &name, cx)))
 }
 
+fn remove_worktree_item(ws: &Workspace) -> Option<Entry> {
+    let row = WorktreeRow { whose: Whose::Here, path: ws.path.clone(), name: ws.name.clone() };
+    ws.worktree
+        .then(|| danger("Remove worktree…", move |_, window, cx| worktrees::remove_worktree(row.clone(), window, cx)))
+}
+
 fn workspace_menu(session: &Session, id: u64, openers: &[Found], look: &Look) -> Vec<Entry> {
     let Some((project, ws)) = session.workspace(id) else { return Vec::new() };
     let ids = id.to_string();
@@ -295,12 +302,7 @@ fn workspace_menu(session: &Session, id: u64, openers: &[Found], look: &Look) ->
     entries.push(panel_item("Ports…", PanelKind::Ports, Some(("workspace", id))));
     entries.extend(run_setup_item(session, project, ws, look));
     entries.push(Entry::Separator);
-    if ws.worktree {
-        let name = ws.name.clone();
-        entries.push(danger("Remove worktree…", move |_, window, cx| {
-            forms::remove_worktree(id, name.clone(), window, cx);
-        }));
-    }
+    entries.extend(remove_worktree_item(ws));
     if !ws.tabs.is_empty() || !ws.worktree {
         entries.push(close_workspace_item(ws));
     }

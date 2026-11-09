@@ -20,6 +20,10 @@ impl Busy {
         &self.key
     }
 
+    pub(crate) fn leaving(aim: &Aim, label: impl Into<String>) -> Self {
+        Self::new(leaving_key(aim), label)
+    }
+
     pub(crate) fn remove_worktree(workspace: u64, name: &str) -> Self {
         Self::new(removal_key(workspace), format!("Removing {name}…"))
     }
@@ -29,7 +33,7 @@ fn removal_key(workspace: u64) -> String {
     format!("remove-worktree:{workspace}")
 }
 
-pub(crate) fn leaving_key(aim: &Aim) -> String {
+fn leaving_key(aim: &Aim) -> String {
     format!("machine-leaving:{}", aim.key())
 }
 

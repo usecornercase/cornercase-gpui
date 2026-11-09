@@ -10,14 +10,14 @@ use crate::panels::files::disk::human_size;
 use crate::panels::poll::parse_text;
 use crate::store::{self, Busy, Store, ToastKind};
 
-const NOT_REMOVED: &str = "Nothing was removed: there is no window to ask in.";
+pub(super) const NOT_REMOVED: &str = "Nothing was removed: there is no window to ask in.";
 const NOT_FREED: &str = "Nothing was freed: there is no window to ask in.";
 
 fn toast(text: String, kind: ToastKind, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
 }
 
-fn ask(question: Question, unasked: &str, cx: &mut App) {
+pub(super) fn ask(question: Question, unasked: &str, cx: &mut App) {
     let window = cx.active_window().or_else(|| cx.windows().first().copied());
     let asked =
         window.is_some_and(|window| window.update(cx, |_, window, cx| dialogs::confirm(question, window, cx)).is_ok());
@@ -38,11 +38,30 @@ pub(super) fn removing(path: &str) -> String {
     format!("remove-folder:{path}")
 }
 
-fn removal_job(folder: &Folder) -> Busy {
+pub(super) fn removal_job(folder: &Folder) -> Busy {
     let title = folder.title();
     match folder.workspace() {
         Some(workspace) => Busy::remove_worktree(workspace, &title),
         None => Busy::new(removing(&folder.path), format!("Removing {title}…")),
+    }
+}
+
+pub(super) fn removal_question(
+    folders: Vec<Folder>,
+    go: impl Fn(&[Folder], bool, &mut App) + Clone + 'static,
+) -> Question {
+    let (kept, deleted) = (said(&folders, false), said(&folders, true));
+    let yes = move |folders: Vec<Folder>, branches: bool| {
+        let go = go.clone();
+        move |cx: &mut App| go(&folders, branches, cx)
+    };
+    let label = branch_label(&folders);
+    let question = Question::new(title(&folders), "", button(&folders, false), Vec::new())
+        .body(move |branches| said_lines(if branches { &deleted } else { &kept }))
+        .on_yes(yes(folders.clone(), false));
+    match label {
+        Some(label) => question.tick(Tick::new(label, button(&folders, true), yes(folders, true))),
+        None => question,
     }
 }
 
@@ -91,25 +110,11 @@ impl WorktreesPanel {
             self.reload(cx);
             return;
         }
-        let question = Self::remove_question(folders, cx);
-        ask(question, NOT_REMOVED, cx);
-    }
-
-    fn remove_question(folders: Vec<Folder>, cx: &mut Context<Self>) -> Question {
-        let (kept, deleted) = (said(&folders, false), said(&folders, true));
         let this = cx.entity();
-        let yes = move |folders: Vec<Folder>, branches: bool| {
-            let this = this.clone();
-            move |cx: &mut App| this.update(cx, |this, cx| this.remove(&folders, branches, cx))
+        let go = move |folders: &[Folder], branches: bool, cx: &mut App| {
+            this.update(cx, |this, cx| this.remove(folders, branches, cx));
         };
-        let label = branch_label(&folders);
-        let question = Question::new(title(&folders), "", button(&folders, false), Vec::new())
-            .body(move |branches| said_lines(if branches { &deleted } else { &kept }))
-            .on_yes(yes(folders.clone(), false));
-        match label {
-            Some(label) => question.tick(Tick::new(label, button(&folders, true), yes(folders, true))),
-            None => question,
-        }
+        ask(removal_question(folders, go), NOT_REMOVED, cx);
     }
 
     fn remove(&mut self, folders: &[Folder], branches: bool, cx: &mut Context<Self>) {

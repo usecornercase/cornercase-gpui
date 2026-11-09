@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.42
+
+- **Remove worktree… can delete the branch too.** A worktree's Remove worktree…, in its menu in the sidebar, now asks what the Worktrees sheet asks about that folder: what cornercase finds there (files changed, commits not pushed, a lock, the programs that would stop, an agent at work among them, the teardown), with an **Also delete the branch** box, off by default. Ticked, it says in red which commits the branch would lose. The button says what it will do (Remove, Remove anyway, Unlock and remove) instead of asking you to tick each risk. The default branch and the main checkout's are never deleted.
+- **A toast says what went:** the worktree and its branch, or why the branch was kept, a teardown that failed, or a folder that changed while you were asked, which is left as it was.
+- **The same on your other machines.** The ✕ of a worktree on a machine in your sidebar asks the same question about that machine's folder, and can delete its branch there too.
+
 ## 0.1.41
 
 - **The window opens where you left it.** Its size, its place on your displays and whether it was maximised or full screen come back at every launch, and after an update's restart. If that display is gone, or the place would be off screen, it opens centred as before. On Linux it keeps its size and state, and your desktop places it.

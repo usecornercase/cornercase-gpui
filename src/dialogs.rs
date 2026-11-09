@@ -80,7 +80,7 @@ fn ask_button(workspace: u64, text: String, label: String) -> Stateful<Div> {
     })
 }
 
-fn show(view: AnyView, focus: &FocusHandle, window: &mut Window, cx: &mut App) {
+pub(crate) fn show(view: AnyView, focus: &FocusHandle, window: &mut Window, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.show_dialog(view, cx));
     window.focus(focus);
 }
