@@ -3,6 +3,7 @@ pub(crate) mod brand;
 pub(crate) mod file_icons;
 pub(crate) mod glass;
 pub(crate) mod icons;
+pub(crate) mod markdown;
 pub(crate) mod menu;
 pub(crate) mod motion;
 pub(crate) mod one_line;

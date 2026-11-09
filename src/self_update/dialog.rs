@@ -8,7 +8,8 @@ use super::install::{Way, Why, program_name};
 use super::release::Found;
 use super::{CURRENT, NAME, Updater};
 use crate::dialogs::frame;
-use crate::notify::{InstallState, update};
+use crate::notify::InstallState;
+use crate::notify::update::{self, ParsedNotes};
 use crate::platform::Os;
 use crate::store::{Store, ToastKind};
 use crate::theme::colours;
@@ -17,13 +18,14 @@ use crate::ui;
 pub(super) struct UpdateDialog {
     updater: Entity<Updater>,
     focus: FocusHandle,
+    notes: ParsedNotes,
 }
 
 pub(super) fn show(updater: Entity<Updater>, window: &mut Window, cx: &mut App) {
     update::show(
         |focus, cx| {
             cx.observe(&updater, |_, _, cx| cx.notify()).detach();
-            UpdateDialog { updater, focus }
+            UpdateDialog { updater, focus, notes: ParsedNotes::default() }
         },
         window,
         cx,
@@ -131,7 +133,7 @@ impl Render for UpdateDialog {
             .flex_col()
             .gap(px(10.))
             .child(ui::dim(format!("You run {NAME} {CURRENT}. What changed since:")))
-            .child(update::release_notes(&found.release()))
+            .child(update::release_notes(&found.notes, &mut self.notes))
             .when_some(how, |d, how| d.child(div().text_size(px(12.)).text_color(colours::muted()).child(how)))
             .when_some(done, |d, (text, colour)| d.child(div().text_size(px(12.)).text_color(colour).child(text)));
         let title = format!("{NAME} {} is out", found.latest.version);

@@ -21,7 +21,7 @@ use crate::store::{self, Busy, Store, ToastGo, ToastKind, args};
 use crate::theme::{UI_FAMILY, colours, radius};
 use crate::ui::{self, glass};
 
-pub(crate) use feed::{AppState, Event, Notes, Notice, Prefs, Release, parse_event};
+pub(crate) use feed::{AppState, Event, Notes, Notice, Prefs, parse_event};
 
 const FLASH: Duration = Duration::from_millis(160);
 const BELL_TOAST_EVERY: Duration = Duration::from_secs(30);

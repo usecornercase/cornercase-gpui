@@ -4,8 +4,8 @@ use std::rc::Rc;
 use gpui::{ListOffset, ListState};
 
 use super::data::ReadIssue;
-use super::markdown::{self, Block};
 use super::{Asked, BodyView, IssueId, virtual_list};
+use crate::ui::markdown::{self, Block};
 
 pub(super) type Read = Result<Rc<Page>, String>;
 

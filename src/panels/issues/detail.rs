@@ -7,9 +7,10 @@ use gpui::{
 
 use super::data::{self, Comment, Issue};
 use super::page::{Item, Page, Read};
-use super::{BodyView, IssuesPanel, blank, card, copy_text, error_note, label_chip, state_icon, text};
+use super::{BodyView, IssuesPanel, blank, card, copy_text, error_note, label_chip, state_icon};
 use crate::notify::tip;
 use crate::theme::{FONT_FAMILY, colours};
+use crate::ui::markdown::text;
 use crate::ui::{self, Icon, Tone, glass};
 
 struct Detail {

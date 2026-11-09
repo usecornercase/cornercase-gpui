@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use gpui::{
     App, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, FocusHandle, InteractiveElement as _,
     IntoElement, ParentElement as _, Render, Rgba, StatefulInteractiveElement as _, Styled as _, Window, div,
@@ -8,9 +10,12 @@ use super::feed::{Notes, Release, Update};
 use super::{InstallState, Notifier};
 use crate::cli::Version;
 use crate::dialogs::frame;
+use crate::model::link::is_web;
 use crate::store::{Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
+use crate::ui::markdown::text::{self, OnLink};
+use crate::ui::markdown::{self, Block};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Chip {
@@ -86,13 +91,14 @@ pub(crate) fn show<V: Render>(make: impl FnOnce(FocusHandle, &mut Context<V>) ->
 pub(super) struct UpdateDialog {
     notifier: Entity<Notifier>,
     focus: FocusHandle,
+    notes: ParsedNotes,
 }
 
 pub(super) fn show_update(notifier: Entity<Notifier>, window: &mut Window, cx: &mut App) {
     show(
         |focus, cx| {
             cx.observe(&notifier, |_, _, cx| cx.notify()).detach();
-            UpdateDialog { notifier, focus }
+            UpdateDialog { notifier, focus, notes: ParsedNotes::default() }
         },
         window,
         cx,
@@ -121,7 +127,7 @@ impl Render for UpdateDialog {
             .flex_col()
             .gap(px(10.))
             .child(ui::dim(format!("You run cornercase {running}. What changed since:")))
-            .child(release_notes(&release))
+            .child(release_notes(&release.notes, &mut self.notes))
             .child(div().text_size(px(12.)).text_color(colours::muted()).child(how_to_install(command.as_deref())))
             .when_some(status, |d, (text, colour)| d.child(div().text_size(px(12.)).text_color(colour).child(text)));
         let buttons = update_buttons(self.notifier.clone(), (command, installed.is_some()), &install, &release.version);
@@ -129,7 +135,29 @@ impl Render for UpdateDialog {
     }
 }
 
-pub(crate) fn release_notes(release: &Release) -> impl IntoElement + use<> {
+#[derive(Default)]
+pub(crate) struct ParsedNotes {
+    read: Vec<Notes>,
+    blocks: Vec<Vec<Block>>,
+}
+
+impl ParsedNotes {
+    pub(crate) fn of(&mut self, notes: &[Notes]) -> &[Vec<Block>] {
+        if self.read != notes {
+            self.blocks = notes.iter().map(|section| markdown::parse(&section.text)).collect();
+            self.read = notes.to_vec();
+        }
+        &self.blocks
+    }
+}
+
+pub(crate) fn release_notes(notes: &[Notes], parsed: &mut ParsedNotes) -> impl IntoElement + use<> {
+    let on_link: OnLink = Rc::new(|url, cx| {
+        if is_web(url) {
+            cx.open_url(url);
+        }
+    });
+    let sections = notes.iter().zip(parsed.of(notes)).map(|(section, blocks)| notes_section(section, blocks, &on_link));
     div()
         .id("update-notes")
         .max_h(px(300.))
@@ -142,15 +170,15 @@ pub(crate) fn release_notes(release: &Release) -> impl IntoElement + use<> {
         .bg(colours::terminal())
         .border_1()
         .border_color(colours::border())
-        .when(release.notes.is_empty(), |d| d.child(ui::dim("This release has no notes.")))
-        .children(release.notes.iter().map(notes_section))
+        .when(notes.is_empty(), |d| d.child(ui::dim("This release has no notes.")))
+        .children(sections)
 }
 
-fn notes_section(section: &Notes) -> impl IntoElement + use<> {
+fn notes_section(section: &Notes, blocks: &[Block], on_link: &OnLink) -> impl IntoElement + use<> {
     div()
         .flex()
         .flex_col()
-        .gap(px(4.))
+        .gap(px(6.))
         .child(div().text_size(px(12.)).text_color(colours::accent()).child(section.version.clone()))
         .child(
             div()
@@ -158,7 +186,8 @@ fn notes_section(section: &Notes) -> impl IntoElement + use<> {
                 .text_color(colours::text())
                 .flex()
                 .flex_col()
-                .children(section.text.lines().map(|l| div().child(l.to_string()))),
+                .gap(px(6.))
+                .children(text::linked_blocks(&format!("notes-{}", section.version), blocks, on_link)),
         )
 }
 

@@ -1,3 +1,5 @@
+pub(crate) mod text;
+
 use std::iter::Peekable;
 use std::ops::Range;
 use std::str::Lines;

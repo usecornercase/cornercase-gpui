@@ -3,11 +3,9 @@ mod data;
 mod detail;
 mod list;
 mod load;
-pub(crate) mod markdown;
 mod page;
 mod picker;
 mod start;
-pub(crate) mod text;
 mod toolbar;
 
 use std::collections::{HashMap, HashSet};

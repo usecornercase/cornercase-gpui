@@ -66,3 +66,23 @@ fn an_older_cornercase_on_disk_still_offers_the_release() {
     assert_eq!(installed(&InstallState::Idle, Some(&update), None), None);
     assert_eq!(installed(&InstallState::Idle, None, disk("0.13.19")), None);
 }
+
+fn notes(text: &str) -> Vec<Notes> {
+    vec![Notes { version: "0.1.37".into(), text: text.into() }]
+}
+
+#[test]
+fn the_notes_are_parsed_once_while_they_stay_the_same() {
+    let mut parsed = ParsedNotes::default();
+    let first = parsed.of(&notes("- **Formatted** notes")).as_ptr();
+    let again = parsed.of(&notes("- **Formatted** notes")).as_ptr();
+    assert_eq!(first, again);
+}
+
+#[test]
+fn changed_notes_are_parsed_again() {
+    let mut parsed = ParsedNotes::default();
+    parsed.of(&notes("- one"));
+    assert_eq!(parsed.of(&notes("## Two")), [markdown::parse("## Two")]);
+    assert_eq!(parsed.of(&[]), Vec::<Vec<Block>>::new());
+}

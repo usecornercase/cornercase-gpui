@@ -6,8 +6,8 @@ use serde::Deserialize;
 
 use super::names;
 use crate::panels::flows::model::ago;
-use crate::panels::issues::markdown::Block;
 use crate::store::{Busy, args};
+use crate::ui::markdown::Block;
 
 const OVERDRAW: f32 = 400.;
 
