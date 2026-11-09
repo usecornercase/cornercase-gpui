@@ -245,12 +245,19 @@ impl SettingsPanel {
             self.fields.insert(role, entity.clone());
             entity
         };
-        entity.update(cx, |f, cx| f.keep_saved(value.to_string(), cx));
+        entity.update(cx, |f, cx| {
+            f.set_placeholder(placeholder.to_string(), cx);
+            f.keep_saved(value.to_string(), cx);
+        });
     }
 
     fn field(role: Role, placeholder: String, masked: bool, cx: &mut Context<Self>) -> Entity<TextField> {
+        let panel = cx.entity();
+        let down = role.clone();
         let entity = cx.new(|cx| {
             let field = TextField::new(placeholder, cx).in_tab_order().reverts_on_escape();
+            let field =
+                field.on_down(move |window, cx| panel.update(cx, |this, cx| this.suggestions_down(&down, window, cx)));
             if masked { field.masked() } else { field }
         });
         cx.subscribe(&entity, move |this, _, event: &TextFieldEvent, cx| match event {

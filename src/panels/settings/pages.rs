@@ -39,7 +39,11 @@ pub(super) fn page_icon(page: &str) -> Icon {
 
 fn setting_label(setting: &Setting) -> Div {
     let restart = setting.restart.then(|| ui::tinted_chip("needs a restart", colours::waiting()));
-    widgets::labelled(widgets::titled(widgets::capitalised(&setting.label), restart), setting.note.clone())
+    let title = widgets::titled(widgets::capitalised(&setting.label), restart);
+    if setting.warns() {
+        return widgets::labelled(title, "").child(ui::error_line(setting.note.clone()).text_size(px(11.5)));
+    }
+    widgets::labelled(title, setting.note.clone())
 }
 
 impl SettingsPanel {
@@ -249,7 +253,7 @@ impl SettingsPanel {
             return div().into_any_element();
         }
         let (key, value) = (setting.key.clone(), data::value_text(&setting.default));
-        let hint = format!("Back to the default: {}", data::default_shown(setting));
+        let hint = data::reset_hint(setting);
         ui::row_action(SharedString::from(format!("reset-{key}")), Icon::Undo, hint, false)
             .on_click(cx.listener(move |this, _, _, cx| this.save(&key, &value, cx)))
             .into_any_element()

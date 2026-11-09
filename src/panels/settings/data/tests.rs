@@ -332,3 +332,145 @@ fn a_tracker_or_a_bot_offers_no_pairing_and_keeps_only_its_own_note() {
     assert_eq!(bot.note_here(), "paste its token");
     assert_eq!(bot.pairing_offer(), None);
 }
+
+fn shell() -> Described {
+    parse(crate::test_util::fixture!("settings/shell.json")).expect("the shell sample parses")
+}
+
+fn refused() -> Described {
+    parse(crate::test_util::fixture!("settings/shell-refused.json")).expect("the refused sample parses")
+}
+
+fn offered_values(setting: &Setting) -> Vec<String> {
+    setting.offered().into_iter().map(|c| c.value).collect()
+}
+
+#[test]
+fn a_text_setting_with_choices_takes_any_text_and_suggests_them() {
+    let (d, sample) = (shell(), sample());
+    assert!(d.settings[1].suggests() && d.settings[1].edited_as_text());
+    assert!(!d.settings[2].suggests());
+    assert!(!sample.settings[4].suggests());
+}
+
+#[test]
+fn the_suggestions_start_with_the_default_then_follow_cornercases_order() {
+    let setting = &shell().settings[1];
+    let values = ["", "/bin/bash", "/bin/csh", "/bin/dash", "/bin/ksh", "/bin/sh", "/bin/tcsh", "/bin/zsh"];
+    assert_eq!(offered_values(setting), values);
+    let labels: Vec<String> = setting.offered().iter().map(|c| setting.offered_label(c)).collect();
+    assert_eq!(labels[..2], ["default", "/bin/bash"]);
+}
+
+#[test]
+fn a_suggested_path_is_shown_as_written() {
+    let mut setting = shell().settings[1].clone();
+    setting.choices = vec![Choice { value: "/opt/my_tools/nu".into(), ..Choice::default() }];
+    let choice = &setting.offered()[1];
+    assert_eq!(setting.offered_label(choice), "/opt/my_tools/nu");
+}
+
+#[test]
+fn a_default_already_among_the_choices_is_not_listed_twice() {
+    let mut setting = shell().settings[1].clone();
+    setting.choices =
+        vec![Choice { value: String::new(), ..Choice::default() }, Choice { value: "x".into(), ..Choice::default() }];
+    assert_eq!(offered_values(&setting), ["", "x"]);
+}
+
+#[test]
+fn a_choice_setting_offers_its_choices_with_spaces_for_underscores() {
+    let d = sample();
+    assert_eq!(d.settings[4].offered(), d.settings[4].choices);
+    let mut setting = d.settings[4].clone();
+    setting.choices = vec![Choice { value: "projects_on_top".into(), ..Choice::default() }];
+    assert_eq!(setting.offered_label(&setting.offered()[0]), "projects on top");
+}
+
+#[test]
+fn the_default_is_in_use_while_the_field_is_empty() {
+    let mut setting = shell().settings[1].clone();
+    assert_eq!(setting.in_use(), Some(0));
+    for (value, at) in [("/bin/zsh", Some(7)), ("zsh", None), ("/usr/local/bin/fish", None)] {
+        setting.value = Value::String(value.into());
+        assert_eq!(setting.in_use(), at, "{value}");
+    }
+}
+
+#[test]
+fn a_text_setting_with_suggestions_is_never_drawn_as_segments() {
+    let mut setting = shell().settings[1].clone();
+    setting.choices.truncate(2);
+    assert!(!setting.as_segments());
+}
+
+#[test]
+fn a_shell_that_cannot_start_warns_and_one_that_can_does_not() {
+    let (bad, good) = (refused(), shell());
+    assert!(bad.settings[1].warns());
+    assert_eq!(bad.settings[1].note, "cannot start: there is no program there; new panes start zsh");
+    assert!(!good.settings[1].warns() && !bad.settings[2].warns());
+}
+
+#[test]
+fn the_reset_arrow_names_the_default() {
+    let (d, sample) = (refused(), sample());
+    assert_eq!(reset_hint(&d.settings[1]), "Back to the default shell");
+    assert_eq!(reset_hint(&sample.settings[0]), "Back to the default: ~/.cornercase/worktrees");
+}
+
+#[test]
+fn the_reset_arrow_of_empty_arguments_names_the_default_empty() {
+    let mut setting = shell().settings[2].clone();
+    setting.value = Value::String("-l".into());
+    assert_eq!(reset_hint(&setting), "Back to the default: empty");
+}
+
+#[test]
+fn an_empty_shell_reads_as_cornercases_words_for_it() {
+    let d = shell();
+    assert_eq!(placeholder(&d.settings[1]), "default (zsh)");
+    assert_eq!(placeholder(&d.settings[2]), "none");
+}
+
+#[test]
+fn shell_arguments_that_look_like_options_are_values() {
+    assert_eq!(set_args("shell.args", "-l"), ["config", "set", "--json", "--", "shell.args", "-l"]);
+    let quoted = set_args("shell.args", "'/Users/me/My Dir/x' --login");
+    assert_eq!(quoted.last().map(String::as_str), Some("'/Users/me/My Dir/x' --login"));
+    assert_eq!(set_args("shell", "")[4..], ["shell", ""]);
+}
+
+#[test]
+fn the_shell_and_its_arguments_are_rows_of_the_ui_pages_card() {
+    let d = shell();
+    let ui = sections(&d, "UI");
+    assert_eq!(ui.len(), 1);
+    assert_eq!(ui[0].title, "");
+    assert_eq!(ui[0].items, [Item::Setting(0), Item::Setting(1), Item::Setting(2), Item::Setting(3)]);
+}
+
+#[test]
+fn search_finds_the_shell_rows_by_name_suggestion_and_note() {
+    let items = |d: &Described, query: &str| -> Vec<Item> {
+        let found = search(d, query);
+        assert_eq!(found.len(), 1, "{query}");
+        assert_eq!(found[0].page, "UI");
+        found[0].section.items.clone()
+    };
+    let d = shell();
+    assert_eq!(items(&d, "shell"), [Item::Setting(1), Item::Setting(2)]);
+    assert_eq!(items(&d, "tcsh"), [Item::Setting(1)]);
+    assert_eq!(items(&d, "login"), [Item::Setting(2)]);
+    assert_eq!(items(&refused(), "fish"), [Item::Setting(1)]);
+}
+
+#[test]
+fn every_suggestion_is_saved_exactly_as_listed() {
+    let setting = shell().settings[1].clone();
+    for choice in setting.offered() {
+        assert_eq!(choice.value.trim(), choice.value);
+        assert_eq!(set_args(&setting.key, choice.value.trim()).last(), Some(&choice.value));
+    }
+    assert_eq!(setting.offered()[0].value, "");
+}

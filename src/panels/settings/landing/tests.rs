@@ -171,6 +171,26 @@ fn a_row_above_the_view_comes_down_to_a_third_of_it() {
     assert!((offset_showing((0., 50.), (100., 700.), -500.) + 200.).abs() < f32::EPSILON);
 }
 
+fn shell_described() -> Described {
+    data::parse(fixture!("settings/shell.json")).expect("the shell sample parses")
+}
+
+#[test]
+fn the_shell_found_by_search_lands_on_its_own_row() {
+    let d = shell_described();
+    let spot = spot(&d, &found(fixture!("settings/search/shell.json"), "UI › shell"));
+    assert_eq!(key_of(&d, &spot), "shell");
+    assert_eq!(spot.notice, None);
+}
+
+#[test]
+fn the_shell_arguments_found_by_search_land_on_their_own_row() {
+    let d = shell_described();
+    let spot = spot(&d, &found(fixture!("settings/search/shell.json"), "UI › shell arguments"));
+    assert_eq!(key_of(&d, &spot), "shell.args");
+    assert_eq!(spot.notice, None);
+}
+
 #[test]
 fn landing_on_appearance_marks_nothing_and_says_nothing() {
     let found = FoundSetting { title: "Appearance".into(), page: "Appearance".into(), ..FoundSetting::default() };

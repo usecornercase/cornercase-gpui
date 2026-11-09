@@ -1,0 +1,24 @@
+{
+  "results": [
+    {
+      "hidden": false,
+      "key": "shell",
+      "label": "shell",
+      "note": "the program a new pane starts; open panes keep theirs",
+      "page": "UI",
+      "section": "",
+      "shown": "default (zsh)",
+      "title": "UI › shell"
+    },
+    {
+      "hidden": false,
+      "key": "shell.args",
+      "label": "shell arguments",
+      "note": "given to the shell when a pane starts, such as -NoLogo or --login",
+      "page": "UI",
+      "section": "",
+      "shown": "none",
+      "title": "UI › shell arguments"
+    }
+  ]
+}
