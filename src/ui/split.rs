@@ -68,7 +68,7 @@ fn extent(edge: Edge, bounds: Bounds<Pixels>) -> f32 {
     })
 }
 
-struct Blank;
+pub(crate) struct Blank;
 
 impl Render for Blank {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {

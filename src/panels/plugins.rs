@@ -78,7 +78,7 @@ fn say(result: anyhow::Result<String>, cx: &mut App) {
 
 fn chip(text: impl Into<SharedString>, colour: Rgba) -> Div {
     let text: SharedString = text.into();
-    div().px(px(7.)).rounded(px(radius::CHIP)).bg(colours::sidebar()).text_size(px(11.)).text_color(colour).child(text)
+    div().px(px(7.)).rounded(px(radius::chip())).bg(colours::inset()).text_size(px(11.)).text_color(colour).child(text)
 }
 
 fn health_colour(health: Health) -> Rgba {
@@ -411,7 +411,7 @@ impl PluginsPanel {
             .flex_col()
             .gap(px(8.))
             .p(px(14.))
-            .rounded(px(radius::CARD))
+            .rounded(px(radius::card()))
             .bg(colours::terminal())
             .border_1()
             .border_color(colours::border())

@@ -1,7 +1,7 @@
 use gpui::{
     AnyElement, App, ClickEvent, ClipboardItem, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, px, rgba,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::cards::{avatar, conductor, ground};
@@ -109,7 +109,7 @@ fn quiet(text: &'static str) -> Div {
 fn rail(colour: Rgba, (first, last): (bool, bool)) -> Div {
     let centre = DOT_TOP + DOT / 2.;
     let top = if first { centre } else { 0. };
-    let line = div().absolute().left(px(DOT / 2. - 1.)).top(px(top)).w(px(2.)).bg(rgba(0xff_ff_ff_14));
+    let line = div().absolute().left(px(DOT / 2. - 1.)).top(px(top)).w(px(2.)).bg(colours::border());
     div()
         .relative()
         .w(px(DOT))
@@ -171,7 +171,7 @@ fn copy_button(seq: u64, text: String) -> Stateful<Div> {
         .id(("copy-message", seq))
         .flex_none()
         .p(px(4.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .cursor_pointer()
         .hover(|s| s.bg(colours::selected()))
         .child(ui::icon(Icon::Copy, 12.).text_color(colours::faint()))

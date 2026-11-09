@@ -241,7 +241,7 @@ impl Popup {
     }
 
     fn card(&self, open: &OpenPopup, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        ui::glass::card(radius::SHEET)
+        ui::glass::card(radius::sheet())
             .id("plugin-popup")
             .flex()
             .flex_col()

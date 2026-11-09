@@ -1,6 +1,7 @@
 #![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
 
 mod app;
+mod appearance;
 mod cli;
 mod context_menu;
 mod desktop;
@@ -182,6 +183,7 @@ fn main() {
         })
         .detach();
 
+        appearance::Appearance::init(cx);
         self_update::start(cx);
         open_window(cx);
         cx.activate(true);

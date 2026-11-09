@@ -1,0 +1,42 @@
+{
+  "name": "Solarized Light",
+  "extends": "cornercase-light",
+  "terminal": {
+    "foreground": "#657b83",
+    "background": "#fdf6e3",
+    "black": "#073642",
+    "red": "#dc322f",
+    "green": "#859900",
+    "yellow": "#b58900",
+    "blue": "#268bd2",
+    "magenta": "#d33682",
+    "cyan": "#2aa198",
+    "white": "#eee8d5",
+    "bright_black": "#002b36",
+    "bright_red": "#cb4b16",
+    "bright_green": "#586e75",
+    "bright_yellow": "#657b83",
+    "bright_blue": "#839496",
+    "bright_magenta": "#6c71c4",
+    "bright_cyan": "#93a1a1",
+    "bright_white": "#fdf6e3"
+  },
+  "chrome": {
+    "glass": "#f0ead8",
+    "raised": "#fefdf8",
+    "surface": "#fffdf9",
+    "text": "#47565c",
+    "soft": "#52646b",
+    "muted": "#6d7d80",
+    "faint": "#6e7979",
+    "veil": "#323e42",
+    "brand": "#268bd2",
+    "on_brand": "#0c0e11",
+    "accent": "#1c689e",
+    "working": "#886700",
+    "waiting": "#983810",
+    "done": "#647300",
+    "failed": "#a52623",
+    "merged": "#9e2862"
+  }
+}

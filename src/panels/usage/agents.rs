@@ -13,12 +13,12 @@ const COLUMNS: [&str; 7] = ["agent time", "started", "prompts", "turns", "waited
 fn agent_colour(key: &str) -> Hsla {
     match key {
         "claude" => colours::waiting().into(),
-        "codex" => theme::hsla(theme::ANSI[6]),
-        "gemini" => theme::hsla(theme::ANSI[4]),
-        "opencode" => theme::hsla(theme::ANSI[2]),
-        "grok" => theme::hsla(theme::ANSI[7]),
-        "cursor" => theme::hsla(theme::ANSI[5]),
-        "copilot" => theme::hsla(theme::ANSI[1]),
+        "codex" => theme::ansi(6),
+        "gemini" => theme::ansi(4),
+        "opencode" => theme::ansi(2),
+        "grok" => theme::ansi(7),
+        "cursor" => theme::ansi(5),
+        "copilot" => theme::ansi(1),
         _ => colours::muted().into(),
     }
 }
@@ -93,7 +93,7 @@ fn agent_row(i: usize, key: &str, c: &Counts, most: f64) -> Stateful<Div> {
         .items_center()
         .px(px(10.))
         .py(px(8.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .hover(|s| s.bg(colours::hover()))
         .child(
             div()

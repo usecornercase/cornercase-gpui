@@ -55,6 +55,7 @@ pub(crate) struct Store {
     homes: Homes,
     pub dock: Option<PanelKind>,
     pub sheet: Option<PanelKind>,
+    pub peeking: bool,
     pub dialog: Option<AnyView>,
     dialog_behind: Option<(AnyView, FocusHandle)>,
     pub refocus: Option<FocusHandle>,
@@ -147,6 +148,7 @@ impl Store {
             homes: Homes::default(),
             dock: None,
             sheet: None,
+            peeking: false,
             dialog: None,
             dialog_behind: None,
             refocus: None,
@@ -172,6 +174,10 @@ impl Store {
             next_toast: 1,
             app_stream: None,
         });
+        Self::publish(store, cx)
+    }
+
+    fn publish(store: Entity<Store>, cx: &mut App) -> Entity<Store> {
         cx.set_global(GlobalStore(store.clone()));
         store.update(cx, |_, cx| detect_openers(cx));
         store
@@ -481,6 +487,7 @@ impl Store {
 
     pub(crate) fn close_overlay(&mut self, cx: &mut Context<Self>) -> bool {
         let closed = self.dialog.take().is_some() || self.sheet.take().is_some();
+        self.peeking = false;
         self.dialog_comes_back();
         if closed {
             cx.notify();
@@ -557,7 +564,15 @@ impl Store {
 
     pub(crate) fn close_sheet(&mut self, cx: &mut Context<Self>) {
         self.sheet = None;
+        self.peeking = false;
         cx.notify();
+    }
+
+    pub(crate) fn peek(&mut self, on: bool, cx: &mut Context<Self>) {
+        if self.peeking != on {
+            self.peeking = on;
+            cx.notify();
+        }
     }
 
     pub(crate) fn show_dialog(&mut self, view: AnyView, cx: &mut Context<Self>) {

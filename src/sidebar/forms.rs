@@ -30,8 +30,7 @@ fn show<T: Render + Focusable>(view: Entity<T>, window: &mut Window, cx: &mut Ap
 }
 
 pub(super) fn palette_colour(index: u8) -> gpui::Rgba {
-    let [r, g, b] = crate::theme::palette(index);
-    gpui::rgb((u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b))
+    crate::theme::palette_rgba(index)
 }
 
 enum Check {

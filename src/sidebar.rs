@@ -161,11 +161,11 @@ fn card() -> Div {
         .flex_1()
         .flex()
         .flex_col()
-        .rounded(px(radius::CARD))
+        .rounded(px(radius::card()))
         .bg(colours::surface())
         .border_1()
         .border_color(colours::border())
-        .child(ui::glass::wash().rounded_t(px(radius::CARD - 1.)))
+        .child(ui::glass::wash().rounded_t(px(radius::card() - 1.)))
 }
 
 fn mark_lead(os: Os) -> (f32, f32) {

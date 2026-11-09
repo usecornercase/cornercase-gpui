@@ -428,6 +428,10 @@ pub(super) fn about(page: &str) -> &'static str {
         "Issues" => "The trackers issues come from, their accounts and filters.",
         "UI" => "How the sidebar, tabs and notifications look and sound.",
         "Remote" => "Reaching this computer's cornercase from a phone or a browser.",
+        APPEARANCE => {
+            "The window's colours and glass: themes to start from, every colour to change, light and dark, and files \
+             to share. Words: theme, colours, transparency, opacity, contrast, palette."
+        }
         LINKS => links_about(Os::CURRENT),
         PROJECTS => {
             "Setup and teardown: the commands a repository runs in a new worktree, and before removing it. Build \
@@ -445,9 +449,12 @@ pub(super) fn alerts(described: &Described, page: &str) -> bool {
     described.connections.iter().any(|c| c.page == page && c.state == State::Refused)
 }
 
+pub(super) const APPEARANCE: &str = "Appearance";
 pub(super) const LINKS: &str = "Links";
 pub(super) const PROJECTS: &str = "Projects";
 pub(super) const SHARE: &str = "Share";
+
+pub(super) const OWN_PAGES: [&str; 4] = [APPEARANCE, LINKS, PROJECTS, SHARE];
 
 pub(super) const ORDER: [&str; 5] = ["Worktrees", "Agents", "Issues", "UI", "Remote"];
 

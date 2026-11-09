@@ -15,6 +15,7 @@ Code: every panel
 
 Filed on 2026-11-07 against cornercase 0.13.19, each with its reproduction from a shell. The window has no way round them. A muted line says what waits where a person would look, and gives way to the control when the command lands; a bullet with no such line says why.
 
+- **The terminal's selection colour** (not filed yet): cornercase draws a selection as `inverse` cells in the `surface` frames, so a window cannot tell selected cells from a program's inverse text and cannot draw the selection in its theme's colour. The ask: mark selected cells apart from `inverse` in `surface`. The Appearance page's Terminal group says so in a muted line (`design/theme.md`).
 - **Notices with no token** (#700): `cornercase notify`, a flow waiting for consent, a failed setup, and the queue's and routines' notices reach only an attached cornercase window, so a person who uses only this one is never told, and `notify` still exits 0. No line says so, since nothing arrives to say it on (`design/notifications.md`).
 - **Following a wrapped address** (#701): `surface` does not mark the rows that go on in the next one, so a long address that wraps, as narrowing a pane can make it, is underlined and opens cut at the row's end. No line says so, since it would sit on every address (`design/terminal.md`, Paths and web addresses).
 - **Logging in an account that exists** (#702): there is no `account login`, so a signed-out row has no button to log it back in. A muted line under the row names the issue, and its tooltip says how by hand (`design/accounts.md`).

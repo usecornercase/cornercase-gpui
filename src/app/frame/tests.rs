@@ -58,7 +58,7 @@ fn a_floating_window_has_margins_rounded_corners_a_shadow_and_eight_grips() {
 #[test]
 fn the_windows_corner_follows_the_cards_inside_it() {
     let [corner, ..] = client(Tiling::default()).corners();
-    assert!((corner - (crate::theme::radius::CARD + super::GAP)).abs() < f32::EPSILON);
+    assert!((corner - (crate::theme::radius::card() + super::GAP)).abs() < f32::EPSILON);
 }
 
 #[test]

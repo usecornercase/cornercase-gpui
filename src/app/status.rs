@@ -53,7 +53,7 @@ impl Root {
             .gap(px(6.))
             .px(px(6.))
             .py(px(2.))
-            .rounded(px(radius::CHIP))
+            .rounded(px(radius::chip()))
             .cursor_pointer()
             .hover(|s| s.bg(colours::hover()))
             .child(connection_dot(dot, self.conn == Conn::Starting))

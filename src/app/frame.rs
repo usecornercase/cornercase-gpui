@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, AnyWindowHandle, App, BoxShadow, ClickEvent, CursorStyle, Decorations, Div, FocusHandle, Global, Hsla,
+    AnyElement, AnyWindowHandle, App, BoxShadow, ClickEvent, CursorStyle, Decorations, Div, FocusHandle, Global,
     InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement as _, Pixels,
     ResizeEdge, Rgba, Size, Stateful, StatefulInteractiveElement as _, Styled, Tiling, Window,
     WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls, WindowDecorations, div, point,
@@ -10,7 +10,7 @@ use gpui::{
 
 use super::{GAP, TITLEBAR_HEIGHT};
 use crate::platform::Os;
-use crate::theme::{self, colours, radius};
+use crate::theme::{self, colours, radius, shade};
 use crate::ui::{self, Icon};
 
 #[cfg(windows)]
@@ -26,7 +26,10 @@ const RESTORE_TRIES: u32 = 100;
 const INSET: f32 = 12.;
 const REACH_IN: f32 = 4.;
 const CORNER_REACH: f32 = 16.;
-const CORNER: f32 = radius::CARD + GAP;
+fn corner() -> f32 {
+    radius::card() + GAP
+}
+
 const CONTROL: f32 = 24.;
 const CAPTION_BUTTON: f32 = 46.;
 const CAPTION_GLYPH: f32 = 18.;
@@ -169,7 +172,7 @@ impl Frame {
 
     pub(crate) fn corners(self) -> [f32; 4] {
         let m = self.margins();
-        let round = |a: f32, b: f32| if a > 0. && b > 0. { CORNER } else { 0. };
+        let round = |a: f32, b: f32| if a > 0. && b > 0. { corner() } else { 0. };
         [round(m.top, m.left), round(m.top, m.right), round(m.bottom, m.right), round(m.bottom, m.left)]
     }
 
@@ -332,7 +335,7 @@ pub(crate) fn round<E: Styled>(element: E, frame: Frame) -> E {
 }
 
 fn shadow() -> Vec<BoxShadow> {
-    let dark = Hsla { h: 0., s: 0., l: 0., a: 0.5 };
+    let dark = shade(0.5);
     vec![BoxShadow { color: dark, offset: point(px(0.), px(1.)), blur_radius: px(INSET - 2.), spread_radius: px(0.) }]
 }
 

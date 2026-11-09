@@ -86,6 +86,9 @@ fn first_of_section(sections: &[Section], title: &str) -> Option<Item> {
 }
 
 pub(super) fn spot(d: &Described, found: &FoundSetting) -> Spot {
+    if found.page == data::APPEARANCE {
+        return Spot::default();
+    }
     if !data::pages(d).contains(&found.page) {
         return Spot { item: None, notice: Some(elsewhere(found)) };
     }
@@ -120,7 +123,7 @@ fn mark() -> Div {
         .bottom_0()
         .left(px(-MARK_BEYOND))
         .right(px(-MARK_BEYOND))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(glass::tint(accent, MARK_TINT))
         .border_1()
         .border_color(glass::tint(accent, MARK_EDGE))
@@ -133,7 +136,9 @@ impl SettingsPanel {
         self.choice = None;
         self.search.update(cx, TextField::clear);
         self.to_top();
-        if self.described.as_ref().is_none_or(|d| data::pages(d).contains(&found.page)) {
+        if found.page == data::APPEARANCE
+            || self.described.as_ref().is_none_or(|d| data::pages(d).contains(&found.page))
+        {
             self.page.clone_from(&found.page);
         }
         self.landed = Some(Landed { found, serial: self.landings, row: Rc::default(), scrolled: false });

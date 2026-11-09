@@ -98,7 +98,7 @@ pub(super) fn picture_body(picture: &Picture, place: &Place) -> (AnyElement, f32
         .w(px(w))
         .h(px(h))
         .object_fit(ObjectFit::Contain)
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .id("peek-picture");
     framed(image, w)
 }
@@ -213,7 +213,7 @@ impl Peek {
             .relative()
             .w(px(w))
             .h(px(h))
-            .rounded(px(radius::CHIP))
+            .rounded(px(radius::chip()))
             .overflow_hidden()
             .bg(colours::pane())
             .cursor_pointer()
@@ -313,7 +313,7 @@ impl Peek {
         place: &Place,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let card = ui::glass::card(radius::SHEET)
+        let card = ui::glass::card(radius::sheet())
             .bg(colours::raised())
             .id("peek")
             .occlude()

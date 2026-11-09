@@ -88,7 +88,7 @@ fn code_box(text: &str) -> AnyElement {
     div()
         .px(px(12.))
         .py(px(10.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(colours::terminal())
         .border_1()
         .border_color(colours::border())
@@ -110,7 +110,7 @@ fn table(rows: &[Vec<String>]) -> AnyElement {
     div()
         .flex()
         .flex_col()
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .border_1()
         .border_color(colours::border())
         .text_size(px(12.))
@@ -118,7 +118,7 @@ fn table(rows: &[Vec<String>]) -> AnyElement {
             div()
                 .flex()
                 .when(r == 0, |d| {
-                    d.font_weight(FontWeight::SEMIBOLD).rounded_t(px(radius::CONTROL - 1.)).bg(colours::sidebar())
+                    d.font_weight(FontWeight::SEMIBOLD).rounded_t(px(radius::control() - 1.)).bg(colours::inset())
                 })
                 .when(r > 0, |d| d.border_t_1().border_color(colours::border()))
                 .children((0..columns).map(|c| {

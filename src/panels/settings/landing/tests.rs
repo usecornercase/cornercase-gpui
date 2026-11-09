@@ -190,3 +190,9 @@ fn the_shell_arguments_found_by_search_land_on_their_own_row() {
     assert_eq!(key_of(&d, &spot), "shell.args");
     assert_eq!(spot.notice, None);
 }
+
+#[test]
+fn landing_on_appearance_marks_nothing_and_says_nothing() {
+    let found = FoundSetting { title: "Appearance".into(), page: "Appearance".into(), ..FoundSetting::default() };
+    assert_eq!(spot(&described(), &found), Spot::default());
+}

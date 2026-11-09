@@ -1,9 +1,8 @@
 use gpui::{
     Background, BoxShadow, Div, Hsla, ParentElement, Rgba, Styled, div, linear_color_stop, linear_gradient, point, px,
-    rgba,
 };
 
-use crate::theme::{UI_FAMILY, colours, radius};
+use crate::theme::{UI_FAMILY, colours, radius, shade};
 
 const WASH: f32 = 180.;
 
@@ -16,6 +15,9 @@ fn shadow(colour: Hsla, y: f32, blur: f32) -> BoxShadow {
 }
 
 pub(crate) fn glow(colour: Rgba, alpha: f32, blur: f32) -> Vec<BoxShadow> {
+    if !crate::theme::current::read(|t| t.shape.glow) {
+        return Vec::new();
+    }
     vec![shadow(tint(colour, alpha).into(), 0., blur)]
 }
 
@@ -24,8 +26,7 @@ pub(crate) fn ring(colour: Rgba) -> Vec<BoxShadow> {
 }
 
 pub(crate) fn lift() -> Vec<BoxShadow> {
-    let dark = |a: f32| Hsla { h: 0., s: 0., l: 0., a };
-    vec![shadow(dark(0.5), 24., 60.), shadow(dark(0.3), 4., 12.)]
+    vec![shadow(shade(0.5), 24., 60.), shadow(shade(0.3), 4., 12.)]
 }
 
 fn fade(angle: f32, colour: Rgba, from: f32, to: f32) -> Background {
@@ -37,11 +38,11 @@ pub(crate) fn cobalt() -> Background {
 }
 
 fn sheen() -> Background {
-    linear_gradient(180., linear_color_stop(rgba(0x1c_1f_24_e0), 0.), linear_color_stop(rgba(0x10_12_15_e8), 1.))
+    linear_gradient(180., linear_color_stop(colours::card_top(), 0.), linear_color_stop(colours::card_bottom(), 1.))
 }
 
 fn highlight(corner: f32) -> Div {
-    div().absolute().top_0().left(px(corner)).right(px(corner)).h(px(1.)).bg(fade(90., colours::text(), 0.18, 0.02))
+    div().absolute().top_0().left(px(corner)).right(px(corner)).h(px(1.)).bg(fade(90., colours::white(), 0.18, 0.02))
 }
 
 pub(crate) fn card(corner: f32) -> Div {
@@ -58,7 +59,7 @@ pub(crate) fn card(corner: f32) -> Div {
 pub(crate) fn dragged() -> Div {
     let halo = glow(colours::brand(), 0.35, 14.);
     div()
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(colours::raised())
         .border_1()
         .border_color(colours::accent())
@@ -69,7 +70,7 @@ pub(crate) fn dragged() -> Div {
 
 pub(crate) fn popover() -> Div {
     div()
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(colours::raised())
         .border_1()
         .border_color(colours::edge())

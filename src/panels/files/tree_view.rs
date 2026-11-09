@@ -137,7 +137,7 @@ impl FilesPanel {
             .h(px(26.))
             .pl(px(6. + small_f32(row.depth) * INDENT))
             .pr(px(8.))
-            .rounded(px(radius::CONTROL))
+            .rounded(px(radius::control()))
             .cursor_pointer()
             .when(selected, glass::lit)
             .when(!selected, |d| d.hover(|s| s.bg(colours::hover())))

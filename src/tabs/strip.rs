@@ -154,7 +154,7 @@ pub(super) fn arrow(forward: bool, enabled: bool, cx: &mut Context<Root>) -> Sta
         .justify_center()
         .w(px(ARROW_WIDTH))
         .h(px(TAB_HEIGHT))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .text_size(px(16.))
         .text_color(if enabled { colours::muted() } else { colours::faint() })
         .when(enabled, |d| d.cursor_pointer().hover(|s| s.bg(colours::hover())))

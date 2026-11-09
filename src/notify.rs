@@ -479,7 +479,7 @@ pub(crate) fn chip(
         .gap(px(5.))
         .px(px(7.))
         .py(px(1.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .text_color(text)
         .cursor_pointer()
         .hover(|s| s.bg(colours::hover()))

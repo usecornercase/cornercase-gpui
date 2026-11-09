@@ -275,7 +275,7 @@ impl SearchPanel {
 
     fn name_rows(&mut self, names: Vec<Ranked>, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let first = names.len();
-        let found = self.settings.hits().to_vec();
+        let found = self.settings.hits();
         self.selected = self.selected.min((first + found.len()).saturating_sub(1));
         let selected = self.selected;
         let mut rows: Vec<AnyElement> =
@@ -461,7 +461,7 @@ fn pane_header(group: &PaneHits, first: bool, cx: &mut Context<SearchPanel>) -> 
         .mt(px(if first { 2. } else { 10. }))
         .px(px(10.))
         .py(px(5.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .cursor_pointer()
         .hover(|s| s.bg(colours::hover()))
         .child(ui::badge(status.as_deref()))
@@ -540,7 +540,7 @@ fn go(goto: Goto, cx: &mut App) {
 }
 
 fn chip_box(colour: impl Into<Hsla>) -> Div {
-    div().flex_none().px(px(7.)).rounded(px(radius::CHIP)).bg(colours::sidebar()).text_size(px(11.)).text_color(colour)
+    div().flex_none().px(px(7.)).rounded(px(radius::chip())).bg(colours::inset()).text_size(px(11.)).text_color(colour)
 }
 
 fn chip(text: impl Into<SharedString>, colour: Rgba) -> Div {

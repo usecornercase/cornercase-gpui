@@ -102,7 +102,7 @@ pub(crate) struct MachineTab {
     arriving: Option<Arriving>,
     attempts: u32,
     tries: u32,
-    themed: bool,
+    pub(super) themed: bool,
     told_visible: bool,
     opened_visible: bool,
     host_events: Option<Stream>,
@@ -269,7 +269,7 @@ impl MachineTab {
 
     fn view_opened(&mut self, tx: &UnboundedSender<Msg>) {
         self.themed = true;
-        self.conn.queue.cmd_with_stdin(args(&["theme", "-"]), theme::theme_json().into_bytes());
+        self.conn.queue.cmd_with_stdin(args(&["theme", "-"]), theme::terminal_json().into_bytes());
         if self.told_visible != self.opened_visible {
             self.conn.tell_visible(self.told_visible);
         }

@@ -29,6 +29,7 @@ pub(super) fn page_icon(page: &str) -> Icon {
         "Issues" => Icon::Issues,
         "UI" => Icon::Interface,
         "Remote" => Icon::Devices,
+        data::APPEARANCE => Icon::Palette,
         data::LINKS => Icon::Globe,
         data::PROJECTS => Icon::FolderOpen,
         data::SHARE => Icon::Share,
@@ -49,7 +50,7 @@ impl SettingsPanel {
     pub(super) fn all_pages(&self) -> Vec<String> {
         let mut pages = self.described.as_ref().map(data::pages).unwrap_or_default();
         pages.retain(|page| page != data::LINKS);
-        pages.extend([data::LINKS, data::PROJECTS, data::SHARE].map(String::from));
+        pages.extend([data::APPEARANCE, data::LINKS, data::PROJECTS, data::SHARE].map(String::from));
         pages
     }
 
@@ -58,7 +59,7 @@ impl SettingsPanel {
         let found = self.described.as_ref().map(|d| data::search(d, &query)).unwrap_or_default();
         let pages = self.all_pages();
         let matching = data::pages_matching(&pages, &query);
-        let own = pages.len().saturating_sub(3);
+        let own = pages.len().saturating_sub(4);
         let items: Vec<Div> = pages
             .into_iter()
             .enumerate()
@@ -116,6 +117,7 @@ impl SettingsPanel {
     fn config_path(&self) -> Option<impl IntoElement + use<>> {
         let path = match self.page.as_str() {
             data::LINKS => prefs::path().display().to_string(),
+            data::APPEARANCE => prefs::path().with_file_name("theme.json").display().to_string(),
             _ => self.described.as_ref()?.path.clone(),
         };
         let shown = ui::home_relative(&path);
@@ -136,6 +138,9 @@ impl SettingsPanel {
     }
 
     pub(super) fn render_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        if self.page == data::APPEARANCE {
+            return self.appearance_page(window, cx);
+        }
         let Some(described) = &self.described else {
             return if self.page == data::LINKS { self.own_page(window, cx) } else { self.not_loaded(cx) };
         };

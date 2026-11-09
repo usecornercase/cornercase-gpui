@@ -160,7 +160,7 @@ fn tab(mut face: Face, cx: &mut Context<Browser>) -> Stateful<Div> {
         .gap(px(6.))
         .pl(px(9.))
         .pr(px(4.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .border_1()
         .border_color(line)
         .bg(fill)

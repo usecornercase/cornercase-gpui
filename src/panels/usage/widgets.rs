@@ -8,7 +8,7 @@ use crate::theme::{colours, radius};
 use crate::ui;
 
 pub(super) fn card() -> Div {
-    div().p(px(18.)).rounded(px(radius::CARD)).bg(colours::terminal()).border_1().border_color(colours::border())
+    div().p(px(18.)).rounded(px(radius::card())).bg(colours::terminal()).border_1().border_color(colours::border())
 }
 
 pub(super) fn heading(text: impl Into<SharedString>) -> Div {

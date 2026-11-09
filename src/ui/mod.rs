@@ -1,5 +1,6 @@
 pub(crate) mod account_picker;
 pub(crate) mod brand;
+pub(crate) mod colour_picker;
 pub(crate) mod file_icons;
 pub(crate) mod glass;
 pub(crate) mod icons;
@@ -10,8 +11,10 @@ pub(crate) mod one_line;
 pub(crate) mod qr;
 pub(crate) mod selection;
 pub(crate) mod signs;
+pub(crate) mod slider;
 pub(crate) mod split;
 pub(crate) mod text_field;
+pub(crate) mod track;
 
 use gpui::{
     AnimationElement, AnyElement, App, Div, ElementId, Entity, Focusable as _, FontWeight, Hsla,
@@ -35,7 +38,7 @@ fn button_base(id: impl Into<ElementId>) -> Stateful<Div> {
         .flex_none()
         .px(px(12.))
         .py(px(4.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .text_size(px(12.))
         .border_1()
         .cursor_pointer()
@@ -144,7 +147,7 @@ pub(crate) fn icon_button(id: impl Into<ElementId>, icon: impl Into<SharedString
         .flex_none()
         .px(px(6.))
         .py(px(1.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .text_color(colours::faint())
         .cursor_pointer()
         .hover(|s| s.bg(colours::selected()).text_color(colours::text()))
@@ -162,7 +165,7 @@ fn tool_frame(id: impl Into<ElementId>, size: f32) -> (Stateful<Div>, SharedStri
         .items_center()
         .justify_center()
         .size(px(size))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .cursor_pointer();
     (el, group)
 }
@@ -266,7 +269,7 @@ pub(crate) fn row(id: impl Into<ElementId>, selected: bool) -> Stateful<Div> {
         .gap(px(8.))
         .px(px(10.))
         .py(px(6.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .cursor_pointer()
         .when(selected, glass::lit)
         .when(!selected, |d| d.hover(|s| s.bg(colours::hover())))
@@ -288,7 +291,7 @@ pub(crate) fn undo_bar(text: impl Into<SharedString>, undo: Stateful<Div>) -> Di
         .flex()
         .items_center()
         .gap(px(8.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(colours::panel())
         .border_1()
         .border_color(colours::border())
@@ -319,7 +322,7 @@ pub(crate) fn input_box(field: impl IntoElement, focused: bool) -> Div {
         .flex_col()
         .px(px(10.))
         .py(px(6.))
-        .rounded(px(radius::CONTROL))
+        .rounded(px(radius::control()))
         .bg(colours::field())
         .border_1()
         .border_color(if focused { colours::accent() } else { colours::edge() })
@@ -357,7 +360,7 @@ pub(crate) fn tick_box(checked: bool) -> Div {
     div()
         .size(px(TICK_BOX))
         .flex_none()
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .flex()
         .items_center()
         .justify_center()
@@ -381,15 +384,15 @@ pub(crate) fn segments(items: Vec<AnyElement>) -> Div {
         .flex()
         .gap(px(2.))
         .p(px(3.))
-        .rounded(px(radius::CONTROL))
-        .bg(colours::sidebar())
+        .rounded(px(radius::control()))
+        .bg(colours::inset())
         .border_1()
         .border_color(colours::border())
         .children(items)
 }
 
 fn segment_shape(id: impl Into<ElementId>) -> Stateful<Div> {
-    div().id(id).relative().px(px(12.)).py(px(3.)).rounded(px(radius::CHIP)).text_size(px(12.))
+    div().id(id).relative().px(px(12.)).py(px(3.)).rounded(px(radius::chip())).text_size(px(12.))
 }
 
 fn segment_base(id: impl Into<ElementId>, selected: bool) -> Stateful<Div> {
@@ -473,4 +476,37 @@ pub(crate) fn emblem(glyph: Icon) -> Div {
         .border_1()
         .border_color(glass::tint(colours::brand_light(), 0.35))
         .child(icon(glyph, 24.).text_color(colours::accent()))
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "a handful of cells"
+)]
+pub(crate) fn checker(width: f32, height: f32, cell: f32) -> Div {
+    let light = Rgba { r: 0.85, g: 0.85, b: 0.85, a: 1. };
+    let dark = Rgba { r: 0.6, g: 0.6, b: 0.6, a: 1. };
+    let columns = (width / cell).ceil() as u32;
+    let rows = (height / cell).ceil() as u32;
+    let cells = (0..rows).flat_map(move |row| {
+        (0..columns).map(move |column| {
+            let ink = if (row + column) % 2 == 0 { light } else { dark };
+            div().absolute().left(px(column as f32 * cell)).top(px(row as f32 * cell)).size(px(cell)).bg(ink)
+        })
+    });
+    div().absolute().inset_0().overflow_hidden().children(cells)
+}
+
+pub(crate) fn swatch(colour: Rgba, size: f32) -> Div {
+    div()
+        .relative()
+        .size(px(size))
+        .flex_none()
+        .rounded(px(radius::chip()))
+        .overflow_hidden()
+        .border_1()
+        .border_color(colours::edge())
+        .child(checker(size, size, (size / 2.).max(3.)))
+        .child(div().absolute().inset_0().bg(colour))
 }

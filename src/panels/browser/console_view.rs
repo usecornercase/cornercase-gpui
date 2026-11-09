@@ -370,7 +370,7 @@ fn times_chip(times: u32) -> impl IntoElement {
     div()
         .flex_none()
         .px(px(5.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .bg(colours::selected())
         .text_size(px(10.))
         .text_color(colours::muted())
@@ -387,7 +387,7 @@ fn send_button(id: u64, browser: WeakEntity<Browser>) -> impl IntoElement {
         .group(group)
         .flex_none()
         .p(px(2.))
-        .rounded(px(radius::CHIP))
+        .rounded(px(radius::chip()))
         .hover(|s| s.bg(colours::selected()))
         .child(glyph)
         .on_click(move |_, _, cx| {

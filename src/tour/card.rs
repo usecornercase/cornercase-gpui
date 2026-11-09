@@ -76,7 +76,7 @@ impl Render for Guide {
         let (tour, step) = (tour.clone(), step.clone());
         div().absolute().bottom(px(44.)).left_0().right_0().flex().justify_center().child(
             div().occlude().child(
-                ui::glass::card(radius::CARD)
+                ui::glass::card(radius::card())
                     .w(px(WIDTH))
                     .p(px(16.))
                     .flex()
