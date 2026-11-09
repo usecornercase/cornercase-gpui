@@ -9,7 +9,7 @@ use gpui::{
 };
 
 pub(crate) use self::plan::{FlowStart, IssueTask};
-use self::plan::{Typed, issue_prompt, plan, refusal};
+use self::plan::{Typed, issue_hints, issue_note, issue_prompt, plan, refusal};
 use self::project::{ProjectChoice, ProjectMenu};
 use super::FlowsPanel;
 use super::actions::announce;
@@ -26,7 +26,6 @@ use crate::ui::{self, Icon, TextField};
 const CHOICE: f32 = 30.;
 const TEAM_NOTE: &str =
     "One tab per role in a new worktree, the orchestrator first; every agent starts without permission prompts.";
-const ISSUE_NOTE: &str = "The task starts as the issue's, through settings' prompt template.";
 
 enum IssueRead {
     Done,
@@ -62,6 +61,7 @@ pub(super) struct StartFlow {
     busy: bool,
     error: Option<String>,
     issue_read: IssueRead,
+    prefill: (String, String),
     run_on: Entity<RunOn>,
 }
 
@@ -94,19 +94,19 @@ impl Fields {
         let (task, branch, workspace) =
             issue.map(|i| (i.task(), i.branch.clone(), i.workspace_name())).unwrap_or_default();
         let (task_hint, hint) = match issue {
-            Some(_) => ("The issue's, through settings' prompt template", "The issue's branch"),
-            None => ("What the team should do", "From the task's first words, made unique"),
+            Some(_) => issue_hints(None),
+            None => ("What the team should do".to_string(), "From the task's first words, made unique".to_string()),
         };
         let scroller = ScrollHandle::new();
         Self {
-            prompt: prompt_field(task_hint, &task, &scroller, cx, window),
+            prompt: prompt_field(&task_hint, &task, &scroller, cx, window),
             issue: field_in(
                 "#482, sc-48, ENG-42 or its URL (optional; a task above replaces its own)",
                 &scroller,
                 cx,
                 window,
             ),
-            branch: filled_field(hint, &branch, &scroller, cx, window),
+            branch: filled_field(&hint, &branch, &scroller, cx, window),
             workspace: filled_field("The issue's key and title", &workspace, &scroller, cx, window),
             scroller,
         }
@@ -138,6 +138,7 @@ impl StartFlow {
         let fresh = known.as_ref().is_some_and(|k| k.project == project);
         cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
         let run_on = there::run_on_of(preset.issue.as_ref(), project, cx);
+        let prefill = preset.issue.as_ref().map(|i| (i.task(), i.branch.clone())).unwrap_or_default();
         let mut this = Self {
             fields: Fields::new(preset.issue.as_ref(), window, cx),
             issue: preset.issue,
@@ -153,6 +154,7 @@ impl StartFlow {
             busy: false,
             error: None,
             issue_read: IssueRead::Done,
+            prefill,
             run_on,
         };
         this.selected =
@@ -185,9 +187,10 @@ impl StartFlow {
             }
         };
         self.issue_read = IssueRead::Done;
-        let typed = self.fields.prompt.read(cx).text();
-        let Some(task) = self.issue.as_mut().and_then(|issue| issue.learn(prompt, &typed)) else { return };
-        self.fields.prompt.update(cx, |field, cx| field.set_text(task, cx));
+        if let Some(issue) = self.issue.as_mut() {
+            issue.learn(prompt);
+        }
+        self.follow_there(cx);
     }
 
     fn first_choice(&self) -> Option<String> {
@@ -271,7 +274,7 @@ impl StartFlow {
         if let Some(problem) = flow.problems.first() {
             return Err(format!("{} cannot start: {problem}", flow.name));
         }
-        plan(&flow.name, self.project, self.issue.as_ref(), &self.typed(cx))
+        plan(&flow.name, self.project, self.shown_issue(cx).as_ref(), &self.typed(cx))
     }
 
     fn command(&self, cx: &App) -> Result<(String, Vec<String>), String> {
@@ -367,6 +370,7 @@ impl StartFlow {
     fn task_field(&self, window: &Window, cx: &App) -> Div {
         let field = ui::field("Task", ui::prompt_box(&self.fields.prompt, "start", window, cx));
         match &self.issue_read {
+            _ if self.on_machine(cx) => field,
             IssueRead::Done => field,
             IssueRead::Reading => field.child(ui::busy("start-issue-reading", "Reading the issue's task…")),
             IssueRead::Failed(why) => field.child(error_text(format!("The issue's task could not be read: {why}"))),
@@ -383,7 +387,11 @@ impl StartFlow {
     }
 
     fn footnote(&self, cx: &App) -> String {
-        let note = if self.issue.is_some() { format!("{ISSUE_NOTE} {TEAM_NOTE}") } else { TEAM_NOTE.to_string() };
+        let note = if self.issue.is_some() {
+            format!("{} {TEAM_NOTE}", issue_note(self.run_on.read(cx).machine()))
+        } else {
+            TEAM_NOTE.to_string()
+        };
         self.footnote_there(note, cx)
     }
 

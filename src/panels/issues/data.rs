@@ -1,10 +1,10 @@
-use std::collections::HashMap;
-
 use serde::Deserialize;
-use serde_json::Value;
 
 use crate::model::Spot;
 use crate::model::accounts::pick::{AccountPick, account_args};
+use crate::model::agent_settings::{Agents, Modes};
+use crate::model::machines::run_on::Source;
+use crate::model::machines::run_on::issue::IssueThere;
 use crate::panels::flows::{FlowStart, IssueTask};
 use crate::store::StartHere;
 
@@ -445,61 +445,51 @@ pub(super) fn sort_newest_first(issues: &mut [Issue]) {
     issues.sort_by_key(|i| std::cmp::Reverse(parse_time(&i.updated_at).unwrap_or(i64::MIN)));
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(super) struct Choice {
-    pub value: String,
-    pub note: String,
-    pub dangerous: bool,
+const DEFAULT_WAITS: &str = "needs usecornercase/cornercase-terminal#726";
+
+pub(super) fn there_footnote(machine: &str, read: Option<&IssueThere>) -> String {
+    let queue = "Schedule is hidden: the queue starts work on this computer only.";
+    match read.and_then(IssueThere::prompt_line) {
+        Some(line) => {
+            format!("The agent starts with {machine}'s prompt for the issue, sent at once: “{line}”. {queue}")
+        }
+        None => format!(
+            "The agent starts with the issue as its first prompt ({machine}'s prompt template, the issue's URL by \
+             default), sent at once. {queue}"
+        ),
+    }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(super) struct Agents {
-    pub default: String,
-    pub list: Vec<Choice>,
-    pub modes: HashMap<String, (String, Vec<Choice>)>,
+pub(super) fn default_waits(chosen: &str, machine: Option<&str>) -> String {
+    match machine {
+        Some(machine) => format!("default is not offered while {machine}'s settings choose {chosen}: {DEFAULT_WAITS}"),
+        None => format!("default is not offered while settings choose {chosen}: {DEFAULT_WAITS}"),
+    }
+}
+
+pub(super) fn modes_shown(agent: &str, here: &Agents, there: Source<'_, Agents>) -> Option<Modes> {
+    let agents = match there {
+        Source::Here => here,
+        Source::There(answer) => answer?,
+    };
+    agents.modes_of(agent).cloned()
+}
+
+pub(super) fn branch_shown(here: &str, there: Source<'_, IssueThere>) -> String {
+    match there {
+        Source::Here => here.to_string(),
+        Source::There(answer) => answer.map(|read| read.branch().to_string()).unwrap_or_default(),
+    }
+}
+
+pub(super) fn branch_hint(machine: Option<&str>) -> String {
+    match machine {
+        Some(machine) => format!("the issue's branch on {machine}"),
+        None => "the issue's branch".to_string(),
+    }
 }
 
 pub(super) const EFFORT_AGENTS: [&str; 4] = ["claude", "codex", "grok", "copilot"];
-
-impl Agents {
-    pub(super) fn from_config(config: &Value) -> Self {
-        let mut agents = Agents::default();
-        let Some(settings) = config.get("settings").and_then(Value::as_array) else { return agents };
-        let choices = |s: &Value| -> Vec<Choice> {
-            s.get("choices")
-                .and_then(Value::as_array)
-                .map(|list| {
-                    list.iter()
-                        .map(|c| Choice {
-                            value: c.get("value").and_then(Value::as_str).unwrap_or_default().to_string(),
-                            note: c.get("note").and_then(Value::as_str).unwrap_or_default().to_string(),
-                            dangerous: c.get("dangerous").and_then(Value::as_bool).unwrap_or(false),
-                        })
-                        .filter(|c| !c.value.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-        for setting in settings {
-            let key = setting.get("key").and_then(Value::as_str).unwrap_or_default();
-            let value = setting.get("value").and_then(Value::as_str).unwrap_or_default().to_string();
-            if key == "agent" {
-                agents.default = value;
-                agents.list = choices(setting).into_iter().filter(|c| c.value != "auto").collect();
-            } else if let Some(agent) = key.strip_prefix("agents.").and_then(|k| k.strip_suffix(".mode")) {
-                agents.modes.insert(agent.to_string(), (value, choices(setting)));
-            }
-        }
-        agents
-    }
-
-    pub(super) fn initial(&self) -> String {
-        if self.list.iter().any(|a| a.value == self.default) {
-            return self.default.clone();
-        }
-        self.list.first().map_or_else(|| "claude".into(), |a| a.value.clone())
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum When {

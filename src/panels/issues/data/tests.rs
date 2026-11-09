@@ -1,7 +1,5 @@
-use serde_json::json;
-
 use super::*;
-use crate::test_util::shop_on_vps;
+use crate::test_util::{fixture, shop_on_vps};
 
 const SOURCES: &str = r#"{
   "closed": false,
@@ -171,29 +169,6 @@ fn check_ago() {
     assert_eq!(ago("2026-10-22T19:13:09Z", now), "1h ago");
     assert_eq!(ago("2026-10-19T20:13:09Z", now), "3d ago");
     assert_eq!(ago("soon", now), "soon");
-}
-
-#[test]
-fn agents_from_config() {
-    let config = json!({"settings": [
-        {"key": "agent", "value": "auto", "choices": [
-            {"value": "auto", "note": "the agent in your tab"}, {"value": "claude", "note": "claude"},
-            {"value": "codex", "note": "codex"}]},
-        {"key": "agents.claude.mode", "value": "plan", "choices": [
-            {"value": "default", "dangerous": false}, {"value": "plan"},
-            {"value": "skip permissions (dangerous)", "dangerous": true}]},
-        {"key": "agents.claude.extra", "value": ""}
-    ]});
-    let agents = Agents::from_config(&config);
-    assert_eq!(agents.default, "auto");
-    assert_eq!(agents.list.iter().map(|a| a.value.as_str()).collect::<Vec<_>>(), ["claude", "codex"]);
-    assert_eq!(agents.initial(), "claude");
-    let (chosen, modes) = &agents.modes["claude"];
-    assert_eq!(chosen, "plan");
-    assert_eq!(modes.len(), 3);
-    assert!(modes[2].dangerous);
-    assert!(!agents.modes.contains_key("codex"));
-    assert_eq!(Agents::from_config(&json!({})), Agents::default());
 }
 
 #[test]
@@ -452,4 +427,93 @@ fn a_scheduled_start_with_a_picked_account_names_it() {
 fn a_start_without_a_pick_names_no_account() {
     assert!(!worktree_plan().start_args().contains(&"--account".to_string()));
     assert!(!worktree_plan().queue_args("in 2h").contains(&"--account".to_string()));
+}
+
+fn made_there() -> IssueThere {
+    serde_json::from_str(fixture!("machines/there_issue.json")).expect("what the machine answered")
+}
+
+#[test]
+fn starting_on_a_machine_sends_the_mode_picked_there() {
+    let plan = StartPlan {
+        issue: Issue { key: "#7".into(), source: "github".into(), ..Issue::default() },
+        agent: "claude".into(),
+        mode: Some("auto".into()),
+        place: Some(Place { project: 4, ..Place::default() }),
+        ..StartPlan::default()
+    };
+    let args = plan.start_args_there(&shop_on_vps());
+    let at = args.iter().position(|arg| arg == "--project").expect("the project");
+    assert_eq!(args[at + 1], "8");
+    assert!(args.windows(2).any(|pair| pair == ["--mode", "auto"]), "{args:?}");
+}
+
+#[test]
+fn the_footnote_on_a_machine_quotes_the_prompt_its_template_made() {
+    assert_eq!(
+        there_footnote("vps", Some(&made_there())),
+        "The agent starts with vps's prompt for the issue, sent at once: “Fix #7: Fix the login Read CLAUDE.md before \
+         you start, then open a pull request.”. Schedule is hidden: the queue starts work on this computer only."
+    );
+}
+
+#[test]
+fn the_footnote_on_a_machine_falls_back_to_its_template_line() {
+    let today = "The agent starts with the issue as its first prompt (vps's prompt template, the issue's URL by \
+                 default), sent at once. Schedule is hidden: the queue starts work on this computer only.";
+    assert_eq!(there_footnote("vps", None), today);
+    let blank = IssueThere { prompt: "  \n".into(), ..IssueThere::default() };
+    assert_eq!(there_footnote("vps", Some(&blank)), today);
+}
+
+#[test]
+fn the_line_under_the_mode_names_whose_settings_and_what_default_waits_for() {
+    assert_eq!(
+        default_waits("plan", None),
+        "default is not offered while settings choose plan: needs usecornercase/cornercase-terminal#726"
+    );
+    assert_eq!(
+        default_waits("plan", Some("vps")),
+        "default is not offered while vps's settings choose plan: needs usecornercase/cornercase-terminal#726"
+    );
+}
+
+#[test]
+fn the_branch_hint_names_the_machine() {
+    assert_eq!(branch_hint(None), "the issue's branch");
+    assert_eq!(branch_hint(Some("vps")), "the issue's branch on vps");
+}
+
+fn here_agents() -> Agents {
+    Agents::from_config(&serde_json::json!({"settings": [
+        {"key": "agents.claude.mode", "value": "plan", "choices": [{"value": "default"}, {"value": "plan"}]}
+    ]}))
+}
+
+fn there_agents() -> Agents {
+    serde_json::from_str(fixture!("machines/there_config.json")).expect("what the machine answered")
+}
+
+#[test]
+fn a_machine_not_heard_from_shows_no_modes_and_no_branch_of_this_computers() {
+    let here = here_agents();
+    assert!(modes_shown("claude", &here, Source::Here).is_some());
+    assert_eq!(modes_shown("claude", &here, Source::There(None)), None);
+    assert_eq!(branch_shown("issue-7-here", Source::There(None)), "");
+    assert_eq!(branch_shown("issue-7-here", Source::Here), "issue-7-here");
+}
+
+#[test]
+fn a_machine_that_answered_shows_its_own_modes_and_branch() {
+    let there = there_agents();
+    let modes = modes_shown("claude", &here_agents(), Source::There(Some(&there))).expect("its modes");
+    assert_eq!(modes.choices.len(), 5);
+    assert_eq!(branch_shown("issue-7-here", Source::There(Some(&made_there()))), "ana/7-fix-the-login");
+}
+
+#[test]
+fn a_mode_picked_on_a_machine_is_sent() {
+    let there = there_agents();
+    let modes = modes_shown("claude", &here_agents(), Source::There(Some(&there))).expect("its modes");
+    assert_eq!(modes.sent(Some("auto")).as_deref(), Some("auto"));
 }

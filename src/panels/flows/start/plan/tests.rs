@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_util::shop_on_vps;
+use crate::test_util::{fixture, shop_on_vps};
 
 fn issue() -> IssueTask {
     IssueTask {
@@ -21,6 +21,10 @@ fn on_issue(branch: &str, workspace: &str) -> Typed {
 
 fn retold(prompt: &str, branch: &str, workspace: &str) -> Typed {
     Typed { prompt: prompt.into(), ..on_issue(branch, workspace) }
+}
+
+fn made_there() -> IssueThere {
+    serde_json::from_str(fixture!("machines/there_issue.json")).expect("what the machine answered")
 }
 
 fn open() -> Vec<(u64, String)> {
@@ -157,15 +161,12 @@ fn a_cornercase_that_refuses_a_task_with_an_issue_is_named_too_old() {
 }
 
 #[test]
-fn a_task_read_late_fills_an_empty_field_and_keeps_what_was_typed() {
-    let unknown = || IssueTask { prompt: None, ..issue() };
-    let mut issue = unknown();
-    assert_eq!(issue.learn(Some("https://x/482".into()), " ").as_deref(), Some("https://x/482"));
+fn a_task_read_late_is_kept_as_the_issues() {
+    let mut issue = IssueTask { prompt: None, ..issue() };
+    issue.learn(Some("https://x/482".into()));
     assert_eq!(issue.prompt.as_deref(), Some("https://x/482"));
-    let mut typed_over = unknown();
-    assert_eq!(typed_over.learn(Some("https://x/482".into()), "Fix the returns page"), None);
-    assert_eq!(typed_over.prompt.as_deref(), Some("https://x/482"));
-    assert_eq!(unknown().learn(None, ""), None);
+    issue.learn(None);
+    assert_eq!(issue.prompt, None);
 }
 
 #[test]
@@ -250,4 +251,53 @@ fn a_flow_on_a_machine_keeps_its_issue_and_accounts() {
 fn a_flow_started_without_a_pick_names_no_account() {
     let args = plan("Quick", Some(4), None, &task("Fix it", "", "")).expect("a plan").args();
     assert!(!args.contains(&"--account".to_string()));
+}
+
+#[test]
+fn an_issue_on_a_machine_prefills_what_its_templates_made() {
+    let there = issue().there(Some(&made_there()));
+    assert_eq!(there.branch, "ana/7-fix-the-login");
+    assert_eq!(there.task(), "Fix #7: Fix the login\n\nRead CLAUDE.md before you start, then open a pull request.");
+    assert_eq!(there.key, "#482");
+    assert_eq!(there.workspace_name(), issue().workspace_name());
+}
+
+#[test]
+fn an_issue_on_a_machine_not_read_yet_keeps_nothing_of_this_computer() {
+    let there = issue().there(None);
+    assert_eq!(there.prompt, None);
+    assert_eq!(there.task(), "");
+    assert_eq!(there.branch, "");
+}
+
+#[test]
+fn a_task_and_branch_left_as_the_machine_made_them_are_not_sent() {
+    let there = issue().there(Some(&made_there()));
+    let typed = retold(&there.task(), &there.branch, &there.workspace_name());
+    let args = plan("Quick", Some(4), Some(&there), &typed).expect("a plan").args_there(&shop_on_vps());
+    assert!(args.contains(&"--issue=#482".to_string()), "{args:?}");
+    assert!(!args.iter().any(|arg| arg.starts_with("--prompt") || arg.starts_with("--worktree")), "{args:?}");
+}
+
+#[test]
+fn a_task_edited_over_the_machines_goes_as_typed() {
+    let there = issue().there(Some(&made_there()));
+    let typed = retold("Do it my way", "mine/7", &there.workspace_name());
+    let args = plan("Quick", Some(4), Some(&there), &typed).expect("a plan").args_there(&shop_on_vps());
+    assert!(args.contains(&"--prompt=Do it my way".to_string()), "{args:?}");
+    assert!(args.contains(&"--worktree=mine/7".to_string()), "{args:?}");
+}
+
+#[test]
+fn the_note_and_hints_name_whose_prompt_template_makes_the_task() {
+    assert_eq!(issue_note(None), "The task starts as the issue's, through settings' prompt template.");
+    assert_eq!(issue_note(Some("vps")), "The task starts as the issue's, through vps's prompt template.");
+    assert_eq!(
+        issue_hints(None),
+        ("The issue's, through settings' prompt template".to_string(), "The issue's branch".to_string())
+    );
+    assert_eq!(
+        issue_hints(Some("vps")),
+        ("The issue's, through vps's prompt template".to_string(), "The issue's branch on vps".to_string())
+    );
 }

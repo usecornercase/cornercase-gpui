@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.47
+
+- **Choose the mode on another machine.** Starting an agent on an issue with **Run on** set to a machine now offers that machine's own modes, as its settings list them, with the one it chose already picked. The Mode used to be hidden there. While the machine is asked, or when it cannot answer, the agent starts in the machine's own choice, as before, and the form says why.
+- **See what the machine makes of the issue.** The form now shows the prompt that machine's template makes for the issue, and fills the branch with the name it gives it. **Start a flow** on a machine fills the task and the branch with that machine's too. Leave them and the machine uses its own; whatever you type goes as typed.
+- **default no longer fails at Start.** While another mode is chosen in settings, cornercase does not start an agent in **default** (no mode arguments), so that choice now rests with a line saying what it waits for, here and on a machine, instead of failing when you press Start.
+
 ## 0.1.46
 
 - **Select with the keyboard in the Changes diff.** Click in the Changes panel, then ⇧← ⇧→ select a character more or less and ⇧↑ ⇧↓ a line (Shift with the arrows on Linux and Windows), as in the Files viewer. The selection goes on across hunks and open gaps, over removed and added lines in the order they show, and with nothing selected it starts from the top of what the diff shows. Lines picked by their numbers grow and shrink by whole lines, and the view follows the end you move.

@@ -5,10 +5,14 @@ use gpui::{
 };
 
 use super::IssuesPanel;
-use super::data::{Agents, Choice, EFFORT_AGENTS, Issue, Place, Sources, StartPlan, When};
+use super::data::{
+    EFFORT_AGENTS, Issue, Place, Sources, StartPlan, When, branch_hint, branch_shown, default_waits, modes_shown,
+    there_footnote,
+};
 use crate::cli;
-use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts};
+use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts, follow_field};
 use crate::model::Spot;
+use crate::model::agent_settings::{Agents, Choice, Modes};
 use crate::model::machines::run_on::Starting;
 use crate::model::machines::run_on::checks::Wanted;
 use crate::store::{StartThere, Store};
@@ -60,6 +64,7 @@ pub(super) struct StartForm {
     agent: String,
     accounts: AccountPickers,
     mode: Option<String>,
+    branch_prefill: String,
     schedule: bool,
     when: When,
     model: Entity<TextField>,
@@ -99,9 +104,19 @@ fn text_field(placeholder: &str, text: &str, clear_error: bool, cx: &mut Context
 
 fn run_on_of(issue: &Issue, places: &Places, cx: &mut Context<StartForm>) -> Entity<RunOn> {
     let project = places.chosen.and_then(|at| places.list.get(at)).map(|place| place.project);
-    let wanted = Wanted { accounts: true, tracker: Some(issue.source.clone()), ..Wanted::default() };
+    let wanted = Wanted {
+        accounts: true,
+        tracker: Some(issue.source.clone()),
+        modes: true,
+        issue: Some(issue.key.clone()),
+        ..Wanted::default()
+    };
     let run_on = cx.new(|cx| RunOn::new(project, wanted, cx));
-    cx.observe(&run_on, |_, _, cx| cx.notify()).detach();
+    cx.observe(&run_on, |this, _, cx| {
+        this.follow_there(cx);
+        cx.notify();
+    })
+    .detach();
     cx.subscribe(&run_on, |this, _, event, cx| this.run_on_event(event, cx)).detach();
     run_on
 }
@@ -129,11 +144,28 @@ fn chips(
         .into_any_element()
 }
 
+fn mode_chips(modes: &Modes, picked: Option<&str>, cx: &mut Context<StartForm>) -> Div {
+    let shown = modes.shown(picked).to_string();
+    div().flex().flex_wrap().gap(px(4.)).children(modes.choices.iter().enumerate().map(|(i, choice)| {
+        let value = choice.value.clone();
+        let is = choice.value == shown;
+        let border = if is { colours::accent() } else { colours::border() };
+        if modes.rests(&choice.value) {
+            return ui::resting_segment(("mode", i), value, is).border_1().border_color(border);
+        }
+        ui::segment(("mode", i), choice.value.clone(), is)
+            .border_1()
+            .border_color(border)
+            .when(choice.dangerous, |d| d.text_color(colours::failed()))
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_mode(value.clone(), cx)))
+    }))
+}
+
 impl StartForm {
     fn new(setup: Setup, cx: &mut Context<Self>) -> Self {
         let Setup { issue, sources, repository, agents, schedule, project_name, panel } = setup;
         let agent = agents.initial();
-        let mode = agents.modes.get(&agent).map(|(chosen, _)| chosen.clone());
+        let branch_prefill = issue.branch.clone();
         let name_hint = format!("{} {}", issue.key, issue.title);
         cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
         let places = Places::of(&sources, repository, project_name);
@@ -141,7 +173,7 @@ impl StartForm {
         Self {
             model: text_field("the agent's own, such as opus", "", true, cx),
             effort: text_field("the agent's own, such as high", "", true, cx),
-            branch: text_field("the issue's branch", &issue.branch, true, cx),
+            branch: text_field(&branch_hint(None), &issue.branch, true, cx),
             name: text_field(&name_hint, "", true, cx),
             at: text_field(When::At.placeholder().unwrap_or_default(), "", true, cx),
             places,
@@ -149,7 +181,8 @@ impl StartForm {
             agents,
             agent,
             accounts: AccountPickers::default(),
-            mode,
+            mode: None,
+            branch_prefill,
             schedule,
             when: When::At,
             error: None,
@@ -162,7 +195,9 @@ impl StartForm {
         if *event == RunOnEvent::Chosen {
             self.accounts = AccountPickers::default();
             self.error = None;
+            self.mode = None;
             self.schedule = self.schedule && !self.on_machine(cx);
+            self.follow_there(cx);
         }
         cx.notify();
     }
@@ -193,7 +228,7 @@ impl StartForm {
     }
 
     fn set_agent(&mut self, agent: String, cx: &mut Context<Self>) {
-        self.mode = self.agents.modes.get(&agent).map(|(chosen, _)| chosen.clone());
+        self.mode = None;
         self.agent = agent;
         cx.notify();
     }
@@ -233,14 +268,13 @@ impl StartForm {
             let text = field.read(cx).text().trim().to_string();
             (!text.is_empty()).then_some(text)
         };
-        let chosen_mode = self.agents.modes.get(&self.agent).map(|(chosen, _)| chosen.clone());
         let worktree = place.worktree;
-        let branch = text(&self.branch).filter(|b| worktree && *b != self.issue.branch);
+        let branch = text(&self.branch).filter(|b| worktree && *b != self.branch_prefill);
         let effort = text(&self.effort).filter(|_| EFFORT_AGENTS.contains(&self.agent.as_str()));
         Ok(StartPlan {
             issue: self.issue.clone(),
             agent: self.agent.clone(),
-            mode: self.mode.clone().filter(|m| Some(m) != chosen_mode.as_ref() && !self.on_machine(cx)),
+            mode: self.modes(cx).and_then(|modes| modes.sent(self.mode.as_deref())),
             model: text(&self.model),
             effort,
             place: Some(place),
@@ -342,12 +376,30 @@ impl StartForm {
         let mut fields = vec![ui::field("Agent", chips("agent", &agents, &self.agent, Self::set_agent, cx))];
         fields.extend(agent_line(&self.run_on, chosen, &self.accounts.picks(chosen, cx), cx));
         fields.extend(accounts_of(&self.run_on, self.accounts.fields(chosen, cx), cx));
-        let modes = self.agents.modes.get(&self.agent).filter(|_| !self.on_machine(cx));
-        if let Some((_, modes)) = modes {
-            let mode = self.mode.clone().unwrap_or_default();
-            fields.push(ui::field("Mode", chips("mode", modes, &mode, Self::set_mode, cx)));
-        }
+        fields.extend(self.mode_field(cx));
         fields
+    }
+
+    fn modes(&self, cx: &App) -> Option<Modes> {
+        modes_shown(&self.agent, &self.agents, self.run_on.read(cx).modes_source())
+    }
+
+    fn mode_field(&self, cx: &mut Context<Self>) -> Option<Div> {
+        let modes = self.modes(cx)?;
+        let machine = self.run_on.read(cx).machine().map(str::to_string);
+        let waits = modes.waits().then(|| ui::dim(default_waits(&modes.chosen, machine.as_deref())));
+        let chips = mode_chips(&modes, self.mode.as_deref(), cx);
+        Some(ui::field("Mode", div().flex().flex_col().gap(px(6.)).child(chips).children(waits)))
+    }
+
+    fn branch_baseline(&self, cx: &App) -> String {
+        branch_shown(&self.issue.branch, self.run_on.read(cx).issue_source())
+    }
+
+    fn follow_there(&mut self, cx: &mut Context<Self>) {
+        let now = self.branch_baseline(cx);
+        let hint = branch_hint(self.run_on.read(cx).machine());
+        self.branch_prefill = follow_field(&self.branch, hint, (&self.branch_prefill, now), cx);
     }
 
     fn model_fields(&self, window: &Window, cx: &App) -> Div {
@@ -407,11 +459,9 @@ impl StartForm {
     }
 
     fn footnote(&self, cx: &App) -> Div {
-        if let Some(machine) = self.run_on.read(cx).machine() {
-            return ui::dim(format!(
-                "The agent starts with the issue as its first prompt ({machine}'s prompt template, the issue's URL by \
-                 default), sent at once. Schedule is hidden: the queue starts work on this computer only."
-            ));
+        let run_on = self.run_on.read(cx);
+        if let Some(machine) = run_on.machine() {
+            return ui::dim(there_footnote(machine, run_on.issue_there()));
         }
         ui::dim(if self.schedule {
             "The queue starts the agent at that time with the issue as its prompt, accepting folder trust prompts."

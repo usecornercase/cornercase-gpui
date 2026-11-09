@@ -1,0 +1,176 @@
+{
+  "connections": [],
+  "path": "/home/ana/.config/cornercase/config.json",
+  "projects": [],
+  "revision": 3,
+  "settings": [
+    {
+      "dangerous": false,
+      "default": "",
+      "field": "branch of an issue's worktree, with {key} {number} {slug} {source} {user}, such as feat/{key}-{slug} (empty is each tracker's own)",
+      "key": "issue_branch",
+      "label": "issue branches",
+      "note": "empty: issue-482-…, 482-… on GitLab, sc-482-…, ENG-482-…",
+      "page": "Worktrees",
+      "restart": false,
+      "section": "",
+      "shown": "{user}/{number}-{slug}",
+      "type": "text",
+      "value": "{user}/{number}-{slug}"
+    },
+    {
+      "choices": [
+        {
+          "dangerous": false,
+          "note": "the agent in your tab, otherwise ask",
+          "value": "auto"
+        },
+        {
+          "dangerous": false,
+          "note": "claude",
+          "value": "claude"
+        },
+        {
+          "dangerous": false,
+          "note": "codex",
+          "value": "codex"
+        },
+        {
+          "dangerous": false,
+          "note": "amp",
+          "value": "amp"
+        }
+      ],
+      "dangerous": false,
+      "default": "auto",
+      "key": "agent",
+      "label": "default agent",
+      "note": "claude",
+      "page": "Agents",
+      "question": "Which agent takes an issue by default?",
+      "restart": false,
+      "section": "Agent",
+      "shown": "claude",
+      "type": "choice",
+      "value": "claude"
+    },
+    {
+      "dangerous": false,
+      "default": false,
+      "key": "submit",
+      "label": "send the prompt",
+      "note": "",
+      "page": "Agents",
+      "restart": false,
+      "section": "Agent",
+      "shown": "[ ] typed, you press Enter",
+      "type": "switch",
+      "value": false
+    },
+    {
+      "choices": [
+        {
+          "dangerous": false,
+          "note": "no mode arguments",
+          "value": "default"
+        },
+        {
+          "dangerous": false,
+          "note": "--permission-mode acceptEdits",
+          "value": "accept edits"
+        },
+        {
+          "dangerous": false,
+          "note": "--permission-mode auto",
+          "value": "auto"
+        },
+        {
+          "dangerous": false,
+          "note": "--permission-mode plan",
+          "value": "plan"
+        },
+        {
+          "dangerous": true,
+          "note": "--dangerously-skip-permissions",
+          "value": "skip permissions (dangerous)"
+        }
+      ],
+      "dangerous": false,
+      "default": "default",
+      "key": "agents.claude.mode",
+      "label": "claude mode",
+      "note": "",
+      "page": "Agents",
+      "question": "How should claude start?",
+      "restart": false,
+      "section": "How each agent starts",
+      "shown": "plan",
+      "type": "choice",
+      "value": "plan"
+    },
+    {
+      "dangerous": false,
+      "default": "",
+      "field": "claude extra arguments",
+      "key": "agents.claude.extra",
+      "label": "claude extra arguments",
+      "note": "",
+      "page": "Agents",
+      "restart": false,
+      "section": "How each agent starts",
+      "shown": "",
+      "type": "text",
+      "value": ""
+    },
+    {
+      "choices": [
+        {
+          "dangerous": false,
+          "note": "no mode arguments",
+          "value": "default"
+        },
+        {
+          "dangerous": false,
+          "note": "--sandbox read-only",
+          "value": "read only"
+        },
+        {
+          "dangerous": false,
+          "note": "--sandbox workspace-write",
+          "value": "workspace write"
+        },
+        {
+          "dangerous": true,
+          "note": "--dangerously-bypass-approvals-and-sandbox",
+          "value": "no sandbox, no approvals (dangerous)"
+        }
+      ],
+      "dangerous": false,
+      "default": "default",
+      "key": "agents.codex.mode",
+      "label": "codex mode",
+      "note": "",
+      "page": "Agents",
+      "question": "How should codex start?",
+      "restart": false,
+      "section": "How each agent starts",
+      "shown": "default",
+      "type": "choice",
+      "value": "default"
+    },
+    {
+      "dangerous": false,
+      "default": "",
+      "field": "amp extra arguments",
+      "key": "agents.amp.extra",
+      "label": "amp extra arguments",
+      "note": "",
+      "page": "Agents",
+      "restart": false,
+      "section": "How each agent starts",
+      "shown": "",
+      "type": "text",
+      "value": ""
+    }
+  ]
+}

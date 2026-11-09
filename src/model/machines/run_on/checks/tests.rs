@@ -10,7 +10,17 @@ fn trackers() -> Trackers {
 }
 
 fn all() -> Wanted {
-    Wanted { accounts: true, accounts_hold: true, tracker: Some("github".into()), flows: true }
+    Wanted { accounts: true, accounts_hold: true, tracker: Some("github".into()), flows: true, ..Wanted::default() }
+}
+
+fn a_start() -> Wanted {
+    Wanted {
+        accounts: true,
+        tracker: Some("github".into()),
+        modes: true,
+        issue: Some("#7".into()),
+        ..Wanted::default()
+    }
 }
 
 fn following(project: Option<u64>) -> Checks {
@@ -81,9 +91,11 @@ fn a_link_that_comes_back_asks_again_what_failed() {
 fn a_machine_that_restarted_is_asked_everything_again() {
     let mut checks = following(Some(8));
     checks.heard(Check::Accounts, Ok(fixture!("machines/there_accounts.json")));
+    checks.heard(Check::Modes, Ok(fixture!("machines/there_config.json")));
     let before = checks.generation();
     checks.follow("another", true, Some(ThereId::heard(8)));
     assert!(checks.due(&all()).contains(&Check::Accounts));
+    assert!(checks.due(&a_start()).contains(&Check::Modes));
     assert_ne!(checks.generation(), before);
 }
 
@@ -116,9 +128,14 @@ fn an_answer_about_another_project_is_dropped_but_the_accounts_are_kept() {
 #[test]
 fn the_commands_ask_the_machines_project() {
     let spot = shop_on_vps();
-    assert_eq!(Check::Accounts.args(Some(&spot)), ["account", "list", "--check", "--json"]);
-    assert_eq!(Check::Trackers.args(Some(&spot)), ["issue", "sources", "--json", "--project", "8"]);
-    assert_eq!(Check::Flows.args(Some(&spot)), ["flow", "list", "--json", "--project", "8"]);
+    let wanted = a_start();
+    let args = |check: Check| check.args(Some(&spot), &wanted);
+    assert_eq!(args(Check::Accounts), ["account", "list", "--check", "--json"]);
+    assert_eq!(args(Check::Trackers), ["issue", "sources", "--json", "--project", "8"]);
+    assert_eq!(args(Check::Flows), ["flow", "list", "--json", "--project", "8"]);
+    assert_eq!(args(Check::Modes), ["config", "--json"]);
+    let read = ["issue", "read", "#7", "--source", "github", "--json", "--project", "8"];
+    assert_eq!(args(Check::Issue), read);
 }
 
 #[test]
@@ -167,7 +184,7 @@ fn start_stops_on_a_tracker_check_that_failed() {
 #[test]
 fn a_flow_waits_for_the_flows_and_the_accounts() {
     let mut checks = following(Some(8));
-    let flow = Wanted { accounts: true, accounts_hold: true, tracker: None, flows: true };
+    let flow = Wanted { accounts: true, accounts_hold: true, flows: true, ..Wanted::default() };
     assert_eq!(checks.hold(&flow, "vps", "shop"), Some(Hold::Waiting));
     checks.heard(Check::Flows, Ok("{}"));
     assert_eq!(checks.hold(&flow, "vps", "shop"), Some(Hold::Waiting));
@@ -323,4 +340,76 @@ fn a_blank_command_falls_back_to_the_agents_name() {
     let mut info = info();
     info.agents[0].command = "  ".into();
     assert_eq!(info.command_of("claude"), Some("claude"));
+}
+
+#[test]
+fn an_issue_start_asks_the_machine_for_its_modes_even_before_the_project_is_there() {
+    assert_eq!(following(None).due(&a_start()), [Check::Accounts, Check::Modes]);
+}
+
+#[test]
+fn the_issue_is_read_there_once_its_tracker_there_can_read_it() {
+    let mut checks = following(Some(8));
+    assert_eq!(checks.due(&a_start()), [Check::Accounts, Check::Trackers, Check::Modes]);
+    checks.heard(Check::Trackers, Ok(fixture!("machines/there_sources.json")));
+    assert!(checks.due(&a_start()).contains(&Check::Issue));
+    checks.asked(Check::Issue);
+    assert!(!checks.due(&a_start()).contains(&Check::Issue));
+}
+
+#[test]
+fn the_issue_is_not_read_where_the_tracker_lacks_a_token() {
+    let mut checks = following(Some(8));
+    checks.heard(Check::Trackers, Ok(fixture!("machines/there_sources.json")));
+    let wanted = Wanted { tracker: Some("gitlab".into()), ..a_start() };
+    assert!(!checks.due(&wanted).contains(&Check::Issue));
+}
+
+#[test]
+fn another_project_there_reads_the_issue_again_but_keeps_the_modes() {
+    let mut checks = following(Some(8));
+    checks.heard(Check::Modes, Ok(fixture!("machines/there_config.json")));
+    checks.heard(Check::Issue, Ok(fixture!("machines/there_issue.json")));
+    assert!(checks.modes.read().is_some() && checks.issue.read().is_some());
+    checks.follow("boot", true, Some(ThereId::heard(30)));
+    assert!(checks.modes.read().is_some());
+    assert_eq!(checks.issue, Asked::Unasked);
+}
+
+#[test]
+fn an_issue_answer_about_another_project_is_dropped_but_the_modes_are_kept() {
+    let mut checks = following(Some(8));
+    let asked = checks.generation();
+    checks.follow("boot", true, Some(ThereId::heard(30)));
+    assert!(!checks.current(asked, Check::Issue, Some(ThereId::heard(8))));
+    assert!(checks.current(asked, Check::Modes, Some(ThereId::heard(8))));
+}
+
+#[test]
+fn the_modes_and_the_issue_never_hold_the_start() {
+    let mut checks = following(Some(8));
+    checks.heard(Check::Trackers, Ok(fixture!("machines/there_sources.json")));
+    checks.asked(Check::Modes);
+    checks.asked(Check::Issue);
+    assert_eq!(checks.hold(&a_start(), "vps", "shop"), None);
+    checks.heard(Check::Modes, Err("ssh said no".into()));
+    checks.heard(Check::Issue, Ok("[1]"));
+    assert_eq!(checks.hold(&a_start(), "vps", "shop"), None);
+}
+
+#[test]
+fn what_could_not_be_read_is_said_by_name() {
+    let mut checks = following(Some(8));
+    checks.heard(Check::Modes, Err("ssh said no".into()));
+    checks.heard(Check::Issue, Ok("[1]"));
+    let said: Vec<String> = checks.failures().into_iter().map(|(check, why)| check.failed("vps", why)).collect();
+    assert_eq!(
+        said,
+        [
+            "Could not read its modes on vps: ssh said no",
+            "Could not read the issue on vps: its answer could not be read"
+        ]
+    );
+    assert_eq!(Check::Modes.doing("vps"), "Reading the modes on vps…");
+    assert_eq!(Check::Issue.doing("vps"), "Reading the issue on vps…");
 }

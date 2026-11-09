@@ -8,6 +8,7 @@ use crate::model::Project;
 
 pub(crate) mod checks;
 pub(crate) mod clone;
+pub(crate) mod issue;
 
 use clone::Cloned;
 
@@ -15,6 +16,20 @@ pub(crate) const NO_REMOTE: &str = "This project has no git remote, so it runs o
 const ANSWER_UNREAD: &str = "its answer could not be read";
 const FROM_ANOTHER_SERVER: &str = "Its address means nothing from this computer";
 const AWAITED_FOR: Duration = Duration::from_secs(30);
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Source<'a, T> {
+    Here,
+    There(Option<&'a T>),
+}
+
+impl<T> Clone for Source<'_, T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for Source<'_, T> {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Offer {

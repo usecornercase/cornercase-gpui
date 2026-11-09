@@ -1,0 +1,26 @@
+{
+  "body": "The login form forgets the address after a wrong password.",
+  "comments": [],
+  "info": [
+    "open",
+    "bug",
+    "opened by @ana"
+  ],
+  "issue": {
+    "assignees": [],
+    "author": "ana",
+    "branch": "ana/7-fix-the-login",
+    "closed": false,
+    "key": "#7",
+    "labels": [
+      "bug"
+    ],
+    "number": 7,
+    "source": "github",
+    "state": "open",
+    "title": "Fix the login",
+    "updated_at": "2026-11-08T10:00:00Z",
+    "url": "https://github.com/acme/shop/issues/7"
+  },
+  "prompt": "Fix #7: Fix the login\n\nRead CLAUDE.md before you start, then open a pull request.\n"
+}
