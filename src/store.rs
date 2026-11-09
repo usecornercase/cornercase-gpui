@@ -30,7 +30,7 @@ pub(crate) use jobs::Busy;
 use jobs::Jobs;
 pub(crate) use machine_read::{MachineRead, Reach};
 use machines_there::Homes;
-pub(crate) use machines_there::{MachineAct, NoticeThere};
+pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 
 const NO_FLOW: &str = "This workspace runs no flow";
@@ -355,8 +355,11 @@ impl Store {
     }
 
     pub(crate) fn copy_elsewhere(&mut self, path: String, cx: &mut Context<Self>) {
-        let text =
-            format!("Copied {path}: it is on {}, not on this {}", cli::host().unwrap_or_default(), desktop::here());
+        self.copy_from(path, &cli::host().unwrap_or_default(), cx);
+    }
+
+    pub(crate) fn copy_from(&mut self, path: String, place: &str, cx: &mut Context<Self>) {
+        let text = format!("Copied {path}: it is on {place}, not on this {}", desktop::here());
         cx.write_to_clipboard(ClipboardItem::new_string(path));
         self.toast(text, ToastKind::Info, cx);
     }
@@ -771,10 +774,22 @@ pub(crate) fn queued_busy(
     args: Vec<String>,
     then: impl FnOnce(anyhow::Result<String>, &mut App) + 'static,
 ) {
+    let reply = busy_reply(cx, busy, then);
+    Store::get(cx).read(cx).queue.cmd_then(args, reply);
+}
+
+pub(crate) fn busy_reply(
+    cx: &mut App,
+    busy: Busy,
+    then: impl FnOnce(anyhow::Result<String>, &mut App) + 'static,
+) -> impl FnOnce(anyhow::Result<String>) + Send + 'static {
     let store = Store::get(cx);
     let id = store.update(cx, |s, cx| s.start_job(busy, cx));
-    let rx = reply_of(&store.read(cx).queue, args);
+    let (tx, rx) = oneshot::channel();
     answered_on(cx, Some((store, id)), rx, then);
+    move |result| {
+        let _ = tx.send(result);
+    }
 }
 
 fn answered_on(

@@ -92,6 +92,10 @@ pub(crate) fn stale_note(machine: &str, error: &anyhow::Error) -> Option<String>
     cli::stale_boot(error).then(|| sent_or_not(&format!("{machine} restarted")))
 }
 
+pub(crate) fn failed_there(machine: &str, error: &anyhow::Error) -> String {
+    stale_note(machine, error).unwrap_or_else(|| format!("{machine}: {}", cli::reason(error)))
+}
+
 fn home_in(status: &str) -> Option<String> {
     let status: Value = serde_json::from_str(status).ok()?;
     status.get("home").and_then(Value::as_str).map(str::to_string)
@@ -198,7 +202,7 @@ impl Store {
     fn acted(&mut self, acting: Acting, failed: Option<anyhow::Error>, cx: &mut Context<Self>) {
         let Acting { aim, act, name } = acting;
         if let Some(e) = failed {
-            let text = stale_note(&aim.machine, &e).unwrap_or_else(|| format!("{}: {}", aim.machine, cli::reason(&e)));
+            let text = failed_there(&aim.machine, &e);
             self.toast(text, ToastKind::Error, cx);
             return;
         }

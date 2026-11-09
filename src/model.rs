@@ -155,6 +155,16 @@ pub(crate) struct PaneInfo<Id = u64> {
     pub memory: Option<u64>,
 }
 
+impl<Id> PaneInfo<Id> {
+    pub(crate) fn running(&self) -> Option<String> {
+        self.agent.clone().or_else(|| self.program.clone())
+    }
+
+    pub(crate) fn pending(&self) -> bool {
+        self.status.as_deref() == Some("pending")
+    }
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub(crate) struct ViewInfo {
@@ -212,6 +222,15 @@ impl Session {
 
     pub(crate) fn pane(&self, id: u64) -> Option<&PaneInfo> {
         self.tabs().flat_map(|t| &t.panes).find(|p| p.id == id)
+    }
+
+    pub(crate) fn agent_children(&self, pane: u64) -> usize {
+        let rows = self
+            .projects
+            .iter()
+            .flat_map(|p| &p.workspaces)
+            .find_map(|w| w.agent_rows().into_iter().find(|r| r.pane.id == pane).map(|r| r.children));
+        rows.unwrap_or(0)
     }
 
     pub(crate) fn workspace_agent(&self, workspace: u64) -> Option<(u64, String)> {

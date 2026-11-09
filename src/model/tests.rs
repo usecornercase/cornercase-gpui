@@ -274,3 +274,18 @@ fn a_working_pane_counts_even_when_its_tab_shows_a_louder_status() {
     assert!(session(vec![pane("waiting"), pane("working")]).anyone_working());
     assert!(!session(vec![pane("waiting"), pane("done")]).anyone_working());
 }
+
+#[test]
+fn an_agent_counts_its_children_on_any_session() {
+    let agent = |id, parent| format!(r#"{{"id":{id},"agent":"claude","parent":{parent}}}"#);
+    let text = format!(
+        r#"{{"projects":[{{"id":1,"workspaces":[{{"id":2,"tabs":[{{"id":3,"panes":[{},{},{}]}}]}}]}}]}}"#,
+        agent(4, "null"),
+        agent(5, "4"),
+        agent(6, "4")
+    );
+    let session: Session = parse(&text);
+    assert_eq!(session.agent_children(4), 2);
+    assert_eq!(session.agent_children(5), 0);
+    assert_eq!(session.agent_children(99), 0);
+}

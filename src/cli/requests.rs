@@ -70,7 +70,7 @@ pub(super) fn answer(name: &str, line: &str) -> Result<String> {
         return Ok(printed(answer));
     }
     let why = [answer.error, answer.stderr].into_iter().map(|text| text.trim().to_string()).find(|t| !t.is_empty());
-    bail!("cornercase {name}: {}", why.as_deref().unwrap_or("failed"))
+    Err(super::failure(name, Some(answer.status), why.unwrap_or_default().as_bytes()))
 }
 
 fn printed(answer: Answer) -> String {

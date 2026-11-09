@@ -106,3 +106,15 @@ fn the_home_is_read_from_what_status_says_there() {
     assert_eq!(home_in(r#"{"boot": "b"}"#), None);
     assert_eq!(home_in("not json"), None);
 }
+
+#[test]
+fn a_failure_there_names_the_machine() {
+    let error = anyhow::anyhow!("cornercase close: there is no pane 9");
+    assert_eq!(failed_there("vps", &error), "vps: there is no pane 9");
+}
+
+#[test]
+fn a_stale_boot_there_reads_as_a_restart() {
+    let error = cli::failure("close", Some(4), b"error: this request is for the cornercase server started as 1-2");
+    assert_eq!(failed_there("vps", &error), "vps restarted: nothing was sent");
+}

@@ -94,6 +94,7 @@ pub(crate) enum Drag {
     Select { pane: u64, from: (u16, u16), to: (u16, u16) },
     Divider { tab: u64, path: Vec<bool>, down: bool, along: Along },
     Link { pane: u64, cell: (u16, u16) },
+    Menu { pane: u64 },
 }
 
 struct SidebarGrip;

@@ -9,11 +9,10 @@ use gpui::{
 use crate::app::frame::{self, Frame};
 use crate::app::{Root, TITLEBAR_HEIGHT};
 use crate::context_menu::{Entry, act, danger, item};
-use crate::dialogs;
+use crate::dialogs::{self, CloseWords};
 use crate::keymap::{self, Command, with_keys};
 use crate::model::{MachinePlace, MachineSeen, Tab, ThereId, ThereWorkspace, memory_size};
-use crate::sidebar::{Dragged, Look, Renaming, Target, cmd, draggable, order, tip};
-use crate::store::{Busy, ToastKind};
+use crate::sidebar::{Dragged, Look, Renaming, Target, cmd, draggable, mark_label, order, tip};
 use crate::terminal::cycled;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, badge};
@@ -169,10 +168,10 @@ fn machine_tab(
 fn agent_entries(tab: &Tab, switch: Option<Entry>) -> Vec<Entry> {
     let Some(agent) = tab.agent_pane() else { return Vec::new() };
     let t = tab.id.to_string();
-    let mark = if agent.status.as_deref() == Some("pending") {
-        act("Mark as reviewed", cmd(&["mark", "--tab", &t, "--reviewed"]))
+    let mark = if agent.pending() {
+        act(mark_label(true), cmd(&["mark", "--tab", &t, "--reviewed"]))
     } else {
-        act("Mark as pending review", cmd(&["mark", "--tab", &t]))
+        act(mark_label(false), cmd(&["mark", "--tab", &t]))
     };
     let pane = agent.id;
     let mut entries = vec![Entry::Separator, mark];
@@ -335,12 +334,6 @@ impl Root {
         }
     }
 
-    pub(crate) fn not_offered_there(&mut self, what: &str, cx: &mut Context<Self>) {
-        let Some(machine) = self.machine.as_ref().map(|tab| tab.machine.clone()) else { return };
-        let text = format!("{what} on {machine} is not offered here yet");
-        self.store.update(cx, |s, cx| s.toast(text, ToastKind::Info, cx));
-    }
-
     pub(crate) fn tab_menu(&self, id: u64, cx: &App) -> Vec<Entry> {
         let Some(tab) = self.session.as_ref().and_then(|s| s.tab(id)).cloned() else { return Vec::new() };
         let mut entries = vec![
@@ -360,19 +353,9 @@ impl Root {
             self.own.queue.cmd(command);
             return;
         };
-        let what = agent.agent.clone().unwrap_or_else(|| "an agent".into());
-        let state = agent.status.as_deref().map(|s| format!(" ({s})")).unwrap_or_default();
-        dialogs::confirm(
-            dialogs::Question::new(
-                format!("Close the tab {}?", tab.name),
-                format!("It runs {what}{state}: closing the tab stops it. Its worktree and branch stay."),
-                "Close tab",
-                command,
-            )
-            .busy(Busy::new(format!("close-tab:{}", tab.id), format!("Closing {}…", tab.name))),
-            window,
-            cx,
-        );
+        let words = CloseWords::tab(tab, Some(agent), None);
+        let question = words.question(command).busy(words.busy(format!("close-tab:{}", tab.id)));
+        dialogs::confirm(question, window, cx);
     }
 }
 

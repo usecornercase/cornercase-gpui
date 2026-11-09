@@ -14,6 +14,7 @@ use crate::theme::{colours, radius};
 use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
+mod closing;
 mod context;
 mod merge_check;
 mod pairing;
@@ -22,6 +23,7 @@ mod remote;
 mod run_on;
 mod shortcuts;
 
+pub(crate) use closing::CloseWords;
 pub(crate) use context::{VIEW_CONTEXT, context_choices, view_context};
 pub(crate) use merge_check::merge_check;
 pub(crate) use pairing::{PairKey, pairing};

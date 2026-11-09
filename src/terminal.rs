@@ -29,6 +29,7 @@ mod dock_text;
 mod input;
 mod links;
 mod machine_card;
+mod machine_menu;
 mod missing;
 mod mouse;
 mod no_tab;
@@ -256,7 +257,7 @@ impl Root {
             return;
         }
         if self.machine.is_some() {
-            self.not_offered_there("Closing a pane", cx);
+            self.close_active_pane_there(window, cx);
             return;
         }
         if let Some(pane) = self.active_pane() {
@@ -266,7 +267,7 @@ impl Root {
 
     fn close_shown_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.machine.is_some() {
-            self.not_offered_there("Closing a tab", cx);
+            self.close_shown_tab_there(window, cx);
             return;
         }
         let session = self.session.as_ref();
@@ -302,11 +303,11 @@ impl Root {
             self.refuse_on_machine(cx);
             return;
         };
-        let mut args = vec!["split".into(), "--pane".into(), pane.to_string(), "--focus".into()];
-        if down {
-            args.push("--down".into());
-        }
-        self.shown().act(args);
+        self.split_pane(pane, down);
+    }
+
+    pub(crate) fn split_pane(&self, pane: u64, down: bool) {
+        self.shown().act(split_args(pane, down));
     }
 
     fn cycle_tab(&mut self, by: i32, cx: &mut Context<Self>) {
@@ -555,6 +556,14 @@ fn elsewhere_button() -> impl IntoElement {
     ui::button("note-connect", with_keys("Connect to another server", Command::Connect))
         .mt(px(10.))
         .on_click(|_: &ClickEvent, window, cx| dialogs::connect(window, cx))
+}
+
+fn split_args(pane: u64, down: bool) -> Vec<String> {
+    let mut args = vec!["split".into(), "--pane".into(), pane.to_string(), "--focus".into()];
+    if down {
+        args.push("--down".into());
+    }
+    args
 }
 
 #[cfg(test)]

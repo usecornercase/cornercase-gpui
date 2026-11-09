@@ -2,7 +2,7 @@ use gpui::CursorStyle;
 
 use super::pane_menu::move_pane_args;
 use super::selection::{cleaned, kept, read_args, word_at};
-use super::{cycled, divider_cursor};
+use super::{cycled, divider_cursor, split_args};
 use crate::app::Msg;
 use crate::desktop::Board;
 use crate::platform::paths::Style;
@@ -99,4 +99,10 @@ fn a_selection_from_a_machine_with_nothing_left_once_cleaned_copies_nothing() {
 #[test]
 fn what_is_cleaned_keeps_lines_tabs_and_every_visible_character() {
     assert_eq!(cleaned("a\tb\nñ中 🦀"), "a\tb\nñ中 🦀");
+}
+
+#[test]
+fn a_split_names_its_pane_and_asks_to_focus_the_new_one() {
+    assert_eq!(split_args(5, false), ["split", "--pane", "5", "--focus"]);
+    assert_eq!(split_args(5, true), ["split", "--pane", "5", "--focus", "--down"]);
 }

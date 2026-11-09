@@ -12,7 +12,7 @@ use crate::platform::Os;
 use crate::store::Busy;
 use crate::theme::{colours, radius};
 use crate::ui::motion::{self, Way};
-use crate::ui::{Icon, glass, icon};
+use crate::ui::{self, Icon, glass, icon};
 
 const MENU_DROP: f32 = 4.;
 const ROW_HEIGHT: f32 = 29.5;
@@ -28,6 +28,7 @@ pub(crate) enum Entry {
     Submenu { label: SharedString, entries: Vec<Entry> },
     Heading(SharedString),
     Resting { label: SharedString },
+    Note(SharedString),
     Separator,
 }
 pub(crate) fn item(
@@ -66,6 +67,10 @@ pub(crate) fn submenu(label: impl Into<SharedString>, entries: Vec<Entry>) -> En
 
 pub(crate) fn resting(label: impl Into<SharedString>) -> Entry {
     Entry::Resting { label: label.into() }
+}
+
+pub(crate) fn note(text: impl Into<SharedString>) -> Entry {
+    Entry::Note(text.into())
 }
 
 pub(crate) struct Menu {
@@ -175,7 +180,7 @@ impl Root {
                     menu.highlight = step(&menu.entries, None, true);
                 }
             }
-            Entry::Heading(_) | Entry::Resting { .. } | Entry::Separator => {}
+            Entry::Heading(_) | Entry::Resting { .. } | Entry::Note(_) | Entry::Separator => {}
         }
     }
 
@@ -221,6 +226,7 @@ fn menu_entry(index: usize, entry: Entry, highlighted: bool, cx: &mut Context<Ro
         Entry::Separator => div().mx(px(10.)).my(px(4.)).h(px(1.)).bg(colours::border()).into_any_element(),
         Entry::Heading(label) => menu_heading(label).into_any_element(),
         Entry::Resting { label } => resting_row(label).into_any_element(),
+        Entry::Note(text) => ui::dim(text.clone()).px(px(10.)).py(px(5.)).into_any_element(),
         Entry::Item { label, action, danger, chosen } => menu_row(id, label, false, (highlighted, danger))
             .when(chosen, |d| d.child(icon(Icon::Check, 12.).text_color(colours::text())))
             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
@@ -276,6 +282,22 @@ pub(crate) fn menu_row(
         .hover(|s| s.bg(lit).text_color(lit_ink))
         .child(div().whitespace_nowrap().child(label))
         .when(more, |d| d.child(div().text_color(colours::muted()).child("›")))
+}
+
+#[cfg(test)]
+pub(crate) fn read_entries(entries: &[Entry]) -> Vec<(&'static str, String)> {
+    entries
+        .iter()
+        .map(|entry| match entry {
+            Entry::Item { label, danger: true, .. } => ("danger", label.to_string()),
+            Entry::Item { label, .. } => ("item", label.to_string()),
+            Entry::Submenu { label, .. } => ("submenu", label.to_string()),
+            Entry::Heading(label) => ("heading", label.to_string()),
+            Entry::Resting { label } => ("resting", label.to_string()),
+            Entry::Note(text) => ("note", text.to_string()),
+            Entry::Separator => ("-", String::new()),
+        })
+        .collect()
 }
 
 #[cfg(test)]
