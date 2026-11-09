@@ -1,4 +1,4 @@
-use gpui::{App, AppContext as _, Context, Entity, Focusable as _, Subscription, Window};
+use gpui::{App, AppContext as _, Context, Entity, Focusable as _, ScrollHandle, Subscription, Window};
 
 use super::data::{Entry, flow_names, repository_for};
 use super::draft::{Draft, Target, When, cleanup_flag};
@@ -102,24 +102,26 @@ pub(super) struct Form {
     pub(super) old: Old,
     pub(super) error: Option<String>,
     pub(super) busy: bool,
+    pub(super) scroller: ScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
 
 #[derive(Default)]
 struct Fields {
     subscriptions: Vec<Subscription>,
+    scroller: ScrollHandle,
 }
 
 impl Fields {
-    fn add(
+    fn field(
         &mut self,
-        placeholder: &str,
-        text: &str,
+        (placeholder, text): (&str, &str),
+        shape: impl FnOnce(TextField) -> TextField,
         window: &mut Window,
         cx: &mut Context<QueuePanel>,
     ) -> Entity<TextField> {
         let field = cx.new(|cx| {
-            let mut field = TextField::new(placeholder.to_string(), cx).wraps();
+            let mut field = shape(TextField::new(placeholder.to_string(), cx));
             if !text.is_empty() {
                 field.set_text(text.to_string(), cx);
             }
@@ -131,6 +133,21 @@ impl Fields {
             TextFieldEvent::Changed => cx.notify(),
         }));
         field
+    }
+
+    fn add(
+        &mut self,
+        placeholder: &str,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<QueuePanel>,
+    ) -> Entity<TextField> {
+        self.field((placeholder, text), TextField::wraps, window, cx)
+    }
+
+    fn prompt(&mut self, text: &str, window: &mut Window, cx: &mut Context<QueuePanel>) -> Entity<TextField> {
+        let scroller = self.scroller.clone();
+        self.field(("What the agent should do", text), move |field| field.prompt().inside(scroller), window, cx)
     }
 }
 
@@ -162,7 +179,7 @@ impl Form {
     ) -> Self {
         let times = Times::of(entry);
         let mut f = Fields::default();
-        let prompt = f.add("What the agent should do", entry.map_or("", |e| &e.prompt), window, cx);
+        let prompt = f.prompt(entry.map_or("", |e| &e.prompt), window, cx);
         let issue_key = f.add("https://github.com/org/repo/issues/12, #12 or ENG-42", "", window, cx);
         let clock = f.add("14:30", &times.clock, window, cx);
         let date = f.add("2026-10-24", &times.date, window, cx);
@@ -194,6 +211,7 @@ impl Form {
             old: Old::of(entry),
             error: None,
             busy: false,
+            scroller: f.scroller,
             _subscriptions: f.subscriptions,
         }
     }

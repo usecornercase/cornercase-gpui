@@ -4,7 +4,8 @@ mod there;
 
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    IntoElement, ParentElement as _, Render, ScrollHandle, Stateful, StatefulInteractiveElement as _, Styled as _,
+    Window, div, px,
 };
 
 pub(crate) use self::plan::{FlowStart, IssueTask};
@@ -12,7 +13,7 @@ use self::plan::{Typed, issue_prompt, plan, refusal};
 use self::project::{ProjectChoice, ProjectMenu};
 use super::FlowsPanel;
 use super::actions::announce;
-use super::dialog::{Submit, boxed, buttons, field, filled_field};
+use super::dialog::{Submit, boxed, buttons, field_in, filled_field, prompt_field};
 use super::model::{self, FlowInfo, Listing, Started, project_args};
 use super::widgets::{error_text, flow_summary, glyph};
 use crate::cli;
@@ -39,6 +40,7 @@ struct Known {
 }
 
 struct Fields {
+    scroller: ScrollHandle,
     prompt: Entity<TextField>,
     issue: Entity<TextField>,
     branch: Entity<TextField>,
@@ -95,11 +97,18 @@ impl Fields {
             Some(_) => ("The issue's, through settings' prompt template", "The issue's branch"),
             None => ("What the team should do", "From the task's first words, made unique"),
         };
+        let scroller = ScrollHandle::new();
         Self {
-            prompt: filled_field(task_hint, &task, cx, window),
-            issue: field("#482, sc-48, ENG-42 or its URL (optional; a task above replaces its own)", cx, window),
-            branch: filled_field(hint, &branch, cx, window),
-            workspace: filled_field("The issue's key and title", &workspace, cx, window),
+            prompt: prompt_field(task_hint, &task, &scroller, cx, window),
+            issue: field_in(
+                "#482, sc-48, ENG-42 or its URL (optional; a task above replaces its own)",
+                &scroller,
+                cx,
+                window,
+            ),
+            branch: filled_field(hint, &branch, &scroller, cx, window),
+            workspace: filled_field("The issue's key and title", &workspace, &scroller, cx, window),
+            scroller,
         }
     }
 }
@@ -356,7 +365,7 @@ impl StartFlow {
     }
 
     fn task_field(&self, window: &Window, cx: &App) -> Div {
-        let field = ui::field("Task", boxed(&self.fields.prompt, window, cx));
+        let field = ui::field("Task", ui::prompt_box(&self.fields.prompt, "start", window, cx));
         match &self.issue_read {
             IssueRead::Done => field,
             IssueRead::Reading => field.child(ui::busy("start-issue-reading", "Reading the issue's task…")),
@@ -439,7 +448,12 @@ impl Render for StartFlow {
         let height = dialogs::body_height(f32::from(window.viewport_size().height));
         dialogs::frame(
             title,
-            div().id("start-flow-form").max_h(px(height)).overflow_y_scroll().child(self.form(window, cx)),
+            div()
+                .id("start-flow-form")
+                .max_h(px(height))
+                .overflow_y_scroll()
+                .track_scroll(&self.fields.scroller)
+                .child(self.form(window, cx)),
             buttons(("start-cancel", "start-run"), (Icon::Play, "Start"), busy, cx),
         )
         .w(px(580.))

@@ -478,13 +478,13 @@ fn builds_queue_add_for_a_routine() {
     };
     assert_eq!(
         d.args().map(|a| a.join(" ")),
-        Ok("queue add --every day 09:00 --prompt review the login fix --project 8 --agent claude --mode plan \
+        Ok("queue add --every day 09:00 --prompt=review the login fix --project 8 --agent claude --mode plan \
          --name deps --cleanup --json"
             .to_string())
     );
     assert_eq!(
         routine_draft(When::Every).args().map(|a| a.join(" ")),
-        Ok("queue add --every 2h --prompt review the login fix --project 8 --no-cleanup --json".to_string())
+        Ok("queue add --every 2h --prompt=review the login fix --project 8 --no-cleanup --json".to_string())
     );
 }
 
@@ -493,7 +493,7 @@ fn a_routine_on_a_flow_sends_the_flow() {
     let d = Draft { flow: Some("Quick".into()), ..routine_draft(When::Weekly) };
     assert_eq!(
         d.args().map(|a| a.join(" ")),
-        Ok("queue add --every monday 09:00 --prompt review the login fix --project 8 --flow Quick --no-cleanup --json"
+        Ok("queue add --every monday 09:00 --prompt=review the login fix --project 8 --flow Quick --no-cleanup --json"
             .to_string())
     );
     let no_task = Draft { text: " ".into(), flow: Some("Quick".into()), ..routine_draft(When::Weekly) };
@@ -561,7 +561,7 @@ fn builds_queue_add() {
     let d = draft();
     assert_eq!(
         d.args().map(|a| a.join(" ")),
-        Ok("queue add --at in 2h --prompt review the login fix --workspace 7 --json".to_string())
+        Ok("queue add --at in 2h --prompt=review the login fix --workspace 7 --json".to_string())
     );
     let d = Draft {
         issue: true,
@@ -601,7 +601,7 @@ fn an_edit_sends_only_what_changed() {
     let d = Draft { edit: Some(4), when: When::At, clock: "14:30".into(), target: Target::Keep, ..draft() };
     assert_eq!(
         d.args().map(|a| a.join(" ")),
-        Ok("queue edit 4 --at 14:30 --prompt review the login fix --json".to_string())
+        Ok("queue edit 4 --at 14:30 --prompt=review the login fix --json".to_string())
     );
 }
 
@@ -645,4 +645,19 @@ fn no_agent_named_has_no_account_row() {
 #[test]
 fn a_routine_that_runs_a_flow_has_no_account_row() {
     assert_eq!(starting_agent(true, Some("codex"), Some("claude"), Some("gemini")), Vec::<String>::new());
+}
+
+#[test]
+fn a_prompt_of_several_lines_is_scheduled_whole() {
+    let d = Draft { text: " check the login\nthen run the tests\n".into(), ..draft() };
+    let a = d.args().expect("args");
+    assert!(a.contains(&"--prompt=check the login\nthen run the tests".to_string()));
+}
+
+#[test]
+fn a_prompt_starting_with_a_hyphen_goes_joined_to_its_flag() {
+    let d = Draft { text: "- fix the tests\n- add one".into(), ..draft() };
+    let a = d.args().expect("args");
+    assert!(a.contains(&"--prompt=- fix the tests\n- add one".to_string()));
+    assert!(!a.contains(&"--prompt".to_string()));
 }

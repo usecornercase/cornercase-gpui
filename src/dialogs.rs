@@ -1,6 +1,6 @@
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString, Stateful,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, ScrollHandle, SharedString, Stateful,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
@@ -91,7 +91,17 @@ fn text_field<T: 'static>(
     on_submit: impl Fn(&mut T, &mut Window, &mut Context<T>) + 'static,
     window: &mut Window,
 ) -> Entity<TextField> {
-    let field = cx.new(|cx| TextField::new(placeholder.to_string(), cx).in_tab_order());
+    shaped_field(placeholder, |field| field, cx, on_submit, window)
+}
+
+fn shaped_field<T: 'static>(
+    placeholder: &str,
+    shape: impl FnOnce(TextField) -> TextField,
+    cx: &mut Context<T>,
+    on_submit: impl Fn(&mut T, &mut Window, &mut Context<T>) + 'static,
+    window: &mut Window,
+) -> Entity<TextField> {
+    let field = cx.new(|cx| shape(TextField::new(placeholder.to_string(), cx).in_tab_order()));
     cx.subscribe_in(&field, window, move |this, _, event, window, cx| match event {
         TextFieldEvent::Submit => on_submit(this, window, cx),
         TextFieldEvent::Cancel => close(cx),
@@ -211,11 +221,17 @@ pub(crate) fn starting(agent: &str) -> Busy {
     Busy::new(format!("start:{agent}"), label)
 }
 
+fn within(scroller: &ScrollHandle, shape: impl FnOnce(TextField) -> TextField) -> impl FnOnce(TextField) -> TextField {
+    let scroller = scroller.clone();
+    move |field| shape(field).inside(scroller)
+}
+
 pub(crate) struct StartAgent {
     agent: Entity<TextField>,
     prompt: Entity<TextField>,
     worktree: Entity<TextField>,
     accounts: AccountPickers,
+    scroller: ScrollHandle,
 }
 
 const SHOWN_ONCE_OPEN: [&str; 2] = ["--focus", "--placed"];
@@ -234,7 +250,7 @@ fn start_args(agent: &str, prompt: &str, worktree: &str, picks: &[AccountPick]) 
     }
     a.extend(args(&SHOWN_ONCE_OPEN));
     if !prompt.is_empty() {
-        a.extend(args(&["--prompt", prompt]));
+        a.push(format!("--prompt={prompt}"));
     }
     if !worktree.is_empty() {
         a.extend(args(&["--worktree", worktree]));
@@ -250,11 +266,20 @@ pub(crate) fn start_agent(window: &mut Window, cx: &mut App) {
     }
     let view = cx.new(|cx| {
         let submit = |this: &mut StartAgent, _: &mut Window, cx: &mut Context<StartAgent>| this.submit(cx);
-        let agent = text_field("the default agent (settings → agents)", cx, submit, window);
-        let prompt = text_field("what it should do (optional)", cx, submit, window);
-        let worktree = text_field("a branch, to work in its own worktree (optional)", cx, submit, window);
+        let scroller = ScrollHandle::new();
+        let (agent, prompt, worktree) = (
+            shaped_field("the default agent (settings → agents)", within(&scroller, |field| field), cx, submit, window),
+            shaped_field("what it should do (optional)", within(&scroller, TextField::prompt), cx, submit, window),
+            shaped_field(
+                "a branch, to work in its own worktree (optional)",
+                within(&scroller, |field| field),
+                cx,
+                submit,
+                window,
+            ),
+        );
         cx.observe(&store, |_, _, cx| cx.notify()).detach();
-        StartAgent { agent, prompt, worktree, accounts: AccountPickers::default() }
+        StartAgent { agent, prompt, worktree, accounts: AccountPickers::default(), scroller }
     });
     let focus = view.read(cx).prompt.read(cx).focus_handle(cx);
     show(view.into(), &focus, window, cx);
@@ -280,20 +305,32 @@ impl StartAgent {
     }
 }
 
+impl StartAgent {
+    fn fields(&self, window: &Window, cx: &App) -> Div {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(ui::field("Agent", ui::boxed(&self.agent, window, cx)))
+            .children(self.accounts.fields(&self.agents(cx), cx))
+            .child(ui::field("Prompt", ui::prompt_box(&self.prompt, "start", window, cx)))
+            .child(ui::field("Worktree", ui::boxed(&self.worktree, window, cx)))
+    }
+}
+
 impl Render for StartAgent {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let choices = Store::get(cx).read(cx).account_choices();
         self.accounts.follow(choices, |_, _| {}, cx);
+        let height = body_height(f32::from(window.viewport_size().height));
         frame(
             "Start an agent in a new tab",
             div()
-                .flex()
-                .flex_col()
-                .gap(px(10.))
-                .child(ui::field("Agent", ui::boxed(&self.agent, window, cx)))
-                .children(self.accounts.fields(&self.agents(cx), cx))
-                .child(ui::field("Prompt", ui::boxed(&self.prompt, window, cx)))
-                .child(ui::field("Worktree", ui::boxed(&self.worktree, window, cx))),
+                .id("start-agent-form")
+                .max_h(px(height))
+                .overflow_y_scroll()
+                .track_scroll(&self.scroller)
+                .child(self.fields(window, cx)),
             cancel_and(
                 ui::primary_button("start", "Start")
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),

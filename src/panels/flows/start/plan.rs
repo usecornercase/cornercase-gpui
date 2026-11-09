@@ -30,7 +30,7 @@ impl IssueTask {
     }
 
     pub(super) fn task(&self) -> String {
-        self.prompt.as_deref().unwrap_or_default().lines().collect::<Vec<_>>().join(" ")
+        self.prompt.as_deref().unwrap_or_default().trim_end().to_string()
     }
 
     pub(super) fn learn(&mut self, prompt: Option<String>, typed: &str) -> Option<String> {
