@@ -83,6 +83,10 @@ impl Root {
         if ks.modifiers.platform || keymap::left_to_system(ks, Os::CURRENT) {
             return;
         }
+        if self.dock_select(ks, window, cx) {
+            cx.stop_propagation();
+            return;
+        }
         if ks.key == "escape" && self.escape(terminal, window, cx) {
             cx.stop_propagation();
             return;

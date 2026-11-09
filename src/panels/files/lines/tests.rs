@@ -1,7 +1,7 @@
 use crate::ui::selection::{Caret, Selection};
 
 use super::super::disk::text;
-use super::{one_based, selected_text};
+use super::{covered_by, one_based, selected_text};
 
 fn chars(anchor: (usize, usize), head: (usize, usize)) -> Selection<usize> {
     Selection::Chars { anchor: Caret { spot: anchor.0, at: anchor.1 }, head: Caret { spot: head.0, at: head.1 } }
@@ -34,4 +34,15 @@ fn a_selection_reaching_past_the_end_copies_what_is_there() {
 #[test]
 fn line_numbers_count_from_one() {
     assert_eq!(one_based((0, 4)), (1, 5));
+}
+
+#[test]
+fn a_selection_of_nothing_covers_no_line() {
+    assert_eq!(covered_by(Some(chars((3, 2), (3, 2)))), None);
+    assert_eq!(covered_by(None), None);
+}
+
+#[test]
+fn a_selection_covers_its_lines() {
+    assert_eq!(covered_by(Some(Selection::Lines { anchor: 2, head: 4 })), Some((2, 4)));
 }

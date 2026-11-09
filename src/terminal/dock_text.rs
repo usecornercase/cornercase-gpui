@@ -1,10 +1,11 @@
-use gpui::{App, Context, Entity, Window};
+use gpui::{App, Context, Entity, Keystroke, Window};
 
 use crate::app::Root;
 use crate::panels::PanelKind;
 use crate::panels::changes::ChangesPanel;
 use crate::panels::files::FilesPanel;
 use crate::store::Store;
+use crate::ui::selection::Step;
 
 impl Root {
     fn files_panel(&self) -> Option<Entity<FilesPanel>> {
@@ -43,6 +44,16 @@ impl Root {
             window.focus(&self.dock_focus);
         }
         answered
+    }
+
+    pub(super) fn dock_select(&mut self, ks: &Keystroke, window: &Window, cx: &mut Context<Self>) -> bool {
+        let Some(step) = Step::of(ks) else { return false };
+        if self.focused_dock(window, cx) != Some(PanelKind::Files) {
+            return false;
+        }
+        let Some(files) = self.files_panel() else { return false };
+        let its_own = self.dock_focus.is_focused(window) || files.read(cx).has_focus_itself(window);
+        its_own && files.update(cx, |files, cx| files.extend_selection(step, cx))
     }
 
     pub(super) fn dock_copy(&mut self, window: &Window, cx: &mut Context<Self>) -> bool {

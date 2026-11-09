@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.44
+
+- **Select with the keyboard in an open file.** Click in the Files viewer, then ⇧← ⇧→ select a character more or less and ⇧↑ ⇧↓ a line (Shift with the arrows on Linux and Windows). They go on from the end of what you selected, or with nothing selected from the top of what the viewer shows. Lines picked by their numbers grow and shrink by whole lines, and the view follows the end you move.
+- **It works like a selection made with the mouse.** Open, Ask agent and Copy float beside it, ⌘C copies it, Esc clears it, and it stays when the file changes; on Linux it also fills the primary selection. In the terminal and in text fields the keys do what they did before.
+
 ## 0.1.43
 
 - **Changes and Files say when a machine's link tries again.** While the link to a machine is down, the strip at the top of both panels counts down to the next try, `vps unreachable · reconnecting in 4 s`, as the machine's card and the Machines sheet do, and says `reconnecting…` while the try runs.

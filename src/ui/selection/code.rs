@@ -33,6 +33,10 @@ impl Fit {
         if wraps { Self::Wrap { columns: columns_in(width) } } else { Self::Cut }
     }
 
+    pub(crate) fn kept(self, line: &str) -> Option<usize> {
+        cut(line, self.cap()?)
+    }
+
     fn cap(self) -> Option<usize> {
         match self {
             Self::Wrap { columns } => Some(WRAP_ROWS * columns),
@@ -72,13 +76,16 @@ struct Capped {
     kept: Option<usize>,
 }
 
+fn cut(line: &str, bytes: usize) -> Option<usize> {
+    (line.len() > bytes).then(|| line.floor_char_boundary(bytes))
+}
+
 fn capped(line: &str, mut styles: Styles, bytes: usize) -> Capped {
-    if line.len() <= bytes {
+    let Some(kept) = cut(line, bytes) else {
         let shown = stand_in(line);
         styles.retain(|(range, _)| shown.get(range.clone()).is_some());
         return Capped { shown, styles, kept: None };
-    }
-    let kept = line.floor_char_boundary(bytes);
+    };
     let tint = styles.iter().filter(|(range, _)| range.end > kept).find_map(|(_, style)| style.background_color);
     let before = styles.into_iter().filter(|(range, _)| range.start < kept);
     let mut cut: Styles = before.map(|(range, style)| (range.start..range.end.min(kept), style)).collect();

@@ -3,8 +3,8 @@ use std::ops::Range;
 use gpui::{Bounds, HighlightStyle, Hsla, point, px, size};
 
 use super::{
-    Caret, Edge, Lit, Press, Selection, Zone, bar_origin, edge_at, host, lines_label, off_centre, overlay, reference,
-    row_at, row_near, word_at,
+    Caret, Edge, Lit, Press, Selection, Zone, bar_origin, edge_at, host, lines_label, off_centre, off_edge, overlay,
+    reference, row_at, row_from, row_near, word_at,
 };
 
 fn caret(spot: usize, at: usize) -> Caret<usize> {
@@ -17,6 +17,10 @@ fn chars(anchor: (usize, usize), head: (usize, usize)) -> Selection<usize> {
 
 fn lines(anchor: usize, head: usize) -> Selection<usize> {
     Selection::Lines { anchor, head }
+}
+
+fn span(top: f32) -> (gpui::Pixels, gpui::Pixels) {
+    (px(top), px(top + 18.))
 }
 
 fn row(top: f32, height: f32) -> Bounds<gpui::Pixels> {
@@ -371,4 +375,46 @@ fn a_row_above_the_body_scrolls_back() {
 fn a_row_under_the_find_field_counts_as_out_of_view() {
     assert_eq!(off_centre(px(30.), row(0., 400.), px(56.)), Some(px(-198.)));
     assert_eq!(off_centre(px(56.), row(0., 400.), px(56.)), None);
+}
+
+#[test]
+fn a_selection_whose_head_is_on_its_anchor_is_empty() {
+    assert!(chars((1, 2), (1, 2)).is_empty());
+    assert!(!chars((1, 2), (1, 3)).is_empty());
+    assert!(!lines(2, 2).is_empty());
+}
+
+#[test]
+fn the_head_caret_of_whole_lines_is_the_start_of_their_head_line() {
+    assert_eq!(lines(1, 4).head_caret(), caret(4, 0));
+    assert_eq!(chars((1, 2), (3, 5)).head_caret(), caret(3, 5));
+}
+
+#[test]
+fn a_caret_row_with_a_row_to_spare_needs_no_scroll() {
+    assert_eq!(off_edge(span(100.), row(0., 400.), px(0.)), None);
+}
+
+#[test]
+fn a_caret_row_near_the_bottom_scrolls_just_enough_to_keep_a_row_under_it() {
+    assert_eq!(off_edge(span(370.), row(0., 400.), px(0.)), Some(px(6.)));
+    assert_eq!(off_edge(span(390.), row(0., 400.), px(0.)), Some(px(26.)));
+}
+
+#[test]
+fn a_caret_row_above_the_top_scrolls_back_just_enough_to_keep_a_row_over_it() {
+    assert_eq!(off_edge(span(-50.), row(0., 400.), px(0.)), Some(px(-68.)));
+}
+
+#[test]
+fn a_caret_row_under_the_find_field_counts_as_out_of_view() {
+    assert_eq!(off_edge(span(30.), row(0., 400.), px(56.)), Some(px(-44.)));
+    assert_eq!(off_edge(span(74.), row(0., 400.), px(56.)), None);
+}
+
+#[test]
+fn the_first_row_shown_is_the_first_reaching_below_the_top() {
+    let rows = || [(1, row(-30., 18.)), (2, row(-12., 18.)), (3, row(6., 18.))].into_iter();
+    assert_eq!(row_from(rows(), px(0.)), Some(2));
+    assert_eq!(row_from(rows(), px(10.)), Some(3));
 }
