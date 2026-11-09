@@ -418,3 +418,13 @@ fn the_first_row_shown_is_the_first_reaching_below_the_top() {
     assert_eq!(row_from(rows(), px(0.)), Some(2));
     assert_eq!(row_from(rows(), px(10.)), Some(3));
 }
+
+#[test]
+fn a_line_of_four_rows_near_the_bottom_scrolls_to_show_its_end_and_a_row_under_it() {
+    assert_eq!(off_edge((px(340.), px(412.)), row(0., 400.), px(0.)), Some(px(30.)));
+}
+
+#[test]
+fn a_line_taller_than_the_view_never_pushes_the_caret_row_past_the_top_margin() {
+    assert_eq!(off_edge((px(100.), px(2000.)), row(0., 400.), px(0.)), Some(px(82.)));
+}

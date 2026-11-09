@@ -296,10 +296,11 @@ pub(crate) fn off_centre(y: Pixels, body: Bounds<Pixels>, inset: Pixels) -> Opti
 pub(crate) fn off_edge((from, to): (Pixels, Pixels), body: Bounds<Pixels>, inset: Pixels) -> Option<Pixels> {
     let row = px(CODE_ROW);
     let (top, bottom) = (body.top() + inset + row, body.bottom() - row);
+    let to = to.max(from + row);
     if from < top {
         Some(from - top)
     } else if to > bottom {
-        Some(to - bottom)
+        Some((to - bottom).min(from - top))
     } else {
         None
     }

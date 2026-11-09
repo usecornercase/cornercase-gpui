@@ -18,8 +18,8 @@ use crate::ui::one_line::LaidOut;
 use super::caret::{Keyed, extended};
 use super::code::past_the_cut;
 use super::{
-    CODE_ROW, Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Step, Zone, bar_origin, edge_at, host, off_centre,
-    off_edge, row_at, row_from, row_near, word_at,
+    Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Step, Zone, bar_origin, edge_at, host, off_centre, off_edge,
+    row_at, row_from, row_near, word_at,
 };
 
 type Rule = fn((Pixels, Pixels), Bounds<Pixels>, Pixels) -> Option<Pixels>;
@@ -59,8 +59,7 @@ impl Drawn {
     }
 
     fn span_of(&self, at: usize) -> (Pixels, Pixels) {
-        let top = self.top_of(at);
-        (top, self.bounds.bottom().min(top + px(2. * CODE_ROW)).max(top + px(CODE_ROW)))
+        (self.top_of(at), self.bounds.bottom())
     }
 
     fn top_of(&self, at: usize) -> Pixels {
