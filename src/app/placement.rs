@@ -6,7 +6,6 @@ use crate::platform::Os;
 
 pub(crate) const SHOWN: (f32, f32) = (1280., 800.);
 pub(crate) const LEAST: (f32, f32) = (640., 360.);
-const IN_REACH: f32 = 100.;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Placed {
@@ -78,8 +77,8 @@ fn usable(saved: &Placed) -> bool {
 pub(crate) fn fits(bounds: Bounds<Pixels>, screen: Bounds<Pixels>) -> bool {
     let inside = bounds.size.width <= screen.size.width && bounds.size.height <= screen.size.height;
     let title_row = bounds.top() >= screen.top() && bounds.top() + px(TITLEBAR_HEIGHT) <= screen.bottom();
-    let overlap = bounds.right().min(screen.right()) - bounds.left().max(screen.left());
-    inside && title_row && overlap >= px(IN_REACH)
+    let centre = bounds.center();
+    inside && title_row && screen.contains(&centre)
 }
 
 fn screen_of(saved: &Placed, screens: &[Screen], os: Os) -> Option<usize> {

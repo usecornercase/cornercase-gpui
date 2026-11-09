@@ -68,8 +68,11 @@ impl Saved {
     }
 }
 
-fn path_in(folder: &Path) -> PathBuf {
-    folder.join(FILE)
+const APART: &str = "window-layout.json";
+
+fn layout_path(settings: &Path) -> PathBuf {
+    let beside = prefs::folder_of(settings).join(FILE);
+    if beside == settings { settings.with_file_name(APART) } else { beside }
 }
 
 pub(crate) struct Keeper {
@@ -105,7 +108,7 @@ impl Keeper {
     }
 
     pub(crate) fn init(cx: &mut App) -> placement::Options {
-        let path = path_in(&prefs::folder());
+        let path = layout_path(&prefs::path());
         let saved = std::fs::read_to_string(&path).map(|text| Saved::parse(&text)).unwrap_or_default();
         let options = placement::window_options(saved.window.as_ref(), cx);
         let opened = options.opened.clone();

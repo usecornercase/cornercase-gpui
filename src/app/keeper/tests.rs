@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use super::{Keeper, Saved, Widths, path_in};
+use super::{Keeper, Saved, Widths, layout_path};
 use crate::app::placement::{Placed, Rect, State};
 
 fn widths(sidebar: Option<f32>, panel: Option<f32>) -> Widths {
@@ -17,8 +17,8 @@ fn keeper(saved: Saved) -> Keeper {
 
 #[test]
 fn the_layout_lives_beside_the_settings() {
-    let folder = crate::prefs::folder_of(Path::new("/x/cornercase-gpui/settings.json"));
-    assert_eq!(path_in(&folder), PathBuf::from("/x/cornercase-gpui/layout.json"));
+    let path = layout_path(Path::new("/x/cornercase-gpui/settings.json"));
+    assert_eq!(path, PathBuf::from("/x/cornercase-gpui/layout.json"));
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn a_window_still_where_it_opened_writes_nothing() {
 #[test]
 fn a_change_reaches_the_file_and_a_second_write_has_nothing_to_add() {
     let folder = std::env::temp_dir().join(format!("cornercase-gpui-keeper-{}", std::process::id()));
-    let path = path_in(&folder);
+    let path = layout_path(&folder.join("settings.json"));
     let mut keeper = Keeper::new(path.clone(), Saved::default());
     keeper.start(Widths::default());
     keeper.take_widths(widths(Some(321.), None));
@@ -134,4 +134,10 @@ fn a_change_reaches_the_file_and_a_second_write_has_nothing_to_add() {
     assert_eq!(on_disk, keeper.kept);
     assert_eq!(keeper.pending(), None);
     std::fs::remove_dir_all(&folder).expect("the folder is removed");
+}
+
+#[test]
+fn settings_named_like_the_layout_are_never_overwritten() {
+    let settings = Path::new("/x/cornercase-gpui/layout.json");
+    assert_ne!(layout_path(settings), settings);
 }

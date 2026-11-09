@@ -104,3 +104,10 @@ fn nothing_saved_keeps_the_default() {
     assert_eq!(split.chosen(), None);
     assert_size(split, 400.);
 }
+
+#[test]
+fn a_size_is_fitted_to_the_room_but_never_below_the_minimum() {
+    assert_size(Split::new(400., 260., 800.).restored(Some(500.), 5000.), 500.);
+    assert!((LIST.fitted(500., 350.) - 350.).abs() < f32::EPSILON);
+    assert!((LIST.fitted(500., 100.) - 260.).abs() < f32::EPSILON);
+}

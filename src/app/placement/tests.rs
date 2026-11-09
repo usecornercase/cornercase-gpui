@@ -83,7 +83,7 @@ fn a_window_larger_than_its_display_now_opens_centred() {
 
 #[test]
 fn a_window_partly_past_a_side_edge_reopens_there() {
-    let b = bounds(1620., 64., 1000., 700.);
+    let b = bounds(1200., 64., 1000., 700.);
     assert!(fits(b, bounds(0., 0., 1920., 1000.)));
     let got = open(&windowed("A", b), &screens(), Os::Mac);
     assert_eq!(got.at, At::On { screen: 0, bounds: b });
@@ -141,4 +141,10 @@ fn a_change_while_maximised_or_full_screen_keeps_the_windowed_place() {
 fn the_first_change_with_nothing_before_takes_what_it_sees() {
     let seen = placed("C", bounds(0., 0., 2560., 1400.), State::FullScreen);
     assert_eq!(keep(None, seen.clone()), seen);
+}
+
+#[test]
+fn a_window_whose_centre_is_off_its_display_opens_centred() {
+    let got = open(&windowed("A", bounds(1620., 64., 1000., 700.)), &screens(), Os::Windows);
+    assert_eq!(got, centred_at((1000., 700.), State::Windowed));
 }

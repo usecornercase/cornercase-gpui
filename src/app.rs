@@ -568,8 +568,12 @@ impl Root {
     }
 
     fn dock_size(&self, kind: PanelKind, window: &Window) -> f32 {
-        let Some(wide) = self.dock_widths.wide(kind) else { return self.dock_widths.panel.size() };
-        wide.chosen().unwrap_or_else(|| wide_default(f32::from(window.viewport_size().width)))
+        let width = f32::from(window.viewport_size().width);
+        let (split, size) = match self.dock_widths.wide(kind) {
+            Some(wide) => (wide, wide.chosen().unwrap_or_else(|| wide_default(width))),
+            None => (self.dock_widths.panel, self.dock_widths.panel.size()),
+        };
+        split.fitted(size, widths::dock_room(width, self.sidebar_extent()))
     }
 
     fn render_dock(

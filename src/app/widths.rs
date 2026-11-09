@@ -7,15 +7,19 @@ use crate::ui::split::Split;
 
 pub(super) fn restored(saved: &Widths, window_width: f32) -> (Split, Split, DockWidths) {
     let main = window_width - COLUMN;
-    let sidebar = SIDEBAR.restored(saved.sidebar, main - TERMINAL_KEEP);
-    let pair = PAIR.restored(saved.pair, main - TERMINAL_KEEP);
-    let beside = main - sidebar.size().min(pair.chosen().unwrap_or(f32::MAX)) - GAP - TERMINAL_KEEP;
+    let room = main - TERMINAL_KEEP - GAP - DOCK.min();
+    let sidebar = SIDEBAR.restored(saved.sidebar, room);
+    let pair = PAIR.restored(saved.pair, room);
     let docks = DockWidths {
-        panel: DOCK.restored(saved.panel, beside),
-        browser: WIDE_DOCK.restored(saved.browser, beside),
-        flow: WIDE_DOCK.restored(saved.flow, beside),
+        panel: DOCK.restored(saved.panel, f32::MAX),
+        browser: WIDE_DOCK.restored(saved.browser, f32::MAX),
+        flow: WIDE_DOCK.restored(saved.flow, f32::MAX),
     };
     (sidebar, pair, docks)
+}
+
+pub(super) fn dock_room(window_width: f32, sidebar_extent: f32) -> f32 {
+    window_width - COLUMN - sidebar_extent - GAP - TERMINAL_KEEP
 }
 
 pub(super) fn of(sidebar: Split, pair: Split, docks: DockWidths) -> Widths {

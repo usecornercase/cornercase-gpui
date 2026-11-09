@@ -1,4 +1,4 @@
-use super::{of, restored};
+use super::{dock_room, of, restored};
 use crate::app::keeper::Widths;
 
 fn saved(sidebar: Option<f32>, panel: Option<f32>) -> Widths {
@@ -17,15 +17,21 @@ fn widths_that_fit_come_back_as_saved() {
 }
 
 #[test]
-fn a_restored_sidebar_leaves_the_terminal_its_room() {
-    let (sidebar, ..) = restored(&saved(Some(560.), None), 700.);
-    assert!((sidebar.size() - 400.).abs() < f32::EPSILON);
+fn a_restored_sidebar_leaves_the_terminal_and_a_dock_their_room() {
+    let (sidebar, ..) = restored(&saved(Some(560.), None), 900.);
+    assert!((sidebar.size() - 284.).abs() < f32::EPSILON);
 }
 
 #[test]
-fn a_restored_dock_fits_beside_the_sidebar() {
+fn a_restored_dock_keeps_the_saved_width_for_the_window_to_fit() {
     let (_, _, docks) = restored(&saved(Some(300.), Some(1208.)), 1280.);
-    assert!((docks.panel.size() - 672.).abs() < f32::EPSILON);
+    assert!((docks.panel.size() - 1208.).abs() < f32::EPSILON);
+}
+
+#[test]
+fn the_dock_room_follows_the_sidebar_shown() {
+    assert!((dock_room(1280., 300.) - 672.).abs() < f32::EPSILON);
+    assert!((dock_room(1280., 700.) - 272.).abs() < f32::EPSILON);
 }
 
 #[test]
@@ -49,11 +55,4 @@ fn the_widths_read_back_what_the_splits_chose() {
     assert_eq!(size_of(back.sidebar), 300.);
     assert_eq!(size_of(back.panel), 500.);
     assert_eq!(back.pair, None);
-}
-
-#[test]
-fn a_wide_tree_sidebar_is_not_measured_as_the_untouched_pair() {
-    let (sidebar, _, docks) = restored(&saved(Some(560.), Some(600.)), 1280.);
-    assert!((sidebar.size() - 560.).abs() < f32::EPSILON);
-    assert!((docks.panel.size() - 412.).abs() < f32::EPSILON);
 }
