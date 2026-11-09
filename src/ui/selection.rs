@@ -293,14 +293,18 @@ pub(crate) fn off_centre(y: Pixels, body: Bounds<Pixels>, inset: Pixels) -> Opti
     Some(y - (body.top() + inset + (body.size.height - inset) / 2.))
 }
 
-pub(crate) fn off_edge((from, to): (Pixels, Pixels), body: Bounds<Pixels>, inset: Pixels) -> Option<Pixels> {
+pub(crate) type Span = (Pixels, Pixels, Pixels);
+
+pub(crate) fn off_edge((line_top, row_top, line_bottom): Span, body: Bounds<Pixels>, inset: Pixels) -> Option<Pixels> {
     let row = px(CODE_ROW);
     let (top, bottom) = (body.top() + inset + row, body.bottom() - row);
-    let to = to.max(from + row);
+    let line_bottom = line_bottom.max(row_top + row);
+    let (from, to) =
+        if line_bottom - line_top <= bottom - top { (line_top, line_bottom) } else { (row_top, row_top + row) };
     if from < top {
         Some(from - top)
     } else if to > bottom {
-        Some((to - bottom).min(from - top))
+        Some(to - bottom)
     } else {
         None
     }

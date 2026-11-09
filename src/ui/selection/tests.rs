@@ -3,8 +3,8 @@ use std::ops::Range;
 use gpui::{Bounds, HighlightStyle, Hsla, point, px, size};
 
 use super::{
-    Caret, Edge, Lit, Press, Selection, Zone, bar_origin, edge_at, host, lines_label, off_centre, off_edge, overlay,
-    reference, row_at, row_from, row_near, word_at,
+    Caret, Edge, Lit, Press, Selection, Span, Zone, bar_origin, edge_at, host, lines_label, off_centre, off_edge,
+    overlay, reference, row_at, row_from, row_near, word_at,
 };
 
 fn caret(spot: usize, at: usize) -> Caret<usize> {
@@ -19,8 +19,8 @@ fn lines(anchor: usize, head: usize) -> Selection<usize> {
     Selection::Lines { anchor, head }
 }
 
-fn span(top: f32) -> (gpui::Pixels, gpui::Pixels) {
-    (px(top), px(top + 18.))
+fn span(top: f32) -> Span {
+    (px(top), px(top), px(top + 18.))
 }
 
 fn row(top: f32, height: f32) -> Bounds<gpui::Pixels> {
@@ -421,10 +421,25 @@ fn the_first_row_shown_is_the_first_reaching_below_the_top() {
 
 #[test]
 fn a_line_of_four_rows_near_the_bottom_scrolls_to_show_its_end_and_a_row_under_it() {
-    assert_eq!(off_edge((px(340.), px(412.)), row(0., 400.), px(0.)), Some(px(30.)));
+    assert_eq!(off_edge((px(340.), px(340.), px(412.)), row(0., 400.), px(0.)), Some(px(30.)));
 }
 
 #[test]
-fn a_line_taller_than_the_view_never_pushes_the_caret_row_past_the_top_margin() {
-    assert_eq!(off_edge((px(100.), px(2000.)), row(0., 400.), px(0.)), Some(px(82.)));
+fn a_caret_in_view_inside_a_line_taller_than_the_view_leaves_the_view_alone() {
+    assert_eq!(off_edge((px(-500.), px(100.), px(2000.)), row(0., 400.), px(0.)), None);
+}
+
+#[test]
+fn a_caret_row_near_the_bottom_of_a_line_taller_than_the_view_scrolls_a_row() {
+    assert_eq!(off_edge((px(-500.), px(380.), px(2000.)), row(0., 400.), px(0.)), Some(px(16.)));
+}
+
+#[test]
+fn a_span_shorter_than_a_row_counts_as_one_row() {
+    assert_eq!(off_edge((px(370.), px(370.), px(370.)), row(0., 400.), px(0.)), Some(px(6.)));
+}
+
+#[test]
+fn a_head_on_the_last_row_of_a_line_keeps_the_whole_line_and_a_row_above_it() {
+    assert_eq!(off_edge((px(-36.), px(0.), px(18.)), row(0., 400.), px(0.)), Some(px(-54.)));
 }

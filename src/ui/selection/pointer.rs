@@ -18,11 +18,11 @@ use crate::ui::one_line::LaidOut;
 use super::caret::{Keyed, extended};
 use super::code::past_the_cut;
 use super::{
-    Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Step, Zone, bar_origin, edge_at, host, off_centre, off_edge,
-    row_at, row_from, row_near, word_at,
+    Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Span, Step, Zone, bar_origin, edge_at, host, off_centre,
+    off_edge, row_at, row_from, row_near, word_at,
 };
 
-type Rule = fn((Pixels, Pixels), Bounds<Pixels>, Pixels) -> Option<Pixels>;
+type Rule = fn(Span, Bounds<Pixels>, Pixels) -> Option<Pixels>;
 
 const DRAG_AFTER: f32 = 3.;
 const SCROLL_EVERY: Duration = Duration::from_millis(50);
@@ -58,8 +58,8 @@ impl Drawn {
         index.min(self.len)
     }
 
-    fn span_of(&self, at: usize) -> (Pixels, Pixels) {
-        (self.top_of(at), self.bounds.bottom())
+    fn span_of(&self, at: usize) -> Span {
+        (self.bounds.top(), self.top_of(at), self.bounds.bottom())
     }
 
     fn top_of(&self, at: usize) -> Pixels {
@@ -122,7 +122,7 @@ impl<S: Copy + Ord> Laid<S> {
     }
 
     pub(crate) fn off(&self, spot: S, at: usize, inset: f32) -> Off {
-        self.off_by(spot, at, inset, |(row, _), body, inset| off_centre(row, body, inset))
+        self.off_by(spot, at, inset, |(_, row, _), body, inset| off_centre(row, body, inset))
     }
 
     pub(crate) fn past_edge(&self, spot: S, at: usize, inset: f32) -> Off {
