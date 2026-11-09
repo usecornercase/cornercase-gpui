@@ -7,7 +7,7 @@ use gpui::{
 };
 
 use super::TextField;
-use super::rows::{Row, Rows, clamp_scroll, rows_shown, scroll_to_show, thumb};
+use super::rows::{Row, Rows, clamp_scroll, rows_shown, scroll_to_show, scroll_to_show_with_margins, thumb};
 use crate::theme::colours;
 
 const CARET_WIDTH: Pixels = px(2.);
@@ -289,8 +289,8 @@ fn show_in_scroller(scroller: &ScrollHandle, (caret, line_height, below): (Pixel
     let offset = scroller.offset();
     let scroll = -offset.y;
     let top = caret - view.top() + scroll;
-    let bottom = top + line_height + below;
-    let next = scroll_to_show(scroll, top - SCROLLER_MARGIN, bottom, view.size.height).max(px(0.));
+    let margins = (SCROLLER_MARGIN, below);
+    let next = scroll_to_show_with_margins(scroll, (top, line_height), margins, view.size.height).max(px(0.));
     if next != scroll {
         scroller.set_offset(point(offset.x, -next));
         window.request_animation_frame();
