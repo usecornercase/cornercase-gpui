@@ -36,6 +36,22 @@ impl Split {
         self.chosen
     }
 
+    pub(crate) fn min(&self) -> f32 {
+        self.min
+    }
+
+    pub(crate) fn restored(self, saved: Option<f32>, room: f32) -> Self {
+        let mut split = self;
+        if let Some(width) = saved {
+            split.drag(width, room);
+        }
+        split
+    }
+
+    pub(crate) fn fitted(&self, size: f32, room: f32) -> f32 {
+        size.clamp(self.min, room.min(self.max).max(self.min)).round()
+    }
+
     fn drag(&mut self, wanted: f32, room: f32) -> bool {
         let size = wanted.clamp(self.min, room.min(self.max).max(self.min)).round();
         let changed = self.chosen != Some(size);

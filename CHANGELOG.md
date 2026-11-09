@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.41
+
+- **The window opens where you left it.** Its size, its place on your displays and whether it was maximised or full screen come back at every launch, and after an update's restart. If that display is gone, or the place would be off screen, it opens centred as before. On Linux it keeps its size and state, and your desktop places it.
+- **The sidebar and the docked panels keep their widths.** The widths you drag the sidebar to (or its two columns), Changes, Files, TODO and Recap, the Browser and the Flow panel are there at the next launch. A double click on the edge brings back the default. In a window too narrow for them, the terminal keeps its room first, and your widths come back at a later launch in a window wide enough for them.
+
 ## 0.1.40
 
 - **Prompts take several lines.** In the Queue's form, Start a flow and Start an agent (⌘G), Enter now starts a new line instead of scheduling or starting the agent on half a prompt. ⌘Enter (Ctrl+Enter on Linux and Windows) or the form's button sends it, as the line under the field says. The field starts three lines high, grows to twelve, then scrolls, and a paste keeps its lines. The other fields (times, branches, names, an issue's key) still send on Enter.

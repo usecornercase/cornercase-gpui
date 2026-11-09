@@ -22,7 +22,7 @@ const RING: f32 = 3.;
 const BUTTON_GAP: f32 = 4.;
 const COUNT: f32 = 13.;
 const DOT: f32 = 6.;
-pub(super) const COLUMN: f32 = RAIL_WIDTH + 2. * GAP;
+pub(crate) const COLUMN: f32 = RAIL_WIDTH + 2. * GAP;
 
 const DOCKED: [PanelKind; 5] =
     [PanelKind::Changes, PanelKind::Files, PanelKind::Todo, PanelKind::Recap, PanelKind::Browser];

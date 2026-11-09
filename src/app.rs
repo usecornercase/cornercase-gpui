@@ -1,11 +1,14 @@
 mod connection;
 mod dock;
 pub(crate) mod frame;
+pub(crate) mod keeper;
 mod looks;
 pub(crate) mod machine;
+pub(crate) mod placement;
 mod status;
 mod surface;
 mod toasts;
+mod widths;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -166,14 +169,12 @@ struct Kept {
 }
 
 impl Kept {
-    fn at_start() -> Self {
-        Self {
-            place: start_place(),
-            sidebar_width: SIDEBAR,
-            pair_width: PAIR,
-            dock_widths: DOCKS,
-            font_size: font_size_from_env(),
-        }
+    fn at_start(width: f32, cx: &mut App) -> Self {
+        let saved = keeper::Keeper::get(cx).read(cx).kept_widths();
+        let (sidebar_width, pair_width, dock_widths) = widths::restored(&saved, width);
+        let shown = widths::of(sidebar_width, pair_width, dock_widths);
+        keeper::Keeper::get(cx).update(cx, |keeper, _| keeper.start(shown));
+        Self { place: start_place(), sidebar_width, pair_width, dock_widths, font_size: font_size_from_env() }
     }
 
     fn apply(self, root: &mut Root) {
@@ -186,10 +187,10 @@ impl Kept {
 }
 
 impl Root {
-    pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub(crate) fn new(window: &mut Window, width: f32, cx: &mut Context<Self>) -> Self {
         frame::show_backdrop(window);
         let missing = theme::missing_font();
-        let mut root = Self::open(Kept::at_start(), window, cx);
+        let mut root = Self::open(Kept::at_start(width, cx), window, cx);
         root.open_requested_panel(cx);
         if let Some(missing) = missing {
             root.say(missing, cx);
@@ -224,17 +225,23 @@ impl Root {
         })
         .detach();
         cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)).detach();
+        Self::follow_activation(window, cx);
+        let mut root = Self::fresh((focus, cx.focus_handle()), store, tx, queue, notifier);
+        kept.apply(&mut root);
+        root.start(cx);
+        root.follow_appearance(window, cx);
+        Self::follow_window_bounds(window, cx);
+        Self::follow_keeper(cx);
+        Self::take_back_colours_on_quit(cx);
+        root
+    }
+
+    fn follow_activation(window: &mut Window, cx: &mut Context<Self>) {
         cx.observe_window_activation(window, |this, window, cx| {
             this.activation_changed(window.is_window_active());
             cx.notify();
         })
         .detach();
-        let mut root = Self::fresh((focus, cx.focus_handle()), store, tx, queue, notifier);
-        kept.apply(&mut root);
-        root.start(cx);
-        root.follow_appearance(window, cx);
-        Self::take_back_colours_on_quit(cx);
-        root
     }
 
     fn store_changed(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {
@@ -561,8 +568,12 @@ impl Root {
     }
 
     fn dock_size(&self, kind: PanelKind, window: &Window) -> f32 {
-        let Some(wide) = self.dock_widths.wide(kind) else { return self.dock_widths.panel.size() };
-        wide.chosen().unwrap_or_else(|| wide_default(f32::from(window.viewport_size().width)))
+        let width = f32::from(window.viewport_size().width);
+        let (split, size) = match self.dock_widths.wide(kind) {
+            Some(wide) => (wide, wide.chosen().unwrap_or_else(|| wide_default(width))),
+            None => (self.dock_widths.panel, self.dock_widths.panel.size()),
+        };
+        split.fitted(size, widths::dock_room(width, self.sidebar_extent()))
     }
 
     fn render_dock(
@@ -904,6 +915,7 @@ impl Render for Root {
             .child(crate::tour::Guide::get(cx))
             .child(self.render_toasts(cx));
         self.keep_counting(cx);
+        self.keep_widths(cx);
         frame::framed(content, window_frame, window)
     }
 }

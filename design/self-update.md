@@ -49,13 +49,15 @@ On the background executor, in this order: the archive and its `.sha256` downloa
 
 ## Relaunch
 
+The layout is written in the keeper's own quit callback, synchronously, before `main.rs`'s future starts the new program (`design/window.md`).
+
 **Restart** stores the program and the arguments (`--tab <shown tab>` and the current server's `--remote`, `--remote-command`, from `cli::target()`, since a switch may have changed it), then quits. In `on_app_quit` a relaunch runs `cli::kill_all()` **without** `theme --clear`: the new window gives the same palette at once, so clearing first would only flash every terminal, and over ssh `cli::quit` does not wait for the clear, which could land after the new window's `start-server --theme -`. Then it starts the new program with stdin null and stdout and stderr inherited. There is no confirmation: the server keeps every program, and the dialog says so.
 
 - **On macOS the new app is opened by `open`**, once this one has ended: a `/bin/sh` waits until this process's pid is gone (`kill -0`, every 100 ms), then runs `/usr/bin/open -n <the app> --args <the arguments>`. Started by `open`, the new window is launched by LaunchServices as if from the Finder: it is its own responsible process for macOS's privacy grants, rather than a child of a process that is gone, and the Dock and activation treat it as a fresh launch. This is what gpui's own `restart` does on macOS, which cannot be used because it passes no arguments. `-n` opens a new copy even if another one runs, so the arguments are not lost to an activation. The environment is launchd's, not this process's, as when the app is opened from the Finder.
 
 ## Limits
 
-- The window's size and place are not kept across the relaunch. What only the window holds (open panels and dialogs, the Browser panel's Chrome) starts again.
+- The window comes back at its size, place, display and state, with its widths, as at every launch (`design/window.md`). What only the window holds (open panels and dialogs, the Browser panel's Chrome) starts again.
 - A relaunch that fails to start ends the window with a message box and standard error (the server and its programs keep running). On macOS only a failure to start `/bin/sh` is seen; an `open` that fails afterwards says nothing, and the app is opened from the Finder as usual.
 - The asset names are a contract (`design/releases.md`): renaming one breaks the update of every installed copy.
 - What installs in place on Windows and Linux is not signed: the checksum is the only check. On macOS the app's signature by the team is checked too.

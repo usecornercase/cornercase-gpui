@@ -106,6 +106,14 @@ pub(crate) fn path() -> PathBuf {
     std::env::var_os("CORNERCASE_GPUI_SETTINGS").map_or_else(|| app_dir().join(FILE), PathBuf::from)
 }
 
+pub(crate) fn folder_of(settings: &Path) -> PathBuf {
+    settings.parent().map(Path::to_path_buf).unwrap_or_default()
+}
+
+pub(crate) fn folder() -> PathBuf {
+    folder_of(&path())
+}
+
 pub(crate) fn load() -> Prefs {
     std::fs::read_to_string(path()).map(|text| Prefs::parse(&text)).unwrap_or_default()
 }
