@@ -40,5 +40,6 @@ pub(crate) fn vps_read(reach: Reach) -> MachineRead {
         path: "/home/ana/code/shop".into(),
         folder: "~/code/shop".into(),
         reach,
+        retry_at: None,
     }
 }

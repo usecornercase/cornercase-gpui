@@ -168,7 +168,7 @@ pub(crate) enum NextTry {
 }
 
 impl NextTry {
-    fn at(retry_at: Option<&str>, now: i64) -> Option<Self> {
+    pub(crate) fn at(retry_at: Option<&str>, now: i64) -> Option<Self> {
         let left = epoch(retry_at?)? - now;
         Some(if left > 0 { Self::In(left) } else { Self::UnderWay })
     }

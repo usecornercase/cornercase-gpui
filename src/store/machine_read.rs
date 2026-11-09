@@ -1,5 +1,5 @@
 use crate::cli::{self, Target};
-use crate::model::machines::{LinkState, Machine, MachineIcon};
+use crate::model::machines::{LinkState, Machine, MachineIcon, NextTry};
 use crate::model::{Aim, MachinePlace, MachineSeen};
 use crate::platform::paths;
 
@@ -38,6 +38,13 @@ pub(crate) struct MachineRead {
     pub path: String,
     pub folder: String,
     pub reach: Reach,
+    pub retry_at: Option<String>,
+}
+
+impl MachineRead {
+    pub(crate) fn next_try(&self, now: i64) -> Option<NextTry> {
+        NextTry::at(self.retry_at.as_deref(), now)
+    }
 }
 
 fn reach(window: &Target, list: &[Machine], seen: &MachineSeen) -> Reach {
@@ -66,6 +73,7 @@ fn read_of(
         path: place.path().to_string(),
         folder: home.map_or_else(|| place.path().to_string(), |home| paths::home_relative(place.path(), home)),
         reach: reach(window, list, seen),
+        retry_at: seen.retry_at.clone(),
     }
 }
 

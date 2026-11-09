@@ -1,9 +1,7 @@
-use std::cell::Cell;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use gpui::{
-    AnyElement, AsyncApp, Context, Div, IntoElement as _, ParentElement as _, Styled as _, Task, WeakEntity, div,
-    prelude::FluentBuilder as _, px,
+    AnyElement, Context, Div, IntoElement as _, ParentElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
 use super::no_tab::{heading, lead_text};
@@ -16,27 +14,10 @@ use crate::panels::{PanelKind, queue};
 use crate::platform::paths;
 use crate::theme::{colours, radius};
 use crate::ui;
+use crate::ui::counting::Counting;
 
-const COUNTS_EVERY: Duration = Duration::from_secs(1);
-
-#[derive(Default)]
-pub(crate) struct Counting {
-    drawn: Cell<bool>,
-    next: Option<Task<()>>,
-}
-
-impl Counting {
-    pub(crate) fn drawn(&self) {
-        self.drawn.set(true);
-    }
-}
-
-async fn next_count(this: WeakEntity<Root>, cx: &mut AsyncApp) {
-    cx.background_executor().timer(COUNTS_EVERY).await;
-    let _ = this.update(cx, |this, cx| {
-        this.counting.next = None;
-        cx.notify();
-    });
+fn counting(root: &mut Root) -> &mut Counting {
+    &mut root.counting
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -182,11 +163,7 @@ impl Root {
         if listed && store.machines.iter().any(|machine| machine.counts(now)) {
             self.counting.drawn();
         }
-        if !self.counting.drawn.take() {
-            self.counting.next = None;
-        } else if self.counting.next.is_none() {
-            self.counting.next = Some(cx.spawn(async move |this, cx| next_count(this, cx).await));
-        }
+        self.counting.keep(counting, cx);
     }
 }
 

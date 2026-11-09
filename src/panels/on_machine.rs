@@ -6,10 +6,13 @@ use gpui::{
 };
 
 use crate::cli::{self, Target};
+use crate::model::machines::NextTry;
 use crate::notify::tip;
+use crate::panels::queue;
 use crate::store::{MachineRead, Reach};
 use crate::theme::colours;
 use crate::ui;
+use crate::ui::counting::Counting;
 
 #[derive(Debug, Default)]
 pub(crate) struct Retry {
@@ -47,25 +50,46 @@ impl Retry {
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Note {
-    Reconnecting(String),
+    Reconnecting { why: String, next: NextTry },
     Refused(String),
 }
 
-fn reconnecting(why: &str) -> Note {
-    Note::Reconnecting(format!("{why} · reconnecting…"))
+impl Note {
+    fn text(&self) -> String {
+        match self {
+            Self::Reconnecting { why, next } => format!("{why} · {}", next.words()),
+            Self::Refused(why) => why.clone(),
+        }
+    }
+
+    fn counts(&self) -> bool {
+        matches!(self, Self::Reconnecting { next, .. } if next.counts())
+    }
 }
 
-pub(crate) fn note(read: &MachineRead, retry: &Retry) -> Option<Note> {
+fn did_not_answer(read: &MachineRead) -> String {
+    format!("{} did not answer", read.aim.machine)
+}
+
+fn note_at(read: &MachineRead, retry: &Retry, now: i64) -> Option<Note> {
     match &read.reach {
-        Reach::Up(_) => retry.waiting().then(|| reconnecting(&format!("{} did not answer", read.aim.machine))),
-        Reach::Down(why) => Some(reconnecting(why)),
+        Reach::Up(_) => {
+            retry.waiting().then(|| Note::Reconnecting { why: did_not_answer(read), next: NextTry::UnderWay })
+        }
+        Reach::Down(why) => {
+            Some(Note::Reconnecting { why: why.clone(), next: read.next_try(now).unwrap_or(NextTry::UnderWay) })
+        }
         Reach::Refused(why) => Some(Note::Refused(why.clone())),
     }
 }
 
+pub(crate) fn note(read: &MachineRead, retry: &Retry) -> Option<Note> {
+    note_at(read, retry, queue::now())
+}
+
 pub(crate) fn may_ask(read: &MachineRead, retry: &Retry) -> Result<Target, String> {
     match &read.reach {
-        Reach::Up(_) if retry.waiting() => Err(format!("{} did not answer", read.aim.machine)),
+        Reach::Up(_) if retry.waiting() => Err(did_not_answer(read)),
         Reach::Up(target) => Ok(target.clone()),
         Reach::Down(why) | Reach::Refused(why) => Err(why.clone()),
     }
@@ -89,15 +113,21 @@ fn where_line(read: &MachineRead) -> impl IntoElement + use<> {
 }
 
 fn note_line(note: &Note, why: Option<&str>) -> AnyElement {
+    let text = note.text();
     let line = match note {
-        Note::Reconnecting(text) => ui::busy("on-machine-reconnecting", text.clone()).text_size(px(11.)),
-        Note::Refused(text) => div().text_color(colours::working()).child(ui::one_line(text.clone())),
+        Note::Refused(_) => div().text_color(colours::working()).child(ui::one_line(text)),
+        _ if note.counts() => div().text_color(colours::muted()).child(ui::one_line(text)),
+        Note::Reconnecting { .. } => ui::busy("on-machine-reconnecting", text).text_size(px(11.)),
     };
     let why = why.map(str::to_string);
     div().id("on-machine-note").when_some(why, |d, why| d.tooltip(tip(why))).child(line).into_any_element()
 }
 
-pub(crate) fn strip(read: &MachineRead, retry: &Retry) -> Div {
+pub(crate) fn strip(read: &MachineRead, retry: &Retry, counting: &Counting) -> Div {
+    let note = note(read, retry);
+    if note.as_ref().is_some_and(Note::counts) {
+        counting.drawn();
+    }
     div()
         .flex_none()
         .flex()
@@ -109,7 +139,7 @@ pub(crate) fn strip(read: &MachineRead, retry: &Retry) -> Div {
         .border_color(colours::border())
         .text_size(px(11.))
         .child(where_line(read))
-        .children(note(read, retry).map(|note| note_line(&note, retry.why.as_deref())))
+        .children(note.map(|note| note_line(&note, retry.why.as_deref())))
 }
 
 #[cfg(test)]

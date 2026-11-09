@@ -28,9 +28,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyView, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
-    IntoElement, ListState, ParentElement as _, Pixels, Point, Render, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Task, UniformListScrollHandle, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, AnyView, AppContext as _, ClickEvent, Context, Entity, FocusHandle, Focusable as _,
+    InteractiveElement as _, IntoElement, ListState, ParentElement as _, Pixels, Point, Render,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Task, UniformListScrollHandle, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use crate::cli;
@@ -41,6 +42,7 @@ use crate::platform::paths::Style;
 use crate::prefs::LongLines;
 use crate::store::{MachineRead, Store};
 use crate::theme::colours;
+use crate::ui::counting::Counting;
 use crate::ui::selection::Selecting;
 use crate::ui::{self, TextField, TextFieldEvent};
 
@@ -193,6 +195,7 @@ pub(crate) struct FilesPanel {
     remote: bool,
     machine: Option<MachineRead>,
     retry: Retry,
+    counting: Counting,
     current: Option<u64>,
     places: HashMap<u64, Place>,
     query: Entity<TextField>,
@@ -248,6 +251,7 @@ impl FilesPanel {
             remote,
             machine: None,
             retry: Retry::default(),
+            counting: Counting::default(),
             current: None,
             places: HashMap::new(),
             query,
@@ -282,13 +286,7 @@ impl FilesPanel {
         self.store.read(cx).dock == Some(PanelKind::Files)
     }
 
-    fn mode_segment(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        mode: Mode,
-        cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
+    fn mode_segment(&self, id: &'static str, label: &'static str, mode: Mode, cx: &mut Context<Self>) -> AnyElement {
         ui::segment(id, label, self.search.mode == mode)
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_mode(mode, cx)))
             .into_any_element()
@@ -336,9 +334,21 @@ impl FilesPanel {
     }
 }
 
+fn counting(panel: &mut FilesPanel) -> &mut Counting {
+    &mut panel.counting
+}
+
 impl Render for FilesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.settle_focus(window, cx);
+        let page = self.page(window, cx);
+        self.counting.keep(counting, cx);
+        page
+    }
+}
+
+impl FilesPanel {
+    fn page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let Some(place) = self.place() else {
             let note = self.no_place_note();
             return div()

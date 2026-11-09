@@ -182,7 +182,7 @@ impl ChangesPanel {
             let files = s.workspaces.iter().flat_map(|w| &w.files);
             (files.clone().filter(|f| f.viewed).count(), files.count())
         });
-        let reconnecting = matches!(self.machine_note(), Some(on_machine::Note::Reconnecting(_)));
+        let reconnecting = matches!(self.machine_note(), Some(on_machine::Note::Reconnecting { .. }));
         let (dot, state) = match (&self.ended, &self.summary, self.stream.is_some()) {
             _ if reconnecting => (colours::working(), "reconnecting…"),
             (Some(_), _, _) => (colours::failed(), "stopped"),
