@@ -17,10 +17,16 @@ use crate::panels::PanelKind;
 use crate::platform::paths::{self, Style};
 use crate::prefs::LongLines;
 use crate::store::Store;
-use crate::ui::selection::{CODE_ROW, Fit, Off, Selecting, Selection};
+use crate::ui::selection::{CODE_ROW, Caret, Fit, Off, Selecting, Selection, Step};
 
 const OVERDRAW: f32 = 400.;
 const ROWS_ABOVE_A_LINE: usize = 3;
+const ROWS_WITHOUT_A_FRAME: usize = 30;
+
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a height in pixels, at least a row")]
+fn rows_in(height: f32) -> usize {
+    if height < CODE_ROW { ROWS_WITHOUT_A_FRAME } else { (height / CODE_ROW) as usize }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Reveal {
@@ -139,6 +145,29 @@ impl Viewer {
     pub(super) fn go_near(&mut self, spot: (usize, usize), rows_above: usize) {
         self.show_near(spot, rows_above);
         self.reveal = Some(Reveal { spot, waited: false, tried_its_line: false });
+    }
+
+    pub(super) fn bring_into_view(&mut self, spot: (usize, usize), off: Off) {
+        match off {
+            Off::InView => {}
+            Off::By(distance) => self.list.scroll_by(distance),
+            Off::Gone => {
+                let rows = rows_in(f32::from(self.selecting.laid().body().size.height) - self.room());
+                self.go_near(spot, rows / 2);
+            }
+        }
+    }
+
+    fn top_line_start(&self, count: usize) -> Caret<usize> {
+        Caret { spot: self.list.logical_scroll_top().item_ix.min(count.saturating_sub(1)), at: 0 }
+    }
+
+    pub(super) fn step_caret(&mut self, step: Step, lines: &[String]) {
+        let (fit, room) = (self.fit(), self.room());
+        let top = self.selecting.laid().first_shown(room).unwrap_or_else(|| self.top_line_start(lines.len()));
+        let Some(head) = self.selecting.step((step, top), lines, fit) else { return };
+        let off = self.selecting.laid().past_edge(head.spot, head.at, room);
+        self.bring_into_view((head.spot, head.at), off);
     }
 
     fn settle_reveal(&mut self, window: &Window) {

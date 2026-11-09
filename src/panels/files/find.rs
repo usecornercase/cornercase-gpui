@@ -13,7 +13,7 @@ use grep_matcher::Matcher as _;
 use grep_regex::RegexMatcher;
 
 use crate::theme::{colours, radius};
-use crate::ui::selection::{CODE_ROW, Fit, Off, Styles, overlay};
+use crate::ui::selection::{Fit, Styles, overlay};
 use crate::ui::{self, TextField, TextFieldEvent};
 
 use super::disk::Content;
@@ -24,7 +24,6 @@ const FIELD_TOP: f32 = 8.;
 const FIELD_HEIGHT: f32 = 48.;
 pub(super) const FIELD_ROOM: f32 = FIELD_TOP + FIELD_HEIGHT;
 const BUSY_AFTER: Duration = Duration::from_millis(150);
-const ROWS_WITHOUT_A_FRAME: usize = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Hit {
@@ -91,11 +90,6 @@ pub(super) fn on_line(hits: &[Hit], line: usize, lit_bytes: usize) -> &[Hit] {
     let from = hits.partition_point(|hit| hit.line < line);
     let shown = hits[from..].partition_point(|hit| hit.line == line && hit.start < lit_bytes);
     &hits[from..from + shown]
-}
-
-#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a height in pixels, at least a row")]
-fn rows_in(height: f32) -> usize {
-    if height < CODE_ROW { ROWS_WITHOUT_A_FRAME } else { (height / CODE_ROW) as usize }
 }
 
 pub(super) fn count(current: Option<usize>, len: usize) -> String {
@@ -326,15 +320,8 @@ impl FilesPanel {
         let Some(viewer) = self.viewer_mut() else { return };
         let Some(hit) = viewer.find.as_ref().and_then(Find::current_hit) else { return };
         let spot = (hit.line as usize, hit.start as usize);
-        let laid = viewer.selecting.laid();
-        match laid.off(spot.0, spot.1, FIELD_ROOM) {
-            Off::InView => {}
-            Off::By(distance) => viewer.list.scroll_by(distance),
-            Off::Gone => {
-                let rows = rows_in(f32::from(laid.body().size.height) - FIELD_ROOM);
-                viewer.go_near(spot, rows / 2);
-            }
-        }
+        let off = viewer.selecting.laid().off(spot.0, spot.1, FIELD_ROOM);
+        viewer.bring_into_view(spot, off);
     }
 
     pub(super) fn find_step(&mut self, back: bool, cx: &mut Context<Self>) {
@@ -361,7 +348,7 @@ impl FilesPanel {
         }
         let Some(viewer) = self.viewer_mut() else { return false };
         let field_closed = viewer.find.take().is_some();
-        let gone = field_closed || viewer.selecting.selection.take().is_some();
+        let gone = field_closed || viewer.selecting.selection.take().is_some_and(|selection| !selection.is_empty());
         if field_closed {
             self.remeasure_first_line();
         }

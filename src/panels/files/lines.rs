@@ -2,13 +2,17 @@ use gpui::{
     AnyElement, ClickEvent, ClipboardItem, Context, IntoElement, Pixels, Point, StatefulInteractiveElement as _,
 };
 
-use crate::ui::selection::{self, Edge, Selecting, Selection, Selects};
+use crate::ui::selection::{self, Edge, Selecting, Selection, Selects, Step};
 
 use super::disk::{Content, Text};
 use super::{FilesPanel, Target, Viewer};
 
 pub(super) fn one_based((first, last): (usize, usize)) -> (usize, usize) {
     (first + 1, last + 1)
+}
+
+pub(super) fn covered_by(selection: Option<Selection<usize>>) -> Option<(usize, usize)> {
+    selection.filter(|selection| !selection.is_empty()).map(Selection::covered)
 }
 
 pub(super) fn selected_text(text: &Text, selection: Selection<usize>) -> String {
@@ -56,7 +60,18 @@ impl FilesPanel {
     }
 
     fn covered(&self) -> Option<(usize, usize)> {
-        Some(self.shown_viewer()?.selecting.selection?.covered())
+        covered_by(self.shown_viewer()?.selecting.selection)
+    }
+
+    pub(crate) fn extend_selection(&mut self, step: Step, cx: &mut Context<Self>) -> bool {
+        let Some(viewer) = self.place_mut().and_then(|place| place.viewer.as_mut()) else { return false };
+        let Some(Content::Text(text)) = &viewer.content else { return false };
+        let lines = text.lines.clone();
+        viewer.step_caret(step, &lines[..]);
+        self.menu = None;
+        selection::to_primary(self, cx);
+        cx.notify();
+        true
     }
 
     pub(crate) fn copy_selection(&mut self, cx: &mut Context<Self>) -> bool {

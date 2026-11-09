@@ -108,3 +108,14 @@ fn a_byte_of_a_wrapped_line_falls_on_the_row_its_offset_says() {
     assert_eq!((fit.row_at(9), fit.row_at(10)), (0, 1));
     assert_eq!(fit.row_at(1_000_000), WRAP_ROWS - 1);
 }
+
+#[test]
+fn a_wrapped_line_past_the_cap_is_kept_up_to_its_cut() {
+    assert_eq!(Fit::Wrap { columns: 1 }.kept(&"a".repeat(150)), Some(100));
+}
+
+#[test]
+fn a_line_within_the_cap_or_a_cut_line_has_no_cut() {
+    assert_eq!(Fit::Wrap { columns: 1 }.kept("short"), None);
+    assert_eq!(Fit::Cut.kept(&"a".repeat(500)), None);
+}

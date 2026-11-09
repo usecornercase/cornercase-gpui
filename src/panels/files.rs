@@ -278,6 +278,10 @@ impl FilesPanel {
         self.place().map_or(Style::of(Os::CURRENT), |place| place.style)
     }
 
+    pub(crate) fn has_focus_itself(&self, window: &Window) -> bool {
+        self.focus.is_focused(window)
+    }
+
     fn place_mut(&mut self) -> Option<&mut Place> {
         self.places.get_mut(&self.current?)
     }

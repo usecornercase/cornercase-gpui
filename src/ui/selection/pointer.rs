@@ -15,10 +15,14 @@ use crate::theme::{colours, radius};
 use crate::ui::glass;
 use crate::ui::one_line::LaidOut;
 
+use super::caret::{Keyed, extended};
 use super::code::past_the_cut;
 use super::{
-    Caret, Edge, Lit, Press, Selection, Zone, bar_origin, edge_at, host, off_centre, row_at, row_near, word_at,
+    Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Span, Step, Zone, bar_origin, edge_at, host, off_centre,
+    off_edge, row_at, row_from, row_near, word_at,
 };
+
+type Rule = fn(Span, Bounds<Pixels>, Pixels) -> Option<Pixels>;
 
 const DRAG_AFTER: f32 = 3.;
 const SCROLL_EVERY: Duration = Duration::from_millis(50);
@@ -52,6 +56,10 @@ impl Drawn {
             DrawnText::Wrapped(layout, kept) => past_the_cut(wrapped_index(layout, at), *kept, self.len),
         };
         index.min(self.len)
+    }
+
+    fn span_of(&self, at: usize) -> Span {
+        (self.bounds.top(), self.top_of(at), self.bounds.bottom())
     }
 
     fn top_of(&self, at: usize) -> Pixels {
@@ -114,9 +122,25 @@ impl<S: Copy + Ord> Laid<S> {
     }
 
     pub(crate) fn off(&self, spot: S, at: usize, inset: f32) -> Off {
+        self.off_by(spot, at, inset, |(_, row, _), body, inset| off_centre(row, body, inset))
+    }
+
+    pub(crate) fn past_edge(&self, spot: S, at: usize, inset: f32) -> Off {
+        self.off_by(spot, at, inset, off_edge)
+    }
+
+    fn off_by(&self, spot: S, at: usize, inset: f32, rule: Rule) -> Off {
         let frame = self.0.borrow();
         let Some(drawn) = frame.rows.get(&spot) else { return Off::Gone };
-        off_centre(drawn.top_of(at), frame.body, px(inset)).map_or(Off::InView, Off::By)
+        rule(drawn.span_of(at), frame.body, px(inset)).map_or(Off::InView, Off::By)
+    }
+
+    pub(crate) fn first_shown(&self, inset: f32) -> Option<Caret<S>> {
+        let frame = self.0.borrow();
+        let top = frame.body.top() + px(inset);
+        let spot = row_from(frame.rows.iter().map(|(spot, drawn)| (*spot, drawn.bounds)), top)?;
+        let drawn = frame.rows.get(&spot)?;
+        Some(Caret { spot, at: drawn.caret(point(drawn.bounds.left(), drawn.bounds.top().max(top))) })
     }
 
     fn pressed(&self, at: Point<Pixels>) -> Option<(Caret<S>, Zone)> {
@@ -170,13 +194,14 @@ struct Pressing<S> {
 
 pub(crate) struct Selecting<S> {
     pub(crate) selection: Option<Selection<S>>,
+    keyed: Option<Keyed<S>>,
     laid: Laid<S>,
     pressing: Option<Pressing<S>>,
 }
 
 impl<S> Default for Selecting<S> {
     fn default() -> Self {
-        Self { selection: None, laid: Laid::default(), pressing: None }
+        Self { selection: None, keyed: None, laid: Laid::default(), pressing: None }
     }
 }
 
@@ -191,6 +216,23 @@ impl<S: Copy + Ord> Selecting<S> {
 
     pub(crate) fn lit(&self, spot: S, line: &str) -> Lit {
         self.selection.map_or(Lit::Nothing, |selection| selection.lit(spot, line))
+    }
+
+    pub(crate) fn step<L: ShownLines<S> + ?Sized>(
+        &mut self,
+        (step, top): (Step, Caret<S>),
+        lines: &L,
+        fit: Fit,
+    ) -> Option<Caret<S>> {
+        if self.pressing.is_some() {
+            return None;
+        }
+        let column = self.keyed.filter(|keyed| Some(keyed.selection) == self.selection).and_then(|keyed| keyed.column);
+        let selection = self.selection.unwrap_or(Selection::Chars { anchor: top, head: top });
+        let keyed = extended(lines, fit, Keyed { selection, column }, step);
+        self.selection = Some(keyed.selection);
+        self.keyed = Some(keyed);
+        Some(keyed.selection.head_caret())
     }
 
     fn follow(&mut self) -> bool {
@@ -311,9 +353,14 @@ fn released<T: Selects>(this: &mut T, cx: &mut Context<T>) {
     let Some(pressing) = selecting.pressing.take() else { return };
     selecting.selection = pressing.press.released(selecting.selection);
     cx.notify();
-    if pressing.press.moved()
-        && desktop::has_primary(Os::CURRENT)
-        && let Some(text) = this.selected_text()
+    if pressing.press.moved() {
+        to_primary(this, cx);
+    }
+}
+
+pub(crate) fn to_primary<T: Selects>(this: &T, cx: &App) {
+    if desktop::has_primary(Os::CURRENT)
+        && let Some(text) = this.selected_text().filter(|text| !text.is_empty())
     {
         desktop::write_primary(&text, cx);
     }

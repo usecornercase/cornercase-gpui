@@ -1,3 +1,4 @@
+mod caret;
 mod code;
 mod pointer;
 
@@ -9,8 +10,9 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::theme::colours;
 
+pub(crate) use caret::{ShownLines, Step};
 pub(crate) use code::{CODE_CELL, CODE_ROW, Fit, code_cell, plain_text, wrap_button};
-pub(crate) use pointer::{Laid, Off, Selecting, Selects, action, action_bar, body, keep_selection, layer};
+pub(crate) use pointer::{Laid, Off, Selecting, Selects, action, action_bar, body, keep_selection, layer, to_primary};
 
 const BAR_GAP: f32 = 4.;
 const BAR_MARGIN: f32 = 8.;
@@ -78,6 +80,17 @@ impl<S: Copy + Ord> Selection<S> {
         match self {
             Self::Lines { anchor, .. } => anchor,
             Self::Chars { anchor, .. } => anchor.spot,
+        }
+    }
+
+    pub(crate) fn is_empty(self) -> bool {
+        matches!(self, Self::Chars { anchor, head } if anchor == head)
+    }
+
+    pub(crate) fn head_caret(self) -> Caret<S> {
+        match self {
+            Self::Lines { head, .. } => Caret { spot: head, at: 0 },
+            Self::Chars { head, .. } => head,
         }
     }
 
@@ -278,6 +291,27 @@ pub(crate) fn off_centre(y: Pixels, body: Bounds<Pixels>, inset: Pixels) -> Opti
         return None;
     }
     Some(y - (body.top() + inset + (body.size.height - inset) / 2.))
+}
+
+pub(crate) type Span = (Pixels, Pixels, Pixels);
+
+pub(crate) fn off_edge((line_top, row_top, line_bottom): Span, body: Bounds<Pixels>, inset: Pixels) -> Option<Pixels> {
+    let row = px(CODE_ROW);
+    let (top, bottom) = (body.top() + inset + row, body.bottom() - row);
+    let line_bottom = line_bottom.max(row_top + row);
+    let (from, to) =
+        if line_bottom - line_top <= bottom - top { (line_top, line_bottom) } else { (row_top, row_top + row) };
+    if from < top {
+        Some(from - top)
+    } else if to > bottom {
+        Some(to - bottom)
+    } else {
+        None
+    }
+}
+
+pub(crate) fn row_from<S>(mut rows: impl Iterator<Item = (S, Bounds<Pixels>)>, top: Pixels) -> Option<S> {
+    rows.find(|(_, bounds)| bounds.bottom() > top).map(|(spot, _)| spot)
 }
 
 pub(crate) fn bar_origin(host: Bounds<Pixels>, bar: Size<Pixels>, room: Bounds<Pixels>) -> Point<Pixels> {
