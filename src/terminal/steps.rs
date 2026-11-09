@@ -1,6 +1,7 @@
 use gpui::Context;
 
 use super::cycled;
+use super::machine_menu::BOOT_WAITS;
 use crate::app::Root;
 use crate::cli;
 use crate::keymap::Command;
@@ -25,10 +26,14 @@ pub(super) fn workspace_after(session: &Session, by: i32, removing: impl Fn(u64)
     cycled(&open, shown.workspace, by).filter(|next| Some(*next) != shown.workspace)
 }
 
+pub(super) fn mark_waits(machine: &str) -> String {
+    format!("Marking an agent on {machine} is not offered yet: {BOOT_WAITS}")
+}
+
 pub(super) fn mark_args(pane: &PaneInfo) -> Option<(Vec<String>, &'static str)> {
     pane.agent.as_ref()?;
     let id = pane.id.to_string();
-    Some(if pane.status.as_deref() == Some("pending") {
+    Some(if pane.pending() {
         (cmd(&["mark", "--pane", &id, "--reviewed"]), REVIEWED)
     } else {
         (cmd(&["mark", "--pane", &id]), MARKED)
@@ -78,8 +83,8 @@ impl Root {
     }
 
     fn mark_active_pane(&mut self, cx: &mut Context<Self>) {
-        if self.machine.is_some() {
-            self.not_offered_there("Marking an agent", cx);
+        if let Some(machine) = self.machine.as_ref().map(|tab| tab.machine.clone()) {
+            self.tell(&mark_waits(&machine), cx);
             return;
         }
         let pane = self.active_pane().and_then(|id| self.session.as_ref()?.pane(id));

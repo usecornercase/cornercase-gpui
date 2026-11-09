@@ -25,7 +25,7 @@ fn chosen(entries: &[Entry]) -> Vec<String> {
         .iter()
         .filter_map(|entry| match entry {
             Entry::Item { label, .. } | Entry::Submenu { label, .. } => Some(label.to_string()),
-            Entry::Heading(_) | Entry::Resting { .. } | Entry::Separator => None,
+            Entry::Heading(_) | Entry::Resting { .. } | Entry::Note(_) | Entry::Separator => None,
         })
         .collect()
 }
@@ -129,6 +129,7 @@ fn plugin_row(entry: &Entry) -> String {
         Entry::Item { label, .. } | Entry::Submenu { label, .. } => label.to_string(),
         Entry::Heading(name) => format!("[{name}]"),
         Entry::Resting { label } => format!("({label})"),
+        Entry::Note(text) => text.to_string(),
         Entry::Separator => "---".to_string(),
     }
 }
@@ -160,7 +161,7 @@ fn a_group_offers_no_actions() {
 fn opener_labels(openers: &[Found]) -> Option<(String, Vec<String>)> {
     let label = |entry: &Entry| match entry {
         Entry::Item { label, .. } | Entry::Submenu { label, .. } => label.to_string(),
-        Entry::Heading(_) | Entry::Resting { .. } | Entry::Separator => String::new(),
+        Entry::Heading(_) | Entry::Resting { .. } | Entry::Note(_) | Entry::Separator => String::new(),
     };
     open_in_item("/work/shop", openers).map(|entry| match &entry {
         Entry::Submenu { entries, .. } => (label(&entry), entries.iter().map(label).collect()),

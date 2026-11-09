@@ -23,6 +23,10 @@ fn rename_item(label: &str, target: Target) -> Entry {
     item(label.to_string(), move |this, window, cx| this.start_rename(target, window, cx))
 }
 
+pub(crate) fn mark_label(pending: bool) -> &'static str {
+    if pending { "Mark as reviewed" } else { "Mark as pending review" }
+}
+
 fn fold_item(fold: Fold, collapsed: bool) -> Entry {
     item(if collapsed { "Expand" } else { "Collapse" }, move |this, _, _| this.set_folded(fold, !collapsed))
 }
@@ -361,25 +365,17 @@ impl Root {
     }
 
     fn agent_has_children(&self, pane: u64) -> bool {
-        self.session
-            .as_ref()
-            .and_then(|s| {
-                s.projects
-                    .iter()
-                    .flat_map(|p| &p.workspaces)
-                    .find_map(|w| w.agent_rows().into_iter().find(|r| r.pane.id == pane))
-            })
-            .is_some_and(|r| r.children > 0)
+        self.session.as_ref().is_some_and(|s| s.agent_children(pane) > 0)
     }
 
     pub(crate) fn agent_menu(&self, pane: u64, cx: &App) -> Vec<Entry> {
         let Some(info) = self.session.as_ref().and_then(|s| s.pane(pane)) else { return Vec::new() };
         let p = pane.to_string();
         let mut entries = vec![act("Show", cmd(&["focus", "--pane", &p]))];
-        if info.status.as_deref() == Some("pending") {
-            entries.push(act("Mark as reviewed", cmd(&["mark", "--pane", &p, "--reviewed"])));
+        if info.pending() {
+            entries.push(act(mark_label(true), cmd(&["mark", "--pane", &p, "--reviewed"])));
         } else {
-            entries.push(act("Mark as pending review", cmd(&["mark", "--pane", &p])));
+            entries.push(act(mark_label(false), cmd(&["mark", "--pane", &p])));
         }
         if self.agent_has_children(pane) {
             entries.push(fold_item(Fold::Pane(pane), info.collapsed));

@@ -97,3 +97,11 @@ fn a_refused_mark_says_why_and_not_that_it_was_marked() {
 fn a_pane_without_an_agent_has_nothing_to_mark() {
     assert!(mark_args(&PaneInfo::default()).is_none());
 }
+
+#[test]
+fn marking_on_a_machine_names_what_it_needs() {
+    assert_eq!(
+        mark_waits("vps"),
+        "Marking an agent on vps is not offered yet: needs usecornercase/cornercase-terminal#723"
+    );
+}

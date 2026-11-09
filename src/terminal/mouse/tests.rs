@@ -53,3 +53,10 @@ fn otherwise_the_left_button_selects_and_the_middle_one_pastes() {
     assert_eq!(press_for(Middle, false, false), Press::PastePrimary);
     assert_eq!(press_for(Navigate(NavigationDirection::Back), false, false), Press::Nothing);
 }
+
+#[test]
+fn a_right_press_asks_for_the_menu_unless_the_program_reads_the_mouse() {
+    assert_eq!(press_for(Right, false, false), Press::Menu);
+    assert_eq!(press_for(Right, true, true), Press::Menu);
+    assert_eq!(press_for(Right, true, false), Press::Program);
+}

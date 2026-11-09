@@ -1,7 +1,8 @@
 use gpui::{point, px};
 
 use super::{
-    ABOVE_POINTER, Entry, FRAME_PADDING, ROW_HEIGHT, SEPARATOR_HEIGHT, above, choice, item, resting, step, submenu,
+    ABOVE_POINTER, Entry, FRAME_PADDING, ROW_HEIGHT, SEPARATOR_HEIGHT, above, choice, item, note, resting, step,
+    submenu,
 };
 
 fn entries() -> Vec<Entry> {
@@ -62,4 +63,10 @@ fn the_keys_skip_a_line_at_rest() {
     let entries = [resting("vps unreachable"), item("Rename", |_, _, _| {}), resting("Rename")];
     assert_eq!(step(&entries, None, true), Some(1));
     assert_eq!(step(&entries, Some(1), true), Some(1));
+}
+
+#[test]
+fn the_keys_skip_a_note() {
+    let entries = [item("One", |_, _, _| {}), note("needs a fix"), item("Two", |_, _, _| {})];
+    assert_eq!(step(&entries, Some(0), true), Some(2));
 }

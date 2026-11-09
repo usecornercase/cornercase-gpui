@@ -454,3 +454,78 @@ fn a_line_or_frame_of_another_run_is_not_this_tabs() {
     assert!(tab.same_run("b1"));
     assert!(!tab.same_run("b2"));
 }
+
+fn run_of(tab: &MachineTab) -> MachineRun {
+    tab.run()
+}
+
+#[test]
+fn closing_a_pane_there_names_the_run_it_was_seen_on() {
+    assert_eq!(Closable::Pane(5).args("b1"), ["close", "--pane", "5", "--boot", "b1"]);
+}
+
+#[test]
+fn closing_a_tab_there_names_the_run_it_was_seen_on() {
+    assert_eq!(Closable::Tab(20).args("b1"), ["close", "--tab", "20", "--boot", "b1"]);
+}
+
+#[test]
+fn a_close_goes_on_the_machine_s_own_queue() {
+    let (tab, tap) = live(20, 5);
+    tab.send_close(Closable::Pane(5), |_| {});
+    assert_eq!(tap.commands(), [["close", "--pane", "5", "--boot", "b1"]]);
+}
+
+#[test]
+fn a_tab_that_fell_sends_no_close() {
+    let (mut tab, tap) = live(20, 5);
+    tab.fall(Lost::Link);
+    tab.send_close(Closable::Pane(5), |_| {});
+    assert_eq!(tap.commands(), Vec::<Vec<String>>::new());
+}
+
+#[test]
+fn a_live_tab_of_the_same_run_may_be_closed() {
+    let (tab, _tap) = live(20, 5);
+    assert_eq!(still_on(Some(&tab), &run_of(&tab), None), Ok(()));
+    let (tab, _tap) = arriving(21);
+    assert_eq!(still_on(Some(&tab), &run_of(&tab), None), Ok(()));
+}
+
+#[test]
+fn a_tab_of_another_run_refuses_as_a_restart() {
+    let (tab, _tap) = live(20, 5);
+    let run = MachineRun { boot: "b0".into(), ..run_of(&tab) };
+    assert_eq!(still_on(Some(&tab), &run, None), Err("vps restarted".into()));
+}
+
+#[test]
+fn a_tab_still_opening_refuses() {
+    let tab = opening();
+    assert_eq!(still_on(Some(&tab), &run_of(&tab), None), Err("The tab on vps is still opening".into()));
+}
+
+#[test]
+fn a_tab_that_fell_refuses_with_the_link_s_words() {
+    let (mut tab, _tap) = live(20, 5);
+    tab.fall(Lost::Link);
+    assert_eq!(still_on(Some(&tab), &run_of(&tab), None), Err("vps unreachable".into()));
+}
+
+#[test]
+fn no_machine_tab_or_another_machine_refuses_as_no_longer_shown() {
+    let (tab, _tap) = live(20, 5);
+    let run = run_of(&tab);
+    let gone = Err("The tab on vps is no longer shown".to_string());
+    assert_eq!(still_on(None, &run, None), gone);
+    let mut other = MachineTab::new(&place_on(&machine("mini", "b1"), 1, 20), None);
+    other.state = TabState::Live;
+    assert_eq!(still_on(Some(&other), &run, None), gone);
+}
+
+#[test]
+fn the_close_job_never_matches_a_local_pane() {
+    let key = Closable::Pane(9).key(&MachineRun { machine: "vps".into(), boot: "b1".into() });
+    assert_ne!(key, "close-pane:9");
+    assert!(key.contains("vps") && key.contains("b1"));
+}

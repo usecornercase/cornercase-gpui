@@ -71,3 +71,17 @@ fn a_line_left_without_an_answer_says_the_last_thing_cornercase_wrote() {
     assert_eq!(error.to_string(), "cornercase focus: Error: the connection to cornercase on `vps` dropped");
     assert_eq!(lost("focus", "").to_string(), "cornercase focus: cornercase requests ended");
 }
+
+#[test]
+fn a_line_refused_for_another_run_reads_as_a_stale_boot() {
+    let refused = r#"{"status":4,"error":"this request is for the cornercase server started as 1-2"}"#;
+    let error = answer("close", refused).expect_err("a refusal");
+    assert!(crate::cli::stale_boot(&error));
+    assert_eq!(error.to_string(), "cornercase close: this request is for the cornercase server started as 1-2");
+}
+
+#[test]
+fn any_other_refused_line_is_not_a_stale_boot() {
+    let error = answer("close", r#"{"status":1,"error":"there is no pane 9"}"#).expect_err("a failure");
+    assert!(!crate::cli::stale_boot(&error));
+}

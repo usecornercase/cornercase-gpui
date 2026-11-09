@@ -33,6 +33,7 @@ pub(super) enum Press {
     Program,
     Select,
     PastePrimary,
+    Menu,
     Nothing,
 }
 
@@ -49,7 +50,8 @@ pub(super) fn press_for(button: MouseButton, program_reads_mouse: bool, shift: b
         _ if program_reads_mouse && !shift => Press::Program,
         MouseButton::Left => Press::Select,
         MouseButton::Middle => Press::PastePrimary,
-        _ => Press::Nothing,
+        MouseButton::Right => Press::Menu,
+        MouseButton::Navigate(_) => Press::Nothing,
     }
 }
 
@@ -165,7 +167,7 @@ impl Root {
             return;
         }
         let press = press_for(event.button, pane.modes.mouse != MouseMode::None, event.modifiers.shift);
-        if !pane.active && (here || press != Press::Nothing) {
+        if !pane.active && (here || !matches!(press, Press::Nothing | Press::Menu)) {
             self.focus_on_shown("pane", pane.pane);
         }
         if here && event.button == MouseButton::Left && keymap::opens_with_system(event.modifiers, Os::CURRENT) {
@@ -182,6 +184,7 @@ impl Root {
                 self.press_select(pane, cell, event.click_count);
             }
             Press::PastePrimary => self.paste_primary(pane.pane, cx),
+            Press::Menu => self.drag = Some(Drag::Menu { pane: pane.pane }),
             Press::Nothing => {}
         }
     }
@@ -259,6 +262,7 @@ impl Root {
             }
             Some(Drag::Select { pane, .. }) => self.selection_made(pane),
             Some(Drag::Divider { .. }) => cx.notify(),
+            Some(Drag::Menu { pane }) => self.open_there_pane_menu(pane, event.position, window, cx),
             Some(Drag::Link { pane, cell }) => self.click_link(pane, cell, window, cx),
             None => {}
         }

@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.45
+
+- **Close a pane or a tab on another machine's tab.** ⌘W closes the pane and ⇧⌘W the tab you see from a machine, as they do here: a shell closes at once, and a pane or tab running an agent asks first, naming the machine. If that machine's cornercase restarted in the meantime, nothing is closed and a toast says so.
+- **A right click on a machine's pane opens its menu**: copy, paste, split, copy its path and close it. Marking an agent for review and moving a pane there show in the menu with what cornercase still needs for them, and ⌘R says the same.
+
 ## 0.1.44
 
 - **Select with the keyboard in an open file.** Click in the Files viewer, then ⇧← ⇧→ select a character more or less and ⇧↑ ⇧↓ a line (Shift with the arrows on Linux and Windows). They go on from the end of what you selected, or with nothing selected from the top of what the viewer shows. Lines picked by their numbers grow and shrink by whole lines, and the view follows the end you move.
