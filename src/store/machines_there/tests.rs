@@ -130,8 +130,8 @@ fn a_machine_keeps_one_home_however_often_its_server_restarts() {
     for boot in ["b1", "b2", "b3"] {
         answer(&mut homes, "vps", boot, "/home/ana");
     }
-    assert_eq!(homes.home("b3"), Some("/home/ana"));
-    assert_eq!((homes.home("b1"), homes.home("b2")), (None, None));
+    assert_eq!(homes.home("vps", "b3"), Some("/home/ana"));
+    assert_eq!((homes.home("vps", "b1"), homes.home("vps", "b2")), (None, None));
     assert_eq!(homes.known.len(), 1);
     assert!(!homes.ask("vps", "b3"));
 }
@@ -151,7 +151,7 @@ fn an_answer_for_a_run_already_left_is_dropped() {
     assert!(homes.ask("vps", "b1"));
     assert!(homes.ask("vps", "b2"));
     homes.answered("vps", "b1", Some("/home/ana".into()));
-    assert_eq!((homes.home("b1"), homes.home("b2")), (None, None));
+    assert_eq!((homes.home("vps", "b1"), homes.home("vps", "b2")), (None, None));
     assert!(!homes.ask("vps", "b2"));
 }
 
@@ -160,5 +160,13 @@ fn each_machine_keeps_its_own_home() {
     let mut homes = Homes::default();
     answer(&mut homes, "vps", "b1", "/home/ana");
     answer(&mut homes, "lab", "c1", "/home/bo");
-    assert_eq!((homes.home("b1"), homes.home("c1")), (Some("/home/ana"), Some("/home/bo")));
+    assert_eq!((homes.home("vps", "b1"), homes.home("lab", "c1")), (Some("/home/ana"), Some("/home/bo")));
+}
+
+#[test]
+fn a_home_is_never_read_for_another_machine_with_the_same_boot() {
+    let mut homes = Homes::default();
+    answer(&mut homes, "vps", "b1", "/home/ana");
+    assert_eq!(homes.home("lab", "b1"), None);
+    assert_eq!(homes.home("vps", "b1"), Some("/home/ana"));
 }

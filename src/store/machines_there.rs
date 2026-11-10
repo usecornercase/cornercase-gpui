@@ -41,8 +41,8 @@ impl Homes {
         }
     }
 
-    fn home(&self, boot: &str) -> Option<&str> {
-        self.known.values().find(|(held, _)| held == boot).map(|(_, home)| home.as_str())
+    fn home(&self, machine: &str, boot: &str) -> Option<&str> {
+        self.known.get(machine).filter(|(held, _)| held == boot).map(|(_, home)| home.as_str())
     }
 }
 
@@ -266,8 +266,8 @@ impl Store {
         });
     }
 
-    pub(crate) fn machine_home(&self, boot: &str) -> Option<&str> {
-        self.there.homes.home(boot)
+    pub(crate) fn machine_home(&self, machine: &str, boot: &str) -> Option<&str> {
+        self.there.homes.home(machine, boot)
     }
 
     pub(crate) fn ask_machine_home(&mut self, machine: &str, cx: &mut Context<Self>) {

@@ -132,7 +132,7 @@ impl Store {
     pub(crate) fn machine_read(&self) -> Option<MachineRead> {
         let place = self.machine_place.as_ref()?;
         let seen = self.session.as_ref()?.machine(&place.machine)?;
-        Some(read_of(place, seen, &cli::target(), &self.machines, self.machine_home(&place.boot)))
+        Some(read_of(place, seen, &cli::target(), &self.machines, self.machine_home(&place.machine, &place.boot)))
     }
 }
 
