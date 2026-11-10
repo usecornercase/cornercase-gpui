@@ -44,7 +44,7 @@ out=docs/cornercase-cli.txt
 new=$out.new
 trap 'rm -f "$new"' EXIT
 {
-  printf '%s: the help of every command and subcommand, in the order of `cornercase --help`.\n' "$version"
+  printf "%s: the help of every command and subcommand, in the order of \`cornercase --help\`.\n" "$version"
   printf 'Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.\n\n'
   walk
 } > "$new"

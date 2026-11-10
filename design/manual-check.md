@@ -1,6 +1,6 @@
 # Manual check
 
-Code: `tools/manual-check.swift`, `tools/machine-bench.sh`, `tools/machine-bench-test.sh`; the window reads the variables below at start (`prefs.rs`, `app.rs`, `self_update.rs`, `theme/current.rs`, `panels/browser/chrome.rs`)
+Code: `tools/manual-check.swift`, `tools/machine-bench.sh`, `tools/machine-bench-test.sh`, `.github/workflows/ci.yml` (the shells of the bench tests); the window reads the variables below at start (`prefs.rs`, `app.rs`, `self_update.rs`, `theme/current.rs`, `panels/browser/chrome.rs`)
 
 How to check a change in the running window on macOS, the way that worked (#113). The rules are in `AGENTS.md`'s Manual check. Linux in Docker is in `design/linux.md`; running the Windows window needs Windows (`design/windows.md`). Every command here was run as written on 2026-11-10 except what is marked untried (the last section says with what); `<pid>` and `<id>` are yours to fill.
 
@@ -137,7 +137,7 @@ Their notes are in the area files, except what the bench does (**Another machine
 
 ## Another machine
 
-`tools/machine-bench.sh` makes the bench for checking another machine and takes it down (#119): two private servers, "here" (the window's) and "there", an `ssh` stand-in that runs "there", "there" linked as machine `vps` of "here", an `env` file, a copy of a cornercase release per side and, on request, a fake agent and a log of what the window ran. `tools/machine-bench-test.sh` tests its refusals and safety lines against a stub, never a real cornercase (`sh tools/machine-bench-test.sh`, or `SH=dash dash …`). It is run by hand when the script changes, and not in CI: a CI step is #123. What was run is in Checked; the rest is untried.
+`tools/machine-bench.sh` makes the bench for checking another machine and takes it down (#119): two private servers, "here" (the window's) and "there", an `ssh` stand-in that runs "there", "there" linked as machine `vps` of "here", an `env` file, a copy of a cornercase release per side and, on request, a fake agent and a log of what the window ran. `tools/machine-bench-test.sh` tests its refusals and safety lines against a stub, never a real cornercase (`sh tools/machine-bench-test.sh`, or `SH=dash dash …`). CI's Linux job runs it on every push and pull request (#123, `design/linux.md`): under dash, which is Linux's `sh`, and under bash started as `sh`, which puts bash in POSIX mode as macOS's `sh` (bash 3.2) is, so a line that one of the two reads its own way fails there; `sh` alone would be dash twice on the runner, and zsh, which the env test also tries when one is installed, is not on it. On a Mac, run it by hand when the script changes. What was run is in Checked; the rest is untried.
 
 From the checkout, with the 0.13.32 archive downloaded as in "A server of its own" and `cargo build --locked` done:
 

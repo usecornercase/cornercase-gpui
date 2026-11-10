@@ -15,15 +15,21 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 10
     commit-message:
       prefix: chore
       include: scope
     groups:
       cargo:
         patterns: ["*"]
+        update-types: ["patch"]
     ignore:
       - dependency-name: gpui
         update-types: ["version-update:semver-minor"]
+      - dependency-name: core-video
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: libc
+        versions: [">= 0.2.190"]
 
   - package-ecosystem: npm
     directory: /site

@@ -69,6 +69,25 @@ jobs:
       - name: tests
         run: cargo test --locked
 
+      - uses: taiki-e/install-action@v2
+        if: ${{ !cancelled() }}
+        with:
+          tool: shellcheck@0.11.0
+
+      - name: shellcheck
+        if: ${{ !cancelled() }}
+        run: shellcheck tools/*.sh
+
+      - name: bench tests (dash)
+        if: ${{ !cancelled() }}
+        run: SH=dash dash tools/machine-bench-test.sh
+
+      - name: bench tests (bash as sh)
+        if: ${{ !cancelled() }}
+        run: |
+          ln -sf "$(command -v bash)" "$RUNNER_TEMP/sh"
+          SH="$RUNNER_TEMP/sh" "$RUNNER_TEMP/sh" tools/machine-bench-test.sh
+
   windows:
     name: clippy + tests (Windows)
     runs-on: windows-2025
@@ -130,12 +149,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: version
-        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'main' }}
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: .github/release/release.sh pull-request "origin/$BASE_REF"
-
       - name: toolchain
         run: rustup toolchain install
 
@@ -165,3 +178,9 @@ jobs:
       - name: licences
         if: ${{ !cancelled() }}
         run: .github/release/release.sh notices "$RUNNER_TEMP/notices.txt"
+
+      - name: version
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'main' }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: .github/release/release.sh pull-request "origin/$BASE_REF"
