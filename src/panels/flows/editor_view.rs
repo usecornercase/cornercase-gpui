@@ -1,7 +1,7 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, Div, ElementId, Entity, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, px,
+    prelude::FluentBuilder as _, px, relative,
 };
 
 use super::draft::saves_line;
@@ -30,11 +30,7 @@ pub(super) fn adder(
     dashed: bool,
     click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    let button = ui::icon_text_button(id, glyph, label, Tone::Plain)
-        .h(px(26.))
-        .text_size(px(12.))
-        .text_color(colours::muted())
-        .on_click(click);
+    let button = ui::icon_text_button(id, glyph, label, Tone::Plain).h(px(26.)).text_size(px(12.)).on_click(click);
     div().flex().child(button.when(dashed, gpui::Styled::border_dashed))
 }
 
@@ -183,6 +179,7 @@ impl FlowEditor {
         div()
             .id("flow-editor-form")
             .track_scroll(&self.inputs.scroller)
+            .line_height(relative(1.35))
             .h_full()
             .overflow_y_scroll()
             .px(px(18.))

@@ -27,16 +27,14 @@ impl Layout {
     }
 }
 
-fn plan_width(editor: f32, narrowest: f32) -> f32 {
-    (board_width(narrowest) + 2. * PLAN_PAD).clamp(editor * PLAN_MIN, editor * PLAN_MAX)
+fn plan_width(editor: f32, narrowest: f32) -> Option<f32> {
+    let needed = board_width(narrowest) + 2. * PLAN_PAD;
+    (needed <= editor * PLAN_MAX).then_some(needed.max(editor * PLAN_MIN))
 }
 
 pub(in crate::panels::flows) fn layout(editor: f32, narrowest: f32) -> Layout {
-    if editor < TWO_COLUMNS {
-        return Layout { form: editor, plan: None };
-    }
-    let plan = plan_width(editor, narrowest);
-    Layout { form: editor - plan, plan: Some(plan) }
+    let plan = plan_width(editor, narrowest).filter(|_| editor >= TWO_COLUMNS);
+    Layout { form: editor - plan.unwrap_or(0.), plan }
 }
 
 fn box_target(plan: &FlowSpec, names: &[(u64, String)], name: &str) -> Option<Open> {
