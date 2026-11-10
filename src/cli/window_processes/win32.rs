@@ -45,4 +45,28 @@ fn limit(job: &Job, flags: JOB_OBJECT_LIMIT) -> Result<(), String> {
 }
 
 #[cfg(test)]
+pub(super) fn copy(job: &Job) -> Job {
+    Job(job.0.try_clone().expect("the handle is duplicated"))
+}
+
+#[cfg(test)]
+pub(super) fn limits(job: &Job) -> JOB_OBJECT_LIMIT {
+    use windows::Win32::System::JobObjects::QueryInformationJobObject;
+
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    let size = u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>()).expect("the size fits");
+    unsafe {
+        QueryInformationJobObject(
+            Some(job.handle()),
+            JobObjectExtendedLimitInformation,
+            std::ptr::from_mut(&mut info).cast(),
+            size,
+            None,
+        )
+    }
+    .expect("the limits are read");
+    info.BasicLimitInformation.LimitFlags
+}
+
+#[cfg(test)]
 mod tests;

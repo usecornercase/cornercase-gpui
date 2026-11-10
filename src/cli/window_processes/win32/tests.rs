@@ -3,12 +3,9 @@ use std::process::{Child, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use windows::Win32::System::JobObjects::{
-    JOB_OBJECT_LIMIT, JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation, QueryInformationJobObject,
-};
+use windows::Win32::System::JobObjects::{JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE};
 
-use super::{Job, let_go, tie};
+use super::{let_go, limits, tie};
 
 const WAIT: Duration = Duration::from_secs(20);
 
@@ -37,22 +34,6 @@ fn ping() -> Child {
         .stderr(Stdio::null())
         .spawn()
         .expect("ping starts")
-}
-
-fn limits(job: &Job) -> JOB_OBJECT_LIMIT {
-    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-    let size = u32::try_from(size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>()).expect("the size fits");
-    unsafe {
-        QueryInformationJobObject(
-            Some(job.handle()),
-            JobObjectExtendedLimitInformation,
-            std::ptr::from_mut(&mut info).cast(),
-            size,
-            None,
-        )
-    }
-    .expect("the limits are read");
-    info.BasicLimitInformation.LimitFlags
 }
 
 #[test]

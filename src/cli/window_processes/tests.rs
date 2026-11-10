@@ -83,7 +83,9 @@ mod on_windows {
     use std::sync::mpsc;
     use std::time::Duration;
 
-    use super::super::Kept;
+    use windows::Win32::System::JobObjects::JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+
+    use super::super::{Kept, Running, win32};
 
     #[test]
     fn a_command_kept_on_windows_is_tied_to_the_window() {
@@ -105,5 +107,21 @@ mod on_windows {
         ended.recv_timeout(Duration::from_secs(20)).expect("the command ends");
         assert_eq!((untied, held), (None, true));
         assert!(KEPT.children.lock().is_empty());
+    }
+
+    #[test]
+    fn stopping_lets_go_of_the_job_before_the_command_is_reaped() {
+        static KEPT: Kept = Kept::empty();
+        let mut ping = crate::platform::command("ping");
+        ping.args(["-n", "120", "127.0.0.1"]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        let child = ping.spawn().expect("ping starts");
+        let job = win32::tie(&child).expect("the command joins its job");
+        let seen = win32::copy(&job);
+        KEPT.children.lock().push(Running { id: 1, child, job: Some(job) });
+        KEPT.stop();
+        assert_eq!(win32::limits(&seen), JOB_OBJECT_LIMIT_BREAKAWAY_OK);
+        for mut running in KEPT.children.lock().drain(..) {
+            running.child.wait().expect("the command is reaped");
+        }
     }
 }
