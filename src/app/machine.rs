@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use super::connection::Connection;
 use super::{Heard, Msg, Root};
-use crate::cli::{self, Stream, Target, Version};
+use crate::cli::{self, Stream, Target};
 use crate::desktop;
 use crate::dialogs::{self, CloseWords, ContextThere, agent_doing, on_machine};
 use crate::model::accounts::{AccountsInfo, ListMoves};
@@ -114,7 +114,6 @@ pub(crate) struct MachineTab {
     told_visible: bool,
     opened_visible: bool,
     host_events: Option<Stream>,
-    cli_release: Option<Version>,
     accounts: Asked<AccountsInfo>,
     accounts_asks: u64,
     config_moves: ListMoves,
@@ -249,7 +248,6 @@ impl MachineTab {
             told_visible: true,
             opened_visible: true,
             host_events: None,
-            cli_release: None,
             accounts: Asked::default(),
             accounts_asks: 0,
             config_moves: ListMoves::default(),
@@ -389,7 +387,6 @@ impl MachineTab {
         self.session = None;
         self.aimed = place.clone();
         self.arriving = None;
-        self.cli_release = None;
         self.accounts = Asked::default();
         self.config_moves = ListMoves::default();
     }
@@ -518,7 +515,7 @@ impl Root {
         tab.opened_visible = seen;
         tab.reopen(target, place, &self.tx);
         let opened = tab.conn.open_view(&place.open_args(size, !seen), &self.tx);
-        self.read_cli_release(cx);
+        self.store.update(cx, Store::read_cli_release);
         if let Err(e) = opened {
             self.machine_fell(&e.to_string(), cx);
         }
@@ -755,8 +752,12 @@ impl Root {
     pub(crate) fn view_context_there(&mut self, pane: u64, window: &mut Window, cx: &mut Context<Self>) {
         let Some(tab) = &self.machine else { return };
         let home = tab.session.as_ref().and_then(|s| s.home.clone()).unwrap_or_default();
-        let there =
-            ContextThere { machine: tab.machine.clone(), boot: tab.boot.clone(), home, sends_boot: tab.sends_boot() };
+        let there = ContextThere {
+            machine: tab.machine.clone(),
+            boot: tab.boot.clone(),
+            home,
+            sends_boot: acts::sends_boot(self.cli_release(cx)),
+        };
         dialogs::view_context_there(pane, there, window, cx);
     }
 

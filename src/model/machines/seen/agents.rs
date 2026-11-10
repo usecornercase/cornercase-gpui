@@ -1,4 +1,5 @@
-use super::{Aim, MachinePlace, MachineSeen, ThereId, ThereProject, ThereWorkspace};
+use super::{Aim, MachinePlace, MachineSeen, ThereId, ThereProject, ThereWorkspace, with_boot};
+use crate::cli::Version;
 use crate::model::tree::{self, Item, Node};
 use crate::model::{AgentRow, PaneInfo, Placed, Session, Tab, needs_you, status_rank};
 use crate::store::args;
@@ -31,6 +32,8 @@ pub(crate) enum SectionRow<'a> {
     Here(AgentRow<'a>),
     There(ThereRow<'a>),
 }
+
+const FOLD_BOOT_SINCE: Version = Version::new(0, 13, 32);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PaneAim {
@@ -119,8 +122,9 @@ impl PaneAim {
         format!("{}:{}:{}", self.machine, self.boot, self.pane.key())
     }
 
-    pub(crate) fn args(&self) -> Vec<String> {
-        args(&[self.verb(), "--pane", &self.pane.0.to_string()])
+    pub(crate) fn args(&self, release: Option<Version>) -> Vec<String> {
+        let command = args(&[self.verb(), "--pane", &self.pane.0.to_string()]);
+        if FOLD_BOOT_SINCE.reached_by(release) { with_boot(command, &self.boot) } else { command }
     }
 
     pub(crate) fn label(&self) -> &'static str {

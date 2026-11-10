@@ -6,7 +6,7 @@ use crate::model::{Aim, MachinePlace, MachineSeen};
 use crate::platform::paths;
 
 use super::Store;
-use super::machines_there::{Homes, machine_target};
+use super::machines_there::{CliRelease, Homes, machine_target};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Reach {
@@ -34,6 +34,7 @@ impl Reach {
 #[derive(Default)]
 pub(super) struct ThereState {
     pub(super) homes: Homes,
+    pub(super) release: CliRelease,
     pub(super) tab: Option<TabThere>,
 }
 

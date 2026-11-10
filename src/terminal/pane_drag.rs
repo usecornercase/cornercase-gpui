@@ -10,7 +10,7 @@ use gpui::{
 use super::pane_menu::move_pane_args;
 use crate::app::Root;
 use crate::app::machine::MachineTab;
-use crate::app::machine::acts::MOVING;
+use crate::app::machine::acts::{MOVING, sends_boot};
 use crate::render::layout::Hit;
 use crate::render::moving::{self, Aim, Answer, Grip, Moves, Press, Release};
 use crate::render::{self, Metrics};
@@ -84,7 +84,7 @@ fn listen(root: &Entity<Root>, window: &mut Window) {
 
 impl Root {
     pub(super) fn hover_handle(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
-        let movable = self.takes_input() && self.machine.as_ref().is_none_or(MachineTab::sends_boot);
+        let movable = self.takes_input() && (self.machine.is_none() || sends_boot(self.cli_release(cx)));
         let near = if movable { moving::near_top(&self.layout.borrow(), at) } else { None };
         if self.moves.borrow_mut().hover(near) {
             cx.notify();
@@ -186,7 +186,7 @@ impl Root {
 
     fn send_move_there(&mut self, pane: u64, aim: Aim, cx: &mut Context<Self>) {
         let Some(run) = self.machine.as_ref().map(MachineTab::run) else { return self.move_refused(cx) };
-        let refusal = self.machine.as_ref().and_then(|tab| tab.boot_refusal(MOVING));
+        let refusal = self.boot_refusal(MOVING, cx);
         if let Some(why) = refusal {
             self.tell(&why, cx);
             return self.move_refused(cx);

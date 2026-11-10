@@ -3,6 +3,7 @@ use serde_json::json;
 
 use super::*;
 use crate::app::machine::tests::{opening, tapped};
+use crate::cli;
 use crate::model::PaneInfo;
 use crate::test_util::fixture;
 
@@ -191,13 +192,11 @@ fn a_mark_there_is_told_once_taken_and_a_menu_mark_says_nothing() {
 }
 
 #[test]
-fn a_new_connection_reads_the_release_and_the_accounts_again() {
+fn a_new_connection_reads_the_accounts_again() {
     let mut tab = opening();
-    tab.cli_release = Some(v(13, 31));
     tab.accounts = Asked::Failed("x".into());
     let (tx, _rx) = futures::channel::mpsc::unbounded();
     tab.reopen(cli::Target::Local, &opening().aimed, &tx);
-    assert_eq!(tab.cli_release, None);
     assert_eq!(tab.accounts, Asked::Unasked);
 }
 

@@ -1,0 +1,15 @@
+{
+  "layout": {
+    "split": {
+      "dir": "down",
+      "first": {
+        "leaf": 5
+      },
+      "ratio": 0.5,
+      "second": {
+        "leaf": 1
+      }
+    }
+  },
+  "tab": 2
+}

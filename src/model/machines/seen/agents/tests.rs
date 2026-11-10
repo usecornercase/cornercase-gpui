@@ -316,10 +316,26 @@ fn a_row_with_nothing_that_moves_needs_no_clock() {
     assert!(!session().machines[0].pane_note_counts());
 }
 
+fn release(minor: u64, patch: u64) -> Version {
+    Version::new(0, minor, patch)
+}
+
 #[test]
-fn the_fold_names_that_pane_there() {
-    assert_eq!(aim(9).args(), ["collapse", "--pane", "9"]);
-    assert_eq!(PaneAim { collapse: false, ..aim(9) }.args(), ["expand", "--pane", "9"]);
+fn the_fold_names_that_pane_there_and_the_run_it_was_aimed_at_from_cornercase_0_13_32() {
+    let expand = PaneAim { collapse: false, ..aim(9) };
+    for here in [Some(release(13, 32)), Some(release(14, 0))] {
+        assert_eq!(aim(9).args(here), ["collapse", "--pane", "9", "--boot", VPS_BOOT]);
+        assert_eq!(expand.args(here), ["expand", "--pane", "9", "--boot", VPS_BOOT]);
+    }
+}
+
+#[test]
+fn an_older_or_unknown_cornercase_here_folds_without_the_run() {
+    let expand = PaneAim { collapse: false, ..aim(9) };
+    for here in [Some(release(13, 31)), Some(release(13, 19)), None] {
+        assert_eq!(aim(9).args(here), ["collapse", "--pane", "9"]);
+        assert_eq!(expand.args(here), ["expand", "--pane", "9"]);
+    }
 }
 
 #[test]

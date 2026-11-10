@@ -130,6 +130,10 @@ impl Version {
         let version = Self { major: parts.next()??, minor: parts.next()??, patch: parts.next()?? };
         parts.next().is_none().then_some(version)
     }
+
+    pub(crate) fn reached_by(self, release: Option<Version>) -> bool {
+        release.is_some_and(|release| release >= self)
+    }
 }
 
 pub(crate) fn parse_version(line: &str) -> Option<Version> {

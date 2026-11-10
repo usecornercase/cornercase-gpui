@@ -20,7 +20,7 @@ const PLACES: [(&str, Place); 5] = [
 
 pub(super) fn move_pane_args(pane: u64, aim: Aim) -> Vec<String> {
     let (pane, target) = (pane.to_string(), aim.target.to_string());
-    cmd(&["move-pane", "--pane", &pane, "--target", &target, "--place", aim.place.arg()])
+    cmd(&["move-pane", "--pane", &pane, "--target", &target, "--place", aim.place.arg(), "--json"])
 }
 
 pub(super) fn pane_label(session: Option<&Session>, id: u64) -> String {

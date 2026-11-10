@@ -101,7 +101,7 @@ impl Root {
         if !self.still_there(&run, cx) {
             return;
         }
-        if let Some(why) = self.machine.as_ref().and_then(|tab| tab.boot_refusal(MARKING)) {
+        if let Some(why) = self.boot_refusal(MARKING, cx) {
             self.tell(&why, cx);
             return;
         }

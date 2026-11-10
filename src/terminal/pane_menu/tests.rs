@@ -26,7 +26,13 @@ fn move_here(this: &mut Root, pane: u64, aim: Aim, cx: &mut Context<Root>) {
 #[test]
 fn a_dropped_pane_asks_cornercase_to_move_it_beside_its_target() {
     let args = move_pane_args(4, Aim { target: 7, place: Place::Below });
-    assert_eq!(args, ["move-pane", "--pane", "4", "--target", "7", "--place", "below"]);
+    assert_eq!(args, ["move-pane", "--pane", "4", "--target", "7", "--place", "below", "--json"]);
+}
+
+#[test]
+fn a_move_on_a_machine_asks_for_the_layout_and_names_its_run() {
+    let args = crate::model::with_boot(move_pane_args(4, Aim { target: 7, place: Place::Below }), "b1");
+    assert_eq!(args, ["move-pane", "--pane", "4", "--target", "7", "--place", "below", "--json", "--boot", "b1"]);
 }
 
 #[test]

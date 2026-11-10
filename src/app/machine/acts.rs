@@ -1,8 +1,8 @@
-use gpui::{AppContext as _, Context};
+use gpui::{App, Context};
 
 use super::{MachineRun, MachineTab};
 use crate::app::Root;
-use crate::cli::{self, Version};
+use crate::cli::Version;
 use crate::desktop;
 use crate::model::accounts::{AccountsInfo, Switch};
 use crate::model::machines::run_on::checks::Asked;
@@ -15,7 +15,7 @@ pub(crate) const MARKING: &str = "Marking an agent";
 pub(crate) const SWITCHING: &str = "Switching the account";
 
 pub(crate) fn sends_boot(release: Option<Version>) -> bool {
-    release.is_some_and(|release| release >= PANE_BOOT_SINCE)
+    PANE_BOOT_SINCE.reached_by(release)
 }
 
 pub(crate) fn boot_note(release: Option<Version>) -> Option<String> {
@@ -83,18 +83,6 @@ fn switched(machine: &str, switch: &Switch, who: &str, result: anyhow::Result<St
 }
 
 impl MachineTab {
-    pub(crate) fn sends_boot(&self) -> bool {
-        sends_boot(self.cli_release)
-    }
-
-    pub(crate) fn boot_note(&self) -> Option<String> {
-        boot_note(self.cli_release)
-    }
-
-    pub(crate) fn boot_refusal(&self, doing: &str) -> Option<String> {
-        boot_refusal(doing, &self.machine, self.cli_release)
-    }
-
     fn ask_accounts(&mut self) -> (u64, u64) {
         self.accounts = Asked::Asking;
         self.accounts_asks += 1;
@@ -113,8 +101,8 @@ impl MachineTab {
         matches!(self.accounts, Asked::Failed(_))
     }
 
-    pub(crate) fn switch_there(&self, pane: &PaneInfo) -> SwitchThere {
-        switch_there(&self.accounts, pane, &self.machine, self.boot_note().as_deref())
+    pub(crate) fn switch_there(&self, pane: &PaneInfo, release: Option<Version>) -> SwitchThere {
+        switch_there(&self.accounts, pane, &self.machine, boot_note(release).as_deref())
     }
 
     pub(crate) fn send_on_run(
@@ -127,20 +115,13 @@ impl MachineTab {
 }
 
 impl Root {
-    pub(super) fn read_cli_release(&mut self, cx: &mut Context<Self>) {
-        let Some(serial) = self.machine.as_ref().map(|tab| tab.conn.queue_serial()) else { return };
-        cx.spawn(async move |this, cx| {
-            let release = cx.background_spawn(async { cli::installed_version() }).await;
-            let _ = this.update(cx, |this, cx| this.heard_release(serial, release, cx));
-        })
-        .detach();
+    pub(crate) fn cli_release(&self, cx: &App) -> Option<Version> {
+        self.store.read(cx).cli_release()
     }
 
-    fn heard_release(&mut self, serial: u64, release: Option<Version>, cx: &mut Context<Self>) {
-        if let Some(tab) = self.machine.as_mut().filter(|tab| tab.conn.queue_serial() == serial) {
-            tab.cli_release = release;
-            cx.notify();
-        }
+    pub(crate) fn boot_refusal(&self, doing: &str, cx: &App) -> Option<String> {
+        let tab = self.machine.as_ref()?;
+        boot_refusal(doing, &tab.machine, self.cli_release(cx))
     }
 
     pub(crate) fn read_accounts_there(&mut self, cx: &mut Context<Self>) {
@@ -182,7 +163,7 @@ impl Root {
 
     pub(crate) fn switch_account_there(&mut self, run: &MachineRun, switch: Switch, cx: &mut Context<Self>) {
         let Some(tab) = self.machine.as_ref().filter(|tab| tab.run() == *run) else { return };
-        if let Some(why) = tab.boot_refusal(SWITCHING) {
+        if let Some(why) = self.boot_refusal(SWITCHING, cx) {
             self.tell(&why, cx);
             return;
         }
