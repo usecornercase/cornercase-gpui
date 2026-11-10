@@ -184,6 +184,11 @@ impl AccountsInfo {
         }
     }
 
+    pub(crate) fn switches_of(&self, pane: &PaneInfo, agent: Option<&str>) -> Vec<Switch> {
+        let found = self.switchers(pane).into_iter().find(|s| agent.is_none_or(|agent| s.agent == agent));
+        found.map(|switcher| self.switches(&switcher)).unwrap_or_default()
+    }
+
     pub(crate) fn switches(&self, switcher: &Switcher) -> Vec<Switch> {
         let Some(provider) = self.provider(&switcher.agent) else { return Vec::new() };
         let unlisted = Some(switcher.folder.as_str()).filter(|folder| provider.folders().all(|f| f != *folder));
@@ -295,22 +300,36 @@ impl Switch {
     }
 
     pub(crate) fn doing(&self) -> String {
-        let (agent, name) = (&self.agent, &self.name);
+        self.doing_as(&self.agent)
+    }
+
+    pub(crate) fn doing_as(&self, agent: &str) -> String {
+        let name = &self.name;
         match (self.cancels, self.runs) {
             (true, _) => format!("Keeping {agent} on {name}…"),
             (false, true) => format!("Restarting {agent} on {name}…"),
-            (false, false) => format!("Moving this pane's {agent} to {name}…"),
+            (false, false) => format!("Moving this pane's {} to {name}…", self.agent),
         }
     }
 
+    pub(crate) fn answered(&self, result: anyhow::Result<String>, who: &str) -> anyhow::Result<Said> {
+        let answer = serde_json::from_str::<RestartAnswer>(&result?)?;
+        Ok(self.said_as(&answer, who))
+    }
+
+    #[cfg(test)]
     pub(crate) fn said(&self, answer: &RestartAnswer) -> Said {
-        let (agent, name) = (&self.agent, &self.name);
+        self.said_as(answer, &self.agent)
+    }
+
+    pub(crate) fn said_as(&self, answer: &RestartAnswer, agent: &str) -> Said {
+        let name = &self.name;
         let done = |text: String| Said { text, refused: false };
         if answer.restarted.contains(&self.pane) {
             return done(if self.runs {
                 format!("{agent} restarted on {name}")
             } else {
-                format!("A {agent} typed in this pane now starts on {name}")
+                format!("A {} typed in this pane now starts on {name}", self.agent)
             });
         }
         if answer.waiting.contains(&self.pane) {

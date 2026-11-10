@@ -1,7 +1,7 @@
 use gpui::MouseButton::{Left, Middle, Navigate, Right};
 use gpui::NavigationDirection;
 
-use super::{Press, buttons, file_of, press_for};
+use super::{Press, buttons, file_of, press_for, right_lifts};
 use crate::platform::Os;
 
 #[test]
@@ -59,4 +59,23 @@ fn a_right_press_asks_for_the_menu_unless_the_program_reads_the_mouse() {
     assert_eq!(press_for(Right, false, false), Press::Menu);
     assert_eq!(press_for(Right, true, true), Press::Menu);
     assert_eq!(press_for(Right, true, false), Press::Program);
+}
+
+#[test]
+fn a_right_press_on_a_machines_pane_that_would_open_its_menu_lifts_it_as_here() {
+    assert!(right_lifts(false, Right, press_for(Right, false, false)));
+    assert!(right_lifts(false, Right, press_for(Right, true, true)));
+}
+
+#[test]
+fn a_right_press_a_machines_program_reads_goes_to_the_program() {
+    assert!(!right_lifts(false, Right, press_for(Right, true, false)));
+    assert!(!right_lifts(false, Left, press_for(Left, false, false)));
+}
+
+#[test]
+fn a_local_right_press_always_lifts() {
+    assert!(right_lifts(true, Right, press_for(Right, true, false)));
+    assert!(right_lifts(true, Right, press_for(Right, false, false)));
+    assert!(!right_lifts(true, Left, press_for(Left, false, false)));
 }

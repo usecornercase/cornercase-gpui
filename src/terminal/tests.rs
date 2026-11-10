@@ -1,23 +1,15 @@
 use gpui::CursorStyle;
 
-use super::pane_menu::move_pane_args;
 use super::selection::{cleaned, kept, read_args, word_at};
 use super::{cycled, divider_cursor, note_text, split_args};
 use crate::app::{Conn, Msg};
 use crate::desktop::Board;
 use crate::platform::paths::Style;
-use crate::render::moving::{Aim, Place};
 
 #[test]
 fn a_divider_shows_the_way_it_moves() {
     assert_eq!(divider_cursor(true), CursorStyle::ResizeRow);
     assert_eq!(divider_cursor(false), CursorStyle::ResizeColumn);
-}
-
-#[test]
-fn a_dropped_pane_asks_cornercase_to_move_it_beside_its_target() {
-    let args = move_pane_args(4, Aim { target: 7, place: Place::Below });
-    assert_eq!(args, ["move-pane", "--pane", "4", "--target", "7", "--place", "below"]);
 }
 
 #[test]

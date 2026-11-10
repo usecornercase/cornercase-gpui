@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 
 use super::Target;
 
@@ -27,20 +27,20 @@ fn answer(name: &str, code: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Result
     if matches!(code, Some(0 | PARTIAL)) {
         return Ok(String::from_utf8_lossy(stdout).into_owned());
     }
-    refused(name, stderr)
+    refused(name, code, stderr)
 }
 
 fn printed(name: &str, code: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Result<String> {
     if code == Some(0) || !String::from_utf8_lossy(stdout).trim().is_empty() {
         return Ok(String::from_utf8_lossy(stdout).into_owned());
     }
-    refused(name, stderr)
+    refused(name, code, stderr)
 }
 
-fn refused(name: &str, stderr: &[u8]) -> Result<String> {
+fn refused(name: &str, code: Option<i32>, stderr: &[u8]) -> Result<String> {
     let err = String::from_utf8_lossy(stderr);
     let err = err.trim().trim_start_matches("Error: ");
-    bail!("cornercase {name}: {}", if err.is_empty() { "failed" } else { err })
+    Err(super::failure(name, code, err.as_bytes()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

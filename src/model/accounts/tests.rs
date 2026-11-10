@@ -349,3 +349,23 @@ fn a_pane_on_an_account_not_seen_before_lists_nothing() {
     moves.view_line(&session_of(vec![pane(PLAIN_SHELL)], 3));
     assert!(!moves.view_line(&session_of(vec![pane(PLAIN_SHELL), pane(SHELL_ON_WORK)], 3)));
 }
+
+#[test]
+fn a_switch_on_a_machine_says_whose_agent_it_restarts() {
+    let switch = switch_to(AGENT_ON_WORK, "personal");
+    assert_eq!(switch.doing_as("claude on vps"), "Restarting claude on vps on personal…");
+    let restarted = switch.said_as(&answer(fixture!("accounts/restart-restarted.json")), "claude on vps");
+    assert_eq!(restarted.text, "claude on vps restarted on personal");
+    let skipped = switch.said_as(&answer(fixture!("accounts/restart-skipped.json")), "claude on vps");
+    assert_eq!(skipped.text, "claude on vps did not move to personal: pane 9 already uses that account");
+    let waiting =
+        switch_to(AGENT_WAITING, "work").said_as(&answer(fixture!("accounts/restart-waiting.json")), "claude on vps");
+    assert_eq!(waiting.text, "claude on vps restarts on Work after this turn");
+}
+
+#[test]
+fn a_local_switch_still_names_only_its_agent() {
+    let switch = switch_to(AGENT_ON_WORK, "personal");
+    assert_eq!(switch.doing(), "Restarting claude on personal…");
+    assert_eq!(switch.doing(), switch.doing_as("claude"));
+}

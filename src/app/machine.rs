@@ -8,15 +8,19 @@ use serde_json::Value;
 
 use super::connection::Connection;
 use super::{Heard, Msg, Root};
-use crate::cli::{self, Stream, Target};
+use crate::cli::{self, Stream, Target, Version};
 use crate::desktop;
 use crate::dialogs::{self, CloseWords, ContextThere, agent_doing, on_machine};
+use crate::model::accounts::{AccountsInfo, ListMoves};
+use crate::model::machines::run_on::checks::Asked;
 use crate::model::{Frame, Grid, MachinePlace, MachineSeen, Session, ThereId};
 use crate::notify::{Event, Notifier, parse_event};
 use crate::sidebar::{self, AgentCloseThere, CloseAgent};
 use crate::store::{self, Busy, Store, TabThere, ToastKind, args, failed_there};
 use crate::terminal::cleaned;
 use crate::theme;
+
+pub(crate) mod acts;
 
 const MOST_HELD: usize = 1024;
 const HELD_FOR: Duration = Duration::from_secs(20);
@@ -110,6 +114,9 @@ pub(crate) struct MachineTab {
     told_visible: bool,
     opened_visible: bool,
     host_events: Option<Stream>,
+    cli_release: Option<Version>,
+    accounts: Asked<AccountsInfo>,
+    config_moves: ListMoves,
 }
 
 fn plan(tab: Option<&MachineTab>, place: Option<&MachinePlace>) -> Plan {
@@ -168,13 +175,13 @@ pub(crate) enum Closable {
 }
 
 impl Closable {
-    fn args(self, boot: &str) -> Vec<String> {
+    fn args(self) -> Vec<String> {
         let (flags, id): (&[&str], u64) = match self {
             Self::Pane(id) => (&["close", "--pane"], id),
             Self::Tab(id) => (&["close", "--tab"], id),
             Self::Agent(id) => (&["close", "--agent", "--pane"], id),
         };
-        args(&[flags, &[&id.to_string(), "--boot", boot]].concat())
+        args(&[flags, &[&id.to_string()]].concat())
     }
 
     fn key(self, run: &MachineRun) -> String {
@@ -187,8 +194,8 @@ impl Closable {
     }
 }
 
-fn agent_check_args(pane: u64, boot: &str) -> Vec<String> {
-    args(&["close", "--agent", "--pane", &pane.to_string(), "--check", "--json", "--boot", boot])
+fn agent_check_args(pane: u64) -> Vec<String> {
+    args(&["close", "--agent", "--pane", &pane.to_string(), "--check", "--json"])
 }
 
 #[derive(Debug, Clone)]
@@ -241,6 +248,9 @@ impl MachineTab {
             told_visible: true,
             opened_visible: true,
             host_events: None,
+            cli_release: None,
+            accounts: Asked::default(),
+            config_moves: ListMoves::default(),
         }
     }
 
@@ -249,11 +259,11 @@ impl MachineTab {
     }
 
     fn send_close(&self, what: Closable, reply: impl FnOnce(anyhow::Result<String>) + Send + 'static) {
-        self.conn.queue.cmd_then(what.args(&self.boot), reply);
+        self.send_on_run(what.args(), reply);
     }
 
     fn send_agent_check(&self, pane: u64, reply: impl FnOnce(anyhow::Result<String>) + Send + 'static) {
-        self.conn.queue.cmd_then(agent_check_args(pane, &self.boot), reply);
+        self.send_on_run(agent_check_args(pane), reply);
     }
 
     fn there(&self, seen: Option<&MachineSeen>) -> TabThere {
@@ -377,6 +387,9 @@ impl MachineTab {
         self.session = None;
         self.aimed = place.clone();
         self.arriving = None;
+        self.cli_release = None;
+        self.accounts = Asked::default();
+        self.config_moves = ListMoves::default();
     }
 }
 
@@ -502,7 +515,9 @@ impl Root {
         tab.told_visible = seen;
         tab.opened_visible = seen;
         tab.reopen(target, place, &self.tx);
-        if let Err(e) = tab.conn.open_view(&place.open_args(size, !seen), &self.tx) {
+        let opened = tab.conn.open_view(&place.open_args(size, !seen), &self.tx);
+        self.read_cli_release(cx);
+        if let Err(e) = opened {
             self.machine_fell(&e.to_string(), cx);
         }
     }
@@ -560,6 +575,7 @@ impl Root {
             self.machine_fell(&e.to_string(), cx);
             return;
         }
+        self.watch_accounts_there(opened, cx);
         if opened {
             self.steer_machine(cx);
         }
@@ -737,7 +753,8 @@ impl Root {
     pub(crate) fn view_context_there(&mut self, pane: u64, window: &mut Window, cx: &mut Context<Self>) {
         let Some(tab) = &self.machine else { return };
         let home = tab.session.as_ref().and_then(|s| s.home.clone()).unwrap_or_default();
-        let there = ContextThere { machine: tab.machine.clone(), boot: tab.boot.clone(), home };
+        let there =
+            ContextThere { machine: tab.machine.clone(), boot: tab.boot.clone(), home, sends_boot: tab.sends_boot() };
         dialogs::view_context_there(pane, there, window, cx);
     }
 

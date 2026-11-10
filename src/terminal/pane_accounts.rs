@@ -1,9 +1,9 @@
 use std::time::Instant;
 
 use gpui::{
-    AnyElement, App, AvailableSpace, Bounds, Div, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement, Pixels, Point, SharedString, Size, Stateful, StatefulInteractiveElement as _, Styled, WeakEntity,
-    Window, div, point, prelude::FluentBuilder as _, px,
+    AnyElement, App, AvailableSpace, Bounds, Context, Div, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement, Pixels, Point, SharedString, Size, Stateful, StatefulInteractiveElement as _,
+    Styled, WeakEntity, Window, div, point, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::Root;
@@ -193,13 +193,23 @@ fn chips_of(pane: &PaneInfo, faded: bool, menu_open: bool, store: &Store) -> Opt
     Some(PaneChips { pane: pane.id, switchers, tips, doing, opacity })
 }
 
-fn switch_entry(switch: Switch) -> Entry {
-    choice(switch.label(), switch.chosen, move |this, _, cx| {
-        if switch.does_anything() {
-            let switch = switch.clone();
-            this.store.update(cx, |s, cx| s.switch_account(switch, cx));
-        }
-    })
+pub(super) fn switch_rows<A>(switches: Vec<Switch>, act: A) -> Vec<Entry>
+where
+    A: Fn(&mut Root, Switch, &mut Context<Root>) + Clone + 'static,
+{
+    let row = |switch: Switch| {
+        let act = act.clone();
+        choice(switch.label(), switch.chosen, move |this, _, cx| {
+            if switch.does_anything() {
+                act(this, switch.clone(), cx);
+            }
+        })
+    };
+    switches.into_iter().map(row).collect()
+}
+
+fn switch_here(this: &mut Root, switch: Switch, cx: &mut Context<Root>) {
+    this.store.update(cx, |s, cx| s.switch_account(switch, cx));
 }
 
 fn manage_item() -> Entry {
@@ -223,11 +233,13 @@ impl Root {
     fn account_entries(&self, pane: u64, agent: &str, cx: &App) -> Vec<Entry> {
         let Some(info) = self.session.as_ref().and_then(|s| s.pane(pane)) else { return Vec::new() };
         let accounts = &self.store.read(cx).accounts;
-        let Some(switcher) = accounts.switchers(info).into_iter().find(|s| s.agent == agent) else {
+        let switches = accounts.switches_of(info, Some(agent));
+        if switches.is_empty() {
             return Vec::new();
-        };
-        let rows = accounts.switches(&switcher).into_iter().map(switch_entry);
-        rows.chain([Entry::Separator, manage_item()]).collect()
+        }
+        let mut rows = switch_rows(switches, switch_here);
+        rows.extend([Entry::Separator, manage_item()]);
+        rows
     }
 
     pub(crate) fn switch_account_item(&self, pane: u64, cx: &App) -> Option<Entry> {

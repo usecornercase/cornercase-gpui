@@ -1,8 +1,9 @@
 use gpui::Context;
 
 use super::cycled;
-use super::machine_menu::BOOT_WAITS;
 use crate::app::Root;
+use crate::app::machine::MachineTab;
+use crate::app::machine::acts::MARKING;
 use crate::cli;
 use crate::keymap::Command;
 use crate::model::{PaneInfo, Session};
@@ -26,18 +27,15 @@ pub(super) fn workspace_after(session: &Session, by: i32, removing: impl Fn(u64)
     cycled(&open, shown.workspace, by).filter(|next| Some(*next) != shown.workspace)
 }
 
-pub(super) fn mark_waits(machine: &str) -> String {
-    format!("Marking an agent on {machine} is not offered yet: {BOOT_WAITS}")
+pub(super) fn mark_pane_args(pane: u64, pending: bool) -> Vec<String> {
+    let id = pane.to_string();
+    if pending { cmd(&["mark", "--pane", &id, "--reviewed"]) } else { cmd(&["mark", "--pane", &id]) }
 }
 
 pub(super) fn mark_args(pane: &PaneInfo) -> Option<(Vec<String>, &'static str)> {
     pane.agent.as_ref()?;
-    let id = pane.id.to_string();
-    Some(if pane.pending() {
-        (cmd(&["mark", "--pane", &id, "--reviewed"]), REVIEWED)
-    } else {
-        (cmd(&["mark", "--pane", &id]), MARKED)
-    })
+    let pending = pane.pending();
+    Some((mark_pane_args(pane.id, pending), if pending { REVIEWED } else { MARKED }))
 }
 
 pub(super) fn mark_answer(result: &anyhow::Result<String>, said: &str) -> (String, ToastKind) {
@@ -83,8 +81,8 @@ impl Root {
     }
 
     fn mark_active_pane(&mut self, cx: &mut Context<Self>) {
-        if let Some(machine) = self.machine.as_ref().map(|tab| tab.machine.clone()) {
-            self.tell(&mark_waits(&machine), cx);
+        if self.machine.is_some() {
+            self.mark_active_there(cx);
             return;
         }
         let pane = self.active_pane().and_then(|id| self.session.as_ref()?.pane(id));
@@ -98,8 +96,21 @@ impl Root {
         });
     }
 
-    fn tell(&self, text: &str, cx: &mut Context<Self>) {
-        self.store.update(cx, |s, cx| s.toast(text, ToastKind::Info, cx));
+    fn mark_active_there(&mut self, cx: &mut Context<Self>) {
+        let Some(run) = self.machine.as_ref().map(MachineTab::run) else { return };
+        if !self.still_there(&run, cx) {
+            return;
+        }
+        if let Some(why) = self.machine.as_ref().and_then(|tab| tab.boot_refusal(MARKING)) {
+            self.tell(&why, cx);
+            return;
+        }
+        let pane = self.active_pane().and_then(|id| self.shown_session()?.pane(id));
+        let Some((args, said)) = pane.and_then(mark_args) else {
+            self.tell(NO_AGENT_HERE, cx);
+            return;
+        };
+        self.send_there(&run, args, Some(said), cx);
     }
 }
 

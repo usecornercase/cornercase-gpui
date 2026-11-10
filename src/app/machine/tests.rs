@@ -5,6 +5,7 @@ use serde_json::json;
 use super::*;
 use crate::cli::QueueTap;
 use crate::model::machines::LinkState;
+use crate::model::with_boot;
 use crate::model::{Shown, Tab, ThereProject, ThereWorkspace, ViewInfo};
 
 fn id(number: u64) -> ThereId {
@@ -38,11 +39,11 @@ fn place(tab: u64) -> MachinePlace {
     place_on(&machine("vps", "b1"), 1, tab)
 }
 
-fn opening() -> MachineTab {
+pub(super) fn opening() -> MachineTab {
     MachineTab::new(&place(20), None)
 }
 
-fn tapped() -> (MachineTab, QueueTap) {
+pub(super) fn tapped() -> (MachineTab, QueueTap) {
     let (queue, tap) = QueueTap::new();
     let mut tab = opening();
     tab.conn = Connection::new(Target::Local, queue);
@@ -461,12 +462,12 @@ fn run_of(tab: &MachineTab) -> MachineRun {
 
 #[test]
 fn closing_a_pane_there_names_the_run_it_was_seen_on() {
-    assert_eq!(Closable::Pane(5).args("b1"), ["close", "--pane", "5", "--boot", "b1"]);
+    assert_eq!(with_boot(Closable::Pane(5).args(), "b1"), ["close", "--pane", "5", "--boot", "b1"]);
 }
 
 #[test]
 fn closing_a_tab_there_names_the_run_it_was_seen_on() {
-    assert_eq!(Closable::Tab(20).args("b1"), ["close", "--tab", "20", "--boot", "b1"]);
+    assert_eq!(with_boot(Closable::Tab(20).args(), "b1"), ["close", "--tab", "20", "--boot", "b1"]);
 }
 
 #[test]
@@ -545,7 +546,7 @@ fn with_agents(mut tab: MachineTab) -> MachineTab {
 
 #[test]
 fn closing_an_agent_there_names_the_run_it_was_seen_on() {
-    assert_eq!(Closable::Agent(5).args("b1"), ["close", "--agent", "--pane", "5", "--boot", "b1"]);
+    assert_eq!(with_boot(Closable::Agent(5).args(), "b1"), ["close", "--agent", "--pane", "5", "--boot", "b1"]);
 }
 
 #[test]
@@ -566,7 +567,10 @@ fn an_agent_close_goes_on_the_machine_s_own_queue() {
 
 #[test]
 fn the_agent_check_there_names_the_run() {
-    assert_eq!(agent_check_args(5, "b1"), ["close", "--agent", "--pane", "5", "--check", "--json", "--boot", "b1"]);
+    assert_eq!(
+        with_boot(agent_check_args(5), "b1"),
+        ["close", "--agent", "--pane", "5", "--check", "--json", "--boot", "b1"]
+    );
 }
 
 #[test]

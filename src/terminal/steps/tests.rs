@@ -1,4 +1,6 @@
 use super::*;
+use crate::app::machine::acts::boot_refusal;
+use crate::model::with_boot;
 use crate::model::{Group, Project, Shown, ViewInfo, Workspace};
 
 fn project(id: u64, group: Option<u64>, workspaces: &[u64]) -> Project {
@@ -99,9 +101,15 @@ fn a_pane_without_an_agent_has_nothing_to_mark() {
 }
 
 #[test]
-fn marking_on_a_machine_names_what_it_needs() {
-    assert_eq!(
-        mark_waits("vps"),
-        "Marking an agent on vps is not offered yet: needs usecornercase/cornercase-terminal#723"
-    );
+fn marking_there_says_which_run_its_pane_is_from() {
+    assert_eq!(with_boot(mark_pane_args(9, true), "b1"), ["mark", "--pane", "9", "--reviewed", "--boot", "b1"]);
+    assert_eq!(with_boot(mark_pane_args(9, false), "b1"), ["mark", "--pane", "9", "--boot", "b1"]);
+}
+
+#[test]
+fn marking_there_with_an_older_cornercase_here_names_what_it_needs() {
+    let older = Some(cli::Version::new(0, 13, 21));
+    let why = boot_refusal(MARKING, "vps", older).expect("a refusal");
+    assert!(why.starts_with("Marking an agent on vps needs cornercase 0.13.30 or newer on this "), "{why}");
+    assert!(why.ends_with("(it has 0.13.21)"), "{why}");
 }
