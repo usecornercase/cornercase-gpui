@@ -81,10 +81,10 @@ impl Root {
         (dot, label, why)
     }
 
-    pub(super) fn keep_beating(&mut self, window: &Window, cx: &mut Context<Self>) {
-        self.beat.drawing(Instant::now());
-        if self.session.as_ref().is_some_and(Session::anyone_working) && self.beat.start() {
-            follow_frames(window, cx.entity_id(), self.beat.clone());
+    pub(super) fn keep_beating(&mut self, window: &Window) {
+        self.parts.beat.drawing(Instant::now());
+        if self.session.as_ref().is_some_and(Session::anyone_working) && self.parts.beat.start() {
+            follow_frames(window, self.parts.orbit_layer.entity_id(), self.parts.beat.clone());
         }
     }
 
@@ -126,10 +126,10 @@ fn conn_words(conn: &Conn, came_up: bool, version: &str) -> (String, Option<Stri
     }
 }
 
-fn follow_frames(window: &Window, root: EntityId, beat: Rc<motion::Beat>) {
+fn follow_frames(window: &Window, target: EntityId, beat: Rc<motion::Beat>) {
     window.on_next_frame(move |window, cx| match beat.tick(Instant::now(), motion::orbits_drawn()) {
-        motion::Next::Wait => follow_frames(window, root, beat),
-        motion::Next::Draw => cx.notify(root),
+        motion::Next::Wait => follow_frames(window, target, beat),
+        motion::Next::Draw => cx.notify(target),
         motion::Next::Rest => {}
     });
 }

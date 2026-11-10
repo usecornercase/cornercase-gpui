@@ -171,7 +171,7 @@ pub(crate) struct Looks {
 
 impl Root {
     pub(crate) fn follow_look(&mut self, cx: &mut gpui::Context<Self>) {
-        let Some(session) = &self.session else { return };
+        let Some(session) = self.session.as_ref() else { return };
         let look = &self.side.look.current;
         let stale = session.boot != look.boot || session.config.revision > look.revision;
         if !stale || self.side.look.loading {

@@ -24,8 +24,9 @@ const LISTS_KEEP: f32 = 120.;
 struct StackGrip;
 struct AgentsGrip;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Sizes {
-    stack: Split,
+    pub(super) stack: Split,
     agents: Split,
 }
 
@@ -159,6 +160,7 @@ impl Root {
             place,
             now: crate::panels::queue::now(),
             counts: look.counts,
+            spots: self.parts.spots.clone(),
         }
     }
 
@@ -167,7 +169,7 @@ impl Root {
     }
 
     fn project_rows(&self, cx: &mut Context<Self>) -> Div {
-        let Some(session) = &self.session else { return rows_column() };
+        let Some(session) = self.session.as_ref() else { return rows_column() };
         let listing = self.listing(session);
         let mut rows = Vec::new();
         for section in session.sections() {
@@ -195,7 +197,7 @@ impl Root {
     }
 
     fn workspace_rows(&self, cx: &mut Context<Self>) -> AnyElement {
-        let Some(session) = &self.session else { return rows_column().into_any_element() };
+        let Some(session) = self.session.as_ref() else { return rows_column().into_any_element() };
         let listing = self.listing(session);
         if let Some((seen, there)) = self.alone_shown() {
             let rows = there.workspaces.iter().map(|ws| self.there_workspace(seen, ws, &listing, cx));

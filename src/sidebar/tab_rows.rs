@@ -12,7 +12,8 @@ use super::{Target, draggable};
 use crate::app::Root;
 use crate::model::{PaneInfo, Shown, Tab, Workspace, memory_size};
 use crate::theme::colours;
-use crate::ui::{self, badge};
+use crate::ui;
+use crate::ui::orbits;
 
 pub(super) fn tab_title<Id>(tab: &Tab<Id>) -> String {
     tab.agent_pane().and_then(PaneInfo::agent_title).unwrap_or_else(|| tab.name.clone())
@@ -81,7 +82,7 @@ impl Root {
             .gap(px(6.))
             .px(px(6.))
             .py(px(3.))
-            .child(badge(tab.loudest()))
+            .child(orbits::badge(tab.loudest(), &self.parts.spots, 1.))
             .child(tab_text(self.name_or_rename(target, name), details))
             .child(self.row_end(target, End { gap: 6., buttons: 1, figures: false }, cx));
         let row = row_actions(row, target, move |this| this.focus_item("tab", id), cx);

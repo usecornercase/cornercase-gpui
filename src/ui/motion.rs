@@ -108,6 +108,10 @@ pub(crate) fn orbit(glyph: Svg) -> Svg {
     glyph.with_transformation(Transformation::rotate(percentage(orbit_turned(clock()))))
 }
 
+pub(crate) fn orbits_shown(count: usize) {
+    ORBITS.with(|drawn| drawn.set(drawn.get() + count));
+}
+
 pub(crate) fn orbits_drawn() -> usize {
     ORBITS.with(Cell::get)
 }

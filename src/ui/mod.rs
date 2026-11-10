@@ -9,6 +9,7 @@ pub(crate) mod markdown;
 pub(crate) mod menu;
 pub(crate) mod motion;
 pub(crate) mod one_line;
+pub(crate) mod orbits;
 pub(crate) mod qr;
 pub(crate) mod selection;
 pub(crate) mod signs;
@@ -236,19 +237,21 @@ pub(crate) fn status_badge(status: Option<&str>) -> Option<(Icon, Rgba)> {
     }
 }
 
-fn badge_slot(status: Option<&str>) -> (Div, Option<Svg>) {
-    let slot = div().w(px(14.)).flex_none().flex().items_center().justify_center();
-    (slot, status_badge(status).map(|(glyph, colour)| icon(glyph, 12.).text_color(colour)))
+pub(crate) fn badge_slot() -> Div {
+    div().w(px(14.)).flex_none().flex().items_center().justify_center()
+}
+
+fn badge_glyph(status: Option<&str>) -> Option<Svg> {
+    status_badge(status).map(|(glyph, colour)| icon(glyph, 12.).text_color(colour))
 }
 
 pub(crate) fn badge(status: Option<&str>) -> Div {
-    let (slot, glyph) = badge_slot(status);
-    slot.children(glyph.map(|glyph| if status == Some("working") { motion::orbit(glyph) } else { glyph }))
+    let glyph = badge_glyph(status);
+    badge_slot().children(glyph.map(|glyph| if status == Some("working") { motion::orbit(glyph) } else { glyph }))
 }
 
 pub(crate) fn still_badge(status: Option<&str>) -> Div {
-    let (slot, glyph) = badge_slot(status);
-    slot.children(glyph)
+    badge_slot().children(badge_glyph(status))
 }
 
 pub(crate) fn section(title: impl Into<SharedString>) -> Div {
