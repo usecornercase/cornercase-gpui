@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::Duration;
 
 use gpui::Context;
@@ -17,8 +17,33 @@ const FOLD_CAP: Duration = Duration::from_secs(15);
 
 #[derive(Default)]
 pub(super) struct Homes {
-    known: HashMap<String, String>,
-    asked: HashSet<String>,
+    known: HashMap<String, (String, String)>,
+    asked: HashMap<String, String>,
+}
+
+impl Homes {
+    fn ask(&mut self, machine: &str, boot: &str) -> bool {
+        let known = self.known.get(machine).is_some_and(|(held, _)| held == boot);
+        if known || self.asked.get(machine).is_some_and(|asked| asked == boot) {
+            return false;
+        }
+        self.asked.insert(machine.to_owned(), boot.to_owned());
+        true
+    }
+
+    fn answered(&mut self, machine: &str, boot: &str, home: Option<String>) {
+        if self.asked.get(machine).is_none_or(|asked| asked != boot) {
+            return;
+        }
+        self.asked.remove(machine);
+        if let Some(home) = home {
+            self.known.insert(machine.to_owned(), (boot.to_owned(), home));
+        }
+    }
+
+    fn home(&self, boot: &str) -> Option<&str> {
+        self.known.values().find(|(held, _)| held == boot).map(|(_, home)| home.as_str())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -242,25 +267,19 @@ impl Store {
     }
 
     pub(crate) fn machine_home(&self, boot: &str) -> Option<&str> {
-        self.there.homes.known.get(boot).map(String::as_str)
+        self.there.homes.home(boot)
     }
 
     pub(crate) fn ask_machine_home(&mut self, machine: &str, cx: &mut Context<Self>) {
         let Some(seen) = self.session.as_ref().and_then(|session| session.machine(machine)) else { return };
-        let boot = seen.boot.clone();
+        let (machine, boot) = (seen.name.clone(), seen.boot.clone());
         let Ok(target) = self.machine_target(seen) else { return };
-        if self.there.homes.known.contains_key(&boot) || !self.there.homes.asked.insert(boot.clone()) {
+        if !self.there.homes.ask(&machine, &boot) {
             return;
         }
         run_on(cx, target, args(&["status", "--json"]), move |this: &mut Self, result, cx| {
-            match result.ok().as_deref().and_then(home_in) {
-                Some(home) => {
-                    this.there.homes.known.insert(boot, home);
-                }
-                None => {
-                    this.there.homes.asked.remove(&boot);
-                }
-            }
+            let home = result.ok().as_deref().and_then(home_in);
+            this.there.homes.answered(&machine, &boot, home);
             cx.notify();
         });
     }
