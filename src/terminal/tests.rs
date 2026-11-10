@@ -2,8 +2,8 @@ use gpui::CursorStyle;
 
 use super::pane_menu::move_pane_args;
 use super::selection::{cleaned, kept, read_args, word_at};
-use super::{cycled, divider_cursor, split_args};
-use crate::app::Msg;
+use super::{cycled, divider_cursor, note_text, split_args};
+use crate::app::{Conn, Msg};
 use crate::desktop::Board;
 use crate::platform::paths::Style;
 use crate::render::moving::{Aim, Place};
@@ -105,4 +105,27 @@ fn what_is_cleaned_keeps_lines_tabs_and_every_visible_character() {
 fn a_split_names_its_pane_and_asks_to_focus_the_new_one() {
     assert_eq!(split_args(5, false), ["split", "--pane", "5", "--focus"]);
     assert_eq!(split_args(5, true), ["split", "--pane", "5", "--focus", "--down"]);
+}
+
+fn lost(why: &str) -> Conn {
+    Conn::Lost(why.to_string())
+}
+
+#[test]
+fn a_connection_that_never_came_up_is_not_called_lost() {
+    let title = note_text(&lost("x"), None, Some("vps"), false).0;
+    assert_eq!(title, "Could not connect to cornercase on vps");
+}
+
+#[test]
+fn a_connection_that_dropped_is_lost() {
+    assert_eq!(note_text(&lost("x"), None, Some("vps"), true).0, "Lost cornercase on vps");
+    assert_eq!(note_text(&lost("x"), None, None, true).0, "Lost cornercase");
+}
+
+#[test]
+fn the_reason_loses_cornercases_prefix() {
+    let conn = lost("cornercase start-server: Error: `vps` runs cornercase 0.13.18 and this machine 0.13.21");
+    let detail = note_text(&conn, None, Some("vps"), false).1.expect("a reason");
+    assert!(detail.starts_with("`vps` runs"), "{detail}");
 }

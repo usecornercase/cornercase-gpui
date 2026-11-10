@@ -1,4 +1,5 @@
 mod locate;
+mod older;
 mod partial;
 mod remote;
 mod requests;
@@ -21,6 +22,11 @@ use parking_lot::Mutex;
 
 pub(crate) use locate::parse_version;
 pub(crate) use locate::{Binary, INSTALL_GUIDE, MINIMUM, Missing, Origin, Problem, Version};
+#[cfg(test)]
+pub(crate) use older::Started;
+pub(crate) use older::{
+    Answer, Behind, Older, Said, Start, Step, answer_at, answer_on, said_of, start_server, step, update_args,
+};
 pub(crate) use partial::{run_partial, run_partial_on, run_printed};
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
@@ -176,7 +182,7 @@ pub(crate) fn run_with_stdin<S: AsRef<str>>(args: &[S], stdin: Option<&str>) -> 
     run_on(&target(), args, stdin.map(str::as_bytes))
 }
 
-pub(crate) fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&[u8]>) -> Result<String> {
+pub(crate) fn output_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&[u8]>) -> Result<Output> {
     let mut cmd = target.command(args);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() });
@@ -186,7 +192,11 @@ pub(crate) fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&
     {
         let _ = pipe.write_all(text);
     }
-    answer_of(&child.wait_with_output()?, args)
+    Ok(child.wait_with_output()?)
+}
+
+pub(crate) fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&[u8]>) -> Result<String> {
+    answer_of(&output_on(target, args, stdin)?, args)
 }
 
 fn answer_of<S: AsRef<str>>(out: &Output, args: &[S]) -> Result<String> {
@@ -603,12 +613,15 @@ fn coalesce(rx: &mpsc::Receiver<Job>, key: &'static str, mut cmd: Cmd) -> (Cmd, 
 }
 
 pub(crate) fn reason(error: &anyhow::Error) -> String {
-    let text = error.to_string();
+    reason_of(&error.to_string())
+}
+
+pub(crate) fn reason_of(text: &str) -> String {
     let text = match text.split_once(": ") {
-        Some((head, rest)) if head.starts_with("cornercase ") => rest.to_string(),
+        Some((head, rest)) if head.starts_with("cornercase ") => rest,
         _ => text,
     };
-    let text = text.strip_prefix("Error: ").or_else(|| text.strip_prefix("error: ")).unwrap_or(&text);
+    let text = text.strip_prefix("Error: ").or_else(|| text.strip_prefix("error: ")).unwrap_or(text);
     text.trim().to_string()
 }
 

@@ -1,0 +1,1 @@
+Error: `vps` runs cornercase 0.13.18 and this machine 0.13.21. Update it from here with `cornercase --remote vps --remote-command /home/ana/bin/cornercase update`

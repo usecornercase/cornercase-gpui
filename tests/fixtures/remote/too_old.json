@@ -1,0 +1,1 @@
+{"error":{"code":"older","message":"the cornercase on `vps` is too old to attach to from another machine. Run `cornercase update` there","destination":"vps","there":null,"here":"0.13.28","update":["cornercase","--remote","vps","--remote-command","/home/ana/old/cornercase","update"]}}

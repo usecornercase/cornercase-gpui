@@ -45,6 +45,6 @@ fn a_missing_cornercase_starts_no_server() {
 
 #[test]
 fn a_found_cornercase_starts_the_server() {
-    let msg = start_message(Ok(()), || Ok("started".to_string()));
-    assert!(matches!(msg, Msg::Started(Ok(text)) if text == "started"));
+    let msg = start_message(Ok(()), || cli::Start::Up(cli::Started::default()));
+    assert!(matches!(msg, Msg::Started(cli::Start::Up(_))));
 }

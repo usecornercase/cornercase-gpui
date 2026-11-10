@@ -1,0 +1,1 @@
+{"error":{"code":"older","message":"`vps` runs cornercase 0.13.21 and this machine 0.13.28. Update it from here with `cornercase --remote vps --remote-command 'env LANG=C /home/ana/bin/cornercase' update`","destination":"vps","there":"0.13.21","here":"0.13.28","update":["cornercase","--remote","vps","--remote-command","env LANG=C /home/ana/bin/cornercase","update"]}}

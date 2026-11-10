@@ -1,0 +1,2 @@
+updated cornercase 0.13.21 → 0.13.28
+the server keeps running 0.13.21; run `cornercase kill-server` and start cornercase to use the new one

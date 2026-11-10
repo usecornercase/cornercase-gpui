@@ -1,0 +1,14 @@
+{
+  "already": false,
+  "boot": "27712-1794289433453344000",
+  "cols": 160,
+  "complete": true,
+  "restored": true,
+  "rows": 48,
+  "size": "start-server",
+  "theme": {
+    "from": "client",
+    "scheme": "dark"
+  },
+  "version": "0.13.28"
+}

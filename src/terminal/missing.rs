@@ -6,11 +6,15 @@ use gpui::{
 };
 
 use super::no_tab::{heading, lead_text, page, row, tall};
+use super::older::answer_under;
 use crate::app::{Conn, Root};
-use crate::cli::{self, Binary, Missing, Origin, Problem};
+use crate::cli::{self, Binary, Missing, Origin, Problem, Said};
 use crate::desktop;
 use crate::platform::{Os, paths::home_relative};
+use crate::store::Busy;
 use crate::ui::{self, Icon, Tone};
+
+const UPDATE_HERE: &str = "update-here";
 
 fn shown(path: &Path, home: &str) -> String {
     home_relative(&path.to_string_lossy(), home)
@@ -62,8 +66,8 @@ fn unusable(path: &Path, origin: Origin, problem: &Problem, home: &str) -> Strin
              ~/.local/bin."
         ),
         (Problem::TooOld(version), _) => format!(
-            "This window needs cornercase {min} or newer; {named} is {version}. Update it as the installation guide \
-             says, then try again."
+            "This window needs cornercase {min} or newer; {named} is {version}. Update it here, or as the installation \
+             guide says, then try again."
         ),
         (Problem::DoesNotStart(why), _) => format!("{named} could not be started: {why}."),
         (Problem::NotCornercase(answer), _) if answer.is_empty() => {
@@ -94,8 +98,30 @@ fn emblem_of(missing: &Missing) -> Icon {
     if missing.label() == "not found" { Icon::Download } else { Icon::Alert }
 }
 
-fn guide_button(cx: &mut Context<Root>) -> Stateful<Div> {
-    tall(ui::icon_text_button("missing-guide", Icon::External, "Installation guide", Tone::Primary))
+fn too_old_path(missing: &Missing) -> Option<&Path> {
+    match missing {
+        Missing::Unusable { path, problem: Problem::TooOld(_), .. } => Some(path),
+        _ => None,
+    }
+}
+
+fn update_question(path: &Path, os: Os, home: &str) -> (String, String, &'static str) {
+    let machine = desktop::machine(os);
+    let message = format!(
+        "This runs `cornercase update` with {}, which installs the latest release in its place, or says which \
+         command updates it when it cannot (Homebrew, a folder it cannot write). A server already running keeps its \
+         release until it restarts.",
+        shown(path, home)
+    );
+    (format!("Update cornercase on this {machine}?"), message, "Update")
+}
+
+fn update_job(os: Os) -> Busy {
+    Busy::new(UPDATE_HERE, format!("Updating cornercase on this {}…", desktop::machine(os)))
+}
+
+fn guide_button(tone: Tone, cx: &mut Context<Root>) -> Stateful<Div> {
+    tall(ui::icon_text_button("missing-guide", Icon::External, "Installation guide", tone))
         .on_click(cx.listener(|_, _: &ClickEvent, _, cx| cx.open_url(cli::INSTALL_GUIDE)))
 }
 
@@ -129,10 +155,13 @@ fn choice(checked: Result<Binary, Missing>) -> Choice {
 }
 
 impl Root {
-    pub(super) fn missing_page(missing: &Missing, cx: &mut Context<Self>) -> Stateful<Div> {
+    pub(super) fn missing_page(&self, missing: &Missing, cx: &mut Context<Self>) -> Stateful<Div> {
         let lead = lead(missing, Os::CURRENT, &desktop::home_text());
+        let update = too_old_path(missing).map(|path| self.update_here_button(path, cx));
+        let tone = if update.is_some() { Tone::Plain } else { Tone::Primary };
         let buttons = row()
-            .child(guide_button(cx))
+            .children(update)
+            .child(guide_button(tone, cx))
             .child(retry_button(cx))
             .children(offers_choice(missing).then(|| choose_button(cx)));
         page()
@@ -142,6 +171,36 @@ impl Root {
             .child(heading(&heading_of(missing)))
             .child(lead_text(lead))
             .child(buttons)
+            .child(answer_under(self.answered.as_ref()))
+    }
+
+    fn update_here_button(&self, path: &Path, cx: &mut Context<Self>) -> Stateful<Div> {
+        if self.store.read(cx).busy(UPDATE_HERE) {
+            let label = format!("Updating cornercase on this {}…", desktop::machine(Os::CURRENT));
+            return tall(ui::busy_button("missing-update", label, Tone::Primary));
+        }
+        let path = path.to_path_buf();
+        tall(ui::icon_text_button("missing-update", Icon::Download, "Update cornercase…", Tone::Primary)).on_click(
+            cx.listener(move |_, _: &ClickEvent, window, cx| {
+                let question = update_question(&path, Os::CURRENT, &desktop::home_text());
+                let path = path.clone();
+                Self::ask_then(question, move |this, cx| this.update_here(path.clone(), cx), window, cx);
+            }),
+        )
+    }
+
+    fn update_here(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        let work = move || cli::answer_at(&path, &["update"]);
+        self.run_answered(update_job(Os::CURRENT), work, Self::update_here_answered, cx);
+    }
+
+    fn update_here_answered(&mut self, said: Said, cx: &mut Context<Self>) {
+        let done = matches!(said, Said::Done(_));
+        self.answered = Some(said);
+        if done {
+            self.start(cx);
+        }
+        cx.notify();
     }
 
     fn restart(&mut self, cx: &mut Context<Self>) {

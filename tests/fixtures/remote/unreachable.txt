@@ -1,0 +1,1 @@
+Error: could not reach cornercase on `ana@vps.example.com`: ssh: Could not resolve hostname ana@vps.example.com: nodename nor servname provided, or not known

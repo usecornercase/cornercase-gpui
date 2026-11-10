@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.51
+
+- **The window says when another machine runs an older cornercase, and updates it.** Connecting to a machine whose cornercase is older than this computer's, with `--remote` or ⇧⌘K, now shows a page with both releases, instead of "Lost cornercase" with cornercase's raw message and a retry that could not succeed. **Update cornercase on vps…** asks first, runs the update cornercase names from here and connects again. If that machine's server still runs the old release, **Restart cornercase on vps…** restarts it, after saying that every program in its terminals stops, or you can connect without restarting. This needs cornercase 0.13.23 or newer on this computer.
+- **A connection that never came up no longer reads "Lost".** When the window cannot connect at all, it says "Could not connect to cornercase on vps" with the reason, without cornercase's `cornercase start-server: Error:` in front. "Lost" is kept for a link that dropped.
+- **Update an old cornercase from the window.** When this computer's cornercase is older than the window needs, its page offers **Update cornercase…**, which asks first, runs `cornercase update` and tries again. When cornercase cannot update itself (Homebrew, a folder it cannot write), the page shows what it says to run.
+
 ## 0.1.50
 
 - **Start an agent in default while settings choose another mode.** An issue's Start now offers **default** (no mode arguments) like any other mode when settings choose one such as plan, and the agent starts without it, on this computer and on a machine. It needs cornercase 0.13.28 or newer wherever the agent starts: with an older one, default rests as before, and the line under it says which version offers it and which one runs.

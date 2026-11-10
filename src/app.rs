@@ -60,7 +60,7 @@ const DIALOG_RISE: f32 = 10.;
 const RETRY: Duration = Duration::from_millis(1500);
 
 pub(crate) enum Msg {
-    Started(Result<String, String>),
+    Started(cli::Start),
     Missing(cli::Missing),
     Stream(u64, Heard),
     Error(String),
@@ -87,6 +87,8 @@ pub(crate) enum Conn {
     Connected,
     Lost(String),
     Missing(cli::Missing),
+    Older(cli::Older),
+    Behind(cli::Behind),
 }
 
 pub(crate) enum Drag {
@@ -118,6 +120,9 @@ pub(crate) struct Root {
     pub(crate) conn: Conn,
     pub(crate) host: Option<String>,
     attempts: u32,
+    pub(crate) came_up: bool,
+    pub(crate) updated_there: Option<cli::Older>,
+    pub(crate) answered: Option<cli::Said>,
     place: Vec<String>,
     pub(crate) side: SideState,
     pub(crate) visible: bool,
@@ -321,6 +326,9 @@ impl Root {
             conn: Conn::Starting,
             host: cli::host(),
             attempts: 0,
+            came_up: false,
+            updated_there: None,
+            answered: None,
             place: Vec::new(),
             side: SideState::default(),
             visible: true,
@@ -409,6 +417,24 @@ impl Root {
         });
     }
 
+    fn started(&mut self, start: cli::Start, cx: &mut Context<Self>) {
+        match cli::step(start, self.updated_there.as_ref()) {
+            cli::Step::Open => {
+                self.updated_there = None;
+                self.open_view(cx);
+            }
+            cli::Step::Behind(behind) => {
+                self.answered = None;
+                self.drop_connection(Conn::Behind(behind), cx);
+            }
+            cli::Step::Older(older) => self.drop_connection(Conn::Older(older), cx),
+            cli::Step::Lost(why) => {
+                self.lost(why, cx);
+                self.retry(cx);
+            }
+        }
+    }
+
     fn lost(&mut self, why: String, cx: &mut Context<Self>) {
         self.drop_connection(Conn::Lost(why), cx);
     }
@@ -429,12 +455,8 @@ impl Root {
             plugins::follow_window_processes(cx);
         }
         match msg {
-            Msg::Started(Ok(_)) => self.open_view(cx),
+            Msg::Started(start) => self.started(start, cx),
             Msg::Missing(missing) => self.drop_connection(Conn::Missing(missing), cx),
-            Msg::Started(Err(e)) => {
-                self.lost(e, cx);
-                self.retry(cx);
-            }
             Msg::Stream(serial, heard) => {
                 if !self.stream_heard(serial, heard, cx) {
                     return;
@@ -481,6 +503,8 @@ impl Root {
     fn session_arrived(&mut self, mut session: Session, cx: &mut Context<Self>) {
         self.side.folds.apply(&mut session);
         self.conn = Conn::Connected;
+        self.came_up = true;
+        self.answered = None;
         self.attempts = 0;
         self.follow_surface(&session, cx);
         let view_id = self.own.view_id;
@@ -859,13 +883,13 @@ fn font_size_from_env() -> f32 {
 
 fn start_server(tx: &UnboundedSender<Msg>, (cols, rows): (u16, u16), chosen: Option<String>) {
     let msg = start_message(cli::ensure_binary(chosen), || {
-        let args = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-"];
-        cli::run_with_stdin(&args, Some(&theme::terminal_json())).map_err(|e| e.to_string())
+        let args = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-", "--json"];
+        cli::start_server(&args, &theme::terminal_json())
     });
     let _ = tx.unbounded_send(msg);
 }
 
-fn start_message(found: Result<(), cli::Missing>, start: impl FnOnce() -> Result<String, String>) -> Msg {
+fn start_message(found: Result<(), cli::Missing>, start: impl FnOnce() -> cli::Start) -> Msg {
     match found {
         Ok(()) => Msg::Started(start()),
         Err(missing) => Msg::Missing(missing),
