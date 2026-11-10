@@ -29,11 +29,34 @@ pub(super) fn pane_label(session: Option<&Session>, id: u64) -> String {
     format!("{program} (pane {id})")
 }
 
-fn move_places(pane: u64, target: u64) -> Vec<Entry> {
+fn move_places<A>(pane: u64, target: u64, act: &A) -> Vec<Entry>
+where
+    A: Fn(&mut Root, u64, Aim, &mut Context<Root>) + Clone + 'static,
+{
     PLACES
         .into_iter()
-        .map(|(text, place)| item(text, move |this, _, cx| this.move_pane(pane, Aim { target, place }, cx)))
+        .map(|(text, place)| {
+            let act = act.clone();
+            item(text, move |this, _, cx| act(this, pane, Aim { target, place }, cx))
+        })
         .collect()
+}
+
+pub(super) fn move_targets(session: Option<&Session>, pane: u64) -> Vec<(u64, String)> {
+    let tab = session.and_then(|s| s.tab_of_pane(pane));
+    let others = tab.into_iter().flat_map(|t| t.panes.iter().map(|p| p.id)).filter(|&id| id != pane);
+    others.map(|id| (id, pane_label(session, id))).collect()
+}
+
+pub(super) fn move_menu<A>(pane: u64, targets: Vec<(u64, String)>, act: &A) -> Option<Entry>
+where
+    A: Fn(&mut Root, u64, Aim, &mut Context<Root>) + Clone + 'static,
+{
+    if targets.is_empty() {
+        return None;
+    }
+    let targets = targets.into_iter().map(|(target, label)| submenu(label, move_places(pane, target, act)));
+    Some(submenu("Move pane", targets.collect()))
 }
 
 fn pass_right_click(pane: u64, (x, y): (u16, u16)) -> Entry {
@@ -86,17 +109,11 @@ impl Root {
     }
 
     fn move_pane_menu(&self, pane: u64) -> Option<Entry> {
-        let others: Vec<u64> = self
-            .session
-            .as_ref()
-            .and_then(|s| s.tab_of_pane(pane))
-            .map(|t| t.panes.iter().map(|p| p.id).filter(|&id| id != pane).collect())
-            .unwrap_or_default();
-        if others.is_empty() {
-            return None;
-        }
-        let named = |target| pane_label(self.session.as_ref(), target);
-        let targets = others.into_iter().map(|target| submenu(named(target), move_places(pane, target))).collect();
-        Some(submenu("Move pane", targets))
+        move_menu(pane, move_targets(self.session.as_ref(), pane), &|this: &mut Root, pane, aim, cx| {
+            this.move_pane(pane, aim, cx);
+        })
     }
 }
+
+#[cfg(test)]
+mod tests;

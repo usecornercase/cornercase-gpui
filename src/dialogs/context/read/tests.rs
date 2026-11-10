@@ -24,8 +24,28 @@ fn total(reads: &Reads) -> Option<u64> {
 
 #[test]
 fn only_the_first_command_asks_for_the_cached_answer() {
-    assert_eq!(cached_args(7), ["context", "--pane", "7", "--cached", "--json"]);
-    assert_eq!(read_args(7), ["context", "--pane", "7", "--json"]);
+    assert_eq!(cached_args(7, None), ["context", "--pane", "7", "--cached", "--json"]);
+    assert_eq!(read_args(7, None), ["context", "--pane", "7", "--json"]);
+}
+
+#[test]
+fn a_read_there_says_which_run_its_pane_is_from() {
+    assert_eq!(cached_args(9, Some("b1")), ["context", "--pane", "9", "--cached", "--json", "--boot", "b1"]);
+    assert_eq!(read_args(9, Some("b1")), ["context", "--pane", "9", "--json", "--boot", "b1"]);
+}
+
+#[test]
+fn a_read_here_sends_no_boot() {
+    assert!(!read_args(9, None).contains(&"--boot".to_string()));
+}
+
+#[test]
+fn a_read_refused_for_another_run_says_the_machine_restarted() {
+    let stale = cli::failure("context", Some(4), b"this request is for another run");
+    let err = stale_read("vps", Err(stale)).expect_err("a refusal");
+    assert_eq!(err.to_string(), "vps restarted: nothing was sent");
+    let other = stale_read("vps", Err(anyhow!("cornercase context: no such pane"))).expect_err("a failure");
+    assert_eq!(other.to_string(), "cornercase context: no such pane");
 }
 
 #[test]
@@ -191,4 +211,15 @@ fn the_job_and_title_name_the_machine() {
     assert_eq!(job_words(None, Some("vps")), "Reading the agent's context on vps…");
     assert_eq!(title(None), "Context");
     assert_eq!(title(Some("vps")), "Context on vps");
+}
+
+fn there(sends_boot: bool) -> ContextThere {
+    ContextThere { machine: "vps".into(), boot: "b1".into(), home: String::new(), sends_boot }
+}
+
+#[test]
+fn a_read_there_carries_the_tabs_run_only_where_this_cornercase_takes_it() {
+    assert_eq!(boot_for(Some(&there(true))), Some("b1"));
+    assert_eq!(boot_for(Some(&there(false))), None);
+    assert_eq!(boot_for(None), None);
 }

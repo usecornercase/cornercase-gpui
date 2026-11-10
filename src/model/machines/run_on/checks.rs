@@ -19,6 +19,15 @@ pub(crate) enum Asked<T> {
     Failed(String),
 }
 
+impl<T: for<'de> Deserialize<'de>> Asked<T> {
+    pub(crate) fn answered(result: anyhow::Result<String>) -> Self {
+        match result {
+            Ok(out) => read(Ok(&out)),
+            Err(e) => read(Err(crate::cli::reason(&e))),
+        }
+    }
+}
+
 impl<T> Asked<T> {
     pub(crate) fn asking(&self) -> bool {
         matches!(self, Self::Asking)

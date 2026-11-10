@@ -10,7 +10,7 @@ use serde_json::Value;
 use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
-use crate::model::accounts::{AccountsInfo, ListMoves, RestartAnswer, Selection, Switch, switching_key};
+use crate::model::accounts::{AccountsInfo, ListMoves, Selection, Switch, switching_key};
 use crate::model::machines::run_on::Awaited;
 use crate::model::machines::run_on::clone::Cloned;
 use crate::model::machines::{self, Machine};
@@ -31,7 +31,7 @@ pub(crate) use jobs::Busy;
 use jobs::Jobs;
 use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, Reach, TabThere};
-pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there};
+pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there, stale_note};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 
 const NO_FLOW: &str = "This workspace runs no flow";
@@ -261,10 +261,8 @@ impl Store {
     }
 
     fn account_switched(&mut self, switch: &Switch, result: anyhow::Result<String>, cx: &mut Context<Self>) {
-        let answer = result.and_then(|out| Ok(serde_json::from_str::<RestartAnswer>(&out)?));
-        match answer {
-            Ok(answer) => {
-                let said = switch.said(&answer);
+        match switch.answered(result, &switch.agent) {
+            Ok(said) => {
                 let kind = if said.refused { ToastKind::Error } else { ToastKind::Info };
                 self.toast(said.text, kind, cx);
             }
@@ -773,9 +771,27 @@ fn reply_of(queue: &Queue, args: Vec<String>) -> oneshot::Receiver<anyhow::Resul
     rx
 }
 
+pub(crate) fn reply(
+    cx: &App,
+    then: impl FnOnce(anyhow::Result<String>, &mut App) + 'static,
+) -> impl FnOnce(anyhow::Result<String>) + Send + 'static {
+    handoff(cx, None, then)
+}
+
+fn handoff(
+    cx: &App,
+    job: Option<(Entity<Store>, u64)>,
+    then: impl FnOnce(anyhow::Result<String>, &mut App) + 'static,
+) -> impl FnOnce(anyhow::Result<String>) + Send + 'static {
+    let (tx, rx) = oneshot::channel();
+    answered_on(cx, job, rx, then);
+    move |result| {
+        let _ = tx.send(result);
+    }
+}
+
 pub(crate) fn queued(cx: &App, args: Vec<String>, then: impl FnOnce(anyhow::Result<String>, &mut App) + 'static) {
-    let rx = reply_of(&Store::get(cx).read(cx).queue, args);
-    answered_on(cx, None, rx, then);
+    Store::get(cx).read(cx).queue.cmd_then(args, reply(cx, then));
 }
 
 pub(crate) fn queued_busy(
@@ -795,11 +811,7 @@ pub(crate) fn busy_reply(
 ) -> impl FnOnce(anyhow::Result<String>) + Send + 'static {
     let store = Store::get(cx);
     let id = store.update(cx, |s, cx| s.start_job(busy, cx));
-    let (tx, rx) = oneshot::channel();
-    answered_on(cx, Some((store, id)), rx, then);
-    move |result| {
-        let _ = tx.send(result);
-    }
+    handoff(cx, Some((store, id)), then)
 }
 
 fn answered_on(

@@ -24,6 +24,7 @@ pub(crate) struct ContextThere {
     pub(crate) machine: String,
     pub(crate) boot: String,
     pub(crate) home: String,
+    pub(crate) sends_boot: bool,
 }
 
 pub(crate) const VIEW_CONTEXT: &str = "View context";
@@ -125,7 +126,7 @@ impl ContextDialog {
     }
 
     fn ask_cached(&mut self, cx: &mut Context<Self>) {
-        let args = read::cached_args(self.pane);
+        let args = read::cached_args(self.pane, read::boot_for(self.there.as_ref()));
         let then = |this: &mut Self, outcome: Outcome, cx: &mut Context<Self>| {
             this.reads.settle(outcome, Instant::now());
             if this.reads.read_follows(shown(cx)) {
@@ -150,7 +151,7 @@ impl ContextDialog {
         if !self.reads.can_read() {
             return;
         }
-        let args = read::read_args(self.pane);
+        let args = read::read_args(self.pane, read::boot_for(self.there.as_ref()));
         let who = self.reads.answer().and_then(|a| a.title.clone());
         let then = |this: &mut Self, outcome: Outcome, cx: &mut Context<Self>| {
             this.reads.settle(outcome, Instant::now());
@@ -184,6 +185,7 @@ impl ContextDialog {
                 self.reads.start();
                 let busy = Busy::new(read::job_key(self.pane, Some((&there.machine, &there.boot))), words);
                 store::run_partial_on_busy(cx, busy, target, args, move |this, result, cx| {
+                    let result = read::stale_read(&there.machine, result);
                     then(this, read::landed(outcome_of(result), &reach(&there, this.pane, cx)), cx);
                 });
             }

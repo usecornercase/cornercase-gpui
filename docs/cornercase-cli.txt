@@ -39,10 +39,11 @@ pane, tab, workspace, project (their ids), program, agent, status, background_sh
 at_prompt, model, context, caller (the pane running the command), shown (the pane the window
 shows), active (its tab's active pane), tab_name, workspace_name, branch, worktree, project_name,
 path, survey (Claude Code's feedback survey shows), resuming (the agent is coming back in its
-conversation), parent (the pane that started it), subagents (how many it still runs), role (the
-role it plays in a flow, from its run), held_sends (how many messages `cornercase send` holds until
-the person in the pane is done typing), draft (true while it has text a person typed and has not sent),
-account_restart (waiting while it waits for its turn to end to restart on another account), pid (its
+conversation), parent (the pane that started it, while what started it still runs there),
+subagents (how many it still runs), role (the role it plays in a flow, from its run),
+held_sends (how many messages `cornercase send` holds until the person in the pane is done
+typing), draft (true while it has text a person typed and has not sent), account_restart
+(waiting while it waits for its turn to end to restart on another account), pid (its
 shell's process id), memory (the bytes its shell and the programs under it use, while that setting is
 on) and compacted (true while the context is empty because the conversation was just compacted);
 new ones only ever go at the end. Values are as in the
@@ -68,7 +69,7 @@ and how installing works here) and `keep_awake` (null while the setting is off),
 `version` and `boot`. `accounts_revision` moves each time `account list` would name other accounts,
 and is left out until it first does, so a client lists them again only when it moves. With --follow
 it keeps running and prints one such line first and again each time one of them changes, each with
-a `revision` that grows by one per line, built at most twice a second while someone follows; rules
+a `revision` that grows by one per line, sent at most twice a second while someone follows; rules
 for ending and for slow readers are --follow's.
 
 Examples:
@@ -351,7 +352,7 @@ Options:
           Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
 
       --mode <NAME>
-          One of the agent's modes, as settings → agents lists them, such as plan [default: the one chosen there]
+          One of the agent's modes, as settings → agents lists them, such as plan, or default for no mode arguments [default: the one chosen there]
 
       --remote-command <COMMAND>
           How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
@@ -429,10 +430,10 @@ Options:
           Print help (see a summary with '-h')
 
 The agent starts with its command and arguments from settings → agents. --mode replaces the mode
-chosen there by another of the agent's modes, --model adds the agent's own model flag and --effort its
-effort (Claude Code, Codex, Grok Build and GitHub Copilot CLI take one; an older server refuses all three rather than
-start the agent without them). If it asks whether
-you trust the folder, the question waits for your answer unless settings → agents accept it for
+chosen there by another of the agent's modes, or drops it with --mode default,
+--model adds the agent's own model flag and --effort its effort (Claude Code, Codex, Grok Build and GitHub
+Copilot CLI take one; an older server refuses all three rather than start the agent without them). If it asks
+whether you trust the folder, the question waits for your answer unless settings → agents accept it for
 you. Once it is ready, the prompt is pasted and
 submitted, and the command prints the pane's id; it fails if the agent never shows up. With
 --wait, a second line says how the wait ended: idle, done (it finished out of sight) or waiting
@@ -946,6 +947,7 @@ Options:
       --tab <ID>                  A tab: its agent's pane, else its active one
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --reviewed                  Take the mark off: the agent's work has been reviewed
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 A pane marked as pending review shows a blue ● on its tab, and on its workspace, project and
@@ -953,10 +955,15 @@ group rows, until it is marked as reviewed or its agent starts working again on 
 answer to its question. Looking at the tab does not take it off, unlike the ✓ of an agent that finished while you looked elsewhere.
 Both marks are saved with the session, so they come back after a restart with the conversation.
 
+--boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
+a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is
+marked, and the command prints why and exits with 4.
+
 Examples:
   cornercase mark
   cornercase mark --pane 12
   cornercase mark --pane 12 --reviewed
+  cornercase --remote vps mark --pane 9 --boot 4242-1700000000
 
 ================================================================ cornercase search
 Find the panes where some text was said: agent transcripts and every pane's history
@@ -1211,7 +1218,7 @@ Options:
       --cleanup                   Remove a routine run's workspace when it finishes, if nothing would be lost
       --no-cleanup                Keep a routine run's workspace (the default)
       --agent <AGENT>             Agent name, or auto to use the current default or running agent
-      --mode <MODE>               One of the agent's configured modes
+      --mode <MODE>               One of the agent's modes, as settings → agents lists them, or default for no mode arguments [default: the one chosen there; edit keeps the entry's]
       --prompt <PROMPT>           Prompt to submit when the entry starts
       --issue <ISSUE>             Issue URL or key; its prompt uses the configured template
       --source <SOURCE>           Tracker for an ambiguous issue key or a self-hosted URL [possible values: github, gitlab, shortcut, linear, jira, plane, asana]
@@ -1240,7 +1247,7 @@ Options:
       --cleanup                   Remove a routine run's workspace when it finishes, if nothing would be lost
       --no-cleanup                Keep a routine run's workspace (the default)
       --agent <AGENT>             Agent name, or auto to use the current default or running agent
-      --mode <MODE>               One of the agent's configured modes
+      --mode <MODE>               One of the agent's modes, as settings → agents lists them, or default for no mode arguments [default: the one chosen there; edit keeps the entry's]
       --prompt <PROMPT>           Prompt to submit when the entry starts
       --issue <ISSUE>             Issue URL or key; its prompt uses the configured template
       --source <SOURCE>           Tracker for an ambiguous issue key or a self-hosted URL [possible values: github, gitlab, shortcut, linear, jira, plane, asana]
@@ -1473,7 +1480,8 @@ It makes the worktree (or uses a worktree already on that branch, if it runs no 
 tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
 answering their trust prompts. The orchestrator starts last, with a brief: the task, the team and
 its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
-pass --focus.
+pass --focus, which shows the orchestrator's tab and opens the Flow panel; with --view ID it shows
+that tab in the view instead, and the window and its Flow panel stay as they are.
 
 With --issue KEY, the task, the branch and the workspace's name are the issue's: the same prompt template
 and branch the Issues dialog's start a flow uses. --prompt or --prompt-file give a task of your own instead,
@@ -1496,7 +1504,8 @@ and keeps its name: a project's flow named like it does not run either.
 With --machine NAME the flow runs on that machine of `cornercase machines`, by its server: the flow,
 its agents and accounts are the machine's, --project and the ids printed are that machine's, as
 `status --json` lists them under machines, and so is the run's folder. --focus shows the run in this
-window once the machine lists it. It needs a server that knows the `machine-start` feature.
+window once the machine lists it, and takes no --view there. It needs a server that knows the
+`machine-start` feature.
 
 Examples:
   cornercase flow run Quick --prompt 'Fix the login form'
@@ -1883,7 +1892,8 @@ Programs that drive cornercase without this command line (an editor extension, a
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run; close and rename take it as --boot, and then act only in that run. Each
+since ids last only one run; close, rename, mark, move-pane, account restart and context take it as
+--boot, and then act only in that run. Each
 command is listed with whether it is available, and each stream with its version. A server without
 this command is older than the contract.
 
@@ -1964,9 +1974,9 @@ id, projection, active, cols, rows, shown (the project, workspace, tab and pane 
 controls (whether it sizes its tab's terminals now). The view lives while this command runs:
 stopping it closes the view and gives its tabs back. The first line is the state now; the view's id
 is in it. Keep it running in the background (`cornercase view --cols 120 --rows 40 > view.jsonl &`),
-read the id from the first line, and pass it as --view ID to `focus`, `new-tab`, `split`, `setup`, `start`,
-`send`, `keys`, `held`, `read`, `wait`, `status`, `rename`, `mark`, `go`, `plugin run` or `surface`: the view's
-tab is their default and --focus moves it.
+read the id from the first line, and pass it as --view ID to `focus`, `open`, `clone`, `new-workspace`,
+`new-tab`, `split`, `setup`, `start`, `flow run`, `send`, `keys`, `held`, `read`, `wait`, `status`, `rename`,
+`mark`, `go`, `plugin run` or `surface`: the view's tab is their default and --focus moves it.
 
 While the view is active, has a size and is not hidden, the tab it shows counts as seen like the
 window's: an agent there gets no done mark, toast or desktop notification. --hidden starts it hidden
@@ -1998,7 +2008,7 @@ Options:
       --active                    Make it active again: it sizes its tab and streams terminals
       --inactive                  Make it inactive: it sizes nothing and streams no terminals, and the tab goes back
       --claim                     Size the tab it shows from now on, even if the window or another view did last
-      --visible                   Its window is on screen again: agents in the tab it shows count as seen
+      --visible                   Its window is back: agents in the tab it shows count as seen, and open pull requests are read again
       --hidden                    Its window is hidden or minimised: agents in the tab it shows notify again
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -2007,7 +2017,8 @@ Changes a view that `cornercase view` holds open. --cols and --rows resize it, -
 size nothing and stream no terminals (its tabs go to whoever claimed them before, else the window),
 --active turns it back on and claims its tab, and --claim takes its tab back from the window or
 another view. --hidden says its window is hidden or minimised, so agents in its tab notify again, and
---visible says it is back. It prints the view as it is now.
+--visible says it is back, which also reads the open pull requests again (not those read in the last
+10 seconds). It prints the view as it is now.
 
 Examples:
   cornercase view-set --view 41 --cols 100 --rows 30
@@ -2556,6 +2567,7 @@ Options:
       --target <ID>               The pane of the same tab to move it onto
       --place <PLACE>             Swap the two, or take that side of the target [possible values: swap, left, right, above, below]
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Swaps two panes of a tab, or moves one to the left, right, top or bottom of another, as dragging
@@ -2563,9 +2575,14 @@ a pane with the right button does. Both keep running. It is refused when the tab
 for every pane at the size it has. The moved pane becomes the tab's active one. With --json it prints
 the tab's new layout.
 
+--boot BOOT says which run of the server the pane ids are from: `boot` in `status --json`, or in a
+machine's entry there. Ids last one run, so a server that restarted since refuses, nothing moves,
+and the command prints why and exits with 4.
+
 Examples:
   cornercase move-pane --pane 4 --target 7 --place swap
   cornercase move-pane --pane 4 --target 7 --place below --json
+  cornercase --remote vps move-pane --pane 9 --target 3 --place left --boot 4242-1700000000
 
 ================================================================ cornercase collapse
 Collapse a group, project, workspace or agent in the sidebar
@@ -2583,7 +2600,8 @@ Options:
   -h, --help                      Print help
 
 Sets it, whatever it was: a group shows or hides its projects, a project its workspaces and a
-workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section.
+workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section
+for as long as the agent running there now keeps running (another conversation there starts expanded).
 Its shells keep running.
 
 Examples:
@@ -2607,7 +2625,8 @@ Options:
   -h, --help                      Print help
 
 Sets it, whatever it was: a group shows or hides its projects, a project its workspaces and a
-workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section.
+workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section
+for as long as the agent running there now keeps running (another conversation there starts expanded).
 Its shells keep running.
 
 Examples:
@@ -3258,6 +3277,7 @@ Options:
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --cached                    Print the last answer with its age, without asking the agent again
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Prints what fills an agent's context, as the Context dialog shows it (`view context` in a tab's
@@ -3275,6 +3295,10 @@ their model and how full the window is, with a notice that they do not say what 
 
 --cached prints the last answer with its age and starts nothing, so a script can read it cheaply.
 
+--boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
+a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is read
+and no second `claude` starts, and the command prints why and exits with 4.
+
 A read that fails says why on the line `context unavailable:` (with --json, in `error`, beside the
 numbers of the last good read) and the command exits with 3.
 
@@ -3291,6 +3315,7 @@ Examples:
   cornercase context
   cornercase context --pane 4 --json
   cornercase context --tab 3 --cached
+  cornercase --remote vps context --pane 9 --json --boot 4242-1700000000
 
 ================================================================ cornercase recap
 Print the Recap panel's summary of what your agents did: now, yesterday or the last 7 days
@@ -3967,10 +3992,14 @@ account, with --login or by running the agent in a tab of that account. Removing
 deletes its folder, never the system's keychain, and an agent that used it goes back to its own
 login.
 
+account restart takes --boot BOOT, the `boot` of the `status --json` its pane ids come from: a
+server that restarted since refuses, nothing restarts, and it exits with 4.
+
 Examples:
   cornercase account add claude work --login
   cornercase account use claude work
   cornercase account restart claude --pane 4
+  cornercase --remote vps account restart claude work --pane 9 --boot 4242-1700000000
   cornercase account rename claude work Work
   cornercase account list
   cornercase start claude --account claude=home --prompt "fix the tests"
@@ -3995,7 +4024,7 @@ Usage: cornercase account add [OPTIONS] <AGENT> <NAME>
 
 Arguments:
   <AGENT>  The agent: claude, codex or gemini
-  <NAME>   The account's name: letters, digits, `.`, `_` and `-`
+  <NAME>   The account's name: letters, digits, `.`, `_` and `-`, at most 32, not ending in `.lock`
 
 Options:
       --login                     Then open a tab that runs the agent's login with this account
@@ -4069,6 +4098,7 @@ Options:
       --pane <ID>                 Restart only this pane, also a shell at its prompt; give it once per pane [default: every pane of the agent on another account]
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase profile

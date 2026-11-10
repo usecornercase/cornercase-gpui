@@ -1,18 +1,37 @@
 use std::time::Instant;
 
+use super::ContextThere;
 use crate::cli;
 use crate::dialogs::on_machine;
-use crate::model::ContextAnswer;
-use crate::store::{AgentReach, args};
+use crate::model::{ContextAnswer, with_boot};
+use crate::store::{AgentReach, args, stale_note};
 
 pub(super) const TOO_OLD: &str = "What fills an agent's context needs cornercase 0.12.243 or newer";
 
-pub(super) fn cached_args(pane: u64) -> Vec<String> {
-    args(&["context", "--pane", &pane.to_string(), "--cached", "--json"])
+pub(super) fn boot_for(there: Option<&ContextThere>) -> Option<&str> {
+    there.filter(|there| there.sends_boot).map(|there| there.boot.as_str())
 }
 
-pub(super) fn read_args(pane: u64) -> Vec<String> {
-    args(&["context", "--pane", &pane.to_string(), "--json"])
+fn on_run(command: Vec<String>, boot: Option<&str>) -> Vec<String> {
+    match boot {
+        Some(boot) => with_boot(command, boot),
+        None => command,
+    }
+}
+
+pub(super) fn cached_args(pane: u64, boot: Option<&str>) -> Vec<String> {
+    on_run(args(&["context", "--pane", &pane.to_string(), "--cached", "--json"]), boot)
+}
+
+pub(super) fn read_args(pane: u64, boot: Option<&str>) -> Vec<String> {
+    on_run(args(&["context", "--pane", &pane.to_string(), "--json"]), boot)
+}
+
+pub(super) fn stale_read(machine: &str, result: anyhow::Result<String>) -> anyhow::Result<String> {
+    result.map_err(|e| match stale_note(machine, &e) {
+        Some(note) => anyhow::anyhow!(note),
+        None => e,
+    })
 }
 
 pub(super) fn landed(outcome: Outcome, now: &AgentReach) -> Outcome {

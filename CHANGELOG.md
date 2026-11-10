@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.55
+
+- **Move panes on another machine's tab.** Drag a pane by its handle, or with the right button (with Shift when the program in it reads the mouse), onto another pane, or use Move pane in its menu. If that machine's cornercase restarted in the meantime, nothing moves and the window says so.
+- **Mark a machine's agent for review, and switch its account.** On a machine's tab, ⌘R and the pane's menu mark the agent for review, or as reviewed, and Switch account restarts it on another of that machine's own accounts, its own login included.
+- **View context on a machine's tab checks which run it reads.** If that machine's cornercase restarted since, the read is refused instead of reading another agent.
+- These need cornercase 0.13.30 or newer on this computer. With an older one, the menu's entries rest with a line saying so, and View context reads as before.
+
 ## 0.1.54
 
 - **A machine's tab keeps no more than it shows.** Measured over a long session on another machine (its tabs visited hundreds of times, long output, the link cut and back, its cornercase restarted), the window's memory stays flat. A frame that names rows past a pane is no longer held: the window asks for a whole one instead, as cornercase's own window refuses such frames.

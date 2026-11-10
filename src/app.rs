@@ -96,7 +96,6 @@ pub(crate) enum Drag {
     Select { pane: u64, from: (u16, u16), to: (u16, u16) },
     Divider { tab: u64, path: Vec<bool>, down: bool, along: Along },
     Link { pane: u64, cell: (u16, u16) },
-    Menu { pane: u64 },
 }
 
 struct SidebarGrip;
@@ -555,6 +554,10 @@ impl Root {
     pub(crate) fn say(&mut self, text: &str, cx: &mut Context<Self>) {
         let text = first_line(text).to_string();
         self.store.update(cx, |s, cx| s.toast(text, ToastKind::Error, cx));
+    }
+
+    pub(crate) fn tell(&self, text: &str, cx: &mut Context<Self>) {
+        self.store.update(cx, |s, cx| s.toast(text, ToastKind::Info, cx));
     }
 
     pub(crate) fn act(&mut self, args: Vec<String>) {

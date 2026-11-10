@@ -9,11 +9,13 @@ use gpui::{
 
 use super::pane_menu::move_pane_args;
 use crate::app::Root;
+use crate::app::machine::MachineTab;
+use crate::app::machine::acts::MOVING;
 use crate::render::layout::Hit;
 use crate::render::moving::{self, Aim, Answer, Grip, Moves, Press, Release};
 use crate::render::{self, Metrics};
 use crate::sidebar::tip;
-use crate::store;
+use crate::store::{self, failed_there};
 use crate::theme::colours;
 use crate::ui::glass::tint;
 use crate::ui::motion::{self, Way};
@@ -64,13 +66,6 @@ pub(super) fn follow(moves: &RefCell<Moves>, root: &Entity<Root>, moving: bool, 
     listen(root, window);
 }
 
-fn send_move(pane: u64, aim: Aim, cx: &mut Context<Root>) {
-    let root = cx.entity().downgrade();
-    store::queued(cx, move_pane_args(pane, aim), move |result, cx| {
-        let _ = root.update(cx, |this, cx| this.move_answered(&result, cx));
-    });
-}
-
 fn listen(root: &Entity<Root>, window: &mut Window) {
     let (moved, released) = (root.downgrade(), root.downgrade());
     window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
@@ -89,8 +84,8 @@ fn listen(root: &Entity<Root>, window: &mut Window) {
 
 impl Root {
     pub(super) fn hover_handle(&mut self, at: Point<Pixels>, cx: &mut Context<Self>) {
-        let here = self.frame_shown() && self.machine.is_none();
-        let near = if here { moving::near_top(&self.layout.borrow(), at) } else { None };
+        let movable = self.takes_input() && self.machine.as_ref().is_none_or(MachineTab::sends_boot);
+        let near = if movable { moving::near_top(&self.layout.borrow(), at) } else { None };
         if self.moves.borrow_mut().hover(near) {
             cx.notify();
         }
@@ -139,11 +134,11 @@ impl Root {
         let release = {
             let mut moves = self.moves.borrow_mut();
             moves.drag(event.position, &self.layout.borrow(), now);
-            moves.release(self.own.grid.layout.clone(), now)
+            moves.release(self.shown().grid.layout.clone(), now)
         };
         match release {
             Release::Click(press) => self.pane_clicked(press, event.position, window, cx),
-            Release::Drop(pane, aim) => send_move(pane, aim, cx),
+            Release::Drop(pane, aim) => self.send_move(pane, aim, cx),
             Release::Home | Release::Nothing => {}
         }
         cx.notify();
@@ -159,30 +154,74 @@ impl Root {
 
     fn pane_clicked(&mut self, press: Press, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         if press.grip == Grip::Right {
-            if matches!(self.hit(at), Some(Hit::Pane(pane, _)) if pane == press.pane) {
-                let entries = self.pane_menu(press.pane, press.cell, cx);
-                self.open_menu(at, entries, window, cx);
-            }
-        } else if self.own.grid.pane(press.pane).is_some_and(|pane| !pane.active) {
-            self.focus_item("pane", press.pane);
+            self.open_pane_menu(press, at, window, cx);
+        } else if self.shown().grid.pane(press.pane).is_some_and(|pane| !pane.active) {
+            self.focus_on_shown("pane", press.pane);
+        }
+    }
+
+    fn open_pane_menu(&mut self, press: Press, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.machine.is_some() {
+            self.open_there_pane_menu(press.pane, at, window, cx);
+        } else if matches!(self.hit(at), Some(Hit::Pane(pane, _)) if pane == press.pane) {
+            let entries = self.pane_menu(press.pane, press.cell, cx);
+            self.open_menu(at, entries, window, cx);
         }
     }
 
     pub(super) fn move_pane(&mut self, pane: u64, aim: Aim, cx: &mut Context<Self>) {
-        self.moves.borrow_mut().expect(pane, self.own.grid.layout.clone(), Instant::now());
-        send_move(pane, aim, cx);
+        self.moves.borrow_mut().expect(pane, self.shown().grid.layout.clone(), Instant::now());
+        self.send_move(pane, aim, cx);
     }
 
-    fn move_answered(&mut self, result: &anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn send_move(&mut self, pane: u64, aim: Aim, cx: &mut Context<Self>) {
+        if self.machine.is_some() {
+            return self.send_move_there(pane, aim, cx);
+        }
+        let root = cx.entity().downgrade();
+        store::queued(cx, move_pane_args(pane, aim), move |result, cx| {
+            let _ = root.update(cx, |this, cx| this.move_answered(&result, None, cx));
+        });
+    }
+
+    fn send_move_there(&mut self, pane: u64, aim: Aim, cx: &mut Context<Self>) {
+        let Some(run) = self.machine.as_ref().map(MachineTab::run) else { return self.move_refused(cx) };
+        let refusal = self.machine.as_ref().and_then(|tab| tab.boot_refusal(MOVING));
+        if let Some(why) = refusal {
+            self.tell(&why, cx);
+            return self.move_refused(cx);
+        }
+        if !self.still_there(&run, cx) {
+            return self.move_refused(cx);
+        }
+        let root = cx.entity().downgrade();
+        let machine = run.machine.clone();
+        let reply = store::reply(cx, move |result, cx| {
+            let _ = root.update(cx, |this, cx| this.move_answered(&result, Some(&machine), cx));
+        });
+        if let Some(tab) = &self.machine {
+            tab.send_on_run(move_pane_args(pane, aim), reply);
+        }
+    }
+
+    fn move_refused(&mut self, cx: &mut Context<Self>) {
+        self.moves.borrow_mut().answered(&Answer::Refused, Instant::now());
+        cx.notify();
+    }
+
+    fn move_answered(&mut self, result: &anyhow::Result<String>, machine: Option<&str>, cx: &mut Context<Self>) {
         if let Err(e) = result {
-            self.say(&e.to_string(), cx);
+            match machine {
+                Some(machine) => self.say(&failed_there(machine, e), cx),
+                None => self.say(&e.to_string(), cx),
+            }
         }
         self.moves.borrow_mut().answered(&Answer::read(result), Instant::now());
         cx.notify();
     }
 
     pub(super) fn render_handle(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let pane = self.moves.borrow().near().filter(|_| self.frame_shown())?;
+        let pane = self.moves.borrow().near().filter(|_| self.takes_input())?;
         let layout = self.layout.borrow();
         let area = moving::handle(layout.card(pane)?.bounds);
         let at = area.origin - layout.at.origin;
@@ -194,7 +233,7 @@ impl Root {
             return None;
         }
         let (moves, layout, grid, metrics) =
-            (self.moves.clone(), self.layout.clone(), self.own.grid.clone(), metrics.clone());
+            (self.moves.clone(), self.layout.clone(), self.shown().grid.clone(), metrics.clone());
         let ghost = canvas(
             |_, _, _| {},
             move |_, (), window, cx| {

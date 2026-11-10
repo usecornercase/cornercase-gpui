@@ -25,6 +25,19 @@ fn an_error_drops_its_output_and_names_the_command() {
 }
 
 #[test]
+fn a_read_refused_for_another_run_reads_as_a_stale_boot() {
+    let err = answer("context", Some(4), b"", b"error: this request is for the cornercase server started as 1-2\n")
+        .expect_err("a stale boot");
+    assert!(crate::cli::stale_boot(&err));
+}
+
+#[test]
+fn any_other_failed_read_is_not_a_stale_boot() {
+    let err = answer("context", Some(1), b"", b"error: no such pane\n").expect_err("a failure");
+    assert!(!crate::cli::stale_boot(&err));
+}
+
+#[test]
 fn an_error_without_text_still_says_it_failed() {
     let err = answer("start", None, b"", b"").expect_err("killed by a signal");
     assert_eq!(err.to_string(), "cornercase start: failed");

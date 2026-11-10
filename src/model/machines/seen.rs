@@ -189,6 +189,12 @@ impl Aim {
     }
 }
 
+pub(crate) fn with_boot(mut args: Vec<String>, boot: &str) -> Vec<String> {
+    let at = args.iter().position(|a| a == "--").unwrap_or(args.len());
+    args.splice(at..at, ["--boot".to_string(), boot.to_string()]);
+    args
+}
+
 pub(crate) fn sighted<'a>(
     machines: &'a [MachineSeen],
     aim: &Aim,

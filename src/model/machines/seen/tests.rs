@@ -1,5 +1,6 @@
 use super::*;
 use crate::model::PaneInfo;
+use crate::store::args;
 use crate::test_util::fixture;
 
 const SEEN: &str = "2026-11-06T01:23:55.000Z";
@@ -432,4 +433,16 @@ fn a_place_says_when_it_is_gone() {
     let seen = vps(&session);
     let place = MachinePlace::at(seen, named(seen, "notes"), None);
     assert_eq!(place.gone_note(), "notes is no longer on vps");
+}
+
+#[test]
+fn a_boot_goes_at_the_end_of_a_command() {
+    let args = with_boot(args(&["mark", "--pane", "9"]), "b1");
+    assert_eq!(args, ["mark", "--pane", "9", "--boot", "b1"]);
+}
+
+#[test]
+fn a_boot_goes_before_the_words_after_two_dashes() {
+    let args = with_boot(args(&["account", "restart", "--json", "--pane", "9", "--", "claude", "work"]), "b1");
+    assert_eq!(args, ["account", "restart", "--json", "--pane", "9", "--boot", "b1", "--", "claude", "work"]);
 }
