@@ -3,19 +3,11 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
-use super::super::draft::{Back, targets};
+use super::super::draft::{Back, reports, targets};
 use super::super::editor_view::{adder, choice};
 use super::{FlowEditor, StageFields};
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, boxed};
-
-fn reports(roles: usize) -> &'static str {
-    match roles {
-        0 | 1 => "If it reports",
-        2 => "If either reports",
-        _ => "If any of them reports",
-    }
-}
 
 impl FlowEditor {
     pub(in crate::panels::flows) fn loop_part(
@@ -61,7 +53,7 @@ impl FlowEditor {
             .flex()
             .items_center()
             .gap(px(7.))
-            .child(ui::icon(Icon::Repeat, 13.))
+            .child(ui::icon(Icon::Repeat, 13.).text_color(colours::muted()))
             .child(div().flex_none().child(reports(stage.roles.len())))
             .child(boxed(&stage.when, window, cx).flex_1().min_w_0())
             .child(
@@ -80,9 +72,16 @@ impl FlowEditor {
             .gap(px(7.))
             .child("go back to stage")
             .child(ui::segments(targets))
-            .child("at most")
-            .child(Self::stepper(index, back, cx))
-            .child(if back.at_most == 1 { "time" } else { "times" })
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(7.))
+                    .whitespace_nowrap()
+                    .child("at most")
+                    .child(Self::stepper(index, back, cx))
+                    .child(if back.at_most == 1 { "time" } else { "times" }),
+            )
     }
 
     fn target(index: usize, to: usize, selected: bool, cx: &Context<Self>) -> AnyElement {

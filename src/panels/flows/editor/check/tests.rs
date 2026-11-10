@@ -36,6 +36,24 @@ fn a_change_goes_back_to_checking() {
 }
 
 #[test]
+fn a_check_that_could_not_run_does_not_rest_save() {
+    let check = answered(Verdict::Failed("no answer".into()));
+    assert_eq!(check.pill(), Pill::Unchecked);
+    assert_eq!(check.pill().words(), "Not checked");
+    assert!(!check.rests());
+    assert_eq!(check.problems(), ["no answer"]);
+}
+
+#[test]
+fn a_refused_draft_answers_the_check_at_once() {
+    let mut check = Check::default();
+    check.changed();
+    check.refuse("KEY has no =".into());
+    assert_eq!(check.pill(), Pill::Problems(1));
+    assert_eq!(check.problems(), ["KEY has no ="]);
+}
+
+#[test]
 fn save_rests_while_there_are_problems() {
     assert!(answered(problems(2)).rests());
     assert!(!answered(problems(0)).rests());

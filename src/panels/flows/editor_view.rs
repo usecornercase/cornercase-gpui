@@ -30,7 +30,11 @@ pub(super) fn adder(
     dashed: bool,
     click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Div {
-    let button = ui::icon_text_button(id, glyph, label, Tone::Plain).on_click(click);
+    let button = ui::icon_text_button(id, glyph, label, Tone::Plain)
+        .h(px(26.))
+        .text_size(px(12.))
+        .text_color(colours::muted())
+        .on_click(click);
     div().flex().child(button.when(dashed, gpui::Styled::border_dashed))
 }
 
@@ -58,6 +62,7 @@ impl FlowEditor {
         let words = state.words();
         match state {
             Pill::Checking => pill_with(ui::spinner("editor-checking", 10., colours::muted()), words, colours::muted()),
+            Pill::Unchecked => pill(words, colours::muted(), false),
             Pill::Ready => pill(words, colours::done(), true),
             Pill::Problems(_) => pill(words, colours::failed(), true),
         }

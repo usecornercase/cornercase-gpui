@@ -5,11 +5,13 @@ pub(in crate::panels::flows) enum Verdict {
     Unknown,
     Checked(Saved),
     Invalid(String),
+    Failed(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::panels::flows) enum Pill {
     Checking,
+    Unchecked,
     Ready,
     Problems(usize),
 }
@@ -18,6 +20,7 @@ impl Pill {
     pub(in crate::panels::flows) fn words(self) -> String {
         match self {
             Self::Checking => "Checking…".into(),
+            Self::Unchecked => "Not checked".into(),
             Self::Ready => "Ready to save".into(),
             Self::Problems(count) => plural(count, "problem"),
         }
@@ -54,6 +57,10 @@ impl Check {
         }
     }
 
+    pub(in crate::panels::flows) fn refuse(&mut self, error: String) {
+        self.answer(self.generation, Verdict::Invalid(error));
+    }
+
     pub(in crate::panels::flows) fn pill(&self) -> Pill {
         if self.pending {
             return Pill::Checking;
@@ -63,6 +70,7 @@ impl Check {
             Verdict::Checked(saved) if saved.problems.is_empty() => Pill::Ready,
             Verdict::Checked(saved) => Pill::Problems(saved.problems.len()),
             Verdict::Invalid(_) => Pill::Problems(1),
+            Verdict::Failed(_) => Pill::Unchecked,
         }
     }
 
@@ -74,14 +82,14 @@ impl Check {
         match &self.verdict {
             Verdict::Unknown => Vec::new(),
             Verdict::Checked(saved) => saved.problems.clone(),
-            Verdict::Invalid(error) => vec![error.clone()],
+            Verdict::Invalid(error) | Verdict::Failed(error) => vec![error.clone()],
         }
     }
 
     pub(in crate::panels::flows) fn risk(&self) -> Option<&str> {
         match &self.verdict {
             Verdict::Checked(saved) => saved.check.as_deref(),
-            Verdict::Unknown | Verdict::Invalid(_) => None,
+            Verdict::Unknown | Verdict::Invalid(_) | Verdict::Failed(_) => None,
         }
     }
 }

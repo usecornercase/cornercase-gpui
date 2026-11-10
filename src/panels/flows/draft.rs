@@ -558,6 +558,14 @@ pub(super) fn seat(draft: &Draft) -> Seating {
     Seating { stages, changes: seater.changes }
 }
 
+pub(super) fn reports(roles: usize) -> &'static str {
+    match roles {
+        0 | 1 => "If it reports",
+        2 => "If either reports",
+        _ => "If any of them reports",
+    }
+}
+
 pub(super) fn first_line(text: &str) -> Option<&str> {
     text.lines().map(str::trim).find(|line| !line.is_empty())
 }

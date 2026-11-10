@@ -15,9 +15,9 @@ impl FlowEditor {
     }
 
     fn name_and_description(&self, layout: Layout, window: &Window, cx: &Context<Self>) -> Div {
-        let description = labelled("Description", &self.description, window, cx);
         if layout.about_in_a_row() {
-            return line().child(labelled("Name", &self.name, window, cx).w(px(210.)).flex_none()).child(description);
+            let name = text_control("Name", &self.name, window, cx).w(px(210.)).flex_none();
+            return line().child(name).child(labelled("Description", &self.description, window, cx));
         }
         div().flex().flex_col().gap(px(10.)).child(text_control("Name", &self.name, window, cx)).child(text_control(
             "Description",

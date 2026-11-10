@@ -5,6 +5,7 @@ use gpui::{Context, Div, ParentElement as _, Window};
 use super::super::diagram::{OnRole, Plan, board_width, draw};
 use super::super::flow_page::block;
 use super::super::graph;
+use super::super::model::FlowSpec;
 use super::{FlowEditor, Open, View};
 use crate::ui::Icon;
 
@@ -38,6 +39,13 @@ pub(in crate::panels::flows) fn layout(editor: f32, narrowest: f32) -> Layout {
     Layout { form: editor - plan, plan: Some(plan) }
 }
 
+fn box_target(plan: &FlowSpec, names: &[(u64, String)], name: &str) -> Option<Open> {
+    if plan.is_lead(name) {
+        return Some(Open::Lead);
+    }
+    names.iter().find(|(_, current)| current == name).map(|(id, _)| Open::Role(*id))
+}
+
 impl FlowEditor {
     pub(in crate::panels::flows) fn narrowest(&self) -> f32 {
         graph::fit(&self.plan, None, 0.).width
@@ -62,12 +70,8 @@ impl FlowEditor {
     }
 
     fn click_box(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let target = if self.plan.is_lead(name) {
-            Some(Open::Lead)
-        } else {
-            self.roles.iter().find(|role| role.current_name(cx) == name).map(|role| Open::Role(role.id))
-        };
-        let Some(target) = target else { return };
+        let names: Vec<(u64, String)> = self.roles.iter().map(|role| (role.id, role.current_name(cx))).collect();
+        let Some(target) = box_target(&self.plan, &names, name) else { return };
         if self.open == Some(target) {
             self.close_role(cx);
             return;

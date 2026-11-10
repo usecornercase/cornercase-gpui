@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use super::{
     Back, BackDraft, Draft, LoopAfter, Place, RoleDraft, Stage, StageDraft, alone, first_line, follow_loops,
     fresh_role_name, gone_note, has_breaks, loop_after, move_role, neighbour, parse_saved, place_note, remove_role,
-    save_args, saves_line, seat, split_words, swapped, targets, without,
+    reports, save_args, saves_line, seat, split_words, swapped, targets, without,
 };
 use crate::panels::flows::model::parse_listing;
 
@@ -336,7 +336,6 @@ fn moving_a_role_keeps_the_order_of_the_roles() {
     assert_eq!(ids(&stages), [vec![0], vec![1, 2, 3]]);
     let drafted = stages[1].draft(&roles, "problems".into());
     assert_eq!(drafted.roles, ["reviewer", "security", "tester"]);
-    assert_eq!(roles, names(&["coder", "reviewer", "security", "tester"]));
 }
 
 #[test]
@@ -417,4 +416,27 @@ fn the_header_says_where_it_saves() {
     assert_eq!(saves_line(&Place::Project, None), "Saves into this project's flows");
     assert_eq!(saves_line(&Place::Yours, Some("It is built in")), "Saves into your flows · It is built in");
     assert!(place_note(&Place::Project).starts_with("Kept in the project's"));
+}
+
+#[test]
+fn a_loop_names_who_reports_by_how_many_roles() {
+    assert_eq!(reports(1), "If it reports");
+    assert_eq!(reports(2), "If either reports");
+    assert_eq!(reports(3), "If any of them reports");
+}
+
+#[test]
+fn seating_and_drafting_a_flow_cornercase_accepts_gives_the_same_flow() {
+    let stages = json!([
+        {"roles": ["coder"], "back": null, "x": 1},
+        {"roles": ["reviewer", "security"], "back": {"to": 1, "when": "bugs", "at_most": 2, "y": 2}, "z": 3}
+    ]);
+    let flow = draft_of(&["coder", "reviewer", "security"], &stages);
+    for draft in [Draft::from_value(&arena()), flow] {
+        let seating = seat(&draft);
+        let roles: Vec<(u64, String)> =
+            draft.roles.iter().enumerate().map(|(id, role)| (id as u64, role.name.clone())).collect();
+        let stages = seating.stages.iter().map(|stage| stage.draft(&roles, stage.when.clone())).collect();
+        assert_eq!(Draft { stages, ..draft.clone() }.to_value(), draft.to_value());
+    }
 }

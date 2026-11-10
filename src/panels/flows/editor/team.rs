@@ -258,7 +258,7 @@ impl FlowEditor {
             .text_color(colours::muted())
             .cursor_pointer()
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_command(open, cx)))
-            .child(ui::icon(glyph, 12.))
+            .child(ui::icon(glyph, 12.).text_color(colours::muted()))
             .child("Arguments and variables");
         let fields = line().child(labelled("Arguments", &role.args, window, cx)).child(labelled(
             "Variables",

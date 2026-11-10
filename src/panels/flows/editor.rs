@@ -348,7 +348,7 @@ impl FlowEditor {
     fn checked(&mut self, generation: u64, result: anyhow::Result<String>, cx: &mut Context<Self>) {
         let verdict = match result.and_then(|out| parse_saved(&out)) {
             Ok(saved) => Verdict::Checked(saved),
-            Err(e) => Verdict::Invalid(e.to_string()),
+            Err(e) => Verdict::Failed(e.to_string()),
         };
         self.check.answer(generation, verdict);
         cx.notify();
@@ -361,7 +361,7 @@ impl FlowEditor {
         let value = match self.draft(cx).to_value() {
             Ok(value) => value,
             Err(e) => {
-                self.error = Some(e);
+                self.check.refuse(e);
                 cx.notify();
                 return;
             }
@@ -416,6 +416,8 @@ impl FlowEditor {
     fn focus_on(field: &Entity<TextField>, window: &mut Window, cx: &mut Context<Self>) {
         let handle = field.read(cx).focus_handle(cx);
         window.focus(&handle);
+        let again = field.clone();
+        window.on_next_frame(move |_, cx| again.update(cx, TextField::reveal));
     }
 
     pub(super) fn open_role(&mut self, open: Open, window: &mut Window, cx: &mut Context<Self>) {
@@ -501,6 +503,9 @@ impl FlowEditor {
     }
 
     pub(super) fn move_role(&mut self, id: u64, to: usize, cx: &mut Context<Self>) {
+        if draft::stage_of(&self.stages, id) == Some(to) {
+            return;
+        }
         let lost = draft::move_role(&mut self.stages, id, to);
         note(gone_note(&lost).as_deref(), cx);
         self.schedule_check(cx);
@@ -539,9 +544,11 @@ impl FlowEditor {
     }
 
     pub(super) fn set_loop_to(&mut self, stage: usize, to: usize, cx: &mut Context<Self>) {
-        if let Some(back) = self.stages.get_mut(stage).and_then(|fields| fields.back.as_mut()) {
-            back.to = to;
+        let Some(back) = self.stages.get_mut(stage).and_then(|fields| fields.back.as_mut()) else { return };
+        if back.to == to {
+            return;
         }
+        back.to = to;
         self.schedule_check(cx);
     }
 
