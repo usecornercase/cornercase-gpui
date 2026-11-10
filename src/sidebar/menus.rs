@@ -354,7 +354,7 @@ impl Root {
     }
 
     fn menu_for(&self, target: Target, cx: &App) -> Vec<Entry> {
-        let Some(session) = &self.session else { return Vec::new() };
+        let Some(session) = self.session.as_ref() else { return Vec::new() };
         let openers = self.store.read(cx).openers.clone();
         match target {
             Target::Group(id) => group_menu(session, id),

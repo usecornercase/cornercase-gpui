@@ -39,7 +39,8 @@ struct Fit {
 
 impl Fit {
     fn any(self) -> bool {
-        self.attention || self.hidden || self.machine
+        let Self { attention, hidden, machine } = self;
+        attention || hidden || machine
     }
 }
 
@@ -119,7 +120,7 @@ impl Root {
         let title = pane.agent_title().unwrap_or_else(|| tab.name.clone());
         let line = there_line(row, place, &self.side.look.current, listing.now);
         if seen.pane_note_counts() {
-            self.counting.drawn();
+            self.parts.counted.set(true);
         }
         let frame = ui::row(gid.clone(), lit)
             .group(gid.clone())
@@ -129,7 +130,7 @@ impl Root {
             .py(px(3.))
             .when(!seen.linked(), |d| d.opacity(DOWN_OPACITY))
             .child(self.there_fold(row, &gid, cx))
-            .child(status_of(seen, pane.status.as_deref()))
+            .child(status_of(seen, (&self.parts.spots, 1.), pane.status.as_deref()))
             .child(agent_text(title, line, lit))
             .child(self.there_agent_end(row, listing.card, &gid, cx))
             .on_hover(hover_listener(gid, cx));
@@ -163,11 +164,12 @@ impl Root {
         let hidden = row.hidden.len();
         let fit = fit_tags(card - EDGES - indent(row.depth), attention.is_some(), hidden, &seen.name);
         let end = End { gap: GAP, buttons: u8::from(row.children > 0), figures: fit.any() };
-        row_end(end, self.row_hovered(gid))
-            .when(fit.attention, |d| d.child(status_of(seen, attention)))
+        let hovered = self.row_hovered(gid);
+        row_end(end, hovered)
+            .when(fit.attention, |d| d.child(status_of(seen, (&self.parts.spots, 1.), attention)))
             .when(fit.hidden, |d| d.child(ui::dim(format!("+{hidden}")).flex_none()))
             .when(fit.machine, |d| d.child(machine_tag(seen)))
-            .when(row.children > 0, |d| d.child(menu_button(row, gid, cx)))
+            .when(hovered && row.children > 0, |d| d.child(menu_button(row, gid, cx)))
     }
 }
 

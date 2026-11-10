@@ -14,7 +14,8 @@ use super::workspace::{detail_row, plural};
 use crate::app::Root;
 use crate::model::{Aim, MachinePlace, MachineSeen, Session, Tab, ThereId, ThereProject, ThereWorkspace};
 use crate::theme::colours;
-use crate::ui::{self, badge};
+use crate::ui;
+use crate::ui::orbits::{self, Spots};
 
 pub(super) const DOWN_OPACITY: f32 = 0.55;
 
@@ -26,7 +27,7 @@ pub(crate) struct FoldThere {
 }
 
 impl FoldThere {
-    fn workspace(seen: &MachineSeen, ws: &ThereWorkspace) -> Self {
+    pub(super) fn workspace(seen: &MachineSeen, ws: &ThereWorkspace) -> Self {
         Self { machine: seen.name.clone(), path: ws.path.clone(), name: Some(ws.name.clone()) }
     }
 
@@ -35,7 +36,7 @@ impl FoldThere {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct ThereFolds(HashSet<FoldThere>);
 
 impl ThereFolds {
@@ -43,7 +44,7 @@ impl ThereFolds {
         self.0.contains(fold)
     }
 
-    fn toggle(&mut self, fold: FoldThere) {
+    pub(super) fn toggle(&mut self, fold: FoldThere) {
         if !self.0.remove(&fold) {
             self.0.insert(fold);
         }
@@ -93,8 +94,12 @@ fn there_tab_text(name: Div, note: Option<String>, details: Option<String>) -> D
         .child(div().text_size(px(11.)).text_color(colours::faint()).child(ui::one_line(note)))
 }
 
-pub(super) fn status_of(seen: &MachineSeen, status: Option<&str>) -> Div {
-    if seen.linked() { badge(status) } else { ui::still_badge(status) }
+pub(super) fn status_of(seen: &MachineSeen, (spots, dim): (&Spots, f32), status: Option<&str>) -> Div {
+    if seen.linked() { orbits::badge(status, spots, dim) } else { ui::still_badge(status) }
+}
+
+fn leaving_dim(leaving: bool) -> f32 {
+    if leaving { DOWN_OPACITY } else { 1. }
 }
 
 pub(super) fn machine_tag(seen: &MachineSeen) -> Div {
@@ -162,7 +167,7 @@ struct ThereRow<'a> {
 
 impl Root {
     pub(super) fn there_rows_under(&self, project: u64, listing: &Listing, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let Some(session) = &self.session else { return Vec::new() };
+        let Some(session) = self.session.as_ref() else { return Vec::new() };
         session.paired_with(project).map(|(seen, ws)| self.there_workspace(seen, ws, listing, cx)).collect()
     }
 
@@ -182,7 +187,7 @@ impl Root {
         let children =
             if folded { Vec::new() } else { ws.tabs.iter().map(|tab| there_tab(&row, tab, listing, cx)).collect() };
         if !folded && ws.tabs.iter().any(|tab| seen.tab_note_counts(tab, listing.now)) {
-            self.counting.drawn();
+            self.parts.counted.set(true);
         }
         div()
             .flex()
@@ -250,8 +255,10 @@ impl Root {
         let hovered = !row.leaving && self.row_hovered(gid);
         row_end(end, hovered)
             .child(machine_tag(row.seen))
-            .when(status, |d| d.child(status_of(row.seen, row.ws.loudest())))
-            .when(!row.leaving, |d| d.children(workspace_buttons(&row.aim, gid, cx)))
+            .when(status, |d| {
+                d.child(status_of(row.seen, (&self.parts.spots, leaving_dim(row.leaving)), row.ws.loudest()))
+            })
+            .when(hovered, |d| d.children(workspace_buttons(&row.aim, gid, cx)))
     }
 
     pub(super) fn alone_project_rows(
@@ -302,7 +309,7 @@ fn there_tab(row: &ThereRow<'_>, tab: &Tab<ThereId>, listing: &Listing, cx: &mut
         .gap(px(6.))
         .px(px(6.))
         .py(px(3.))
-        .child(status_of(row.seen, tab.loudest()))
+        .child(status_of(row.seen, (&listing.spots, leaving_dim(row.leaving)), tab.loudest()))
         .child(there_tab_text(name, note, details));
     if row.leaving {
         return frame.cursor_default().into_any_element();
@@ -336,8 +343,11 @@ fn alone_project_row(
         .child(lead)
         .child(name)
         .child(row_end(end, false).child(machine_tag(seen)).when(folded, |d| {
-            d.when(listing.counts, |d| d.child(ui::dim(format!("{}", there.workspaces.len()))))
-                .child(status_of(seen, there.attention()))
+            d.when(listing.counts, |d| d.child(ui::dim(format!("{}", there.workspaces.len())))).child(status_of(
+                seen,
+                (&listing.spots, 1.),
+                there.attention(),
+            ))
         }));
     match there.workspaces.first() {
         Some(ws) => pick_on_click(frame, MachinePlace::at(seen, ws, None), cx),

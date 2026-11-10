@@ -10,7 +10,8 @@ use super::{Dragged, Fold, Renaming, Target, draggable, forms, order};
 use crate::app::Root;
 use crate::model::{Group, MachinePlace, Project, Session, Shown};
 use crate::theme::{colours, radius};
-use crate::ui::{self, badge, glass};
+use crate::ui::orbits::{self, Spots};
+use crate::ui::{self, glass};
 
 #[derive(Clone, Copy)]
 pub(super) struct End {
@@ -27,6 +28,7 @@ pub(super) struct Listing {
     pub place: Option<MachinePlace>,
     pub now: i64,
     pub counts: bool,
+    pub spots: Spots,
 }
 
 fn id_prefix(target: Target) -> &'static str {
@@ -228,7 +230,8 @@ impl Root {
     }
 
     pub(super) fn row_end(&self, target: Target, end: End, cx: &mut Context<Self>) -> Div {
-        trailing(end, self.row_hovered(&row_group_id(target))).child(menu_button(target, cx))
+        let hovered = self.row_hovered(&row_group_id(target));
+        trailing(end, hovered).when(hovered, |d| d.child(menu_button(target, cx)))
     }
 
     pub(super) fn name_or_rename(&self, target: Target, label: Div) -> AnyElement {
@@ -355,20 +358,27 @@ impl Root {
         let session = self.session.as_ref();
         let count = session.map_or(project.workspaces.len(), |s| s.workspaces_under(project));
         let attention = session.map_or_else(|| project.attention(), |s| s.attention_under(project));
+        let hovered = self.row_hovered(&row_group_id(target));
         self.row_end(target, End { gap: 4., buttons: 2, figures: collapsed }, cx)
             .when(collapsed, |d| {
-                d.when(self.side.look.current.counts, |d| d.child(ui::dim(format!("{count}")))).child(badge(attention))
+                d.when(self.side.look.current.counts, |d| d.child(ui::dim(format!("{count}")))).child(orbits::badge(
+                    attention,
+                    &self.parts.spots,
+                    1.,
+                ))
             })
-            .child(
-                hover_button(SharedString::from(format!("project-add-{id}")), row_group_id(target), "+", 1)
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |this, e: &MouseDownEvent, window, cx| {
-                            cx.stop_propagation();
-                            this.open_new_menu(Some(id), e.position, window, cx);
-                        }),
-                    ),
-            )
+            .when(hovered, |d| {
+                d.child(
+                    hover_button(SharedString::from(format!("project-add-{id}")), row_group_id(target), "+", 1)
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                this.open_new_menu(Some(id), e.position, window, cx);
+                            }),
+                        ),
+                )
+            })
     }
 }
 

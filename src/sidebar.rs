@@ -3,6 +3,7 @@ mod agents;
 mod arrange;
 mod folds;
 mod forms;
+pub(crate) mod key;
 mod look;
 mod machine_acts;
 mod machine_agents;
@@ -22,6 +23,7 @@ use gpui::{
 };
 
 use crate::app::frame::{self, Frame};
+use crate::app::part::{self, Drawn};
 use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
 use crate::context_menu::Menu;
 use crate::dialogs;
@@ -132,7 +134,7 @@ pub(crate) struct SideState {
 }
 
 impl Root {
-    pub(crate) fn render_sidebar(&self, window_frame: Frame, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(crate) fn render_sidebar(&self, window_frame: Frame) -> impl IntoElement + use<> {
         div()
             .w(px(self.sidebar_extent()))
             .h_full()
@@ -142,8 +144,20 @@ impl Root {
             .flex_col()
             .pb(px(GAP))
             .child(frame::title_row(title_strip(Os::CURRENT), window_frame))
-            .child(self.sidebar_cards(cx))
-            .children(self.render_menu(cx))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .relative()
+                    .child(part::cached(&self.parts.sidebar))
+                    .child(div().absolute().inset_0().child(self.parts.orbit_layer.clone())),
+            )
+    }
+
+    pub(crate) fn sidebar_part(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> Drawn {
+        self.parts.spots.clear();
+        let element = self.sidebar_cards(cx).size_full().into_any_element();
+        Drawn { element, counted: self.parts.counted.take() }
     }
 
     pub(crate) fn sidebar_extent(&self) -> f32 {

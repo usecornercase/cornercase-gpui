@@ -98,7 +98,7 @@ fn rename_placeholder(what: &Renaming) -> &'static str {
 
 impl Root {
     pub(crate) fn set_folded(&mut self, fold: Fold, collapsed: bool) {
-        self.side.folds.set(fold, collapsed, self.session.as_mut());
+        self.side.folds.set(fold, collapsed, self.session.get_mut().as_mut());
         let tx = self.tx.clone();
         self.own.queue.cmd_then(fold.args(collapsed), move |result| {
             let _ = tx.unbounded_send(Msg::Folded(fold, collapsed, result.err().map(|e| e.to_string())));
@@ -106,7 +106,7 @@ impl Root {
     }
 
     pub(crate) fn fold_answered(&mut self, fold: Fold, collapsed: bool, error: Option<&str>, cx: &mut Context<Self>) {
-        self.side.folds.answered(fold, collapsed, error.is_none(), self.session.as_mut());
+        self.side.folds.answered(fold, collapsed, error.is_none(), self.session.get_mut().as_mut());
         if let Some(error) = error {
             self.say(error, cx);
         }
@@ -176,7 +176,7 @@ impl Root {
     }
 
     pub(crate) fn drop_on(&mut self, dragged: Target, target: Target) {
-        let Some(session) = &self.session else { return };
+        let Some(session) = self.session.as_ref() else { return };
         if let Some(args) = drop_command(session, dragged, target) {
             self.own.queue.cmd(args);
         }

@@ -4,7 +4,9 @@ pub(crate) mod frame;
 pub(crate) mod keeper;
 mod looks;
 pub(crate) mod machine;
+pub(crate) mod part;
 pub(crate) mod placement;
+mod revised;
 mod status;
 mod surface;
 mod toasts;
@@ -44,6 +46,8 @@ use crate::ui::split::{self, Edge, Split};
 pub(crate) use connection::Connection;
 use dock::{dock_card, over_the_terminal};
 use machine::MachineTab;
+use part::Parts;
+use revised::Revised;
 
 pub(crate) const TITLEBAR_HEIGHT: f32 = 44.;
 pub(crate) const GAP: f32 = 8.;
@@ -108,7 +112,7 @@ pub(crate) struct Root {
     pub(crate) tx: UnboundedSender<Msg>,
     pub(crate) own: Connection,
     pub(crate) machine: Option<MachineTab>,
-    pub(crate) session: Option<Session>,
+    pub(crate) session: Revised<Option<Session>>,
     pub(crate) metrics: Option<Metrics>,
     pub(crate) font_size: f32,
     pub(crate) layout: Rc<RefCell<Layout>>,
@@ -137,10 +141,10 @@ pub(crate) struct Root {
     notifier: Entity<Notifier>,
     title: String,
     pub(crate) dock_focus: FocusHandle,
-    beat: Rc<motion::Beat>,
     pub(crate) counting: Counting,
     given: looks::Given,
     palette_settled: u64,
+    pub(crate) parts: Parts,
 }
 
 impl Focusable for Root {
@@ -165,6 +169,10 @@ impl DockWidths {
         }
     }
 }
+
+type Focuses = (FocusHandle, FocusHandle);
+
+type Wires = (Entity<Store>, Entity<Notifier>, UnboundedSender<Msg>, Queue);
 
 struct Kept {
     place: Vec<String>,
@@ -232,7 +240,9 @@ impl Root {
         .detach();
         cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)).detach();
         Self::follow_activation(window, cx);
-        let mut root = Self::fresh((focus, cx.focus_handle()), store, tx, queue, notifier);
+        let parts = Parts::new(&cx.weak_entity(), Self::sidebar_part, cx);
+        let mut root = Self::fresh((focus, cx.focus_handle()), (store, notifier, tx, queue), parts);
+        cx.observe_self(Self::tell_parts).detach();
         kept.apply(&mut root);
         root.start(cx);
         root.follow_appearance(window, cx);
@@ -282,6 +292,7 @@ impl Root {
             self.tell_machine_visible();
         }
         self.track_leaving(cx);
+        self.parts.store_seen += 1;
         cx.notify();
     }
 
@@ -301,20 +312,14 @@ impl Root {
         window.replace_root(cx, move |window, cx| Self::open(kept, window, cx));
     }
 
-    fn fresh(
-        (focus, dock_focus): (FocusHandle, FocusHandle),
-        store: Entity<Store>,
-        tx: UnboundedSender<Msg>,
-        queue: Queue,
-        notifier: Entity<Notifier>,
-    ) -> Self {
+    fn fresh((focus, dock_focus): Focuses, (store, notifier, tx, queue): Wires, parts: Parts) -> Self {
         Self {
             focus,
             store,
             tx,
             own: Connection::new(cli::target(), queue),
             machine: None,
-            session: None,
+            session: Revised::default(),
             metrics: None,
             font_size: font_size_from_env(),
             layout: Rc::default(),
@@ -343,10 +348,10 @@ impl Root {
             notifier,
             title: String::new(),
             dock_focus,
-            beat: Rc::default(),
             counting: Counting::default(),
             given: looks::Given::of(theme::terminal_json()),
             palette_settled: 0,
+            parts,
         }
     }
 
@@ -523,7 +528,7 @@ impl Root {
             s.view_id = view_id;
             cx.notify();
         });
-        self.session = Some(session);
+        self.session.set(Some(session));
         self.drop_drags_without_tab();
         self.publish_tab(cx);
         self.follow_look(cx);
@@ -706,7 +711,7 @@ impl Root {
             .flex()
             .flex_row()
             .on_drag_move(split::follow::<_, SidebarGrip>(Edge::Right, TERMINAL_KEEP + dock, sidebar_width, cx))
-            .child(self.render_sidebar(window_frame, cx))
+            .child(self.render_sidebar(window_frame))
             .child(self.render_workspace_area(window_frame, window, cx))
             .child(split::handle("sidebar-split", SidebarGrip, at, sidebar_width, cx))
     }
@@ -916,7 +921,8 @@ fn start_place() -> Vec<String> {
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_title(window);
-        self.keep_beating(window, cx);
+        self.mind_the_sidebar(window);
+        self.keep_beating(window);
         self.keep_the_keys(window, cx);
         let window_frame = frame::Frame::read(window, Os::CURRENT);
         let (sheet, dialog) = {
@@ -937,6 +943,7 @@ impl Render for Root {
             .on_key_down(cx.listener(Self::on_key))
             .child(self.render_rail(cx))
             .child(self.render_main(window_frame, window, cx))
+            .children(self.render_menu(cx))
             .children(sheet)
             .children(dialog.map(|view| {
                 let id = view.entity_id();

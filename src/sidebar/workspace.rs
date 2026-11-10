@@ -16,7 +16,8 @@ use crate::app::Root;
 use crate::dialogs;
 use crate::model::{AgentRow, PaneInfo, PullRequest, Session, Shown, Workspace};
 use crate::theme::colours;
-use crate::ui::{self, badge};
+use crate::ui;
+use crate::ui::orbits;
 
 fn pull_tip(pr: &PullRequest) -> String {
     let mut text = format!("{} {}\n{}", pr.reference(), pr.title, pr.summary());
@@ -254,7 +255,7 @@ impl Root {
                     div().flex_none().text_size(px(11.)).text_color(colours::muted()).child(format!("↓{}", ws.behind)),
                 )
             })
-            .when(status, |d| d.child(badge(ws.loudest())))
+            .when(status, |d| d.child(orbits::badge(ws.loudest(), &self.parts.spots, if removing { 0.55 } else { 1. })))
     }
 
     pub(crate) fn account_mark(&self, pane: &PaneInfo, cx: &App) -> Option<String> {
@@ -290,7 +291,7 @@ impl Root {
             .px(px(6.))
             .py(px(3.))
             .child(agent_fold(row, place.scope, cx))
-            .child(badge(pane.status.as_deref()))
+            .child(orbits::badge(pane.status.as_deref(), &self.parts.spots, 1.))
             .child(agent_text(title, details, selected))
             .child(self.agent_end(row, place, gid.clone(), cx))
             .on_hover(hover_listener(gid, cx))
@@ -308,10 +309,11 @@ impl Root {
         let id = row.pane.id;
         let folded = row.pane.collapsed && row.children > 0;
         let end = End { gap: 4., buttons: if place.closable { 2 } else { 1 }, figures: folded };
-        trailing(end, self.row_hovered(&gid))
+        let hovered = self.row_hovered(&gid);
+        trailing(end, hovered)
             .when(folded, |d| d.child(ui::dim(format!("+{}", row.children))))
-            .when(place.closable, |d| d.child(agent_close_button(id, place.scope, gid.clone(), cx)))
-            .child(agent_menu_button(id, place.scope, gid, cx))
+            .when(hovered && place.closable, |d| d.child(agent_close_button(id, place.scope, gid.clone(), cx)))
+            .when(hovered, |d| d.child(agent_menu_button(id, place.scope, gid, cx)))
     }
 }
 

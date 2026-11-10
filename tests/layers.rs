@@ -267,6 +267,61 @@ fn only_the_window_implements_root() {
     check("`impl Root` outside the window", &[], |s| !s.in_window() && s.code.contains("impl Root"));
 }
 
+const SIDEBAR_FILES: &[&str] = &[
+    "src/sidebar.rs",
+    "src/sidebar/arrange.rs",
+    "src/sidebar/rows.rs",
+    "src/sidebar/workspace.rs",
+    "src/sidebar/tab_rows.rs",
+    "src/sidebar/agents.rs",
+    "src/sidebar/machine_rows.rs",
+    "src/sidebar/machine_agents.rs",
+    "src/sidebar/key.rs",
+];
+const SIDEBAR_FIELDS: &[&str] = &["session", "side", "store", "sidebar_width", "pair_width", "parts"];
+const PARTS_FIELDS: &[&str] = &["spots", "counted", "store_seen", "sidebar", "orbit_layer"];
+const SIDE_FIELDS: &[&str] = &["hovered", "rename", "there_folds", "look", "sizes", "machine_place"];
+
+fn root_fields(sources: &[Source]) -> Vec<String> {
+    let app = sources.iter().find(|s| s.path == "src/app.rs").expect("the window is in src/app.rs");
+    let start = app.code.find("pub(crate) struct Root {").expect("Root is declared") + "pub(crate) struct Root {".len();
+    let body = &app.code[start..];
+    let body = &body[..body.find("\n}").expect("Root ends")];
+    body.lines()
+        .filter_map(|line| {
+            line.trim().trim_start_matches("pub(crate) ").split_once(':').map(|(name, _)| name.trim().to_owned())
+        })
+        .collect()
+}
+
+fn words_after<'a>(code: &'a str, prefix: &str) -> impl Iterator<Item = &'a str> {
+    code.match_indices(prefix).map(move |(at, _)| {
+        let rest = &code[at + prefix.len()..];
+        let end = rest.find(|c: char| !(c.is_alphanumeric() || c == '_')).unwrap_or(rest.len());
+        &rest[..end]
+    })
+}
+
+fn reads_beyond_its_key(source: &Source, fields: &[String]) -> bool {
+    if !SIDEBAR_FILES.contains(&source.path.as_str()) {
+        return false;
+    }
+    let outside = words_after(&source.code, "self.")
+        .any(|word| fields.iter().any(|f| f == word) && !SIDEBAR_FIELDS.contains(&word));
+    let side = words_after(&source.code, "self.side.").any(|word| !SIDE_FIELDS.contains(&word));
+    let parts = words_after(&source.code, "self.parts.").any(|word| !PARTS_FIELDS.contains(&word));
+    let globals = source.code.match_indices("::get(cx)").any(|(at, _)| !source.code[..at].ends_with("Store"));
+    outside || side || parts || globals
+}
+
+#[test]
+fn the_sidebar_draws_only_what_its_key_holds() {
+    let all = sources();
+    let fields = root_fields(&all);
+    assert!(fields.iter().any(|f| f == "metrics"), "the field list is read from Root");
+    check("the sidebar reads what its key leaves out", &[], |s| reads_beyond_its_key(s, &fields));
+}
+
 #[test]
 fn fixtures_are_read_with_the_fixture_macro() {
     check("relative include_str!", &[], relative_fixture);
