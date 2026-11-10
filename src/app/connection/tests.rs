@@ -14,9 +14,15 @@ fn line(view: u64, size: Option<(u16, u16)>) -> Session {
     Session { view: Some(info), ..Session::default() }
 }
 
+fn with_rows(surface: u64, revision: u64, base: Option<u64>, panes: &serde_json::Value) -> Frame {
+    serde_json::from_value(json!({
+        "boot": "b", "surface": surface, "revision": revision, "base": base, "tab": 6, "styles": [{}], "panes": panes
+    }))
+    .expect("a frame with rows")
+}
+
 fn complete(surface: u64, revision: u64) -> Frame {
-    serde_json::from_value(json!({ "boot": "b", "surface": surface, "revision": revision, "tab": 6, "panes": [] }))
-        .expect("a frame")
+    with_rows(surface, revision, None, &json!([]))
 }
 
 fn patch_on(base: u64) -> Frame {
@@ -143,4 +149,15 @@ fn a_connection_gone_nowhere_sends_nothing_and_keeps_its_last_frame() {
     assert!(conn.has_frame);
     assert_eq!(tap.inputs(), Vec::new());
     assert_eq!(tap.commands(), Vec::<Vec<String>>::new());
+}
+
+#[test]
+fn a_patch_past_the_pane_asks_for_a_whole_frame_on_its_own_queue() {
+    let (mut conn, tap) = tapped();
+    let two = json!([{ "pane": 9, "lines": [[{ "style": 0, "cells": ["a"] }], [{ "style": 0, "cells": ["b"] }]] }]);
+    conn.frame_arrived(with_rows(4, 1, None, &two));
+    let past = json!([{ "pane": 9, "lines": { "2": [{ "style": 0, "cells": ["c"] }] } }]);
+    assert!(!conn.frame_arrived(with_rows(4, 2, Some(1), &past)));
+    assert_eq!(tap.commands(), [["redraw", "--surface", "4"]]);
+    assert_eq!(conn.grid.panes[0].lines.len(), 2);
 }

@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.54
+
+- **A machine's tab keeps no more than it shows.** Measured over a long session on another machine (its tabs visited hundreds of times, long output, the link cut and back, its cornercase restarted), the window's memory stays flat. A frame that names rows past a pane is no longer held: the window asks for a whole one instead, as cornercase's own window refuses such frames.
+
 ## 0.1.53
 
 - **On Windows, plugins' window processes now end with the window when it crashes.** If the window crashed or was ended from Task Manager, `cornercase plugin windows` and the processes your plugins run beside the window kept running, with nothing left to stop them. Windows now ends them with the window, as already happened on macOS and Linux. Quitting stops them as before. If Windows does not allow it, the window says so once.

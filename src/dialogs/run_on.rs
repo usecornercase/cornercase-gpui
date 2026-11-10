@@ -252,7 +252,7 @@ impl RunOn {
         let line = |text: String| div().text_size(px(12.5)).text_color(colours::soft()).child(text);
         Some(match self.there(cx)? {
             There::Ready(spot) => {
-                let home = Store::get(cx).read(cx).machine_home(&spot.boot);
+                let home = Store::get(cx).read(cx).machine_home(&spot.machine, &spot.boot);
                 let folder = home.map_or_else(|| spot.path.clone(), |home| paths::home_relative(&spot.path, home));
                 line(format!("{how} on {machine}, in {folder}"))
             }

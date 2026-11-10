@@ -148,7 +148,7 @@ impl Root {
         let seen = self.session.as_ref()?.machine(&place.machine)?;
         let store = self.store.read(cx);
         let error = store.machines.iter().find(|machine| machine.name == seen.name).and_then(|m| m.error.as_deref());
-        let told = Told { home: store.machine_home(&place.boot), error, now: queue::now() };
+        let told = Told { home: store.machine_home(&place.machine, &place.boot), error, now: queue::now() };
         let text = card_text(place, seen, &told, &standing);
         if card_counts(&standing, seen, told.now) {
             self.counting.drawn();

@@ -135,23 +135,37 @@ impl PaneGrid {
     }
 
     fn copy_lines(&mut self, copy: Copy) {
-        let held = self.lines.clone();
-        for i in 0..usize::from(copy.count) {
-            let (from, to) = (usize::from(copy.from) + i, usize::from(copy.to) + i);
-            if let (Some(source), Some(target)) = (held.get(from), self.lines.get_mut(to)) {
-                target.clone_from(source);
-            }
+        let (from, to, count) = (usize::from(copy.from), usize::from(copy.to), usize::from(copy.count));
+        let Some(moved) = self.lines.get(from..from + count).map(<[Line]>::to_vec) else { return };
+        if let Some(target) = self.lines.get_mut(to..to + count) {
+            target.clone_from_slice(&moved);
         }
     }
 
     fn replace_rows(&mut self, changed: HashMap<String, Vec<WireRun>>, tables: &Tables) {
         for (row, runs) in changed {
-            let Ok(row) = row.parse::<usize>() else { continue };
-            if row >= self.lines.len() {
-                self.lines.resize(row + 1, Vec::new());
+            if let Some(line) = row.parse::<usize>().ok().and_then(|row| self.lines.get_mut(row)) {
+                *line = tables.line(runs);
             }
-            self.lines[row] = tables.line(runs);
         }
+    }
+
+    fn fits(&self, wire: &WirePane) -> bool {
+        let rows = self.lines.len();
+        wire.copy.is_none_or(|copy| copy_fits(copy, rows))
+            && wire.lines.as_ref().is_none_or(|lines| lines_fit(lines, rows))
+    }
+}
+
+fn copy_fits(copy: Copy, rows: usize) -> bool {
+    let count = usize::from(copy.count);
+    usize::from(copy.from) + count <= rows && usize::from(copy.to) + count <= rows
+}
+
+fn lines_fit(lines: &WireLines, rows: usize) -> bool {
+    match lines {
+        WireLines::All(all) => all.len() <= rows,
+        WireLines::Changed(changed) => changed.keys().filter_map(|row| row.parse::<usize>().ok()).all(|row| row < rows),
     }
 }
 
@@ -189,17 +203,27 @@ impl Grid {
     }
 
     fn patch(&mut self, base: u64, frame: Frame, tables: &Tables) -> Applied {
-        if base != self.revision || frame.surface != self.surface || frame.boot != self.boot {
+        if !self.same_base(base, &frame) || !self.fits(&frame.panes) {
             return Applied::NeedRedraw;
         }
         for wire in frame.panes {
-            let Some(grid) = self.panes.iter_mut().find(|g| g.pane == wire.pane) else {
-                return Applied::NeedRedraw;
-            };
-            grid.patch(wire, tables);
+            if let Some(grid) = self.panes.iter_mut().find(|g| g.pane == wire.pane) {
+                grid.patch(wire, tables);
+            }
         }
         self.revision = frame.revision;
         self.projection = frame.projection.or(self.projection);
         Applied::Ok
     }
+
+    fn same_base(&self, base: u64, frame: &Frame) -> bool {
+        base == self.revision && frame.surface == self.surface && frame.boot == self.boot
+    }
+
+    fn fits(&self, panes: &[WirePane]) -> bool {
+        panes.iter().all(|wire| self.pane(wire.pane).is_some_and(|held| held.fits(wire)))
+    }
 }
+
+#[cfg(test)]
+mod tests;
