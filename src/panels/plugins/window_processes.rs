@@ -11,6 +11,7 @@ use crate::cli;
 use crate::store::{Store, ToastKind};
 
 const ENDED: &str = "`cornercase plugin windows` ended";
+const UNTIED: &str = "If this window crashes, the plugins' window processes will keep running";
 
 #[derive(Debug, Deserialize)]
 struct Line {
@@ -107,6 +108,7 @@ pub(crate) struct WindowProcesses {
     kept: bool,
     run: u64,
     tries: u32,
+    told_untied: bool,
 }
 
 struct GlobalWindowProcesses(Entity<WindowProcesses>);
@@ -146,6 +148,15 @@ impl WindowProcesses {
         self.run += 1;
         self.tries = 0;
         self.seen = Seen::default();
+    }
+
+    fn untied(&mut self, why: Option<String>) -> Option<String> {
+        let why = why?;
+        if self.told_untied {
+            return None;
+        }
+        self.told_untied = true;
+        Some(format!("{UNTIED}. {why}"))
     }
 
     fn read_line(&mut self, run: u64, text: &str, now: Instant) -> serde_json::Result<()> {
@@ -192,8 +203,7 @@ impl WindowProcesses {
                 let _ = ending.unbounded_send(Heard::End(why));
             },
         );
-        if let Err(e) = started {
-            self.fell(run, &e.to_string(), cx);
+        if !self.kept_it(run, started, cx) {
             return;
         }
         cx.spawn(async move |this, cx| {
@@ -203,6 +213,21 @@ impl WindowProcesses {
         })
         .detach();
         cx.notify();
+    }
+
+    fn kept_it(&mut self, run: u64, started: anyhow::Result<Option<String>>, cx: &mut Context<Self>) -> bool {
+        match started {
+            Ok(untied) => {
+                if let Some(text) = self.untied(untied) {
+                    say(text, cx);
+                }
+                true
+            }
+            Err(e) => {
+                self.fell(run, &e.to_string(), cx);
+                false
+            }
+        }
     }
 
     fn heard(&mut self, run: u64, heard: Heard, cx: &mut Context<Self>) {

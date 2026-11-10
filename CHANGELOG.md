@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.53
+
+- **On Windows, plugins' window processes now end with the window when it crashes.** If the window crashed or was ended from Task Manager, `cornercase plugin windows` and the processes your plugins run beside the window kept running, with nothing left to stop them. Windows now ends them with the window, as already happened on macOS and Linux. Quitting stops them as before. If Windows does not allow it, the window says so once.
+
 ## 0.1.51
 
 - **The window says when another machine runs an older cornercase, and updates it.** Connecting to a machine whose cornercase is older than this computer's, with `--remote` or ⇧⌘K, now shows a page with both releases, instead of "Lost cornercase" with cornercase's raw message and a retry that could not succeed. **Update cornercase on vps…** asks first, runs the update cornercase names from here and connects again. If that machine's server still runs the old release, **Restart cornercase on vps…** restarts it, after saying that every program in its terminals stops, or you can connect without restarting. This needs cornercase 0.13.23 or newer on this computer.
