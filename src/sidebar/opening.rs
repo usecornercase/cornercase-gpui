@@ -171,7 +171,10 @@ impl Root {
         };
         let args = self.store.read(cx).with_view(args);
         store::run_busy(cx, busy, args, move |this: &mut Root, result, cx| match result {
-            Ok(_) => this.set_folded(Fold::Group(group), false),
+            Ok(_) => {
+                this.set_folded(Fold::Group(group), false);
+                cx.notify();
+            }
             Err(e) => this.say(&cli::reason(&e), cx),
         });
     }

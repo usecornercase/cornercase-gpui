@@ -1,7 +1,6 @@
 use gpui::SharedString;
 
 use super::{KeyParts, SidebarKey};
-use crate::app::part::told;
 use crate::model::machines::LinkState;
 use crate::model::{MachinePlace, MachineSeen, ThereWorkspace};
 use crate::sidebar::arrange::Sizes;
@@ -76,17 +75,4 @@ fn each_input_of_the_sidebar_moves_its_key() {
 fn the_same_inputs_give_the_same_key() {
     let inputs = Inputs { hovered: Some("row-1".into()), ..Inputs::default() };
     assert_eq!(inputs.key(), inputs.clone().key());
-}
-
-#[test]
-fn the_sidebar_redraws_only_when_its_key_moves() {
-    let key = Inputs::default().key();
-    let moved = Inputs { store: 1, ..Inputs::default() }.key();
-    assert!(!told(Some(&key), &key).sidebar);
-    assert!(told(Some(&key), &moved).sidebar);
-}
-
-#[test]
-fn the_first_notification_redraws_the_sidebar() {
-    assert!(told(None, &Inputs::default().key()).sidebar);
 }

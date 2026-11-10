@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use super::{
     Beat, Leaving, Next, ORBIT, ORBIT_FRAME, Way, ease_in, ease_out, marked, next_frame, orbit, orbit_turned,
-    orbits_drawn,
+    orbits_drawn, orbits_shown,
 };
 
 #[test]
@@ -142,4 +142,12 @@ fn a_mark_holds_then_fades_to_nothing() {
     assert!((marked(0.5) - 1.).abs() < f32::EPSILON);
     assert!(marked(0.75) > 0. && marked(0.75) < 1.);
     assert!(marked(1.).abs() < f32::EPSILON);
+}
+
+#[test]
+fn orbits_shown_count_with_badges() {
+    Beat::default().drawing(Instant::now());
+    drop(orbit(gpui::svg()));
+    orbits_shown(2);
+    assert_eq!(orbits_drawn(), 3);
 }

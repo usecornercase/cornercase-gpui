@@ -94,8 +94,12 @@ fn there_tab_text(name: Div, note: Option<String>, details: Option<String>) -> D
         .child(div().text_size(px(11.)).text_color(colours::faint()).child(ui::one_line(note)))
 }
 
-pub(super) fn status_of(seen: &MachineSeen, spots: &Spots, status: Option<&str>) -> Div {
-    if seen.linked() { orbits::badge(status, spots, 1.) } else { ui::still_badge(status) }
+pub(super) fn status_of(seen: &MachineSeen, (spots, dim): (&Spots, f32), status: Option<&str>) -> Div {
+    if seen.linked() { orbits::badge(status, spots, dim) } else { ui::still_badge(status) }
+}
+
+fn leaving_dim(leaving: bool) -> f32 {
+    if leaving { DOWN_OPACITY } else { 1. }
 }
 
 pub(super) fn machine_tag(seen: &MachineSeen) -> Div {
@@ -251,7 +255,9 @@ impl Root {
         let hovered = !row.leaving && self.row_hovered(gid);
         row_end(end, hovered)
             .child(machine_tag(row.seen))
-            .when(status, |d| d.child(status_of(row.seen, &self.parts.spots, row.ws.loudest())))
+            .when(status, |d| {
+                d.child(status_of(row.seen, (&self.parts.spots, leaving_dim(row.leaving)), row.ws.loudest()))
+            })
             .when(hovered, |d| d.children(workspace_buttons(&row.aim, gid, cx)))
     }
 
@@ -303,7 +309,7 @@ fn there_tab(row: &ThereRow<'_>, tab: &Tab<ThereId>, listing: &Listing, cx: &mut
         .gap(px(6.))
         .px(px(6.))
         .py(px(3.))
-        .child(status_of(row.seen, &listing.spots, tab.loudest()))
+        .child(status_of(row.seen, (&listing.spots, leaving_dim(row.leaving)), tab.loudest()))
         .child(there_tab_text(name, note, details));
     if row.leaving {
         return frame.cursor_default().into_any_element();
@@ -339,7 +345,7 @@ fn alone_project_row(
         .child(row_end(end, false).child(machine_tag(seen)).when(folded, |d| {
             d.when(listing.counts, |d| d.child(ui::dim(format!("{}", there.workspaces.len())))).child(status_of(
                 seen,
-                &listing.spots,
+                (&listing.spots, 1.),
                 there.attention(),
             ))
         }));

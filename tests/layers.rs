@@ -279,6 +279,7 @@ const SIDEBAR_FILES: &[&str] = &[
     "src/sidebar/key.rs",
 ];
 const SIDEBAR_FIELDS: &[&str] = &["session", "side", "store", "sidebar_width", "pair_width", "parts"];
+const PARTS_FIELDS: &[&str] = &["spots", "counted", "store_seen", "sidebar", "orbit_layer"];
 const SIDE_FIELDS: &[&str] = &["hovered", "rename", "there_folds", "look", "sizes", "machine_place"];
 
 fn root_fields(sources: &[Source]) -> Vec<String> {
@@ -308,8 +309,9 @@ fn reads_beyond_its_key(source: &Source, fields: &[String]) -> bool {
     let outside = words_after(&source.code, "self.")
         .any(|word| fields.iter().any(|f| f == word) && !SIDEBAR_FIELDS.contains(&word));
     let side = words_after(&source.code, "self.side.").any(|word| !SIDE_FIELDS.contains(&word));
+    let parts = words_after(&source.code, "self.parts.").any(|word| !PARTS_FIELDS.contains(&word));
     let globals = source.code.match_indices("::get(cx)").any(|(at, _)| !source.code[..at].ends_with("Store"));
-    outside || side || globals
+    outside || side || parts || globals
 }
 
 #[test]

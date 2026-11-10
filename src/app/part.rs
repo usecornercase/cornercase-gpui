@@ -76,21 +76,16 @@ impl Parts {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Told {
-    pub(crate) sidebar: bool,
-}
-
-pub(crate) fn told(before: Option<&SidebarKey>, now: &SidebarKey) -> Told {
-    Told { sidebar: before != Some(now) }
+pub(crate) fn sidebar_told(before: Option<&SidebarKey>, now: &SidebarKey) -> bool {
+    before != Some(now)
 }
 
 impl Root {
     pub(super) fn tell_parts(&mut self, cx: &mut Context<Self>) {
         let now = self.sidebar_key();
-        let told = told(self.parts.told.as_ref(), &now);
+        let told = sidebar_told(self.parts.told.as_ref(), &now);
         self.parts.told = Some(now);
-        if told.sidebar {
+        if told {
             self.parts.sidebar.update(cx, |_, cx| cx.notify());
         }
     }
@@ -112,3 +107,6 @@ impl Root {
         window.on_next_frame(move |_, cx| cx.notify(sidebar));
     }
 }
+
+#[cfg(test)]
+mod tests;

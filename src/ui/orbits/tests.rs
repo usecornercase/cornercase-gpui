@@ -1,7 +1,6 @@
 use gpui::{Bounds, Pixels, Rgba, TransformationMatrix, point, px, size};
 
 use super::{Spot, Spots, orbit_matrix};
-use crate::ui::motion::{Beat, orbit, orbits_drawn, orbits_shown};
 
 fn bounds(x: f32, y: f32, edge: f32) -> Bounds<Pixels> {
     Bounds::new(point(px(x), px(y)), size(px(edge), px(edge)))
@@ -54,12 +53,4 @@ fn no_turn_leaves_the_badge_in_place() {
     let matrix = orbit_matrix(bounds(10., 20., 12.), 2., 0.);
     near(through(&matrix, (30., 40.)), (30., 40.));
     assert_eq!(matrix.rotation_scale, [[1., 0.], [0., 1.]]);
-}
-
-#[test]
-fn spots_shown_count_with_the_badges_drawn() {
-    Beat::default().drawing(std::time::Instant::now());
-    drop(orbit(gpui::svg()));
-    orbits_shown(2);
-    assert_eq!(orbits_drawn(), 3);
 }
