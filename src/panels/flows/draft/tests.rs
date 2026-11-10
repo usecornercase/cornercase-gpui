@@ -1,8 +1,9 @@
 use serde_json::{Value, json};
 
 use super::{
-    Draft, LoopAfter, Place, RoleDraft, StageDraft, fresh_role_name, gone_note, has_breaks, loop_after, neighbour,
-    only_role_in, parse_saved, removed_from, renamed_in, save_args, split_words, swapped, without,
+    Back, BackDraft, Draft, LoopAfter, Place, RoleDraft, Stage, StageDraft, alone, first_line, follow_loops,
+    fresh_role_name, gone_note, has_breaks, loop_after, move_role, neighbour, parse_saved, place_note, remove_role,
+    reports, save_args, saves_line, seat, split_words, swapped, targets, without,
 };
 use crate::panels::flows::model::parse_listing;
 
@@ -100,54 +101,10 @@ fn the_orchestrator_keeps_its_own_edits_and_worktree() {
 }
 
 #[test]
-fn a_stage_lists_its_roles_from_commas() {
-    let stage = StageDraft::with_roles(" coder,  reviewer ,");
-    assert_eq!(stage.to_value(1), Ok(json!({"roles": ["coder", "reviewer"], "back": null})));
-}
-
-#[test]
-fn a_loop_needs_numbers() {
-    let stage = StageDraft {
-        roles: "r".into(),
-        back_to: "1".into(),
-        when: "findings".into(),
-        at_most: "x".into(),
-        ..StageDraft::default()
-    };
-    assert_eq!(stage.to_value(2), Err("stage 2: at most takes a number".into()));
-    let stage = StageDraft { at_most: "3".into(), ..stage };
-    assert_eq!(stage.to_value(2).expect("stage")["back"], json!({"to": 1, "when": "findings", "at_most": 3}));
-}
-
-#[test]
 fn a_blank_flow_can_be_saved_as_it_is() {
     let value = Draft::blank("New").to_value().expect("value");
     assert_eq!(value["stages"], json!([{"roles": ["coder"], "back": null}]));
     assert_eq!(value["end"], "commits");
-}
-
-#[test]
-fn renaming_a_role_renames_it_in_the_stages() {
-    assert_eq!(renamed_in("coder, reviewer", "coder", "writer"), Some("writer, reviewer".into()));
-    assert_eq!(renamed_in("reviewer", "coder", "writer"), None);
-}
-
-#[test]
-fn removing_a_role_takes_it_out_of_the_stages() {
-    assert_eq!(removed_from("coder, reviewer", "coder"), Some("reviewer".into()));
-    assert_eq!(removed_from("reviewer", "coder"), None);
-}
-
-#[test]
-fn a_stage_of_one_role_is_only_that_role() {
-    assert!(only_role_in("coder", "coder"));
-    assert!(only_role_in(" coder, ", "coder"));
-}
-
-#[test]
-fn a_stage_it_shares_or_an_empty_one_is_not_only_that_role() {
-    assert!(!only_role_in("coder, reviewer", "coder"));
-    assert!(!only_role_in("", "coder"));
 }
 
 #[test]
@@ -180,51 +137,45 @@ fn a_check_gives_the_problems_of_the_draft() {
 #[test]
 fn moving_a_stage_keeps_its_loops_pointing_at_the_same_stages() {
     let moved = swapped(2, 3);
-    assert_eq!(loop_after("1", 2, &moved), LoopAfter::Same);
-    assert_eq!(loop_after("1", 3, &moved), LoopAfter::Same);
-    assert_eq!(loop_after("2", 4, &moved), LoopAfter::To("3".into()));
-    assert_eq!(loop_after("3", 4, &moved), LoopAfter::To("2".into()));
+    assert_eq!(loop_after(1, 2, &moved), LoopAfter::Same);
+    assert_eq!(loop_after(1, 3, &moved), LoopAfter::Same);
+    assert_eq!(loop_after(2, 4, &moved), LoopAfter::To(3));
+    assert_eq!(loop_after(3, 4, &moved), LoopAfter::To(2));
 }
 
 #[test]
 fn a_stage_moved_above_the_stage_it_goes_back_to_loses_its_loop() {
-    assert_eq!(loop_after("1", 1, swapped(1, 2)), LoopAfter::Gone);
+    assert_eq!(loop_after(1, 1, swapped(1, 2)), LoopAfter::Gone);
 }
 
 #[test]
 fn a_loop_follows_the_stage_it_goes_back_to_when_that_stage_moves() {
-    assert_eq!(loop_after("1", 3, swapped(1, 2)), LoopAfter::To("2".into()));
+    assert_eq!(loop_after(1, 3, swapped(1, 2)), LoopAfter::To(2));
 }
 
 #[test]
 fn a_target_moved_below_its_loop_drops_the_loop() {
-    assert_eq!(loop_after("2", 2, swapped(2, 3)), LoopAfter::Gone);
+    assert_eq!(loop_after(2, 2, swapped(2, 3)), LoopAfter::Gone);
 }
 
 #[test]
 fn removing_a_stage_renumbers_the_loops_after_it() {
-    assert_eq!(loop_after("3", 3, without(2)), LoopAfter::To("2".into()));
+    assert_eq!(loop_after(3, 3, without(2)), LoopAfter::To(2));
 }
 
 #[test]
 fn removing_a_later_stage_leaves_a_loop_alone() {
-    assert_eq!(loop_after("1", 2, without(3)), LoopAfter::Same);
+    assert_eq!(loop_after(1, 2, without(3)), LoopAfter::Same);
 }
 
 #[test]
 fn removing_the_stage_a_loop_goes_back_to_drops_the_loop() {
-    assert_eq!(loop_after("2", 2, without(2)), LoopAfter::Gone);
-}
-
-#[test]
-fn a_stage_without_a_loop_or_with_a_half_typed_one_is_left_alone() {
-    assert_eq!(loop_after("", 2, swapped(1, 2)), LoopAfter::Same);
-    assert_eq!(loop_after("x", 2, swapped(1, 2)), LoopAfter::Same);
+    assert_eq!(loop_after(2, 2, without(2)), LoopAfter::Gone);
 }
 
 #[test]
 fn a_loop_back_to_stage_zero_is_dropped() {
-    assert_eq!(loop_after("0", 2, swapped(1, 2)), LoopAfter::Gone);
+    assert_eq!(loop_after(0, 2, swapped(1, 2)), LoopAfter::Gone);
 }
 
 #[test]
@@ -272,9 +223,8 @@ fn only_line_breaks_ask_for_a_field_of_several_lines() {
 fn the_plan_of_a_draft_follows_its_stages() {
     let mut draft = Draft::blank("New");
     draft.stages.push(StageDraft {
-        roles: "coder".into(),
-        back_to: "1".into(),
-        at_most: "2".into(),
+        roles: vec!["coder".into()],
+        back: Some(BackDraft { to: 1, when: String::new(), at_most: 2 }),
         ..StageDraft::default()
     });
     let plan = draft.plan().expect("plan");
@@ -285,6 +235,208 @@ fn the_plan_of_a_draft_follows_its_stages() {
 #[test]
 fn a_draft_that_cannot_be_read_has_no_plan() {
     let mut draft = Draft::blank("New");
-    draft.stages[0].back_to = "soon".into();
+    draft.roles[0].env = "KEY".into();
     assert_eq!(draft.plan(), None);
+}
+
+fn names(list: &[&str]) -> Vec<(u64, String)> {
+    list.iter().enumerate().map(|(id, name)| (id as u64, (*name).to_string())).collect()
+}
+
+fn stage(roles: &[u64], back: Option<(usize, u32)>) -> Stage<String> {
+    Stage {
+        base: Value::Null,
+        roles: roles.to_vec(),
+        back: back.map(|(to, at_most)| Back { to, at_most }),
+        when: "problems".into(),
+    }
+}
+
+fn draft_of(roles: &[&str], stages: &Value) -> Draft {
+    let roles: Vec<Value> = roles.iter().map(|name| json!({"name": name, "agent": "claude"})).collect();
+    Draft::from_value(&json!({"name": "Q", "orchestrator": {"name": "orchestrator"}, "roles": roles, "stages": stages}))
+}
+
+fn ids(stages: &[Stage<String>]) -> Vec<Vec<u64>> {
+    stages.iter().map(|stage| stage.roles.clone()).collect()
+}
+
+#[test]
+fn a_flow_cornercase_accepts_is_seated_as_it_is() {
+    let stages = json!([
+        {"roles": ["coder"], "back": null},
+        {"roles": ["reviewer", "security"], "back": {"to": 1, "when": "problems", "at_most": 3}},
+        {"roles": ["tester"], "back": {"to": 1, "when": "bugs", "at_most": 2}}
+    ]);
+    let seating = seat(&draft_of(&["coder", "reviewer", "security", "tester"], &stages));
+    assert_eq!(ids(&seating.stages), [vec![0], vec![1, 2], vec![3]]);
+    assert_eq!(seating.stages[1].back, Some(Back { to: 1, at_most: 3 }));
+    assert_eq!(seating.stages[2].when, "bugs");
+    assert_eq!(seating.note(), None);
+    let arena = Draft::from_value(&arena());
+    let seating = seat(&arena);
+    assert_eq!(seating.stages.len(), arena.stages.len());
+    assert_eq!(seating.changes, Vec::<String>::new());
+}
+
+#[test]
+fn a_role_no_stage_names_gets_a_stage_of_its_own() {
+    let seating = seat(&draft_of(&["coder", "tester"], &json!([{"roles": ["coder"], "back": null}])));
+    assert_eq!(ids(&seating.stages), [vec![0], vec![1]]);
+    assert_eq!(seating.note().as_deref(), Some("Opened with changes: tester had no stage, so it has one of its own"));
+}
+
+#[test]
+fn a_role_named_twice_stays_in_its_first_stage() {
+    let stages = json!([{"roles": ["coder"]}, {"roles": ["reviewer", "coder"]}]);
+    let seating = seat(&draft_of(&["coder", "reviewer"], &stages));
+    assert_eq!(ids(&seating.stages), [vec![0], vec![1]]);
+    assert_eq!(seating.changes, ["coder was in stage 1 and stage 2, so it stays in stage 1"]);
+    let seating = seat(&draft_of(&["coder"], &json!([{"roles": ["coder", "coder"]}])));
+    assert_eq!(seating.changes, ["stage 1 named coder twice, so it is there once"]);
+}
+
+#[test]
+fn a_name_no_role_has_leaves_its_stage() {
+    let seating = seat(&draft_of(&["coder"], &json!([{"roles": ["coder", "ghost"]}])));
+    assert_eq!(ids(&seating.stages), [vec![0]]);
+    assert_eq!(seating.changes, ["stage 1 named ghost, which is not a role, so it is left out"]);
+}
+
+#[test]
+fn a_stage_left_empty_goes_and_its_loops_follow() {
+    let back = |to| json!({"to": to, "when": "problems", "at_most": 3});
+    let stages = json!([
+        {"roles": ["a"]},
+        {"roles": ["ghost"]},
+        {"roles": ["b"], "back": back(1)},
+        {"roles": ["c"], "back": back(2)},
+        {"roles": ["d"], "back": back(3)}
+    ]);
+    let seating = seat(&draft_of(&["a", "b", "c", "d"], &stages));
+    assert_eq!(ids(&seating.stages), [vec![0], vec![1], vec![2], vec![3]]);
+    let loops: Vec<Option<Back>> = seating.stages.iter().map(|stage| stage.back).collect();
+    assert_eq!(loops, [None, Some(Back { to: 1, at_most: 3 }), None, Some(Back { to: 2, at_most: 3 })]);
+    assert!(seating.changes.contains(&"stage 2 had no roles, so it is gone, and so is the loop of stage 4".into()));
+}
+
+#[test]
+fn moving_a_role_out_of_a_stage_it_was_alone_in_removes_the_stage() {
+    let mut stages = vec![stage(&[0], None), stage(&[1], None), stage(&[2], Some((1, 3)))];
+    assert_eq!(move_role(&mut stages, 0, 1), [2]);
+    assert_eq!(ids(&stages), [vec![1, 0], vec![2]]);
+    assert_eq!(stages[1].back, None);
+}
+
+#[test]
+fn moving_a_role_keeps_the_order_of_the_roles() {
+    let mut stages = vec![stage(&[0, 3], None), stage(&[1, 2], None)];
+    let roles = names(&["coder", "reviewer", "security", "tester"]);
+    assert_eq!(move_role(&mut stages, 3, 1), Vec::<usize>::new());
+    assert_eq!(ids(&stages), [vec![0], vec![1, 2, 3]]);
+    let drafted = stages[1].draft(&roles, "problems".into());
+    assert_eq!(drafted.roles, ["reviewer", "security", "tester"]);
+}
+
+#[test]
+fn a_role_alone_in_its_stage_cannot_ask_for_a_new_one() {
+    let stages = vec![stage(&[0], None), stage(&[1, 2], None)];
+    assert!(alone(&stages, 0));
+    assert!(!alone(&stages, 1));
+}
+
+#[test]
+fn a_new_loop_is_cornercases_default() {
+    let default = BackDraft::default();
+    assert_eq!(default, BackDraft { to: 1, when: "problems".into(), at_most: 3 });
+    let stage = StageDraft { roles: vec!["a".into()], back: Some(default), ..StageDraft::default() };
+    let mut draft = Draft::blank("New");
+    draft.stages = vec![stage];
+    let value = draft.to_value().expect("value");
+    assert_eq!(value["stages"][0]["back"], json!({"to": 1, "when": "problems", "at_most": 3}));
+}
+
+#[test]
+fn a_loop_offers_only_earlier_stages() {
+    assert_eq!(targets(2).collect::<Vec<_>>(), [1, 2]);
+    assert_eq!(targets(0).count(), 0);
+}
+
+#[test]
+fn a_loop_cannot_go_under_once() {
+    let back = Back { to: 1, at_most: 1 };
+    assert!(back.step(false).lowest());
+    assert_eq!(back.step(false).at_most, 1);
+    assert_eq!(back.step(true).at_most, 2);
+    assert_eq!(Back { at_most: u32::MAX, ..back }.step(true).at_most, u32::MAX);
+}
+
+#[test]
+fn the_orchestrators_name_is_left_as_it_was() {
+    let raw = json!({"orchestrator": {"name": "boss", "agent": "claude"}});
+    let mut draft = Draft::from_value(&raw);
+    draft.orchestrator.name = "other".into();
+    assert_eq!(draft.to_value().expect("value")["orchestrator"]["name"], "boss");
+    assert_eq!(Draft::blank("New").to_value().expect("value")["orchestrator"]["name"], "orchestrator");
+}
+
+#[test]
+fn a_stage_without_a_loop_is_left_alone() {
+    let mut stages = vec![stage(&[0], None), stage(&[1], None)];
+    assert_eq!(follow_loops(&mut stages, swapped(1, 2)), Vec::<usize>::new());
+    assert_eq!(stages[1].back, None);
+}
+
+#[test]
+fn removing_the_last_role_of_a_stage_removes_the_stage_and_its_loops_follow() {
+    let mut stages = vec![stage(&[0], None), stage(&[1], None), stage(&[2], Some((2, 3)))];
+    assert_eq!(remove_role(&mut stages, 1), [2]);
+    assert_eq!(ids(&stages), [vec![0], vec![2]]);
+}
+
+#[test]
+fn a_closed_role_shows_the_first_line_of_its_prompt() {
+    assert_eq!(first_line("\n  \n Fix it \nthen test"), Some("Fix it"));
+    assert_eq!(first_line(" \n"), None);
+}
+
+#[test]
+fn a_role_is_drawn_as_it_is_typed() {
+    let role = RoleDraft { env: "KEY A=1".into(), model: " ".into(), ..RoleDraft::new(" coder ", "claude", true) };
+    let spec = role.spec();
+    assert_eq!(spec.name, "coder");
+    assert_eq!(spec.model, None);
+    assert_eq!(spec.env.keys().collect::<Vec<_>>(), ["A"]);
+}
+
+#[test]
+fn the_header_says_where_it_saves() {
+    assert_eq!(saves_line(&Place::File("/f/q.toml".into()), None), "Saves /f/q.toml");
+    assert_eq!(saves_line(&Place::Yours, None), "Saves into your flows");
+    assert_eq!(saves_line(&Place::Project, None), "Saves into this project's flows");
+    assert_eq!(saves_line(&Place::Yours, Some("It is built in")), "Saves into your flows · It is built in");
+    assert!(place_note(&Place::Project).starts_with("Kept in the project's"));
+}
+
+#[test]
+fn a_loop_names_who_reports_by_how_many_roles() {
+    assert_eq!(reports(1), "If it reports");
+    assert_eq!(reports(2), "If either reports");
+    assert_eq!(reports(3), "If any of them reports");
+}
+
+#[test]
+fn seating_and_drafting_a_flow_cornercase_accepts_gives_the_same_flow() {
+    let stages = json!([
+        {"roles": ["coder"], "back": null, "x": 1},
+        {"roles": ["reviewer", "security"], "back": {"to": 1, "when": "bugs", "at_most": 2, "y": 2}, "z": 3}
+    ]);
+    let flow = draft_of(&["coder", "reviewer", "security"], &stages);
+    for draft in [Draft::from_value(&arena()), flow] {
+        let seating = seat(&draft);
+        let roles: Vec<(u64, String)> =
+            draft.roles.iter().enumerate().map(|(id, role)| (id as u64, role.name.clone())).collect();
+        let stages = seating.stages.iter().map(|stage| stage.draft(&roles, stage.when.clone())).collect();
+        assert_eq!(Draft { stages, ..draft.clone() }.to_value(), draft.to_value());
+    }
 }

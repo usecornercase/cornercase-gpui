@@ -229,6 +229,11 @@ impl TextField {
         cx.notify();
     }
 
+    pub(crate) fn reveal(&mut self, cx: &mut Context<Self>) {
+        self.view.reveal = true;
+        cx.notify();
+    }
+
     fn caret_moved(&mut self) {
         self.view.goal_x = None;
         self.view.reveal = true;

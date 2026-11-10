@@ -2,6 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.56
+
+- **Edit a flow in a form that follows its plan, with the plan beside it.** New and Edit read in the plan's order: what the flow is, the orchestrator, each stage with its roles, then what happens when the work is done. Every role is a row with its agent and what it may do. A click opens it, one at a time, and so does a click on its box in the plan. The plan stays beside the form when the window is about 1,220 px wide or more and the plan fits beside it; otherwise Form and Plan switch between them.
+- **No more typing role names into stages.** A role's Works in moves it to another stage or a new one, and a stage goes when its last role does. Add a role beside and Add a stage add a role and open it.
+- **Loops read as a sentence**: if it reports problems, go back to stage 1 at most 3 times, with the stage picked among the earlier ones and the times stepped. Add a loop back starts from cornercase's own.
+- **The check stays in view.** The header says Checking…, Ready to save or how many problems there are, the problems are listed under it, and Save waits while the finished check lists problems. It does not wait while the check is still running or if the check could not run.
+- A flow whose stages and roles do not match opens with them put right and says what changed; Cancel asks before dropping that.
+- Notes for the orchestrator, and a role's arguments and variables, wait behind a button until used. The orchestrator no longer shows a name to edit, since cornercase always calls it orchestrator.
+
 ## 0.1.55
 
 - **Move panes on another machine's tab.** Drag a pane by its handle, or with the right button (with Shift when the program in it reads the mouse), onto another pane, or use Move pane in its menu. If that machine's cornercase restarted in the meantime, nothing moves and the window says so.

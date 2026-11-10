@@ -4,8 +4,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, Div, FontWeight, IntoElement, ParentElement as _, Rgba, SharedString,
-    Styled as _, WeakEntity, div, ease_in_out, px,
+    Animation, AnimationExt as _, AnyElement, App, Div, FontWeight, IntoElement, ParentElement as _, Rgba,
+    SharedString, Styled as _, Window, div, ease_in_out, px,
 };
 
 use super::FlowsPanel;
@@ -55,13 +55,15 @@ impl Played {
     }
 }
 
+pub(super) type OnRole = Rc<dyn Fn(&str, &mut Window, &mut App)>;
+
 #[derive(Clone, Copy)]
 pub(super) struct Plan<'a> {
     pub flow: &'a FlowSpec,
     pub run: Option<&'a Run>,
     pub focus: Option<&'a str>,
     pub key: &'a str,
-    pub panel: Option<&'a WeakEntity<FlowsPanel>>,
+    pub on_role: Option<&'a OnRole>,
 }
 
 impl<'a> Plan<'a> {
@@ -297,12 +299,14 @@ fn caption(graph: &Graph) -> Div {
         )
 }
 
-fn marker(plan: Plan, at: Spot, stage: usize) -> Div {
-    let base = div()
-        .absolute()
-        .left(px(at.x - MARK / 2.))
-        .top(px(at.y - MARK / 2.))
+pub(super) fn board_width(graph: f32) -> f32 {
+    graph + 2. * BOARD_PAD + 2.
+}
+
+pub(super) fn stage_ring(stage: usize) -> Div {
+    div()
         .size(px(MARK))
+        .flex_none()
         .rounded_full()
         .flex()
         .items_center()
@@ -310,7 +314,14 @@ fn marker(plan: Plan, at: Spot, stage: usize) -> Div {
         .border_1()
         .text_size(px(11.))
         .font_weight(FontWeight::SEMIBOLD)
-        .child((stage + 1).to_string());
+        .border_color(colours::edge())
+        .bg(ground())
+        .text_color(colours::muted())
+        .child((stage + 1).to_string())
+}
+
+fn marker(plan: Plan, at: Spot, stage: usize) -> Div {
+    let base = stage_ring(stage).absolute().left(px(at.x - MARK / 2.)).top(px(at.y - MARK / 2.));
     match plan.progress(stage) {
         Some(Progress::Active) => base
             .bg(glass::cobalt())

@@ -131,6 +131,10 @@ impl FlowSpec {
         self.roles.iter().find(|r| r.name == name)
     }
 
+    pub(crate) fn lead_name(&self) -> &str {
+        if self.orchestrator.name.is_empty() { "orchestrator" } else { &self.orchestrator.name }
+    }
+
     pub(crate) fn is_lead(&self, name: &str) -> bool {
         name == "orchestrator" || name == self.orchestrator.name
     }

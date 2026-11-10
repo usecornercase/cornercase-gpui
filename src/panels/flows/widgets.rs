@@ -70,6 +70,10 @@ pub(super) fn eyebrow(text: &str) -> Div {
 
 pub(super) fn pill(text: impl Into<SharedString>, colour: Rgba, glowing: bool) -> Div {
     let light = div().size(px(6.)).rounded_full().bg(colour).when(glowing, |d| d.shadow(glass::glow(colour, 0.9, 6.)));
+    pill_with(light, text, colour)
+}
+
+pub(super) fn pill_with(lead: impl IntoElement, text: impl Into<SharedString>, colour: Rgba) -> Div {
     div()
         .flex()
         .flex_none()
@@ -84,7 +88,7 @@ pub(super) fn pill(text: impl Into<SharedString>, colour: Rgba, glowing: bool) -
         .text_size(px(11.))
         .font_weight(FontWeight::MEDIUM)
         .text_color(colour)
-        .child(light)
+        .child(lead)
         .child(text.into())
 }
 
