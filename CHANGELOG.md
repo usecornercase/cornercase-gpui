@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.58
+
+- **The window costs less while agents work.** The sidebar is kept from one frame to the next unless something it shows changed, and the working orbits are drawn over it. On a bench of 22 agents with 5 working, at 1512×912, the window went from 12.7 % to 5.9 % of a core (a frame from 3.9 to 1.2 ms), and from 15.5 % to 7.7 % while an output scrolls in the terminal.
+- A row's buttons (⋯, +, ✕) are now made only while the pointer is over it, so after a scroll with the pointer still they show once the pointer moves.
+
 ## 0.1.57
 
 - **Folding a machine's agent never acts on a server that restarted.** With cornercase 0.13.32 or newer on this computer, the arrow and Collapse/Expand on a machine's agent in the agents section tell that machine which run of its cornercase they were pressed on. If it restarted on the way, nothing is folded or unfolded and the window says `vps restarted: nothing was sent`. With an older cornercase here, folding works as before.
