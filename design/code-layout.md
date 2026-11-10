@@ -2,7 +2,7 @@
 
 Code: `src/`, `tests/layers.rs`, `Cargo.toml`, `clippy.toml`
 
-These rules come from cornercase-terminal (`../cornercase-terminal/design/code-layout.md`), which learned them on a 17,000-line `app.rs`; this repository adopted them in October 2026, at about 25,000 lines.
+These rules come from cornercase-terminal (its `design/code-layout.md`), which learned them on a 17,000-line `app.rs`; this repository adopted them in October 2026, at about 25,000 lines.
 
 - **No comments**: a comment repeats the code or goes stale beside it. What the code cannot say (why a choice was made, what was rejected, what waits upstream) goes in the area's file in `design/`, where a reviewer reads it with the other decisions of the area. `tests/layers.rs` lexes every source (strings and char literals apart) and fails on `//` or `/* */`.
 - **The window is five files**: gpui lets any module write `impl Root`, but `Root`'s fields are then `pub(crate)` for everyone. `impl Root` stays in `app.rs`, `terminal.rs`, `sidebar.rs`, `tabs.rs` and `context_menu.rs` (and their folders), and only they import `crate::app`. Panels and widgets reach shared state through `Store`, so a panel can be read, tested and changed without the window. `FONT_FAMILY` moved from `app.rs` to `theme.rs` for this.
