@@ -20,7 +20,7 @@ const TWO_COLUMNS: f32 = 480.;
 impl FlowsPanel {
     pub(super) fn run_top(&self, run: &Run, cx: &Context<Self>) -> Div {
         let key = format!("run-{}", run.id);
-        let plan = Plan { flow: &run.flow, run: Some(run), focus: None, key: &key, panel: None };
+        let plan = Plan { flow: &run.flow, run: Some(run), focus: None, key: &key, on_role: None };
         div()
             .flex()
             .flex_col()

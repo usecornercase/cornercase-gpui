@@ -1,12 +1,14 @@
+use std::rc::Rc;
+
 use gpui::{
-    ClickEvent, Context, Div, FontWeight, InteractiveElement as _, ParentElement as _, Stateful,
+    ClickEvent, Context, Div, ElementId, FontWeight, InteractiveElement as _, ParentElement as _, Rgba, Stateful,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
 use super::FlowsPanel;
 use super::actions::{Question, ask_on_click, flow_buttons};
 use super::cards::{avatar, conductor};
-use super::diagram::{Plan, role_colour};
+use super::diagram::{OnRole, Plan, role_colour};
 use super::hero::{description, facts, hero, team, title};
 use super::model::{FlowInfo, FlowSpec, RoleSpec};
 use super::widgets::{agents_label, alert, chip, file_name, heading, open_path, panel_box};
@@ -19,7 +21,10 @@ impl FlowsPanel {
         let spec = &flow.flow;
         let key = flow.key();
         let panel = cx.entity().downgrade();
-        let plan = Plan { flow: spec, run: None, focus: self.prompt.as_deref(), key: &key, panel: Some(&panel) };
+        let on_role: OnRole = Rc::new(move |name, _, cx| {
+            let _ = panel.update(cx, |this, cx| this.toggle_prompt(name, cx));
+        });
+        let plan = Plan { flow: spec, run: None, focus: self.prompt.as_deref(), key: &key, on_role: Some(&on_role) };
         div()
             .flex()
             .flex_col()
@@ -42,15 +47,10 @@ impl FlowsPanel {
         let open = self.prompt.as_deref() == Some(role.name.as_str());
         let colour = if i == 0 { colours::soft() } else { role_colour(spec, &role.name) };
         let name = role.name.clone();
-        panel_box()
-            .id(("role", i))
-            .flex()
-            .flex_col()
+        role_box(("role", i), colour, open)
             .cursor_pointer()
-            .when(open, |d| d.border_color(tint(colour, 0.55)).bg(tint(colour, 0.06)))
-            .when(!open, |d| d.hover(|s| s.border_color(colours::edge()).bg(colours::hover())))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_prompt(&name, cx)))
-            .child(role_head((i, role), colour, open))
+            .child(role_head((i, role), colour, open, None))
             .when(open, |d| d.child(prompt(role)))
     }
 
@@ -96,6 +96,15 @@ impl FlowsPanel {
     }
 }
 
+pub(super) fn role_box(id: impl Into<ElementId>, colour: Rgba, open: bool) -> Stateful<Div> {
+    panel_box()
+        .id(id)
+        .flex()
+        .flex_col()
+        .when(open, |d| d.border_color(tint(colour, 0.55)).bg(tint(colour, 0.06)))
+        .when(!open, |d| d.hover(|s| s.border_color(colours::edge()).bg(colours::hover())))
+}
+
 pub(super) fn block(glyph: Icon, label: &str) -> Div {
     div().flex().flex_col().gap(px(10.)).child(heading(glyph, label))
 }
@@ -135,7 +144,7 @@ fn tag_chip(tag: &'static str) -> Div {
     }
 }
 
-fn role_head((i, role): (usize, &RoleSpec), colour: gpui::Rgba, open: bool) -> Div {
+pub(super) fn role_head((i, role): (usize, &RoleSpec), colour: Rgba, open: bool, under: Option<Div>) -> Div {
     let face = if i == 0 { conductor(30.) } else { avatar(&role.name, colour, 30.) };
     div()
         .flex()
@@ -150,14 +159,24 @@ fn role_head((i, role): (usize, &RoleSpec), colour: gpui::Rgba, open: bool) -> D
                 .min_w_0()
                 .flex()
                 .flex_col()
-                .gap(px(6.))
-                .child(div().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD).child(role.name.clone()))
-                .child(div().flex().flex_wrap().gap(px(5.)).children(role_chips(role))),
+                .gap(px(5.))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(5.))
+                        .child(
+                            div().flex().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD).child(role.name.clone()),
+                        )
+                        .children(role_chips(role)),
+                )
+                .children(under),
         )
         .child(ui::icon(if open { Icon::ChevronDown } else { Icon::ChevronRight }, 14.).text_color(colours::faint()))
 }
 
-fn role_chips(role: &RoleSpec) -> Vec<Div> {
+pub(super) fn role_chips(role: &RoleSpec) -> Vec<Div> {
     let muted = colours::muted();
     let mut chips = vec![chip(Some(Icon::Agent), role.agent.clone(), colours::soft())];
     chips.extend(role.model.clone().map(|model| chip(None, model, muted)));

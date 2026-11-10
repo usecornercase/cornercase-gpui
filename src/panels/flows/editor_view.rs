@@ -1,62 +1,125 @@
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, App, ClickEvent, Context, Div, ElementId, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
-use super::diagram::{Plan, draw};
-use super::draft::Place;
-use super::editor::{FlowEditor, Mode, RoleFields, StageFields, Verdict};
-use super::flow_page::block;
-use super::widgets::{alert, error_text, icon_action, panel_box};
+use super::draft::saves_line;
+use super::editor::{FlowEditor, Layout, Mode, PLAN_PAD, Pill, View, layout};
+use super::widgets::{alert, glyph, pill, pill_with};
+use super::wires;
 use crate::theme::colours;
 use crate::ui::{self, Icon, TextField, Tone, boxed};
 
-const TYPED_WAITS: &str = "Agent, model and effort are typed: picking from what each agent takes needs \
-                           usecornercase/cornercase-terminal#704.";
-
-fn labelled(label: &str, field: &gpui::Entity<TextField>, window: &Window, cx: &App) -> Div {
+pub(super) fn labelled(label: &str, field: &Entity<TextField>, window: &Window, cx: &App) -> Div {
     ui::field(label.to_string(), boxed(field, window, cx)).flex_1().min_w_0()
 }
 
-fn text_control(label: &str, field: &gpui::Entity<TextField>, window: &Window, cx: &App) -> Div {
+pub(super) fn text_control(label: &str, field: &Entity<TextField>, window: &Window, cx: &App) -> Div {
     ui::field(label.to_string(), boxed(field, window, cx))
 }
 
-fn line() -> Div {
+pub(super) fn line() -> Div {
     div().flex().gap(px(10.)).items_start()
 }
 
+pub(super) fn adder(
+    id: impl Into<ElementId>,
+    glyph: Icon,
+    label: &'static str,
+    dashed: bool,
+    click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> Div {
+    let button = ui::icon_text_button(id, glyph, label, Tone::Plain).on_click(click);
+    div().flex().child(button.when(dashed, gpui::Styled::border_dashed))
+}
+
+pub(super) fn choice(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    selected: bool,
+    cx: &Context<FlowEditor>,
+    act: impl Fn(&mut FlowEditor, &mut Window, &mut Context<FlowEditor>) + 'static,
+) -> AnyElement {
+    ui::segment(id, label, selected)
+        .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| act(this, window, cx)))
+        .into_any_element()
+}
+
 impl FlowEditor {
-    fn header(&self, cx: &Context<Self>) -> Div {
+    fn view_choice(&self, glyph: Icon, label: &'static str, view: View, cx: &Context<Self>) -> AnyElement {
+        ui::icon_segment(label, glyph, label, self.view == view)
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_view(view, cx)))
+            .into_any_element()
+    }
+
+    fn pill(&self) -> Div {
+        let state = self.check.pill();
+        let words = state.words();
+        match state {
+            Pill::Checking => pill_with(ui::spinner("editor-checking", 10., colours::muted()), words, colours::muted()),
+            Pill::Ready => pill(words, colours::done(), true),
+            Pill::Problems(_) => pill(words, colours::failed(), true),
+        }
+    }
+
+    fn title_column(&self) -> Div {
         div()
+            .flex_1()
+            .min_w_0()
             .flex()
             .flex_col()
-            .gap(px(8.))
-            .p(px(16.))
-            .border_b_1()
-            .border_color(colours::border())
+            .gap(px(2.))
             .child(
                 div()
                     .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(ui::title(self.title.clone()).text_size(px(15.)).flex_1())
-                    .child(self.buttons(cx)),
+                    .text_size(px(15.))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child(ui::one_line(self.title.clone())),
             )
-            .child(self.place_line(cx))
-            .children(self.note.clone().map(ui::dim))
+            .child(div().flex().child(ui::dim(ui::one_line(saves_line(&self.place, self.note.as_deref())))))
+    }
+
+    fn header(&self, layout: Layout, cx: &Context<Self>) -> Div {
+        let row = div()
+            .flex()
+            .items_center()
+            .gap(px(12.))
+            .child(glyph(&self.plan, None, 36.))
+            .child(self.title_column())
+            .when(layout.plan.is_none(), |row| {
+                row.child(ui::segments(vec![
+                    self.view_choice(Icon::Todo, "Form", View::Form, cx),
+                    self.view_choice(Icon::Flows, "Plan", View::Plan, cx),
+                ]))
+            })
+            .child(self.pill())
+            .child(self.buttons(cx));
+        div()
+            .flex_none()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .px(px(18.))
+            .py(px(14.))
+            .border_b_1()
+            .border_color(colours::border())
+            .child(row)
             .children((self.mode == Mode::Discarding).then(|| Self::discard_ask(cx)))
     }
 
     fn buttons(&self, cx: &Context<Self>) -> Div {
         let save = if self.mode == Mode::Saving {
             ui::busy_button("editor-save", "Saving…", Tone::Primary)
+        } else if self.check.rests() {
+            ui::resting_button("editor-save", "Save", Tone::Primary)
         } else {
             ui::icon_text_button("editor-save", Icon::Download, "Save", Tone::Primary)
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.save(cx)))
         };
         div()
             .flex()
+            .flex_none()
             .gap(px(8.))
             .child(
                 ui::button("editor-cancel", "Cancel")
@@ -81,219 +144,83 @@ impl FlowEditor {
             )
     }
 
-    fn place_line(&self, cx: &Context<Self>) -> AnyElement {
-        if let Place::File(path) = &self.place {
-            return ui::dim(format!("Saves {path}")).into_any_element();
-        }
-        if !self.new || self.project.is_none() {
-            return ui::dim("Saves into your flows").into_any_element();
-        }
-        let choice = |id: &'static str, label: &'static str, place: Place| {
-            let selected = self.place == place;
-            ui::segment(id, label, selected)
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_place(place.clone(), cx)))
-                .into_any_element()
-        };
-        ui::field(
-            "Into",
-            ui::segments(vec![
-                choice("editor-yours", "Yours", Place::Yours),
-                choice("editor-project", "This project's", Place::Project),
-            ]),
-        )
-        .into_any_element()
+    fn strip(&self) -> Option<impl IntoElement + use<>> {
+        let failed = self.check.problems().into_iter().chain(self.error.clone());
+        let red = failed.map(|text| alert(text, colours::failed()));
+        let orange = self.opened.iter().map(String::as_str).chain(self.check.risk());
+        let orange = orange.map(|text| alert(text.to_string(), colours::waiting()));
+        let lines: Vec<Div> = red.chain(orange).collect();
+        (!lines.is_empty()).then(|| {
+            div()
+                .id("flow-editor-strip")
+                .flex_none()
+                .max_h(px(160.))
+                .overflow_y_scroll()
+                .flex()
+                .flex_col()
+                .gap(px(6.))
+                .px(px(18.))
+                .py(px(10.))
+                .border_b_1()
+                .border_color(colours::border())
+                .children(lines)
+        })
     }
 
-    fn verdict_view(&self) -> Div {
-        let state = div().flex().flex_col().gap(px(6.));
-        let state = match &self.verdict {
-            Verdict::Waiting | Verdict::Checking => state.child(ui::busy("verdict-checking", "Checking…")),
-            Verdict::Invalid(e) => state.child(alert(e.clone(), colours::failed())),
-            Verdict::Checked(saved) if saved.problems.is_empty() => state
-                .child(ui::dim("No problems: it can be saved."))
-                .children(saved.check.clone().map(|c| alert(c, colours::waiting()))),
-            Verdict::Checked(saved) => {
-                state.children(saved.problems.iter().map(|p| alert(p.clone(), colours::failed())))
+    fn form_column(&self, layout: Layout, window: &Window, cx: &Context<Self>) -> impl IntoElement + use<> {
+        let form = div()
+            .flex()
+            .flex_col()
+            .gap(px(18.))
+            .child(self.about(layout, window, cx))
+            .child(self.team(window, cx))
+            .child(self.end(cx));
+        div()
+            .id("flow-editor-form")
+            .track_scroll(&self.inputs.scroller)
+            .h_full()
+            .overflow_y_scroll()
+            .px(px(18.))
+            .pt(px(18.))
+            .pb(px(22.))
+            .child(form)
+    }
+
+    fn plan_box(&self, cx: &Context<Self>) -> impl IntoElement + use<> {
+        div()
+            .id("flow-editor-plan")
+            .h_full()
+            .overflow_y_scroll()
+            .px(px(PLAN_PAD))
+            .py(px(18.))
+            .child(self.plan_column(cx))
+    }
+
+    fn body(&self, layout: Layout, window: &Window, cx: &Context<Self>) -> Div {
+        let body = div().flex_1().min_h_0();
+        match layout.plan {
+            Some(plan) => {
+                body.flex().child(div().flex_1().min_w_0().child(self.form_column(layout, window, cx))).child(
+                    div().w(px(plan)).flex_none().border_l_1().border_color(colours::border()).child(self.plan_box(cx)),
+                )
             }
-        };
-        state.children(self.error.clone().map(error_text))
+            None if self.view == View::Plan => body.child(self.plan_box(cx)),
+            None => body.child(self.form_column(layout, window, cx)),
+        }
     }
-
-    fn flow_fields(&self, window: &Window, cx: &Context<Self>) -> Div {
-        let end = |id: &'static str, label: &'static str, commits: bool| {
-            ui::segment(id, label, self.commits == commits)
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_commits(commits, cx)))
-                .into_any_element()
-        };
-        block(Icon::Flows, "Flow")
-            .child(labelled("Name", &self.name, window, cx))
-            .child(text_control("Description", &self.description, window, cx))
-            .child(text_control("Notes", &self.notes, window, cx))
-            .child(ui::field(
-                "Then",
-                ui::segments(vec![
-                    end("editor-commits", "Leave the commits", true),
-                    end("editor-pr", "Open a pull request", false),
-                ]),
-            ))
-    }
-
-    fn agent_line(role: &RoleFields, window: &Window, cx: &App) -> Div {
-        line()
-            .child(labelled("Name", &role.name, window, cx))
-            .child(labelled("Agent", &role.agent, window, cx))
-            .child(labelled("Model", &role.model, window, cx))
-            .child(labelled("Effort", &role.effort, window, cx))
-    }
-
-    fn command_line(role: &RoleFields, window: &Window, cx: &App) -> Div {
-        line().child(labelled("Arguments", &role.args, window, cx)).child(labelled("Variables", &role.env, window, cx))
-    }
-
-    fn orchestrator_fields(&self, window: &Window, cx: &Context<Self>) -> Div {
-        let lead = &self.orchestrator;
-        block(Icon::Waypoints, "Orchestrator")
-            .child(Self::agent_line(lead, window, cx))
-            .child(ui::dim(TYPED_WAITS))
-            .child(Self::command_line(lead, window, cx))
-            .child(text_control("Prompt", &lead.prompt, window, cx))
-    }
-
-    fn role_card(index: usize, role: &RoleFields, window: &Window, cx: &Context<Self>) -> Div {
-        let toggle = |id: &'static str, checked: bool, label: &'static str, own: bool| {
-            ui::checkbox((id, index), checked, label)
-                .text_size(px(12.))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.toggle_role(index, own, cx)))
-        };
-        panel_box()
-            .p(px(12.))
-            .flex()
-            .flex_col()
-            .gap(px(10.))
-            .child(Self::agent_line(role, window, cx))
-            .child(Self::command_line(role, window, cx))
-            .child(text_control("Prompt", &role.prompt, window, cx))
-            .child(
-                line()
-                    .items_center()
-                    .gap(px(16.))
-                    .child(toggle("role-edits", role.edits, "Edits the files", false))
-                    .child(toggle("role-own", role.own_worktree, "A worktree of its own", true))
-                    .child(div().flex_1())
-                    .child(
-                        icon_action(("role-remove", index), Icon::Trash, "Remove this role", true)
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.remove_role(index, cx))),
-                    ),
-            )
-    }
-
-    fn role_fields(&self, window: &Window, cx: &Context<Self>) -> Div {
-        block(Icon::Accounts, "Roles")
-            .children(self.roles.iter().enumerate().map(|(i, role)| Self::role_card(i, role, window, cx)))
-            .child(adder(
-                "editor-add-role",
-                "Add role",
-                cx.listener(|this, _: &ClickEvent, window, cx| {
-                    this.add_role(window, cx);
-                }),
-            ))
-    }
-
-    fn stage_moves(index: usize, last: bool, cx: &Context<Self>) -> Div {
-        let step = |id: &'static str, glyph: Icon, hint: &'static str, up: bool| {
-            let blocked = if up { index == 0 } else { last };
-            icon_action((id, index), glyph, hint, false)
-                .when(blocked, |action| action.opacity(0.35).cursor_default())
-                .when(!blocked, |action| {
-                    action.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.move_stage(index, up, cx)))
-                })
-        };
-        div()
-            .flex()
-            .flex_none()
-            .gap(px(4.))
-            .child(step("stage-up", Icon::ArrowUp, "Move this stage up", true))
-            .child(step("stage-down", Icon::ArrowDown, "Move this stage down", false))
-    }
-
-    fn stage_row(index: usize, stage: &StageFields, last: bool, window: &Window, cx: &Context<Self>) -> Div {
-        line()
-            .child(
-                div()
-                    .w(px(22.))
-                    .pt(px(26.))
-                    .flex_none()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(colours::muted())
-                    .child((index + 1).to_string()),
-            )
-            .child(labelled("Roles, side by side", &stage.roles, window, cx).flex_grow())
-            .child(labelled("Back to stage", &stage.back_to, window, cx).max_w(px(110.)))
-            .child(labelled("When", &stage.when, window, cx).max_w(px(130.)))
-            .child(labelled("At most", &stage.at_most, window, cx).max_w(px(80.)))
-            .child(
-                div().pt(px(20.)).flex().gap(px(4.)).child(Self::stage_moves(index, last, cx)).child(
-                    icon_action(("stage-remove", index), Icon::Trash, "Remove this stage", true)
-                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.remove_stage(index, cx))),
-                ),
-            )
-    }
-
-    fn stage_fields(&self, window: &Window, cx: &Context<Self>) -> Div {
-        let last = self.stages.len().saturating_sub(1);
-        block(Icon::Repeat, "Stages")
-            .child(ui::dim(
-                "Stages run top to bottom; the roles of one stage work side by side. A loop sends the work back \
-                 to an earlier stage, at most so many times.",
-            ))
-            .children(self.stages.iter().enumerate().map(|(i, stage)| Self::stage_row(i, stage, i == last, window, cx)))
-            .child(adder(
-                "editor-add-stage",
-                "Add stage",
-                cx.listener(|this, _: &ClickEvent, window, cx| {
-                    this.add_stage(window, cx);
-                }),
-            ))
-    }
-
-    fn body(&self, window: &Window, cx: &Context<Self>) -> Div {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(22.))
-            .child(self.verdict_view())
-            .child(self.flow_fields(window, cx))
-            .child(self.orchestrator_fields(window, cx))
-            .child(self.role_fields(window, cx))
-            .child(self.stage_fields(window, cx))
-            .child(self.plan_view())
-    }
-
-    fn plan_view(&self) -> Div {
-        let plan = Plan { flow: &self.plan, run: None, focus: None, key: "flow-draft", panel: None };
-        block(Icon::Flows, "Plan").child(draw(plan, &self.board, &self.played))
-    }
-}
-
-fn adder(
-    id: &'static str,
-    label: &'static str,
-    click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div().flex().child(ui::icon_text_button(id, Icon::Plus, label, Tone::Plain).on_click(click))
 }
 
 impl Render for FlowEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().flex().flex_col().child(self.header(cx)).child(
-            div()
-                .id(SharedString::from("flow-editor-body"))
-                .track_scroll(&self.inputs.scroller)
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scroll()
-                .p(px(20.))
-                .child(self.body(window, cx).pb(px(12.))),
-        )
+        let layout = layout(self.width.get(), self.narrowest());
+        div()
+            .size_full()
+            .relative()
+            .flex()
+            .flex_col()
+            .child(wires::measure(self.width.clone()))
+            .child(self.header(layout, cx))
+            .children(self.strip())
+            .child(self.body(layout, window, cx))
     }
 }

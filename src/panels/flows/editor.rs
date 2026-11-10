@@ -2,22 +2,33 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use gpui::{App, AppContext as _, Context, Entity, ScrollHandle, WeakEntity, Window};
+use gpui::{App, AppContext as _, Context, Entity, Focusable as _, ScrollHandle, WeakEntity, Window};
 use serde_json::Value;
 
 use super::FlowsPanel;
 use super::actions::{Imported, announce, note, run_stdin};
 use super::diagram::Played;
 use super::draft::{
-    Draft, LoopAfter, Place, RoleDraft, Saved, StageDraft, fresh_role_name, gone_note, has_breaks, loop_after,
-    neighbour, only_role_in, parse_saved, place_of, removed_from, renamed_in, save_args, swapped, without,
+    self, Back, BackDraft, Draft, Place, RoleDraft, Saved, Stage, fresh_role_name, gone_note, has_breaks, neighbour,
+    parse_saved, place_of, save_args, seat, swapped,
 };
-use super::model::{self, FlowInfo, FlowSpec};
+use super::model::{self, FlowInfo, FlowSpec, RoleSpec};
 use crate::ui::{TextField, TextFieldEvent};
 
+mod about;
+mod check;
+mod loops;
+mod plan;
+mod team;
+
+pub(super) use self::check::{Check, Pill, Verdict};
+pub(super) use self::plan::{Layout, PLAN_PAD, layout};
+
 const CHECK_DELAY: Duration = Duration::from_millis(400);
+const SHEET_AT_1280: f32 = 1_050.;
 
 pub(super) struct RoleFields {
+    pub id: u64,
     base: Value,
     pub name: Entity<TextField>,
     pub agent: Entity<TextField>,
@@ -28,23 +39,24 @@ pub(super) struct RoleFields {
     pub prompt: Entity<TextField>,
     pub edits: bool,
     pub own_worktree: bool,
-    last_name: String,
+    pub command_open: bool,
 }
 
 impl RoleFields {
-    fn new(role: &RoleDraft, inputs: &Inputs, window: &mut Window, cx: &mut Context<FlowEditor>) -> Self {
+    fn new(id: u64, role: &RoleDraft, inputs: &Inputs, window: &mut Window, cx: &mut Context<FlowEditor>) -> Self {
         Self {
+            id,
             base: role.base.clone(),
             name: inputs.line(&role.name, "Name", window, cx),
             agent: inputs.line(&role.agent, "claude, codex, gemini…", window, cx),
-            model: inputs.line(&role.model, "The agent's default", window, cx),
-            effort: inputs.line(&role.effort, "The agent's default", window, cx),
+            model: inputs.line(&role.model, "Default", window, cx),
+            effort: inputs.line(&role.effort, "Default", window, cx),
             args: inputs.wrapped(&role.args, "Added to the agent's command", window, cx),
             env: inputs.wrapped(&role.env, "KEY=value KEY='a value'", window, cx),
             prompt: inputs.lines(&role.prompt, "What this role does", window, cx),
             edits: role.edits,
             own_worktree: role.own_worktree,
-            last_name: role.name.clone(),
+            command_open: !role.args.trim().is_empty() || !role.env.trim().is_empty(),
         }
     }
 
@@ -63,56 +75,27 @@ impl RoleFields {
         }
     }
 
-    fn current_name(&self, cx: &App) -> String {
+    pub(super) fn spec(&self, cx: &App) -> RoleSpec {
+        self.draft(cx).spec()
+    }
+
+    pub(super) fn current_name(&self, cx: &App) -> String {
         self.name.read(cx).text().trim().to_string()
     }
 }
 
-pub(super) struct StageFields {
-    base: Value,
-    pub roles: Entity<TextField>,
-    pub back_to: Entity<TextField>,
-    pub when: Entity<TextField>,
-    pub at_most: Entity<TextField>,
+pub(super) type StageFields = Stage<Entity<TextField>>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Open {
+    Lead,
+    Role(u64),
 }
 
-impl StageFields {
-    fn new(stage: &StageDraft, inputs: &Inputs, window: &mut Window, cx: &mut Context<FlowEditor>) -> Self {
-        Self {
-            base: stage.base.clone(),
-            roles: inputs.line(&stage.roles, "coder, reviewer", window, cx),
-            back_to: inputs.line(&stage.back_to, "No loop", window, cx),
-            when: inputs.line(&stage.when, "findings", window, cx),
-            at_most: inputs.line(&stage.at_most, "2", window, cx),
-        }
-    }
-
-    fn clear_loop(&self, cx: &mut Context<FlowEditor>) {
-        for field in [&self.back_to, &self.when, &self.at_most] {
-            field.update(cx, TextField::clear);
-        }
-    }
-
-    fn holds_only(&self, role: &str, cx: &App) -> bool {
-        only_role_in(&self.roles.read(cx).text(), role)
-    }
-
-    fn draft(&self, cx: &App) -> StageDraft {
-        StageDraft {
-            base: self.base.clone(),
-            roles: self.roles.read(cx).text(),
-            back_to: self.back_to.read(cx).text(),
-            when: self.when.read(cx).text(),
-            at_most: self.at_most.read(cx).text(),
-        }
-    }
-}
-
-pub(super) enum Verdict {
-    Waiting,
-    Checking,
-    Checked(Saved),
-    Invalid(String),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum View {
+    Form,
+    Plan,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,8 +132,13 @@ pub(super) struct FlowEditor {
     pub plan: FlowSpec,
     pub board: Rc<Cell<f32>>,
     pub played: Played,
-    pub verdict: Verdict,
-    generation: u64,
+    pub check: Check,
+    next_id: u64,
+    pub open: Option<Open>,
+    pub notes_open: bool,
+    pub view: View,
+    pub width: Rc<Cell<f32>>,
+    pub opened: Option<String>,
     pub mode: Mode,
     pub error: Option<String>,
 }
@@ -210,6 +198,10 @@ impl FlowsPanel {
         let panel = cx.entity().downgrade();
         let project = self.project;
         let editor = cx.new(|cx| FlowEditor::new(panel, project, opening, window, cx));
+        if flow.is_none() {
+            let focus = editor.read(cx).name.read(cx).focus_handle(cx);
+            window.focus(&focus);
+        }
         self.editor = Some(editor);
         cx.notify();
     }
@@ -242,6 +234,15 @@ fn editing(flow: &FlowInfo) -> Opening {
     Opening { draft: Draft::from_value(&flow.raw), place: place_of(flow), title: format!("Edit {}", flow.name), note }
 }
 
+fn seated(
+    stages: Vec<Stage<String>>,
+    inputs: &Inputs,
+    window: &mut Window,
+    cx: &mut Context<FlowEditor>,
+) -> Vec<StageFields> {
+    stages.into_iter().map(|s| s.with_when(|text| inputs.line(&text, "problems", window, cx))).collect()
+}
+
 impl FlowEditor {
     fn new(
         panel: WeakEntity<FlowsPanel>,
@@ -252,6 +253,11 @@ impl FlowEditor {
     ) -> Self {
         let Opening { draft, place, title, note } = opening;
         let inputs = Inputs::default();
+        let seating = seat(&draft);
+        let opened = seating.note();
+        let roles: Vec<RoleFields> =
+            (0u64..).zip(&draft.roles).map(|(id, role)| RoleFields::new(id, role, &inputs, window, cx)).collect();
+        let stages = seated(seating.stages, &inputs, window, cx);
         let mut this = Self {
             panel,
             project,
@@ -265,15 +271,20 @@ impl FlowEditor {
             description: inputs.sentence(&draft.description, "What the flow is for", window, cx),
             notes: inputs.lines(&draft.notes, "Notes for the orchestrator (optional)", window, cx),
             commits: draft.commits,
-            orchestrator: RoleFields::new(&draft.orchestrator, &inputs, window, cx),
-            roles: draft.roles.iter().map(|r| RoleFields::new(r, &inputs, window, cx)).collect(),
-            stages: draft.stages.iter().map(|s| StageFields::new(s, &inputs, window, cx)).collect(),
+            orchestrator: RoleFields::new(0, &draft.orchestrator, &inputs, window, cx),
+            next_id: roles.len() as u64,
+            roles,
+            stages,
             plan: draft.plan().unwrap_or_default(),
             board: Rc::new(Cell::new(super::BOARD)),
             played: Played::default(),
             inputs,
-            verdict: Verdict::Waiting,
-            generation: 0,
+            check: Check::default(),
+            open: None,
+            notes_open: !draft.notes.is_empty(),
+            view: View::Form,
+            width: Rc::new(Cell::new(SHEET_AT_1280)),
+            opened,
             mode: Mode::Editing,
             error: None,
         };
@@ -282,6 +293,7 @@ impl FlowEditor {
     }
 
     fn draft(&self, cx: &App) -> Draft {
+        let names: Vec<(u64, String)> = self.roles.iter().map(|r| (r.id, r.current_name(cx))).collect();
         Draft {
             base: self.base.clone(),
             name: self.name.read(cx).text(),
@@ -290,7 +302,7 @@ impl FlowEditor {
             commits: self.commits,
             orchestrator: self.orchestrator.draft(cx),
             roles: self.roles.iter().map(|r| r.draft(cx)).collect(),
-            stages: self.stages.iter().map(|s| s.draft(cx)).collect(),
+            stages: self.stages.iter().map(|s| s.draft(&names, s.when.read(cx).text())).collect(),
         }
     }
 
@@ -299,38 +311,18 @@ impl FlowEditor {
     }
 
     fn changed(&mut self, cx: &mut Context<Self>) {
-        self.follow_renames(cx);
         if self.mode == Mode::Discarding {
             self.mode = Mode::Editing;
         }
         self.schedule_check(cx);
     }
 
-    fn follow_renames(&mut self, cx: &mut Context<Self>) {
-        for i in 0..self.roles.len() {
-            let name = self.roles[i].current_name(cx);
-            if name.is_empty() || name == self.roles[i].last_name {
-                continue;
-            }
-            let old = std::mem::replace(&mut self.roles[i].last_name, name.clone());
-            self.rewrite_stages(|list| renamed_in(list, &old, &name), cx);
-        }
-    }
-
-    fn rewrite_stages(&self, rewrite: impl Fn(&str) -> Option<String>, cx: &mut Context<Self>) {
-        for stage in &self.stages {
-            if let Some(list) = rewrite(&stage.roles.read(cx).text()) {
-                stage.roles.update(cx, |field, cx| field.set_text(list, cx));
-            }
-        }
-    }
-
     pub(super) fn schedule_check(&mut self, cx: &mut Context<Self>) {
         if let Some(plan) = self.draft(cx).plan() {
             self.plan = plan;
         }
-        self.generation += 1;
-        let generation = self.generation;
+        self.error = None;
+        let generation = self.check.changed();
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(CHECK_DELAY).await;
             let _ = this.update(cx, |this, cx| this.check(generation, cx));
@@ -340,36 +332,30 @@ impl FlowEditor {
     }
 
     fn check(&mut self, generation: u64, cx: &mut Context<Self>) {
-        if generation != self.generation {
+        if !self.check.is_current(generation) {
             return;
         }
-        let value = match self.draft(cx).to_value() {
-            Ok(value) => value,
-            Err(e) => {
-                self.verdict = Verdict::Invalid(e);
-                cx.notify();
-                return;
+        match self.draft(cx).to_value() {
+            Ok(value) => {
+                let command = save_args(&self.place, self.project, true);
+                run_stdin(cx, command, value.to_string(), move |this, result, cx| this.checked(generation, result, cx));
             }
-        };
-        self.verdict = Verdict::Checking;
-        let command = save_args(&self.place, self.project, true);
-        run_stdin(cx, command, value.to_string(), move |this, result, cx| this.checked(generation, result, cx));
+            Err(e) => self.check.answer(generation, Verdict::Invalid(e)),
+        }
         cx.notify();
     }
 
     fn checked(&mut self, generation: u64, result: anyhow::Result<String>, cx: &mut Context<Self>) {
-        if generation != self.generation {
-            return;
-        }
-        self.verdict = match result.and_then(|out| parse_saved(&out)) {
+        let verdict = match result.and_then(|out| parse_saved(&out)) {
             Ok(saved) => Verdict::Checked(saved),
             Err(e) => Verdict::Invalid(e.to_string()),
         };
+        self.check.answer(generation, verdict);
         cx.notify();
     }
 
     pub(super) fn save(&mut self, cx: &mut Context<Self>) {
-        if self.mode == Mode::Saving {
+        if self.mode == Mode::Saving || self.check.rests() {
             return;
         }
         let value = match self.draft(cx).to_value() {
@@ -422,8 +408,53 @@ impl FlowEditor {
         self.schedule_check(cx);
     }
 
-    pub(super) fn toggle_role(&mut self, index: usize, own_worktree: bool, cx: &mut Context<Self>) {
-        let Some(role) = self.roles.get_mut(index) else { return };
+    pub(super) fn set_view(&mut self, view: View, cx: &mut Context<Self>) {
+        self.view = view;
+        cx.notify();
+    }
+
+    fn focus_on(field: &Entity<TextField>, window: &mut Window, cx: &mut Context<Self>) {
+        let handle = field.read(cx).focus_handle(cx);
+        window.focus(&handle);
+    }
+
+    pub(super) fn open_role(&mut self, open: Open, window: &mut Window, cx: &mut Context<Self>) {
+        self.open = Some(open);
+        let field = match open {
+            Open::Lead => Some(self.orchestrator.agent.clone()),
+            Open::Role(id) => self.roles.iter().find(|role| role.id == id).map(|role| role.name.clone()),
+        };
+        if let Some(field) = field {
+            Self::focus_on(&field, window, cx);
+        }
+        cx.notify();
+    }
+
+    pub(super) fn close_role(&mut self, cx: &mut Context<Self>) {
+        self.open = None;
+        cx.notify();
+    }
+
+    pub(super) fn toggle_notes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.notes_open = true;
+        let field = self.notes.clone();
+        Self::focus_on(&field, window, cx);
+        cx.notify();
+    }
+
+    pub(super) fn toggle_command(&mut self, open: Open, cx: &mut Context<Self>) {
+        let role = match open {
+            Open::Lead => Some(&mut self.orchestrator),
+            Open::Role(id) => self.roles.iter_mut().find(|role| role.id == id),
+        };
+        if let Some(role) = role {
+            role.command_open = !role.command_open;
+        }
+        cx.notify();
+    }
+
+    pub(super) fn toggle_role(&mut self, id: u64, own_worktree: bool, cx: &mut Context<Self>) {
+        let Some(role) = self.roles.iter_mut().find(|role| role.id == id) else { return };
         if own_worktree {
             role.own_worktree = !role.own_worktree;
         } else {
@@ -432,63 +463,92 @@ impl FlowEditor {
         self.schedule_check(cx);
     }
 
-    pub(super) fn add_role(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn add_role_field(&mut self, window: &mut Window, cx: &mut Context<Self>) -> u64 {
         let taken: Vec<String> = self.roles.iter().map(|r| r.current_name(cx)).collect();
         let name = fresh_role_name(&taken);
-        let role = RoleFields::new(&RoleDraft::new(&name, "claude", false), &self.inputs, window, cx);
+        let id = self.next_id;
+        self.next_id += 1;
+        let role = RoleFields::new(id, &RoleDraft::new(&name, "claude", false), &self.inputs, window, cx);
         self.roles.push(role);
-        let stage = StageFields::new(&StageDraft::with_roles(&name), &self.inputs, window, cx);
-        self.stages.push(stage);
-        self.schedule_check(cx);
+        id
     }
 
-    pub(super) fn remove_role(&mut self, index: usize, cx: &mut Context<Self>) {
-        if index >= self.roles.len() {
-            return;
-        }
-        let gone = self.roles.remove(index).current_name(cx);
-        let emptied: Vec<usize> = (0..self.stages.len()).filter(|i| self.stages[*i].holds_only(&gone, cx)).collect();
-        self.rewrite_stages(|list| removed_from(list, &gone), cx);
-        for stage in emptied.into_iter().rev() {
-            self.stages.remove(stage);
-            self.follow_loops(without(stage + 1), cx);
+    pub(super) fn add_role_beside(&mut self, stage: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let id = self.add_role_field(window, cx);
+        if let Some(stage) = self.stages.get_mut(stage) {
+            stage.roles.push(id);
         }
         self.schedule_check(cx);
+        self.open_role(Open::Role(id), window, cx);
     }
 
     pub(super) fn add_stage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let stage = StageFields::new(&StageDraft::default(), &self.inputs, window, cx);
-        self.stages.push(stage);
+        let id = self.add_role_field(window, cx);
+        let when = self.inputs.line("", "problems", window, cx);
+        self.stages.push(Stage::of(id, when));
+        self.schedule_check(cx);
+        self.open_role(Open::Role(id), window, cx);
+    }
+
+    pub(super) fn remove_role(&mut self, id: u64, cx: &mut Context<Self>) {
+        self.roles.retain(|role| role.id != id);
+        let lost = draft::remove_role(&mut self.stages, id);
+        note(gone_note(&lost).as_deref(), cx);
+        if self.open == Some(Open::Role(id)) {
+            self.open = None;
+        }
         self.schedule_check(cx);
     }
 
-    pub(super) fn remove_stage(&mut self, index: usize, cx: &mut Context<Self>) {
-        if index < self.stages.len() {
-            self.stages.remove(index);
-            self.follow_loops(without(index + 1), cx);
-            self.schedule_check(cx);
+    pub(super) fn move_role(&mut self, id: u64, to: usize, cx: &mut Context<Self>) {
+        let lost = draft::move_role(&mut self.stages, id, to);
+        note(gone_note(&lost).as_deref(), cx);
+        self.schedule_check(cx);
+    }
+
+    pub(super) fn in_new_stage(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
+        if draft::alone(&self.stages, id) {
+            return;
         }
+        let when = self.inputs.line("", "problems", window, cx);
+        self.stages.push(Stage { base: Value::Null, roles: Vec::new(), back: None, when });
+        self.move_role(id, self.stages.len() - 1, cx);
     }
 
     pub(super) fn move_stage(&mut self, index: usize, up: bool, cx: &mut Context<Self>) {
         let Some(other) = neighbour(index, up, self.stages.len()) else { return };
         self.stages.swap(index, other);
-        self.follow_loops(swapped(index + 1, other + 1), cx);
+        let lost = draft::follow_loops(&mut self.stages, swapped(index + 1, other + 1));
+        note(gone_note(&lost).as_deref(), cx);
         self.schedule_check(cx);
     }
 
-    fn follow_loops(&self, moved: impl Fn(usize) -> Option<usize>, cx: &mut Context<Self>) {
-        let mut gone = Vec::new();
-        for (i, stage) in self.stages.iter().enumerate() {
-            match loop_after(&stage.back_to.read(cx).text(), i + 1, &moved) {
-                LoopAfter::Same => {}
-                LoopAfter::To(to) => stage.back_to.update(cx, |field, cx| field.set_text(to, cx)),
-                LoopAfter::Gone => {
-                    stage.clear_loop(cx);
-                    gone.push(i + 1);
-                }
-            }
+    pub(super) fn add_loop(&mut self, stage: usize, cx: &mut Context<Self>) {
+        let Some(fields) = self.stages.get_mut(stage) else { return };
+        let BackDraft { to, when, at_most } = BackDraft::default();
+        fields.back = Some(Back { to, at_most });
+        fields.when.update(cx, |field, cx| field.set_text(when, cx));
+        self.schedule_check(cx);
+    }
+
+    pub(super) fn remove_loop(&mut self, stage: usize, cx: &mut Context<Self>) {
+        if let Some(fields) = self.stages.get_mut(stage) {
+            fields.back = None;
         }
-        note(gone_note(&gone).as_deref(), cx);
+        self.schedule_check(cx);
+    }
+
+    pub(super) fn set_loop_to(&mut self, stage: usize, to: usize, cx: &mut Context<Self>) {
+        if let Some(back) = self.stages.get_mut(stage).and_then(|fields| fields.back.as_mut()) {
+            back.to = to;
+        }
+        self.schedule_check(cx);
+    }
+
+    pub(super) fn step_loop(&mut self, stage: usize, up: bool, cx: &mut Context<Self>) {
+        if let Some(back) = self.stages.get_mut(stage).and_then(|fields| fields.back.as_mut()) {
+            *back = back.step(up);
+        }
+        self.schedule_check(cx);
     }
 }

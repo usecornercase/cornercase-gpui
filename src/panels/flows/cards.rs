@@ -205,7 +205,7 @@ pub(super) fn role_card(plan: Plan, (index, card): (usize, &Card)) -> Stateful<D
 
 pub(super) fn lead_card(plan: Plan, rect: Rect) -> Stateful<Div> {
     let lead = &plan.flow.orchestrator;
-    let name = if lead.name.is_empty() { "orchestrator" } else { lead.name.as_str() };
+    let name = plan.flow.lead_name();
     let member = plan.run.and_then(|r| r.orchestrator());
     let line = facts(Some(lead), member, plan.run.is_some());
     let colour = colours::soft();
@@ -223,11 +223,9 @@ fn pointer(card: Stateful<Div>, colour: Rgba) -> Stateful<Div> {
 
 fn clickable(card: Stateful<Div>, plan: Plan, role: &str, colour: Rgba) -> Stateful<Div> {
     if plan.run.is_none() {
-        let Some(panel) = plan.panel.cloned() else { return card };
+        let Some(on_role) = plan.on_role.cloned() else { return card };
         let name = role.to_string();
-        return pointer(card, colour).on_click(move |_: &ClickEvent, _, cx| {
-            let _ = panel.update(cx, |this, cx| this.toggle_prompt(&name, cx));
-        });
+        return pointer(card, colour).on_click(move |_: &ClickEvent, window, cx| on_role(&name, window, cx));
     }
     match plan.member(role).filter(|m| !m.closed).and_then(|m| m.pane) {
         Some(pane) => pointer(card, colour).on_click(move |_: &ClickEvent, _, cx| show_pane(pane, cx)),
