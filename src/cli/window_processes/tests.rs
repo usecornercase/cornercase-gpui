@@ -76,3 +76,34 @@ mod on_unix {
         assert!(KEPT.children.lock().is_empty());
     }
 }
+
+#[cfg(windows)]
+mod on_windows {
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use super::super::Kept;
+
+    #[test]
+    fn a_command_kept_on_windows_is_tied_to_the_window() {
+        static KEPT: Kept = Kept::empty();
+        let (tx, ended) = mpsc::channel();
+        let mut ping = crate::platform::command("ping");
+        ping.args(["-n", "120", "127.0.0.1"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let untied = KEPT
+            .start(
+                ping,
+                |_| {},
+                move |_| {
+                    let _ = tx.send(());
+                },
+            )
+            .expect("ping starts");
+        let held = KEPT.children.lock().iter().all(|running| running.job.is_some());
+        KEPT.stop();
+        ended.recv_timeout(Duration::from_secs(20)).expect("the command ends");
+        assert_eq!((untied, held), (None, true));
+        assert!(KEPT.children.lock().is_empty());
+    }
+}

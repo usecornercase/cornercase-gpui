@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::{Card, ENDED, Seen, Step, WindowProcesses};
+use super::{Card, ENDED, Seen, Step, UNTIED, WindowProcesses};
 use crate::test_util::fixture;
 
 const NOTES: &str = "acme.notes";
@@ -222,4 +222,21 @@ fn a_line_between_two_falls_tells_the_next_one_again() {
     let run = windows.began();
     windows.read_line(run, lines()[0], now).expect("the line parses");
     assert!(windows.ended(run, "it fell over").expect("it fell").say.is_some());
+}
+
+#[test]
+fn a_job_windows_refused_is_told_once_per_window() {
+    let mut processes = WindowProcesses::default();
+    let told = processes.untied(Some("Access is denied.".to_string())).expect("the first time it is told");
+    assert!(told.starts_with(UNTIED));
+    assert!(told.ends_with("Access is denied."));
+    processes.stopped();
+    assert_eq!(processes.untied(Some("Access is denied.".to_string())), None);
+}
+
+#[test]
+fn a_tied_start_says_nothing_and_leaves_the_one_telling() {
+    let mut processes = WindowProcesses::default();
+    assert_eq!(processes.untied(None), None);
+    assert!(processes.untied(Some("no".to_string())).is_some());
 }
