@@ -1,8 +1,8 @@
 # Manual check
 
-Code: `tools/manual-check.swift`; the window reads the variables below at start (`prefs.rs`, `app.rs`, `self_update.rs`, `theme/current.rs`, `panels/browser/chrome.rs`)
+Code: `tools/manual-check.swift`, `tools/machine-bench.sh`, `tools/machine-bench-test.sh`; the window reads the variables below at start (`prefs.rs`, `app.rs`, `self_update.rs`, `theme/current.rs`, `panels/browser/chrome.rs`)
 
-How to check a change in the running window on macOS, the way that worked (#113). The rules are in `AGENTS.md`'s Manual check. Linux in Docker is in `design/linux.md`; running the Windows window needs Windows (`design/windows.md`). Every command here was run as written on 2026-11-10 except the one marked untried (the last section says with what); `<pid>` and `<id>` are yours to fill.
+How to check a change in the running window on macOS, the way that worked (#113). The rules are in `AGENTS.md`'s Manual check. Linux in Docker is in `design/linux.md`; running the Windows window needs Windows (`design/windows.md`). Every command here was run as written on 2026-11-10 except what is marked untried (the last section says with what); `<pid>` and `<id>` are yours to fill.
 
 ## A server of its own
 
@@ -128,24 +128,54 @@ rm -rf /tmp/cc-check
 
 ## Beyond one window
 
-Not re-run for this file; their notes are in the area files:
+Their notes are in the area files, except what the bench does (**Another machine**, below):
 
-- fake agents through `agent_commands` in the private server's settings (`design/flows.md`);
-- a `CORNERCASE_BIN` wrapper that logs or answers commands (`design/flows.md`, `design/pull-requests.md`);
-- two private servers and a fake `ssh` for another machine (`design/machines.md`, and **Another machine** below);
+- a fake agent: the bench's `--agent`; fakes that answer probes or write session files: `design/flows.md`, `design/context-dialog.md`;
+- a `CORNERCASE_BIN` wrapper that logs: the bench's `--log`; one that answers commands: `design/flows.md`, `design/pull-requests.md`;
+- two private servers and an `ssh` stand-in for another machine: **Another machine** below;
 - Linux under Xvfb (`design/linux.md`).
 
 ## Another machine
 
-Run once, on 2026-11-10 (**Checked**); the script is not written. A window with a machine linked needs two private servers, "here" and "there", and an `ssh` stand-in that runs cornercase against "there" (the script is #119's, not written here):
+`tools/machine-bench.sh` makes the bench for checking another machine and takes it down (#119): two private servers, "here" (the window's) and "there", an `ssh` stand-in that runs "there", "there" linked as machine `vps` of "here", an `env` file, a copy of a cornercase release per side and, on request, a fake agent and a log of what the window ran. `tools/machine-bench-test.sh` tests its refusals and safety lines against a stub, never a real cornercase (`sh tools/machine-bench-test.sh`, or `SH=dash dash …`). It is run by hand when the script changes, and not in CI: a CI step is #123. What was run is in Checked; the rest is untried.
 
-- **A socket and a `CLAUDE_CONFIG_DIR` per server**, under one short folder, set on every command. With either unset a command reaches the user's server or writes into the user's Claude folder; a pane's shell also carries `CORNERCASE_PANE` and `CORNERCASE_SERVER`, and `CORNERCASE_REMOTE` if set sends every command to that machine, so a command that must not see them unsets them.
-- **The stand-in first on the `PATH` of the window and of "here"**, named `ssh`, skipping ssh's options, then running its command with "there"'s socket, Claude folder and `PATH` set (`env CORNERCASE_SOCKET=… CLAUDE_CONFIG_DIR=… PATH=…`). A file per destination makes it refuse (`ssh: connect to host … Connection refused`, exit 255) or sleep, which holds a fold in flight long enough to restart "there" under it: `there restart --yes` leaves its server stopped, and a held command then fails with `no cornercase server is running`, which is not the stale case, so start it again at once (`there start-server`, from the project folder) inside the hold; the agent dies with the restart.
-- **"there" as a shell function** that always sets its socket, so no command meant for it reaches "here".
-- **"there" started, with its agent, before it is linked**: `agent_commands` in its config names a fake agent, which reports through OSC 7501 and starts a child agent from its own pane on a word, so the arrow has a row to fold; without a child the row has no arrow. `send --pane P --enter spawn` prints `not confirmed: the prompt may not have been submitted` though the child appears, so read `status`, not the exit code.
-- **`CORNERCASE_BIN` as a wrapper** that logs its arguments and runs the release under test, so the log shows whether a fold carried `--boot`. It does not show a pane move: that goes through the window's running `requests --follow`, which the log shows only starting.
-- **The release under test is the one "here" runs**: the fold's release is this computer's, so a 0.13.21 "here" (a copy of the installed binary, never pointed at the user's server) with a 0.13.32 "there" is the bench for the older behaviour.
+From the checkout, with the 0.13.32 archive downloaded as in "A server of its own" and `cargo build --locked` done:
+
+```sh
+repo=$PWD
+"$repo/tools/machine-bench.sh" up /tmp/cc119 --here "$repo/target/cornercase-0.13.32/cornercase-aarch64-apple-darwin/cornercase" --agent --log
+. /tmp/cc119/env; there status --panes; here machines
+. /tmp/cc119/env; cd /tmp/cc119/here/here-proj; CORNERCASE_GPUI_OPEN=Machines "$repo/target/debug/cornercase-gpui" > /tmp/cc119/window.log 2>&1 &
+echo $! > /tmp/cc119/window.pid
+kill "$(cat /tmp/cc119/window.pid)"; "$repo/tools/machine-bench.sh" down /tmp/cc119
+```
+
+`up` prints the summary with the window's line for this checkout, which sources the `env` itself. One folder per bench, named after the issue. Every later command starts with `. FOLDER/env`; `here` and `there` also work by their full path (`FOLDER/bin/here`). Both run from their project folders, so give them absolute paths.
+
+- **Words and exit statuses.** `up FOLDER [--here BIN] [--there BIN] [--agent] [--log]`, `status FOLDER` (read-only) and `down FOLDER`; `-h` says the rest. 0 done, 1 failed on the way (a command failed, the link did not come up, processes left at `down`), 2 wrong usage or a refused folder or release, with nothing done. A failed `up` stops its servers and keeps the folder for its logs.
+- **A release per side.**
+  - The side under test is "here": a fold's release is this computer's (#120), so a 0.13.21 "here" (`--here` the installed binary: `up` copies it, never pointing at the user's server) with a 0.13.32 "there" is the bench for the older behaviour. `--there` defaults to `--here`'s release; an older "there" makes the link `older`, which `up` says and accepts.
+  - The releases are copies, so an `update` there (the older page's Update…, `machines update`) replaces the bench's copy with a download, never the installed one (`update` replaces the binary it runs).
+  - The installed cornercase is only asked `--version`. For another release, see "A server of its own".
+- **Why each line.**
+  - **Each side is a server of its own**: its socket, its `CLAUDE_CONFIG_DIR` and the unsets are "A server of its own"'s, set by the script on every command it and its files run, so the caller's `CORNERCASE_SOCKET`, `CORNERCASE_REMOTE`, `CORNERCASE_PANE` and `CORNERCASE_SERVER` never reach one.
+  - **The folder is new, under `/tmp` and short**: a plain name (letters, digits and `. _ / -`, no `.` or `..` part), not `/`, the home folder or what holds it, not inside a git work tree, with no symbolic link taking it elsewhere, and short enough for a socket. That keeps the bench off the user's files.
+  - **Private folders (700)**, which cornercase requires of a socket's folder.
+  - **The mark**, `.machine-bench`, written first and naming the folder: `status` and `down` refuse a folder without it, or one copied from another (`rm -rf` runs only after that).
+  - **The projects** are throwaway repositories with one empty commit, made with no global git config, so the user's hooks and signing stay out; each server starts from its own, so it is its first project.
+  - **`worktrees_dir`** is inside the bench: its default is `~/.cornercase/worktrees`, where the user's real worktrees are.
+  - **Every agent is pinned** to `/nonexistent/<name>` unless it is the fake `claude`, as upstream's e2e does (upstream #739): a built-in flow or probe would otherwise run the user's real `codex` on their login.
+  - **"There" is another machine**: a fresh environment (`env -i`) and a `HOME` of its own, as upstream's e2e machine has, so its `~` defaults (the clone folder, worktrees) stay inside the bench and nothing of the caller's environment reaches it. "Here" keeps the user's `HOME`, so its other agents' default homes (`~/.codex`…) are the user's, and an Accounts capture on "here" can show them: a capture that leaves the computer must not.
+  - **The destination is `vps.invalid`**, which never resolves: a command run without the env fails at the real ssh's name lookup.
+  - **`down`** (it also looks for processes holding a server's socket, with `lsof` when there is one, so a wrapper that is not a copy under the folder cannot leave a server unseen) touches `ssh/vps.invalid.held` first (a stand-in sleeping in `.slow` would otherwise start "there" again), stops "here" before "there" (its link would start "there" again) with `kill-server --yes` on each side's own socket, waits 10 s and removes the folder. It never kills by name: it refuses (2, nothing done) while a window is on the bench (kill it by its pid first) and when its caller runs inside the bench's server, and when processes remain it lists them, keeps the folder and exits 1. A window is a process named `cornercase-gpui`, matched by file name: this checkout's path holds that name too.
+- **The stand-in** (`bin/ssh`) takes the command lines upstream builds and runs the command there through `sh -c`. It answers `-G` with `hostname <destination>` and never reads the user's ssh config. It refuses, with exit 255, tunnels and masters (so the Browser panel's tunnels to a machine fail on the bench), no command and any other host. `ssh/calls.log` holds each call, refused ones too. Files in `ssh/`, touched by hand:
+  - `vps.invalid.held`: "Connection refused", as when the machine is off. New sessions are refused at once (a fold, a one-shot command); the link already open drops on `here machines retry vps` on macOS (`unreachable`, ssh's line under it) and comes back with `rm` and another retry. **On Linux that retry did not drop it**: end the link's `cornercase proxy` by its pid (`status` lists the bench's processes; never by name) and it goes `unreachable` the same way. `there restart --yes` leaves the server there stopped: under a hold, start it again with `there start-server`, or the answer is `no cornercase server is running`, not the stale one. The agent dies with the restart.
+  - `vps.invalid.slow` (its content is the seconds, 8 when empty): each call sleeps, then refuses if a hold was placed meanwhile.
+  - `vps.invalid.missing`: exit 127, `cornercase: not found`.
+- **The fake agent.** `--agent` starts a fake `claude` on "there" before the link (#120 needed it so), sends it `spawn` so a child appears (`status --panes` shows its `parent`), and turns on "here"'s agents section, since the fold's arrow lives there (`here config set agents_section false` turns it off). In its pane, type `idle`, `working`, `blocked`, `done`, `error` (each an OSC 7501 state) or `spawn`. `send --pane P --enter spawn` prints `not confirmed: …` though the child appears: read `status`. It fakes no session file, model, context or conversation, so View context reads nothing, and `-p`, `auth` and `mcp` fail at once.
+- **The log.** `--log` makes `CORNERCASE_BIN` a wrapper that appends each command line the window runs to `commands.log`, `--version` included (so it shows whether a fold carried `--boot`), quoted so it pastes back into sh. It does not show what goes through the window's running `requests --follow`, such as a pane move (#120).
 - **A drop's timing** is read with `drag`, which prints the release's time, and captures after it. In a window of 1280×800 points the agents arrow of the first agent was at (80, 599) and the handle of the left pane at (559, 54); read them from a capture for another size.
+- **What the bench is not.** A real sshd, network, `ControlMaster`, terminal (`-t`) or port forwarding; more than one machine; the user's ssh config; Windows (#70); presses without the pointer (#116). To pair two projects, give both the same `origin` (`https://example.invalid/…`).
 
 ## A press without the pointer
 
@@ -162,3 +192,9 @@ The issue's "Better still" (#113) asked for a debug-only way to send the window 
 
 - Run: a fake agent with a child on "there"; a machine linked from the window; the fold's arrow and its stale answer, and the older "here" (`design/machines.md`); `drag` (a left-button drag from a pane's handle, the release time printed) for a drop that changes nothing and one that changes the layout, on this computer's tab and on a machine's (`design/terminal.md`).
 - Not run: a refused move in the window (no tab could be made to refuse for lack of room), a stale move on a machine's tab, a right-button drag, a drag with the old build, Linux, Windows and a real machine.
+
+2026-11-10, `tools/machine-bench.sh` (#119), macOS 26.6.2 on Apple silicon with cornercase 0.13.32 from the release's aarch64 archive (sha256 checked) as both sides, with the installed 0.13.21 copied as "here" and 0.13.32 as "there" (`linked`), and the reverse (`older`). The installed cornercase and the user's server were untouched: its `status` and the ssh configuration were compared before and after.
+
+- Run: `up --agent --log` made the two servers, linked `vps` and started a fake `claude` with a child (`parent`); `commands.log` held the window's `--version`, `machines --json` and `status --app --follow`; `here --remote vps.invalid status` answered from there, and `calls.log` showed it and the link's `proxy`. A debug window (cornercase-gpui, gpui 0.2.2) started as the summary prints showed `vps` linked in the Machines sheet. The hold plus `machines retry vps` gave `unreachable · Connection refused`, and removing it `linked` again. Two benches side by side did not mix. `down` refused while the window ran, then removed the folder and left no process. The refusals (a folder outside `/tmp`, `/tmp`, a missing folder, a folder `up` did not make, a binary that is not an executable cornercase), a failed `up` and an `up` stopped by SIGTERM left nothing running.
+- Linux, in a container (Debian 13.6 arm64, `/bin/sh` = dash, cornercase 0.13.32 aarch64 Linux): the 44 stub tests, `up --agent --log`, `there status --panes`, `here machines`, `--remote`, `status` and `down` passed. There `machines retry vps` under a hold did not drop the open link (above).
+- Not run: a real sshd or network, Windows, a window on Linux, a second machine, the Browser panel on a machine, a press-driven fold, an Accounts capture, and the safety-net breaks of the script's tests. The `lsof` look in `down` and the Linux wording above came after this run.
