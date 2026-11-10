@@ -29,6 +29,8 @@ pub(crate) use machines::seen::{
 };
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};
 pub(crate) use shared::Shared;
+#[cfg(test)]
+pub(crate) use surface::Share;
 pub(crate) use surface::{
     Area, Branch, Colour, Colours, Cursor, CursorShape, Frame, MouseMode, Node, OpenPopup, Style, UnderlineKind,
 };

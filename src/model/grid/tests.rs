@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use super::*;
-use crate::model::surface::{Branch, CursorShape};
+use crate::model::surface::{Branch, CursorShape, Share};
 
 fn parse<T: serde::de::DeserializeOwned>(text: &str) -> T {
     serde_json::from_str(text).expect("valid JSON")
@@ -157,7 +157,8 @@ fn reads_the_fixture_frame() {
 
 #[test]
 fn keeps_the_split_tree_of_the_fixture_frame() {
-    let split = |first, second| Node::Split(Box::new(Branch { dir: "right".into(), first, second }));
+    let split =
+        |first, second| Node::Split(Box::new(Branch { dir: "right".into(), ratio: Share::default(), first, second }));
     assert_eq!(fixture_grid().layout, Some(split(Node::Leaf(13), Node::Leaf(14))));
 }
 

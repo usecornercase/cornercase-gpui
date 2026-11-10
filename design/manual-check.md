@@ -91,10 +91,12 @@ target/manual-check front <pid>                   # brings that process to the f
 target/manual-check size <pid> <width> <height>   # the window's size, in points
 target/manual-check key <pid> <key> [cmd] [shift] [alt] [ctrl]
 target/manual-check press <pid> <x> <y> [right]   # a point from the window's top-left, in points
+target/manual-check drag <pid> <x0> <y0> <x1> <y1> [right]   # press at the start, move to the end, release
 target/manual-check scroll <pid> <x> <y> <dy> [dx]
 ```
 
 - **Exit status.** 0 done; 1 an error (no window, no permission, refused); 2 a wrong word, a point outside the window, or a pid that is not a `target/debug/cornercase-gpui` (the user's own window has the same name, so every command but `window` refuses it); 3 the process is not in front, another window covers the point or the point is under the Dock or the menu bar, with nothing posted. Only the Dock's own full-screen backdrop is ignored when looking for a covering window.
+- **Drag.** `drag` runs the checks of `press` at both points (inside the window, not under the Dock or the menu bar, the process in front and topmost there) before any button is pressed (the hover's mouse move is posted first, as for `press`), hovers the start for 150 ms (a pane's handle fades in) and checks it again, presses, moves in 12 steps over about 250 ms, waits 250 ms (a drop zone glides in 170 ms), releases, and prints the release's time as seconds since the epoch with three decimals, so a capture taken after it can be placed against a timer such as the move's 1.5 s. Exit 3 then means no button was pressed. The pointer goes back as for a press.
 - **Points and pixels.** A capture's pixels divided by the scale `window` prints are points: the 2560×1600 capture of a 1280×800 window at scale 2 puts a pixel (60, 1532) at the point (30, 766).
 - **Keys** are `a` to `z`, `return`, `escape`, `tab`, `space`, `delete` and the arrows only, posted down and up with `CGEvent.postToPid`: key codes are positions on a US keyboard, so punctuation would type another character on another layout, and the user's is Spanish (`design/browser.md`). ⌘F opened Search (`key <pid> f cmd`) and ⌘T made a tab. **A key needs no front**: with another debug window in front, ⌘F reached the window behind it (grey traffic lights) and opened its Search. Only presses and scrolls need `front`.
 - **Why the HID tap, with dates and versions.** Posted to the pid, mouse events only moved the hover in gpui 0.2.2 on macOS 26 (#102, #103, #104; the notes in `design/issues.md` and `design/remote.md`). Posted to `.cghidEventTap` with the debug window in front they press (#109's captures and #95's bench, `design/machines.md`, 2026-11-10), and pixel scrolls scroll what was sent. Run again on 2026-11-10: a press on the rail's Settings icon opened the sheet and a press on Appearance changed its page; `scroll <pid> 720 400 -300` over the page moved it up, so **a negative `dy` shows later rows**.
@@ -130,8 +132,20 @@ Not re-run for this file; their notes are in the area files:
 
 - fake agents through `agent_commands` in the private server's settings (`design/flows.md`);
 - a `CORNERCASE_BIN` wrapper that logs or answers commands (`design/flows.md`, `design/pull-requests.md`);
-- two private servers and a fake `ssh` for another machine (`design/machines.md`);
+- two private servers and a fake `ssh` for another machine (`design/machines.md`, and **Another machine** below);
 - Linux under Xvfb (`design/linux.md`).
+
+## Another machine
+
+Run once, on 2026-11-10 (**Checked**); the script is not written. A window with a machine linked needs two private servers, "here" and "there", and an `ssh` stand-in that runs cornercase against "there" (the script is #119's, not written here):
+
+- **A socket and a `CLAUDE_CONFIG_DIR` per server**, under one short folder, set on every command. With either unset a command reaches the user's server or writes into the user's Claude folder; a pane's shell also carries `CORNERCASE_PANE` and `CORNERCASE_SERVER`, and `CORNERCASE_REMOTE` if set sends every command to that machine, so a command that must not see them unsets them.
+- **The stand-in first on the `PATH` of the window and of "here"**, named `ssh`, skipping ssh's options, then running its command with "there"'s socket, Claude folder and `PATH` set (`env CORNERCASE_SOCKET=… CLAUDE_CONFIG_DIR=… PATH=…`). A file per destination makes it refuse (`ssh: connect to host … Connection refused`, exit 255) or sleep, which holds a fold in flight long enough to restart "there" under it: `there restart --yes` leaves its server stopped, and a held command then fails with `no cornercase server is running`, which is not the stale case, so start it again at once (`there start-server`, from the project folder) inside the hold; the agent dies with the restart.
+- **"there" as a shell function** that always sets its socket, so no command meant for it reaches "here".
+- **"there" started, with its agent, before it is linked**: `agent_commands` in its config names a fake agent, which reports through OSC 7501 and starts a child agent from its own pane on a word, so the arrow has a row to fold; without a child the row has no arrow. `send --pane P --enter spawn` prints `not confirmed: the prompt may not have been submitted` though the child appears, so read `status`, not the exit code.
+- **`CORNERCASE_BIN` as a wrapper** that logs its arguments and runs the release under test, so the log shows whether a fold carried `--boot`. It does not show a pane move: that goes through the window's running `requests --follow`, which the log shows only starting.
+- **The release under test is the one "here" runs**: the fold's release is this computer's, so a 0.13.21 "here" (a copy of the installed binary, never pointed at the user's server) with a 0.13.32 "there" is the bench for the older behaviour.
+- **A drop's timing** is read with `drag`, which prints the release's time, and captures after it. In a window of 1280×800 points the agents arrow of the first agent was at (80, 599) and the handle of the left pane at (559, 54); read them from a capture for another size.
 
 ## A press without the pointer
 
@@ -143,3 +157,8 @@ The issue's "Better still" (#113) asked for a debug-only way to send the window 
 
 - Run, in this order: the download and checksum; the folder and environment; the build and the helper; the start with `CORNERCASE_GPUI_OPEN=Settings`; `status` and `--version`; `size`; Escape; `front`; ⌘F and Escape; ⌘T (`status` showed a second tab); the plain prompt, a capture and a crop; two presses; a scroll; the refusals above; the clean-up (`status` failed afterwards and nothing was left). Then, with two debug windows on two private servers: `front` from one to the other, a key to the window behind, a refused press and scroll, and a press on the window in front.
 - Not run: Linux and Windows, the real-server variant, a fake agent or machine, drags, a right press, a press or scroll refused because a window covers the point or because it is under the Dock, and the browser profile variable with a Browser panel open.
+
+2026-11-10, macOS 26.6.2 on Apple silicon: cornercase-gpui 0.1.57 as a debug build, two private servers and an `ssh` stand-in (**Another machine**), "there" on cornercase 0.13.32 (the release's archive, checksum read), "here" on 0.13.32 and then on 0.13.21 (a copy of the installed binary, never pointed at the user's server). The Mac's own cornercase, its server, the ssh configuration and the user's settings were untouched, and what was started was stopped and removed.
+
+- Run: a fake agent with a child on "there"; a machine linked from the window; the fold's arrow and its stale answer, and the older "here" (`design/machines.md`); `drag` (a left-button drag from a pane's handle, the release time printed) for a drop that changes nothing and one that changes the layout, on this computer's tab and on a machine's (`design/terminal.md`).
+- Not run: a refused move in the window (no tab could be made to refuse for lack of room), a stale move on a machine's tab, a right-button drag, a drag with the old build, Linux, Windows and a real machine.

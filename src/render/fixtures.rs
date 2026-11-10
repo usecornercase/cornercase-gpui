@@ -1,7 +1,7 @@
 use gpui::{Bounds, Pixels, point, px, size};
 
 use super::layout::Layout;
-use crate::model::{Area, Branch, Grid, Node, PaneGrid};
+use crate::model::{Area, Branch, Grid, Node, PaneGrid, Share};
 
 pub(super) const CELL: (f32, f32) = (8., 16.);
 
@@ -10,7 +10,7 @@ pub(super) fn pane(pane: u64, (x, y): (u16, u16), (cols, rows): (u16, u16)) -> P
 }
 
 pub(super) fn split(dir: &str, first: Node, second: Node) -> Node {
-    Node::Split(Box::new(Branch { dir: dir.into(), first, second }))
+    Node::Split(Box::new(Branch { dir: dir.into(), ratio: Share::default(), first, second }))
 }
 
 pub(super) fn area(w: f32, h: f32) -> Bounds<Pixels> {

@@ -4,8 +4,9 @@ use super::pane_accounts::switch_rows;
 use super::pane_menu::{move_menu, move_targets};
 use super::steps::mark_pane_args;
 use crate::app::Root;
-use crate::app::machine::acts::SwitchThere;
+use crate::app::machine::acts::{SwitchThere, boot_note};
 use crate::app::machine::{MachineRun, MachineTab};
+use crate::cli::Version;
 use crate::context_menu::{Entry, danger, item, note, resting, submenu};
 use crate::dialogs::VIEW_CONTEXT;
 use crate::render::layout::Hit;
@@ -152,7 +153,8 @@ impl Root {
             return;
         }
         let Some(tab) = self.machine.as_ref() else { return };
-        let entries = there_pane_menu(&tab.run(), &self.there_pane_facts(pane, tab));
+        let release = self.cli_release(cx);
+        let entries = there_pane_menu(&tab.run(), &self.there_pane_facts(pane, tab, release));
         let retry = tab.accounts_failed();
         self.open_menu(at, entries, window, cx);
         if retry {
@@ -160,18 +162,18 @@ impl Root {
         }
     }
 
-    fn there_pane_facts(&self, pane: u64, tab: &MachineTab) -> TherePane {
+    fn there_pane_facts(&self, pane: u64, tab: &MachineTab, release: Option<Version>) -> TherePane {
         let session = self.shown_session();
         let info = session.and_then(|s| s.pane(pane));
         let agent = info
             .filter(|i| i.agent.is_some())
-            .map(|i| AgentThere { pending: i.pending(), switch: tab.switch_there(i) });
+            .map(|i| AgentThere { pending: i.pending(), switch: tab.switch_there(i, release) });
         TherePane {
             pane,
             agent,
             targets: move_targets(session, pane),
             path: info.and_then(|i| i.path.clone()),
-            waits: tab.boot_note(),
+            waits: boot_note(release),
         }
     }
 }

@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use super::{answer, line, lost};
+use crate::test_util::fixture;
 
 fn args(words: &[&str]) -> Vec<String> {
     words.iter().map(|word| (*word).to_string()).collect()
@@ -84,4 +85,18 @@ fn a_line_refused_for_another_run_reads_as_a_stale_boot() {
 fn any_other_refused_line_is_not_a_stale_boot() {
     let error = answer("close", r#"{"status":1,"error":"there is no pane 9"}"#).expect_err("a failure");
     assert!(!crate::cli::stale_boot(&error));
+}
+
+#[test]
+fn a_line_answers_a_move_with_the_layout_the_command_prints() {
+    let text = answer("move-pane", fixture!("move_pane/line_unchanged.json")).expect("an answer");
+    let printed = serde_json::from_str::<Value>(fixture!("move_pane/unchanged.json")).expect("json");
+    assert_eq!(sent(&text), printed);
+}
+
+#[test]
+fn a_move_refused_on_a_line_keeps_its_reason_and_is_no_stale_boot() {
+    let error = answer("move-pane", fixture!("move_pane/line_refused.json")).expect_err("refused");
+    assert!(!crate::cli::stale_boot(&error));
+    assert!(crate::cli::reason(&error).contains("cannot move onto itself"));
 }

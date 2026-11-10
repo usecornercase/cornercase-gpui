@@ -36,7 +36,7 @@ fn offers() -> SwitchThere {
 }
 
 fn older() -> Option<String> {
-    boot_note(Some(crate::cli::Version::new(0, 13, 21)))
+    boot_note(Some(Version::new(0, 13, 21)))
 }
 
 fn rows(facts: &TherePane) -> Vec<(&'static str, String)> {

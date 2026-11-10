@@ -88,7 +88,7 @@ impl Agents {
 }
 
 fn default_rests(chosen: &str, server: Option<Version>) -> bool {
-    chosen != NO_MODE && server.is_none_or(|server| server < NO_MODE_SINCE)
+    chosen != NO_MODE && !NO_MODE_SINCE.reached_by(server)
 }
 
 fn default_waits(chosen: &str, machine: Option<&str>, server: Option<Version>) -> String {

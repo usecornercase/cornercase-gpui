@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.57
+
+- **Folding a machine's agent never acts on a server that restarted.** With cornercase 0.13.32 or newer on this computer, the arrow and Collapse/Expand on a machine's agent in the agents section tell that machine which run of its cornercase they were pressed on. If it restarted on the way, nothing is folded or unfolded and the window says `vps restarted: nothing was sent`. With an older cornercase here, folding works as before.
+- **A pane dropped where it changes nothing goes back at once.** Dropping a pane on a place that leaves its tab's layout as it was, on this computer or on a machine's tab, flies it back as soon as cornercase answers, instead of after a second and a half.
+
 ## 0.1.56
 
 - **Edit a flow in a form that follows its plan, with the plan beside it.** New and Edit read in the plan's order: what the flow is, the orchestrator, each stage with its roles, then what happens when the work is done. Every role is a row with its agent and what it may do. A click opens it, one at a time, and so does a click on its box in the plan. The plan stays beside the form when the window is about 1,220 px wide or more and the plan fits beside it; otherwise Form and Plan switch between them.

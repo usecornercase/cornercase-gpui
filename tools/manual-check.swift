@@ -7,7 +7,7 @@ struct Failure: Error {
     let status: Int32
 }
 
-let usage = "usage: manual-check window|front|size|key|press|scroll PID …"
+let usage = "usage: manual-check window|front|size|key|press|drag|scroll PID …"
 
 let keys: [String: Int] = [
     "a": kVK_ANSI_A, "b": kVK_ANSI_B, "c": kVK_ANSI_C, "d": kVK_ANSI_D, "e": kVK_ANSI_E, "f": kVK_ANSI_F,
@@ -189,6 +189,31 @@ func press(_ pid: pid_t, _ x: String, _ y: String, right: Bool) throws {
     }
 }
 
+func drag(_ pid: pid_t, from start: (String, String), to end: (String, String), right: Bool) throws {
+    let origin = try target(pid, start.0, start.1)
+    let goal = try target(pid, end.0, end.1)
+    let button: CGMouseButton = right ? .right : .left
+    let (down, moved, up): (CGEventType, CGEventType, CGEventType) =
+        right ? (.rightMouseDown, .rightMouseDragged, .rightMouseUp) : (.leftMouseDown, .leftMouseDragged, .leftMouseUp)
+    try keepingPointer {
+        try hover(pid, at: origin, start.0, start.1)
+        try clear(pid, at: goal, end.0, end.1)
+        post(down, at: origin, button: button)
+        let steps = 12
+        for step in 1...steps {
+            let fraction = CGFloat(step) / CGFloat(steps)
+            let point = CGPoint(
+                x: origin.x + (goal.x - origin.x) * fraction, y: origin.y + (goal.y - origin.y) * fraction)
+            post(moved, at: point, button: button)
+            usleep(21_000)
+        }
+        usleep(250_000)
+        post(up, at: goal, button: button)
+        print(String(format: "%.3f", Date().timeIntervalSince1970))
+        usleep(100_000)
+    }
+}
+
 func scroll(_ pid: pid_t, _ x: String, _ y: String, dy: Int32, dx: Int32) throws {
     let point = try target(pid, x, y)
     try keepingPointer {
@@ -239,21 +264,25 @@ func describe(_ pid: pid_t) throws {
     print(found.id, Int(frame.minX), Int(frame.minY), Int(frame.width), Int(frame.height), Int(scale(of: frame)))
 }
 
-func button(_ args: [String]) throws -> Bool {
-    guard args.count == 5 else { return false }
-    guard args[4] == "right" else { throw Failure(message: "press takes only 'right' after the point", status: 2) }
+func button(_ args: [String], after count: Int) throws -> Bool {
+    guard args.count == count + 1 else { return false }
+    guard args[count] == "right" else {
+        throw Failure(message: "\(args[0]) takes only 'right' after the point\(count > 4 ? "s" : "")", status: 2)
+    }
     return true
 }
 
 func run(_ args: [String]) throws {
     guard args.count >= 2, let pid = pid_t(args[1]) else { throw Failure(message: usage, status: 2) }
-    if ["front", "size", "key", "press", "scroll"].contains(args[0]) { try checkedPid(pid) }
+    if ["front", "size", "key", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
     switch (args[0], args.count) {
     case ("window", 2): try describe(pid)
     case ("front", 2): try front(pid)
     case ("size", 4): try size(pid, args[2], args[3])
     case ("key", 3...): try key(pid, args[2], Array(args.dropFirst(3)))
-    case ("press", 4...5): try press(pid, args[2], args[3], right: try button(args))
+    case ("press", 4...5): try press(pid, args[2], args[3], right: try button(args, after: 4))
+    case ("drag", 6...7):
+        try drag(pid, from: (args[2], args[3]), to: (args[4], args[5]), right: try button(args, after: 6))
     case ("scroll", 5...6):
         let sideways = args.count == 6 ? try wholeNumber(args[5], "dx") : 0
         try scroll(pid, args[2], args[3], dy: try wholeNumber(args[4], "dy"), dx: sideways)

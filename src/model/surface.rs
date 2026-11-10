@@ -69,9 +69,29 @@ pub(crate) enum Node {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub(crate) struct Branch {
     pub dir: String,
+    pub ratio: Share,
     pub first: Node,
     pub second: Node,
 }
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(transparent)]
+pub(crate) struct Share(f32);
+
+#[cfg(test)]
+impl Default for Share {
+    fn default() -> Self {
+        Self(0.5)
+    }
+}
+
+impl PartialEq for Share {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.to_bits() == other.0.to_bits()
+    }
+}
+
+impl Eq for Share {}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]

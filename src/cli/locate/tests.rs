@@ -321,3 +321,12 @@ fn nothing_found_names_the_places_looked_in() {
     let Err(Missing::NotFound { asked_shell, .. }) = locate(&inputs(Os::Windows), &probe) else { panic!("not found") };
     assert!(!asked_shell);
 }
+
+#[test]
+fn a_release_reaches_what_came_in_it_or_before_and_an_unknown_one_reaches_nothing() {
+    let since = Version::new(0, 13, 32);
+    assert!(since.reached_by(Some(Version::new(0, 13, 32))));
+    assert!(since.reached_by(Some(Version::new(0, 14, 0))));
+    assert!(!since.reached_by(Some(Version::new(0, 13, 31))));
+    assert!(!since.reached_by(None));
+}

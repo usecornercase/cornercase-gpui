@@ -3,8 +3,10 @@ use std::time::{Duration, Instant};
 use gpui::{point, px, size};
 
 use super::*;
+use crate::cli;
 use crate::model::{Grid, Node};
 use crate::render::fixtures::{CELL, area, bounds, pane, side_by_side, split};
+use crate::test_util::fixture;
 
 fn at(x: f32, y: f32) -> Point<Pixels> {
     point(px(x), px(y))
@@ -265,6 +267,51 @@ fn an_answer_reads_the_new_layout_or_a_refusal() {
     assert_eq!(moved, Answer::Moved(Some(Node::Leaf(4))));
     assert_eq!(Answer::read(&Err(anyhow::anyhow!("no room"))), Answer::Refused);
     assert_eq!(Answer::read(&Ok("moved".to_string())), Answer::Moved(None));
+}
+
+fn moved_below() -> Node {
+    split("down", Node::Leaf(5), Node::Leaf(1))
+}
+
+#[test]
+fn a_move_cornercase_answers_reads_the_tab_s_new_layout() {
+    let answer = Answer::read(&Ok(fixture!("move_pane/moved.json").to_string()));
+    assert_eq!(answer, Answer::Moved(Some(moved_below())));
+}
+
+#[test]
+fn a_move_cornercase_answers_unchanged_sends_the_ghost_home_at_once() {
+    let (layout, start) = (laid(&side_by_side()), Instant::now());
+    let mut moves = dragged_to(at(395., 100.), &layout, start);
+    moves.release(Some(moved_below()), later(start, 400));
+    let unchanged = Answer::read(&Ok(fixture!("move_pane/unchanged.json").to_string()));
+    assert_eq!(unchanged, Answer::read(&Ok(fixture!("move_pane/moved.json").to_string())));
+    let answered = later(start, 430);
+    moves.answered(&unchanged, answered);
+    assert!(moves.stage(&layout, answered).zone.is_none_or(|zone| !zone.refused));
+    moves.tick(later(answered, 300));
+    assert_eq!(
+        (moves.ghost(&layout, later(answered, 300)), moves.stage(&layout, later(answered, 300)).hollow),
+        (None, None)
+    );
+}
+
+#[test]
+fn a_move_that_only_changes_a_splits_share_still_waits_for_its_frame() {
+    let (layout, start) = (laid(&side_by_side()), Instant::now());
+    let mut moves = dragged_to(at(395., 100.), &layout, start);
+    moves.release(Some(moved_below()), later(start, 400));
+    let shared = r#"{"layout":{"split":{"dir":"down","ratio":0.7,"first":{"leaf":5},"second":{"leaf":1}}},"tab":2}"#;
+    let answer = Answer::read(&Ok(shared.to_string()));
+    assert_ne!(answer, Answer::Moved(Some(moved_below())));
+    moves.answered(&answer, later(start, 430));
+    assert_eq!(moves.stage(&layout, later(start, 900)).hollow, Some((1, 1.)));
+}
+
+#[test]
+fn a_move_cornercase_refuses_reads_as_refused() {
+    let refused = cli::failure("move-pane", Some(1), fixture!("move_pane/refused.txt").as_bytes());
+    assert_eq!(Answer::read(&Err(refused)), Answer::Refused);
 }
 
 #[test]

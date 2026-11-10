@@ -1,5 +1,6 @@
 use super::*;
 use crate::model::machines::LinkState;
+use crate::test_util::fixture;
 
 fn linked() -> MachineSeen {
     MachineSeen { name: "vps".into(), state: LinkState::Linked, ..MachineSeen::default() }
@@ -169,4 +170,47 @@ fn a_home_is_never_read_for_another_machine_with_the_same_boot() {
     answer(&mut homes, "vps", "b1", "/home/ana");
     assert_eq!(homes.home("lab", "b1"), None);
     assert_eq!(homes.home("vps", "b1"), Some("/home/ana"));
+}
+
+fn pane_aim() -> PaneAim {
+    PaneAim { machine: "vps".into(), boot: "1-2".into(), pane: ThereId::heard(9), collapse: true }
+}
+
+#[test]
+fn a_fold_refused_for_another_run_says_the_machine_restarted() {
+    let stale = cli::failure("collapse", Some(4), fixture!("machines/fold_stale.txt").as_bytes());
+    assert_eq!(fold_refusal(&pane_aim(), "ana@vps-host", &stale), "vps restarted: nothing was sent");
+}
+
+#[test]
+fn any_other_fold_failure_names_the_machine_and_not_its_address() {
+    let refused = cli::failure("collapse", Some(1), b"error: no such pane on vps-host");
+    assert_eq!(
+        fold_refusal(&pane_aim(), "vps-host", &refused),
+        "could not collapse the agent on vps: no such pane on vps"
+    );
+    let slow = anyhow::anyhow!("no answer in 15 s");
+    assert_eq!(fold_refusal(&pane_aim(), "vps-host", &slow), "could not collapse the agent on vps: no answer in 15 s");
+}
+
+#[test]
+fn the_latest_read_of_the_release_is_the_one_kept() {
+    let mut release = CliRelease::default();
+    let (first, second) = (release.ask(), release.ask());
+    assert!(!release.answered(first, Some(Version::new(0, 13, 21))));
+    assert_eq!(release.known, None);
+    assert!(release.answered(second, Some(Version::new(0, 13, 32))));
+    assert_eq!(release.known, Some(Version::new(0, 13, 32)));
+}
+
+#[test]
+fn a_read_that_finds_no_release_leaves_it_unknown_and_an_equal_one_changes_nothing() {
+    let mut release = CliRelease::default();
+    let ask = release.ask();
+    assert!(release.answered(ask, Some(Version::new(0, 13, 32))));
+    let ask = release.ask();
+    assert!(!release.answered(ask, Some(Version::new(0, 13, 32))));
+    let ask = release.ask();
+    assert!(release.answered(ask, None));
+    assert_eq!(release.known, None);
 }

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use gpui::Context;
+use gpui::{AppContext as _, Context};
 use serde_json::Value;
 
 use super::jobs::{folding_key, renaming_key};
 use super::{Busy, Store, ToastKind, args, run_job_on, run_on, run_with};
-use crate::cli::{self, Remote, Target};
+use crate::cli::{self, Remote, Target, Version};
 use crate::desktop;
 use crate::model::machines::seen::{sighted, sighted_pane};
 use crate::model::machines::{Machine, hide_destination};
@@ -43,6 +43,27 @@ impl Homes {
 
     fn home(&self, machine: &str, boot: &str) -> Option<&str> {
         self.known.get(machine).filter(|(held, _)| held == boot).map(|(_, home)| home.as_str())
+    }
+}
+
+#[derive(Default)]
+pub(super) struct CliRelease {
+    known: Option<Version>,
+    asks: u64,
+}
+
+impl CliRelease {
+    fn ask(&mut self) -> u64 {
+        self.asks += 1;
+        self.asks
+    }
+
+    fn answered(&mut self, ask: u64, release: Option<Version>) -> bool {
+        if ask != self.asks || self.known == release {
+            return false;
+        }
+        self.known = release;
+        true
     }
 }
 
@@ -119,6 +140,11 @@ pub(crate) fn stale_note(machine: &str, error: &anyhow::Error) -> Option<String>
 
 pub(crate) fn failed_there(machine: &str, error: &anyhow::Error) -> String {
     stale_note(machine, error).unwrap_or_else(|| format!("{machine}: {}", cli::reason(error)))
+}
+
+fn fold_refusal(aim: &PaneAim, destination: &str, error: &anyhow::Error) -> String {
+    stale_note(&aim.machine, error)
+        .unwrap_or_else(|| aim.failed(&hide_destination(&cli::reason(error), &aim.machine, destination)))
 }
 
 fn home_in(status: &str) -> Option<String> {
@@ -255,15 +281,34 @@ impl Store {
             Err(why) => return self.not_sent(&why, cx),
         };
         let job = (Store::get(cx), self.start_job(Busy::new(folding_key(&aim), aim.running()), cx));
-        let command = aim.args();
+        let command = aim.args(self.cli_release());
         let destination = target.host().unwrap_or_default().to_string();
         let answer = move || cli::run_on_within(&target, &command, FOLD_CAP);
         run_with(cx, Some(job), answer, move |this: &mut Self, result, cx| {
             if let Err(e) = result {
-                let reason = hide_destination(&cli::reason(&e), &aim.machine, &destination);
-                this.toast(aim.failed(&reason), ToastKind::Error, cx);
+                this.toast(fold_refusal(&aim, &destination, &e), ToastKind::Error, cx);
             }
         });
+    }
+
+    pub(crate) fn cli_release(&self) -> Option<Version> {
+        self.there.release.known
+    }
+
+    pub(crate) fn read_cli_release(&mut self, cx: &mut Context<Self>) {
+        let ask = self.there.release.ask();
+        let read = cx.background_spawn(async { cli::installed_version() });
+        cx.spawn(async move |this, cx| {
+            let release = read.await;
+            let _ = this.update(cx, |this, cx| this.heard_cli_release(ask, release, cx));
+        })
+        .detach();
+    }
+
+    fn heard_cli_release(&mut self, ask: u64, release: Option<Version>, cx: &mut Context<Self>) {
+        if self.there.release.answered(ask, release) {
+            cx.notify();
+        }
     }
 
     pub(crate) fn machine_home(&self, machine: &str, boot: &str) -> Option<&str> {
