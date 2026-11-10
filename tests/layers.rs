@@ -267,20 +267,54 @@ fn only_the_window_implements_root() {
     check("`impl Root` outside the window", &[], |s| !s.in_window() && s.code.contains("impl Root"));
 }
 
-const SIDEBAR_FILES: &[&str] = &[
-    "src/sidebar.rs",
-    "src/sidebar/arrange.rs",
-    "src/sidebar/rows.rs",
-    "src/sidebar/workspace.rs",
-    "src/sidebar/tab_rows.rs",
-    "src/sidebar/agents.rs",
-    "src/sidebar/machine_rows.rs",
-    "src/sidebar/machine_agents.rs",
-    "src/sidebar/key.rs",
+struct Drawing {
+    what: &'static str,
+    files: &'static [&'static str],
+    root: &'static [&'static str],
+    side: &'static [&'static str],
+    parts: &'static [&'static str],
+}
+
+const DRAWINGS: &[Drawing] = &[
+    Drawing {
+        what: "the sidebar",
+        files: &[
+            "src/sidebar.rs",
+            "src/sidebar/arrange.rs",
+            "src/sidebar/rows.rs",
+            "src/sidebar/workspace.rs",
+            "src/sidebar/tab_rows.rs",
+            "src/sidebar/agents.rs",
+            "src/sidebar/machine_rows.rs",
+            "src/sidebar/machine_agents.rs",
+            "src/sidebar/key.rs",
+        ],
+        root: &["session", "side", "store", "sidebar_width", "pair_width", "parts"],
+        side: &["hovered", "rename", "there_folds", "look", "sizes", "machine_place"],
+        parts: &["spots", "counted", "store_seen", "sidebar", "orbit_layer"],
+    },
+    Drawing {
+        what: "the rail",
+        files: &["src/sidebar/rail.rs", "src/sidebar/rail/key.rs"],
+        root: &["session", "side", "store", "parts"],
+        side: &["look", "menu", "machine_place"],
+        parts: &["rail", "store_seen"],
+    },
+    Drawing {
+        what: "the tab bar",
+        files: &["src/tabs.rs", "src/tabs/key.rs"],
+        root: &["session", "side", "store", "machine", "focus", "parts"],
+        side: &["look", "strip", "rename", "machine_place"],
+        parts: &["tabs", "tab_orbits", "tab_spots", "store_seen"],
+    },
+    Drawing {
+        what: "the status bar",
+        files: &["src/app/status.rs", "src/app/status/key.rs"],
+        root: &["notifier", "store", "conn", "came_up", "host", "session", "machine", "parts"],
+        side: &[],
+        parts: &["status", "store_seen", "chips_seen"],
+    },
 ];
-const SIDEBAR_FIELDS: &[&str] = &["session", "side", "store", "sidebar_width", "pair_width", "parts"];
-const PARTS_FIELDS: &[&str] = &["spots", "counted", "store_seen", "sidebar", "orbit_layer"];
-const SIDE_FIELDS: &[&str] = &["hovered", "rename", "there_folds", "look", "sizes", "machine_place"];
 
 fn root_fields(sources: &[Source]) -> Vec<String> {
     let app = sources.iter().find(|s| s.path == "src/app.rs").expect("the window is in src/app.rs");
@@ -302,24 +336,26 @@ fn words_after<'a>(code: &'a str, prefix: &str) -> impl Iterator<Item = &'a str>
     })
 }
 
-fn reads_beyond_its_key(source: &Source, fields: &[String]) -> bool {
-    if !SIDEBAR_FILES.contains(&source.path.as_str()) {
-        return false;
-    }
+fn reads_beyond_its_key(source: &Source, fields: &[String]) -> Option<&'static str> {
+    let drawing = DRAWINGS.iter().find(|d| d.files.contains(&source.path.as_str()))?;
     let outside = words_after(&source.code, "self.")
-        .any(|word| fields.iter().any(|f| f == word) && !SIDEBAR_FIELDS.contains(&word));
-    let side = words_after(&source.code, "self.side.").any(|word| !SIDE_FIELDS.contains(&word));
-    let parts = words_after(&source.code, "self.parts.").any(|word| !PARTS_FIELDS.contains(&word));
+        .any(|word| fields.iter().any(|f| f == word) && !drawing.root.contains(&word));
+    let side = words_after(&source.code, "self.side.").any(|word| !drawing.side.contains(&word));
+    let parts = words_after(&source.code, "self.parts.").any(|word| !drawing.parts.contains(&word));
     let globals = source.code.match_indices("::get(cx)").any(|(at, _)| !source.code[..at].ends_with("Store"));
-    outside || side || parts || globals
+    (outside || side || parts || globals).then_some(drawing.what)
 }
 
 #[test]
-fn the_sidebar_draws_only_what_its_key_holds() {
+fn each_part_draws_only_what_its_key_holds() {
     let all = sources();
     let fields = root_fields(&all);
     assert!(fields.iter().any(|f| f == "metrics"), "the field list is read from Root");
-    check("the sidebar reads what its key leaves out", &[], |s| reads_beyond_its_key(s, &fields));
+    for drawing in DRAWINGS {
+        check(&format!("{} reads what its key leaves out", drawing.what), &[], |s| {
+            reads_beyond_its_key(s, &fields) == Some(drawing.what)
+        });
+    }
 }
 
 #[test]

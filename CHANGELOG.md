@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.61
+
+- **The window costs less again while agents work.** The panel icons on the left, the tabs above the panes and the status bar are now kept from one frame to the next unless something they show changed, as the sidebar has been since 0.1.58, and the working orbits in the tabs are drawn over them. On a bench of 22 agents with 5 working, at 1512×912, a frame drawn to turn the orbits went from 1.35 to 0.75 ms with seven tabs on top (1.0 to 0.8 ms with two), and the window from 6.2 to 4.4 % of a core (5.5 to 4.6 %).
+- A working tab scrolled out of sight in the tab bar no longer keeps the window drawing its orbit.
+
 ## 0.1.60
 
 - **A flow can close its agents once its pull request merges.** Tick Close the agents once the pull request merges when you start it, or on its page in the Flows sheet or the Flow panel while it runs. Once the pull request has merged and none of its agents has worked for 3 minutes, they close as Close agents does: nothing is removed, and Reopen agents, on its page or in the workspace's menu, brings them back. A flow that leaves the commits opens no pull request, so it does not offer it.

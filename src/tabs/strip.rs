@@ -2,8 +2,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui::{
-    App, ClickEvent, Context, Div, InteractiveElement, IntoElement, ParentElement, ScrollHandle, Stateful,
-    StatefulInteractiveElement, Styled, WeakEntity, canvas, div, point, prelude::FluentBuilder as _, px,
+    App, ClickEvent, Context, Div, EntityId, InteractiveElement, IntoElement, ParentElement, ScrollHandle, Stateful,
+    StatefulInteractiveElement, Styled, canvas, div, point, prelude::FluentBuilder as _, px,
 };
 
 use super::TAB_HEIGHT;
@@ -130,17 +130,15 @@ impl TabStrip {
     }
 }
 
-fn settle(strip: &TabStrip, root: WeakEntity<Root>, cx: &mut App) {
+fn settle(strip: &TabStrip, part: EntityId, cx: &mut App) {
     if strip.settle() {
-        cx.defer(move |cx| {
-            let _ = root.update(cx, |_, cx| cx.notify());
-        });
+        cx.defer(move |cx| cx.notify(part));
     }
 }
 
-pub(super) fn watcher(strip: &TabStrip, root: WeakEntity<Root>) -> impl IntoElement + use<> {
+pub(super) fn watcher(strip: &TabStrip, part: EntityId) -> impl IntoElement + use<> {
     let strip = strip.clone();
-    canvas(move |_, _, cx| settle(&strip, root, cx), |_, (), _, _| {}).absolute().size(px(0.))
+    canvas(move |_, _, cx| settle(&strip, part, cx), |_, (), _, _| {}).absolute().size(px(0.))
 }
 
 pub(super) fn arrow(forward: bool, enabled: bool, cx: &mut Context<Root>) -> Stateful<Div> {

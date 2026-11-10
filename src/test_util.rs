@@ -43,3 +43,18 @@ pub(crate) fn vps_read(reach: Reach) -> MachineRead {
         retry_at: None,
     }
 }
+
+pub(crate) type Change<I> = (&'static str, fn(&mut I));
+
+pub(crate) fn each_change_moves<I: Clone + Default, K: PartialEq + std::fmt::Debug>(
+    changes: &[Change<I>],
+    key: fn(&I) -> K,
+) {
+    let base = I::default();
+    assert_eq!(key(&base), key(&base.clone()), "the same inputs gave two keys");
+    for (what, change) in changes {
+        let mut moved = base.clone();
+        change(&mut moved);
+        assert_ne!(key(&moved), key(&base), "{what} did not move the key");
+    }
+}

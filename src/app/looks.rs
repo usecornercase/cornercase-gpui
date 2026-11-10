@@ -31,6 +31,7 @@ impl Root {
         let appearance = Appearance::get(cx);
         cx.observe(&appearance, |this, appearance, cx| this.appearance_changed(&appearance, cx)).detach();
         cx.observe_window_appearance(window, |_, window, cx| {
+            window.refresh();
             let dark = appearance::dark(window.appearance());
             Appearance::get(cx).update(cx, |this, cx| this.system_changed(dark, cx));
         })

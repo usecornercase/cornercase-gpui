@@ -1,11 +1,12 @@
 use gpui::{
     AnyElement, ClickEvent, Context, Div, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, div,
+    ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
 use super::menus::run_item;
 use super::{card, tip};
+use crate::app::part::{self, Drawn};
 use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
 use crate::context_menu::Entry;
 use crate::dialogs;
@@ -15,6 +16,8 @@ use crate::panels::{PanelKind, todo};
 use crate::theme::colours;
 use crate::ui::glass::ring;
 use crate::ui::{self, Icon};
+
+pub(crate) mod key;
 
 const RAIL_WIDTH: f32 = 44.;
 const SLOT: f32 = 34.;
@@ -76,7 +79,15 @@ fn plugin_slot(button: Button, says: Option<String>, cx: &mut Context<Root>) -> 
 }
 
 impl Root {
-    pub(crate) fn render_rail(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(crate) fn rail_part(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> Drawn {
+        Drawn { element: self.render_rail(cx).into_any_element(), counted: false }
+    }
+
+    pub(crate) fn rail_slot(&self) -> impl IntoElement + use<> {
+        div().w(px(COLUMN)).h_full().flex_none().child(part::cached(&self.parts.rail))
+    }
+
+    fn render_rail(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         div().h_full().flex_none().flex().flex_col().pt(px(TITLEBAR_HEIGHT)).px(px(GAP)).pb(px(GAP)).child(
             card()
                 .w(px(RAIL_WIDTH))

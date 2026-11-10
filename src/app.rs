@@ -228,9 +228,9 @@ impl Root {
         );
         let store = Store::init(queue.clone(), cx);
         let notifier = cx.new(|cx| Notifier::new(store.clone(), window, cx));
-        cx.observe(&notifier, |_, _, cx| cx.notify()).detach();
+        cx.observe(&notifier, |this, _, cx| this.chips_moved(cx)).detach();
         if let Some(updater) = self_update::entity(cx) {
-            cx.observe(&updater, |_, _, cx| cx.notify()).detach();
+            cx.observe(&updater, |this, _, cx| this.chips_moved(cx)).detach();
         }
         cx.spawn(async move |this, cx| {
             while let Some(msg) = rx.next().await
@@ -240,9 +240,9 @@ impl Root {
         .detach();
         cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)).detach();
         Self::follow_activation(window, cx);
-        let parts = Parts::new(&cx.weak_entity(), Self::sidebar_part, cx);
+        let parts = Parts::new(&cx.weak_entity(), cx);
         let mut root = Self::fresh((focus, cx.focus_handle()), (store, notifier, tx, queue), parts);
-        cx.observe_self(Self::tell_parts).detach();
+        Self::follow_parts(cx);
         kept.apply(&mut root);
         root.start(cx);
         root.follow_appearance(window, cx);
@@ -731,7 +731,7 @@ impl Root {
             .overflow_hidden()
             .child(self.render_tabs(window_frame, cx))
             .child(self.render_body(window, cx))
-            .child(self.render_status(cx))
+            .child(self.status_slot())
     }
 
     fn render_body(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -921,7 +921,7 @@ fn start_place() -> Vec<String> {
 impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_title(window);
-        self.mind_the_sidebar(window);
+        self.mind_the_parts(window, cx);
         self.keep_beating(window);
         self.keep_the_keys(window, cx);
         let window_frame = frame::Frame::read(window, Os::CURRENT);
@@ -941,7 +941,7 @@ impl Render for Root {
             .font_family(theme::UI_FAMILY)
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
-            .child(self.render_rail(cx))
+            .child(self.rail_slot())
             .child(self.render_main(window_frame, window, cx))
             .children(self.render_menu(cx))
             .children(sheet)

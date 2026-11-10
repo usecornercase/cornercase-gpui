@@ -189,6 +189,7 @@ How #115's frame times and CPU were measured (2026-11-10, release builds, corner
 - **Never while a build runs** (`pgrep -x cargo; pgrep -x rustc`): the bench waits for it. Others' work on the machine still moves the numbers (load average 2.6–6.5 here), so every cell is measured three times, interleaved, and a run not in front is repeated.
 - **Faking working agents** needs no agent: the wrapper put in `CORNERCASE_BIN` runs the real `cornercase` and rewrites the JSON lines of `view` (agent, title, model, status `working` for the first N panes of a list, N from a file), and refuses to run unless `CORNERCASE_SOCKET` is the bench's; "Beyond one window" lists the script's own wrappers for a window and a machine. A pane that redraws three lines ten times a second stands for a working agent's output.
 - **A copy of a release's binary** taken out of its `.app` is killed by the system (signature bound to the bundle): `codesign --force -s -` it.
+- **The rail, tab strip and status bar step** used the same bench plus cell T (a flow workspace's tab shown: 7 tabs, 2 working).
 
 ## A press without the pointer
 
@@ -222,3 +223,5 @@ The issue's "Better still" (#113) asked for a debug-only way to send the window 
 - Not run: a real sshd or network, Windows, a window on Linux, a second machine, the Browser panel on a machine, a press-driven fold, an Accounts capture, and the safety-net breaks of the script's tests. The `lsof` look in `down` and the Linux wording above came after this run.
 
 2026-11-10, **A frame's cost**: cornercase-gpui 0.1.39 (its release's binary, re-signed), 0.1.57 and 0.1.58 as release builds, cornercase 0.13.32, macOS 26.6.2 on an M5 MacBook Pro; the cells ran on a private server with the window in front, three runs each.
+
+2026-11-10, **The rail, tab strip and status bar step**: cornercase-gpui 0.1.60 and 0.1.61 as release builds, cornercase 0.13.32, macOS 26.6.2 on an M5 MacBook Pro on battery, cells B, T and C, three interleaved runs each, `sample` of B and T in the first round; the 0.1.61 window was looked at once in a capture (rail, tabs with their orbits, arrows, status bar), not looked at live: hover, clicks, rename, drag, the theme switch, the job spinner, reconnecting, the title row's drag and the backstop's line on stderr.

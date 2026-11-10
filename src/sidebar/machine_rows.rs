@@ -94,7 +94,7 @@ fn there_tab_text(name: Div, note: Option<String>, details: Option<String>) -> D
         .child(div().text_size(px(11.)).text_color(colours::faint()).child(ui::one_line(note)))
 }
 
-pub(super) fn status_of(seen: &MachineSeen, (spots, dim): (&Spots, f32), status: Option<&str>) -> Div {
+pub(crate) fn status_of(seen: &MachineSeen, (spots, dim): (&Spots, f32), status: Option<&str>) -> Div {
     if seen.linked() { orbits::badge(status, spots, dim) } else { ui::still_badge(status) }
 }
 
