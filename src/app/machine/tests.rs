@@ -529,3 +529,73 @@ fn the_close_job_never_matches_a_local_pane() {
     assert_ne!(key, "close-pane:9");
     assert!(key.contains("vps") && key.contains("b1"));
 }
+
+fn with_agents(mut tab: MachineTab) -> MachineTab {
+    tab.session = Some(
+        serde_json::from_value(json!({
+            "boot": "b1",
+            "projects": [{"id": 1, "workspaces": [{"id": 2, "tabs": [
+                {"id": 20, "name": "shop", "panes": [{"id": 5, "agent": "claude"}, {"id": 6}]}
+            ]}]}]
+        }))
+        .expect("a session"),
+    );
+    tab
+}
+
+#[test]
+fn closing_an_agent_there_names_the_run_it_was_seen_on() {
+    assert_eq!(Closable::Agent(5).args("b1"), ["close", "--agent", "--pane", "5", "--boot", "b1"]);
+}
+
+#[test]
+fn an_agents_close_job_is_its_own() {
+    let run = MachineRun { machine: "vps".into(), boot: "b1".into() };
+    let key = Closable::Agent(5).key(&run);
+    assert_ne!(key, Closable::Pane(5).key(&run));
+    assert_ne!(key, "close-agent:5");
+    assert!(key.contains("agent"));
+}
+
+#[test]
+fn an_agent_close_goes_on_the_machine_s_own_queue() {
+    let (tab, tap) = live(20, 5);
+    tab.send_close(Closable::Agent(5), |_| {});
+    assert_eq!(tap.commands(), [["close", "--agent", "--pane", "5", "--boot", "b1"]]);
+}
+
+#[test]
+fn the_agent_check_there_names_the_run() {
+    assert_eq!(agent_check_args(5, "b1"), ["close", "--agent", "--pane", "5", "--check", "--json", "--boot", "b1"]);
+}
+
+#[test]
+fn the_agent_check_goes_on_the_machine_s_own_queue() {
+    let (tab, tap) = live(20, 5);
+    tab.send_agent_check(5, |_| {});
+    assert_eq!(tap.commands(), [["close", "--agent", "--pane", "5", "--check", "--json", "--boot", "b1"]]);
+}
+
+#[test]
+fn a_tab_that_fell_sends_no_agent_check() {
+    let (mut tab, tap) = live(20, 5);
+    tab.fall(Lost::Link);
+    tab.send_agent_check(5, |_| {});
+    assert_eq!(tap.commands(), Vec::<Vec<String>>::new());
+}
+
+#[test]
+fn a_live_tab_publishes_its_run_target_and_agent_panes() {
+    let (tab, _tap) = live(20, 5);
+    let there = with_agents(tab).there(None);
+    assert_eq!((there.machine.as_str(), there.boot.as_str()), ("vps", "b1"));
+    assert_eq!((there.target, there.down, there.agents), (Target::Local, None, vec![5]));
+}
+
+#[test]
+fn a_tab_that_fell_or_still_opens_publishes_why_it_is_down() {
+    let (mut tab, _tap) = live(20, 5);
+    tab.fall(Lost::Link);
+    assert_eq!(tab.there(None).down.as_deref(), Some("vps unreachable"));
+    assert_eq!(opening().there(None).down.as_deref(), Some("The tab on vps is still opening"));
+}

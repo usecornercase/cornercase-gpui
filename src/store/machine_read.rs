@@ -1,10 +1,12 @@
+use gpui::Context;
+
 use crate::cli::{self, Target};
 use crate::model::machines::{LinkState, Machine, MachineIcon, NextTry};
 use crate::model::{Aim, MachinePlace, MachineSeen};
 use crate::platform::paths;
 
 use super::Store;
-use super::machines_there::machine_target;
+use super::machines_there::{Homes, machine_target};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Reach {
@@ -27,6 +29,44 @@ impl Reach {
             Self::Down(why) | Self::Refused(why) => Some(why),
         }
     }
+}
+
+#[derive(Default)]
+pub(super) struct ThereState {
+    pub(super) homes: Homes,
+    pub(super) tab: Option<TabThere>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AgentReach {
+    Ready(Target),
+    Down(String),
+    Gone(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TabThere {
+    pub machine: String,
+    pub boot: String,
+    pub target: Target,
+    pub down: Option<String>,
+    pub agents: Vec<u64>,
+}
+
+fn reach_agent(tab: Option<&TabThere>, machine: &str, boot: &str, pane: u64) -> AgentReach {
+    let Some(tab) = tab.filter(|tab| tab.machine == machine) else {
+        return AgentReach::Gone(format!("The tab on {machine} is no longer shown"));
+    };
+    if tab.boot != boot {
+        return AgentReach::Gone(format!("{machine} restarted"));
+    }
+    if let Some(why) = &tab.down {
+        return AgentReach::Down(why.clone());
+    }
+    if tab.agents.contains(&pane) {
+        return AgentReach::Ready(tab.target.clone());
+    }
+    AgentReach::Gone(format!("that agent is no longer on {machine}"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +118,17 @@ fn read_of(
 }
 
 impl Store {
+    pub(crate) fn set_tab_there(&mut self, tab: Option<TabThere>, cx: &mut Context<Self>) {
+        if self.there.tab != tab {
+            self.there.tab = tab;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn agent_reach(&self, machine: &str, boot: &str, pane: u64) -> AgentReach {
+        reach_agent(self.there.tab.as_ref(), machine, boot, pane)
+    }
+
     pub(crate) fn machine_read(&self) -> Option<MachineRead> {
         let place = self.machine_place.as_ref()?;
         let seen = self.session.as_ref()?.machine(&place.machine)?;

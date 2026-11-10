@@ -29,8 +29,8 @@ mod run_on;
 
 pub(crate) use jobs::Busy;
 use jobs::Jobs;
-pub(crate) use machine_read::{MachineRead, Reach};
-use machines_there::Homes;
+use machine_read::ThereState;
+pub(crate) use machine_read::{AgentReach, MachineRead, Reach, TabThere};
 pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 
@@ -53,7 +53,7 @@ pub(crate) struct Store {
     pub machine_place: Option<MachinePlace>,
     awaited: Option<Awaited>,
     cloned: Vec<Cloned>,
-    homes: Homes,
+    there: ThereState,
     pub dock: Option<PanelKind>,
     pub sheet: Option<PanelKind>,
     pub peeking: bool,
@@ -147,7 +147,7 @@ impl Store {
             machine_place: None,
             awaited: None,
             cloned: Vec::new(),
-            homes: Homes::default(),
+            there: ThereState::default(),
             dock: None,
             sheet: None,
             peeking: false,

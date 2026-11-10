@@ -242,23 +242,23 @@ impl Store {
     }
 
     pub(crate) fn machine_home(&self, boot: &str) -> Option<&str> {
-        self.homes.known.get(boot).map(String::as_str)
+        self.there.homes.known.get(boot).map(String::as_str)
     }
 
     pub(crate) fn ask_machine_home(&mut self, machine: &str, cx: &mut Context<Self>) {
         let Some(seen) = self.session.as_ref().and_then(|session| session.machine(machine)) else { return };
         let boot = seen.boot.clone();
         let Ok(target) = self.machine_target(seen) else { return };
-        if self.homes.known.contains_key(&boot) || !self.homes.asked.insert(boot.clone()) {
+        if self.there.homes.known.contains_key(&boot) || !self.there.homes.asked.insert(boot.clone()) {
             return;
         }
         run_on(cx, target, args(&["status", "--json"]), move |this: &mut Self, result, cx| {
             match result.ok().as_deref().and_then(home_in) {
                 Some(home) => {
-                    this.homes.known.insert(boot, home);
+                    this.there.homes.known.insert(boot, home);
                 }
                 None => {
-                    this.homes.asked.remove(&boot);
+                    this.there.homes.asked.remove(&boot);
                 }
             }
             cx.notify();

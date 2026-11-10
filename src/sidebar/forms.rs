@@ -15,7 +15,7 @@ use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
 
 pub(super) use agents::close_agents;
-pub(crate) use checked::close_agent;
+pub(crate) use checked::{AgentCloseThere, CloseAgent, agent_checked, close_agent, close_agent_there};
 pub(super) use style::group_style;
 
 fn close(cx: &mut App) {

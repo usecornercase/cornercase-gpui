@@ -3,6 +3,8 @@ use std::time::Duration;
 use anyhow::anyhow;
 
 use super::*;
+use crate::cli::Target;
+use crate::store::AgentReach;
 use crate::test_util::fixture;
 
 fn outcome(text: &str) -> Outcome {
@@ -164,4 +166,29 @@ fn an_answer_without_numbers_has_no_age() {
 fn an_age_reads_in_the_largest_unit_that_fits() {
     let said: Vec<String> = [0, 59, 60, 3_599, 3_600, 86_400].map(read_ago).to_vec();
     assert_eq!(said, ["Read just now", "Read just now", "Read 1m ago", "Read 59m ago", "Read 1h ago", "Read 1d ago"]);
+}
+
+#[test]
+fn an_answer_that_lands_once_the_tab_fell_is_dropped_for_its_reason() {
+    let answer = outcome("{\"title\":\"Claude Code\"}");
+    let ready = AgentReach::Ready(Target::Local);
+    assert_eq!(landed(answer.clone(), &ready), answer);
+    let down = AgentReach::Down("vps unreachable".into());
+    assert_eq!(landed(answer.clone(), &down), Outcome::Failed("vps unreachable".into()));
+    let gone = AgentReach::Gone("vps restarted".into());
+    assert_eq!(landed(answer, &gone), Outcome::Failed("vps restarted".into()));
+}
+
+#[test]
+fn a_read_there_is_a_job_of_its_own() {
+    assert_eq!(job_key(5, None), "context:5");
+    assert_eq!(job_key(5, Some(("vps", "b1"))), "context:vps:b1:5");
+}
+
+#[test]
+fn the_job_and_title_name_the_machine() {
+    assert_eq!(job_words(Some("Claude Code"), None), "Reading Claude Code's context…");
+    assert_eq!(job_words(None, Some("vps")), "Reading the agent's context on vps…");
+    assert_eq!(title(None), "Context");
+    assert_eq!(title(Some("vps")), "Context on vps");
 }
