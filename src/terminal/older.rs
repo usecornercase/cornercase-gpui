@@ -1,18 +1,14 @@
-use gpui::{
-    ClickEvent, Context, Div, InteractiveElement as _, IntoElement, ParentElement as _, Stateful,
-    StatefulInteractiveElement as _, Styled as _, Window, div, px,
-};
+use gpui::{ClickEvent, Context, Div, ParentElement as _, Stateful, StatefulInteractiveElement as _, Window};
 
-use super::no_tab::{heading, lead_text, page, row, tall};
+use super::no_tab::{answer_under, column, heading, lead_text, retry_button, row, scrolled, tall};
 use crate::app::{Conn, Root};
-use crate::cli::{self, Behind, Older, Said, Target};
+use crate::cli::{self, Behind, Older, Target};
 use crate::desktop;
-use crate::dialogs::{self, Question};
+use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::platform::Os;
 use crate::sidebar::tip;
-use crate::store::{self, Busy};
-use crate::theme::colours;
+use crate::store::Busy;
 use crate::ui::{self, Icon, Tone};
 
 const UPDATE: &str = "Update";
@@ -79,34 +75,8 @@ fn restart_args() -> Vec<String> {
     vec!["restart".to_string(), "--yes".to_string()]
 }
 
-pub(super) fn answer_lines(said: &Said) -> (Vec<String>, bool) {
-    let (text, failed) = match said {
-        Said::Done(text) => (text, false),
-        Said::Failed(text) => (text, true),
-    };
-    (text.lines().map(str::to_string).collect(), failed)
-}
-
-fn answer_line(said: Option<&Said>) -> Option<Div> {
-    let (lines, failed) = answer_lines(said?);
-    let colour = if failed { colours::failed() } else { colours::muted() };
-    let lines = lines.into_iter().map(|line| div().child(line));
-    Some(div().max_w(px(540.)).text_center().text_size(px(12.)).text_color(colour).children(lines))
-}
-
-pub(super) fn answer_under(said: Option<&Said>) -> impl IntoElement + use<> {
-    div().children(answer_line(said))
-}
-
 fn plain_button(id: &'static str, icon: Icon, label: &str) -> Stateful<Div> {
     tall(ui::icon_text_button(id, icon, label.to_string(), Tone::Plain))
-}
-
-fn try_button(cx: &mut Context<Root>) -> Stateful<Div> {
-    plain_button("older-retry", Icon::Refresh, "Try again").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-        this.start(cx);
-        cx.notify();
-    }))
 }
 
 fn elsewhere_button() -> Stateful<Div> {
@@ -120,8 +90,7 @@ fn without_restart_button(cx: &mut Context<Root>) -> Stateful<Div> {
         |this, _: &ClickEvent, _, cx| {
             this.updated_there = None;
             this.answered = None;
-            this.start(cx);
-            cx.notify();
+            this.start_again(cx);
         },
     ))
 }
@@ -137,16 +106,17 @@ impl Root {
 
     fn older_page(&self, older: &Older, cx: &mut Context<Self>) -> Stateful<Div> {
         let busy = self.store.read(cx).busy(update_job(&older.destination).key());
-        let buttons =
-            row().children(Self::update_button(older, busy, cx)).child(try_button(cx)).child(elsewhere_button());
-        page()
-            .id("older-page")
-            .overflow_y_scroll()
+        let buttons = row()
+            .children(Self::update_button(older, busy, cx))
+            .child(retry_button("older-retry", cx))
+            .child(elsewhere_button());
+        let content = column()
             .child(ui::emblem(Icon::Alert))
             .child(heading(&older_heading(older)))
             .child(lead_text(older_lead(older, Os::CURRENT)))
             .child(buttons)
-            .child(answer_under(self.answered.as_ref()))
+            .child(answer_under(self.answer_for(update_job(&older.destination).key())));
+        scrolled("older-page", content)
     }
 
     fn behind_page(&self, behind: &Behind, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -155,14 +125,13 @@ impl Root {
             .child(Self::restart_button(behind, busy, cx))
             .child(without_restart_button(cx))
             .child(elsewhere_button());
-        page()
-            .id("behind-page")
-            .overflow_y_scroll()
+        let content = column()
             .child(ui::emblem(Icon::Refresh))
             .child(heading(&behind_heading(behind)))
             .child(lead_text(behind_lead(behind, Os::CURRENT)))
             .child(buttons)
-            .child(answer_under(self.answered.as_ref()))
+            .child(answer_under(self.answer_for(restart_job(&behind.destination).key())));
+        scrolled("behind-page", content)
     }
 
     fn update_button(older: &Older, busy: bool, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
@@ -191,30 +160,6 @@ impl Root {
             .on_click(cx.listener(move |_, _: &ClickEvent, window, cx| Self::ask_restart(&destination, window, cx)))
     }
 
-    pub(super) fn ask_then(
-        (title, message, button): (String, String, &'static str),
-        then: impl Fn(&mut Root, &mut Context<Root>) + 'static,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let root = cx.entity();
-        let question = Question::new(title, message, button, Vec::new())
-            .on_yes(move |cx| root.update(cx, |this, cx| then(this, cx)));
-        dialogs::confirm(question, window, cx);
-    }
-
-    pub(super) fn run_answered(
-        &mut self,
-        busy: Busy,
-        work: impl FnOnce() -> anyhow::Result<cli::Answer> + Send + 'static,
-        then: impl FnOnce(&mut Root, Said, &mut Context<Root>) + 'static,
-        cx: &mut Context<Self>,
-    ) {
-        self.answered = None;
-        cx.notify();
-        store::run_local_busy(cx, busy, work, move |this, result, cx| then(this, cli::said_of(result), cx));
-    }
-
     fn ask_update(older: Older, window: &mut Window, cx: &mut Context<Self>) {
         let question = update_question(&older.destination, Os::CURRENT);
         Self::ask_then(question, move |this, cx| this.update_there(older.clone(), cx), window, cx);
@@ -224,12 +169,10 @@ impl Root {
         let Some(args) = cli::update_args(&older) else { return };
         let job = update_job(&older.destination);
         let work = move || cli::answer_on(&Target::Local, &args);
-        self.run_answered(job, work, move |this, said, cx| this.update_answered(older, said, cx), cx);
+        self.run_answered(job, work, move |this, done, cx| this.update_answered(older, done, cx), cx);
     }
 
-    fn update_answered(&mut self, older: Older, said: Said, cx: &mut Context<Self>) {
-        let done = matches!(said, Said::Done(_));
-        self.answered = Some(said);
+    fn update_answered(&mut self, older: Older, done: bool, cx: &mut Context<Self>) {
         if done {
             self.updated_there = Some(older);
             self.start(cx);
@@ -248,10 +191,9 @@ impl Root {
         self.run_answered(restart_job(destination), work, Self::restart_answered, cx);
     }
 
-    fn restart_answered(&mut self, said: Said, cx: &mut Context<Self>) {
-        let done = matches!(said, Said::Done(_));
-        self.answered = (!done).then_some(said);
+    fn restart_answered(&mut self, done: bool, cx: &mut Context<Self>) {
         if done {
+            self.answered = None;
             self.start(cx);
         }
         cx.notify();

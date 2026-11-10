@@ -1,6 +1,4 @@
-use anyhow::anyhow;
-
-use super::{Answer, Older, Said, Start, Started, Step, refusal, said, said_of, start, step, update_args};
+use super::{Older, Start, Started, Step, refusal, start, step, update_args};
 use crate::test_util::fixture;
 
 fn older() -> Older {
@@ -9,10 +7,6 @@ fn older() -> Older {
 
 fn up(version: &str) -> Start {
     Start::Up(Started { version: version.to_string() })
-}
-
-fn answer(code: i32, stdout: &str, stderr: &str) -> Answer {
-    Answer { code: Some(code), stdout: stdout.to_string(), stderr: stderr.to_string() }
 }
 
 #[test]
@@ -129,36 +123,13 @@ fn words_that_do_not_start_with_cornercase_offer_no_update() {
 }
 
 #[test]
-fn an_update_that_exits_0_is_done() {
-    let text = fixture!("remote/update_done.txt");
-    assert_eq!(said(&answer(0, text, "")), Said::Done(text.trim().to_string()));
+fn an_unreachable_host_is_a_failure_even_with_status_5() {
+    let got = start(Some(5), b"", fixture!("remote/unreachable.txt").as_bytes());
+    let Start::Failed(why) = got else { panic!("expected a failure") };
+    assert!(why.starts_with("cornercase start-server: Error: could not reach"), "{why}");
 }
 
 #[test]
-fn an_update_cornercase_cannot_run_says_what_to_run() {
-    let Said::Failed(text) = said(&answer(1, fixture!("remote/update_by_hand.txt"), "")) else {
-        panic!("expected a failure")
-    };
-    assert!(text.contains("brew update && brew upgrade cornercase"), "{text}");
-}
-
-#[test]
-fn a_failed_update_gives_its_reason() {
-    let stderr = "Error: could not reach GitHub: io: Connection refused (os error 61)";
-    assert_eq!(
-        said(&answer(1, "", stderr)),
-        Said::Failed("could not reach GitHub: io: Connection refused (os error 61)".into())
-    );
-}
-
-#[test]
-fn an_update_that_could_not_start_says_so() {
-    let said = said_of(Err(anyhow!("could not run `cornercase`")));
-    assert_eq!(said, Said::Failed("could not run `cornercase`".into()));
-}
-
-#[test]
-fn an_update_that_says_nothing_still_says_something() {
-    let Said::Failed(text) = said(&answer(1, "", "")) else { panic!("expected a failure") };
-    assert_ne!(text, "");
+fn a_fresh_server_says_its_release_too() {
+    assert_eq!(start(Some(0), fixture!("remote/started.json").as_bytes(), b""), up("0.13.21"));
 }

@@ -122,7 +122,7 @@ pub(crate) struct Root {
     attempts: u32,
     pub(crate) came_up: bool,
     pub(crate) updated_there: Option<cli::Older>,
-    pub(crate) answered: Option<cli::Said>,
+    pub(crate) answered: Option<(String, cli::Said)>,
     place: Vec<String>,
     pub(crate) side: SideState,
     pub(crate) visible: bool,
@@ -883,10 +883,14 @@ fn font_size_from_env() -> f32 {
 
 fn start_server(tx: &UnboundedSender<Msg>, (cols, rows): (u16, u16), chosen: Option<String>) {
     let msg = start_message(cli::ensure_binary(chosen), || {
-        let args = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-", "--json"];
-        cli::start_server(&args, &theme::terminal_json())
+        cli::start_server(&start_args((cols, rows)), &theme::terminal_json())
     });
     let _ = tx.unbounded_send(msg);
+}
+
+fn start_args((cols, rows): (u16, u16)) -> Vec<String> {
+    let words = ["start-server", "--cols", &cols.to_string(), "--rows", &rows.to_string(), "--theme", "-", "--json"];
+    words.iter().map(ToString::to_string).collect()
 }
 
 fn start_message(found: Result<(), cli::Missing>, start: impl FnOnce() -> cli::Start) -> Msg {

@@ -1,4 +1,11 @@
-use super::{answer, printed};
+use anyhow::anyhow;
+
+use super::{Answer, Said, answer, printed, said, said_of};
+use crate::test_util::fixture;
+
+fn reply(code: i32, stdout: &str, stderr: &str) -> Answer {
+    Answer { code: Some(code), stdout: stdout.to_string(), stderr: stderr.to_string() }
+}
 
 #[test]
 fn a_partial_answer_keeps_its_output() {
@@ -38,4 +45,47 @@ fn a_refusal_that_printed_nothing_is_an_error() {
 #[test]
 fn a_success_that_printed_nothing_is_no_error() {
     assert_eq!(printed("plugin", Some(0), b"", b"").expect("an answer"), "");
+}
+
+#[test]
+fn an_update_that_exits_0_is_done() {
+    let text = fixture!("remote/update_done.txt");
+    assert_eq!(said(&reply(0, text, "")), Said::Done(text.trim().to_string()));
+}
+
+#[test]
+fn an_update_cornercase_cannot_run_says_what_to_run() {
+    let Said::Failed(text) = said(&reply(1, fixture!("remote/update_by_hand.txt"), "")) else {
+        panic!("expected a failure")
+    };
+    assert!(text.contains("brew update && brew upgrade cornercase"), "{text}");
+}
+
+#[test]
+fn a_failed_update_gives_its_reason() {
+    let stderr = "Error: could not reach GitHub: io: Connection refused (os error 61)";
+    assert_eq!(
+        said(&reply(1, "", stderr)),
+        Said::Failed("could not reach GitHub: io: Connection refused (os error 61)".into())
+    );
+}
+
+#[test]
+fn an_update_that_could_not_start_says_so() {
+    let said = said_of(Err(anyhow!("could not run `cornercase`")));
+    assert_eq!(said, Said::Failed("could not run `cornercase`".into()));
+}
+
+#[test]
+fn an_update_that_says_nothing_still_says_something() {
+    let Said::Failed(text) = said(&reply(1, "", "")) else { panic!("expected a failure") };
+    assert_ne!(text, "");
+}
+
+#[test]
+fn a_failed_restart_keeps_its_reason() {
+    let said = said(&reply(1, "Restarting stops every program in the terminals.", "Error: could not stop the server"));
+    let Said::Failed(text) = said else { panic!("expected a failure") };
+    assert!(text.contains("could not stop the server"), "{text}");
+    assert!(text.contains("Restarting stops"), "{text}");
 }

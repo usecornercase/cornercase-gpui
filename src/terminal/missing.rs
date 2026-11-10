@@ -1,14 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use gpui::{
-    AppContext as _, ClickEvent, Context, Div, InteractiveElement as _, ParentElement as _, PathPromptOptions,
-    Stateful, StatefulInteractiveElement as _,
+    AppContext as _, ClickEvent, Context, Div, ParentElement as _, PathPromptOptions, Stateful,
+    StatefulInteractiveElement as _,
 };
 
-use super::no_tab::{heading, lead_text, page, row, tall};
-use super::older::answer_under;
+use super::no_tab::{answer_under, column, heading, lead_text, retry_button, row, scrolled, tall};
 use crate::app::{Conn, Root};
-use crate::cli::{self, Binary, Missing, Origin, Problem, Said};
+use crate::cli::{self, Binary, Missing, Origin, Problem};
 use crate::desktop;
 use crate::platform::{Os, paths::home_relative};
 use crate::store::Busy;
@@ -125,11 +124,6 @@ fn guide_button(tone: Tone, cx: &mut Context<Root>) -> Stateful<Div> {
         .on_click(cx.listener(|_, _: &ClickEvent, _, cx| cx.open_url(cli::INSTALL_GUIDE)))
 }
 
-fn retry_button(cx: &mut Context<Root>) -> Stateful<Div> {
-    tall(ui::icon_text_button("missing-retry", Icon::Refresh, "Try again", Tone::Plain))
-        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.restart(cx)))
-}
-
 fn choose_button(cx: &mut Context<Root>) -> Stateful<Div> {
     tall(ui::icon_text_button("missing-choose", Icon::FolderOpen, "Choose cornercase…", Tone::Plain))
         .on_click(cx.listener(|_, _: &ClickEvent, _, cx| Root::choose_cornercase(cx)))
@@ -162,16 +156,15 @@ impl Root {
         let buttons = row()
             .children(update)
             .child(guide_button(tone, cx))
-            .child(retry_button(cx))
+            .child(retry_button("missing-retry", cx))
             .children(offers_choice(missing).then(|| choose_button(cx)));
-        page()
-            .id("missing-page")
-            .overflow_y_scroll()
+        let content = column()
             .child(ui::emblem(emblem_of(missing)))
             .child(heading(&heading_of(missing)))
             .child(lead_text(lead))
             .child(buttons)
-            .child(answer_under(self.answered.as_ref()))
+            .child(answer_under(self.answer_for(UPDATE_HERE)));
+        scrolled("missing-page", content)
     }
 
     fn update_here_button(&self, path: &Path, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -194,17 +187,10 @@ impl Root {
         self.run_answered(update_job(Os::CURRENT), work, Self::update_here_answered, cx);
     }
 
-    fn update_here_answered(&mut self, said: Said, cx: &mut Context<Self>) {
-        let done = matches!(said, Said::Done(_));
-        self.answered = Some(said);
+    fn update_here_answered(&mut self, done: bool, cx: &mut Context<Self>) {
         if done {
             self.start(cx);
         }
-        cx.notify();
-    }
-
-    fn restart(&mut self, cx: &mut Context<Self>) {
-        self.start(cx);
         cx.notify();
     }
 

@@ -1,4 +1,5 @@
-use super::{Empty, NoTab, empty_of, lead, new_shell_args};
+use super::{Empty, NoTab, answer_kept, answer_lines, empty_of, lead, new_shell_args};
+use crate::cli::Said;
 use crate::model::{Project, Session, Shown, ViewInfo, Workspace};
 
 fn showing(project: Option<u64>, workspace: Option<u64>) -> Session {
@@ -66,4 +67,18 @@ fn the_lead_offers_the_closed_agents_back() {
 fn a_new_shell_opens_in_the_shown_workspace() {
     assert_eq!(new_shell_args(Some(2)), ["new-tab", "--workspace", "2", "--focus"]);
     assert_eq!(new_shell_args(None), ["new-tab", "--focus"]);
+}
+
+#[test]
+fn an_answer_is_drawn_line_by_line() {
+    assert_eq!(answer_lines(&Said::Failed("a\nb".into())), (vec!["a".to_string(), "b".to_string()], true));
+    assert!(!answer_lines(&Said::Done("a".into())).1);
+}
+
+#[test]
+fn an_answer_shows_only_on_the_page_of_the_job_that_gave_it() {
+    let kept = ("update-here".to_string(), Said::Done("updated".into()));
+    assert_eq!(answer_kept(Some(&kept), "update-here"), Some(&kept.1));
+    assert_eq!(answer_kept(Some(&kept), "update-there:vps"), None);
+    assert_eq!(answer_kept(None, "update-here"), None);
 }

@@ -1,8 +1,8 @@
 use super::{
-    answer_lines, behind_heading, behind_lead, older_heading, older_lead, restart_args, restart_job, restart_question,
-    update_job, update_question,
+    behind_heading, behind_lead, older_heading, older_lead, restart_args, restart_job, restart_question, update_job,
+    update_question,
 };
-use crate::cli::{Behind, Older, Said};
+use crate::cli::{Behind, Older};
 use crate::platform::Os;
 
 fn older(there: Option<&str>) -> Older {
@@ -72,10 +72,4 @@ fn the_restart_runs_with_yes_on_the_windows_target() {
 fn the_jobs_name_the_machine() {
     assert_eq!(update_job("vps").key(), "update-there:vps");
     assert_eq!(restart_job("vps").key(), "restart-there:vps");
-}
-
-#[test]
-fn an_answer_is_drawn_line_by_line() {
-    assert_eq!(answer_lines(&Said::Failed("a\nb".into())), (vec!["a".to_string(), "b".to_string()], true));
-    assert!(!answer_lines(&Said::Done("a".into())).1);
 }

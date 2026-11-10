@@ -37,6 +37,13 @@ fn the_browser_opens_at_least_as_wide_as_the_other_docked_panels() {
 }
 
 #[test]
+fn the_start_asks_for_its_answer_as_json() {
+    let args = start_args((160, 48));
+    assert_eq!(args[..2], ["start-server", "--cols"]);
+    assert_eq!(args[args.len() - 3..], ["--theme", "-", "--json"]);
+}
+
+#[test]
 fn a_missing_cornercase_starts_no_server() {
     let missing = cli::Missing::NotFound { places: Vec::new(), asked_shell: false };
     let msg = start_message(Err(missing), || panic!("the server must not start"));

@@ -24,10 +24,8 @@ pub(crate) use locate::parse_version;
 pub(crate) use locate::{Binary, INSTALL_GUIDE, MINIMUM, Missing, Origin, Problem, Version};
 #[cfg(test)]
 pub(crate) use older::Started;
-pub(crate) use older::{
-    Answer, Behind, Older, Said, Start, Step, answer_at, answer_on, said_of, start_server, step, update_args,
-};
-pub(crate) use partial::{run_partial, run_partial_on, run_printed};
+pub(crate) use older::{Behind, Older, Start, Step, start_server, step, update_args};
+pub(crate) use partial::{Answer, Said, answer_at, answer_on, run_partial, run_partial_on, run_printed, said_of};
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
 use typist::{OnError, Typist};
