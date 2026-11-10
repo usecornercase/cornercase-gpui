@@ -34,17 +34,20 @@ pub(super) enum Helper {
     Command(Vec<OsString>),
     PlaySound(PathBuf),
     Toast(String),
+    Center { id: String, title: String, body: String },
 }
 
 pub(super) fn notification(
     os: Os,
+    id: Option<String>,
     (title, body): (&str, &str),
     find: &dyn Fn(&str) -> Option<PathBuf>,
 ) -> Result<Helper, &'static str> {
-    match os {
-        Os::Mac => Ok(Helper::Command(osascript(title, body))),
-        Os::Linux => notify_send(title, body, find).map(Helper::Command),
-        Os::Windows => Ok(Helper::Toast(toast_xml(title, body))),
+    match (os, id) {
+        (Os::Mac, Some(id)) => Ok(Helper::Center { id, title: title.into(), body: body.into() }),
+        (Os::Mac, None) => Ok(Helper::Command(osascript(title, body))),
+        (Os::Linux, _) => notify_send(title, body, find).map(Helper::Command),
+        (Os::Windows, _) => Ok(Helper::Toast(toast_xml(title, body))),
     }
 }
 
@@ -167,6 +170,7 @@ pub(super) fn run(helper: &Helper) -> Result<(), String> {
         Helper::Command(argv) => run_command(argv),
         Helper::PlaySound(file) => win32::play(file),
         Helper::Toast(xml) => win32::toast((id, &app_key(id), APP), xml),
+        Helper::Center { id, title, body } => super::center::post((id, title, body)),
     }
 }
 

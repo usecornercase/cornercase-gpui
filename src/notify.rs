@@ -1,4 +1,5 @@
 mod alert;
+mod center;
 mod feed;
 pub(crate) mod update;
 
@@ -21,6 +22,7 @@ use crate::store::{self, Busy, Store, ToastGo, ToastKind, args};
 use crate::theme::{UI_FAMILY, colours, radius};
 use crate::ui::{self, glass};
 
+pub(crate) use center::{Posted, listen};
 pub(crate) use feed::{AppState, Event, Notes, Notice, Prefs, parse_event};
 
 const FLASH: Duration = Duration::from_millis(160);
@@ -48,6 +50,7 @@ pub(crate) struct Notifier {
     active: bool,
     last_sound: Option<Instant>,
     told: HashSet<&'static str>,
+    held: Vec<(&'static str, String)>,
     bell_toasts: HashMap<u64, Instant>,
     flash: u64,
     flashing: bool,
@@ -69,6 +72,7 @@ impl Notifier {
             this.active = window.is_window_active();
             if this.active {
                 this.read_disk(cx);
+                this.tell_held(cx);
             }
         })
         .detach();
@@ -89,6 +93,7 @@ impl Notifier {
             active: window.is_window_active(),
             last_sound: None,
             told: HashSet::new(),
+            held: Vec::new(),
             bell_toasts: HashMap::new(),
             flash: 0,
             flashing: false,
@@ -118,6 +123,7 @@ impl Notifier {
                 self.install = InstallState::Idle;
                 self.restart = None;
                 self.bell_toasts.clear();
+                self.store.update(cx, |s, _| s.posted = Posted::default());
             }
             self.boot = boot;
             self.follow(cx);
@@ -175,8 +181,9 @@ impl Notifier {
         if self.active && there.as_ref().is_some_and(|there| store.shows_notice(there)) {
             return;
         }
-        let go = ("Go".to_string(), notice.go(there));
-        self.store.update(cx, |s, cx| s.toast_with(notice.message.clone(), notice.toast_kind(), Some(go), cx));
+        let go = notice.go(there);
+        let button = Some(("Go".to_string(), go.clone()));
+        self.store.update(cx, |s, cx| s.toast_with(notice.message.clone(), notice.toast_kind(), button, cx));
         let behind = !self.active;
         if notice.sound.is_none() && !behind {
             return;
@@ -190,10 +197,15 @@ impl Notifier {
                 this.play(&prefs, cue, cx);
             }
             if behind && prefs.desktop {
-                let helper = alert::notification(Os::CURRENT, (&notice.headline(), &notice.message), &desktop::on_path);
-                this.run_or_tell(helper.map(|helper| vec![helper]), alert::NOTIFICATION_FAILED, cx);
+                this.notify_desktop(&notice, go, cx);
             }
         });
+    }
+
+    fn notify_desktop(&mut self, notice: &Notice, go: ToastGo, cx: &mut Context<Self>) {
+        let id = center::available().then(|| self.store.update(cx, |s, _| s.posted.remember(go)));
+        let helper = alert::notification(Os::CURRENT, id, (&notice.headline(), &notice.message), &desktop::on_path);
+        self.run_or_tell(helper.map(|helper| vec![helper]), alert::NOTIFICATION_FAILED, cx);
     }
 
     fn play(&mut self, prefs: &Prefs, cue: &str, cx: &mut Context<Self>) {
@@ -220,6 +232,20 @@ impl Notifier {
     fn tell_once(&mut self, key: &'static str, text: String, kind: ToastKind, cx: &mut Context<Self>) {
         if self.told.insert(key) {
             self.store.update(cx, |s, cx| s.toast(text, kind, cx));
+        }
+    }
+
+    fn tell_failure(&mut self, key: &'static str, text: String, cx: &mut Context<Self>) {
+        if self.active {
+            self.tell_once(key, text, ToastKind::Error, cx);
+        } else {
+            hold(&mut self.held, &self.told, key, text);
+        }
+    }
+
+    fn tell_held(&mut self, cx: &mut Context<Self>) {
+        for (key, text) in std::mem::take(&mut self.held) {
+            self.tell_once(key, text, ToastKind::Error, cx);
         }
     }
 
@@ -507,13 +533,19 @@ impl Render for Tip {
     }
 }
 
+fn hold(held: &mut Vec<(&'static str, String)>, told: &HashSet<&'static str>, key: &'static str, text: String) {
+    if !told.contains(key) && !held.iter().any(|(known, _)| *known == key) {
+        held.push((key, text));
+    }
+}
+
 fn run_helper(tries: Vec<alert::Helper>, failed: &'static str, cx: &mut Context<Notifier>) {
     let (tx, rx) = oneshot::channel();
     std::thread::spawn(move || tx.send(alert::first_that_works(&tries, alert::run)));
     cx.spawn(async move |this, cx| {
         if let Ok(Err(why)) = rx.await {
             let text = format!("{failed}: {why}");
-            let _ = this.update(cx, |this, cx| this.tell_once(failed, text, ToastKind::Error, cx));
+            let _ = this.update(cx, |this, cx| this.tell_failure(failed, text, cx));
         }
     })
     .detach();

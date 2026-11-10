@@ -183,6 +183,7 @@ fn main() {
         appearance::Appearance::init(cx);
         self_update::start(cx);
         open_window(cx);
+        notify::listen(cx);
         cx.activate(true);
     });
 }

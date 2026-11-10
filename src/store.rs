@@ -15,6 +15,7 @@ use crate::model::machines::run_on::Awaited;
 use crate::model::machines::run_on::clone::Cloned;
 use crate::model::machines::{self, Machine};
 use crate::model::{MachinePlace, Session};
+use crate::notify::Posted;
 use crate::panels::PanelKind;
 use crate::panels::files::open::{self, Found};
 use crate::panels::plugins::Offers;
@@ -60,6 +61,7 @@ pub(crate) struct Store {
     dialog_behind: Option<(AnyView, FocusHandle)>,
     pub refocus: Option<FocusHandle>,
     pub toasts: Vec<Toast>,
+    pub posted: Posted,
     pub switch_to: Option<Target>,
     pub browse: Option<(String, Option<u64>)>,
     pub landing: Option<FoundSetting>,
@@ -153,6 +155,7 @@ impl Store {
             dialog_behind: None,
             refocus: None,
             toasts: Vec::new(),
+            posted: Posted::default(),
             switch_to: None,
             browse: None,
             landing: None,
@@ -362,6 +365,13 @@ impl Store {
         let text = format!("Copied {path}: it is on {place}, not on this {}", desktop::here());
         cx.write_to_clipboard(ClipboardItem::new_string(path));
         self.toast(text, ToastKind::Info, cx);
+    }
+
+    pub(crate) fn go(&mut self, action: &ToastGo, cx: &mut Context<Self>) {
+        match action {
+            ToastGo::Run(args) => self.act(args.clone()),
+            ToastGo::Machine(there) => self.go_there(there, cx),
+        }
     }
 
     pub(crate) fn toast_with(

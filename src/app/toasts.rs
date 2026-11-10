@@ -4,7 +4,7 @@ use gpui::{
 };
 
 use super::Root;
-use crate::store::{Store, Toast, ToastGo, ToastKind};
+use crate::store::{Store, Toast, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
 use crate::ui::motion::{self, Way};
@@ -55,10 +55,7 @@ fn toast_view(store: &Entity<Store>, toast: Toast) -> Stateful<Div> {
             d.child(ui::primary_button(SharedString::from(format!("toast-go-{id}")), label).on_click(
                 move |_: &ClickEvent, _, cx| {
                     go.update(cx, |s, cx| {
-                        match &action {
-                            ToastGo::Run(args) => s.act(args.clone()),
-                            ToastGo::Machine(there) => s.go_there(there, cx),
-                        }
+                        s.go(&action, cx);
                         s.dismiss_toast(id, cx);
                     });
                 },

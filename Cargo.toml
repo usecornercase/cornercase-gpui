@@ -1,6 +1,6 @@
 [package]
 name = "cornercase-gpui"
-version = "0.1.47"
+version = "0.1.48"
 edition = "2024"
 description = "A native window for cornercase on macOS, Linux and Windows, drawn with GPUI"
 license = "MIT OR Apache-2.0"
@@ -34,9 +34,21 @@ sha2 = "0.10"
 ureq = { version = "3.4", default-features = false, features = ["rustls-no-provider", "platform-verifier"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
 core-foundation = "0.10.0"
 core-video = "0.4.3"
 objc2 = "0.6.5"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSBundle", "NSError", "NSString"] }
+objc2-user-notifications = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "block2",
+    "UNNotification",
+    "UNNotificationContent",
+    "UNNotificationRequest",
+    "UNNotificationResponse",
+    "UNNotificationTrigger",
+    "UNUserNotificationCenter",
+] }
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6.2"
