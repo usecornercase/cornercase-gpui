@@ -13,25 +13,50 @@ fn argv(helper: &Helper) -> &[OsString] {
 }
 
 #[test]
-fn a_mac_notifies_through_osascript_with_the_text_as_arguments() {
-    let helper = notification(Os::Mac, ("Claude", "done; \"rm\""), &only(&[])).expect("osascript is always there");
+fn a_mac_without_a_bundle_notifies_through_osascript_with_the_text_as_arguments() {
+    let helper =
+        notification(Os::Mac, None, ("Claude", "done; \"rm\""), &only(&[])).expect("osascript is always there");
     let argv = argv(&helper);
     assert_eq!(argv.first().and_then(|program| program.to_str()), Some("osascript"));
     assert_eq!(argv[argv.len() - 2..], ["Claude", "done; \"rm\""]);
 }
 
 #[test]
+fn a_mac_app_posts_the_notices_text_through_its_own_center() {
+    let helper =
+        notification(Os::Mac, Some("4242-7".into()), ("claude finished", "claude finished in shop › main"), &only(&[]));
+    assert_eq!(
+        helper,
+        Ok(Helper::Center {
+            id: "4242-7".into(),
+            title: "claude finished".into(),
+            body: "claude finished in shop › main".into()
+        })
+    );
+}
+
+#[test]
+fn only_a_mac_uses_a_notifications_id() {
+    let find = only(&["notify-send"]);
+    for os in [Os::Linux, Os::Windows] {
+        let text = ("claude finished", "in shop › main");
+        assert_eq!(notification(os, Some("1-1".into()), text, &find), notification(os, None, text, &find));
+    }
+}
+
+#[test]
 fn linux_notifies_through_notify_send_with_the_text_after_its_options() {
-    let helper = notification(Os::Linux, ("-claude", "--help"), &only(&["notify-send"])).expect("notify-send is there");
+    let helper =
+        notification(Os::Linux, None, ("-claude", "--help"), &only(&["notify-send"])).expect("notify-send is there");
     let expected =
         ["/usr/bin/notify-send", "--app-name=cornercase", "--icon=utilities-terminal", "--", "-claude", "--help"];
     assert_eq!(helper, command(&expected));
-    assert_eq!(notification(Os::Linux, ("a", "b"), &only(&[])), Err(NO_NOTIFY_SEND));
+    assert_eq!(notification(Os::Linux, None, ("a", "b"), &only(&[])), Err(NO_NOTIFY_SEND));
 }
 
 #[test]
 fn windows_notifies_with_a_silent_toast_whatever_the_path_holds() {
-    let helper = notification(Os::Windows, ("claude finished", "in shop › main"), &only(&[])).expect("a toast");
+    let helper = notification(Os::Windows, None, ("claude finished", "in shop › main"), &only(&[])).expect("a toast");
     let expected = "<toast><visual><binding template=\"ToastGeneric\"><text>claude finished</text>\
         <text>in shop › main</text></binding></visual><audio silent=\"true\"/></toast>";
     assert_eq!(helper, Helper::Toast(expected.to_string()));

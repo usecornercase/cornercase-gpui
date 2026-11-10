@@ -33,3 +33,20 @@ fn a_tab_is_placed() {
     assert_eq!(tab_place(&session(), 6).as_deref(), Some("shop › main › claude"));
     assert_eq!(tab_place(&session(), 60), None);
 }
+
+#[test]
+fn a_failure_told_while_the_window_is_behind_is_held_once_for_when_it_is_seen() {
+    let mut held = Vec::new();
+    let told = HashSet::new();
+    hold(&mut held, &told, alert::NOTIFICATION_FAILED, "first".into());
+    hold(&mut held, &told, alert::NOTIFICATION_FAILED, "second".into());
+    assert_eq!(held, vec![(alert::NOTIFICATION_FAILED, "first".to_string())]);
+}
+
+#[test]
+fn a_failure_already_told_this_run_is_not_held_again() {
+    let mut held = Vec::new();
+    let told = HashSet::from([alert::NOTIFICATION_FAILED]);
+    hold(&mut held, &told, alert::NOTIFICATION_FAILED, "again".into());
+    assert_eq!(held, Vec::<(&str, String)>::new());
+}

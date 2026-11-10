@@ -1154,10 +1154,11 @@ dependencies = [
 
 [[package]]
 name = "cornercase-gpui"
-version = "0.1.47"
+version = "0.1.48"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "block2",
  "core-foundation 0.10.0",
  "core-video",
  "embed-resource",
@@ -1171,6 +1172,8 @@ dependencies = [
  "libc",
  "nucleo-matcher",
  "objc2",
+ "objc2-foundation",
+ "objc2-user-notifications",
  "parking_lot",
  "qrcode",
  "raw-window-handle",
@@ -3713,6 +3716,18 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation",
  "objc2-quartz-core",
+]
+
+[[package]]
+name = "objc2-user-notifications"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9df9128cbbfef73cda168416ccf7f837b62737d748333bfe9ab71c245d76613e"
+dependencies = [
+ "bitflags 2.13.2",
+ "block2",
+ "objc2",
+ "objc2-foundation",
 ]
 
 [[package]]

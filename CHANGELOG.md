@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.48
+
+- **macOS notifications come from cornercase, not Script Editor.** The downloaded app now posts its desktop notifications in its own name and with its own icon, and System Settings › Notifications lists cornercase on its own, so you can allow, silence or style them there without touching other apps' notifications.
+- **macOS asks first, when one is due.** The first time an agent's notice would show a notification, macOS asks whether cornercase may notify you, never when the app opens. If you don't allow them, a toast says where to turn them on, or how to turn the notifications off in cornercase, the next time you come back to the window.
+- **A click goes to the agent.** Clicking a notification brings the window forward on the agent's tab, as the toast's Go does, an agent's on one of your machines too. The notification plays no sound of its own: the cue plays as before.
+- **A sound or notification that fails now tells you when you come back.** If a sound or a desktop notification fails while the window is behind (on any system), its error toast waits until you return to the window, instead of showing and expiring while you are away. It is still told once per run.
+- A build from source, which runs without the app bundle, still notifies through Script Editor.
+
 ## 0.1.47
 
 - **Choose the mode on another machine.** Starting an agent on an issue with **Run on** set to a machine now offers that machine's own modes, as its settings list them, with the one it chose already picked. The Mode used to be hidden there. While the machine is asked, or when it cannot answer, the agent starts in the machine's own choice, as before, and the form says why.
