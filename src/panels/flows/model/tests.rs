@@ -187,3 +187,19 @@ fn a_team_names_each_of_its_agents_once_the_orchestrator_first() {
     let quick = listing.flows.iter().find(|f| f.origin == "user").expect("the user's flow");
     assert_eq!(quick.team_agents(), ["claude", "codex"]);
 }
+
+#[test]
+fn a_run_reads_whether_it_closes_once_merged() {
+    assert!(!parse_runs(RUNS).expect("runs").runs[0].close_when_merged);
+    let line = r#"{"revision":1,"runs":[{"run":2,"workspace":5,"close_when_merged":true}]}"#;
+    assert!(parse_runs(line).expect("runs").runs[0].close_when_merged);
+}
+
+#[test]
+fn a_start_answer_reads_close_when_merged() {
+    let started: Started =
+        serde_json::from_str(r#"{"run":1,"workspace":2,"branch":"b","close_when_merged":true}"#).expect("an answer");
+    assert!(started.close_when_merged);
+    let plain: Started = serde_json::from_str(r#"{"run":1,"workspace":2,"branch":"b"}"#).expect("an answer");
+    assert!(!plain.close_when_merged);
+}

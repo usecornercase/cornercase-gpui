@@ -12,6 +12,8 @@ mod graph;
 mod hero;
 mod import;
 mod list;
+pub(crate) mod merged;
+mod merged_view;
 mod messages;
 pub(crate) mod model;
 mod run_list;

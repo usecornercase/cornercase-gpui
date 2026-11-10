@@ -133,7 +133,8 @@ Their notes are in the area files, except what the bench does (**Another machine
 - a fake agent: the bench's `--agent`; fakes that answer probes or write session files: `design/flows.md`, `design/context-dialog.md`;
 - a `CORNERCASE_BIN` wrapper that logs: the bench's `--log`; one that answers commands: `design/flows.md`, `design/pull-requests.md`;
 - two private servers and an `ssh` stand-in for another machine: **Another machine** below;
-- Linux under Xvfb (`design/linux.md`).
+- Linux under Xvfb (`design/linux.md`);
+- a fake `gh` whose pull request merges (#126): `design/flows.md`.
 
 ## Another machine
 

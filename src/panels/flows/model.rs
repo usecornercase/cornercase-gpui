@@ -231,6 +231,7 @@ pub(crate) struct Run {
     pub ended: bool,
     pub messages: u64,
     pub state: Option<String>,
+    pub close_when_merged: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -408,6 +409,7 @@ pub(crate) struct Started {
     pub branch: String,
     pub note: Option<String>,
     pub members: Vec<StartedMember>,
+    pub close_when_merged: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]

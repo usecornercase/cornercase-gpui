@@ -45,7 +45,7 @@ pub(super) fn run_stdin<T: 'static>(
     super::deliver(cx, task, then);
 }
 
-fn toast(text: impl Into<String>, kind: ToastKind, cx: &mut App) {
+pub(super) fn toast(text: impl Into<String>, kind: ToastKind, cx: &mut App) {
     let text = text.into();
     Store::get(cx).update(cx, |s, cx| s.toast(text, kind, cx));
 }
