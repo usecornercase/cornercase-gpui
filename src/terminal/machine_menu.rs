@@ -3,10 +3,12 @@ use gpui::{Context, Pixels, Point, Window};
 use crate::app::Root;
 use crate::app::machine::{MachineRun, MachineTab};
 use crate::context_menu::{Entry, danger, item, note, resting};
+use crate::dialogs::VIEW_CONTEXT;
 use crate::render::layout::Hit;
 use crate::sidebar::mark_label;
 
 pub(super) const BOOT_WAITS: &str = "needs usecornercase/cornercase-terminal#723";
+pub(super) const RESTART_WAITS: &str = "needs usecornercase/cornercase-terminal#729";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct TherePane {
@@ -19,6 +21,7 @@ pub(super) struct TherePane {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) struct AgentThere {
     pub(super) pending: bool,
+    pub(super) on_account: bool,
 }
 
 type Act = fn(&mut Root, u64, &mut Window, &mut Context<Root>);
@@ -40,8 +43,17 @@ fn there_danger(label: &'static str, run: &MachineRun, pane: u64, act: Act) -> E
     danger(label, guarded(run, pane, act))
 }
 
-fn agent_waits(agent: AgentThere) -> Vec<Entry> {
-    vec![Entry::Separator, resting(mark_label(agent.pending)), note(BOOT_WAITS)]
+fn agent_entries(run: &MachineRun, pane: u64, agent: AgentThere) -> Vec<Entry> {
+    let mut entries = vec![Entry::Separator, resting(mark_label(agent.pending)), note(BOOT_WAITS)];
+    if agent.on_account {
+        entries.extend([resting("Switch account"), note(RESTART_WAITS)]);
+    }
+    entries.extend([
+        there_item(VIEW_CONTEXT, run, pane, Root::view_context_there),
+        Entry::Separator,
+        there_danger("Close agent…", run, pane, Root::close_agent_there),
+    ]);
+    entries
 }
 
 fn copy_path_item(machine: &str, path: &str) -> Entry {
@@ -65,7 +77,7 @@ pub(super) fn there_pane_menu(run: &MachineRun, facts: &TherePane) -> Vec<Entry>
         there_item("Split down", run, pane, |this, pane, _, _| this.split_pane(pane, true)),
     ];
     entries.extend(move_waits(facts.siblings));
-    entries.extend(facts.agent.map(agent_waits).unwrap_or_default());
+    entries.extend(facts.agent.map(|a| agent_entries(run, pane, a)).unwrap_or_default());
     entries.push(Entry::Separator);
     if let Some(path) = facts.path.as_deref() {
         entries.extend([copy_path_item(&run.machine, path), Entry::Separator]);
@@ -94,7 +106,9 @@ impl Root {
     fn there_pane_facts(&self, pane: u64) -> TherePane {
         let session = self.shown_session();
         let info = session.and_then(|s| s.pane(pane));
-        let agent = info.filter(|i| i.agent.is_some()).map(|i| AgentThere { pending: i.pending() });
+        let agent = info
+            .filter(|i| i.agent.is_some())
+            .map(|i| AgentThere { pending: i.pending(), on_account: i.account.is_some() });
         TherePane {
             pane,
             agent,

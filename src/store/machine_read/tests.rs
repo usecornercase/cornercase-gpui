@@ -141,3 +141,44 @@ fn a_read_of_a_link_that_fell_says_when_it_tries_next() {
 fn a_read_of_a_linked_machine_promises_no_try() {
     assert_eq!(read(LinkState::Linked, &Target::Local).next_try(NOW), None);
 }
+
+fn tab(down: Option<&str>) -> TabThere {
+    TabThere {
+        machine: "vps".into(),
+        boot: "b1".into(),
+        target: Target::Local,
+        down: down.map(str::to_string),
+        agents: vec![5],
+    }
+}
+
+fn reach_of(tab: Option<&TabThere>, machine: &str, boot: &str, pane: u64) -> AgentReach {
+    reach_agent(tab, machine, boot, pane)
+}
+
+#[test]
+fn an_agent_on_a_live_tab_can_be_read() {
+    assert_eq!(reach_of(Some(&tab(None)), "vps", "b1", 5), AgentReach::Ready(Target::Local));
+}
+
+#[test]
+fn a_pane_that_runs_no_agent_or_is_gone_reads_as_gone() {
+    let gone = AgentReach::Gone("that agent is no longer on vps".into());
+    assert_eq!(reach_of(Some(&tab(None)), "vps", "b1", 6), gone);
+    assert_eq!(reach_of(Some(&tab(None)), "vps", "b1", 99), gone);
+}
+
+#[test]
+fn a_restart_or_another_tab_reads_as_gone() {
+    let live = tab(None);
+    assert_eq!(reach_of(Some(&live), "vps", "b0", 5), AgentReach::Gone("vps restarted".into()));
+    let none = AgentReach::Gone("The tab on vps is no longer shown".into());
+    assert_eq!(reach_of(None, "vps", "b1", 5), none);
+    assert_eq!(reach_of(Some(&live), "mini", "b1", 5), AgentReach::Gone("The tab on mini is no longer shown".into()));
+}
+
+#[test]
+fn a_tab_that_is_down_reads_as_down_even_when_the_agent_is_listed() {
+    let down = tab(Some("vps unreachable"));
+    assert_eq!(reach_of(Some(&down), "vps", "b1", 5), AgentReach::Down("vps unreachable".into()));
+}

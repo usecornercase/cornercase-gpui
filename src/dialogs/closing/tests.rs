@@ -57,3 +57,22 @@ fn an_unnamed_agent_without_a_status_reads_as_an_agent() {
     let words = CloseWords::tab(&shop(), Some(&pane(None, None)), None);
     assert_eq!(words.message, "It runs an agent: closing the tab stops it. Its worktree and branch stay.");
 }
+
+#[test]
+fn the_agents_title_names_the_agent_and_the_machine() {
+    assert_eq!(agent_title(None, None), "Close agent?");
+    assert_eq!(agent_title(Some("claude"), None), "Close claude?");
+    assert_eq!(agent_title(None, Some("vps")), "Close agent on vps?");
+    assert_eq!(agent_title(Some("claude"), Some("vps")), "Close claude on vps?");
+    assert_eq!(agent_doing("claude", None), "Closing claude…");
+    assert_eq!(agent_doing("claude", Some("vps")), "Closing claude on vps…");
+}
+
+#[test]
+fn the_tabs_line_says_where_the_worktree_stays() {
+    assert_eq!(closes_line(1, None), "Closes 1 tab. Nothing is removed from disk: its worktree and branch stay.");
+    assert_eq!(
+        closes_line(2, Some("vps")),
+        "Closes 2 tabs. Nothing is removed from disk: its worktree and branch stay there."
+    );
+}

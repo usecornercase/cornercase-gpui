@@ -9,7 +9,7 @@ use gpui::{
 use super::{body_height, close, frame, show};
 use crate::cli;
 use crate::model::{Breakdown, ContextAnswer, PaneInfo, Session, Tab};
-use crate::store::{self, Busy, Store};
+use crate::store::{self, AgentReach, Busy, Store};
 use crate::theme::{self, colours};
 use crate::ui::{self, Icon, Tone, glass};
 
@@ -17,7 +17,14 @@ mod lists;
 mod read;
 
 use lists::{Fill, Row, Section, Slice};
-use read::{Reads, TOO_OLD, outcome_of};
+use read::{Outcome, Reads, TOO_OLD, outcome_of};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContextThere {
+    pub(crate) machine: String,
+    pub(crate) boot: String,
+    pub(crate) home: String,
+}
 
 pub(crate) const VIEW_CONTEXT: &str = "View context";
 
@@ -50,16 +57,26 @@ pub(crate) struct ContextDialog {
     pane: u64,
     focus: FocusHandle,
     reads: Reads,
+    there: Option<ContextThere>,
     _store: Subscription,
     _age: Task<()>,
 }
 
 pub(crate) fn view_context(pane: u64, window: &mut Window, cx: &mut App) {
+    open(pane, None, window, cx);
+}
+
+pub(crate) fn view_context_there(pane: u64, there: ContextThere, window: &mut Window, cx: &mut App) {
+    open(pane, Some(there), window, cx);
+}
+
+fn open(pane: u64, there: Option<ContextThere>, window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| {
         let store = Store::get(cx);
         let follow = cx.observe(&store, |this: &mut ContextDialog, store, cx| this.follow(&store, cx));
         let age = age_redraws(cx);
-        ContextDialog { pane, focus: cx.focus_handle(), reads: Reads::default(), _store: follow, _age: age }
+        let focus = cx.focus_handle();
+        ContextDialog { pane, focus, reads: Reads::default(), there, _store: follow, _age: age }
     });
     let focus = view.read(cx).focus.clone();
     show(view.clone().into(), &focus, window, cx);
@@ -81,26 +98,51 @@ fn agent_gone(session: Option<&Session>, pane: u64) -> bool {
     session.is_some_and(|s| s.pane(pane).is_none_or(|p| p.agent.is_none()))
 }
 
+fn gone(now: &AgentReach) -> bool {
+    matches!(now, AgentReach::Gone(_))
+}
+
+fn reach(there: &ContextThere, pane: u64, cx: &App) -> AgentReach {
+    Store::get(cx).read(cx).agent_reach(&there.machine, &there.boot, pane)
+}
+
 fn shown(cx: &Context<ContextDialog>) -> bool {
     Store::get(cx).read(cx).dialog.as_ref().is_some_and(|d| d.entity_id() == cx.entity_id())
 }
 
 impl ContextDialog {
     fn follow(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
-        if shown(cx) && agent_gone(store.read(cx).session.as_ref(), self.pane) {
+        if !shown(cx) {
+            return;
+        }
+        let closes = match &self.there {
+            None => agent_gone(store.read(cx).session.as_ref(), self.pane),
+            Some(there) => gone(&reach(there, self.pane, cx)),
+        };
+        if closes {
             store.update(cx, Store::close_dialog);
         }
     }
 
     fn ask_cached(&mut self, cx: &mut Context<Self>) {
-        self.reads.start();
-        store::run_partial(cx, read::cached_args(self.pane), |this, result, cx| {
-            this.reads.settle(outcome_of(result), Instant::now());
+        let args = read::cached_args(self.pane);
+        let then = |this: &mut Self, outcome: Outcome, cx: &mut Context<Self>| {
+            this.reads.settle(outcome, Instant::now());
             if this.reads.read_follows(shown(cx)) {
                 this.read(cx);
             }
             cx.notify();
-        });
+        };
+        match self.there.clone() {
+            None => {
+                self.reads.start();
+                store::run_partial(cx, args, move |this, result, cx| then(this, outcome_of(result), cx));
+            }
+            Some(there) => {
+                let words = read::job_words(None, Some(&there.machine));
+                self.read_there(words, args, then, cx);
+            }
+        }
         cx.notify();
     }
 
@@ -108,27 +150,58 @@ impl ContextDialog {
         if !self.reads.can_read() {
             return;
         }
-        self.reads.start();
         let args = read::read_args(self.pane);
-        let who = self.reads.answer().and_then(|a| a.title.clone()).unwrap_or_else(|| "the agent".into());
-        let busy = Busy::new(format!("context:{}", self.pane), format!("Reading {who}'s context…"));
-        store::run_local_busy(
-            cx,
-            busy,
-            move || cli::run_partial(&args),
-            |this, result, cx| {
-                this.reads.settle(outcome_of(result), Instant::now());
-                cx.notify();
-            },
-        );
+        let who = self.reads.answer().and_then(|a| a.title.clone());
+        let then = |this: &mut Self, outcome: Outcome, cx: &mut Context<Self>| {
+            this.reads.settle(outcome, Instant::now());
+            cx.notify();
+        };
+        match self.there.clone() {
+            None => {
+                self.reads.start();
+                let busy = Busy::new(read::job_key(self.pane, None), read::job_words(who.as_deref(), None));
+                let work = move || cli::run_partial(&args);
+                store::run_local_busy(cx, busy, work, move |this, result, cx| then(this, outcome_of(result), cx));
+            }
+            Some(there) => {
+                let words = read::job_words(who.as_deref(), Some(&there.machine));
+                self.read_there(words, args, then, cx);
+            }
+        }
         cx.notify();
+    }
+
+    fn read_there(
+        &mut self,
+        words: String,
+        args: Vec<String>,
+        then: impl FnOnce(&mut Self, Outcome, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(there) = self.there.clone() else { return };
+        match reach(&there, self.pane, cx) {
+            AgentReach::Ready(target) => {
+                self.reads.start();
+                let busy = Busy::new(read::job_key(self.pane, Some((&there.machine, &there.boot))), words);
+                store::run_partial_on_busy(cx, busy, target, args, move |this, result, cx| {
+                    then(this, read::landed(outcome_of(result), &reach(&there, this.pane, cx)), cx);
+                });
+            }
+            AgentReach::Down(why) | AgentReach::Gone(why) => {
+                self.reads.settle(Outcome::Failed(why), Instant::now());
+            }
+        }
     }
 }
 
 impl Render for ContextDialog {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let height = body_height(f32::from(window.viewport_size().height));
-        let home = Store::get(cx).read(cx).session.as_ref().and_then(|s| s.home.clone()).unwrap_or_default();
+        let home = match &self.there {
+            Some(there) => there.home.clone(),
+            None => Store::get(cx).read(cx).session.as_ref().and_then(|s| s.home.clone()).unwrap_or_default(),
+        };
+        let title = read::title(self.there.as_ref().map(|t| t.machine.as_str()));
         div()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
@@ -136,7 +209,7 @@ impl Render for ContextDialog {
                     this.read(cx);
                 }
             }))
-            .child(frame("Context", body(&self.reads, &home, height), footer(&self.reads, cx)).w(px(560.)))
+            .child(frame(title, body(&self.reads, &home, height), footer(&self.reads, cx)).w(px(560.)))
     }
 }
 

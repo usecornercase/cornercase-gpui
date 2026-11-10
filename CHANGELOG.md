@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.49
+
+- **Close an agent on another machine's tab.** Right click a pane where an agent runs on one of your machines and choose Close agent…: as here, it first asks that machine what would stop, the agent's tab and the tabs of the agents it started, and what keeps running elsewhere, naming the machine. If that machine's cornercase restarted in the meantime, nothing is closed and it says so.
+- **See what fills its context.** View context, in the same menu, reads that agent's context on its machine, without typing into the agent or spending tokens.
+- **Switch account waits on cornercase.** On a machine's pane whose agent runs on an account, Switch account shows with a line saying what cornercase still needs for it.
+
 ## 0.1.48
 
 - **macOS notifications come from cornercase, not Script Editor.** The downloaded app now posts its desktop notifications in its own name and with its own icon, and System Settings › Notifications lists cornercase on its own, so you can allow, silence or style them there without touching other apps' notifications.

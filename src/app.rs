@@ -500,6 +500,7 @@ impl Root {
         });
         self.session = Some(session);
         self.drop_drags_without_tab();
+        self.publish_tab(cx);
         self.follow_look(cx);
     }
 

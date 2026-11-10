@@ -1,8 +1,9 @@
 use std::time::Instant;
 
 use crate::cli;
+use crate::dialogs::on_machine;
 use crate::model::ContextAnswer;
-use crate::store::args;
+use crate::store::{AgentReach, args};
 
 pub(super) const TOO_OLD: &str = "What fills an agent's context needs cornercase 0.12.243 or newer";
 
@@ -12,6 +13,29 @@ pub(super) fn cached_args(pane: u64) -> Vec<String> {
 
 pub(super) fn read_args(pane: u64) -> Vec<String> {
     args(&["context", "--pane", &pane.to_string(), "--json"])
+}
+
+pub(super) fn landed(outcome: Outcome, now: &AgentReach) -> Outcome {
+    match now {
+        AgentReach::Ready(_) => outcome,
+        AgentReach::Down(why) | AgentReach::Gone(why) => Outcome::Failed(why.clone()),
+    }
+}
+
+pub(super) fn job_key(pane: u64, there: Option<(&str, &str)>) -> String {
+    match there {
+        Some((machine, boot)) => format!("context:{machine}:{boot}:{pane}"),
+        None => format!("context:{pane}"),
+    }
+}
+
+pub(super) fn job_words(who: Option<&str>, machine: Option<&str>) -> String {
+    let place = on_machine(machine);
+    format!("Reading {}'s context{place}…", who.unwrap_or("the agent"))
+}
+
+pub(super) fn title(machine: Option<&str>) -> String {
+    format!("Context{}", on_machine(machine))
 }
 
 fn too_old(reason: &str) -> bool {

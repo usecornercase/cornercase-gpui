@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::Target;
 use crate::model::Session;
 
 fn pane(id: u64, agent: Option<&str>) -> PaneInfo {
@@ -75,4 +76,11 @@ fn the_dialog_closes_when_its_pane_runs_no_agent() {
 #[test]
 fn a_lost_connection_does_not_close_the_dialog() {
     assert!(!agent_gone(None, 4));
+}
+
+#[test]
+fn a_machines_dialog_closes_only_when_its_agent_is_gone() {
+    assert!(gone(&AgentReach::Gone("vps restarted".into())));
+    assert!(!gone(&AgentReach::Down("vps unreachable".into())));
+    assert!(!gone(&AgentReach::Ready(Target::Local)));
 }

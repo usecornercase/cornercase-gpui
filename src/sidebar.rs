@@ -33,7 +33,7 @@ use crate::ui::{self, Icon, TextField};
 
 pub(crate) use crate::store::args as cmd;
 pub(crate) use folds::Fold;
-pub(crate) use forms::close_agent;
+pub(crate) use forms::{AgentCloseThere, CloseAgent, agent_checked, close_agent, close_agent_there};
 pub(crate) use look::{Arrangement, Look};
 pub(crate) use menus::{mark_label, path_items, reopening};
 

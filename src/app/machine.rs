@@ -1,17 +1,20 @@
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use anyhow::anyhow;
 use futures::channel::mpsc::UnboundedSender;
-use gpui::{ClipboardItem, Context, Window};
+use gpui::{App, ClipboardItem, Context, WeakEntity, Window};
 use serde_json::Value;
 
 use super::connection::Connection;
 use super::{Heard, Msg, Root};
 use crate::cli::{self, Stream, Target};
 use crate::desktop;
-use crate::dialogs::{self, CloseWords};
+use crate::dialogs::{self, CloseWords, ContextThere, agent_doing, on_machine};
 use crate::model::{Frame, Grid, MachinePlace, MachineSeen, Session, ThereId};
 use crate::notify::{Event, Notifier, parse_event};
-use crate::store::{self, Busy, Store, ToastKind, args, failed_there};
+use crate::sidebar::{self, AgentCloseThere, CloseAgent};
+use crate::store::{self, Busy, Store, TabThere, ToastKind, args, failed_there};
 use crate::terminal::cleaned;
 use crate::theme;
 
@@ -161,24 +164,31 @@ pub(crate) struct MachineRun {
 pub(crate) enum Closable {
     Pane(u64),
     Tab(u64),
+    Agent(u64),
 }
 
 impl Closable {
     fn args(self, boot: &str) -> Vec<String> {
-        let (flag, id) = match self {
-            Self::Pane(id) => ("--pane", id),
-            Self::Tab(id) => ("--tab", id),
+        let (flags, id): (&[&str], u64) = match self {
+            Self::Pane(id) => (&["close", "--pane"], id),
+            Self::Tab(id) => (&["close", "--tab"], id),
+            Self::Agent(id) => (&["close", "--agent", "--pane"], id),
         };
-        args(&["close", flag, &id.to_string(), "--boot", boot])
+        args(&[flags, &[&id.to_string(), "--boot", boot]].concat())
     }
 
     fn key(self, run: &MachineRun) -> String {
         let (kind, id) = match self {
             Self::Pane(id) => ("pane", id),
             Self::Tab(id) => ("tab", id),
+            Self::Agent(id) => ("agent", id),
         };
         format!("machine-close:{}:{}:{kind}-{id}", run.machine, run.boot)
     }
+}
+
+fn agent_check_args(pane: u64, boot: &str) -> Vec<String> {
+    args(&["close", "--agent", "--pane", &pane.to_string(), "--check", "--json", "--boot", boot])
 }
 
 #[derive(Debug, Clone)]
@@ -240,6 +250,21 @@ impl MachineTab {
 
     fn send_close(&self, what: Closable, reply: impl FnOnce(anyhow::Result<String>) + Send + 'static) {
         self.conn.queue.cmd_then(what.args(&self.boot), reply);
+    }
+
+    fn send_agent_check(&self, pane: u64, reply: impl FnOnce(anyhow::Result<String>) + Send + 'static) {
+        self.conn.queue.cmd_then(agent_check_args(pane, &self.boot), reply);
+    }
+
+    fn there(&self, seen: Option<&MachineSeen>) -> TabThere {
+        let agents = self.session.iter().flat_map(Session::tabs).flat_map(|t| &t.panes);
+        TabThere {
+            machine: self.machine.clone(),
+            boot: self.boot.clone(),
+            target: self.conn.target().clone(),
+            down: still_on(Some(self), &self.run(), seen).err(),
+            agents: agents.filter(|p| p.agent.is_some()).map(|p| p.id).collect(),
+        }
     }
 
     fn live(&self) -> bool {
@@ -412,6 +437,7 @@ impl Root {
             (Plan::Steer, Some(_)) => self.steer_machine(cx),
             _ => {}
         }
+        self.publish_tab(cx);
         self.activation_changed(window.is_window_active());
         cx.notify();
     }
@@ -492,6 +518,7 @@ impl Root {
             Heard::Copied(text, pane) => self.machine_copied(&text, pane, cx),
             Heard::Bell(tab) => self.machine_bell(tab, cx),
         }
+        self.publish_tab(cx);
     }
 
     fn machine_copied(&mut self, text: &str, pane: Option<u64>, cx: &mut Context<Self>) {
@@ -595,6 +622,7 @@ impl Root {
         );
         if due {
             self.open_machine(cx);
+            self.publish_tab(cx);
             cx.notify();
         }
     }
@@ -645,6 +673,7 @@ impl Root {
             LinkStep::Fall => self.machine_down(Lost::Link, cx),
             LinkStep::Reopen => self.open_machine(cx),
         }
+        self.publish_tab(cx);
     }
 
     pub(crate) fn still_there(&mut self, run: &MachineRun, cx: &mut Context<Self>) -> bool {
@@ -695,6 +724,55 @@ impl Root {
         } else {
             self.send_close_there(&close, cx);
         }
+    }
+
+    pub(super) fn publish_tab(&self, cx: &mut Context<Self>) {
+        let tab = self.machine.as_ref().map(|tab| {
+            let seen = self.session.as_ref().and_then(|session| session.machine(&tab.machine));
+            tab.there(seen)
+        });
+        self.store.update(cx, |s, cx| s.set_tab_there(tab, cx));
+    }
+
+    pub(crate) fn view_context_there(&mut self, pane: u64, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(tab) = &self.machine else { return };
+        let home = tab.session.as_ref().and_then(|s| s.home.clone()).unwrap_or_default();
+        let there = ContextThere { machine: tab.machine.clone(), boot: tab.boot.clone(), home };
+        dialogs::view_context_there(pane, there, window, cx);
+    }
+
+    fn closing_on(&self, run: &MachineRun, pane: u64, cx: &Context<Self>) -> AgentCloseThere {
+        let session = self.machine.as_ref().and_then(|tab| tab.session.as_ref());
+        let agent = session.and_then(|s| s.pane(pane)).and_then(|p| p.agent.clone());
+        let words = agent_doing(agent.as_deref().unwrap_or("the agent"), Some(&run.machine));
+        let what = Closable::Agent(pane);
+        let close = CloseThere { run: run.clone(), what, busy: Busy::new(what.key(run), words) };
+        let root = cx.entity().downgrade();
+        let close: Rc<dyn Fn(&mut App)> = Rc::new(move |cx| {
+            let _ = root.update(cx, |this, cx| this.send_close_there(&close, cx));
+        });
+        let tabs = session.map(|s| s.tabs().map(|t| (t.id, t.name.clone())).collect()).unwrap_or_default();
+        AgentCloseThere { machine: run.machine.clone(), tabs, close }
+    }
+
+    fn check_agent_there(&self, run: &MachineRun, pane: u64, dialog: WeakEntity<CloseAgent>, cx: &mut Context<Self>) {
+        let machine = run.machine.clone();
+        let words = format!("Checking what would stop{}…", on_machine(Some(&machine)));
+        let busy = Busy::new(format!("{}:check", Closable::Agent(pane).key(run)), words);
+        let reply = store::busy_reply(cx, busy, move |result, cx| {
+            let result = result.map_err(|e| anyhow!(failed_there(&machine, &e)));
+            sidebar::agent_checked(&dialog, result, cx);
+        });
+        if let Some(tab) = &self.machine {
+            tab.send_agent_check(pane, reply);
+        }
+    }
+
+    pub(crate) fn close_agent_there(&mut self, pane: u64, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(run) = self.machine.as_ref().map(MachineTab::run) else { return };
+        let there = self.closing_on(&run, pane, cx);
+        let dialog = sidebar::close_agent_there(pane, there, window, cx);
+        self.check_agent_there(&run, pane, dialog, cx);
     }
 
     fn ask_close_there(close: CloseThere, words: &CloseWords, window: &mut Window, cx: &mut Context<Self>) {
