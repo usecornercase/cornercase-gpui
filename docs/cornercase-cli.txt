@@ -1,3 +1,6 @@
+cornercase 0.13.31: the help of every command and subcommand, in the order of `cornercase --help`.
+Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
+
 ================================================================ cornercase status
 List the projects, workspaces, tabs and panes, with their ids
 
