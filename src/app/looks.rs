@@ -52,7 +52,7 @@ impl Root {
         cx.notify();
     }
 
-    fn give_palette(&mut self) {
+    pub(super) fn give_palette(&mut self) {
         let json = theme::terminal_json();
         if !self.given.needs(&json) {
             return;
@@ -89,7 +89,7 @@ impl Root {
 }
 
 fn takes_palette(conn: &Conn) -> bool {
-    matches!(conn, Conn::Starting | Conn::Connected)
+    matches!(conn, Conn::Connected)
 }
 
 #[cfg(test)]

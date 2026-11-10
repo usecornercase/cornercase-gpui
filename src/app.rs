@@ -503,6 +503,7 @@ impl Root {
     fn session_arrived(&mut self, mut session: Session, cx: &mut Context<Self>) {
         self.side.folds.apply(&mut session);
         self.conn = Conn::Connected;
+        self.give_palette();
         self.came_up = true;
         self.answered = None;
         self.attempts = 0;

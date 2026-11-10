@@ -78,7 +78,7 @@ pub(super) fn page() -> Div {
 }
 
 pub(super) fn scrolled(id: &'static str, content: Div) -> Stateful<Div> {
-    div().id(id).absolute().inset_0().overflow_y_scroll().child(content.min_h_full())
+    div().id(id).absolute().inset_0().overflow_y_scroll().flex().flex_col().child(content.flex_shrink_0().my_auto())
 }
 
 pub(super) fn heading(text: &str) -> Div {
