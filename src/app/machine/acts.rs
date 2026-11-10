@@ -95,6 +95,20 @@ impl MachineTab {
         boot_refusal(doing, &self.machine, self.cli_release)
     }
 
+    fn ask_accounts(&mut self) -> (u64, u64) {
+        self.accounts = Asked::Asking;
+        self.accounts_asks += 1;
+        (self.conn.queue_serial(), self.accounts_asks)
+    }
+
+    fn take_accounts(&mut self, serial: u64, ask: u64, result: anyhow::Result<String>) -> bool {
+        let current = self.conn.queue_serial() == serial && self.accounts_asks == ask;
+        if current {
+            self.accounts = Asked::answered(result);
+        }
+        current
+    }
+
     pub(crate) fn accounts_failed(&self) -> bool {
         matches!(self.accounts, Asked::Failed(_))
     }
@@ -131,11 +145,10 @@ impl Root {
 
     pub(crate) fn read_accounts_there(&mut self, cx: &mut Context<Self>) {
         let Some(tab) = self.machine.as_mut() else { return };
-        tab.accounts = Asked::Asking;
-        let (serial, target) = (tab.conn.queue_serial(), tab.conn.target().clone());
+        let (serial, ask) = tab.ask_accounts();
+        let target = tab.conn.target().clone();
         store::run_on(cx, target, args(&["account", "list", "--json"]), move |this: &mut Root, result, cx| {
-            if let Some(tab) = this.machine.as_mut().filter(|tab| tab.conn.queue_serial() == serial) {
-                tab.accounts = Asked::answered(result);
+            if this.machine.as_mut().is_some_and(|tab| tab.take_accounts(serial, ask, result)) {
                 cx.notify();
             }
         });

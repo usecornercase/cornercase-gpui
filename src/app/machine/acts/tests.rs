@@ -210,3 +210,18 @@ fn only_a_failed_read_of_the_accounts_is_tried_again_when_a_menu_opens() {
     tab.accounts = there();
     assert!(!tab.accounts_failed());
 }
+
+#[test]
+fn an_older_read_of_the_accounts_never_replaces_a_newer_ask() {
+    let mut tab = opening();
+    let serial = tab.conn.queue_serial();
+    let (_, first) = tab.ask_accounts();
+    let (_, second) = tab.ask_accounts();
+    let list = || Ok(fixture!("machines/there_accounts.json").to_string());
+    assert!(!tab.take_accounts(serial, first, list()));
+    assert_eq!(tab.accounts, Asked::Asking);
+    assert!(tab.take_accounts(serial, second, list()));
+    assert!(matches!(tab.accounts, Asked::Read(_)));
+    assert!(!tab.take_accounts(serial, first, Err(anyhow!("late"))));
+    assert!(matches!(tab.accounts, Asked::Read(_)));
+}

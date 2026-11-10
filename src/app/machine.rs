@@ -116,6 +116,7 @@ pub(crate) struct MachineTab {
     host_events: Option<Stream>,
     cli_release: Option<Version>,
     accounts: Asked<AccountsInfo>,
+    accounts_asks: u64,
     config_moves: ListMoves,
 }
 
@@ -250,6 +251,7 @@ impl MachineTab {
             host_events: None,
             cli_release: None,
             accounts: Asked::default(),
+            accounts_asks: 0,
             config_moves: ListMoves::default(),
         }
     }
