@@ -144,7 +144,7 @@ impl Root {
         [parts.sidebar.entity_id(), parts.rail.entity_id(), parts.tabs.entity_id(), parts.status.entity_id()]
     }
 
-    pub(super) fn tell_parts(&mut self, cx: &mut Context<Self>) {
+    fn tell_parts(&mut self, cx: &mut Context<Self>) {
         let now = (self.sidebar_key(), self.rail_key(cx), self.tabs_key(), self.status_key());
         let told_of = &mut self.parts.told;
         let moved = [

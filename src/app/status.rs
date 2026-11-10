@@ -19,7 +19,7 @@ use crate::ui::{self, motion};
 
 pub(super) mod key;
 
-pub(super) const HEIGHT: f32 = 28.;
+const HEIGHT: f32 = 28.;
 
 impl Root {
     pub(super) fn status_part(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> Drawn {
