@@ -5,7 +5,7 @@ use gpui::{
     SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
-use crate::cli::{self, Target};
+use crate::cli::{self, Target, Version};
 use crate::model::Spot;
 use crate::model::ThereId;
 use crate::model::accounts::pick::{AccountPick, AgentChoices};
@@ -13,7 +13,7 @@ use crate::model::agent_settings::Agents;
 use crate::model::machines::THIS_COMPUTER;
 use crate::model::machines::run_on::checks::{AgentNote, Check, Checks, Hold, Wanted};
 use crate::model::machines::run_on::issue::{IssueThere, follow};
-use crate::model::machines::run_on::{NO_REMOTE, Offer, Source, Starting, There};
+use crate::model::machines::run_on::{NO_REMOTE, Offer, Source, Starting, There, server_release};
 use crate::model::machines::seen::LoginTab;
 use crate::notify::tip;
 use crate::platform::paths;
@@ -105,6 +105,11 @@ impl RunOn {
             Some(_) => Source::There(self.checks.modes.read()),
             None => Source::Here,
         }
+    }
+
+    pub(crate) fn release(&self, cx: &App) -> Option<Version> {
+        let store = Store::get(cx).read(cx);
+        server_release(self.chosen.as_deref(), store.session.as_ref(), &store.machines)
     }
 
     pub(crate) fn issue_source(&self) -> Source<'_, IssueThere> {

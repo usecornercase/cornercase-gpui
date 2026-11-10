@@ -2,12 +2,13 @@ use serde_json::json;
 
 use super::data::{
     Body, Click, Entry, Group, Place, Row, Section, State, agent_choices, clear_goes_in, entries, flow_names,
-    folder_name, is_repository, live_pane, missed, missed_run, mode_choices, notice, place_label, remove_tip,
+    folder_name, is_repository, live_pane, missed, missed_run, mode_chips, notice, place_label, remove_tip,
     repository_for, sections, sentence, status_label,
 };
 use super::draft::{Draft, Target, When, cleanup_flag};
 use super::form::{Times, starting_agent};
 use super::time::{Civil, days, local, relative, when_label};
+use crate::cli::Version;
 use crate::model::accounts::pick::AccountPick;
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::panels::flows::model::FlowInfo;
@@ -612,8 +613,6 @@ fn reads_agents_and_modes_from_the_settings() {
         { "key": "agents.claude.mode", "value": "plan", "choices": [{ "value": "default" }, { "value": "plan" }] },
     ]});
     assert_eq!(agent_choices(&config), (vec!["auto".to_string(), "claude".to_string()], "claude".to_string()));
-    assert_eq!(mode_choices(&config, "claude"), (vec!["default".into(), "plan".into()], Some("plan".into())));
-    assert_eq!(mode_choices(&config, "codex"), (vec![], None));
     assert_eq!(agent_choices(&json!({})), (vec![], "auto".to_string()));
 }
 
@@ -660,4 +659,58 @@ fn a_prompt_starting_with_a_hyphen_goes_joined_to_its_flag() {
     let a = d.args().expect("args");
     assert!(a.contains(&"--prompt=- fix the tests\n- add one".to_string()));
     assert!(!a.contains(&"--prompt".to_string()));
+}
+
+fn plan_config(chosen: &str) -> serde_json::Value {
+    json!({ "settings": [
+        { "key": "agents.claude.mode", "value": chosen, "choices": [{ "value": "default" }, { "value": "plan" }] },
+    ]})
+}
+
+fn release(text: &str) -> Option<Version> {
+    Version::parse(text)
+}
+
+#[test]
+fn default_rests_with_its_line_on_a_server_before_0_13_28() {
+    let (chips, line) = mode_chips(&plan_config("plan"), "claude", release("0.13.21"));
+    let seen: Vec<(&str, &str, bool)> =
+        chips.iter().map(|chip| (chip.value.as_str(), chip.label.as_str(), chip.rests)).collect();
+    assert_eq!(seen, [("default", "default", true), ("plan", "plan ✓", false)]);
+    let line = line.expect("the line");
+    assert!(line.ends_with("(the server runs 0.13.21)"), "{line}");
+}
+
+#[test]
+fn every_mode_is_offered_on_a_server_that_starts_default() {
+    let (chips, line) = mode_chips(&plan_config("plan"), "claude", release("0.13.28"));
+    assert!(chips.iter().all(|chip| !chip.rests));
+    assert_eq!(line, None);
+}
+
+#[test]
+fn default_chosen_in_settings_never_rests() {
+    let (chips, line) = mode_chips(&plan_config("default"), "claude", release("0.13.21"));
+    assert_eq!(chips[0].label, "default ✓");
+    assert!(chips.iter().all(|chip| !chip.rests));
+    assert_eq!(line, None);
+}
+
+fn sent_by_the_form(edit: Option<u64>, mode: Option<&str>) -> Vec<String> {
+    let draft = Draft { edit, agent: Some("claude".into()), mode: mode.map(str::to_string), ..draft() };
+    draft.args().expect("the arguments")
+}
+
+#[test]
+fn the_form_sends_default_as_its_word() {
+    for edit in [None, Some(4)] {
+        assert!(sent_by_the_form(edit, Some("default")).windows(2).any(|pair| pair == ["--mode", "default"]));
+    }
+}
+
+#[test]
+fn a_form_left_on_as_in_settings_sends_no_mode() {
+    for edit in [None, Some(4)] {
+        assert!(!sent_by_the_form(edit, None).iter().any(|arg| arg == "--mode"));
+    }
 }

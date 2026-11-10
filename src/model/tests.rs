@@ -289,3 +289,11 @@ fn an_agent_counts_its_children_on_any_session() {
     assert_eq!(session.agent_children(5), 0);
     assert_eq!(session.agent_children(99), 0);
 }
+
+#[test]
+fn a_session_names_the_release_of_the_server_that_sent_it() {
+    let release = |text: &str| parse::<Session>(text).release();
+    assert_eq!(release(crate::test_util::fixture!("session/view_0_13_28.json")), Version::parse("0.13.28"));
+    assert_eq!(release(crate::test_util::fixture!("session/view_0_13_21.json")), Version::parse("0.13.21"));
+    assert_eq!(Session::default().release(), None);
+}

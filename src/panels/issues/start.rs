@@ -6,8 +6,7 @@ use gpui::{
 
 use super::IssuesPanel;
 use super::data::{
-    EFFORT_AGENTS, Issue, Place, Sources, StartPlan, When, branch_hint, branch_shown, default_waits, modes_shown,
-    there_footnote,
+    EFFORT_AGENTS, Issue, Place, Sources, StartPlan, When, branch_hint, branch_shown, modes_shown, there_footnote,
 };
 use crate::cli;
 use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts, follow_field};
@@ -381,13 +380,15 @@ impl StartForm {
     }
 
     fn modes(&self, cx: &App) -> Option<Modes> {
-        modes_shown(&self.agent, &self.agents, self.run_on.read(cx).modes_source())
+        let run_on = self.run_on.read(cx);
+        let modes = modes_shown(&self.agent, &self.agents, run_on.modes_source())?;
+        Some(modes.on_server(run_on.release(cx)))
     }
 
     fn mode_field(&self, cx: &mut Context<Self>) -> Option<Div> {
         let modes = self.modes(cx)?;
         let machine = self.run_on.read(cx).machine().map(str::to_string);
-        let waits = modes.waits().then(|| ui::dim(default_waits(&modes.chosen, machine.as_deref())));
+        let waits = modes.waiting(machine.as_deref()).map(ui::dim);
         let chips = mode_chips(&modes, self.mode.as_deref(), cx);
         Some(ui::field("Mode", div().flex().flex_col().gap(px(6.)).child(chips).children(waits)))
     }

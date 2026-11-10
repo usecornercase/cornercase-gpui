@@ -1,4 +1,6 @@
 use super::*;
+use crate::model::machines::parse_list;
+use crate::model::machines::run_on::server_release;
 use crate::test_util::{fixture, shop_on_vps};
 
 const SOURCES: &str = r#"{
@@ -467,18 +469,6 @@ fn the_footnote_on_a_machine_falls_back_to_its_template_line() {
 }
 
 #[test]
-fn the_line_under_the_mode_names_whose_settings_and_what_default_waits_for() {
-    assert_eq!(
-        default_waits("plan", None),
-        "default is not offered while settings choose plan: needs usecornercase/cornercase-terminal#726"
-    );
-    assert_eq!(
-        default_waits("plan", Some("vps")),
-        "default is not offered while vps's settings choose plan: needs usecornercase/cornercase-terminal#726"
-    );
-}
-
-#[test]
 fn the_branch_hint_names_the_machine() {
     assert_eq!(branch_hint(None), "the issue's branch");
     assert_eq!(branch_hint(Some("vps")), "the issue's branch on vps");
@@ -516,4 +506,31 @@ fn a_mode_picked_on_a_machine_is_sent() {
     let there = there_agents();
     let modes = modes_shown("claude", &here_agents(), Source::There(Some(&there))).expect("its modes");
     assert_eq!(modes.sent(Some("auto")).as_deref(), Some("auto"));
+}
+
+#[test]
+fn default_picked_goes_to_start_here_there_and_to_the_queue() {
+    let plan = StartPlan {
+        agent: "claude".into(),
+        mode: Some("default".into()),
+        place: Some(Place { project: 4, ..Place::default() }),
+        ..StartPlan::default()
+    };
+    let pair = ["--mode", "default"];
+    assert!(plan.start_args().windows(2).any(|args| args == pair));
+    assert!(plan.start_args_there(&shop_on_vps()).windows(2).any(|args| args == pair));
+    assert!(plan.queue_args("in 2h").windows(2).any(|args| args == pair));
+}
+
+#[test]
+fn a_machine_whose_server_starts_default_offers_it_and_one_behind_rests_it() {
+    let list = parse_list(fixture!("machines/list_mode_default.json")).expect("the list").machines;
+    let there = there_agents();
+    let source = || modes_shown("claude", &here_agents(), Source::There(Some(&there))).expect("its modes");
+    let vps = source().on_server(server_release(Some("vps"), None, &list));
+    assert_eq!(vps.sent(Some("default")).as_deref(), Some("default"));
+    let lab = source().on_server(server_release(Some("lab"), None, &list));
+    assert_eq!(lab.sent(Some("default")), None);
+    let line = lab.waiting(Some("lab")).expect("the line");
+    assert!(line.contains("on lab") && line.contains("lab's server runs 0.13.21"), "{line}");
 }

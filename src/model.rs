@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+use crate::cli::Version;
 use crate::platform::paths;
 
 pub(crate) mod accounts;
@@ -188,6 +189,10 @@ pub(crate) struct Shown {
 }
 
 impl Session {
+    pub(crate) fn release(&self) -> Option<Version> {
+        Version::parse(&self.version)
+    }
+
     pub(crate) fn path_style(&self) -> paths::Style {
         let known = self.home.as_deref().or_else(|| self.projects.first().map(|p| p.path.as_str()));
         known.map_or_else(paths::Style::default, paths::Style::of_path)

@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.50
+
+- **Start an agent in default while settings choose another mode.** An issue's Start now offers **default** (no mode arguments) like any other mode when settings choose one such as plan, and the agent starts without it, on this computer and on a machine. It needs cornercase 0.13.28 or newer wherever the agent starts: with an older one, default rests as before, and the line under it says which version offers it and which one runs.
+- **Schedule in default too.** Schedule on an issue and the Queue's form send default the same way with cornercase 0.13.28 or newer. With an older cornercase, where it meant the mode settings chose, the Queue's form now rests it with the same line. **as in settings**, which the form starts on, schedules as before.
+
 ## 0.1.49
 
 - **Close an agent on another machine's tab.** Right click a pane where an agent runs on one of your machines and choose Close agent…: as here, it first asks that machine what would stop, the agent's tab and the tabs of the agents it started, and what keeps running elsewhere, naming the machine. If that machine's cornercase restarted in the meantime, nothing is closed and it says so.
