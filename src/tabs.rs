@@ -1,22 +1,26 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Div, FocusHandle, InteractiveElement, IntoElement, MouseButton,
-    MouseDownEvent, ParentElement, SharedString, Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window,
-    div, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Div, FocusHandle, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement, SharedString, Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use crate::app::frame::{self, Frame};
+use crate::app::part::{self, Drawn};
 use crate::app::{Root, TITLEBAR_HEIGHT};
-use crate::context_menu::{Entry, act, danger, item};
-use crate::dialogs::{self, CloseWords};
-use crate::keymap::{self, Command, with_keys};
+use crate::context_menu::{Entry, act, item};
+use crate::dialogs;
+use crate::keymap::{Command, with_keys};
 use crate::model::{MachinePlace, MachineSeen, Tab, ThereId, ThereWorkspace, memory_size};
-use crate::sidebar::{Dragged, Look, Renaming, Target, cmd, draggable, mark_label, order, tip};
-use crate::terminal::cycled;
+use crate::platform::Os;
+use crate::sidebar::{Dragged, Look, Renaming, Target, cmd, draggable, order, status_of, tip};
 use crate::theme::{colours, radius};
-use crate::ui::{self, Icon, badge};
+use crate::ui::orbits::{self, Spots};
+use crate::ui::{self, Icon};
 
+mod acts;
+pub(crate) mod key;
 mod strip;
 
 pub(crate) use strip::TabStrip;
@@ -148,14 +152,13 @@ fn machine_tab(
     (seen, ws): (&MachineSeen, &ThereWorkspace),
     tab: &Tab<ThereId>,
     selected: bool,
-    look: &Look,
+    (look, spots): (&Look, &Spots),
     cx: &mut Context<Root>,
 ) -> Stateful<Div> {
     let place = MachinePlace::at(seen, ws, Some(tab.id));
     let others = tab.panes.len().saturating_sub(1);
     let detail = tab_detail(tab, None, look);
-    let status =
-        tab.loudest().map(|status| if seen.linked() { badge(Some(status)) } else { ui::still_badge(Some(status)) });
+    let status = tab.loudest().map(|status| status_of(seen, (spots, 1.), Some(status)));
     tab_pill(SharedString::from(format!("machine-tab-{}", tab.id.key())), selected)
         .pr(px(10.))
         .children(status)
@@ -163,26 +166,6 @@ fn machine_tab(
         .when(others > 0, |d| d.child(faint(format!("+{others}"))))
         .when_some(detail, |d, text| d.child(faint(text).whitespace_nowrap()))
         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_on_machine(place.clone(), cx)))
-}
-
-fn agent_entries(tab: &Tab, switch: Option<Entry>) -> Vec<Entry> {
-    let Some(agent) = tab.agent_pane() else { return Vec::new() };
-    let t = tab.id.to_string();
-    let mark = if agent.pending() {
-        act(mark_label(true), cmd(&["mark", "--tab", &t, "--reviewed"]))
-    } else {
-        act(mark_label(false), cmd(&["mark", "--tab", &t]))
-    };
-    let pane = agent.id;
-    let mut entries = vec![Entry::Separator, mark];
-    entries.extend(switch);
-    entries.extend(
-        dialogs::context_choices(tab)
-            .into_iter()
-            .map(|(pane, label)| item(label, move |_, window, cx| dialogs::view_context(pane, window, cx))),
-    );
-    entries.push(danger("Close agent…", move |_, window, cx| crate::sidebar::close_agent(pane, window, cx)));
-    entries
 }
 
 impl Root {
@@ -195,9 +178,25 @@ impl Root {
             .justify_between()
             .gap(px(8.))
             .pr(px(window_frame.title_end()))
-            .child(frame::claimed(self.tab_group(cx), window_frame, &self.focus))
+            .child(self.tab_slot())
             .child(tools(window_frame, &self.focus, cx));
         frame::title_row(row, window_frame)
+    }
+
+    fn tab_slot(&self) -> Div {
+        div()
+            .relative()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .child(part::cached(&self.parts.tabs))
+            .child(div().absolute().inset_0().child(self.parts.tab_orbits.clone()))
+    }
+
+    pub(crate) fn tabs_part(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Drawn {
+        self.parts.tab_spots.clear();
+        let group = frame::claimed(self.tab_group(cx), Frame::read(window, Os::CURRENT), &self.focus);
+        Drawn { element: div().size_full().flex().items_center().child(group).into_any_element(), counted: false }
     }
 
     fn tab_group(&self, cx: &mut Context<Self>) -> Div {
@@ -208,7 +207,7 @@ impl Root {
         group
             .child(self.scrolled_tabs(cx))
             .when(self.machine.is_none(), |d| d.child(new_tab_button(cx)))
-            .child(strip::watcher(&self.side.strip, cx.entity().downgrade()))
+            .child(strip::watcher(&self.side.strip, self.parts.tabs.entity_id()))
     }
 
     fn scrolled_tabs(&self, cx: &mut Context<Self>) -> Div {
@@ -269,7 +268,7 @@ impl Root {
         let mark = tab.agent_pane().and_then(|agent| self.account_mark(agent, cx));
         let detail = tab_detail(tab, mark.as_deref(), &self.side.look.current);
         tab_pill(group.clone(), selected)
-            .children(tab.loudest().map(|status| badge(Some(status))))
+            .children(tab.loudest().map(|status| orbits::badge(Some(status), &self.parts.tab_spots, 1.)))
             .child(self.tab_name(tab))
             .when(others > 0, |d| d.child(faint(format!("+{others}"))))
             .when_some(detail, |d, text| d.child(faint(text).whitespace_nowrap()))
@@ -283,15 +282,7 @@ impl Root {
         }
     }
 
-    fn click_tab(&mut self, id: u64, clicks: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if clicks == 2 {
-            self.start_rename(Target::Tab(id), window, cx);
-        } else {
-            self.focus_item("tab", id);
-        }
-    }
-
-    fn machine_workspace(&self) -> Option<(&MachineSeen, &ThereWorkspace)> {
+    pub(super) fn machine_workspace(&self) -> Option<(&MachineSeen, &ThereWorkspace)> {
         let place = self.side.machine_place.as_ref()?;
         let seen = self.session.as_ref()?.machine(&place.machine)?;
         Some((seen, seen.workspace(place.workspace)?))
@@ -303,59 +294,10 @@ impl Root {
         let index = ws.tabs.iter().position(|tab| Some(tab.id) == shown);
         self.side.strip.show(None, index.and_then(|at| u64::try_from(at).ok()), index);
         let look = &self.side.look.current;
-        ws.tabs.iter().map(|tab| machine_tab((seen, ws), tab, Some(tab.id) == shown, look, cx)).collect()
-    }
-
-    fn pick_on_machine(&mut self, place: MachinePlace, cx: &mut Context<Self>) {
-        self.store.update(cx, |s, cx| s.pick_machine_place(place, cx));
-    }
-
-    fn machine_tab_place(
-        &self,
-        tab: impl FnOnce(&ThereWorkspace, Option<ThereId>) -> Option<ThereId>,
-    ) -> Option<MachinePlace> {
-        let (seen, ws) = self.machine_workspace()?;
-        let shown = self.side.machine_place.as_ref().and_then(|place| place.tab);
-        Some(MachinePlace::at(seen, ws, Some(tab(ws, shown)?)))
-    }
-
-    pub(crate) fn pick_machine_tab_number(&mut self, key: &str, cx: &mut Context<Self>) {
-        let number =
-            |ws: &ThereWorkspace, _| keymap::tab_index(key, ws.tabs.len()).and_then(|i| ws.tabs.get(i)).map(|t| t.id);
-        if let Some(place) = self.machine_tab_place(number) {
-            self.pick_on_machine(place, cx);
-        }
-    }
-
-    pub(crate) fn cycle_machine_tab(&mut self, by: i32, cx: &mut Context<Self>) {
-        let next = |ws: &ThereWorkspace, shown| cycled(&ws.tabs.iter().map(|t| t.id).collect::<Vec<_>>(), shown, by);
-        if let Some(place) = self.machine_tab_place(next) {
-            self.pick_on_machine(place, cx);
-        }
-    }
-
-    pub(crate) fn tab_menu(&self, id: u64, cx: &App) -> Vec<Entry> {
-        let Some(tab) = self.session.as_ref().and_then(|s| s.tab(id)).cloned() else { return Vec::new() };
-        let mut entries = vec![
-            item("Rename tab", move |this, window, cx| this.start_rename(Target::Tab(id), window, cx)),
-            act("New shell tab", cmd(&["new-tab", "--focus"])),
-        ];
-        let switch = tab.agent_pane().and_then(|agent| self.switch_account_item(agent.id, cx));
-        entries.extend(agent_entries(&tab, switch));
-        entries.push(Entry::Separator);
-        entries.push(danger("Close tab", move |this, window, cx| this.close_tab(&tab, window, cx)));
-        entries
-    }
-
-    pub(crate) fn close_tab(&mut self, tab: &Tab, window: &mut Window, cx: &mut Context<Self>) {
-        let command = cmd(&["close", "--tab", &tab.id.to_string()]);
-        let Some(agent) = tab.agent_pane() else {
-            self.own.queue.cmd(command);
-            return;
-        };
-        let words = CloseWords::tab(tab, Some(agent), None);
-        let question = words.question(command).busy(words.busy(format!("close-tab:{}", tab.id)));
-        dialogs::confirm(question, window, cx);
+        ws.tabs
+            .iter()
+            .map(|tab| machine_tab((seen, ws), tab, Some(tab.id) == shown, (look, &self.parts.tab_spots), cx))
+            .collect()
     }
 }
 

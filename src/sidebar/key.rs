@@ -47,23 +47,6 @@ impl SidebarKey {
     }
 }
 
-#[cfg(test)]
-impl SidebarKey {
-    pub(crate) fn of_session(session: u64) -> Self {
-        Self::of(&KeyParts {
-            session,
-            store: 0,
-            hovered: None,
-            renaming: None,
-            there_folds: &ThereFolds::default(),
-            look: &Look::default(),
-            sizes: &Sizes::default(),
-            widths: (0., 0.),
-            place: None,
-        })
-    }
-}
-
 impl Root {
     pub(crate) fn sidebar_key(&self) -> SidebarKey {
         SidebarKey::of(&KeyParts {

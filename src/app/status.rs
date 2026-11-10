@@ -1,16 +1,15 @@
-use std::rc::Rc;
 use std::time::Instant;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, EntityId, InteractiveElement as _, IntoElement, ParentElement as _, Rgba,
+    AnyElement, ClickEvent, Context, InteractiveElement as _, IntoElement, ParentElement as _, Rgba,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
+use super::part::{self, Drawn};
 use super::{Conn, GAP, Root};
 use crate::cli;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
-use crate::model::Session;
 use crate::notify;
 use crate::platform::Os;
 use crate::platform::paths;
@@ -18,14 +17,25 @@ use crate::terminal;
 use crate::theme::{colours, radius};
 use crate::ui::{self, motion};
 
+pub(super) mod key;
+
+pub(super) const HEIGHT: f32 = 28.;
+
 impl Root {
-    pub(super) fn render_status(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(super) fn status_part(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> Drawn {
+        Drawn { element: self.render_status(cx).into_any_element(), counted: false }
+    }
+
+    pub(super) fn status_slot(&self) -> impl IntoElement + use<> {
+        div().h(px(HEIGHT)).flex_none().child(part::cached(&self.parts.status))
+    }
+
+    fn render_status(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let items = self.notifier.read(cx).status_items(&self.notifier, cx);
         let jobs = self.store.read(cx).jobs.summary(Instant::now());
         let separator = || div().w(px(1.)).h(px(12.)).flex_none().bg(colours::edge());
         div()
-            .h(px(28.))
-            .flex_none()
+            .size_full()
             .flex()
             .items_center()
             .gap(px(10.))
@@ -81,13 +91,6 @@ impl Root {
         (dot, label, why)
     }
 
-    pub(super) fn keep_beating(&mut self, window: &Window) {
-        self.parts.beat.drawing(Instant::now());
-        if self.session.as_ref().is_some_and(Session::anyone_working) && self.parts.beat.start() {
-            follow_frames(window, self.parts.orbit_layer.entity_id(), self.parts.beat.clone());
-        }
-    }
-
     fn active_pane_summary(&self) -> String {
         let session = self.shown_session();
         let pane = self.active_pane().and_then(|id| session?.pane(id).cloned());
@@ -124,14 +127,6 @@ fn conn_words(conn: &Conn, came_up: bool, version: &str) -> (String, Option<Stri
             (format!("older server · {}", behind.server), Some(terminal::behind_lead(behind, Os::CURRENT)))
         }
     }
-}
-
-fn follow_frames(window: &Window, target: EntityId, beat: Rc<motion::Beat>) {
-    window.on_next_frame(move |window, cx| match beat.tick(Instant::now(), motion::orbits_drawn()) {
-        motion::Next::Wait => follow_frames(window, target, beat),
-        motion::Next::Draw => cx.notify(target),
-        motion::Next::Rest => {}
-    });
 }
 
 fn connection_dot(colour: Rgba, waiting: bool) -> AnyElement {
