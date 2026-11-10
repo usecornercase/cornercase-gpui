@@ -133,6 +133,7 @@ fn a_machine_keeps_one_home_however_often_its_server_restarts() {
     assert_eq!(homes.home("b3"), Some("/home/ana"));
     assert_eq!((homes.home("b1"), homes.home("b2")), (None, None));
     assert_eq!(homes.known.len(), 1);
+    assert!(!homes.ask("vps", "b3"));
 }
 
 #[test]

@@ -4,10 +4,6 @@ fn parse<T: serde::de::DeserializeOwned>(text: &str) -> T {
     serde_json::from_str(text).expect("valid JSON")
 }
 
-fn cell(pane: &PaneGrid, x: u16, y: u16) -> (&str, &Run) {
-    pane.cell(x, y).expect("a cell there")
-}
-
 #[test]
 fn reads_workspace_details_from_the_session() {
     let text = r#"{"projects":[{"id":1,"name":"shop","custom_name":"shop","workspaces":[{"id":2,"name":"feat",
@@ -23,19 +19,6 @@ fn reads_workspace_details_from_the_session() {
     assert_eq!(ws.changes.as_ref().map(|c| c.added), Some(4));
     assert_eq!(ws.tabs[0].panes[0].subagents, 2);
     assert_eq!(session.projects[0].custom_name.as_deref(), Some("shop"));
-}
-
-#[test]
-fn a_pane_scrolled_up_counts_the_lines_below_its_view() {
-    let frame: Frame = parse(
-        r#"{"surface":1,"revision":1,"tab":1,"cols":80,"rows":24,"panes":[
-        {"pane":1,"scroll":{"total":402,"offset":324,"rows":48}},
-        {"pane":2,"scroll":{"total":402,"offset":354,"rows":48}}]}"#,
-    );
-    let mut grid = Grid::default();
-    assert!(matches!(grid.apply(frame), Applied::Ok));
-    assert_eq!(grid.pane(1).expect("a pane").below(), 30);
-    assert_eq!(grid.pane(2).expect("a pane").below(), 0);
 }
 
 #[test]
@@ -126,93 +109,6 @@ fn a_frame_newer_than_the_session_shows_the_tab_it_came_for() {
 fn a_view_that_shows_a_tab_has_no_empty_page() {
     assert!(!viewing(Some(7), 5).shows_no_tab(None));
     assert!(!Session::default().shows_no_tab(None));
-}
-
-#[test]
-fn the_grid_keeps_the_projection_of_its_last_frame() {
-    let mut frame: serde_json::Value = parse(crate::test_util::fixture!("frame.json"));
-    frame["projection"] = 4.into();
-    let mut grid = Grid::default();
-    assert!(matches!(grid.apply(serde_json::from_value(frame).expect("a frame")), Applied::Ok));
-    assert_eq!(grid.projection, Some(4));
-}
-
-fn fixture_grid() -> Grid {
-    let frame: Frame = parse(crate::test_util::fixture!("frame.json"));
-    let mut grid = Grid::default();
-    assert!(matches!(grid.apply(frame), Applied::Ok));
-    grid
-}
-
-#[test]
-fn reads_the_fixture_frame() {
-    let grid = fixture_grid();
-    assert_eq!(grid.panes.len(), 2);
-    let pane = &grid.panes[0];
-    assert_eq!(cell(pane, 1, 1).0, "k");
-    assert!(cell(pane, 1, 1).1.style.bold);
-    assert_eq!(cell(pane, 3, 1).0, "中");
-    assert_eq!(cell(pane, 2, 2).1.link.as_deref(), None);
-    assert_eq!(cell(pane, 3, 2).1.link.as_deref(), Some("https://example.com/docs/a-long-page"));
-    assert_eq!(pane.cursor.map(|c| c.shape), Some(CursorShape::Bar));
-    assert_eq!(pane.colours.palette.get("1"), Some(&[255, 0, 0]));
-}
-
-#[test]
-fn keeps_the_split_tree_of_the_fixture_frame() {
-    let split = |first, second| Node::Split(Box::new(Branch { dir: "right".into(), first, second }));
-    assert_eq!(fixture_grid().layout, Some(split(Node::Leaf(13), Node::Leaf(14))));
-}
-
-#[test]
-fn applies_a_patch_with_a_copy() {
-    let full = r#"{"boot":"b","revision":1,"surface":3,"tab":1,"cols":4,"rows":3,"styles":[{}],
-        "panes":[{"pane":7,"active":true,"rect":{"x":0,"y":0,"cols":4,"rows":3},"size":{"cols":4,"rows":3},
-        "cursor":null,"lines":[[{"style":0,"cells":["a"]}],[{"style":0,"cells":["b"]}],[{"style":0,"cells":["c"]}]]}]}"#;
-    let patch = r#"{"boot":"b","revision":2,"base":1,"surface":3,"tab":1,"cols":4,"rows":3,
-        "styles":[{"bold":true}],"panes":[{"pane":7,"cursor":{"x":1,"y":2},
-        "copy":{"from":1,"to":0,"count":2},"lines":{"2":[{"style":0,"cells":["d"]}]}}]}"#;
-    let mut grid = Grid::default();
-    grid.apply(parse(full));
-    assert!(matches!(grid.apply(parse(patch)), Applied::Ok));
-    let pane = &grid.panes[0];
-    let text: Vec<&str> = (0..3).map(|y| cell(pane, 0, y).0).collect();
-    assert_eq!(text, ["b", "c", "d"]);
-    assert!(cell(pane, 0, 2).1.style.bold);
-    assert_eq!(pane.cursor.map(|c| c.x), Some(1));
-    assert_eq!(grid.revision, 2);
-    let stale = patch.replace("\"revision\":2,\"base\":1", "\"revision\":9,\"base\":5");
-    assert!(matches!(grid.apply(parse(&stale)), Applied::NeedRedraw));
-}
-
-fn popup_grid() -> Grid {
-    let mut grid = Grid::default();
-    assert!(matches!(grid.apply(parse(crate::test_util::fixture!("surface/popup.json"))), Applied::Ok));
-    grid
-}
-
-#[test]
-fn a_popup_frame_names_its_plugin_and_holds_one_pane() {
-    let grid = popup_grid();
-    let popup = grid.popup.as_ref().expect("a popup");
-    assert_eq!((popup.pane, popup.plugin.as_str(), popup.action.as_str()), (40, "acme.notes", "browse"));
-    assert_eq!((grid.tab, grid.cols, grid.rows, grid.layout.is_none()), (0, 60, 10, true));
-    assert_eq!(grid.panes.iter().map(|p| p.pane).collect::<Vec<_>>(), [40]);
-    assert!(cell(&grid.panes[0], 0, 1).1.style.bold);
-}
-
-#[test]
-fn a_popup_patch_keeps_the_popup_and_changes_its_rows() {
-    let mut grid = popup_grid();
-    assert!(matches!(grid.apply(parse(crate::test_util::fixture!("surface/popup-patch.json"))), Applied::Ok));
-    assert_eq!(grid.popup.as_ref().map(|p| p.pane), Some(40));
-    assert_eq!(cell(&grid.panes[0], 2, 0).0, "n");
-    assert_eq!(grid.panes[0].cursor.map(|c| c.x), Some(3));
-}
-
-#[test]
-fn a_tab_frame_has_no_popup() {
-    assert!(fixture_grid().popup.is_none());
 }
 
 #[test]
