@@ -1,0 +1,145 @@
+# Manual check
+
+Code: `tools/manual-check.swift`; the window reads the variables below at start (`prefs.rs`, `app.rs`, `self_update.rs`, `theme/current.rs`, `panels/browser/chrome.rs`)
+
+How to check a change in the running window on macOS, the way that worked (#113). The rules are in `AGENTS.md`'s Manual check. Linux in Docker is in `design/linux.md`; running the Windows window needs Windows (`design/windows.md`). Every command here was run as written on 2026-11-10 except the one marked untried (the last section says with what); `<pid>` and `<id>` are yours to fill.
+
+## A server of its own
+
+- **The folder and the environment.** One short folder, and a different one for each check running at the same time. Every later command starts with `. /tmp/cc-check/env`, because an agent's shell keeps no variable from one command to the next. Put the path of the `cornercase` to run on the `CORNERCASE_BIN` line (the next bullet says how to get another release than the installed one).
+
+  ```sh
+  mkdir -p /tmp/cc-check/proj && git -C /tmp/cc-check/proj init -q
+  cat > /tmp/cc-check/env <<'EOF'
+  export CORNERCASE_SOCKET=/tmp/cc-check/server.sock
+  export CORNERCASE_GPUI_SETTINGS=/tmp/cc-check/settings.json
+  export CORNERCASE_GPUI_BROWSER_PROFILE=/tmp/cc-check/browser
+  export CLAUDE_CONFIG_DIR=/tmp/cc-check/claude
+  export CORNERCASE_BIN="$(command -v cornercase)"
+  unset CORNERCASE_PANE CORNERCASE_SERVER CORNERCASE_REMOTE
+  EOF
+  ```
+
+- **Why each line.**
+  - **The socket** isolates the server: cornercase's `config.json`, its session and its flows sit beside it, and so do `server.log` and `server.lock` from the first start. Only the socket isolates a server; `CORNERCASE_ROOT` does not (`design/machines.md`).
+  - **A short path**, since a socket's path must fit (`design/remote.md`).
+  - **`CORNERCASE_GPUI_SETTINGS`** moves this window's settings, themes and saved layout (`design/settings.md`, `design/theme.md`, `design/window.md`), so the user's are never written. In the run, Settings showed `/tmp/cc-check/config.json` and the window wrote `theme.json` and `layout.json` there.
+  - **The throwaway git folder** becomes the server's first and only project: `status` listed that one.
+  - **`CORNERCASE_GPUI_BROWSER_PROFILE`** moves the Browser panel's Chrome profile. It is not under the settings file's folder, and a second window attaches to the Chrome its profile already runs (`design/browser.md`), so without it a Browser panel here would drive the Chrome profile that the user's own cornercase-gpui window runs (not their everyday browser).
+  - **`CLAUDE_CONFIG_DIR`** is the agent's account in an agent's shell; left as it is, anything started on the private server writes into it, as a fake agent once did (`design/machines.md`), and unset, into the user's default Claude folder. A folder of its own is removed with the rest. This replaces the unset in `design/machines.md`'s bench note for #95, which is kept as the record of that check.
+  - **The unsets.** An agent's shell inside cornercase names its own pane and server, which commands must not aim at.
+  - **`CORNERCASE_BIN`** is the binary the window and every command run (`design/connection.md`), so both are one release.
+- **Another release than the installed one, without installing it.** Download it under the checkout's `target/` (ignored by git), check its checksum and unpack it. The archive is per platform (`cornercase-aarch64-apple-darwin` on Apple silicon), and one glob fetches the archive and its `.sha256`. `shasum` prints `OK` and then `WARNING: 1 line is improperly formatted`, from the checksum file's empty last line; it is harmless.
+
+  ```sh
+  v=0.13.32
+  mkdir -p target/cornercase-$v && (cd target/cornercase-$v &&
+    gh release download v$v --repo usecornercase/cornercase-terminal --pattern 'cornercase-aarch64-apple-darwin.tar.gz*' --skip-existing &&
+    shasum -a 256 -c cornercase-aarch64-apple-darwin.tar.gz.sha256 &&
+    tar -xzf cornercase-aarch64-apple-darwin.tar.gz &&
+    ./cornercase-aarch64-apple-darwin/cornercase --version)
+  ```
+
+  `target/cornercase-$v/cornercase-aarch64-apple-darwin/cornercase`, as an absolute path, goes in `CORNERCASE_BIN`. `tools/cornercase-cli.sh` takes the same variable to make `docs/cornercase-cli.txt` from that release.
+- **Build and start.** `$!` must be the window's own pid, so the `cd` is a statement of its own, never `cd … && program &`. The first build compiles every dependency, a few minutes.
+
+  ```sh
+  cargo build --locked
+  swiftc -O -o target/manual-check tools/manual-check.swift
+  repo=$PWD; . /tmp/cc-check/env; cd /tmp/cc-check/proj
+  CORNERCASE_GPUI_OPEN=Settings "$repo/target/debug/cornercase-gpui" > /tmp/cc-check/window.log 2>&1 &
+  echo $! > /tmp/cc-check/window.pid
+  ```
+
+  Then, from the checkout, check that the pid is the window's and that it shows a window (retry for a few seconds): `ps -o comm= -p "$(cat /tmp/cc-check/window.pid)"` names `target/debug/cornercase-gpui`, and `target/manual-check window "$(cat /tmp/cc-check/window.pid)"` prints a line. `. /tmp/cc-check/env; "$CORNERCASE_BIN" status` lists one project, the throwaway folder, and `"$CORNERCASE_BIN" --version` the release you chose.
+- **Driving that server from the shell needs no press.** `"$CORNERCASE_BIN" status` lists the ids; `send --pane <id> --enter "<text>"` types into a pane, and `status` showed the new tab after a ⌘T.
+
+## Looking at the user's server
+
+`AGENTS.md` says when. The window opens on a throwaway tab of that server (the id from `cornercase status`), with its settings and Browser profile in a folder of its own and a pid kept to stop it by. **Untried**, as the end of this section says:
+
+```sh
+repo=$PWD; mkdir -p /tmp/cc-real; cd /tmp/cc-real
+env -u CORNERCASE_SOCKET CORNERCASE_GPUI_SETTINGS=/tmp/cc-real/settings.json CORNERCASE_GPUI_BROWSER_PROFILE=/tmp/cc-real/browser "$repo/target/debug/cornercase-gpui" --tab <id> > /tmp/cc-real/window.log 2>&1 &
+echo $! > /tmp/cc-real/window.pid
+```
+
+Stop it with `kill "$(cat /tmp/cc-real/window.pid)"` and remove the folder.
+
+It costs more than it looks: the window gives the server its colours as it starts (`start-server --theme -`), and upstream applies that to a server that already runs (its design note on colours, under `design/` in the clone). The user's terminals then wear the debug window's theme until their own window gives theirs again: at its next start, a reconnect or a theme change (`design/theme.md`). Copying the user's `theme.json` and `themes/` into `/tmp/cc-real` first gives the same colours.
+
+This was not tried for this file, command included: a team's checks run inside the user's server.
+
+## What needs no press
+
+These reach a screen without a press:
+
+- `CORNERCASE_GPUI_OPEN=<panel>`, the panel's title in any case (`design/window.md`).
+- `--tab`, `--workspace` or `--project` with an id at start.
+- `CORNERCASE_GPUI_FONT_SIZE` and `CORNERCASE_GPUI_OPACITY` (the README's table).
+- `CORNERCASE_GPUI_RELEASES_URL=<url>` makes a debug build ask that fake release, for the update chip and dialog (`design/self-update.md`).
+- A `cornercase` command to that server.
+- A ⌘ key with `key`, below, which posts no mouse event.
+
+## Focus, keys, presses and scrolls
+
+`tools/manual-check.swift` does what no stock command does. It compiles with `swiftc`, and whoever runs it needs Accessibility in System Settings › Privacy & Security (and Screen Recording for captures); it says so when it may not post. In every call `<pid>` is the window's own: never System Events (`AGENTS.md`).
+
+```sh
+target/manual-check window <pid>                  # <window id> <x> <y> <width> <height> <scale>, in points
+target/manual-check front <pid>                   # brings that process to the front
+target/manual-check size <pid> <width> <height>   # the window's size, in points
+target/manual-check key <pid> <key> [cmd] [shift] [alt] [ctrl]
+target/manual-check press <pid> <x> <y> [right]   # a point from the window's top-left, in points
+target/manual-check scroll <pid> <x> <y> <dy> [dx]
+```
+
+- **Exit status.** 0 done; 1 an error (no window, no permission, refused); 2 a wrong word, a point outside the window, or a pid that is not a `target/debug/cornercase-gpui` (the user's own window has the same name, so every command but `window` refuses it); 3 the process is not in front, another window covers the point or the point is under the Dock or the menu bar, with nothing posted. Only the Dock's own full-screen backdrop is ignored when looking for a covering window.
+- **Points and pixels.** A capture's pixels divided by the scale `window` prints are points: the 2560×1600 capture of a 1280×800 window at scale 2 puts a pixel (60, 1532) at the point (30, 766).
+- **Keys** are `a` to `z`, `return`, `escape`, `tab`, `space`, `delete` and the arrows only, posted down and up with `CGEvent.postToPid`: key codes are positions on a US keyboard, so punctuation would type another character on another layout, and the user's is Spanish (`design/browser.md`). ⌘F opened Search (`key <pid> f cmd`) and ⌘T made a tab. **A key needs no front**: with another debug window in front, ⌘F reached the window behind it (grey traffic lights) and opened its Search. Only presses and scrolls need `front`.
+- **Why the HID tap, with dates and versions.** Posted to the pid, mouse events only moved the hover in gpui 0.2.2 on macOS 26 (#102, #103, #104; the notes in `design/issues.md` and `design/remote.md`). Posted to `.cghidEventTap` with the debug window in front they press (#109's captures and #95's bench, `design/machines.md`, 2026-11-10), and pixel scrolls scroll what was sent. Run again on 2026-11-10: a press on the rail's Settings icon opened the sheet and a press on Appearance changed its page; `scroll <pid> 720 400 -300` over the page moved it up, so **a negative `dy` shows later rows**.
+- **Its cost.** A press or a scroll moves the real pointer, needs the window in front (keys the user types meanwhile go to it), and anything covering the point would take it. So the helper checks that the process is in front and that its window is the topmost at the point, posts a move, waits for the hover, checks both again just before the button goes down (exit 3 then, with only the move posted), does one per call and puts the pointer back. The pointer was where it started after each one here.
+- **Refusals seen.** A point outside the window, `press … middle`, `scroll … abc`, an unknown key or command, and a pid that is not a debug window (`front` on a shell, `press` on pid 1) each exit 2 with a sentence and nothing posted. With two debug windows on two private servers and the first in front, `press` and `scroll` on the second exit 3 (not in front) with nothing posted, and `front` on the second then a `press` on it worked.
+- **`size`** worked: 1100×700 and back to 1280×800, and `window` showed it.
+
+## Captures
+
+- `screencapture -x -o -l <window id> <file>.png`, the id from `window`; it needs no focus. At 1280×800 and scale 2 the file is 2560×1600 pixels.
+- **A plain prompt first**, in the pane behind the window: `"$CORNERCASE_BIN" send --pane <id> --enter "clear; exec env PS1='\$ ' /bin/sh"`. Plain sh reads no `.zshrc`, and a prompt theme rewrites a zsh `PS1` on every prompt. The tab then reads `bash` (macOS's sh), the status bar shows only the throwaway folder and the prompt is `$ `.
+- **Crop** in pixels: `sips -c <height> <width> --cropOffset <y> <x> in.png --out out.png`.
+- A user, host or home folder can still be in another pane's prompt, a tab's title or the sidebar. A capture with the glass's blur needs `-R` of the window's rectangle (`design/website.md`).
+
+## Cleaning up
+
+```sh
+. /tmp/cc-check/env; pid=$(cat /tmp/cc-check/window.pid)
+server=$(lsof -t "$CORNERCASE_SOCKET" 2>/dev/null | grep -vx "$pid" | head -1)
+left=$( { echo "$server"; pgrep -P "$pid"; [ -z "$server" ] || pgrep -P "$server"; } | grep . | sort -u | tr '\n' ,)
+kill "$pid" 2>/dev/null
+"$CORNERCASE_BIN" kill-server
+"$CORNERCASE_BIN" status
+[ -z "${left%,}" ] || ps -o pid=,command= -p "${left%,}"
+rm -rf /tmp/cc-check
+```
+
+`left` is the server, its panes' shells and the window's own children. `status` must now fail ("no cornercase server is running"; it never starts one) and `ps` list nothing. If some remain, end them by pid.
+
+## Beyond one window
+
+Not re-run for this file; their notes are in the area files:
+
+- fake agents through `agent_commands` in the private server's settings (`design/flows.md`);
+- a `CORNERCASE_BIN` wrapper that logs or answers commands (`design/flows.md`, `design/pull-requests.md`);
+- two private servers and a fake `ssh` for another machine (`design/machines.md`);
+- Linux under Xvfb (`design/linux.md`).
+
+## A press without the pointer
+
+The issue's "Better still" (#113) asked for a debug-only way to send the window a click. **Worth building**, and filed as #116, not built here. The HID route works but fights whoever uses the Mac, and teams of agents now check while the user works. #102, #103 and #104 left their presses unchecked, and #107 measured with a hook in an uncommitted copy of the code (`design/machines.md`). gpui 0.2.2's `Window::dispatch_event` is public, so a debug-only reader of steps (`CORNERCASE_GPUI_STEPS=<file>`) can play presses and scrolls inside gpui: no pointer, no front, nothing to land on another window, and the same on Linux and Windows. It costs a debug-only module with a parser and its tests, a note and a patch version. Its limit is that the OS never sees those events, so what depends on macOS's own routing (the first click on an inactive window, a drag from the Finder) still goes through the HID route.
+
+## Checked
+
+2026-11-10, macOS 26.6.2 on Apple silicon: cornercase-gpui 0.1.55 as a debug build (gpui 0.2.2), cornercase 0.13.32 from the release's aarch64 archive with its sha256 checked (the Mac's own cornercase untouched).
+
+- Run, in this order: the download and checksum; the folder and environment; the build and the helper; the start with `CORNERCASE_GPUI_OPEN=Settings`; `status` and `--version`; `size`; Escape; `front`; ⌘F and Escape; ⌘T (`status` showed a second tab); the plain prompt, a capture and a crop; two presses; a scroll; the refusals above; the clean-up (`status` failed afterwards and nothing was left). Then, with two debug windows on two private servers: `front` from one to the other, a key to the window behind, a refused press and scroll, and a press on the window in front.
+- Not run: Linux and Windows, the real-server variant, a fake agent or machine, drags, a right press, a press or scroll refused because a window covers the point or because it is under the Dock, and the browser profile variable with a Browser panel open.

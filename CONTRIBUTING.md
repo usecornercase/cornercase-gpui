@@ -17,20 +17,14 @@ The rules for every change are in [AGENTS.md](AGENTS.md), and the design decisio
 
 ## Setup
 
-You need macOS with the Xcode Command Line Tools (`xcode-select --install`), [rustup](https://rustup.rs) (it installs the pinned Rust version by itself) and [cornercase](https://github.com/usecornercase/cornercase-terminal) 0.12.234 or newer where the window finds it (`design/connection.md`; `CORNERCASE_BIN` names one). Clone cornercase-terminal next to this checkout too: its `design/` and `src/` explain the behaviour this window draws. `docs/cornercase-cli.txt` holds the help of every `cornercase` command. On Linux or Windows, the README's Install says what else to install; from a Mac, [`design/linux.md`](design/linux.md) shows how to build and run the Linux window in Docker, and [`design/windows.md`](design/windows.md) how to check the Windows code with `cargo xwin`.
+You need macOS with the Xcode Command Line Tools (`xcode-select --install`), [rustup](https://rustup.rs) (it installs the pinned Rust version by itself) and [cornercase](https://github.com/usecornercase/cornercase-terminal), at least the version [the README's Install](README.md#install) asks for, where the window finds it (`design/connection.md`; `CORNERCASE_BIN` names one). Clone cornercase-terminal beside this checkout too: its `design/` and `src/` explain the behaviour this window draws, and [AGENTS.md](AGENTS.md) says how to reach it from a worktree and to read its `origin/main`. `docs/cornercase-cli.txt` holds the help of every `cornercase` command, from the release on its first line. On Linux or Windows, the README's Install says what else to install; from a Mac, [`design/linux.md`](design/linux.md) shows how to build and run the Linux window in Docker, and [`design/windows.md`](design/windows.md) how to check the Windows code with `cargo xwin`.
 
 ```sh
 cargo run                  # the first build compiles every dependency optimised, a couple of minutes
 cargo run -- --tab 6       # opens on a tab, workspace or project id (`cornercase status`)
 ```
 
-The window drives the same server as your everyday cornercase, and starts it if none runs. Closing, discarding and removing act on that real session, so try them on a throwaway project (`cornercase open /tmp/…`). A server of its own keeps your session and settings out of it entirely:
-
-```sh
-CORNERCASE_SOCKET=/tmp/cc-gpui/server.sock cargo run
-```
-
-Quitting the window runs `cornercase theme --clear`, which also takes back the colours your own cornercase window gave the terminals; stop a window you started for a test with `kill <pid>` instead.
+The window drives the same server as your everyday cornercase, and starts it if none runs, so closing, discarding and removing act on your real session, and it uses the settings, themes and saved layout of your installed window. Stop a window you started with `kill <pid>`, as [AGENTS.md](AGENTS.md)'s Manual check says; [`design/manual-check.md`](design/manual-check.md) shows how to try a change on a server of its own.
 
 ## Checks
 
