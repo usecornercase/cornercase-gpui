@@ -99,3 +99,13 @@ fn a_patch_within_its_pane_keeps_the_rows_it_had() {
     assert_eq!(texts(&grid, 7), ["b", "c", "d"]);
     assert_eq!(grid.revision, 2);
 }
+
+#[test]
+fn a_changed_row_past_the_rows_held_is_dropped_whatever_called_for_it() {
+    let mut grid = held(&[(7, &["a", "b"])]);
+    let tables = Tables::new(vec![Style::default()], Vec::new());
+    let run = |text: &str| vec![WireRun { style: 0, hyperlink: None, cells: vec![text.to_owned()] }];
+    let changed = HashMap::from([("1".to_owned(), run("x")), ("5".to_owned(), run("y"))]);
+    grid.panes[0].replace_rows(changed, &tables);
+    assert_eq!(texts(&grid, 7), ["a", "x"]);
+}
