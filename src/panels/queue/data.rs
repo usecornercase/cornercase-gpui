@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use super::repeat;
 use crate::cli::Version;
-use crate::model::agent_settings::{NO_MODE, default_rests, default_waits};
+use crate::model::agent_settings::Agents;
 use crate::model::{Project, Session};
 use crate::panels::flows::model::FlowInfo;
 use crate::platform::Os;
@@ -376,13 +376,6 @@ pub(crate) fn agent_choices(config: &Value) -> (Vec<String>, String) {
     (choices, default)
 }
 
-pub(crate) fn mode_choices(config: &Value, agent: &str) -> (Vec<String>, Option<String>) {
-    let setting = setting(config, &format!("agents.{agent}.mode"));
-    let choices = setting.map(choice_values).unwrap_or_default();
-    let chosen = setting.and_then(|s| s.get("value")).and_then(Value::as_str).map(str::to_string);
-    (choices, chosen)
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ModeChip {
     pub value: String,
@@ -391,19 +384,20 @@ pub(super) struct ModeChip {
 }
 
 pub(super) fn mode_chips(config: &Value, agent: &str, server: Option<Version>) -> (Vec<ModeChip>, Option<String>) {
-    let (values, chosen) = mode_choices(config, agent);
-    let chips: Vec<ModeChip> = values
-        .into_iter()
-        .map(|value| {
-            let is_chosen = chosen.as_deref() == Some(value.as_str());
-            let rests = value == NO_MODE && chosen.as_deref().is_some_and(|chosen| default_rests(chosen, server));
-            let label = if is_chosen { format!("{value} ✓") } else { value.clone() };
-            ModeChip { value, label, rests }
+    let agents = Agents::from_config(config);
+    let Some(modes) = agents.modes_of(agent).cloned().map(|modes| modes.on_server(server)) else {
+        return (Vec::new(), None);
+    };
+    let chips = modes
+        .choices
+        .iter()
+        .map(|choice| {
+            let label =
+                if choice.value == modes.chosen { format!("{} ✓", choice.value) } else { choice.value.clone() };
+            ModeChip { value: choice.value.clone(), label, rests: modes.rests(&choice.value) }
         })
         .collect();
-    let line =
-        chosen.filter(|_| chips.iter().any(|chip| chip.rests)).map(|chosen| default_waits(&chosen, None, server));
-    (chips, line)
+    (chips, modes.waiting(None))
 }
 
 fn setting<'a>(config: &'a Value, key: &str) -> Option<&'a Value> {

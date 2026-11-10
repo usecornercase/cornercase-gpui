@@ -117,7 +117,7 @@ impl Found {
     }
 }
 
-pub(crate) const MINIMUM: Version = Version { major: 0, minor: 13, patch: 19 };
+pub(crate) const MINIMUM: Version = Version::new(0, 13, 19);
 
 impl Version {
     pub(crate) const fn new(major: u64, minor: u64, patch: u64) -> Self {

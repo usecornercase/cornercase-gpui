@@ -2,8 +2,8 @@ use serde_json::json;
 
 use super::data::{
     Body, Click, Entry, Group, Place, Row, Section, State, agent_choices, clear_goes_in, entries, flow_names,
-    folder_name, is_repository, live_pane, missed, missed_run, mode_chips, mode_choices, notice, place_label,
-    remove_tip, repository_for, sections, sentence, status_label,
+    folder_name, is_repository, live_pane, missed, missed_run, mode_chips, notice, place_label, remove_tip,
+    repository_for, sections, sentence, status_label,
 };
 use super::draft::{Draft, Target, When, cleanup_flag};
 use super::form::{Times, starting_agent};
@@ -613,8 +613,6 @@ fn reads_agents_and_modes_from_the_settings() {
         { "key": "agents.claude.mode", "value": "plan", "choices": [{ "value": "default" }, { "value": "plan" }] },
     ]});
     assert_eq!(agent_choices(&config), (vec!["auto".to_string(), "claude".to_string()], "claude".to_string()));
-    assert_eq!(mode_choices(&config, "claude"), (vec!["default".into(), "plan".into()], Some("plan".into())));
-    assert_eq!(mode_choices(&config, "codex"), (vec![], None));
     assert_eq!(agent_choices(&json!({})), (vec![], "auto".to_string()));
 }
 
@@ -698,14 +696,21 @@ fn default_chosen_in_settings_never_rests() {
     assert_eq!(line, None);
 }
 
+fn sent_by_the_form(edit: Option<u64>, mode: Option<&str>) -> Vec<String> {
+    let draft = Draft { edit, agent: Some("claude".into()), mode: mode.map(str::to_string), ..draft() };
+    draft.args().expect("the arguments")
+}
+
 #[test]
-fn the_form_sends_default_as_its_word_and_nothing_when_left_as_in_settings() {
-    let sent = |edit, mode: Option<&str>| {
-        let draft = Draft { edit, agent: Some("claude".into()), mode: mode.map(str::to_string), ..draft() };
-        draft.args().expect("the arguments")
-    };
+fn the_form_sends_default_as_its_word() {
     for edit in [None, Some(4)] {
-        assert!(sent(edit, Some("default")).windows(2).any(|pair| pair == ["--mode", "default"]));
-        assert!(!sent(edit, None).iter().any(|arg| arg == "--mode"));
+        assert!(sent_by_the_form(edit, Some("default")).windows(2).any(|pair| pair == ["--mode", "default"]));
+    }
+}
+
+#[test]
+fn a_form_left_on_as_in_settings_sends_no_mode() {
+    for edit in [None, Some(4)] {
+        assert!(!sent_by_the_form(edit, None).iter().any(|arg| arg == "--mode"));
     }
 }

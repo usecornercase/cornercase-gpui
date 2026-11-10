@@ -134,7 +134,7 @@ fn the_line_under_the_mode_says_which_release_offers_default_and_which_runs() {
     );
     assert_eq!(
         default_waits("plan", Some("vps"), release("0.13.21")),
-        "default needs cornercase 0.13.28 or newer on vps while its settings choose plan (vps runs 0.13.21)"
+        "default needs cornercase 0.13.28 or newer on vps while its settings choose plan (vps's server runs 0.13.21)"
     );
     assert_eq!(
         default_waits("plan", Some("vps"), None),

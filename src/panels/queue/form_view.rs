@@ -11,7 +11,6 @@ use super::draft::When;
 use super::form::{Form, Spot};
 use super::repeat::{self, DAYS, UNITS};
 use crate::model::Session;
-use crate::model::machines::run_on::server_release;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, Tone, boxed, glass};
@@ -328,8 +327,7 @@ fn modes(form: &Form, config: &Value, cx: &mut Context<QueuePanel>) -> Option<Di
     if agent == "auto" {
         return None;
     }
-    let store = Store::get(cx).read(cx);
-    let server = server_release(None, store.session.as_ref(), &store.machines);
+    let server = Store::get(cx).read(cx).session.as_ref().and_then(Session::release);
     let (offered, line) = mode_chips(config, &agent, server);
     if offered.is_empty() {
         return None;

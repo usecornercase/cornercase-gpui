@@ -87,13 +87,13 @@ impl Agents {
     }
 }
 
-pub(crate) fn default_rests(chosen: &str, server: Option<Version>) -> bool {
+fn default_rests(chosen: &str, server: Option<Version>) -> bool {
     chosen != NO_MODE && server.is_none_or(|server| server < NO_MODE_SINCE)
 }
 
-pub(crate) fn default_waits(chosen: &str, machine: Option<&str>, server: Option<Version>) -> String {
+fn default_waits(chosen: &str, machine: Option<&str>, server: Option<Version>) -> String {
     let (place, runs) = match machine {
-        Some(machine) => (format!(" on {machine} while its settings"), format!("{machine} runs")),
+        Some(machine) => (format!(" on {machine} while its settings"), format!("{machine}'s server runs")),
         None => (" while settings".to_string(), "the server runs".to_string()),
     };
     let release = server.map(|server| format!(" ({runs} {server})")).unwrap_or_default();

@@ -20,7 +20,7 @@ const AWAITED_FOR: Duration = Duration::from_secs(30);
 
 pub(crate) fn server_release(machine: Option<&str>, here: Option<&Session>, list: &[Machine]) -> Option<Version> {
     let text = match machine {
-        None => here?.version.as_str(),
+        None => return here?.release(),
         Some(name) => list.iter().find(|listed| listed.name == name)?.server_version.as_deref()?,
     };
     Version::parse(text)
