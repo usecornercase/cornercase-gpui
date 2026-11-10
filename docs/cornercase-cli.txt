@@ -1,4 +1,4 @@
-cornercase 0.13.32: the help of every command and subcommand, in the order of `cornercase --help`.
+cornercase 0.13.33: the help of every command and subcommand, in the order of `cornercase --help`.
 Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
 
 ================================================================ cornercase status
@@ -1400,20 +1400,21 @@ List, start, follow, share and manage flows: teams of agents in a worktree, run 
 Usage: cornercase flow [OPTIONS] <COMMAND>
 
 Commands:
-  list      List the flows, built in, yours and the project's, with their agents and their problems
-  run       Start a flow in a worktree, and print its workspace's id and each role's pane id
-  export    Print a flow as text to share it: a file to send to a teammate, or to commit
-  import    Add a flow someone shared, from a file or from standard input with -
-  save      Save a flow given as JSON, as `flow list --json` gives it, checked as Settings › Flows does
-  runs      Print where each running flow stands: its stage, its loops, each role's pane and status
-  messages  Print what the orchestrator and the roles of a run sent each other, and follow new messages
-  files     List the files of a run's folder, newest first, also after the run ended
-  delete    Delete a flow of yours or the project's, by name or by its file
-  hide      Delete a built-in flow, as Settings › Flows does; `flow restore` brings it back
-  restore   Bring a deleted built-in flow back, and delete your version of it
-  default   Choose the flow the start dialog opens on, as set default does in Settings › Flows
-  order     Put the flows in your order, as dragging them in Settings › Flows does
-  help      Print this message or the help of the given subcommand(s)
+  list               List the flows, built in, yours and the project's, with their agents and their problems
+  run                Start a flow in a worktree, and print its workspace's id and each role's pane id
+  export             Print a flow as text to share it: a file to send to a teammate, or to commit
+  import             Add a flow someone shared, from a file or from standard input with -
+  save               Save a flow given as JSON, as `flow list --json` gives it, checked as Settings › Flows does
+  runs               Print where each running flow stands: its stage, its loops, each role's pane and status
+  messages           Print what the orchestrator and the roles of a run sent each other, and follow new messages
+  files              List the files of a run's folder, newest first, also after the run ended
+  delete             Delete a flow of yours or the project's, by name or by its file
+  hide               Delete a built-in flow, as Settings › Flows does; `flow restore` brings it back
+  restore            Bring a deleted built-in flow back, and delete your version of it
+  default            Choose the flow the start dialog opens on, as set default does in Settings › Flows
+  close-when-merged  Close a run's agents once its pull request merges, as flow run --close-when-merged does, or keep them open with --off
+  order              Put the flows in your order, as dragging them in Settings › Flows does
+  help               Print this message or the help of the given subcommand(s)
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
@@ -1474,6 +1475,7 @@ Options:
       --profile <NAME>            Start it with the accounts of this profile; an empty name is each agent's own login [default: the default accounts]
       --account <AGENT=ACCOUNT>   Start that agent with this account, over the default ones; AGENT= is its own login. Give it once per agent
       --machine <NAME>            Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers
+      --close-when-merged         Close the team's agents, as agents close does, once the run's pull request has merged and none of them has worked for 3 minutes; the workspace's ▶ or agents reopen brings them back
       --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
@@ -1504,6 +1506,12 @@ a built-in flow of its name, and a project's flow never stands in for another of
 command says so on stderr when it happens. A built-in flow deleted in Settings › Flows is refused,
 and keeps its name: a project's flow named like it does not run either.
 
+With --close-when-merged the run's agents close, as `agents close` does, once the run's pull request has merged
+and nothing in the workspace has worked, waited, started or been typed into for 3 minutes. Nothing is removed: the workspace's ▶ or
+`agents reopen` brings each agent back in its own conversation (opencode and custom agents start over), and a reopen
+keeps them open. A flow that leaves the commits has no pull request, so it is refused. It needs a server that knows the
+`flow-close-when-merged` feature; `flow close-when-merged` turns it on or off for a run that is already going.
+
 With --machine NAME the flow runs on that machine of `cornercase machines`, by its server: the flow,
 its agents and accounts are the machine's, --project and the ids printed are that machine's, as
 `status --json` lists them under machines, and so is the run's folder. --focus shows the run in this
@@ -1515,6 +1523,7 @@ Examples:
   cornercase flow run 'Bug, test first' --prompt-file bug.md --worktree fix-crash --json
   cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
   cornercase flow run Quick --issue '#482' --project 2 --machine vps
+  cornercase flow run 'Full issue' --issue '#482' --close-when-merged
 
 ================================================================ cornercase flow export
 Print a flow as text to share it: a file to send to a teammate, or to commit
@@ -1688,6 +1697,8 @@ how a run ends. Stages count from 1 here; --json counts them from 0, as the diag
 server stops; each line has a revision that only goes up while the server runs. The answer of a run that
 has no message yet or no step has them null.
 
+A run that closes its agents once its pull request merges says so (close_when_merged with --json).
+
 Examples:
   cornercase flow runs
   cornercase flow runs --follow
@@ -1853,6 +1864,31 @@ needs the name: the default only picks what the start dialog selects.
 Examples:
   cornercase flow default Quick
   cornercase flow default --clear
+
+================================================================ cornercase flow close-when-merged
+Close a run's agents once its pull request merges, as flow run --close-when-merged does, or keep them open with --off
+
+Usage: cornercase flow close-when-merged [OPTIONS]
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
+      --off                       Keep the run's agents open after its pull request merges
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+It turns on, or with --off turns off, closing a run's agents once its pull request has merged and nothing in
+its workspace has worked, waited, started or been typed into for 3 minutes, as `flow run --close-when-merged` does from the start.
+The agents are kept, as `agents close` keeps them: the workspace's ▶ or `agents reopen` brings them back. A flow
+that leaves the commits has no pull request, so it cannot be turned on; --off is always accepted. Without --workspace
+or --worktree it is the workspace this runs in, else the shown one. It sets the choice, never toggles it, so
+saying it twice changes nothing the second time.
+
+Examples:
+  cornercase flow close-when-merged --worktree fix-login
+  cornercase flow close-when-merged --worktree fix-login --off
 
 ================================================================ cornercase flow order
 Put the flows in your order, as dragging them in Settings › Flows does

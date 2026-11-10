@@ -89,9 +89,9 @@ impl StartFlow {
             }
         };
         self.error = None;
-        let starting = Starting::Flow { name: plan.flow.clone() };
+        let starting = Starting::Flow { name: plan.flow.clone(), close_when_merged: plan.close_when_merged };
         let command = plan.args_there(&spot);
-        let start = StartThere { spot, starting, command, target: cli::target(), select: self.focus };
+        let start = StartThere { spot, starting, command, target: cli::target(), select: self.ticks.focus };
         Store::get(cx).update(cx, |s, cx| s.start_there(start, cx));
     }
 

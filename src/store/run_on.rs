@@ -114,6 +114,9 @@ impl Store {
                     self.toast(note, ToastKind::Info, cx);
                 }
                 self.toast(start.starting.done(machine, &answer), ToastKind::Done, cx);
+                if let Some(text) = start.starting.left_open(machine, &answer) {
+                    self.toast(text, ToastKind::Error, cx);
+                }
                 if start.select {
                     self.awaited = Awaited::answered(&start.spot, &answer, Instant::now());
                     self.follow_awaited(cx);

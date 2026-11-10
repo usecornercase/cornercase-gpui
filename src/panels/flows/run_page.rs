@@ -9,6 +9,7 @@ use super::cards::{avatar, conductor, status_word, with_status};
 use super::diagram::{Plan, role_colour};
 use super::flow_page::block;
 use super::hero::{facts, hero, stages_bar, task, title};
+use super::merged_view;
 use super::model::{Member, RoleSpec, Run, plural};
 use super::widgets::{panel_box, pill, show_pane};
 use crate::store::{Store, args};
@@ -48,6 +49,7 @@ fn run_hero(run: &Run, cx: &Context<FlowsPanel>) -> Div {
                 .child(div().flex_none().text_size(px(11.)).text_color(colours::muted()).child(run.summary())),
         )
         .child(run_buttons(run, cx))
+        .children(merged_view::run_switch(run, cx))
 }
 
 fn run_status(run: &Run) -> (&'static str, Rgba) {

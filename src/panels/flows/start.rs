@@ -14,10 +14,13 @@ use self::project::{ProjectChoice, ProjectMenu};
 use super::FlowsPanel;
 use super::actions::announce;
 use super::dialog::{Submit, boxed, buttons, field_in, filled_field, prompt_field};
+use super::merged;
+use super::merged_view;
 use super::model::{self, FlowInfo, Listing, Started, project_args};
 use super::widgets::{error_text, flow_summary, glyph};
 use crate::cli;
 use crate::dialogs::{self, Gate, RunOn, accounts_of, dialog_starts};
+use crate::model::Session;
 use crate::store::{self, Store, args};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::account_picker::AccountPickers;
@@ -46,6 +49,12 @@ struct Fields {
     workspace: Entity<TextField>,
 }
 
+#[derive(Clone, Copy)]
+struct Ticks {
+    focus: bool,
+    close_when_merged: bool,
+}
+
 pub(super) struct StartFlow {
     issue: Option<IssueTask>,
     projects: Vec<(u64, ProjectChoice)>,
@@ -57,7 +66,7 @@ pub(super) struct StartFlow {
     loading: bool,
     fields: Fields,
     accounts: AccountPickers,
-    focus: bool,
+    ticks: Ticks,
     busy: bool,
     error: Option<String>,
     issue_read: IssueRead,
@@ -150,7 +159,7 @@ impl StartFlow {
             keep_flow: None,
             loading: false,
             accounts: AccountPickers::default(),
-            focus: true,
+            ticks: Ticks { focus: true, close_when_merged: false },
             busy: false,
             error: None,
             issue_read: IssueRead::Done,
@@ -254,7 +263,8 @@ impl StartFlow {
             issue: text(&fields.issue),
             branch: text(&fields.branch),
             workspace: text(&fields.workspace),
-            focus: self.focus,
+            focus: self.ticks.focus,
+            close_when_merged: self.ticks.close_when_merged && self.merged_rests(cx).is_none(),
             accounts: self.accounts.picks(&self.team(), cx),
         }
     }
@@ -286,7 +296,7 @@ impl StartFlow {
         self.busy = true;
         self.error = None;
         cx.notify();
-        let focus = self.focus;
+        let focus = self.ticks.focus;
         store::run(cx, command, move |this, result, cx| this.started(&name, focus, result, cx));
     }
 
@@ -378,12 +388,32 @@ impl StartFlow {
     }
 
     fn focus_checkbox(&self, cx: &Context<Self>) -> Stateful<Div> {
-        ui::checkbox("start-focus", self.focus, "Show it in the window").on_click(cx.listener(
+        ui::checkbox("start-focus", self.ticks.focus, "Show it in the window").on_click(cx.listener(
             |this, _: &ClickEvent, _, cx| {
-                this.focus = !this.focus;
+                this.ticks.focus = !this.ticks.focus;
                 cx.notify();
             },
         ))
+    }
+
+    fn merged_rests(&self, cx: &App) -> Option<String> {
+        let here = Store::get(cx).read(cx).session.as_ref().and_then(Session::release);
+        let run_on = self.run_on.read(cx);
+        let machine = run_on.machine().map(|name| (name, run_on.release(cx)));
+        merged::rests(self.selected(), &merged::Releases { here, machine })
+    }
+
+    fn merged_box(&self, cx: &Context<Self>) -> Div {
+        if let Some(line) = self.merged_rests(cx) {
+            return merged_view::with_line(ui::resting_checkbox(self.ticks.close_when_merged, merged::LABEL), line);
+        }
+        let the_box = ui::checkbox("start-merged", self.ticks.close_when_merged, merged::LABEL).on_click(cx.listener(
+            |this, _: &ClickEvent, _, cx| {
+                this.ticks.close_when_merged = !this.ticks.close_when_merged;
+                cx.notify();
+            },
+        ));
+        merged_view::with_line(the_box, merged::how(self.run_on.read(cx).machine()))
     }
 
     fn footnote(&self, cx: &App) -> String {
@@ -410,13 +440,18 @@ impl StartFlow {
             .children(self.agent_note(cx))
             .children(accounts_of(&self.run_on, self.accounts.fields(&self.team(), cx), cx))
             .child(self.focus_checkbox(cx))
+            .child(self.merged_box(cx))
             .child(ui::dim(self.footnote(cx)))
             .children(self.error.clone().map(error_text))
     }
 }
 
 fn finish(name: &str, focus: bool, started: &Started, cx: &mut App) {
-    announce(started.note.as_deref(), format!("Started {name} on {}", started.branch), cx);
+    announce(
+        started.note.as_deref(),
+        format!("Started {name} on {}{}", started.branch, merged::closes_clause(started.close_when_merged)),
+        cx,
+    );
     let (workspace, (kind, id)) = (started.workspace, started.place());
     Store::get(cx).update(cx, |s, cx| {
         s.close_dialog(cx);

@@ -301,3 +301,23 @@ fn the_note_and_hints_name_whose_prompt_template_makes_the_task() {
         ("The issue's, through vps's prompt template".to_string(), "The issue's branch on vps".to_string())
     );
 }
+
+#[test]
+fn a_start_that_closes_its_agents_once_merged_sends_the_flag() {
+    let typed = Typed { close_when_merged: true, ..task("Fix it", "", "") };
+    let plan = plan("Quick", Some(3), None, &typed).expect("plans");
+    assert!(plan.args().contains(&"--close-when-merged".to_string()));
+}
+
+#[test]
+fn a_start_left_open_sends_no_close_when_merged_flag() {
+    let plan = plan("Quick", Some(3), None, &task("Fix it", "", "")).expect("plans");
+    assert!(!plan.args().iter().any(|a| a == "--close-when-merged"));
+}
+
+#[test]
+fn a_start_on_a_machine_sends_the_close_when_merged_flag_too() {
+    let typed = Typed { close_when_merged: true, ..task("Fix it", "", "") };
+    let plan = plan("Quick", Some(3), None, &typed).expect("plans");
+    assert!(plan.args_there(&shop_on_vps()).contains(&"--close-when-merged".to_string()));
+}

@@ -229,7 +229,8 @@ fn an_agent_is_still_starting_when_its_tab_answers() {
 
 #[test]
 fn a_flow_started_there_says_where_to_watch_it() {
-    let done = Starting::Flow { name: "Quick".into() }.done("vps", &answer(fixture!("machines/there_flow.json")));
+    let done = Starting::Flow { name: "Quick".into(), close_when_merged: false }
+        .done("vps", &answer(fixture!("machines/there_flow.json")));
     assert_eq!(
         done,
         "Started Quick on vps, on probe-flow. Follow it in its tab: the run page reads this computer's runs"
@@ -320,4 +321,21 @@ fn a_start_on_a_machine_runs_on_its_servers_release_not_the_one_installed_there(
     assert_eq!(release("lab"), Version::parse("0.13.21"));
     assert_eq!(release("homelab"), None);
     assert_eq!(release("elsewhere"), None);
+}
+
+#[test]
+fn a_flow_started_there_that_took_the_choice_says_so() {
+    let took = answer(r#"{"branch":"probe-flow","workspace":17,"close_when_merged":true}"#);
+    let done = Starting::Flow { name: "Quick".into(), close_when_merged: true }.done("vps", &took);
+    assert!(done.contains("on probe-flow, and its agents close once the pull request merges. Follow it"));
+}
+
+#[test]
+fn a_flow_started_there_that_dropped_the_choice_says_its_agents_stay_open() {
+    let dropped = answer(fixture!("machines/there_flow.json"));
+    let asked = Starting::Flow { name: "Quick".into(), close_when_merged: true };
+    let text = asked.left_open("vps", &dropped).expect("a warning");
+    assert!(text.contains("vps") && text.contains("0.13.33"));
+    let not_asked = Starting::Flow { name: "Quick".into(), close_when_merged: false };
+    assert_eq!(not_asked.left_open("vps", &dropped), None);
 }

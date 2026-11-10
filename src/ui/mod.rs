@@ -393,6 +393,17 @@ pub(crate) fn checkbox(id: impl Into<ElementId>, checked: bool, label: impl Into
     div().id(id).flex().items_center().gap(px(8.)).cursor_pointer().child(tick_box(checked)).child(label.into())
 }
 
+pub(crate) fn resting_checkbox(checked: bool, label: impl Into<SharedString>) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(8.))
+        .cursor_default()
+        .text_color(colours::faint())
+        .child(tick_box(checked).opacity(0.4))
+        .child(label.into())
+}
+
 pub(crate) fn segments(items: Vec<AnyElement>) -> Div {
     div()
         .flex()

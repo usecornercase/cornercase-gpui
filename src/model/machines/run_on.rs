@@ -6,6 +6,7 @@ use super::seen::{MachinePlace, MachineSeen, Spot, ThereId};
 use super::{Machine, MachineIcon};
 use crate::cli::Version;
 use crate::model::{Project, Session};
+use crate::panels::flows::merged::{CLOSE_WHEN_MERGED_SINCE, closes_clause};
 
 pub(crate) mod checks;
 pub(crate) mod clone;
@@ -137,7 +138,7 @@ impl Looking<'_> {
 pub(crate) enum Starting {
     Agent { agent: String, issue: String },
     Workspace { name: String },
-    Flow { name: String },
+    Flow { name: String, close_when_merged: bool },
     LoginTab { agent: String },
 }
 
@@ -146,7 +147,7 @@ impl Starting {
         match self {
             Self::Agent { agent, issue } => format!("Starting {agent} on {issue} on {machine}…"),
             Self::Workspace { name } => format!("Creating {name} on {machine}…"),
-            Self::Flow { name } => format!("Starting {name} on {machine}…"),
+            Self::Flow { name, .. } => format!("Starting {name} on {machine}…"),
             Self::LoginTab { agent } => format!("Opening a tab for {agent} on {machine}…"),
         }
     }
@@ -155,12 +156,22 @@ impl Starting {
         match self {
             Self::Agent { agent, issue } => format!("{agent} is starting on {issue} on {machine}"),
             Self::Workspace { name } => format!("Created {name} on {machine}"),
-            Self::Flow { name } => format!(
-                "Started {name} on {machine}{}. Follow it in its tab: the run page reads this computer's runs",
-                answer.branch.as_deref().map(|branch| format!(", on {branch}")).unwrap_or_default()
+            Self::Flow { name, .. } => format!(
+                "Started {name} on {machine}{}{}. Follow it in its tab: the run page reads this computer's runs",
+                answer.branch.as_deref().map(|branch| format!(", on {branch}")).unwrap_or_default(),
+                closes_clause(answer.close_when_merged)
             ),
             Self::LoginTab { agent } => format!("Opened a tab for {agent} on {machine}"),
         }
+    }
+
+    pub(crate) fn left_open(&self, machine: &str, answer: &Answer) -> Option<String> {
+        let Self::Flow { name, close_when_merged: true } = self else { return None };
+        (!answer.close_when_merged).then(|| {
+            format!(
+                "{name} on {machine} keeps its agents open after the merge: its cornercase did not take the choice, which needs {CLOSE_WHEN_MERGED_SINCE} or newer there"
+            )
+        })
     }
 }
 
@@ -172,6 +183,7 @@ pub(crate) struct Answer {
     pub branch: Option<String>,
     pub note: Option<String>,
     pub members: Vec<AnswerMember>,
+    pub close_when_merged: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]

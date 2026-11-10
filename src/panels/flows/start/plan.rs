@@ -109,6 +109,7 @@ pub(super) struct Typed {
     pub branch: String,
     pub workspace: String,
     pub focus: bool,
+    pub close_when_merged: bool,
     pub accounts: Vec<AccountPick>,
 }
 
@@ -126,6 +127,7 @@ pub(super) struct Plan {
     pub branch: Option<String>,
     pub workspace_name: Option<String>,
     pub focus: bool,
+    pub close_when_merged: bool,
     pub accounts: Vec<AccountPick>,
 }
 
@@ -135,8 +137,8 @@ pub(super) fn plan(flow: &str, project: Option<u64>, issue: Option<&IssueTask>, 
         Some(issue) => on_issue(issue, typed),
         None => (typed_task(typed)?, filled(&typed.branch), None),
     };
-    let (focus, accounts) = (typed.focus, typed.accounts.clone());
-    Ok(Plan { flow: flow.to_string(), project, task, branch, workspace_name, focus, accounts })
+    let (focus, close_when_merged, accounts) = (typed.focus, typed.close_when_merged, typed.accounts.clone());
+    Ok(Plan { flow: flow.to_string(), project, task, branch, workspace_name, focus, close_when_merged, accounts })
 }
 
 fn on_issue(issue: &IssueTask, typed: &Typed) -> (Task, Option<String>, Option<String>) {
@@ -200,6 +202,9 @@ impl Plan {
         command.extend(flag("--worktree", self.branch.as_ref()));
         command.extend(flag("--workspace-name", self.workspace_name.as_ref()));
         command.extend(account_args(&self.accounts));
+        if self.close_when_merged {
+            command.push("--close-when-merged".into());
+        }
         command
     }
 }
