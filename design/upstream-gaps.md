@@ -16,6 +16,7 @@ Code: every panel; `tools/cornercase-cli.sh` and what it makes, `docs/cornercase
   - #726 landed in 0.13.28 (2026-11-10): `default` is offered where the server that starts the agent runs it, and rests with a line on older ones (`design/issues.md`).
   - #723 and #729 landed in 0.13.30 (2026-11-10, upstream PR #732; 0.13.30 was tagged without a release, 0.13.31 is the first): `mark`, `move-pane`, `account restart` and `context` take `--boot`, and a stale one answers status 4. The window sends it from cornercase 0.13.30 on this computer, and rests Move pane, the mark and Switch account with a line on older ones; the minimum stays 0.13.19 (`design/machines.md`).
   - #709 landed in 0.13.32 (upstream #737): `collapse` and `expand` take `--boot`. A machine's fold sends it from cornercase 0.13.32 on this computer (#110), after the same snapshot checks, and folds without it on older ones; the minimum stays 0.13.19 (`design/machines.md`).
+  - #116 (presses, drags and scrolls from a file) is parked on gpui, not on cornercase: gpui 0.2.2 cannot take events from our code; what it needs and the design to build then are in `design/manual-check.md` ("A press without the pointer").
 
 ## What the window cannot do because cornercase lacks it
 
