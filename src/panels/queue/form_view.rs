@@ -6,11 +6,12 @@ use gpui::{
 use serde_json::Value;
 
 use super::QueuePanel;
-use super::data::{ROUTINES_NOTE, SOURCES, agent_choices, is_repository, mode_choices, sentence};
+use super::data::{ModeChip, ROUTINES_NOTE, SOURCES, agent_choices, is_repository, mode_chips, sentence};
 use super::draft::When;
 use super::form::{Form, Spot};
 use super::repeat::{self, DAYS, UNITS};
 use crate::model::Session;
+use crate::model::machines::run_on::server_release;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, Tone, boxed, glass};
@@ -327,18 +328,28 @@ fn modes(form: &Form, config: &Value, cx: &mut Context<QueuePanel>) -> Option<Di
     if agent == "auto" {
         return None;
     }
-    let (modes, chosen) = mode_choices(config, &agent);
-    if modes.is_empty() {
+    let store = Store::get(cx).read(cx);
+    let server = server_release(None, store.session.as_ref(), &store.machines);
+    let (offered, line) = mode_chips(config, &agent, server);
+    if offered.is_empty() {
         return None;
     }
-    let mut items = vec![chip("q-mode-default", "as in settings", form.mode.is_none(), cx, |f| f.mode = None)];
-    for mode in modes {
-        let label = if Some(&mode) == chosen.as_ref() { format!("{mode} ✓") } else { mode.clone() };
-        let id = SharedString::from(format!("q-mode-{mode}"));
-        let selected = form.mode.as_ref() == Some(&mode);
-        items.push(chip(id, label, selected, cx, move |f| f.mode = Some(mode.clone())));
+    let mut items = vec![chip("q-mode-settings", "as in settings", form.mode.is_none(), cx, |f| f.mode = None)];
+    items.extend(offered.into_iter().enumerate().map(|(at, offer)| mode_chip(form, at, offer, cx)));
+    Some(ui::field("Mode", stack().child(chips(items)).children(line.map(ui::dim))))
+}
+
+fn mode_chip(form: &Form, at: usize, offer: ModeChip, cx: &mut Context<QueuePanel>) -> AnyElement {
+    let selected = form.mode.as_deref() == Some(offer.value.as_str());
+    if offer.rests {
+        let edge = if selected { colours::accent() } else { colours::border() };
+        return ui::resting_segment(("q-mode", at), offer.label, selected)
+            .border_1()
+            .border_color(edge)
+            .into_any_element();
     }
-    Some(ui::field("Mode", chips(items)))
+    let value = offer.value;
+    chip(("q-mode", at), offer.label, selected, cx, move |f| f.mode = Some(value.clone()))
 }
 
 fn account_row(form: &Form, cx: &App) -> Option<Div> {

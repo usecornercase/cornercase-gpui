@@ -3,10 +3,15 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use super::{
-    Binary, Inputs, MINIMUM, Missing, Origin, Probe, Problem, closed, installer_dirs, locate, merged, parse_version,
-    shell_args, shell_path, unix_dirs, verdict,
+    Binary, Inputs, MINIMUM, Missing, Origin, Probe, Problem, Version, closed, installer_dirs, locate, merged,
+    parse_version, shell_args, shell_path, unix_dirs, verdict,
 };
 use crate::platform::Os;
+
+#[test]
+fn a_version_made_by_hand_is_the_one_parsed() {
+    assert_eq!(Version::new(0, 13, 28), Version::parse("0.13.28").expect("a version"));
+}
 
 const MARK: &str = "cornercase-gpui-path-mark";
 

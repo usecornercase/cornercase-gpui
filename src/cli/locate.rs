@@ -120,6 +120,10 @@ impl Found {
 pub(crate) const MINIMUM: Version = Version { major: 0, minor: 13, patch: 19 };
 
 impl Version {
+    pub(crate) const fn new(major: u64, minor: u64, patch: u64) -> Self {
+        Self { major, minor, patch }
+    }
+
     pub(crate) fn parse(text: &str) -> Option<Self> {
         let numbers = text.trim().split(['-', '+']).next()?;
         let mut parts = numbers.trim().split('.').map(|part| part.parse::<u64>().ok());

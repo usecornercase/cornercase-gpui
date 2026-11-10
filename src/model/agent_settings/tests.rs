@@ -81,23 +81,72 @@ fn a_mode_goes_only_when_picked_and_unlike_the_chosen_one() {
     assert_eq!(claude.sent(Some("auto")).as_deref(), Some("auto"));
 }
 
-#[test]
-fn default_rests_and_is_never_sent_while_another_mode_is_chosen() {
-    let claude = claude();
-    assert!(claude.rests("default"));
-    assert!(!claude.rests("auto"));
-    assert!(claude.waits());
-    assert_eq!(claude.sent(Some("default")), None);
+fn release(text: &str) -> Option<Version> {
+    Version::parse(text)
 }
 
 #[test]
-fn default_is_the_chosen_chip_and_sends_nothing_when_settings_choose_it() {
-    let codex = codex();
-    assert!(!codex.rests("default"));
-    assert!(!codex.waits());
-    assert_eq!(codex.shown(None), "default");
-    assert_eq!(codex.sent(Some("default")), None);
-    assert_eq!(codex.sent(Some("read only")).as_deref(), Some("read only"));
+fn default_is_a_mode_like_the_others_on_a_server_that_starts_it() {
+    let claude = claude().on_server(release("0.13.28"));
+    assert!(!claude.rests("default"));
+    assert!(!claude.waits());
+    assert_eq!(claude.waiting(None), None);
+    assert_eq!(claude.shown(Some("default")), "default");
+    assert_eq!(claude.sent(Some("default")).as_deref(), Some("default"));
+}
+
+#[test]
+fn a_later_release_starts_default_too() {
+    for text in ["0.14.0", "1.0.0"] {
+        assert!(!claude().on_server(release(text)).rests("default"), "{text}");
+    }
+}
+
+#[test]
+fn default_rests_on_a_server_before_0_13_28_or_of_no_known_release() {
+    for server in [release("0.13.27"), release("0.13.21"), None] {
+        let claude = claude().on_server(server);
+        assert!(claude.rests("default"), "{server:?}");
+        assert!(!claude.rests("auto"));
+        assert!(claude.waits());
+        assert_eq!(claude.sent(Some("default")), None);
+        assert_eq!(claude.shown(Some("default")), "plan");
+    }
+}
+
+#[test]
+fn default_chosen_in_settings_is_lit_and_sends_nothing_on_any_release() {
+    for text in ["0.13.21", "0.13.28"] {
+        let codex = codex().on_server(release(text));
+        assert!(!codex.rests("default"), "{text}");
+        assert!(!codex.waits());
+        assert_eq!(codex.shown(None), "default");
+        assert_eq!(codex.sent(Some("default")), None);
+    }
+    assert_eq!(codex().sent(Some("read only")).as_deref(), Some("read only"));
+}
+
+#[test]
+fn the_line_under_the_mode_says_which_release_offers_default_and_which_runs() {
+    assert_eq!(
+        default_waits("plan", None, release("0.13.21")),
+        "default needs cornercase 0.13.28 or newer while settings choose plan (the server runs 0.13.21)"
+    );
+    assert_eq!(
+        default_waits("plan", Some("vps"), release("0.13.21")),
+        "default needs cornercase 0.13.28 or newer on vps while its settings choose plan (vps runs 0.13.21)"
+    );
+    assert_eq!(
+        default_waits("plan", Some("vps"), None),
+        "default needs cornercase 0.13.28 or newer on vps while its settings choose plan"
+    );
+}
+
+#[test]
+fn default_rests_only_while_another_mode_is_chosen_on_an_older_server() {
+    assert!(default_rests("plan", release("0.13.21")));
+    assert!(!default_rests("default", release("0.13.21")));
+    assert!(!default_rests("plan", release("0.13.28")));
 }
 
 #[test]

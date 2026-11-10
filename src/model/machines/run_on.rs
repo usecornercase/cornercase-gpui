@@ -4,7 +4,8 @@ use serde::Deserialize;
 
 use super::seen::{MachinePlace, MachineSeen, Spot, ThereId};
 use super::{Machine, MachineIcon};
-use crate::model::Project;
+use crate::cli::Version;
+use crate::model::{Project, Session};
 
 pub(crate) mod checks;
 pub(crate) mod clone;
@@ -16,6 +17,14 @@ pub(crate) const NO_REMOTE: &str = "This project has no git remote, so it runs o
 const ANSWER_UNREAD: &str = "its answer could not be read";
 const FROM_ANOTHER_SERVER: &str = "Its address means nothing from this computer";
 const AWAITED_FOR: Duration = Duration::from_secs(30);
+
+pub(crate) fn server_release(machine: Option<&str>, here: Option<&Session>, list: &[Machine]) -> Option<Version> {
+    let text = match machine {
+        None => here?.version.as_str(),
+        Some(name) => list.iter().find(|listed| listed.name == name)?.server_version.as_deref()?,
+    };
+    Version::parse(text)
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Source<'a, T> {

@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::cli::Version;
+
 pub(crate) const NO_MODE: &str = "default";
+pub(crate) const NO_MODE_SINCE: Version = Version::new(0, 13, 28);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -16,6 +19,7 @@ pub(crate) struct Choice {
 pub(crate) struct Modes {
     pub chosen: String,
     pub choices: Vec<Choice>,
+    pub server: Option<Version>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -59,7 +63,7 @@ impl From<Listed> for Agents {
                 agents.list = entry.offered().into_iter().filter(|choice| choice.value != "auto").collect();
             } else if let Some(agent) = key.strip_prefix("agents.").and_then(|rest| rest.strip_suffix(".mode")) {
                 let chosen = entry.chosen();
-                agents.modes.insert(agent.to_string(), Modes { chosen, choices: entry.offered() });
+                agents.modes.insert(agent.to_string(), Modes { chosen, choices: entry.offered(), server: None });
             }
         }
         agents
@@ -83,7 +87,24 @@ impl Agents {
     }
 }
 
+pub(crate) fn default_rests(chosen: &str, server: Option<Version>) -> bool {
+    chosen != NO_MODE && server.is_none_or(|server| server < NO_MODE_SINCE)
+}
+
+pub(crate) fn default_waits(chosen: &str, machine: Option<&str>, server: Option<Version>) -> String {
+    let (place, runs) = match machine {
+        Some(machine) => (format!(" on {machine} while its settings"), format!("{machine} runs")),
+        None => (" while settings".to_string(), "the server runs".to_string()),
+    };
+    let release = server.map(|server| format!(" ({runs} {server})")).unwrap_or_default();
+    format!("default needs cornercase {NO_MODE_SINCE} or newer{place} choose {chosen}{release}")
+}
+
 impl Modes {
+    pub(crate) fn on_server(self, server: Option<Version>) -> Self {
+        Self { server, ..self }
+    }
+
     fn offers(&self, value: &str) -> bool {
         self.choices.iter().any(|choice| choice.value == value)
     }
@@ -93,7 +114,7 @@ impl Modes {
     }
 
     pub(crate) fn rests(&self, value: &str) -> bool {
-        value == NO_MODE && self.chosen != NO_MODE
+        value == NO_MODE && default_rests(&self.chosen, self.server)
     }
 
     pub(crate) fn sent(&self, picked: Option<&str>) -> Option<String> {
@@ -103,6 +124,10 @@ impl Modes {
 
     pub(crate) fn waits(&self) -> bool {
         self.choices.iter().any(|choice| self.rests(&choice.value))
+    }
+
+    pub(crate) fn waiting(&self, machine: Option<&str>) -> Option<String> {
+        self.waits().then(|| default_waits(&self.chosen, machine, self.server))
     }
 }
 

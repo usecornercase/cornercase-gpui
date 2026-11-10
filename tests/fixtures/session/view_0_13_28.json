@@ -1,0 +1,37 @@
+{
+  "boot": "boot",
+  "caller": null,
+  "config": {
+    "revision": 3
+  },
+  "groups": [],
+  "home": "/home/ana",
+  "projects": [],
+  "revision": 1,
+  "shown": {
+    "pane": 1,
+    "project": 1,
+    "tab": 1,
+    "workspace": 1
+  },
+  "theme": {
+    "from": "default",
+    "scheme": null
+  },
+  "version": "0.13.28",
+  "view": {
+    "active": false,
+    "cols": null,
+    "controls": false,
+    "id": 9,
+    "projection": 1,
+    "rows": null,
+    "shown": {
+      "pane": 1,
+      "project": 1,
+      "tab": 1,
+      "workspace": 1
+    },
+    "visible": true
+  }
+}

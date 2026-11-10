@@ -445,8 +445,6 @@ pub(super) fn sort_newest_first(issues: &mut [Issue]) {
     issues.sort_by_key(|i| std::cmp::Reverse(parse_time(&i.updated_at).unwrap_or(i64::MIN)));
 }
 
-const DEFAULT_WAITS: &str = "needs usecornercase/cornercase-terminal#726";
-
 pub(super) fn there_footnote(machine: &str, read: Option<&IssueThere>) -> String {
     let queue = "Schedule is hidden: the queue starts work on this computer only.";
     match read.and_then(IssueThere::prompt_line) {
@@ -457,13 +455,6 @@ pub(super) fn there_footnote(machine: &str, read: Option<&IssueThere>) -> String
             "The agent starts with the issue as its first prompt ({machine}'s prompt template, the issue's URL by \
              default), sent at once. {queue}"
         ),
-    }
-}
-
-pub(super) fn default_waits(chosen: &str, machine: Option<&str>) -> String {
-    match machine {
-        Some(machine) => format!("default is not offered while {machine}'s settings choose {chosen}: {DEFAULT_WAITS}"),
-        None => format!("default is not offered while settings choose {chosen}: {DEFAULT_WAITS}"),
     }
 }
 

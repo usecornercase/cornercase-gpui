@@ -298,3 +298,26 @@ fn what_never_shows_is_given_up_after_a_while() {
     let awaited = awaited_answer(&spot_of_shop(&session), fixture!("machines/there_started.json"), now);
     assert_eq!(awaited.look(&session.machines, now + Duration::from_secs(31)), Look::Gone);
 }
+
+fn view_of(text: &str) -> Session {
+    serde_json::from_str(text).expect("a view line")
+}
+
+#[test]
+fn a_start_here_runs_on_the_release_the_view_names() {
+    let new = view_of(fixture!("session/view_0_13_28.json"));
+    let old = view_of(fixture!("session/view_0_13_21.json"));
+    assert_eq!(server_release(None, Some(&new), &[]), Version::parse("0.13.28"));
+    assert_eq!(server_release(None, Some(&old), &[]), Version::parse("0.13.21"));
+    assert_eq!(server_release(None, None, &[]), None);
+}
+
+#[test]
+fn a_start_on_a_machine_runs_on_its_servers_release_not_the_one_installed_there() {
+    let list = parse_list(fixture!("machines/list_mode_default.json")).expect("the list").machines;
+    let release = |name| server_release(Some(name), None, &list);
+    assert_eq!(release("vps"), Version::parse("0.13.28"));
+    assert_eq!(release("lab"), Version::parse("0.13.21"));
+    assert_eq!(release("homelab"), None);
+    assert_eq!(release("elsewhere"), None);
+}

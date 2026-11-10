@@ -5,6 +5,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::repeat;
+use crate::cli::Version;
+use crate::model::agent_settings::{NO_MODE, default_rests, default_waits};
 use crate::model::{Project, Session};
 use crate::panels::flows::model::FlowInfo;
 use crate::platform::Os;
@@ -379,6 +381,29 @@ pub(crate) fn mode_choices(config: &Value, agent: &str) -> (Vec<String>, Option<
     let choices = setting.map(choice_values).unwrap_or_default();
     let chosen = setting.and_then(|s| s.get("value")).and_then(Value::as_str).map(str::to_string);
     (choices, chosen)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ModeChip {
+    pub value: String,
+    pub label: String,
+    pub rests: bool,
+}
+
+pub(super) fn mode_chips(config: &Value, agent: &str, server: Option<Version>) -> (Vec<ModeChip>, Option<String>) {
+    let (values, chosen) = mode_choices(config, agent);
+    let chips: Vec<ModeChip> = values
+        .into_iter()
+        .map(|value| {
+            let is_chosen = chosen.as_deref() == Some(value.as_str());
+            let rests = value == NO_MODE && chosen.as_deref().is_some_and(|chosen| default_rests(chosen, server));
+            let label = if is_chosen { format!("{value} ✓") } else { value.clone() };
+            ModeChip { value, label, rests }
+        })
+        .collect();
+    let line =
+        chosen.filter(|_| chips.iter().any(|chip| chip.rests)).map(|chosen| default_waits(&chosen, None, server));
+    (chips, line)
 }
 
 fn setting<'a>(config: &'a Value, key: &str) -> Option<&'a Value> {
