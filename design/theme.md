@@ -62,7 +62,7 @@ Cornercase dark (the root, today's colours exactly), cornercase light, Tokyo Nig
 - **Sliders** (`ui/slider.rs`) carry the slider's key in the drag value, so a drag moves only its own.
 - Global search lists the page as one row when every word matches its words, a preset's name or a token's label, before cornercase's settings and even when `config search` fails.
 - Local file reads and writes (save, import, export) are small and run on the main thread, not as jobs (`store::run_busy`); the exception is recorded because an import from a slow or network path would block the window for that long, which no one asked to avoid yet.
-- The palette given to cornercase is forgotten when the server is started again (`Root::given`), so a restarted or reconnected server gets it at the next change as well as through `start-server --theme -`.
+- The palette given to cornercase is forgotten when the server is started again (`Root::given`), so a restarted or reconnected server gets it at the next change as well as through `start-server --theme -`. The window's own queue is given it only while connected (`takes_palette`), and when the view arrives (`session_arrived`), never while a start may still be refused or after it was: the push would only fail, and for an older cornercase there it would toast the very sentence the older page replaces (`design/remote.md`); `start-server --theme -` carries the palette meanwhile, and `given` stays unmarked until it is pushed.
 - Not in Export and Import (`design/settings.md`): the setup is cornercase's; a theme is a file.
 
 ## Contrast

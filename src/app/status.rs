@@ -7,11 +7,14 @@ use gpui::{
 };
 
 use super::{Conn, GAP, Root};
+use crate::cli;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::Session;
 use crate::notify;
+use crate::platform::Os;
 use crate::platform::paths;
+use crate::terminal;
 use crate::theme::{colours, radius};
 use crate::ui::{self, motion};
 
@@ -64,11 +67,12 @@ impl Root {
 
     fn connection_label(&self) -> (Rgba, String, Option<String>) {
         let version = self.session.as_ref().map(|s| format!("cornercase {}", s.version)).unwrap_or_default();
-        let (dot, state, why) = match &self.conn {
-            Conn::Starting => (colours::working(), "connecting…".to_string(), None),
-            Conn::Connected => (colours::done(), version, None),
-            Conn::Lost(why) => (colours::failed(), "disconnected".to_string(), Some(why.clone())),
-            Conn::Missing(missing) => (colours::failed(), format!("cornercase {}", missing.label()), None),
+        let (state, why) = conn_words(&self.conn, self.came_up, &version);
+        let dot = match &self.conn {
+            Conn::Starting => colours::working(),
+            Conn::Connected => colours::done(),
+            Conn::Older(_) | Conn::Behind(_) => colours::waiting(),
+            Conn::Lost(_) | Conn::Missing(_) => colours::failed(),
         };
         let label = match &self.host {
             Some(host) => format!("{host} · {state}"),
@@ -103,6 +107,25 @@ impl Root {
     }
 }
 
+fn conn_words(conn: &Conn, came_up: bool, version: &str) -> (String, Option<String>) {
+    match conn {
+        Conn::Starting => ("connecting…".to_string(), None),
+        Conn::Connected => (version.to_string(), None),
+        Conn::Lost(why) => {
+            let state = if came_up { "disconnected" } else { "not connected" };
+            (state.to_string(), Some(cli::reason_of(why)))
+        }
+        Conn::Missing(missing) => (format!("cornercase {}", missing.label()), None),
+        Conn::Older(older) => {
+            let state = older.there.as_ref().map_or_else(|| "older".to_string(), |there| format!("older · {there}"));
+            (state, Some(terminal::older_lead(older, Os::CURRENT)))
+        }
+        Conn::Behind(behind) => {
+            (format!("older server · {}", behind.server), Some(terminal::behind_lead(behind, Os::CURRENT)))
+        }
+    }
+}
+
 fn follow_frames(window: &Window, root: EntityId, beat: Rc<motion::Beat>) {
     window.on_next_frame(move |window, cx| match beat.tick(Instant::now(), motion::orbits_drawn()) {
         motion::Next::Wait => follow_frames(window, root, beat),
@@ -115,3 +138,6 @@ fn connection_dot(colour: Rgba, waiting: bool) -> AnyElement {
     let dot = div().size(px(7.)).rounded_full().bg(colour).shadow(ui::glass::glow(colour, 0.9, 6.));
     if waiting { motion::pulse(dot, "conn-pulse").into_any_element() } else { dot.into_any_element() }
 }
+
+#[cfg(test)]
+mod tests;

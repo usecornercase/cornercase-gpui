@@ -207,3 +207,9 @@ fn a_command_failing_any_other_way_was_not_refused_for_its_boot() {
     assert!(!stale_boot(&failure("close", None, b"")));
     assert_eq!(super::reason(&failure("close", Some(1), b"")), "failed");
 }
+
+#[test]
+fn a_reason_reads_the_same_from_a_text() {
+    assert_eq!(super::reason_of("cornercase start-server: Error: x"), "x");
+    assert_eq!(super::reason_of("error: y"), "y");
+}

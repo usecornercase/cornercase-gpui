@@ -1,15 +1,17 @@
 use gpui::{
-    ClickEvent, Context, Div, FontWeight, ParentElement as _, Stateful, StatefulInteractiveElement as _, Styled as _,
-    div, px,
+    ClickEvent, Context, Div, FontWeight, InteractiveElement as _, ParentElement as _, Stateful,
+    StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 use super::mouse::{button_name, mouse};
 use crate::app::{Drag, Root};
-use crate::dialogs;
+use crate::cli::{self, Said};
+use crate::dialogs::{self, Question};
 use crate::keymap::{Command, with_keys};
 use crate::model::Session;
 use crate::render::moving::Moves;
 use crate::sidebar::{cmd, reopening, tip};
+use crate::store::{self, Busy};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone};
 
@@ -67,8 +69,16 @@ fn reopen_label(closed: usize) -> String {
     if closed == 1 { "Reopen the agent".to_string() } else { format!("Reopen {closed} agents") }
 }
 
+pub(super) fn column() -> Div {
+    div().flex().flex_col().items_center().justify_center().gap(px(10.)).p(px(24.))
+}
+
 pub(super) fn page() -> Div {
-    div().absolute().inset_0().flex().flex_col().items_center().justify_center().gap(px(10.)).p(px(24.))
+    column().absolute().inset_0()
+}
+
+pub(super) fn scrolled(id: &'static str, content: Div) -> Stateful<Div> {
+    div().id(id).absolute().inset_0().overflow_y_scroll().flex().flex_col().child(content.flex_shrink_0().my_auto())
 }
 
 pub(super) fn heading(text: &str) -> Div {
@@ -139,7 +149,74 @@ fn no_tab_page(no_tab: &NoTab, reopen_busy: bool, cx: &mut Context<Root>) -> Div
         .child(actions(no_tab, reopen_busy, cx))
 }
 
+pub(super) fn answer_lines(said: &Said) -> (Vec<String>, bool) {
+    let (text, failed) = match said {
+        Said::Done(text) => (text, false),
+        Said::Failed(text) => (text, true),
+    };
+    (text.lines().map(str::to_string).collect(), failed)
+}
+
+fn answer_line(said: Option<&Said>) -> Option<Div> {
+    let (lines, failed) = answer_lines(said?);
+    let colour = if failed { colours::failed() } else { colours::muted() };
+    let lines = lines.into_iter().map(|line| div().child(line));
+    Some(div().max_w(px(540.)).text_center().text_size(px(12.)).text_color(colour).children(lines))
+}
+
+fn answer_kept<'a>(answered: Option<&'a (String, Said)>, key: &str) -> Option<&'a Said> {
+    answered.filter(|(kept, _)| kept == key).map(|(_, said)| said)
+}
+
+pub(super) fn answer_under(said: Option<&Said>) -> Div {
+    div().children(answer_line(said))
+}
+
+pub(super) fn retry_button(id: &'static str, cx: &mut Context<Root>) -> Stateful<Div> {
+    tall(ui::icon_text_button(id, Icon::Refresh, "Try again", Tone::Plain))
+        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.start_again(cx)))
+}
+
 impl Root {
+    pub(super) fn start_again(&mut self, cx: &mut Context<Self>) {
+        self.start(cx);
+        cx.notify();
+    }
+
+    pub(super) fn answer_for(&self, key: &str) -> Option<&Said> {
+        answer_kept(self.answered.as_ref(), key)
+    }
+
+    pub(super) fn ask_then(
+        (title, message, button): (String, String, &'static str),
+        then: impl Fn(&mut Root, &mut Context<Root>) + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let root = cx.entity();
+        let question = Question::new(title, message, button, Vec::new())
+            .on_yes(move |cx| root.update(cx, |this, cx| then(this, cx)));
+        dialogs::confirm(question, window, cx);
+    }
+
+    pub(super) fn run_answered(
+        &mut self,
+        busy: Busy,
+        work: impl FnOnce() -> anyhow::Result<cli::Answer> + Send + 'static,
+        then: impl FnOnce(&mut Root, bool, &mut Context<Root>) + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.answered = None;
+        cx.notify();
+        let key = busy.key().to_string();
+        store::run_local_busy(cx, busy, work, move |this, result, cx| {
+            let said = cli::said_of(result);
+            let done = matches!(said, Said::Done(_));
+            this.answered = Some((key, said));
+            then(this, done, cx);
+        });
+    }
+
     pub(super) fn shows_no_tab(&self) -> bool {
         let shown = self.shown();
         let frame = shown.has_frame.then_some(shown.grid.projection).flatten();

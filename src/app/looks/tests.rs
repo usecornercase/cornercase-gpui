@@ -15,3 +15,13 @@ fn a_restarted_server_is_given_the_palette_again() {
     given.gave("a".to_string());
     assert!(!given.needs("a"));
 }
+
+#[test]
+fn the_palette_is_not_pushed_to_a_server_the_window_is_not_connected_to() {
+    let older =
+        crate::cli::Older { destination: "vps".into(), there: None, here: "0.13.28".into(), update: Vec::new() };
+    assert!(takes_palette(&Conn::Connected));
+    assert!(!takes_palette(&Conn::Starting));
+    assert!(!takes_palette(&Conn::Older(older)));
+    assert!(!takes_palette(&Conn::Lost("x".into())));
+}

@@ -1,6 +1,6 @@
 use gpui::{AnyElement, Context, InteractiveElement as _, IntoElement as _, MouseButton, Styled as _, Window, div};
 
-use super::{Root, frame};
+use super::{Conn, Root, frame};
 use crate::appearance::{self, Appearance};
 use crate::store::{ToastKind, args};
 use crate::theme;
@@ -52,13 +52,20 @@ impl Root {
         cx.notify();
     }
 
-    fn give_palette(&mut self) {
+    pub(super) fn give_palette(&mut self) {
         let json = theme::terminal_json();
         if !self.given.needs(&json) {
             return;
         }
-        self.own.queue.cmd_with_stdin(args(&["theme", "-"]), json.clone().into_bytes());
-        if let Some(tab) = self.machine.as_ref().filter(|tab| tab.themed) {
+        let tab = self.machine.as_ref().filter(|tab| tab.themed);
+        let own = takes_palette(&self.conn);
+        if !own && tab.is_none() {
+            return;
+        }
+        if own {
+            self.own.queue.cmd_with_stdin(args(&["theme", "-"]), json.clone().into_bytes());
+        }
+        if let Some(tab) = tab {
             tab.conn.queue.cmd_with_stdin(args(&["theme", "-"]), json.clone().into_bytes());
         }
         self.given.gave(json);
@@ -79,6 +86,10 @@ impl Root {
         });
         frame::round(layer, window_frame).into_any_element()
     }
+}
+
+fn takes_palette(conn: &Conn) -> bool {
+    matches!(conn, Conn::Connected)
 }
 
 #[cfg(test)]

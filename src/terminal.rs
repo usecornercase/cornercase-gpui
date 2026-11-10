@@ -10,6 +10,7 @@ use gpui::{
 
 use crate::app::machine::MachineTab;
 use crate::app::{Conn, Drag, Root};
+use crate::cli;
 use crate::dialogs;
 use crate::keymap::{self, Command, Focus, with_keys};
 use crate::keys;
@@ -24,6 +25,8 @@ use crate::store::Store;
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
 
+pub(crate) use older::{behind_lead, older_lead};
+
 mod browser;
 mod dock_text;
 mod input;
@@ -33,6 +36,7 @@ mod machine_menu;
 mod missing;
 mod mouse;
 mod no_tab;
+mod older;
 mod pane_accounts;
 mod pane_drag;
 mod pane_menu;
@@ -369,7 +373,10 @@ impl Root {
 
     fn cover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         if let Conn::Missing(missing) = &self.conn {
-            return Some(Self::missing_page(missing, cx).into_any_element());
+            return Some(self.missing_page(missing, cx).into_any_element());
+        }
+        if let Some(page) = self.refused_page(cx) {
+            return Some(page.into_any_element());
         }
         if self.machine.is_some() {
             return self.machine_tab_area(cx);
@@ -381,7 +388,8 @@ impl Root {
     }
 
     fn connection_note(&self) -> impl IntoElement + use<> {
-        let (title, detail) = note_text(&self.conn, self.own.surface_error.as_deref(), self.host.as_deref());
+        let (title, detail) =
+            note_text(&self.conn, self.own.surface_error.as_deref(), self.host.as_deref(), self.came_up);
         let lost_remote = self.host.is_some() && matches!(self.conn, Conn::Lost(_));
         div()
             .absolute()
@@ -395,7 +403,7 @@ impl Root {
             .child(ui::brand::mark(5., matches!(self.conn, Conn::Starting)).mb(px(22.)))
             .child(div().text_color(colours::soft()).child(title))
             .when_some(detail, |d, why| {
-                d.child(div().max_w(px(460.)).text_center().text_size(px(12.)).text_color(colours::faint()).child(why))
+                d.child(div().max_w(px(460.)).text_center().text_size(px(12.)).text_color(colours::muted()).child(why))
                     .child(div().text_size(px(11.)).text_color(colours::faint()).child("Retrying…"))
             })
             .when(lost_remote, |d| d.child(elsewhere_button()))
@@ -541,13 +549,17 @@ impl Painting {
     }
 }
 
-fn note_text(conn: &Conn, surface_error: Option<&str>, host: Option<&str>) -> (String, Option<String>) {
+fn note_text(conn: &Conn, surface_error: Option<&str>, host: Option<&str>, came_up: bool) -> (String, Option<String>) {
     let server = host.map_or_else(|| "cornercase".to_string(), |host| format!("cornercase on {host}"));
     match (conn, surface_error) {
         (Conn::Starting, _) => (format!("Connecting to {server}…"), None),
         (Conn::Connected, None) => ("Waiting for the terminal…".to_string(), None),
         (Conn::Connected, Some(why)) => ("The terminal cannot be shown".to_string(), Some(why.to_string())),
-        (Conn::Lost(why), _) => (format!("Lost {server}"), Some(why.clone())),
+        (Conn::Lost(why), _) => {
+            let title = if came_up { format!("Lost {server}") } else { format!("Could not connect to {server}") };
+            (title, Some(cli::reason_of(why)))
+        }
+        (Conn::Older(_) | Conn::Behind(_), _) => (String::new(), None),
         (Conn::Missing(missing), _) => (format!("cornercase {}", missing.label()), None),
     }
 }

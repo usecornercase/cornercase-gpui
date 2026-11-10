@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use super::{Choice, choice, emblem_of, heading_of, lead, offers_choice};
+use super::{Choice, choice, emblem_of, heading_of, lead, offers_choice, too_old_path, update_question};
 use crate::cli::{Binary, Missing, Origin, Problem, parse_version};
 use crate::platform::Os;
 use crate::ui::Icon;
@@ -75,4 +75,34 @@ fn a_pick_whose_path_is_not_text_is_not_saved() {
     use std::os::unix::ffi::OsStringExt;
     let path = PathBuf::from(std::ffi::OsString::from_vec(vec![b'/', 0xff, b'c']));
     assert!(matches!(choice(Ok(Binary::plain(path))), Choice::Stay(_)));
+}
+
+#[test]
+fn only_a_cornercase_too_old_offers_its_update() {
+    let path = std::path::Path::new("/opt/cc");
+    assert_eq!(too_old_path(&too_old("/opt/cc", Origin::Path)), Some(path));
+    let others = [
+        Missing::NotFound { places: Vec::new(), asked_shell: false },
+        unusable("/opt/cc", Origin::Path, Problem::NotAProgram),
+        unusable("/opt/cc", Origin::Path, Problem::DoesNotStart("x".into())),
+        unusable("/opt/cc", Origin::Path, Problem::NotCornercase("x".into())),
+    ];
+    for other in others {
+        assert_eq!(too_old_path(&other), None, "{other:?}");
+    }
+}
+
+#[test]
+fn the_update_here_asks_first_and_names_the_binary() {
+    let path = std::path::Path::new("/Users/ana/.local/bin/cornercase");
+    let (title, message, button) = update_question(path, Os::Mac, "/Users/ana");
+    assert_eq!(title, "Update cornercase on this Mac?");
+    assert!(message.contains("~/.local/bin/cornercase") && message.contains("Homebrew"), "{message}");
+    assert_eq!(button, "Update");
+}
+
+#[test]
+fn a_too_old_binary_offers_to_update_it_here() {
+    let text = lead(&too_old("/opt/cc", Origin::Path), Os::Mac, "/Users/ana");
+    assert!(text.contains("Update it here"), "{text}");
 }
