@@ -175,6 +175,7 @@ impl TodoPanel {
     fn remove_item(&mut self, id: u64, what: &str, cx: &mut Context<Self>) {
         if self.editing.as_ref().is_some_and(|e| e.id == id) {
             self.editing = None;
+            cx.notify();
         }
         let command = args(&["todo", "rm", &id.to_string(), "--json"]);
         Self::remove(command, format!("Removed “{}”", short(what, 40)), cx);
@@ -469,6 +470,10 @@ impl Render for TodoPanel {
 
 pub(crate) fn build(window: &mut Window, cx: &mut App) -> AnyView {
     cx.new(|cx| TodoPanel::new(window, cx)).into()
+}
+
+pub(crate) fn drawn_cached(view: &AnyView, cx: &App) -> bool {
+    view.clone().downcast::<TodoPanel>().map_or(true, |panel| data::drawn_cached(panel.read(cx).sending))
 }
 
 #[cfg(test)]

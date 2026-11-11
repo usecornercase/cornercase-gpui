@@ -1,4 +1,4 @@
-use super::shown_run;
+use super::{ages_tick, shown_run};
 use crate::panels::flows::model::parse_runs;
 
 const RUNS: &str = crate::test_util::fixture!("flows/runs.json");
@@ -15,4 +15,11 @@ fn a_workspace_without_a_run_shows_none() {
     assert_eq!(shown_run(&runs, Some(4)), None);
     assert_eq!(shown_run(&runs, None), None);
     assert_eq!(shown_run(&[], Some(3)), None);
+}
+
+#[test]
+fn the_dock_counts_its_ages_only_while_it_shows_a_run() {
+    assert!(ages_tick(true, true));
+    assert!(!ages_tick(true, false));
+    assert!(!ages_tick(false, true));
 }

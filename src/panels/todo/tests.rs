@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::data::{Item, any_pending, drop_on, items, sent_message, short, step, targets, undo_number};
+use super::data::{Item, any_pending, drawn_cached, drop_on, items, sent_message, short, step, targets, undo_number};
 use crate::model::accounts::AccountsInfo;
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::store::ToastKind;
@@ -155,4 +155,10 @@ fn a_target_names_the_account_it_runs_on() {
 fn a_target_names_no_account_when_the_mark_is_off() {
     let on_work = PaneInfo { account: Some("personal".into()), ..pane(7, Some("claude")) };
     assert_eq!(targets(&session_with(on_work), None)[0].account, None);
+}
+
+#[test]
+fn the_panel_is_drawn_uncached_while_its_send_menu_is_open() {
+    assert!(!drawn_cached(Some(4)));
+    assert!(drawn_cached(None));
 }

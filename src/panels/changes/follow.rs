@@ -106,6 +106,7 @@ impl ChangesPanel {
             self.shown.clone_from(&shown);
             self.base = None;
             self.base_open = false;
+            cx.notify();
             if matches!(self.scope, Scope::Project(_)) {
                 self.select(None, cx);
             }

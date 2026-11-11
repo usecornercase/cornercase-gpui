@@ -117,6 +117,17 @@ impl PanelKind {
         matches!(self, Self::Changes | Self::Files | Self::Todo | Self::Recap | Self::Browser | Self::Flow)
     }
 
+    pub(crate) fn cached(self) -> bool {
+        matches!(self, Self::Changes | Self::Files | Self::Todo | Self::Recap | Self::Flow)
+    }
+
+    pub(crate) fn drawn_cached(self, view: &AnyView, cx: &gpui::App) -> bool {
+        match self {
+            Self::Todo => todo::drawn_cached(view, cx),
+            kind => kind.cached(),
+        }
+    }
+
     pub(crate) fn shows(self, session: Option<&Session>) -> bool {
         self != Self::Flow || session.is_some_and(Session::shown_runs_flow)
     }

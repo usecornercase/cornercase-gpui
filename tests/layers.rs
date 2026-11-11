@@ -215,8 +215,7 @@ fn relative_fixture(source: &Source) -> bool {
 
 fn makes_a_colour(source: &Source) -> bool {
     let themed = source.path == "src/theme.rs" || source.path.starts_with("src/theme/");
-    let tests =
-        source.path.starts_with("tests/") || source.path.ends_with("/tests.rs") || source.path.contains("/tests/");
+    let tests = source.path.starts_with("tests/") || is_test_file(&source.path);
     if themed || tests {
         return false;
     }
@@ -316,6 +315,131 @@ const DRAWINGS: &[Drawing] = &[
     },
 ];
 
+struct Cached {
+    kind: &'static str,
+    files: &'static [&'static str],
+    except: &'static [&'static str],
+    clock: &'static [&'static str],
+    badges: &'static [&'static str],
+}
+
+const CACHED: &[Cached] = &[
+    Cached {
+        kind: "Changes",
+        files: &["src/panels/changes.rs", "src/panels/changes/", "src/panels/on_machine.rs"],
+        except: &[],
+        clock: &["src/panels/changes/follow.rs", "src/panels/on_machine.rs"],
+        badges: &[],
+    },
+    Cached {
+        kind: "Files",
+        files: &["src/panels/files.rs", "src/panels/files/", "src/panels/on_machine.rs"],
+        except: &[
+            "src/panels/files/finder.rs",
+            "src/panels/files/finder/",
+            "src/panels/files/peek.rs",
+            "src/panels/files/peek/",
+        ],
+        clock: &["src/panels/files/querying.rs", "src/panels/files/there.rs", "src/panels/on_machine.rs"],
+        badges: &[],
+    },
+    Cached {
+        kind: "Todo",
+        files: &["src/panels/todo.rs", "src/panels/todo/"],
+        except: &[],
+        clock: &[],
+        badges: &["src/panels/todo.rs"],
+    },
+    Cached {
+        kind: "Recap",
+        files: &["src/panels/recap.rs", "src/panels/recap/"],
+        except: &[],
+        clock: &["src/panels/recap.rs"],
+        badges: &[],
+    },
+    Cached {
+        kind: "Flow",
+        files: &["src/panels/flows.rs", "src/panels/flows/"],
+        except: &[
+            "src/panels/flows/checked.rs",
+            "src/panels/flows/dialog.rs",
+            "src/panels/flows/draft.rs",
+            "src/panels/flows/editor.rs",
+            "src/panels/flows/editor/",
+            "src/panels/flows/editor_view.rs",
+            "src/panels/flows/import.rs",
+            "src/panels/flows/import/",
+            "src/panels/flows/list.rs",
+            "src/panels/flows/start.rs",
+            "src/panels/flows/start/",
+        ],
+        clock: &[
+            "src/panels/flows/messages.rs",
+            "src/panels/flows/diagram.rs",
+            "src/panels/flows/merged_view.rs",
+            "src/panels/flows/model.rs",
+        ],
+        badges: &[],
+    },
+];
+
+fn reads_a_global_but_store(code: &str) -> bool {
+    code.match_indices("::get(cx)").any(|(at, _)| !code[..at].ends_with("Store"))
+}
+
+fn is_test_file(path: &str) -> bool {
+    path.ends_with("/tests.rs") || path.contains("/tests/")
+}
+
+fn listed(path: &str, names: &[&str]) -> bool {
+    names.iter().any(|name| if name.ends_with('/') { path.starts_with(name) } else { path == *name })
+}
+
+fn covers(panel: &Cached, path: &str) -> bool {
+    !is_test_file(path) && listed(path, panel.files) && !listed(path, panel.except)
+}
+
+fn reads_outside_itself(source: &Source, panel: &Cached) -> Option<&'static str> {
+    let code = &source.code;
+    let path = source.path.as_str();
+    if reads_a_global_but_store(code) || code.contains("try_global") || code.contains("global::<") {
+        return Some("a global but Store");
+    }
+    if code.contains("now()") && !panel.clock.contains(&path) {
+        return Some("the wall clock");
+    }
+    if ["window.modifiers()", "window.mouse_position()", "capslock()"].iter().any(|call| code.contains(call)) {
+        return Some("window state that redraws nothing");
+    }
+    if (code.contains("ui::badge(") || code.contains("motion::orbit(")) && !panel.badges.contains(&path) {
+        return Some("an orbit turned at render");
+    }
+    code.contains("thread_local!").then_some("a thread-local")
+}
+
+#[test]
+fn each_cached_panel_draws_from_itself_and_the_store() {
+    for panel in CACHED {
+        check(&format!("the {} panel reads outside itself", panel.kind), &[], |s| {
+            covers(panel, &s.path) && reads_outside_itself(s, panel).is_some()
+        });
+    }
+}
+
+#[test]
+fn the_dock_caches_the_panels_the_table_checks() {
+    let all = sources();
+    let panels = all.iter().find(|s| s.path == "src/panels/mod.rs").expect("the panels are in src/panels/mod.rs");
+    let start = panels.code.find("fn cached(self) -> bool").expect("PanelKind::cached exists");
+    let body = &panels.code[start..];
+    let body = &body[..body.find("\n    }").expect("cached ends")];
+    let mut kinds: Vec<&str> = words_after(body, "Self::").collect();
+    let mut checked: Vec<&str> = CACHED.iter().map(|panel| panel.kind).collect();
+    kinds.sort_unstable();
+    checked.sort_unstable();
+    assert_eq!(kinds, checked, "every cached panel is in CACHED, and every entry of CACHED is cached");
+}
+
 fn root_fields(sources: &[Source]) -> Vec<String> {
     let app = sources.iter().find(|s| s.path == "src/app.rs").expect("the window is in src/app.rs");
     let start = app.code.find("pub(crate) struct Root {").expect("Root is declared") + "pub(crate) struct Root {".len();
@@ -342,7 +466,7 @@ fn reads_beyond_its_key(source: &Source, fields: &[String]) -> Option<&'static s
         .any(|word| fields.iter().any(|f| f == word) && !drawing.root.contains(&word));
     let side = words_after(&source.code, "self.side.").any(|word| !drawing.side.contains(&word));
     let parts = words_after(&source.code, "self.parts.").any(|word| !drawing.parts.contains(&word));
-    let globals = source.code.match_indices("::get(cx)").any(|(at, _)| !source.code[..at].ends_with("Store"));
+    let globals = reads_a_global_but_store(&source.code);
     (outside || side || parts || globals).then_some(drawing.what)
 }
 

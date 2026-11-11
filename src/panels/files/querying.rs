@@ -99,6 +99,7 @@ impl FilesPanel {
         }
         self.search.enter = false;
         self.run_search(cx);
+        cx.notify();
     }
 
     pub(super) fn set_mode(&mut self, mode: Mode, cx: &mut Context<Self>) {
@@ -107,6 +108,7 @@ impl FilesPanel {
             self.search.results = Results::None;
             self.search.rows.clear();
             self.run_search(cx);
+            cx.notify();
         }
     }
 
