@@ -44,7 +44,7 @@ use crate::ui::counting::Counting;
 use crate::ui::motion::{self, Leaving, Way};
 use crate::ui::split::{self, Edge, Split};
 pub(crate) use connection::Connection;
-use dock::{dock_card, over_the_terminal};
+use dock::{dock_card, dock_view, over_the_terminal};
 use machine::MachineTab;
 use part::Parts;
 use revised::Revised;
@@ -620,7 +620,7 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let view = self.panel(kind, window, cx);
+        let view = dock_view(kind, self.panel(kind, window, cx), cx);
         let width = (!full).then(|| self.dock_size(kind, window));
         let card = dock_card(kind, view, &self.store, width).track_focus(&self.dock_focus);
         motion::slide(card, SharedString::from(format!("dock-in-{}", kind.title())), Way::In, (DOCK_SLIDE, 0.))

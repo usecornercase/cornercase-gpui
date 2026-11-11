@@ -45,6 +45,7 @@ use crate::ui;
 use crate::ui::split::{self, Edge, Split};
 
 const POLL: Duration = Duration::from_secs(3);
+const AGES: Duration = Duration::from_secs(1);
 const KEPT: usize = 256;
 const LIST: Split = Split::new(330., 240., 700.);
 const DETAIL_KEEP: f32 = 320.;
@@ -127,7 +128,17 @@ impl FlowsPanel {
         this.refresh(cx);
         this.store_changed(&store, cx);
         cx.spawn(async move |this, cx| poll_while_alive(this, cx).await).detach();
+        if place == Place::Dock {
+            cx.spawn(async move |this, cx| count_ages(this, cx).await).detach();
+        }
         this
+    }
+
+    fn tick_ages(&mut self, cx: &mut Context<Self>) {
+        let shown = Store::get(cx).read(cx).shown_dock() == Some(PanelKind::Flow);
+        if dock::ages_tick(shown, self.selected_run().is_some()) {
+            cx.notify();
+        }
     }
 
     fn store_changed(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
@@ -209,7 +220,10 @@ impl FlowsPanel {
                 self.sync_feed(cx);
                 cx.notify();
             }
-            Err(e) => self.runs_error = Some(format!("cannot read `flow runs`: {e}")),
+            Err(e) => {
+                self.runs_error = Some(format!("cannot read `flow runs`: {e}"));
+                cx.notify();
+            }
         }
     }
 
@@ -231,6 +245,7 @@ impl FlowsPanel {
         }
         let Some(followed) = key else {
             self.feed = Feed::default();
+            cx.notify();
             return;
         };
         let keep = self.feed.key == key;
@@ -247,6 +262,7 @@ impl FlowsPanel {
             move |this, err, cx| this.on_feed_end(followed, &err, cx),
         );
         self.read_files(cx);
+        cx.notify();
     }
 
     fn on_feed_line(&mut self, followed: (u64, u64), line: &str, cx: &mut Context<Self>) {
@@ -415,6 +431,15 @@ async fn poll_while_alive(this: WeakEntity<FlowsPanel>, cx: &mut AsyncApp) {
     loop {
         cx.background_executor().timer(POLL).await;
         if this.update(cx, FlowsPanel::poll).is_err() {
+            break;
+        }
+    }
+}
+
+async fn count_ages(this: WeakEntity<FlowsPanel>, cx: &mut AsyncApp) {
+    loop {
+        cx.background_executor().timer(AGES).await;
+        if this.update(cx, FlowsPanel::tick_ages).is_err() {
             break;
         }
     }

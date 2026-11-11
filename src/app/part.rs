@@ -8,6 +8,7 @@ use gpui::{
 };
 
 use super::Root;
+use super::dock::key::DockKey;
 use super::status::key::StatusKey;
 use crate::model::Session;
 use crate::sidebar::key::SidebarKey;
@@ -78,6 +79,7 @@ pub(super) struct Told {
     rail: Option<RailKey>,
     tabs: Option<TabsKey>,
     status: Option<StatusKey>,
+    dock: Option<DockKey>,
 }
 
 impl Parts {
@@ -158,6 +160,29 @@ impl Root {
                 App::notify(cx, id);
             }
         }
+        self.tell_dock(cx);
+    }
+
+    fn tell_dock(&mut self, cx: &mut Context<Self>) {
+        let key = self.dock_key(cx);
+        let entered = key.entered(self.parts.told.dock.as_ref());
+        if told(&mut self.parts.told.dock, key)
+            && let Some(id) = self.dock_view_id(cx)
+        {
+            App::notify(cx, id);
+        }
+        if entered {
+            Self::settle_dock(cx);
+        }
+    }
+
+    fn mind_the_dock(&mut self, window: &Window, cx: &App) {
+        let key = self.dock_key(cx);
+        if minded(&mut self.parts.told.dock, key) == Minded::Missed
+            && let Some(id) = self.dock_view_id(cx)
+        {
+            missed("dock", id, window);
+        }
     }
 
     pub(super) fn mind_the_parts(&mut self, window: &Window, cx: &mut Context<Self>) {
@@ -174,6 +199,7 @@ impl Root {
                 missed(name, id, window);
             }
         }
+        self.mind_the_dock(window, cx);
     }
 
     pub(super) fn keep_beating(&mut self, window: &Window) {

@@ -69,3 +69,7 @@ On 2026-11-07, following a conversation with cornercase 0.13.19, Linux x86_64 un
 - `agents close`: the link went to the workspace, on its shell tab, with no toast. `agents reopen`, the conversation now in pane 12, the view on another project: the link went to pane 12's tab, and typed keys reached that agent.
 - `restart`, with the answer's `boot` now an earlier one: the window reconnected and the link went to the pane the conversation came back in.
 - A closed project: `shop › main › claude is closed`.
+
+## Drawn cached while docked
+
+- **The panel is a cached view while docked** (#134; the rule, the measure and the method are in `design/widgets.md`). The byline's age ("written 4d ago") moves with the 20 s ticker the panel already has; the rest is its own fields, the jobs the status bar shows (`Store`, through `DockKey`) and the `list`'s scroll. Nothing was added.

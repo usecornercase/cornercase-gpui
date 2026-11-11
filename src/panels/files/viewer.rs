@@ -240,6 +240,7 @@ impl FilesPanel {
         let through = at.is_none().then(|| link.last_line()).flatten();
         let target = OpenAt { line: at.or_else(|| link.first_line()), through, from_search, ..OpenAt::default() };
         self.menu = None;
+        cx.notify();
         self.open_file(link_path(link, self.current), target, cx);
     }
 

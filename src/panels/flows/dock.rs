@@ -11,6 +11,10 @@ pub(super) fn shown_run(runs: &[Run], workspace: Option<u64>) -> Option<u64> {
     runs.iter().find(|r| r.workspace == workspace).map(|r| r.id)
 }
 
+pub(super) fn ages_tick(shown: bool, run: bool) -> bool {
+    shown && run
+}
+
 impl FlowsPanel {
     pub(super) fn follow_shown(&mut self, cx: &mut Context<Self>) {
         let workspace = Store::get(cx).read(cx).session.as_ref().and_then(|s| s.shown().workspace);

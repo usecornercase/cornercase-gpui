@@ -15,3 +15,8 @@ Code: `src/panels/todo.rs`, `src/panels/todo/`
 - **The send menu says which account each agent runs on** (a chip, `AccountsInfo::mark`, under `account_mark` and only once there is an account, `design/accounts.md`): `todo send` goes to a running pane and takes no `--account`, so there is no account to pick here, and choosing the target is what chooses it.
 - **An item removed elsewhere closes what was open on it** (its edit field or its send menu).
 - **Sending an item to an agent is a job**: the item's buttons give way to a spinner until `todo send` answers, and the status bar names it. Adding, ticking, editing, moving and removing answer in milliseconds and show at once.
+
+## Drawn cached while docked
+
+- **The panel is a cached view while docked** (#134; the rule, the measure and the method are in `design/widgets.md`). It reads its own fields (`editing`, `sending`, `undo`; `remove_item` now notifies when it closes an edit), its text fields and `Store` (`DockKey`).
+- **The send menu is drawn uncached while it is open** (`data::drawn_cached`, read by `todo::drawn_cached`, which `PanelKind::drawn_cached` calls): its agents' working badges are `ui::badge`s, whose orbit turns only when they are drawn, and a cached view would freeze them. Opening or closing the menu notifies the panel, which marks `Root`, which switches the wrapper. Rejected: probes and an orbit layer over the menu (a `Spots` handle reaching the panel and cleared on every draw, and the leaving dock's orbits to keep or drop, for a menu open for seconds), and a still badge (a working agent's badge turns everywhere else).

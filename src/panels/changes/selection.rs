@@ -68,6 +68,7 @@ impl ChangesPanel {
         self.base_open = false;
         self.select(None, cx);
         self.sync(cx);
+        cx.notify();
     }
 
     pub(super) fn select(&mut self, selected: Option<Selected>, cx: &mut Context<Self>) {
@@ -199,6 +200,7 @@ impl ChangesPanel {
     fn base_failed(&mut self, error: &str, cx: &mut Context<Self>) {
         self.base_open = false;
         toast(error, ToastKind::Error, cx);
+        cx.notify();
     }
 
     pub(super) fn choose_base(&mut self, branch: Option<String>, cx: &mut Context<Self>) {

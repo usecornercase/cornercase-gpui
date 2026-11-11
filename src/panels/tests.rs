@@ -32,3 +32,8 @@ fn the_flow_panel_is_docked_beside_the_terminal() {
     assert!(PanelKind::Flow.docked());
     assert!(!PanelKind::Flows.docked());
 }
+
+#[test]
+fn every_cached_panel_is_docked() {
+    assert!(PanelKind::ALL.into_iter().filter(|kind| kind.cached()).all(PanelKind::docked));
+}

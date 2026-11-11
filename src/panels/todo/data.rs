@@ -25,6 +25,10 @@ pub(crate) fn any_pending(app: Option<&Value>) -> bool {
     todos.is_some_and(|todos| todos.iter().any(|t| Item::deserialize(t).is_ok_and(|item| !item.done)))
 }
 
+pub(crate) fn drawn_cached(sending: Option<u64>) -> bool {
+    sending.is_none()
+}
+
 pub(crate) fn undo_number(answer: &Value) -> Option<u64> {
     answer.get("undo").and_then(Value::as_u64)
 }

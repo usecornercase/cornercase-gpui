@@ -160,6 +160,7 @@ impl FilesPanel {
     fn stay_on_machine(&mut self, read: &MachineRead, cx: &mut Context<Self>) {
         if read.reach.target().is_none() {
             self.retry = Retry::default();
+            cx.notify();
         }
         if self.search.refused && self.showing(cx) && on_machine::may_ask(read, &self.retry).is_ok() {
             self.run_search(cx);
