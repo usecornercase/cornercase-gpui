@@ -101,6 +101,10 @@ pub(crate) fn settled(started_on: &str, now: &str) -> Settled {
     if started_on == now { Settled::Closed } else { Settled::Back }
 }
 
+pub(crate) fn forgets_after_close(live_hold: bool) -> bool {
+    !live_hold
+}
+
 pub(crate) fn settle_now(linked: bool, live: bool, started_on: &str, now: &str) -> Option<Settled> {
     if !linked {
         return None;

@@ -530,6 +530,35 @@ while True:
   track "$!"
 }
 
+late_server() {
+  python3 -I -c '
+import socket, sys, threading
+def serve(c):
+    while c.recv(100):
+        pass
+    c.sendall(b"pong")
+    c.close()
+l = socket.socket()
+l.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+l.bind(("127.0.0.1", int(sys.argv[1])))
+l.listen(5)
+while True:
+    c, _ = l.accept()
+    threading.Thread(target=serve, args=(c,), daemon=True).start()
+' "$1" > /dev/null 2>&1 &
+  track "$!"
+}
+
+half_close_trip() {
+  python3 -I -c '
+import socket, sys
+s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=5)
+s.sendall(b"ping")
+s.shutdown(socket.SHUT_WR)
+print(s.recv(10).decode())
+' "$1" 2> /dev/null
+}
+
 round_trip() {
   python3 -I -c '
 import socket, sys
@@ -591,6 +620,27 @@ the_stand_in_forwards_a_reverse_forward_too() {
   until_answers "$near" || { check "nothing answered through the -R forward: $(cat "$t/ferr")" false; return 1; }
   kill "$forwarded"
   check "SIGTERM did not end the -R forward" until_gone "$forwarded"
+}
+
+the_stand_in_keeps_the_answer_after_a_client_half_closes() {
+  far=$(free_port)
+  near=$(other_free_port "$far")
+  late_server "$far"
+  n=0
+  while [ "$n" -lt 50 ] && ! python3 -I -c 'import socket,sys;socket.create_connection(("127.0.0.1",int(sys.argv[1])),timeout=1)' "$far" 2> /dev/null; do
+    n=$((n + 1))
+    sleep 0.1
+  done
+  forward_in "$b" "$near" "$far"
+  n=0
+  answer=
+  while [ "$n" -lt 50 ] && [ "$answer" != pong ]; do
+    answer=$(half_close_trip "$near")
+    n=$((n + 1))
+    [ "$answer" = pong ] || sleep 0.1
+  done
+  kill "$forwarded"
+  check "the answer after the client's half-close was '$answer', not pong" [ "$answer" = pong ]
 }
 
 the_stand_in_says_a_taken_port_as_ssh_does() {
@@ -867,6 +917,7 @@ run_test the_stand_in_answers_127_while_missing
 run_test the_stand_in_refuses_other_hosts_masters_and_shells
 run_test the_stand_in_forwards_a_port_to_there
 run_test the_stand_in_forwards_a_reverse_forward_too
+run_test the_stand_in_keeps_the_answer_after_a_client_half_closes
 run_test the_stand_in_says_a_taken_port_as_ssh_does
 run_test the_stand_in_refuses_a_forward_while_held
 run_test the_stand_in_forwards_only_loopback

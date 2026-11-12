@@ -1,4 +1,4 @@
-use super::{Passage, Step, passage, step, tabs_of_a_server};
+use super::{HeldOpen, Passage, Step, asks_now, passage, step, superseded, tabs_of_a_server};
 use crate::model::tunnels::{Older, Way};
 use crate::store::Held;
 
@@ -31,7 +31,22 @@ fn leaving_a_server_closes_the_tabs_of_its_workspaces_only() {
 }
 
 #[test]
-fn an_open_waits_for_a_tunnel_being_closed_and_asks_again() {
-    assert_eq!(step(Some(&Held::Ending), true), Step::Wait);
-    assert_eq!(step(None, false), Step::Wait);
+fn an_open_made_while_its_tunnel_is_closing_waits_and_asks_after() {
+    assert!(!asks_now(false, Some(&Held::Ending)));
+    assert_eq!(step(Some(&Held::Ending), false), Step::Wait);
+    assert!(asks_now(false, None));
+}
+
+#[test]
+fn an_open_asked_before_a_close_is_dropped_so_the_close_stands() {
+    assert_eq!(step(Some(&Held::Ending), true), Step::Drop);
+    assert!(!asks_now(true, None));
+}
+
+#[test]
+fn a_navigation_elsewhere_drops_the_opens_waiting_for_that_tab() {
+    let open = |session: Option<&str>| HeldOpen::waiting(5173, session);
+    let mut opens = vec![open(Some("a")), open(Some("b")), open(None)];
+    superseded(&mut opens, "a");
+    assert_eq!(opens.iter().map(|o| o.session.as_deref()).collect::<Vec<_>>(), [Some("b"), None]);
 }

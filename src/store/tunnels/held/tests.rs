@@ -1,4 +1,7 @@
-use super::{Asked, Fate, Held, Hold, Settled, bring_back, fate, settle_now, settled, up_toast, window_failure};
+use super::{
+    Asked, Fate, Held, Hold, Settled, bring_back, fate, forgets_after_close, settle_now, settled, up_toast,
+    window_failure,
+};
 
 fn hold(state: Held, was_up: bool) -> Hold {
     let mut hold = Hold::opening(5173, 1, Asked::Click, "boot-a");
@@ -94,4 +97,10 @@ fn an_exit_0_while_unlinked_waits_for_the_next_view_line() {
 #[test]
 fn a_hold_started_again_is_not_forgotten_by_the_exit_that_came_before() {
     assert_eq!(settle_now(true, true, "boot-a", "boot-a"), Some(Settled::Superseded));
+}
+
+#[test]
+fn a_close_answered_after_the_port_was_opened_again_keeps_it() {
+    assert!(!forgets_after_close(true));
+    assert!(forgets_after_close(false));
 }

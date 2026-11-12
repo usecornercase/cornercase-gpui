@@ -196,6 +196,7 @@ impl Browser {
         if let Some(remote) = self.through_cornercase(&typed, cx) {
             return self.browse_held((remote, typed), (self.workspace, true), cx);
         }
+        self.supersede_waiting();
         let url = self.tunnelled(typed);
         match self.active_session() {
             Some(session) => self.send(Some(&session), "Page.navigate", json!({ "url": url })),
@@ -204,6 +205,7 @@ impl Browser {
     }
 
     fn step(&mut self, entry: Option<i64>) {
+        self.supersede_waiting();
         if let (Some(session), Some(entry)) = (self.active_session(), entry) {
             self.send(Some(&session), "Page.navigateToHistoryEntry", json!({ "entryId": entry }));
         }

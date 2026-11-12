@@ -18,6 +18,18 @@ pub(crate) struct HeldOpen {
 }
 
 impl HeldOpen {
+    #[cfg(test)]
+    pub(crate) fn waiting(remote: u16, session: Option<&str>) -> Self {
+        Self {
+            remote,
+            url: format!("http://localhost:{remote}"),
+            workspace: None,
+            navigate: true,
+            session: session.map(str::to_string),
+            asked: false,
+        }
+    }
+
     pub(super) fn in_workspace(&self, workspace: Option<u64>) -> bool {
         self.workspace == workspace
     }
@@ -30,11 +42,19 @@ pub(crate) enum Step {
     Drop,
 }
 
+pub(crate) fn asks_now(asked: bool, held: Option<&Held>) -> bool {
+    !asked && held != Some(&Held::Ending)
+}
+
+pub(crate) fn superseded(opens: &mut Vec<HeldOpen>, session: &str) {
+    opens.retain(|open| open.session.as_deref() != Some(session));
+}
+
 pub(crate) fn step(held: Option<&Held>, asked: bool) -> Step {
     match held {
         Some(Held::Up { local }) => Step::Open(*local),
-        Some(Held::Opening | Held::Down { .. } | Held::Ending) => Step::Wait,
-        None => {
+        Some(Held::Opening | Held::Down { .. }) => Step::Wait,
+        Some(Held::Ending) | None => {
             if asked {
                 Step::Drop
             } else {
@@ -67,8 +87,12 @@ impl Browser {
         cx: &mut Context<Self>,
     ) {
         let session = self.active_session().filter(|_| navigate);
-        let again = |o: &HeldOpen| (o.remote, &o.url, o.workspace, o.navigate) == (remote, &url, workspace, navigate);
-        if !self.dev.held_opens.iter().any(again) {
+        if let Some(session) = &session {
+            superseded(&mut self.dev.held_opens, session);
+        }
+        let key = |o: &HeldOpen| (o.remote, o.url.clone(), o.workspace, o.navigate, o.session.clone());
+        let new = (remote, url.clone(), workspace, navigate, session.clone());
+        if !self.dev.held_opens.iter().any(|o| key(o) == new) {
             self.dev.held_opens.push(HeldOpen { remote, url, workspace, navigate, session, asked: false });
         }
         self.held_changed(cx);
@@ -99,12 +123,12 @@ impl Browser {
     fn follow_holds(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
         let mut waiting = Vec::new();
         for mut open in std::mem::take(&mut self.dev.held_opens) {
-            if !open.asked {
+            let before = store.read(cx).held_tunnel(open.remote).cloned();
+            if asks_now(open.asked, before.as_ref()) {
                 store.update(cx, |s, cx| s.hold_tunnel(open.remote, Asked::Open, cx));
                 open.asked = true;
             }
             let held = store.read(cx).held_tunnel(open.remote).cloned();
-            open.asked &= held != Some(Held::Ending);
             match step(held.as_ref(), open.asked) {
                 Step::Open(local) => self.open_held(&open, local, cx),
                 Step::Wait => waiting.push(open),
@@ -139,6 +163,12 @@ impl Browser {
             return self.tunnel_to(remote, cx).map_or(Passage::Waiting, Passage::Through);
         }
         passage(&way, Store::get(cx).read(cx).held_tunnel(remote))
+    }
+
+    pub(super) fn supersede_waiting(&mut self) {
+        if let Some(session) = self.active_session() {
+            superseded(&mut self.dev.held_opens, &session);
+        }
     }
 
     pub(super) fn left_server_now(&mut self, cx: &mut Context<Self>) {

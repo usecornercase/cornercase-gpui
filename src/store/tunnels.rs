@@ -16,7 +16,7 @@ pub(crate) use held::{Asked, Held};
 use rows::Mark;
 pub(crate) use rows::{Control, TunnelRow, Whose, asks_note, heading, none_note};
 
-use held::{Fate, Hold, Settled, bring_back, fate, settle_now, up_toast, window_failure};
+use held::{Fate, Hold, Settled, bring_back, fate, forgets_after_close, settle_now, up_toast, window_failure};
 
 const SETTLE_AFTER: Duration = Duration::from_secs(3);
 
@@ -267,7 +267,10 @@ impl Store {
         let verb = if forget { "forget" } else { "close" };
         match result {
             Ok(_) => {
-                self.forget_in_memory(&host, port, cx);
+                let live = self.tunnels.holds.iter().any(|h| h.port == port && h.state != Held::Ending);
+                if forgets_after_close(live) {
+                    self.forget_in_memory(&host, port, cx);
+                }
                 let past = if forget { "Forgot" } else { "Closed" };
                 self.toast(format!("{past} the tunnel of port {port} on {host}"), ToastKind::Info, cx);
             }
