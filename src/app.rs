@@ -260,14 +260,21 @@ impl Root {
         .detach();
     }
 
+    fn take_asks(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(focus) = store.update(cx, |s, _| s.asks.refocus.take()) {
+            window.focus(&focus);
+        }
+        if let Some(updating) = store.update(cx, |s, _| s.asks.open_update.take()) {
+            self.open_update(updating, window, cx);
+        }
+    }
+
     fn store_changed(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(target) = store.update(cx, |s, _| s.switch_to.take()) {
             self.switch(target, window, cx);
             return;
         }
-        if let Some(focus) = store.update(cx, |s, _| s.refocus.take()) {
-            window.focus(&focus);
-        }
+        self.take_asks(store, window, cx);
         let to_terminal = store.update(cx, |s, _| std::mem::take(&mut s.keys_to_terminal));
         let place = store.read(cx).machine_place.clone();
         if place != self.side.machine_place {

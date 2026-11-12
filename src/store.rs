@@ -16,6 +16,7 @@ use crate::model::machines::run_on::clone::Cloned;
 use crate::model::machines::{self, Machine};
 use crate::model::{MachinePlace, Session};
 use crate::notify::Posted;
+use crate::notify::update::Updating;
 use crate::panels::PanelKind;
 use crate::panels::files::open::{self, Found};
 use crate::panels::plugins::Offers;
@@ -59,10 +60,10 @@ pub(crate) struct Store {
     pub peeking: bool,
     pub dialog: Option<AnyView>,
     dialog_behind: Option<(AnyView, FocusHandle)>,
-    pub refocus: Option<FocusHandle>,
     pub toasts: Vec<Toast>,
     pub posted: Posted,
     pub switch_to: Option<Target>,
+    pub asks: Asks,
     pub browse: Option<(String, Option<u64>)>,
     pub landing: Option<FoundSetting>,
     pub prefs: Prefs,
@@ -94,13 +95,20 @@ pub(crate) struct Toast {
     pub count: u32,
 }
 
+#[derive(Default)]
+pub(crate) struct Asks {
+    pub refocus: Option<FocusHandle>,
+    pub open_update: Option<Updating>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ToastGo {
     Run(Vec<String>),
     Machine(NoticeThere),
+    Update(Updating),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ToastKind {
     Info,
     Error,
@@ -153,10 +161,10 @@ impl Store {
             peeking: false,
             dialog: None,
             dialog_behind: None,
-            refocus: None,
             toasts: Vec::new(),
             posted: Posted::default(),
             switch_to: None,
+            asks: Asks::default(),
             browse: None,
             landing: None,
             prefs: prefs::load(),
@@ -369,6 +377,10 @@ impl Store {
         match action {
             ToastGo::Run(args) => self.act(args.clone()),
             ToastGo::Machine(there) => self.go_there(there, cx),
+            ToastGo::Update(updating) => {
+                self.asks.open_update = Some(*updating);
+                cx.notify();
+            }
         }
     }
 

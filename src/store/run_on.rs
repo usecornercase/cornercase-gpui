@@ -206,14 +206,14 @@ impl Store {
     ) {
         self.dialog_behind = self.dialog.take().map(|dialog| (dialog, back));
         self.dialog = Some(view);
-        self.refocus = Some(focus);
+        self.asks.refocus = Some(focus);
         cx.notify();
     }
 
     pub(super) fn dialog_comes_back(&mut self) {
         if let Some((dialog, focus)) = self.dialog_behind.take() {
             self.dialog = Some(dialog);
-            self.refocus = Some(focus);
+            self.asks.refocus = Some(focus);
         }
     }
 }

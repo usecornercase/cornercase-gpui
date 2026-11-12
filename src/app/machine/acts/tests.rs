@@ -172,7 +172,7 @@ fn an_answer_there_says_the_machine_restarted_for_a_stale_boot() {
     let stale = Err(cli::failure("mark", Some(4), b"this request is for another run"));
     let (text, kind) = there_answer("vps", &stale, None).expect("an answer");
     assert_eq!(text, "vps restarted: nothing was sent");
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn an_answer_there_names_the_machine_for_any_other_failure() {
     let failed = Err(cli::failure("mark", Some(1), b"no such pane"));
     let (text, kind) = there_answer("vps", &failed, None).expect("an answer");
     assert!(text.starts_with("vps: "), "{text}");
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
 }
 
 #[test]

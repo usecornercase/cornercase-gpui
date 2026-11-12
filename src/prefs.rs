@@ -110,6 +110,11 @@ pub(crate) fn folder_of(settings: &Path) -> PathBuf {
     settings.parent().map(Path::to_path_buf).unwrap_or_default()
 }
 
+pub(crate) fn beside(settings: &Path, name: &str) -> PathBuf {
+    let beside = folder_of(settings).join(name);
+    if beside == settings { settings.with_file_name(format!("window-{name}")) } else { beside }
+}
+
 pub(crate) fn folder() -> PathBuf {
     folder_of(&path())
 }

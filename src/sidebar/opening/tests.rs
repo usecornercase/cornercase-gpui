@@ -40,27 +40,27 @@ fn an_import_from_a_group_goes_into_that_group() {
 fn a_whole_import_says_how_many_projects_went_into_the_group() {
     let whole = imported(fixture!("code_workspace/whole.json"));
     assert_eq!(whole.message(), "2 projects imported into whole");
-    assert!(whole.kind() == ToastKind::Done);
+    assert_eq!(whole.kind(), ToastKind::Done);
 }
 
 #[test]
 fn a_folder_that_is_gone_is_said_beside_what_went_in() {
     let partial = imported(fixture!("code_workspace/one-gone.json"));
     assert_eq!(partial.message(), "2 projects imported into team, 1 not found");
-    assert!(partial.kind() == ToastKind::Done);
+    assert_eq!(partial.kind(), ToastKind::Done);
 }
 
 #[test]
 fn a_folder_that_could_not_open_is_an_error_and_says_where_to_look() {
     assert_eq!(one_failed().message(), "1 project imported into team, 1 could not open, see server.log");
-    assert!(one_failed().kind() == ToastKind::Error);
+    assert_eq!(one_failed().kind(), ToastKind::Error);
 }
 
 #[test]
 fn an_import_of_nothing_is_an_error_that_names_the_file() {
     let nothing = imported(fixture!("code_workspace/nothing.json"));
     assert_eq!(nothing.message(), "nothing imported from none, 1 not found");
-    assert!(nothing.kind() == ToastKind::Error);
+    assert_eq!(nothing.kind(), ToastKind::Error);
 }
 
 #[test]

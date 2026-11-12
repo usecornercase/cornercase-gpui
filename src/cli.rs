@@ -158,6 +158,10 @@ pub(crate) fn ensure_binary(chosen: Option<String>) -> Result<(), Missing> {
     Ok(())
 }
 
+pub(crate) fn binary_path() -> std::path::PathBuf {
+    binary().path
+}
+
 pub(crate) fn installed_version() -> Option<Version> {
     let binary = binary();
     let lines = System::here().version(&binary.path, binary.path_env.as_deref()).ok()?;

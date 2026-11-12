@@ -74,7 +74,7 @@ fn a_finished_action_says_how_long_it_took() {
         .expect("the outcome parses");
     let (text, kind) = ok.say("say hello").expect("it says so");
     assert_eq!(text, "say hello: done in 380 ms");
-    assert!(kind == ToastKind::Info);
+    assert_eq!(kind, ToastKind::Info);
     assert_eq!(duration(1500), "1.5 s");
 }
 
@@ -84,7 +84,7 @@ fn a_failed_action_points_at_its_log() {
         serde_json::from_str(crate::test_util::fixture!("plugins/run-failed.json")).expect("the failure parses");
     let (text, kind) = failed.say("Fail on purpose").expect("it says so");
     assert_eq!(text, "Fail on purpose: exit status: 3; `cornercase plugin logs acme.notes` says more");
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
 }
 
 #[test]

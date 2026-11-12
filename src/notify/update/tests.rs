@@ -86,3 +86,10 @@ fn changed_notes_are_parsed_again() {
     assert_eq!(parsed.of(&notes("## Two")), [markdown::parse("## Two")]);
     assert_eq!(parsed.of(&[]), Vec::<Vec<Block>>::new());
 }
+
+#[test]
+fn a_failed_install_names_the_program_and_opens_its_dialog() {
+    let toast = UpdateToast::install_failed("cornercase-gpui", "0.1.65", "no space left", Updating::Window);
+    assert_eq!(toast.text, "Could not install cornercase-gpui 0.1.65: no space left");
+    assert_eq!((toast.kind, toast.details), (ToastKind::Error, Some(Updating::Window)));
+}

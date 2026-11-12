@@ -182,7 +182,7 @@ fn a_finished_run_says_so_and_reads_nothing_again() {
     let told = told("Say where", Ok(r#"{"plugin": "p", "error": null, "ms": 51}"#.to_string()));
     let (text, kind) = told.said.expect("it says so");
     assert_eq!(text, "Say where: done in 51 ms");
-    assert!(kind == ToastKind::Info);
+    assert_eq!(kind, ToastKind::Info);
     assert!(!told.refused);
 }
 
@@ -191,7 +191,7 @@ fn a_failed_run_is_told_from_its_outcome() {
     let told = told("Fail on purpose", Ok(fixture!("plugins/run-failed.json").to_string()));
     let (text, kind) = told.said.expect("it says so");
     assert_eq!(text, "Fail on purpose: exit status: 3; `cornercase plugin logs acme.notes` says more");
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
     assert!(!told.refused);
 }
 
@@ -200,7 +200,7 @@ fn a_refused_run_is_told_and_reads_the_list_again() {
     let told = told("Say where", Err(anyhow::anyhow!("cornercase plugin: the plugins changed since revision 1")));
     let (text, kind) = told.said.expect("it says so");
     assert_eq!(text, "Say where: cornercase plugin: the plugins changed since revision 1");
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
     assert!(told.refused);
 }
 

@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.64
+
+- **A failed update says so.** When Install fails, for cornercase or for this window, a toast names the program and why, with Details to open its update dialog, even if you closed the dialog while it ran; if the window was behind, the toast waits until you come back. When cornercase cannot update itself (Homebrew, a folder it cannot write), it now shows the command cornercase printed instead of `failed`.
+- **An install is checked before it is called installed.** After `cornercase update` finishes, the window asks the `cornercase` it runs for its version, and says so when it is still the old one. On another machine it cannot check yet and says so ([usecornercase/cornercase-terminal#775](https://github.com/usecornercase/cornercase-terminal/issues/775)).
+- **After a restart, the window says whether it took**: `cornercase is now 0.13.50`, or the version the server came back on, with the `cornercase` this window runs. After this window's own update, its next start says `cornercase-gpui is now …`, or which version started instead and from where, even if you opened another copy yourself.
+- The status bar's tooltip on the connection now names this window's version.
+
 ## 0.1.63
 
 - **A long branch name stays inside the question before removing a worktree.** Also delete the branch now wraps a long name onto more lines, as the question's title and lines already did, instead of running past the dialog's edge, so you can read the whole name before you answer. Other checkboxes wrap a long label the same way where their row has a width to fit it in.

@@ -13,6 +13,7 @@ use crate::keymap::{Command, with_keys};
 use crate::notify;
 use crate::platform::Os;
 use crate::platform::paths;
+use crate::self_update;
 use crate::terminal;
 use crate::theme::{colours, radius};
 use crate::ui::{self, motion};
@@ -56,7 +57,7 @@ impl Root {
 
     fn connection_status(&self) -> impl IntoElement + use<> {
         let (dot, label, why) = self.connection_label();
-        let tip = why.unwrap_or_else(|| with_keys("Connect to another server", Command::Connect));
+        let tip = connection_tip(why);
         div()
             .id("conn")
             .flex_none()
@@ -108,6 +109,11 @@ impl Root {
         })
         .unwrap_or_default()
     }
+}
+
+fn connection_tip(why: Option<String>) -> String {
+    let lead = why.unwrap_or_else(|| with_keys("Connect to another server", Command::Connect));
+    format!("{lead}\nThis window is {}", self_update::version_line())
 }
 
 fn conn_words(conn: &Conn, came_up: bool, version: &str) -> (String, Option<String>) {

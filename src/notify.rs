@@ -21,6 +21,8 @@ use crate::platform::Os;
 use crate::store::{self, Busy, Store, ToastGo, ToastKind, args};
 use crate::theme::{UI_FAMILY, colours, radius};
 use crate::ui::{self, glass};
+use update::UpdateToast;
+use update::outcome::{self, CameBack, Here, Outcome, Where};
 
 pub(crate) use center::{Posted, listen};
 pub(crate) use feed::{AppState, Event, Notes, Notice, Prefs, parse_event};
@@ -31,7 +33,7 @@ const SOUND_EVERY: Duration = Duration::from_secs(1);
 const RETRY: Duration = Duration::from_secs(3);
 const DISK_EVERY: Duration = Duration::from_secs(20);
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum InstallState {
     Idle,
     Running,
@@ -57,6 +59,9 @@ pub(crate) struct Notifier {
     pub install: InstallState,
     restart: Option<Stream>,
     disk: OnDisk,
+    waits: Option<String>,
+    expected: Option<outcome::Expected>,
+    later: Vec<UpdateToast>,
 }
 
 #[derive(Default)]
@@ -68,20 +73,8 @@ struct OnDisk {
 impl Notifier {
     pub(crate) fn new(store: Entity<Store>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         cx.observe(&store, |this, _, cx| this.store_changed(cx)).detach();
-        cx.observe_window_activation(window, |this, window, cx| {
-            this.active = window.is_window_active();
-            if this.active {
-                this.read_disk(cx);
-                this.tell_held(cx);
-            }
-        })
-        .detach();
-        cx.spawn(async move |this, cx| {
-            while this.update(cx, Self::read_disk).is_ok() {
-                cx.background_executor().timer(DISK_EVERY).await;
-            }
-        })
-        .detach();
+        Self::follow_window(window, cx);
+        Self::follow_updater(cx);
         Self {
             store,
             events: None,
@@ -100,6 +93,55 @@ impl Notifier {
             install: InstallState::Idle,
             restart: None,
             disk: OnDisk::default(),
+            waits: None,
+            expected: None,
+            later: Vec::new(),
+        }
+    }
+
+    fn follow_window(window: &mut Window, cx: &mut Context<Self>) {
+        cx.observe_window_activation(window, |this, window, cx| {
+            this.active = window.is_window_active();
+            if this.active {
+                this.read_disk(cx);
+                this.tell_held(cx);
+                this.tell_later(cx);
+            }
+        })
+        .detach();
+        cx.spawn(async move |this, cx| {
+            while this.update(cx, Self::read_disk).is_ok() {
+                cx.background_executor().timer(DISK_EVERY).await;
+            }
+        })
+        .detach();
+    }
+
+    fn follow_updater(cx: &mut Context<Self>) {
+        if let Some(updater) = crate::self_update::entity(cx) {
+            cx.observe(&updater, |this, _, cx| this.hear_updater(cx)).detach();
+        }
+        cx.spawn(async move |this, cx| {
+            let _ = this.update(cx, Self::hear_updater);
+        })
+        .detach();
+    }
+
+    fn hear_updater(&mut self, cx: &mut Context<Self>) {
+        for toast in crate::self_update::take_toasts(cx) {
+            self.tell(toast, cx);
+        }
+    }
+
+    fn tell(&mut self, toast: UpdateToast, cx: &mut Context<Self>) {
+        let Some(toast) = hold_or_tell(self.active, toast, &mut self.later) else { return };
+        let button = toast.details.map(|updating| ("Details".to_string(), ToastGo::Update(updating)));
+        self.store.update(cx, |s, cx| s.toast_with(toast.text, toast.kind, button, cx));
+    }
+
+    fn tell_later(&mut self, cx: &mut Context<Self>) {
+        for toast in std::mem::take(&mut self.later) {
+            self.tell(toast, cx);
         }
     }
 
@@ -116,11 +158,13 @@ impl Notifier {
             self.app = app;
             self.app_key = app_key;
             self.read_disk(cx);
+            self.check_came_back(cx);
             cx.notify();
         }
         if boot.is_some() && boot != self.boot {
             if self.boot.is_some() {
                 self.install = InstallState::Idle;
+                self.waits = None;
                 self.restart = None;
                 self.bell_toasts.clear();
                 self.store.update(cx, |s, _| s.posted = Posted::default());
@@ -309,16 +353,62 @@ impl Notifier {
         if self.install == InstallState::Running {
             return;
         }
-        let version = self.app.release().map(|r| r.version.clone()).unwrap_or_default();
+        let release = self.app.release().map(|r| r.version.clone()).unwrap_or_default();
+        let target = cli::target();
+        let host = target.host().map(str::to_string);
         self.install = InstallState::Running;
+        self.waits = None;
         cx.notify();
-        store::run(cx, args(&["update"]), move |this, result, cx| {
-            this.install = match result {
-                Ok(_) => InstallState::Done(version),
-                Err(e) => InstallState::Failed(e.to_string()),
-            };
-            cx.notify();
-        });
+        let busy = Busy::new("update", format!("Installing cornercase {release}…"));
+        store::run_local_busy(
+            cx,
+            busy,
+            move || Ok(ask_update(&target)),
+            move |this, result, cx| {
+                let (answer, here) = result.unwrap_or_else(|e| (Err(e), None));
+                let outcome = outcome::of(answer, &release, host.as_deref(), here.as_ref());
+                this.settle(&outcome, &release, cx);
+            },
+        );
+    }
+
+    fn settle(&mut self, outcome: &Outcome, release: &str, cx: &mut Context<Self>) {
+        self.install = outcome.state();
+        self.waits = outcome.waits();
+        if let InstallState::Done(version) = &self.install {
+            self.expect(version.clone());
+        }
+        if let Some(toast) = outcome.toast(release) {
+            self.tell(toast, cx);
+        }
+        cx.notify();
+    }
+
+    fn expect(&mut self, version: String) {
+        self.expected = self.app.boot.clone().map(|boot| outcome::Expected { version, boot });
+    }
+
+    fn check_came_back(&mut self, cx: &mut Context<Self>) {
+        let Some(back) = self.expected.as_ref().and_then(|expected| outcome::came_back(expected, &self.app)) else {
+            return;
+        };
+        self.expected = None;
+        if let Some(host) = cli::host() {
+            self.tell(back.toast(&Where::There(&host)), cx);
+        } else if matches!(back, CameBack::Now(_)) {
+            self.tell(back.toast(&Where::Here(None)), cx);
+        } else {
+            let read = cx.background_spawn(async { binary_here() });
+            cx.spawn(async move |this, cx| {
+                let here = read.await;
+                let _ = this.update(cx, |this, cx| this.tell(back.toast(&Where::Here(Some(&here))), cx));
+            })
+            .detach();
+        }
+    }
+
+    pub(crate) fn waits(&self) -> Option<&str> {
+        self.waits.as_deref()
     }
 
     pub(crate) fn installed_version(&self) -> Option<String> {
@@ -351,6 +441,9 @@ impl Notifier {
     }
 
     pub(crate) fn restart(&mut self, when_idle: bool, cx: &mut Context<Self>) {
+        if let Some(version) = self.installed_version() {
+            self.expect(version);
+        }
         if !when_idle {
             let busy = Busy::new("restart", "Restarting the server…");
             self.store.update(cx, |s, cx| s.run_aside(busy, args(&["restart", "--yes"]), cx));
@@ -461,6 +554,24 @@ impl Notifier {
                 .into_any_element(),
         )
     }
+}
+
+fn ask_update(target: &cli::Target) -> (anyhow::Result<cli::Answer>, Option<Here>) {
+    let answer = cli::answer_on(target, &["update"]);
+    let verify = answer.as_ref().is_ok_and(|a| a.code == Some(0)) && matches!(target, cli::Target::Local);
+    (answer, verify.then(binary_here))
+}
+
+fn binary_here() -> Here {
+    Here { path: ui::home_relative(&cli::binary_path().to_string_lossy()), version: cli::installed_version() }
+}
+
+fn hold_or_tell(active: bool, toast: UpdateToast, later: &mut Vec<UpdateToast>) -> Option<UpdateToast> {
+    if active {
+        return Some(toast);
+    }
+    later.push(toast);
+    None
 }
 
 fn last_line(err: &str) -> String {

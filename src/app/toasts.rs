@@ -1,9 +1,12 @@
 use gpui::{
     ClickEvent, Context, Div, Entity, InteractiveElement as _, IntoElement, ParentElement as _, Rgba, SharedString,
-    Stateful, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
+    Stateful, StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use super::Root;
+use crate::notify;
+use crate::notify::update::Updating;
+use crate::self_update;
 use crate::store::{Store, Toast, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
@@ -21,6 +24,13 @@ impl Root {
                 motion::slide(toast_view(&store, t), ("toast-in", id), Way::In, (TOAST_SLIDE, 0.))
             },
         ))
+    }
+
+    pub(super) fn open_update(&self, updating: Updating, window: &mut Window, cx: &mut Context<Self>) {
+        match updating {
+            Updating::Cornercase => notify::update::show_update(self.notifier.clone(), window, cx),
+            Updating::Window => self_update::show_dialog(window, cx),
+        }
     }
 }
 
