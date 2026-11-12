@@ -22,7 +22,7 @@ fn reads_a_notice() {
     assert_eq!(n.message, "claude needs you in shop › default");
     assert_eq!(n.panes, [4]);
     assert_eq!(n.sound, None);
-    assert!(n.toast_kind() == ToastKind::NeedsYou);
+    assert_eq!(n.toast_kind(), ToastKind::NeedsYou);
     assert_eq!(n.headline(), "claude needs you");
 }
 
@@ -40,7 +40,7 @@ fn reads_a_notice_of_an_agent_on_a_machine() {
     assert_eq!(n.machine.as_deref(), Some("vps"));
     assert_eq!(n.message, "claude on vps needs you in shop › notes");
     assert_eq!(n.sound.as_deref(), Some("needs-you"));
-    assert!(n.toast_kind() == ToastKind::NeedsYou);
+    assert_eq!(n.toast_kind(), ToastKind::NeedsYou);
     assert_eq!(n.headline(), "claude needs you");
 }
 
@@ -62,7 +62,7 @@ fn a_notice_of_an_agent_on_a_machine_goes_to_its_panes_there_not_by_its_token() 
 fn reads_a_notice_with_its_sound() {
     let Event::Notice(n) = fixture("notice-sound") else { panic!("not a notice") };
     assert_eq!(n.sound.as_deref(), Some("finished"));
-    assert!(n.toast_kind() == ToastKind::Done);
+    assert_eq!(n.toast_kind(), ToastKind::Done);
     assert_eq!(n.headline(), "claude finished");
 }
 

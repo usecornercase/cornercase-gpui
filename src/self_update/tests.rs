@@ -81,3 +81,28 @@ fn release_builds_ask_github_and_only_debug_builds_ask_another_url() {
     assert_eq!(releases_url(Some("http://127.0.0.1:8765/x".into()), false).as_deref(), Some(RELEASES_URL));
     assert_eq!(releases_url(Some("  ".into()), true), None);
 }
+
+#[test]
+fn a_failed_install_tells_the_user_with_details() {
+    let mut updater = updater(Some(found("0.2.0", false)), InstallState::Running);
+    assert_eq!(updater.settle("0.2.0", Err(anyhow::anyhow!("no space left"))), None);
+    assert_eq!(updater.install, InstallState::Failed("no space left".into()));
+    assert_eq!(updater.toasts.len(), 1);
+    assert_eq!(updater.toasts[0].text, "Could not install cornercase-gpui 0.2.0: no space left");
+    assert_eq!(updater.toasts[0].details, Some(Updating::Window));
+}
+
+#[test]
+fn a_done_install_is_noted_for_the_next_start() {
+    let mut updater = updater(Some(found("0.2.0", false)), InstallState::Running);
+    assert_eq!(updater.settle("0.2.0", Ok("0.2.0".into())), Some("0.2.0".into()));
+    assert_eq!(updater.install, InstallState::Done("0.2.0".into()));
+    assert_eq!(updater.toasts.len(), 0);
+}
+
+#[test]
+fn the_relaunch_awaits_the_installed_version() {
+    assert_eq!(updater(None, InstallState::Done("0.2.0".into())).awaited(), Some("0.2.0".into()));
+    assert_eq!(updater(Some(found("0.3.0", true)), InstallState::Idle).awaited(), Some("0.3.0".into()));
+    assert_eq!(updater(Some(found("0.3.0", false)), InstallState::Idle).awaited(), None);
+}

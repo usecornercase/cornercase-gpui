@@ -68,11 +68,8 @@ impl Saved {
     }
 }
 
-const APART: &str = "window-layout.json";
-
 fn layout_path(settings: &Path) -> PathBuf {
-    let beside = prefs::folder_of(settings).join(FILE);
-    if beside == settings { settings.with_file_name(APART) } else { beside }
+    prefs::beside(settings, FILE)
 }
 
 pub(crate) struct Keeper {

@@ -17,6 +17,31 @@ use crate::ui;
 use crate::ui::markdown::text::{self, OnLink};
 use crate::ui::markdown::{self, Block};
 
+pub(crate) mod outcome;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Updating {
+    Cornercase,
+    Window,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct UpdateToast {
+    pub text: String,
+    pub kind: ToastKind,
+    pub details: Option<Updating>,
+}
+
+impl UpdateToast {
+    pub(crate) fn install_failed(program: &str, version: &str, why: &str, updating: Updating) -> Self {
+        Self {
+            text: format!("Could not install {program} {version}: {why}"),
+            kind: ToastKind::Error,
+            details: Some(updating),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Chip {
     Pending,
@@ -94,7 +119,7 @@ pub(super) struct UpdateDialog {
     notes: ParsedNotes,
 }
 
-pub(super) fn show_update(notifier: Entity<Notifier>, window: &mut Window, cx: &mut App) {
+pub(crate) fn show_update(notifier: Entity<Notifier>, window: &mut Window, cx: &mut App) {
     show(
         |focus, cx| {
             cx.observe(&notifier, |_, _, cx| cx.notify()).detach();
@@ -122,6 +147,7 @@ impl Render for UpdateDialog {
         let command = update.install.as_ref().filter(|i| i.method == "command").and_then(|i| i.command.clone());
         let installed = n.installed_version();
         let status = install_status(&install, &update, installed.as_deref());
+        let waits = n.waits().map(str::to_string);
         let body = div()
             .flex()
             .flex_col()
@@ -129,7 +155,8 @@ impl Render for UpdateDialog {
             .child(ui::dim(format!("You run cornercase {running}. What changed since:")))
             .child(release_notes(&release.notes, &mut self.notes))
             .child(div().text_size(px(12.)).text_color(colours::muted()).child(how_to_install(command.as_deref())))
-            .when_some(status, |d, (text, colour)| d.child(div().text_size(px(12.)).text_color(colour).child(text)));
+            .when_some(status, |d, (text, colour)| d.child(div().text_size(px(12.)).text_color(colour).child(text)))
+            .when_some(waits, |d, line| d.child(ui::dim(line)));
         let buttons = update_buttons(self.notifier.clone(), (command, installed.is_some()), &install, &release.version);
         dialog.child(frame(format!("cornercase {} is out", release.version), body, buttons))
     }

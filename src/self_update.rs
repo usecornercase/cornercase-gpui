@@ -1,3 +1,4 @@
+mod arrival;
 mod bundle;
 mod dialog;
 mod fetch;
@@ -8,16 +9,19 @@ mod release;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use anyhow::Context as _;
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Entity, Global, IntoElement as _,
-    StatefulInteractiveElement as _,
+    StatefulInteractiveElement as _, Window,
 };
 use serde_json::Value;
 
 use crate::cli;
+use crate::notify::update::{UpdateToast, Updating};
 use crate::notify::{self, InstallState, Notes};
 use crate::platform::Os;
-use crate::store::{self, Busy, Store, args};
+use crate::prefs;
+use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::colours;
 use crate::ui;
 use install::Way;
@@ -41,6 +45,7 @@ pub(crate) struct Updater {
     error: Option<String>,
     install: InstallState,
     relaunch: Option<Relaunch>,
+    toasts: Vec<UpdateToast>,
 }
 
 struct GlobalUpdater(Entity<Updater>);
@@ -93,7 +98,11 @@ pub(crate) fn start(cx: &mut App) {
         cx.background_spawn(async move { install::sweep(Os::CURRENT, &exe) }).detach();
     }
     let Some(url) = releases_url(std::env::var(URL_VARIABLE).ok(), cfg!(debug_assertions)) else { return };
-    let updater = cx.new(|_| Updater::new(url, exe));
+    let updater = cx.new(|_| {
+        let mut updater = Updater::new(url, exe);
+        updater.toasts.extend(arrived(updater.exe.as_deref()));
+        updater
+    });
     cx.set_global(GlobalUpdater(updater.clone()));
     cx.spawn(async move |cx| {
         cx.background_executor().timer(FIRST_CHECK).await;
@@ -115,6 +124,30 @@ pub(crate) fn take_relaunch(cx: &mut App) -> Option<Relaunch> {
     entity(cx)?.update(cx, |this, _| this.relaunch.take())
 }
 
+pub(crate) fn take_toasts(cx: &mut App) -> Vec<UpdateToast> {
+    entity(cx).map(|updater| updater.update(cx, |this, _| std::mem::take(&mut this.toasts))).unwrap_or_default()
+}
+
+pub(crate) fn show_dialog(window: &mut Window, cx: &mut App) {
+    if let Some(updater) = entity(cx) {
+        dialog::show(updater, window, cx);
+    }
+}
+
+fn place_of(exe: &Path) -> PathBuf {
+    install::home(Os::CURRENT, exe).unwrap_or_else(|| exe.to_path_buf())
+}
+
+fn shown(path: &Path) -> String {
+    ui::home_relative(&path.to_string_lossy())
+}
+
+fn arrived(exe: Option<&Path>) -> Option<UpdateToast> {
+    let awaited = arrival::take(&arrival::path(&prefs::path()))?;
+    let here = exe.map(place_of).unwrap_or_default();
+    Some(arrival::toast(&awaited.version, CURRENT, &shown(&here), &shown(&awaited.program)))
+}
+
 pub(crate) fn status_item(cx: &App) -> Option<AnyElement> {
     let updater = entity(cx)?;
     let state = updater.read(cx).chip_state()?;
@@ -130,7 +163,7 @@ pub(crate) fn status_item(cx: &App) -> Option<AnyElement> {
 
 impl Updater {
     fn new(url: String, exe: Option<PathBuf>) -> Self {
-        Self { exe, url, found: None, error: None, install: InstallState::Idle, relaunch: None }
+        Self { exe, url, found: None, error: None, install: InstallState::Idle, relaunch: None, toasts: Vec::new() }
     }
 
     fn chip_state(&self) -> Option<ChipState> {
@@ -183,20 +216,62 @@ impl Updater {
         }
         self.install = InstallState::Running;
         cx.notify();
+        let latest_version = latest.version.clone();
         let busy = Busy::new("window-update", format!("Installing {NAME} {}…", latest.version));
         let secure = fetch::secure(&self.url);
         let work = move || install::install(&latest, &asset, &exe, Os::CURRENT, secure);
-        store::run_local_busy(cx, busy, work, |this, result, cx| {
-            this.install = match result {
-                Ok(version) => InstallState::Done(version),
-                Err(e) => InstallState::Failed(format!("{e:#}")),
-            };
+        let wanted = latest_version.clone();
+        store::run_local_busy(cx, busy, work, move |this, result, cx| {
+            if let Some(done) = this.settle(&wanted, result) {
+                this.note_installed(&done);
+            }
             cx.notify();
         });
     }
 
+    fn settle(&mut self, version: &str, result: anyhow::Result<String>) -> Option<String> {
+        match result {
+            Ok(done) => {
+                self.install = InstallState::Done(done.clone());
+                Some(done)
+            }
+            Err(e) => {
+                let why = format!("{e:#}");
+                self.toasts.push(UpdateToast::install_failed(NAME, version, &why, Updating::Window));
+                self.install = InstallState::Failed(why);
+                None
+            }
+        }
+    }
+
+    fn note_installed(&mut self, version: &str) {
+        if let Err(e) = self.note(version) {
+            let text = format!("The next start cannot confirm {NAME} {version}: {e:#}");
+            self.toasts.push(UpdateToast { text, kind: ToastKind::Error, details: None });
+        }
+    }
+
+    fn note(&self, version: &str) -> anyhow::Result<()> {
+        let exe = self.exe.as_deref().context("this window does not know where it runs from")?;
+        let awaited = arrival::Awaited { version: version.to_string(), program: place_of(exe) };
+        arrival::remember(&arrival::path(&prefs::path()), &awaited)
+    }
+
+    fn awaited(&self) -> Option<String> {
+        match (&self.install, &self.found) {
+            (InstallState::Done(version), _) => Some(version.clone()),
+            (_, Some(found)) if found.on_disk => Some(found.latest.version.clone()),
+            _ => None,
+        }
+    }
+
     pub(crate) fn restart(&mut self, cx: &mut Context<Self>) {
         let Some(program) = self.exe.clone() else { return };
+        if let Some(version) = self.awaited()
+            && let Err(e) = self.note(&version)
+        {
+            eprintln!("{NAME}: the next start cannot confirm {version}: {e:#}");
+        }
         let tab = Store::get(cx).read(cx).session.as_ref().and_then(|session| session.shown().tab);
         let args = relaunch::relaunch_args(&cli::target().flags(), tab);
         self.relaunch = Some(Relaunch { program, args });

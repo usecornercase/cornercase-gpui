@@ -50,3 +50,13 @@ fn a_failure_already_told_this_run_is_not_held_again() {
     hold(&mut held, &told, alert::NOTIFICATION_FAILED, "again".into());
     assert_eq!(held, Vec::<(&str, String)>::new());
 }
+
+#[test]
+fn an_update_toast_waits_while_the_window_is_behind() {
+    let toast = UpdateToast::install_failed("cornercase", "0.13.50", "no", update::Updating::Cornercase);
+    let mut later = Vec::new();
+    assert_eq!(hold_or_tell(false, toast.clone(), &mut later), None);
+    assert_eq!(later, vec![toast.clone()]);
+    assert_eq!(hold_or_tell(true, toast.clone(), &mut later), Some(toast));
+    assert_eq!(later.len(), 1);
+}

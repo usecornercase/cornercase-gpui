@@ -69,3 +69,11 @@ fn settings_from_before_keep_no_chosen_cornercase() {
     let prefs = Prefs::parse(r#"{"open_links": "browser_panel"}"#);
     assert_eq!((prefs.open_links, prefs.cornercase_bin), (OpenLinks::BrowserPanel, None));
 }
+
+#[test]
+fn a_file_beside_the_settings_never_takes_their_name() {
+    let settings = Path::new("/x/cornercase-gpui/settings.json");
+    assert_eq!(beside(settings, "relaunch.json"), Path::new("/x/cornercase-gpui/relaunch.json"));
+    let same = Path::new("/x/relaunch.json");
+    assert_eq!(beside(same, "relaunch.json"), Path::new("/x/window-relaunch.json"));
+}

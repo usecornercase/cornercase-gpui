@@ -215,7 +215,7 @@ fn when_nothing_can_go_the_toast_says_why_by_name() {
 fn a_removal_with_nothing_to_say_is_plain_news() {
     let (text, kind) = summary(&only(at(&answers(), "cap-clean")));
     assert_eq!(text, "Removed shop › cap/clean and the branch cap/clean");
-    assert!(kind == ToastKind::Info);
+    assert_eq!(kind, ToastKind::Info);
 }
 
 #[test]
@@ -239,7 +239,7 @@ fn a_branch_that_was_kept_is_named() {
         "Removed shop › main\nshop › main: could not delete the branch main: refusing to delete the branch main, the \
          main checkout's or the default"
     );
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
 }
 
 #[test]
@@ -257,7 +257,7 @@ fn a_branch_that_moved_since_the_question_is_named() {
 fn a_teardown_that_failed_is_named() {
     let (text, kind) = summary(&only(at(&answers(), "cap-bad")));
     assert_eq!(text, "Removed shop › cap/bad\nshop › cap/bad: its teardown failed: exit status 4: broken");
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn a_folder_git_refused_says_why_by_name() {
         "Could not remove shop › cap/writes: '/home/ana/.cornercase/worktrees/shop/cap-writes' contains modified or \
          untracked files, use --force to delete it"
     );
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
 }
 
 #[test]
@@ -280,7 +280,7 @@ fn a_folder_that_changed_after_the_question_is_left_alone_and_said_in_words() {
          Remove it again to be asked again."
     );
     assert!(!text.contains("--force"), "{text}");
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
 }
 
 #[test]
@@ -295,7 +295,7 @@ fn a_refusal_nothing_could_lift_gives_its_reason() {
 fn the_good_news_comes_before_the_bad() {
     let (text, kind) = summary(&answers());
     assert!(text.starts_with("Removed 4 worktrees and 2 branches\n"), "{text}");
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
 }
 
 #[test]
@@ -303,7 +303,7 @@ fn a_command_that_failed_as_a_whole_still_names_the_folder() {
     let asked = at(&checked(), "feat-clean");
     let (text, kind) = summary(&only(asked.answered(Err("cornercase worktrees: no such command".to_string()))));
     assert_eq!(text, "Could not remove shop › feat/clean: cornercase worktrees: no such command");
-    assert!(kind == ToastKind::Error);
+    assert_eq!(kind, ToastKind::Error);
 }
 
 #[test]

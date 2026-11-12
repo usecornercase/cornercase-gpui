@@ -33,3 +33,11 @@ fn an_older_cornercase_there_reads_as_the_machines_sheet_says_it() {
         ("older server · 0.13.21".into(), Some(behind_lead(&behind, Os::CURRENT)))
     );
 }
+
+#[test]
+fn the_connection_tip_names_this_windows_version() {
+    let window = format!("This window is {}", crate::self_update::version_line());
+    let with = super::connection_tip(Some("boom".into()));
+    assert_eq!(with, format!("boom\n{window}"));
+    assert!(super::connection_tip(None).ends_with(&window));
+}
