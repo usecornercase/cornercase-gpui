@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.63
+
+- **A long branch name stays inside the question before removing a worktree.** Also delete the branch now wraps a long name onto more lines, as the question's title and lines already did, instead of running past the dialog's edge, so you can read the whole name before you answer. Every checkbox in the window wraps a long label the same way.
+
 ## 0.1.62
 
 - **An open panel costs much less while agents work.** The Changes, Files, TODO, Recap and Flow panels are now kept from one frame to the next unless something they show changed, as the sidebar, the tabs and the status bar already are. On a bench of 22 agents with 5 working, at 1512×912, a frame drawn to turn the orbits with the panel open went from 5.7 to 1.9 ms with Changes, 3.3 to 1.7 ms with Files, 4.4 to 2.1 ms with TODO, 2.5 to 1.7 ms with Recap and 4.0 to 2.1 ms with Flow, and the window went from 18.6 to 8.4 %, 12.6 to 7.7 %, 15.6 to 8.2 %, 9.4 to 7.2 % and 14.4 to 9.1 % of a core. One of the targets set before measuring was missed: an open panel still adds 0.5 to 0.9 ms to such a frame, more than the 10 % aimed at. The Browser panel is not kept yet.
