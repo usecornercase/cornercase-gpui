@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.68
+
+- **A dev server on another machine opens through cornercase's own tunnel.** With the window on another server (`--remote` or ⇧⌘K) and cornercase 0.13.50 or newer on both computers, Tunnel on a port's row in Ports, or opening the port in the Browser panel, holds the tunnel with `cornercase tunnel hold`: `cornercase tunnels` lists it, a script there can close it, and the window says which port it took on this computer when the same one is taken here. The status bar shows how many tunnels the window holds (`devbox ⇄2`); a click lists them, with Open in the Browser, Copy, Close and Forget. They end when the window closes or connects elsewhere, and come back when it connects to that machine again.
+- With an older cornercase on either side, the Browser panel opens its own tunnels as before, and Ports and the Browser say what 0.13.50 adds and where.
+- A program on that machine cannot ask this window for a tunnel yet (`cornercase tunnel open`): it waits on usecornercase/cornercase-terminal#776, which the tunnels' menu names.
+- Connecting to another server now also ends the Browser panel's own tunnels to the server it left.
+
 ## 0.1.67
 
 - **Long names stay inside Settings' import, a flow's roles and its messages, and context menus.** Importing a setup wraps a long file name onto more lines, with how many settings would change beside it, or under it when both do not fit, instead of running past the card. A flow's page and its editor wrap a long role name; a run's messages end it in "…", whole when you rest the pointer on it. A context menu ends a long entry in "…" at its edge, such as a group's name in Move to group or a plugin's name, and keeps a submenu's arrow and a chosen entry's tick in view.

@@ -8,7 +8,7 @@ use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::Context;
 
 use super::{Browser, say};
-use crate::model::link::loopback_port;
+use crate::model::link::{loopback_port, rewrite};
 use crate::store::{Busy, Store};
 use crate::{cli, desktop};
 
@@ -98,6 +98,13 @@ impl Tunnels {
         taken
     }
 
+    pub(crate) fn clear(&mut self, cx: &mut Context<Browser>) {
+        for tunnel in std::mem::take(&mut self.list) {
+            end_job(tunnel.job, cx);
+        }
+        self.pending.clear();
+    }
+
     pub(crate) fn reverse(&self, host: &str, browser: u16) -> Option<u16> {
         ssh::reverse(host, browser, &self.events)
     }
@@ -108,15 +115,6 @@ impl Drop for Tunnels {
         self.list.iter().filter_map(|t| t.process).for_each(ssh::stop);
         ssh::drop_reverse_unless(cli::host().as_deref());
     }
-}
-
-pub(crate) fn rewrite(url: &str, local: u16) -> String {
-    let Some((scheme, rest)) = url.split_once("://") else { return url.to_string() };
-    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let authority = rest[..end].rsplit_once('@').map_or(&rest[..end], |(_, host)| host);
-    let name = authority.rsplit_once(':').map_or(authority, |(host, _)| host);
-    let host = if name.ends_with(".localhost") { name } else { "localhost" };
-    format!("{scheme}://{host}:{local}{}", &rest[end..])
 }
 
 pub(crate) fn pick_local(
@@ -161,8 +159,8 @@ impl Browser {
         cx.notify();
     }
 
-    pub(super) fn keep_tunnels(&mut self, cx: &mut Context<Self>) {
-        let wanted = if cli::host().is_some() { self.wanted_ports() } else { BTreeSet::new() };
+    pub(super) fn keep_tunnels(&mut self, own: bool, cx: &mut Context<Self>) {
+        let wanted = if own && cli::host().is_some() { self.wanted_ports() } else { BTreeSet::new() };
         let gone: Vec<u16> = self.dev.tunnels.list.iter().map(|t| t.remote).filter(|r| !wanted.contains(r)).collect();
         for remote in gone {
             self.stop_tunnel(remote, cx);

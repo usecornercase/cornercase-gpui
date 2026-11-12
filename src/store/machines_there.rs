@@ -10,6 +10,7 @@ use crate::cli::{self, Remote, Target, Version};
 use crate::desktop;
 use crate::model::machines::seen::{sighted, sighted_pane};
 use crate::model::machines::{Machine, hide_destination};
+use crate::model::tunnels::Release;
 use crate::model::{Aim, MachinePlace, MachineSeen, PaneAim, ThereId};
 
 const NOTHING_SENT: &str = "nothing was sent";
@@ -49,6 +50,7 @@ impl Homes {
 #[derive(Default)]
 pub(super) struct CliRelease {
     known: Option<Version>,
+    heard: bool,
     asks: u64,
 }
 
@@ -59,11 +61,12 @@ impl CliRelease {
     }
 
     fn answered(&mut self, ask: u64, release: Option<Version>) -> bool {
-        if ask != self.asks || self.known == release {
+        if ask != self.asks {
             return false;
         }
-        self.known = release;
-        true
+        let changed = self.known != release || !self.heard;
+        (self.known, self.heard) = (release, true);
+        changed
     }
 }
 
@@ -295,6 +298,10 @@ impl Store {
         self.there.release.known
     }
 
+    pub(crate) fn heard_release(&self) -> Release {
+        if self.there.release.heard { Release::Read(self.there.release.known) } else { Release::Unread }
+    }
+
     pub(crate) fn read_cli_release(&mut self, cx: &mut Context<Self>) {
         let ask = self.there.release.ask();
         let read = cx.background_spawn(async { cli::installed_version() });
@@ -307,6 +314,7 @@ impl Store {
 
     fn heard_cli_release(&mut self, ask: u64, release: Option<Version>, cx: &mut Context<Self>) {
         if self.there.release.answered(ask, release) {
+            self.follow_tunnels(cx);
             cx.notify();
         }
     }

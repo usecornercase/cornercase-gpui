@@ -1,4 +1,4 @@
-use super::{pick_local, rewrite, wanted};
+use super::{pick_local, wanted};
 use crate::model::link::loopback_port;
 
 #[test]
@@ -22,20 +22,6 @@ fn a_url_elsewhere_names_none() {
     assert_eq!(loopback_port("http://127.example.com/token"), None);
     assert_eq!(loopback_port("ws://localhost:3000"), None);
     assert_eq!(loopback_port("about:blank"), None);
-}
-
-#[test]
-fn rewriting_moves_the_url_to_the_local_end_and_keeps_the_rest() {
-    assert_eq!(rewrite("http://localhost:3000/a/b?c=1#d", 61234), "http://localhost:61234/a/b?c=1#d");
-    assert_eq!(rewrite("https://127.0.0.1:8443", 8443), "https://localhost:8443");
-    assert_eq!(rewrite("http://[::1]:3000/x", 61234), "http://localhost:61234/x");
-    assert_eq!(rewrite("HTTP://%6cocalhost:3000/x", 61234), "HTTP://localhost:61234/x");
-}
-
-#[test]
-fn rewriting_keeps_a_localhost_subdomain_for_servers_that_route_by_host() {
-    assert_eq!(rewrite("http://app.localhost:3000/x", 61234), "http://app.localhost:61234/x");
-    assert_eq!(rewrite("http://localhost/", 61234), "http://localhost:61234/");
 }
 
 #[test]

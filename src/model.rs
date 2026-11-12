@@ -16,6 +16,7 @@ mod pull_request;
 mod shared;
 mod surface;
 mod tree;
+pub(crate) mod tunnels;
 
 pub(crate) use agent_context::{Breakdown, Category, ContextAnswer, Messages, Slot};
 #[cfg(test)]
@@ -47,6 +48,7 @@ pub(crate) struct Session {
     pub config: ConfigInfo,
     pub home: Option<String>,
     pub machines: Vec<MachineSeen>,
+    pub tunnels: Vec<tunnels::TunnelSeen>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]

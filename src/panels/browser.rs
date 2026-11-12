@@ -14,6 +14,7 @@ mod element;
 mod engine;
 mod follow;
 mod frame;
+mod held;
 mod input;
 mod keyboard;
 mod notices;
@@ -58,6 +59,7 @@ use crate::theme::colours;
 use crate::ui::text_field::TextField;
 use crate::ui::{self, Icon};
 use engine::{Engine, Incoming};
+pub(crate) use held::left_server;
 use input::Input;
 use notices::Notices;
 use ports::DevServers;
@@ -197,6 +199,7 @@ impl Browser {
             cx.notify();
         }
         self.dev_changed(store, cx);
+        self.held_changed(cx);
     }
 
     fn ended(&mut self, why: String, cx: &mut Context<Self>) {

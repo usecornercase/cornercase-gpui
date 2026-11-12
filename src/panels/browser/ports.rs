@@ -5,9 +5,11 @@ use gpui::{App, Context, Entity};
 use serde_json::Value;
 
 use super::Browser;
+use super::held::HeldOpen;
 use super::tunnels::Tunnels;
 use crate::cli;
 use crate::model::link::loopback_port;
+use crate::model::tunnels::Way;
 use crate::panels::PanelKind;
 use crate::panels::poll::{Polled, Watch, parse};
 use crate::panels::ports::data::{List, Port, list_command};
@@ -17,6 +19,7 @@ pub(crate) struct DevServers {
     pub(crate) ports: Option<Vec<Port>>,
     pub(crate) error: Option<String>,
     pub(crate) tunnels: Tunnels,
+    pub(super) held_opens: Vec<HeldOpen>,
     workspace: Option<u64>,
     seen: HashSet<(u64, u16)>,
     watch: Watch,
@@ -26,7 +29,7 @@ impl DevServers {
     pub(crate) fn new(cx: &mut Context<Browser>) -> Self {
         let tunnels = Tunnels::new(cx);
         let watch = Watch::start(cx);
-        Self { ports: None, error: None, tunnels, workspace: None, seen: HashSet::new(), watch }
+        Self { ports: None, error: None, tunnels, held_opens: Vec::new(), workspace: None, seen: HashSet::new(), watch }
     }
 
     fn follow(&mut self, workspace: Option<u64>) -> bool {
@@ -110,7 +113,8 @@ impl Browser {
             Ok(list) => (self.dev.ports, self.dev.error) = (Some(web_ports(list.ports)), None),
             Err(e) => self.dev.error = Some(e),
         }
-        self.keep_tunnels(cx);
+        let own = matches!(Store::get(cx).read(cx).tunnel_way(), Way::Own(_));
+        self.keep_tunnels(own, cx);
         self.auto_open(workspace, cx);
         cx.notify();
     }
@@ -127,9 +131,13 @@ impl Browser {
     }
 
     pub(super) fn browse(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
-        match loopback_port(&url).filter(|_| cli::host().is_some()) {
-            Some(remote) => self.browse_through(remote, url, workspace, cx),
-            None => self.open_now(url, workspace, cx),
+        let Some(remote) = loopback_port(&url).filter(|_| cli::host().is_some()) else {
+            return self.open_now(url, workspace, cx);
+        };
+        match Store::get(cx).read(cx).tunnel_way() {
+            Way::Own(_) => self.browse_through(remote, url, workspace, cx),
+            Way::Cornercase | Way::Waiting => self.browse_held((remote, url), (workspace, false), cx),
+            Way::Here => self.open_now(url, workspace, cx),
         }
     }
 

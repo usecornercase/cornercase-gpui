@@ -1,5 +1,6 @@
 pub(crate) mod data;
 mod rows;
+mod tunnel;
 
 use std::collections::HashSet;
 use std::time::Duration;
@@ -151,7 +152,8 @@ impl PortsPanel {
 impl Render for PortsPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let toolbar = self.toolbar(cx);
-        let remote = cli::host().map(|host| ui::dim(rows::remote_note(&host)));
+        let way = Store::get(cx).read(cx).tunnel_way();
+        let notes = cli::host().map(|host| rows::remote_notes(&host, &way)).unwrap_or_default();
         div()
             .id("ports")
             .size_full()
@@ -161,7 +163,7 @@ impl Render for PortsPanel {
             .flex_col()
             .gap(px(8.))
             .child(toolbar)
-            .children(remote)
+            .children(notes.into_iter().map(ui::dim))
             .children(self.list(cx))
             .child(ui::dim(DOCKER_NOTE))
     }

@@ -192,7 +192,11 @@ impl Browser {
     }
 
     pub(super) fn go_to(&mut self, text: &str, cx: &mut Context<Self>) {
-        let Some(url) = address::normalize(text).map(|url| self.tunnelled(url)) else { return };
+        let Some(typed) = address::normalize(text) else { return };
+        if let Some(remote) = self.through_cornercase(&typed, cx) {
+            return self.browse_held((remote, typed), (self.workspace, true), cx);
+        }
+        let url = self.tunnelled(typed);
         match self.active_session() {
             Some(session) => self.send(Some(&session), "Page.navigate", json!({ "url": url })),
             None => self.open_tab(&url, self.workspace, cx),

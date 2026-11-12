@@ -27,6 +27,7 @@ mod jobs;
 mod machine_read;
 mod machines_there;
 mod run_on;
+pub(crate) mod tunnels;
 
 pub(crate) use jobs::Busy;
 use jobs::Jobs;
@@ -106,6 +107,7 @@ pub(crate) enum ToastGo {
     Run(Vec<String>),
     Machine(NoticeThere),
     Update(Updating),
+    Browse(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -377,6 +379,7 @@ impl Store {
         match action {
             ToastGo::Run(args) => self.act(args.clone()),
             ToastGo::Machine(there) => self.go_there(there, cx),
+            ToastGo::Browse(url) => self.open_in_browser(url.clone(), None, cx),
             ToastGo::Update(updating) => {
                 self.asks.open_update = Some(*updating);
                 cx.notify();

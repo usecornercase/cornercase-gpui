@@ -177,19 +177,131 @@ EOF
   ln -s ../../bin/ssh "$folder/there/bin/ssh"
 }
 
+write_forward() {
+  emit "$folder/bin/forward" 600 <<'EOF'
+import socket
+import sys
+import threading
+
+
+def pipe(source, target):
+    try:
+        while True:
+            data = source.recv(65536)
+            if not data:
+                break
+            target.sendall(data)
+    except OSError:
+        pass
+    finally:
+        for end in (source, target):
+            try:
+                end.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+
+def serve(listener, host, port):
+    while True:
+        try:
+            client, _ = listener.accept()
+        except OSError:
+            return
+        try:
+            far = socket.create_connection((host, port), timeout=5)
+        except OSError as error:
+            sys.stderr.write("channel 2: open failed: connect failed: %s\n" % (error.strerror or error))
+            sys.stderr.flush()
+            client.close()
+            continue
+        for source, target in ((client, far), (far, client)):
+            threading.Thread(target=pipe, args=(source, target), daemon=True).start()
+
+
+def loopback(name):
+    return name in ("127.0.0.1", "localhost", "::1")
+
+
+def parse(kind, spec):
+    parts = spec.split(":")
+    if len(parts) == 3:
+        parts.insert(0, "127.0.0.1")
+    if len(parts) != 4 or not (parts[1].isdigit() and parts[3].isdigit()):
+        sys.stderr.write("Bad %s forwarding specification '%s'\n" % (kind, spec))
+        sys.exit(255)
+    bind, listen, host, port = parts[0], int(parts[1]), parts[2], int(parts[3])
+    if not (loopback(bind) and loopback(host)):
+        sys.stderr.write("machine-bench ssh: %s: the bench forwards loopback only\n" % spec)
+        sys.exit(255)
+    return bind, listen, host, port
+
+
+def listen_on(kind, bind, listen):
+    family = socket.AF_INET6 if ":" in bind else socket.AF_INET
+    listener = socket.socket(family, socket.SOCK_STREAM)
+    try:
+        listener.bind((bind, listen))
+        listener.listen(64)
+    except OSError:
+        sys.stderr.write("bind [%s]:%d: Address already in use\n" % (bind, listen))
+        if kind == "-L":
+            sys.stderr.write("channel_setup_fwd_listener_tcpip: cannot listen to port: %d\n" % listen)
+            sys.stderr.write("Could not request local forwarding.\n")
+        else:
+            sys.stderr.write("Error: remote port forwarding failed for listen port %d\n" % listen)
+        sys.exit(255)
+    return listener
+
+
+def main():
+    args = sys.argv[1:]
+    wanted = []
+    while args:
+        kind, spec = args[0], args[1]
+        wanted.append((kind, parse(kind, spec)))
+        args = args[2:]
+    listeners = []
+    for kind, (bind, listen, host, port) in wanted:
+        listeners.append((listen_on(kind, bind, listen), host, port))
+    threads = [threading.Thread(target=serve, args=found, daemon=True) for found in listeners]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+
+try:
+    main()
+except KeyboardInterrupt:
+    pass
+EOF
+}
+
 write_ssh() {
   emit "$folder/bin/ssh" 700 <<'EOF'
 #!/bin/sh
 dir=@F@/ssh
 printf '%s %s\n' "$(date +%H:%M:%S)" "$*" >> "$dir/calls.log"
 config=0
+net=0
+forwards=
+refuse_flag() {
+  printf 'machine-bench ssh: %s: the bench keeps no master and no agent forwarding; it forwards only -N with -L or -R\n' "$1" >&2
+  exit 255
+}
+add_forward() {
+  [ -n "$2" ] || exit 255
+  forwards="$forwards $1 $2"
+}
 while [ $# -gt 0 ]; do
   case $1 in
     --) shift; break ;;
     -G) config=1; shift ;;
-    -N | -f | -L* | -R* | -D* | -W* | -O*)
-      printf 'machine-bench ssh: %s: the bench runs commands only; it forwards no port and keeps no master\n' "$1" >&2
-      exit 255 ;;
+    -N) net=1; shift ;;
+    -L | -R) [ $# -ge 2 ] || exit 255; add_forward "$1" "$2"; shift 2 ;;
+    -L?*) add_forward -L "${1#-L}"; shift ;;
+    -R?*) add_forward -R "${1#-R}"; shift ;;
+    -f | -D* | -W* | -O*) refuse_flag "$1" ;;
     -[BbcEeFIiJlmoPpQSw]) [ $# -ge 2 ] || exit 255; shift 2 ;;
     -*) shift ;;
     *) break ;;
@@ -205,7 +317,15 @@ if [ "$config" = 1 ]; then
   printf 'hostname %s\n' "$dest"
   exit 0
 fi
-if [ $# -eq 0 ]; then
+if [ "$net" = 1 ]; then
+  if [ $# -ne 0 ] || [ -z "$forwards" ]; then
+    printf 'machine-bench ssh: %s: -N needs forwards and no command\n' "$dest" >&2
+    exit 255
+  fi
+elif [ -n "$forwards" ]; then
+  printf 'machine-bench ssh: %s: a forward needs -N and no command\n' "$dest" >&2
+  exit 255
+elif [ $# -eq 0 ]; then
   printf 'machine-bench ssh: %s: no command; the bench opens no shell\n' "$dest" >&2
   exit 255
 fi
@@ -224,6 +344,14 @@ if [ -e "$dir/$dest.slow" ]; then
   case $n in '' | *[!0-9]*) n=8 ;; esac
   sleep "$n"
   held
+fi
+if [ "$net" = 1 ]; then
+  command -v python3 > /dev/null 2>&1 || {
+    printf 'machine-bench ssh: forwarding needs python3\n' >&2
+    exit 255
+  }
+  # shellcheck disable=SC2086
+  exec python3 -I @F@/bin/forward $forwards
 fi
 if [ -e "$dir/$dest.missing" ]; then
   printf 'sh: 1: cornercase: not found\n' >&2
@@ -330,6 +458,7 @@ make_files() {
   write_commands
   write_env
   write_ssh
+  write_forward
   if [ "$log" = 1 ]; then
     write_logged
   fi
@@ -442,6 +571,7 @@ summary() {
   printf 'every command      . %s/env   then here … and there …\n' "$folder"
   printf 'the window         . %s/env; cd %s/here/here-proj; "%s/target/debug/cornercase-gpui" > %s/window.log 2>&1 & echo $! > %s/window.pid\n' \
     "$folder" "$folder" "$repo" "$folder" "$folder"
+  printf 'forward a port     the stand-in forwards -N -L and -R to this computer'"'"'s loopback (python3): a port that is taken here lands on another local port\n'
   printf 'cut the link       touch %s/ssh/%s.held; here machines retry %s   (rm it and retry to bring it back; on Linux the open link drops only when its cornercase proxy ends, by pid; .slow holds each ssh N s)\n' \
     "$folder" "$dest" "$name"
   printf 'take it down       kill "%s(cat %s/window.pid)"; %s/tools/%s down %s\n' '$' "$folder" "$repo" "$me" "$folder"
@@ -507,7 +637,7 @@ scan() {
       line = $0
       sub(/^[ \t]*[0-9]+[ \t]+[0-9]+[ \t]+/, "", line)
       args[NR] = line
-      if (benchword($3) || benchword($4)) { direct[$1] = 1; mark[$1] = 1 }
+      if (benchword($3) || benchword($4) || benchword($5)) { direct[$1] = 1; mark[$1] = 1 }
       if (base($3) == "cornercase-gpui") window[$1] = 1
     }
     END {
@@ -597,6 +727,37 @@ machine_line() {
   printf '  %s %s%s\n' "$name" "$(printf '%s\n' "$json" | machine_field state)" "${error:+: $error}"
 }
 
+forwarders() {
+  ps -A -o pid= -o args= | MB_FORWARD="$folder/bin/forward" awk '
+    { at = index($0, ENVIRON["MB_FORWARD"]) }
+    at > 0 { print $1, substr($0, at + length(ENVIRON["MB_FORWARD"]) + 1) }'
+}
+
+forwarders_report() {
+  found=$(forwarders)
+  if [ -z "$found" ]; then
+    printf '  forwards none\n'
+    return 0
+  fi
+  printf '%s\n' "$found" | while read -r fpid fspecs; do
+    printf '  forward pid %s %s\n' "$fpid" "$fspecs"
+  done
+}
+
+list_file() {
+  if [ -e "$2" ]; then
+    printf '  %s %s is there\n' "$1" "$3"
+  else
+    printf '  %s %s is not there\n' "$1" "$3"
+  fi
+}
+
+lists_report() {
+  list_file "cornercase's list on here:" "$folder/here/tunnels.json" tunnels.json
+  list_file "cornercase's list on there:" "$folder/there/tunnels.json" tunnels.json
+  list_file "the window's own list:" "$folder/window/remembered-tunnels.json" remembered-tunnels.json
+}
+
 status() {
   valid_path "$folder_arg"
   marked
@@ -613,6 +774,8 @@ status() {
     fi
   done
   printf '  window %s\n' "$(windows_on_bench | grep . || printf none)"
+  forwarders_report
+  lists_report
   printf 'processes:\n'
   scan left | grep . || printf '  none\n'
 }

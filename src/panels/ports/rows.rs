@@ -7,8 +7,11 @@ use gpui::{
 
 use super::PortsPanel;
 use super::data::{Port, stop_many_warning, stop_warning};
+use super::tunnel::{tunnel_button, tunnel_mark};
 use crate::dialogs::Question;
 use crate::model::Session;
+use crate::model::link::rewrite;
+use crate::model::tunnels::{Way, older_note};
 use crate::notify::tip;
 use crate::panels::poll::{Stop, Watch, confirm_stop, confirm_stops};
 use crate::panels::queue::open_pane;
@@ -19,9 +22,19 @@ use crate::{cli, desktop};
 
 const TICK: f32 = 15.;
 
-pub(super) fn remote_note(host: &str) -> String {
+pub(super) fn remote_notes(host: &str, way: &Way) -> Vec<String> {
     let here = desktop::here();
-    format!("These ports are on {host}: Open shows one in the Browser panel, through an ssh tunnel to this {here}.")
+    let own = format!(
+        "These ports are on {host}: Open shows one in the Browser panel, through an ssh tunnel to this {here}."
+    );
+    match way {
+        Way::Cornercase => vec![format!(
+            "These ports are on {host}: Tunnel forwards one to this {here} through cornercase, which lists it, and Open \
+             shows it in the Browser panel."
+        )],
+        Way::Own(older) => vec![own, older_note(older, host)],
+        Way::Here | Way::Waiting => vec![own],
+    }
 }
 
 fn stopping(port: &Port) -> String {
@@ -84,7 +97,7 @@ fn copy(url: &str, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.toast(text, ToastKind::Info, cx));
 }
 
-fn address_line(port: &Port) -> Div {
+fn address_line(port: &Port, store: &Store) -> Div {
     let url = port.url.clone().unwrap_or_else(|| format!("port {}", port.number));
     div()
         .flex()
@@ -92,15 +105,26 @@ fn address_line(port: &Port) -> Div {
         .gap(px(8.))
         .child(div().font_weight(FontWeight::SEMIBOLD).text_color(colours::accent()).child(url))
         .child(ui::dim(port.addresses.join(", ")))
+        .children(tunnel_mark(port, store))
         .when(port.by_agent(), |d| d.child(div().text_size(px(11.)).text_color(colours::waiting()).child("agent")))
 }
 
-fn buttons(port: &Port, stop: Stop<PortsPanel>) -> Div {
+fn reached_url(port: &Port, store: &Store) -> Option<String> {
+    let url = port.url.clone()?;
+    match store.tunnel_local(port.number).filter(|_| cli::host().is_some()) {
+        Some(local) => Some(rewrite(&url, local)),
+        None => Some(url),
+    }
+}
+
+fn buttons(port: &Port, stop: Stop<PortsPanel>, store: &Store) -> Div {
     let key = port.key();
     let id = |what: &str| SharedString::from(format!("{what}-{key}"));
-    let local = cli::host().is_none();
-    let (opened, copied) = (port.url.clone(), port.url.clone());
-    let elsewhere = port.url.clone().filter(|_| local).map(|url| system_browser(id("system"), url));
+    let reached = reached_url(port, store);
+    let tunnelled = store.tunnel_local(port.number).is_some();
+    let (opened, copied) = (port.url.clone(), reached.clone());
+    let system = reached.filter(|_| cli::host().is_none() || tunnelled);
+    let elsewhere = system.map(|url| system_browser(id("system"), url));
     div()
         .flex()
         .items_center()
@@ -110,6 +134,7 @@ fn buttons(port: &Port, stop: Stop<PortsPanel>) -> Div {
                 ui::button(id("open"), "Open").on_click(move |_: &ClickEvent, _, cx| browse(url.clone(), cx))
             }),
         )
+        .children(tunnel_button(port, store))
         .children(elsewhere)
         .children(
             copied.map(|url| ui::button(id("copy"), "Copy").on_click(move |_: &ClickEvent, _, cx| copy(&url, cx))),
@@ -122,6 +147,7 @@ fn buttons(port: &Port, stop: Stop<PortsPanel>) -> Div {
 
 struct Row<'a> {
     session: Option<&'a Session>,
+    store: &'a Store,
     all: bool,
     stop: Stop<PortsPanel>,
     ticked: bool,
@@ -156,11 +182,11 @@ fn port_row(port: &Port, row: Row<'_>) -> AnyElement {
                 .flex()
                 .flex_col()
                 .gap(px(3.))
-                .child(address_line(port))
+                .child(address_line(port, row.store))
                 .child(super::command_line(port))
                 .child(ui::dim(format!("pid {} · {}", port.pid, port.place(row.session, row.all)))),
         )
-        .child(buttons(port, row.stop))
+        .child(buttons(port, row.stop, row.store))
         .into_any_element()
 }
 
@@ -172,7 +198,13 @@ pub(super) fn rows(
 ) -> Vec<AnyElement> {
     let (panel, store) = (cx.entity(), Store::get(cx).read(cx));
     let stop = |p: &Port| Stop::of(p.stoppable(), watch.stopping(&stopping(p), store), &panel);
-    let row = |p: &Port| Row { session: store.session.as_ref(), all, stop: stop(p), ticked: ticked.contains(&p.key()) };
+    let row = |p: &Port| Row {
+        session: store.session.as_ref(),
+        store,
+        all,
+        stop: stop(p),
+        ticked: ticked.contains(&p.key()),
+    };
     ports.iter().map(|p| port_row(p, row(p))).collect()
 }
 
