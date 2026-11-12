@@ -79,9 +79,17 @@ mod on_windows {
         let mut tree = crate::platform::command("cmd");
         tree.args(["/d", "/c", "ping", "-n", "120", "127.0.0.1"]);
         let (id, heard) = start(tree);
-        end_hold(id);
         let until = Instant::now() + WAIT;
         let mut said = String::new();
+        while !said.contains("127.0.0.1") {
+            match heard.recv_timeout(until.saturating_duration_since(Instant::now())) {
+                Ok(Heard::Line(line)) => said.push_str(&line),
+                Ok(Heard::End(_)) => panic!("the hold ended before ping said anything: {said:?}"),
+                Err(why) => panic!("ping did not start ({why}): {said:?}"),
+            }
+        }
+        end_hold(id);
+        let until = Instant::now() + WAIT;
         loop {
             match heard.recv_timeout(until.saturating_duration_since(Instant::now())) {
                 Ok(Heard::Line(line)) => said.push_str(&line),

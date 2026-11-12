@@ -1,6 +1,6 @@
 # Plugins
 
-Code: `src/panels/plugins.rs`, `src/panels/plugins/`, `src/cli/window_processes.rs`, `src/cli/kept.rs`, `src/cli/kept/`; in the window, `src/sidebar/menus.rs`, `src/sidebar/rail.rs`
+Code: `src/panels/plugins.rs`, `src/panels/plugins/`, `src/cli/window_processes.rs`, `src/cli/kept/`; in the window, `src/sidebar/menus.rs`, `src/sidebar/rail.rs`
 
 - **Like the TUI's Settings › Plugins, with no catalogue**: what is installed or linked, whether it is on, what it asks for and runs, its actions and its log; turning each on and off, linking a folder, installing, updating and removing. Finding plugins is the website's job.
 - **The list is read again each time the sheet opens**: `plugin list --json` reads the plugins from the files, `plugin actions --json` asks the server for their actions and `plugin status --json` (#469 upstream) for what each service is doing. Without a server, or with an older one, there are no actions and no service states, a toast says why, and the list stays. `list` stays the source of the cards rather than `status`, which carries the same plugins, because it works with no server. The last two are the store's (`Store::plugins`, `plugins/offers.rs`), since the menus and the rail draw from them too.

@@ -57,6 +57,10 @@ impl DevServers {
     }
 }
 
+pub(crate) fn still_asked(sample: (u64, u64), now: (Option<u64>, u64)) -> bool {
+    now.0 == Some(sample.0) && now.1 == sample.1
+}
+
 pub(crate) fn web_ports(ports: Vec<Port>) -> Vec<Port> {
     let mut web: Vec<Port> = ports.into_iter().filter(|p| p.url.is_some()).collect();
     web.sort_by_key(|p| p.number);
@@ -122,7 +126,7 @@ impl Browser {
 
     fn sampled(&mut self, (workspace, generation): (u64, u64), result: anyhow::Result<Value>, cx: &mut Context<Self>) {
         self.dev.watch.end();
-        if self.dev.workspace != Some(workspace) || self.dev.generation != generation {
+        if !still_asked((workspace, generation), (self.dev.workspace, self.dev.generation)) {
             self.measure(cx);
             return;
         }

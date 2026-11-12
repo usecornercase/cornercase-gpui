@@ -138,7 +138,7 @@ impl Browser {
         for target in tabs_of_a_server(self.tabs.list.iter().map(|t| (t.target.as_str(), t.workspace))) {
             self.close_tab(&target);
         }
-        self.restore.clear();
+        self.restore.retain(|(_, workspace)| workspace.is_none());
         super::tunnels::quit();
         self.dev.tunnels.clear(cx);
         self.dev.held_opens.clear();

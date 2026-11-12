@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use super::{appeared, origin, same_page, web_ports};
+use super::{appeared, origin, same_page, still_asked, web_ports};
 use crate::panels::ports::data::{List, Port};
 use crate::test_util::fixture;
 
@@ -67,4 +67,12 @@ fn an_address_with_a_path_comes_forward_only_on_that_page() {
     assert!(same_page("https://github.com/a/b/pull/12", "https://github.com/a/b/pull/12"));
     assert!(!same_page("https://github.com/a/b", "https://github.com/a/b/pull/12"));
     assert!(!same_page("http://localhost:3000/", "http://localhost:3000/?debug=1"));
+}
+
+#[test]
+fn a_sample_asked_before_leaving_a_server_is_dropped() {
+    assert!(still_asked((3, 0), (Some(3), 0)));
+    assert!(!still_asked((3, 0), (Some(3), 1)));
+    assert!(!still_asked((3, 1), (Some(4), 1)));
+    assert!(!still_asked((3, 1), (None, 1)));
 }

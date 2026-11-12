@@ -94,7 +94,7 @@ fn step(entries: &[Entry], from: Option<usize>, down: bool) -> Option<usize> {
     choices.get(next).copied()
 }
 
-pub(crate) fn above(at: Point<Pixels>) -> Point<Pixels> {
+fn above(at: Point<Pixels>) -> Point<Pixels> {
     point(at.x, at.y - px(ABOVE_POINTER))
 }
 
@@ -121,6 +121,16 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.show_menu((at, false), entries, window, cx);
+    }
+
+    fn show_menu(
+        &mut self,
+        (at, from_bottom): (Point<Pixels>, bool),
+        entries: Vec<Entry>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let entries = without_stray_separators(entries);
         if entries.is_empty() {
             return;
@@ -128,7 +138,7 @@ impl Root {
         let focus = cx.focus_handle();
         window.focus(&focus);
         window.prevent_default();
-        self.side.menu = Some(Menu { at, entries, focus, highlight: None, from_bottom: false });
+        self.side.menu = Some(Menu { at, entries, focus, highlight: None, from_bottom });
         cx.notify();
     }
 
@@ -139,10 +149,7 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_menu(above(pointer), entries, window, cx);
-        if let Some(menu) = &mut self.side.menu {
-            menu.from_bottom = true;
-        }
+        self.show_menu((above(pointer), true), entries, window, cx);
     }
 
     pub(crate) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
