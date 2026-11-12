@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.1.63
 
-- **A long branch name stays inside the question before removing a worktree.** Also delete the branch now wraps a long name onto more lines, as the question's title and lines already did, instead of running past the dialog's edge, so you can read the whole name before you answer. Every checkbox in the window wraps a long label the same way.
+- **A long branch name stays inside the question before removing a worktree.** Also delete the branch now wraps a long name onto more lines, as the question's title and lines already did, instead of running past the dialog's edge, so you can read the whole name before you answer. Other checkboxes wrap a long label the same way where their row has a width to fit it in.
 
 ## 0.1.62
 
