@@ -1,4 +1,4 @@
-use super::{Passage, Step, passage, step};
+use super::{Passage, Step, passage, step, tabs_of_a_server};
 use crate::model::tunnels::{Older, Way};
 use crate::store::Held;
 
@@ -23,4 +23,11 @@ fn a_preview_goes_only_through_a_tunnel_that_is_up() {
     assert_eq!(passage(&Way::Cornercase, None), Passage::Not);
     assert_eq!(passage(&Way::Waiting, None), Passage::Waiting);
     assert_eq!(passage(&Way::Own(Older::Server(None)), None), Passage::Not);
+}
+
+#[test]
+fn leaving_another_server_closes_the_tabs_of_its_workspaces_only() {
+    let tabs = [("a", Some(3)), ("b", None), ("c", Some(7))];
+    assert_eq!(tabs_of_a_server(tabs.into_iter(), true), ["a", "c"]);
+    assert_eq!(tabs_of_a_server(tabs.into_iter(), false), Vec::<String>::new());
 }

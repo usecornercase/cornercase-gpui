@@ -134,7 +134,13 @@ impl Browser {
         passage(&way, Store::get(cx).read(cx).held_tunnel(remote))
     }
 
-    pub(super) fn left_server_now(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn left_server_now(&mut self, was_remote: bool, cx: &mut Context<Self>) {
+        for target in tabs_of_a_server(self.tabs.list.iter().map(|t| (t.target.as_str(), t.workspace)), was_remote) {
+            self.close_tab(&target);
+        }
+        if was_remote {
+            self.restore.clear();
+        }
         super::tunnels::quit();
         self.dev.tunnels.clear(cx);
         self.dev.held_opens.clear();
@@ -155,10 +161,17 @@ pub(crate) fn follow_store(store: &Entity<Store>, cx: &mut App) {
     }
 }
 
-pub(crate) fn left_server(cx: &mut App) {
+pub(crate) fn left_server(was_remote: bool, cx: &mut App) {
     if let Some(browser) = super::running(cx) {
-        browser.update(cx, Browser::left_server_now);
+        browser.update(cx, move |browser, cx| browser.left_server_now(was_remote, cx));
     }
+}
+
+pub(crate) fn tabs_of_a_server<'a>(
+    tabs: impl Iterator<Item = (&'a str, Option<u64>)>,
+    was_remote: bool,
+) -> Vec<String> {
+    tabs.filter(|(_, workspace)| was_remote && workspace.is_some()).map(|(target, _)| target.to_string()).collect()
 }
 
 #[cfg(test)]

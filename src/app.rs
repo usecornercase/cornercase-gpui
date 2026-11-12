@@ -313,7 +313,7 @@ impl Root {
         };
         let left = cli::connect(target);
         cli::end_holds();
-        crate::panels::browser::left_server(cx);
+        crate::panels::browser::left_server(left.host().is_some(), cx);
         plugins::follow_window_processes(cx);
         cli::kill_all();
         cli::leave(&left);
