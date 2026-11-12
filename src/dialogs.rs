@@ -434,16 +434,19 @@ impl Confirm {
         }
     }
 
-    fn said(&self, window: &Window) -> AnyElement {
+    fn said(&self) -> AnyElement {
         let Some(body) = &self.question.body else {
             return div().text_color(colours::muted()).child(self.question.message.clone()).into_any_element();
         };
+        body(self.ticked().is_some())
+    }
+
+    fn scrolled(&self, window: &Window, tick: Option<impl IntoElement>) -> impl IntoElement {
         div()
             .id("question-body")
             .max_h(px(body_height(f32::from(window.viewport_size().height))))
             .overflow_y_scroll()
-            .child(body(self.ticked().is_some()))
-            .into_any_element()
+            .child(div().flex().flex_col().gap(px(12.)).child(self.said()).children(tick))
     }
 
     fn tick_box(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
@@ -488,8 +491,7 @@ impl Confirm {
 impl Render for Confirm {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let button = self.ticked().map_or(&self.question.button, |tick| &tick.button).clone();
-        let said = self.said(window);
-        let tick = self.tick_box(cx);
+        let scrolled = self.scrolled(window, self.tick_box(cx));
         div()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, _, cx| {
@@ -499,7 +501,7 @@ impl Render for Confirm {
             }))
             .child(frame(
                 self.question.title.clone(),
-                div().flex().flex_col().gap(px(12.)).child(said).children(tick),
+                scrolled,
                 cancel_and(
                     ui::danger_button("confirm", button)
                         .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx))),

@@ -389,19 +389,20 @@ pub(crate) fn tick_box(checked: bool) -> Div {
         })
 }
 
+fn box_slot(tick: Div) -> Div {
+    div().flex_none().flex().items_center().child(tick).child("")
+}
+
+fn labelled(tick: Div, label: SharedString) -> Div {
+    div().flex().items_start().gap(px(8.)).child(box_slot(tick)).child(div().flex_1().min_w_0().child(label))
+}
+
 pub(crate) fn checkbox(id: impl Into<ElementId>, checked: bool, label: impl Into<SharedString>) -> Stateful<Div> {
-    div().id(id).flex().items_center().gap(px(8.)).cursor_pointer().child(tick_box(checked)).child(label.into())
+    labelled(tick_box(checked), label.into()).id(id).cursor_pointer()
 }
 
 pub(crate) fn resting_checkbox(checked: bool, label: impl Into<SharedString>) -> Div {
-    div()
-        .flex()
-        .items_center()
-        .gap(px(8.))
-        .cursor_default()
-        .text_color(colours::faint())
-        .child(tick_box(checked).opacity(0.4))
-        .child(label.into())
+    labelled(tick_box(checked).opacity(0.4), label.into()).cursor_default().text_color(colours::faint())
 }
 
 pub(crate) fn segments(items: Vec<AnyElement>) -> Div {
