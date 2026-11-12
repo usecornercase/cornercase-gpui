@@ -167,7 +167,11 @@ pub(super) fn role_head((i, role): (usize, &RoleSpec), colour: Rgba, open: bool,
                         .items_center()
                         .gap(px(5.))
                         .child(
-                            div().flex().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD).child(role.name.clone()),
+                            div()
+                                .min_w_0()
+                                .text_size(px(13.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(role.name.clone()),
                         )
                         .children(role_chips(role)),
                 )

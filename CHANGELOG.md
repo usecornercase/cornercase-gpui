@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.67
+
+- **Long names stay inside Settings' import, a flow's roles and its messages, and context menus.** Importing a setup wraps a long file name onto more lines, with how many settings would change beside it, or under it when both do not fit, instead of running past the card. A flow's page and its editor wrap a long role name; a run's messages end it in "…", whole when you rest the pointer on it. A context menu ends a long entry in "…" at its edge, such as a group's name in Move to group or a plugin's name, and keeps a submenu's arrow and a chosen entry's tick in view.
+
 ## 0.1.65
 
 - **Long names stay inside the Worktrees sheet and Icon and colour.** A worktree whose project or branch name is too long for its row now ends it in "…" where its marks begin, so the marks, the age and the size stay in view; rest the pointer on the name to read it whole, and the folder under it still shows in full. When the sheet shows one project's worktrees, the line naming the project wraps a long name instead of pushing Show every worktree out of view. Icon and colour wraps a long group name onto more lines instead of running past the dialog's edge, and Settings › Projects ends a long folder name in "…", whole in its tooltip, so its chips stay in view.

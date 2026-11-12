@@ -248,8 +248,8 @@ fn menu_heading(label: SharedString) -> Div {
         .text_size(px(11.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(colours::muted())
-        .whitespace_nowrap()
-        .child(label)
+        .flex()
+        .child(ui::one_line(label))
 }
 
 fn resting_row(label: SharedString) -> Div {
@@ -280,7 +280,7 @@ pub(crate) fn menu_row(
         .text_color(ink)
         .when(highlighted, |d| d.bg(lit).text_color(lit_ink))
         .hover(|s| s.bg(lit).text_color(lit_ink))
-        .child(div().whitespace_nowrap().child(label))
+        .child(div().min_w_0().flex().child(ui::one_line(label)))
         .when(more, |d| d.child(div().text_color(colours::muted()).child("›")))
 }
 
