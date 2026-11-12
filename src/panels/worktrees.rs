@@ -161,7 +161,7 @@ impl WorktreesPanel {
         let session = Store::get(cx).read(cx).session.clone();
         let name = session.as_ref().and_then(|s| s.projects.iter().find(|p| p.id == project)).map(|p| p.name.clone());
         Some(
-            div().flex().items_center().gap(px(10.)).child(ui::dim(scope_note(name.as_deref()))).child(
+            div().flex().items_center().gap(px(10.)).child(ui::dim(scope_note(name.as_deref())).min_w_0()).child(
                 ui::button("worktrees-every", "Show every worktree")
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.show_project(None, cx))),
             ),

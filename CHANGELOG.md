@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.65
+
+- **Long names stay inside the Worktrees sheet and Icon and colour.** A worktree whose project or branch name is too long for its row now ends it in "…" where its marks begin, so the marks, the age and the size stay in view; rest the pointer on the name to read it whole, and the folder under it still shows in full. When the sheet shows one project's worktrees, the line naming the project wraps a long name instead of pushing Show every worktree out of view. Icon and colour wraps a long group name onto more lines instead of running past the dialog's edge, and Settings › Projects ends a long folder name in "…", whole in its tooltip, so its chips stay in view.
+
 ## 0.1.64
 
 - **A failed update says so.** When Install fails, for cornercase or for this window, a toast names the program and why, with Details to open its update dialog, even if you closed the dialog while it ran; if the window was behind, the toast waits until you come back. When cornercase cannot update itself (Homebrew, a folder it cannot write), it now shows the command cornercase printed instead of `failed`.
