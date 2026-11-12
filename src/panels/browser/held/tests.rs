@@ -26,8 +26,7 @@ fn a_preview_goes_only_through_a_tunnel_that_is_up() {
 }
 
 #[test]
-fn leaving_another_server_closes_the_tabs_of_its_workspaces_only() {
+fn leaving_a_server_closes_the_tabs_of_its_workspaces_only() {
     let tabs = [("a", Some(3)), ("b", None), ("c", Some(7))];
-    assert_eq!(tabs_of_a_server(tabs.into_iter(), true), ["a", "c"]);
-    assert_eq!(tabs_of_a_server(tabs.into_iter(), false), Vec::<String>::new());
+    assert_eq!(tabs_of_a_server(tabs.into_iter()), ["a", "c"]);
 }

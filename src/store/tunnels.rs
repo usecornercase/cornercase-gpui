@@ -14,7 +14,7 @@ mod rows;
 
 pub(crate) use held::{Asked, Held};
 use rows::Mark;
-pub(crate) use rows::{Control, TunnelRow, Whose, asks_note, none_note};
+pub(crate) use rows::{Control, TunnelRow, Whose, asks_note, heading, none_note};
 
 use held::{Fate, Hold, Settled, bring_back, fate, settle_now, up_toast, window_failure};
 

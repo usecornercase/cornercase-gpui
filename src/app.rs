@@ -227,6 +227,7 @@ impl Root {
             },
         );
         let store = Store::init(queue.clone(), cx);
+        crate::panels::browser::follow_store(&store, cx);
         let notifier = cx.new(|cx| Notifier::new(store.clone(), window, cx));
         cx.observe(&notifier, |this, _, cx| this.chips_moved(cx)).detach();
         if let Some(updater) = self_update::entity(cx) {
@@ -313,7 +314,7 @@ impl Root {
         };
         let left = cli::connect(target);
         cli::end_holds();
-        crate::panels::browser::left_server(left.host().is_some(), cx);
+        crate::panels::browser::left_server(cx);
         plugins::follow_window_processes(cx);
         cli::kill_all();
         cli::leave(&left);

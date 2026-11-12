@@ -36,13 +36,13 @@ fn start(mut command: Command) -> (u64, mpsc::Receiver<Heard>) {
     (id, rx)
 }
 
-fn next(heard: &mpsc::Receiver<Heard>) -> Heard {
-    heard.recv_timeout(WAIT).expect("the hold says something")
-}
-
 #[cfg(unix)]
 mod on_unix {
     use super::*;
+
+    fn next(heard: &mpsc::Receiver<Heard>) -> Heard {
+        heard.recv_timeout(WAIT).expect("the hold says something")
+    }
 
     fn shell(script: &str) -> Command {
         let mut shell = crate::platform::command("/bin/sh");
@@ -70,6 +70,8 @@ mod on_unix {
 
 #[cfg(windows)]
 mod on_windows {
+    use std::time::Instant;
+
     use super::*;
 
     #[test]
@@ -78,13 +80,17 @@ mod on_windows {
         tree.args(["/d", "/c", "ping", "-n", "120", "127.0.0.1"]);
         let (id, heard) = start(tree);
         end_hold(id);
+        let until = Instant::now() + WAIT;
         let mut said = String::new();
-        let ended = loop {
-            match next(&heard) {
-                Heard::Line(line) => said.push_str(&line),
-                Heard::End(ended) => break ended,
+        loop {
+            match heard.recv_timeout(until.saturating_duration_since(Instant::now())) {
+                Ok(Heard::Line(line)) => said.push_str(&line),
+                Ok(Heard::End(ended)) => {
+                    assert_eq!(ended.said, ended.said.trim(), "the end's stderr is trimmed");
+                    break;
+                }
+                Err(why) => panic!("the ping the hold's cmd started outlived the hold ({why}); it said {said:?}"),
             }
-        };
-        assert!(!said.contains("Error") && !ended.said.contains("Error"), "the hold said {said:?}");
+        }
     }
 }

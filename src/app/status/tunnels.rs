@@ -9,7 +9,7 @@ use crate::platform::Os;
 use crate::store::Asked;
 use crate::store::ToastKind;
 use crate::store::remote_url;
-use crate::store::{TunnelRow, Whose, asks_note, none_note};
+use crate::store::{TunnelRow, Whose, asks_note, heading, none_note};
 
 fn closing(port: u16) -> Vec<Entry> {
     vec![
@@ -62,7 +62,7 @@ impl Root {
         let store = self.store.read(cx);
         let tunnels = store.tunnel_rows();
         let host = self.host.clone().unwrap_or_default();
-        let mut entries = vec![Entry::Heading(format!("Tunnels to {host}").into())];
+        let mut entries = vec![Entry::Heading(heading(&host).into())];
         if tunnels.is_empty() {
             entries
                 .push(context_menu::note(none_note(keys_of(Command::Panel(PanelKind::Ports), Os::CURRENT).as_deref())));
@@ -71,6 +71,6 @@ impl Root {
         entries.push(context_menu::note(asks_note(&host)));
         entries.push(Entry::Separator);
         entries.push(context_menu::item("Connect to another server…", |_, window, cx| dialogs::connect(window, cx)));
-        self.open_menu(context_menu::above(at, &entries), entries, window, cx);
+        self.open_menu_above(at, entries, window, cx);
     }
 }

@@ -129,6 +129,14 @@ pub(crate) fn asks_note(host: &str) -> String {
     format!("A program on {host} cannot open a tunnel here yet: needs {ASKS_ISSUE}")
 }
 
+const HEADING_HOST: usize = 28;
+
+pub(crate) fn heading(host: &str) -> String {
+    let cut: String = host.chars().take(HEADING_HOST).collect();
+    let ellipsis = if host.chars().count() > HEADING_HOST { "…" } else { "" };
+    format!("Tunnels to {cut}{ellipsis}")
+}
+
 pub(crate) fn none_note(keys: Option<&str>) -> String {
     let ports = keys.map_or_else(|| "Ports".to_string(), |keys| format!("Ports ({keys})"));
     format!("None yet: Tunnel on a port in {ports}, or opening it in the Browser, makes one.")

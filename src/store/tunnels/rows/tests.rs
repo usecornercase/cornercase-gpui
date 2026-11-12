@@ -90,3 +90,10 @@ fn the_note_for_no_tunnel_names_the_keys_of_this_platform() {
     assert!(super::none_note(Some("Ctrl+Shift+O")).contains("in Ports (Ctrl+Shift+O),"));
     assert!(super::none_note(None).contains("in Ports,"));
 }
+
+#[test]
+fn a_long_destination_is_cut_in_the_menus_heading() {
+    assert_eq!(super::heading("devbox"), "Tunnels to devbox");
+    let long = super::heading("builder@ci-runner-07.eu-west-1.compute.example.invalid");
+    assert_eq!(long, "Tunnels to builder@ci-runner-07.eu-west…");
+}

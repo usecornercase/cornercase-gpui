@@ -314,7 +314,9 @@ impl Store {
 
     fn heard_cli_release(&mut self, ask: u64, release: Option<Version>, cx: &mut Context<Self>) {
         if self.there.release.answered(ask, release) {
-            self.follow_tunnels(cx);
+            if self.view_id.is_some() {
+                self.follow_tunnels(cx);
+            }
             cx.notify();
         }
     }

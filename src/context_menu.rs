@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FocusHandle, FontWeight, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, ParentElement, Pixels, Point, SharedString, Stateful, StatefulInteractiveElement, Styled, Window,
-    anchored, deferred, div, point, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Corner, Div, FocusHandle, FontWeight, InteractiveElement, IntoElement,
+    KeyDownEvent, MouseButton, ParentElement, Pixels, Point, SharedString, Stateful, StatefulInteractiveElement,
+    Styled, Window, anchored, deferred, div, point, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::Root;
@@ -15,10 +15,6 @@ use crate::ui::motion::{self, Way};
 use crate::ui::{self, Icon, glass, icon};
 
 const MENU_DROP: f32 = 4.;
-const ROW_HEIGHT: f32 = 29.5;
-const NOTE_LINE: usize = 44;
-const SEPARATOR_HEIGHT: f32 = 9.;
-const FRAME_PADDING: f32 = 4.;
 const ABOVE_POINTER: f32 = 6.;
 
 pub(crate) type Action = Rc<dyn Fn(&mut Root, &mut Window, &mut Context<Root>)>;
@@ -79,6 +75,7 @@ pub(crate) struct Menu {
     pub entries: Vec<Entry>,
     pub focus: FocusHandle,
     pub highlight: Option<usize>,
+    pub from_bottom: bool,
 }
 
 fn choosable(entry: &Entry) -> bool {
@@ -97,19 +94,8 @@ fn step(entries: &[Entry], from: Option<usize>, down: bool) -> Option<usize> {
     choices.get(next).copied()
 }
 
-#[expect(clippy::cast_precision_loss, reason = "a menu has a few entries")]
-pub(crate) fn above(at: Point<Pixels>, entries: &[Entry]) -> Point<Pixels> {
-    let separators = entries.iter().filter(|e| matches!(e, Entry::Separator)).count();
-    let wrapped: usize = entries
-        .iter()
-        .map(|e| match e {
-            Entry::Note(text) => text.len().saturating_sub(1) / NOTE_LINE,
-            _ => 0,
-        })
-        .sum();
-    let rows = entries.len() - separators + wrapped;
-    let height = rows as f32 * ROW_HEIGHT + separators as f32 * SEPARATOR_HEIGHT + FRAME_PADDING * 2.;
-    point(at.x, at.y - px(height + ABOVE_POINTER))
+pub(crate) fn above(at: Point<Pixels>) -> Point<Pixels> {
+    point(at.x, at.y - px(ABOVE_POINTER))
 }
 
 fn without_stray_separators(entries: Vec<Entry>) -> Vec<Entry> {
@@ -142,8 +128,21 @@ impl Root {
         let focus = cx.focus_handle();
         window.focus(&focus);
         window.prevent_default();
-        self.side.menu = Some(Menu { at, entries, focus, highlight: None });
+        self.side.menu = Some(Menu { at, entries, focus, highlight: None, from_bottom: false });
         cx.notify();
+    }
+
+    pub(crate) fn open_menu_above(
+        &mut self,
+        pointer: Point<Pixels>,
+        entries: Vec<Entry>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_menu(above(pointer), entries, window, cx);
+        if let Some(menu) = &mut self.side.menu {
+            menu.from_bottom = true;
+        }
     }
 
     pub(crate) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -204,7 +203,9 @@ impl Root {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation());
         let id = SharedString::from(format!("menu-{:?}", menu.at));
         let list = motion::slide(list, id, Way::Pop, (0., -MENU_DROP));
-        Some(deferred(anchored().position(menu.at).snap_to_window_with_margin(px(8.)).child(list)).with_priority(2))
+        let corner = if menu.from_bottom { Corner::BottomLeft } else { Corner::TopLeft };
+        let place = anchored().position(menu.at).anchor(corner).snap_to_window_with_margin(px(8.));
+        Some(deferred(place.child(list)).with_priority(2))
     }
 }
 

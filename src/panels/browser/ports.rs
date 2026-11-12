@@ -21,6 +21,7 @@ pub(crate) struct DevServers {
     pub(crate) tunnels: Tunnels,
     pub(super) held_opens: Vec<HeldOpen>,
     workspace: Option<u64>,
+    generation: u64,
     seen: HashSet<(u64, u16)>,
     watch: Watch,
 }
@@ -29,12 +30,22 @@ impl DevServers {
     pub(crate) fn new(cx: &mut Context<Browser>) -> Self {
         let tunnels = Tunnels::new(cx);
         let watch = Watch::start(cx);
-        Self { ports: None, error: None, tunnels, held_opens: Vec::new(), workspace: None, seen: HashSet::new(), watch }
+        Self {
+            ports: None,
+            error: None,
+            tunnels,
+            held_opens: Vec::new(),
+            workspace: None,
+            generation: 0,
+            seen: HashSet::new(),
+            watch,
+        }
     }
 
     pub(super) fn forget_server(&mut self) {
         (self.workspace, self.ports, self.error) = (None, None, None);
         self.seen.clear();
+        self.generation += 1;
     }
 
     fn follow(&mut self, workspace: Option<u64>) -> bool {
@@ -93,7 +104,8 @@ impl Polled for Browser {
             return;
         }
         let command = list_command(false, Some(workspace));
-        store::run_json(cx, command, move |this, result, cx| this.sampled(workspace, result, cx));
+        let generation = self.dev.generation;
+        store::run_json(cx, command, move |this, result, cx| this.sampled((workspace, generation), result, cx));
     }
 }
 
@@ -108,9 +120,9 @@ impl Browser {
         }
     }
 
-    fn sampled(&mut self, workspace: u64, result: anyhow::Result<Value>, cx: &mut Context<Self>) {
+    fn sampled(&mut self, (workspace, generation): (u64, u64), result: anyhow::Result<Value>, cx: &mut Context<Self>) {
         self.dev.watch.end();
-        if self.dev.workspace != Some(workspace) {
+        if self.dev.workspace != Some(workspace) || self.dev.generation != generation {
             self.measure(cx);
             return;
         }
