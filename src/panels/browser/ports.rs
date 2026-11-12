@@ -32,6 +32,11 @@ impl DevServers {
         Self { ports: None, error: None, tunnels, held_opens: Vec::new(), workspace: None, seen: HashSet::new(), watch }
     }
 
+    pub(super) fn forget_server(&mut self) {
+        (self.workspace, self.ports, self.error) = (None, None, None);
+        self.seen.clear();
+    }
+
     fn follow(&mut self, workspace: Option<u64>) -> bool {
         let moved = workspace != self.workspace;
         if moved {
@@ -122,8 +127,9 @@ impl Browser {
     fn auto_open(&mut self, workspace: u64, cx: &mut Context<Self>) {
         let Some(ports) = &self.dev.ports else { return };
         let url = appeared(ports, &mut self.dev.seen, workspace);
-        let opening =
-            self.dev.tunnels.pending_in(Some(workspace)) || self.restore.iter().any(|r| r.1 == Some(workspace));
+        let opening = self.dev.tunnels.pending_in(Some(workspace))
+            || self.dev.held_opens.iter().any(|open| open.in_workspace(Some(workspace)))
+            || self.restore.iter().any(|r| r.1 == Some(workspace));
         let busy = opening || self.tabs.active(Some(workspace)).is_some();
         if let Some(url) = url.filter(|_| !busy) {
             self.browse(url, Some(workspace), cx);

@@ -36,7 +36,6 @@ pub(super) struct ThereState {
     pub(super) homes: Homes,
     pub(super) release: CliRelease,
     pub(super) tab: Option<TabThere>,
-    pub(super) tunnels: super::tunnels::Tunnels,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

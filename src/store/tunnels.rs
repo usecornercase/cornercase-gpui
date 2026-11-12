@@ -8,12 +8,15 @@ use super::{Busy, Store, ToastGo, ToastKind};
 use crate::cli::{self, Ended};
 use crate::model::tunnels::{Release, TunnelSeen, Way, held_line, way};
 
-pub(crate) mod held;
-pub(crate) mod memory;
-pub(crate) mod rows;
+mod held;
+mod memory;
+mod rows;
 
-use held::{Asked, Fate, Held, Hold, Settled, bring_back, failed_toast, fate, settled, up_toast};
-use rows::{Control, Mark, TunnelRow};
+pub(crate) use held::{Asked, Held};
+use rows::Mark;
+pub(crate) use rows::{Control, TunnelRow, Whose, asks_note, none_note};
+
+use held::{Fate, Hold, Settled, bring_back, fate, settle_now, up_toast, window_failure};
 
 const SETTLE_AFTER: Duration = Duration::from_secs(3);
 
@@ -56,7 +59,7 @@ impl Store {
     }
 
     fn live_hold(&self, port: u16) -> Option<&Hold> {
-        let ours = || self.there.tunnels.holds.iter().filter(move |hold| hold.port == port);
+        let ours = || self.tunnels.holds.iter().filter(move |hold| hold.port == port);
         ours().find(|hold| hold.state != Held::Ending).or_else(|| ours().next())
     }
 
@@ -69,7 +72,7 @@ impl Store {
     }
 
     pub(crate) fn tunnel_count(&self) -> usize {
-        rows::count(&self.there.tunnels.holds)
+        rows::count(&self.tunnels.holds)
     }
 
     fn listed_tunnels(&self) -> &[TunnelSeen] {
@@ -77,7 +80,7 @@ impl Store {
     }
 
     pub(crate) fn tunnel_rows(&self) -> Vec<TunnelRow> {
-        rows::menu_rows(self.listed_tunnels(), &self.there.tunnels.holds)
+        rows::menu_rows(self.listed_tunnels(), &self.tunnels.holds)
     }
 
     pub(crate) fn tunnel_control(&self, port: u16) -> Control {
@@ -85,13 +88,13 @@ impl Store {
     }
 
     pub(crate) fn tunnel_mark(&self, port: u16) -> Option<Mark> {
-        let there = rows::elsewhere(port, self.listed_tunnels(), &self.there.tunnels.holds);
+        let there = rows::elsewhere(port, self.listed_tunnels(), &self.tunnels.holds);
         rows::mark(&self.tunnel_way(), self.held_tunnel(port), there)
     }
 
     pub(crate) fn hold_tunnel(&mut self, port: u16, asked: Asked, cx: &mut Context<Self>) {
         if self.tunnel_way() != Way::Cornercase
-            || self.there.tunnels.holds.iter().any(|h| h.port == port && h.state != Held::Ending)
+            || self.tunnels.holds.iter().any(|h| h.port == port && h.state != Held::Ending)
         {
             return;
         }
@@ -113,8 +116,12 @@ impl Store {
             },
         );
         let process = match started {
-            Ok(process) => process,
-            Err(e) => return self.toast(failed_toast(port, &cli::reason(&e)), ToastKind::Error, cx),
+            Ok((process, None)) => process,
+            Ok((process, Some(why))) => {
+                cli::end_hold(process);
+                return self.toast(window_failure(port, &why), ToastKind::Error, cx);
+            }
+            Err(e) => return self.toast(window_failure(port, &cli::reason(&e)), ToastKind::Error, cx),
         };
         let mut hold = Hold::opening(port, process, asked, &boot);
         hold.job =
@@ -123,7 +130,7 @@ impl Store {
             hold.attempts = attempts;
             hold.was_up = true;
         }
-        self.there.tunnels.holds.push(hold);
+        self.tunnels.holds.push(hold);
         if asked != Asked::Back && asked != Asked::Retry {
             self.remember_tunnel(&host, port, true, cx);
         }
@@ -160,7 +167,7 @@ impl Store {
     }
 
     fn hold_up(&mut self, process: u64, local: u16, cx: &mut Context<Self>) {
-        let Some(hold) = self.there.tunnels.holds.iter_mut().find(|h| h.process == process) else { return };
+        let Some(hold) = self.tunnels.holds.iter_mut().find(|h| h.process == process) else { return };
         if hold.state == Held::Ending {
             return;
         }
@@ -180,29 +187,29 @@ impl Store {
     }
 
     fn hold_ended(&mut self, process: u64, ended: &Ended, cx: &mut Context<Self>) {
-        let Some(at) = self.there.tunnels.holds.iter().position(|h| h.process == process) else { return };
-        let hold = self.there.tunnels.holds[at].clone();
+        let Some(at) = self.tunnels.holds.iter().position(|h| h.process == process) else { return };
+        let hold = self.tunnels.holds[at].clone();
         if let Some(job) = hold.job {
             self.end_job(job, cx);
         }
         match fate(&hold, ended.code, &ended.said) {
-            Fate::Gone => drop(self.there.tunnels.holds.remove(at)),
+            Fate::Gone => drop(self.tunnels.holds.remove(at)),
             Fate::Failed(why) => {
-                self.there.tunnels.holds.remove(at);
-                self.toast(failed_toast(hold.port, &why), ToastKind::Error, cx);
+                self.tunnels.holds.remove(at);
+                self.toast(why, ToastKind::Error, cx);
             }
             Fate::Retry(why) => self.fall(at, why, cx),
             Fate::Settle => {
-                self.there.tunnels.holds.remove(at);
-                self.there.tunnels.settling.push((hold.port, hold.boot));
-                later(SETTLE_AFTER, Self::follow_tunnels, cx);
+                self.tunnels.holds.remove(at);
+                self.tunnels.settling.push((hold.port, hold.boot));
+                later(SETTLE_AFTER, Self::settle_later, cx);
             }
         }
         cx.notify();
     }
 
     fn fall(&mut self, at: usize, why: String, cx: &mut Context<Self>) {
-        let hold = &mut self.there.tunnels.holds[at];
+        let hold = &mut self.tunnels.holds[at];
         hold.state = Held::Down { why };
         (hold.job, hold.process) = (None, 0);
         hold.attempts += 1;
@@ -212,24 +219,24 @@ impl Store {
 
     fn retry_hold(&mut self, port: u16, attempts: u32, cx: &mut Context<Self>) {
         let waiting = |h: &Hold| h.port == port && h.attempts == attempts && matches!(h.state, Held::Down { .. });
-        let Some(at) = self.there.tunnels.holds.iter().position(waiting) else { return };
-        if self.tunnel_way() != Way::Cornercase || self.there.tunnels.link.is_none() {
+        let Some(at) = self.tunnels.holds.iter().position(waiting) else { return };
+        if self.tunnel_way() != Way::Cornercase || self.tunnels.link.is_none() {
             return;
         }
-        self.there.tunnels.holds.remove(at);
+        self.tunnels.holds.remove(at);
         self.start_hold(port, Asked::Retry, Some(attempts), cx);
     }
 
     pub(crate) fn close_tunnel(&mut self, port: u16, forget: bool, cx: &mut Context<Self>) {
         let Some(host) = cli::host() else { return };
-        let ours = self.there.tunnels.holds.iter().position(|h| h.port == port && h.state != Held::Ending);
-        let quick = ours.is_some_and(|at| !matches!(self.there.tunnels.holds[at].state, Held::Up { .. }));
+        let ours = self.tunnels.holds.iter().position(|h| h.port == port && h.state != Held::Ending);
+        let quick = ours.is_some_and(|at| !matches!(self.tunnels.holds[at].state, Held::Up { .. }));
         if let Some(at) = ours {
-            self.forget_in_memory(&host, port, cx);
             if quick {
+                self.forget_in_memory(&host, port, cx);
                 return self.drop_hold(at, cx);
             }
-            self.there.tunnels.holds[at].state = Held::Ending;
+            self.tunnels.holds[at].state = Held::Ending;
         }
         let verb = if forget { "forget" } else { "close" };
         let busy = Busy::new(closing_key(port), format!("Closing the tunnel of port {port} on {host}…"));
@@ -244,7 +251,7 @@ impl Store {
     }
 
     fn drop_hold(&mut self, at: usize, cx: &mut Context<Self>) {
-        let hold = self.there.tunnels.holds.remove(at);
+        let hold = self.tunnels.holds.remove(at);
         cli::end_hold(hold.process);
         if let Some(job) = hold.job {
             self.end_job(job, cx);
@@ -257,6 +264,7 @@ impl Store {
         let verb = if forget { "forget" } else { "close" };
         match result {
             Ok(_) => {
+                self.forget_in_memory(&host, port, cx);
                 let past = if forget { "Forgot" } else { "Closed" };
                 self.toast(format!("{past} the tunnel of port {port} on {host}"), ToastKind::Info, cx);
             }
@@ -270,7 +278,7 @@ impl Store {
     }
 
     fn restore_ending(&mut self, port: u16) {
-        for hold in self.there.tunnels.holds.iter_mut().filter(|h| h.port == port && h.state == Held::Ending) {
+        for hold in self.tunnels.holds.iter_mut().filter(|h| h.port == port && h.state == Held::Ending) {
             if let (Some(local), true) = (hold.last_local, hold.process != 0) {
                 hold.state = Held::Up { local };
             }
@@ -279,32 +287,45 @@ impl Store {
 
     pub(crate) fn follow_tunnels(&mut self, cx: &mut Context<Self>) {
         if self.tunnel_way() != Way::Cornercase {
-            if !self.there.tunnels.holds.is_empty() {
+            if !self.tunnels.holds.is_empty() {
                 self.end_tunnels_here(cx);
             }
-            self.there.tunnels.link = None;
+            self.tunnels.link = None;
             return;
         }
         let (Some(host), Some(boot)) = (cli::host(), self.session.as_ref().map(|s| s.boot.clone())) else { return };
-        for (port, started) in std::mem::take(&mut self.there.tunnels.settling) {
-            match settled(&started, &boot) {
-                Settled::Closed => self.forget_in_memory(&host, port, cx),
-                Settled::Back => self.hold_tunnel(port, Asked::Back, cx),
-            }
-        }
-        if self.there.tunnels.link.as_ref() != Some(&boot) {
-            self.there.tunnels.link = Some(boot);
+        let relink = self.tunnels.link.as_ref() != Some(&boot);
+        self.tunnels.link = Some(boot);
+        self.settle_tunnels(&host, cx);
+        if relink {
             self.link_tunnels(&host, cx);
         }
     }
 
+    fn settle_later(&mut self, cx: &mut Context<Self>) {
+        if let Some(host) = cli::host() {
+            self.settle_tunnels(&host, cx);
+        }
+    }
+
+    fn settle_tunnels(&mut self, host: &str, cx: &mut Context<Self>) {
+        let Some(now) = self.session.as_ref().map(|s| s.boot.clone()) else { return };
+        let linked = self.tunnels.link.is_some();
+        for (port, started) in std::mem::take(&mut self.tunnels.settling) {
+            match settle_now(linked, &started, &now) {
+                None => self.tunnels.settling.push((port, started)),
+                Some(Settled::Closed) => self.forget_in_memory(host, port, cx),
+                Some(Settled::Back) => self.hold_tunnel(port, Asked::Back, cx),
+            }
+        }
+    }
+
     fn link_tunnels(&mut self, host: &str, cx: &mut Context<Self>) {
-        let held: Vec<u16> = self.there.tunnels.holds.iter().map(|h| h.port).collect();
+        let held: Vec<u16> = self.tunnels.holds.iter().map(|h| h.port).collect();
         for port in bring_back(&memory::remembered(host), &held) {
             self.hold_tunnel(port, Asked::Back, cx);
         }
         let down: Vec<(u16, u32)> = self
-            .there
             .tunnels
             .holds
             .iter()
@@ -317,16 +338,16 @@ impl Store {
     }
 
     pub(crate) fn drop_down_tunnel(&mut self, port: u16) {
-        self.there.tunnels.holds.retain(|hold| !(hold.port == port && matches!(hold.state, Held::Down { .. })));
+        self.tunnels.holds.retain(|hold| !(hold.port == port && matches!(hold.state, Held::Down { .. })));
     }
 
     pub(crate) fn tunnels_unlinked(&mut self) {
-        self.there.tunnels.link = None;
+        self.tunnels.link = None;
     }
 
     fn end_tunnels_here(&mut self, cx: &mut Context<Self>) {
         cli::end_holds();
-        for hold in std::mem::take(&mut self.there.tunnels.holds) {
+        for hold in std::mem::take(&mut self.tunnels.holds) {
             if let Some(job) = hold.job {
                 self.end_job(job, cx);
             }

@@ -1,4 +1,4 @@
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 
 use anyhow::Result;
 
@@ -22,13 +22,17 @@ pub(crate) fn hold(
     port: u16,
     on_line: impl FnMut(String) + Send + 'static,
     on_end: impl FnOnce(Ended) + Send + 'static,
-) -> Result<u64> {
-    let mut command = target.command(&args(port));
+) -> Result<(u64, Option<String>)> {
+    hold_with(target.command(&args(port)), on_line, on_end)
+}
+
+fn hold_with(
+    mut command: Command,
+    on_line: impl FnMut(String) + Send + 'static,
+    on_end: impl FnOnce(Ended) + Send + 'static,
+) -> Result<(u64, Option<String>)> {
     command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let (id, _) = HOLDS.start(command, on_line, move |said, code| {
-        on_end(Ended { code, said: said.trim().to_string() });
-    })?;
-    Ok(id)
+    HOLDS.start(command, on_line, move |said, code| on_end(Ended { code, said: said.trim().to_string() }))
 }
 
 pub(crate) fn end_hold(id: u64) {

@@ -134,8 +134,8 @@ fn buttons(port: &Port, stop: Stop<PortsPanel>, store: &Store) -> Div {
                 ui::button(id("open"), "Open").on_click(move |_: &ClickEvent, _, cx| browse(url.clone(), cx))
             }),
         )
-        .children(tunnel_button(port, store))
         .children(elsewhere)
+        .children(tunnel_button(port, store))
         .children(
             copied.map(|url| ui::button(id("copy"), "Copy").on_click(move |_: &ClickEvent, _, cx| copy(&url, cx))),
         )

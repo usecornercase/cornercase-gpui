@@ -254,12 +254,10 @@ def listen_on(kind, bind, listen):
 
 
 def main():
-    args = sys.argv[1:]
     wanted = []
-    while args:
-        kind, spec = args[0], args[1]
+    for found in sys.argv[1].split(","):
+        kind, spec = found.split(":", 1)
         wanted.append((kind, parse(kind, spec)))
-        args = args[2:]
     listeners = []
     for kind, (bind, listen, host, port) in wanted:
         listeners.append((listen_on(kind, bind, listen), host, port))
@@ -291,7 +289,7 @@ refuse_flag() {
 }
 add_forward() {
   [ -n "$2" ] || exit 255
-  forwards="$forwards $1 $2"
+  forwards="${forwards:+$forwards,}$1:$2"
 }
 while [ $# -gt 0 ]; do
   case $1 in
@@ -350,8 +348,7 @@ if [ "$net" = 1 ]; then
     printf 'machine-bench ssh: forwarding needs python3\n' >&2
     exit 255
   }
-  # shellcheck disable=SC2086
-  exec python3 -I @F@/bin/forward $forwards
+  exec python3 -I @F@/bin/forward "$forwards"
 fi
 if [ -e "$dir/$dest.missing" ]; then
   printf 'sh: 1: cornercase: not found\n' >&2

@@ -10,8 +10,8 @@ use crate::model::Session;
 use crate::model::link::{loopback_port, rewrite};
 use crate::model::tunnels::{Way, older_note};
 use crate::panels::ports::{self, data::Port};
+use crate::store::Held;
 use crate::store::Store;
-use crate::store::tunnels::held::Held;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, icon};
 
@@ -25,6 +25,7 @@ pub(crate) enum Reach {
     Tunnelled { url: String, state: State },
     Opening,
     NotTunnelled,
+    Closing,
 }
 
 pub(crate) fn held_reach(port: &Port, held: Option<&Held>) -> Reach {
@@ -33,7 +34,8 @@ pub(crate) fn held_reach(port: &Port, held: Option<&Held>) -> Reach {
         Some(Held::Up { local }) => Reach::Tunnelled { url: rewrite(&url, *local), state: State::Ready },
         Some(Held::Down { .. }) => Reach::Tunnelled { url, state: State::Retrying },
         Some(Held::Opening) => Reach::Opening,
-        Some(Held::Ending) | None => Reach::NotTunnelled,
+        Some(Held::Ending) => Reach::Closing,
+        None => Reach::NotTunnelled,
     }
 }
 
@@ -57,6 +59,7 @@ pub(crate) fn how_reached(port: &Port, reach: &Reach, host: &str) -> String {
         Reach::Tunnelled { url, .. } if loopback_port(url) == Some(port.number) => format!("via {host}"),
         Reach::Tunnelled { .. } => format!("via {host}, port {} there", port.number),
         Reach::Opening | Reach::NotTunnelled => format!("port {} on {host}", port.number),
+        Reach::Closing => format!("closing the tunnel of port {} on {host}", port.number),
     }
 }
 
@@ -122,9 +125,10 @@ fn port_row(
 ) -> AnyElement {
     let url = match reach {
         Reach::Direct(url) | Reach::Tunnelled { url, .. } => url.clone(),
-        Reach::Opening | Reach::NotTunnelled => port.url.clone().unwrap_or_default(),
+        Reach::Opening | Reach::NotTunnelled | Reach::Closing => port.url.clone().unwrap_or_default(),
     };
     let opened = port.url.clone().unwrap_or_default();
+    let closing = matches!(reach, Reach::Closing);
     let place = [port.place(session, false), how_reached(port, reach, host)];
     ui::row(SharedString::from(format!("browser-port-{}", port.number)), false)
         .p(px(12.))
@@ -137,7 +141,11 @@ fn port_row(
         .child(port_text(shown_url(&url), port, &place))
         .child(open_hint(port.number, reach))
         .children(close_button(port.number, reach, cx))
-        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.browse(opened.clone(), this.workspace, cx)))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            if !closing {
+                this.browse(opened.clone(), this.workspace, cx);
+            }
+        }))
         .into_any_element()
 }
 
@@ -172,6 +180,9 @@ fn close_button(number: u16, reach: &Reach, cx: &Context<Browser>) -> Option<Any
 
 fn open_hint(number: u16, reach: &Reach) -> AnyElement {
     match reach {
+        Reach::Closing => {
+            ui::busy(SharedString::from(format!("browser-closing-{number}")), "Closing…").into_any_element()
+        }
         Reach::NotTunnelled => div()
             .flex_none()
             .text_size(px(12.))

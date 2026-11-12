@@ -3,10 +3,13 @@ use gpui::{ClipboardItem, Context, Pixels, Point, Window};
 use crate::app::Root;
 use crate::context_menu::{self, Entry};
 use crate::dialogs;
+use crate::keymap::{Command, keys_of};
+use crate::panels::PanelKind;
+use crate::platform::Os;
+use crate::store::Asked;
 use crate::store::ToastKind;
-use crate::store::tunnels::held::Asked;
-use crate::store::tunnels::remote_url;
-use crate::store::tunnels::rows::{self, TunnelRow, Whose};
+use crate::store::remote_url;
+use crate::store::{TunnelRow, Whose, asks_note, none_note};
 
 fn closing(port: u16) -> Vec<Entry> {
     vec![
@@ -37,14 +40,16 @@ fn actions(row: &TunnelRow) -> Vec<Entry> {
         Whose::Opening => vec![context_menu::item("Close", move |this, _, cx| {
             this.store.update(cx, |s, cx| s.close_tunnel(port, false, cx));
         })],
-        Whose::Down { .. } => {
+        Whose::Down { why } => {
             let again = context_menu::item("Try again", move |this, _, cx| {
                 this.store.update(cx, |s, cx| {
                     s.drop_down_tunnel(port);
                     s.hold_tunnel(port, Asked::Click, cx);
                 });
             });
-            let mut entries = vec![again];
+            let mut entries: Vec<Entry> =
+                (!why.is_empty()).then(|| context_menu::note(why.clone())).into_iter().collect();
+            entries.push(again);
             entries.extend(closing(port));
             entries
         }
@@ -59,10 +64,11 @@ impl Root {
         let host = self.host.clone().unwrap_or_default();
         let mut entries = vec![Entry::Heading(format!("Tunnels to {host}").into())];
         if tunnels.is_empty() {
-            entries.push(context_menu::note(rows::none_note()));
+            entries
+                .push(context_menu::note(none_note(keys_of(Command::Panel(PanelKind::Ports), Os::CURRENT).as_deref())));
         }
         entries.extend(tunnels.iter().map(|row| context_menu::submenu(row.text(), actions(row))));
-        entries.push(context_menu::note(rows::asks_note(&host)));
+        entries.push(context_menu::note(asks_note(&host)));
         entries.push(Entry::Separator);
         entries.push(context_menu::item("Connect to another server…", |_, window, cx| dialogs::connect(window, cx)));
         self.open_menu(context_menu::above(at, &entries), entries, window, cx);

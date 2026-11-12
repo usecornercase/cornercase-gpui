@@ -1,6 +1,6 @@
 use super::{Passage, Step, passage, step};
 use crate::model::tunnels::{Older, Way};
-use crate::store::tunnels::held::Held;
+use crate::store::Held;
 
 #[test]
 fn an_open_waits_for_its_hold_and_opens_on_the_local_port() {

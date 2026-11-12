@@ -67,15 +67,14 @@ pub(crate) fn fate(hold: &Hold, code: Option<i32>, said: &str) -> Fate {
     if code == Some(0) {
         return Fate::Settle;
     }
-    let why = said_line(said, code);
-    if hold.was_up { Fate::Retry(why) } else { Fate::Failed(why) }
+    let line = cli::reason_of(said);
+    if hold.was_up {
+        return Fate::Retry(if line.is_empty() { status_words(code) } else { capitalised(&line) });
+    }
+    Fate::Failed(if line.is_empty() { window_failure(hold.port, &status_words(code)) } else { capitalised(&line) })
 }
 
-fn said_line(said: &str, code: Option<i32>) -> String {
-    let line = cli::reason_of(said);
-    if !line.is_empty() {
-        return capitalised(&line);
-    }
+fn status_words(code: Option<i32>) -> String {
     match code {
         Some(code) => format!("cornercase tunnel hold ended with status {code}"),
         None => "cornercase tunnel hold was stopped".to_string(),
@@ -87,12 +86,8 @@ fn capitalised(text: &str) -> String {
     chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
-pub(crate) fn failed_toast(port: u16, why: &str) -> String {
-    if why.starts_with("Could not tunnel port") {
-        why.to_string()
-    } else {
-        format!("Could not tunnel port {port}: {why}")
-    }
+pub(crate) fn window_failure(port: u16, why: &str) -> String {
+    format!("Could not tunnel port {port}: {why}")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +98,10 @@ pub(crate) enum Settled {
 
 pub(crate) fn settled(started_on: &str, now: &str) -> Settled {
     if started_on == now { Settled::Closed } else { Settled::Back }
+}
+
+pub(crate) fn settle_now(linked: bool, started_on: &str, now: &str) -> Option<Settled> {
+    linked.then(|| settled(started_on, now))
 }
 
 pub(crate) fn bring_back(remembered: &[u16], held: &[u16]) -> Vec<u16> {

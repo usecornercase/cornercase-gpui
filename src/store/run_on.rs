@@ -8,6 +8,12 @@ use crate::model::machines::run_on::clone::{Cloned, Unwritten, clone_args, clone
 use crate::model::machines::run_on::{self, Answer, Awaited, Look, Looking, Offer, Starting, There, parse_answer};
 use crate::model::{Project, Spot, ThereId};
 
+#[derive(Default)]
+pub(super) struct Placing {
+    pub(super) awaited: Option<Awaited>,
+    pub(super) cloned: Vec<Cloned>,
+}
+
 pub(crate) struct StartThere {
     pub spot: Spot,
     pub starting: Starting,
@@ -65,7 +71,7 @@ impl Store {
             list: &self.machines,
             seen: self.session.as_ref().map_or(&[][..], |session| &session.machines),
             cloning: project.is_some_and(|project| self.jobs.busy(&clone_key(machine, project))),
-            cloned: &self.cloned,
+            cloned: &self.placing.cloned,
             now: Instant::now(),
         };
         looking.there()
@@ -118,7 +124,7 @@ impl Store {
                     self.toast(text, ToastKind::Error, cx);
                 }
                 if start.select {
-                    self.awaited = Awaited::answered(&start.spot, &answer, Instant::now());
+                    self.placing.awaited = Awaited::answered(&start.spot, &answer, Instant::now());
                     self.follow_awaited(cx);
                 }
             }
@@ -151,11 +157,11 @@ impl Store {
     }
 
     pub(crate) fn follow_awaited(&mut self, cx: &mut Context<Self>) {
-        let Some(awaited) = self.awaited.take() else { return };
+        let Some(awaited) = self.placing.awaited.take() else { return };
         let machines = self.session.as_ref().map_or(&[][..], |session| &session.machines);
         match awaited.look(machines, Instant::now()) {
             Look::Listed(place) => self.select_there(place, cx),
-            Look::NotYet => self.awaited = Some(awaited),
+            Look::NotYet => self.placing.awaited = Some(awaited),
             Look::Gone => {}
         }
     }
@@ -191,7 +197,7 @@ impl Store {
             Ok((there, unwritten)) => {
                 let kind = if unwritten.is_empty() { ToastKind::Done } else { ToastKind::Error };
                 self.toast(cloned_note(&name, &machine, &unwritten), kind, cx);
-                self.cloned.push(Cloned { machine, boot, project, there, at: Instant::now() });
+                self.placing.cloned.push(Cloned { machine, boot, project, there, at: Instant::now() });
             }
             Err(why) => self.toast(format!("The clone on {machine} failed: {why}"), ToastKind::Error, cx),
         }

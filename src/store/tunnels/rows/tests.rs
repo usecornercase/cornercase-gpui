@@ -58,7 +58,7 @@ fn a_hold_not_listed_yet_still_shows_as_opening() {
     let rows = menu_rows(&[], &[ours(5173, Held::Opening)]);
     assert_eq!(rows.iter().map(super::TunnelRow::text).collect::<Vec<_>>(), ["⇄ 5173 · opening"]);
     let down = menu_rows(&[], &[ours(5173, Held::Down { why: "ssh stopped".to_string() })]);
-    assert_eq!(down[0].text(), "⇄ 5173 · down: ssh stopped");
+    assert_eq!(down[0].text(), "⇄ 5173 · down");
 }
 
 #[test]
@@ -83,4 +83,10 @@ fn another_holder_is_seen_as_elsewhere_only_when_open() {
     assert!(!elsewhere(1, &listed, &[]));
     assert!(elsewhere(2, &listed, &[]));
     assert!(!elsewhere(2, &[seen(2, Some(3), "up", "hold")], &[ours(2, Held::Up { local: 3 })]));
+}
+
+#[test]
+fn the_note_for_no_tunnel_names_the_keys_of_this_platform() {
+    assert!(super::none_note(Some("Ctrl+Shift+O")).contains("in Ports (Ctrl+Shift+O),"));
+    assert!(super::none_note(None).contains("in Ports,"));
 }

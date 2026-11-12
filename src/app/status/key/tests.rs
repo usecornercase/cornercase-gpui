@@ -13,6 +13,7 @@ struct Inputs {
     size: Option<(u16, u16)>,
     store: u64,
     chips: u64,
+    menu: bool,
 }
 
 impl Inputs {
@@ -24,6 +25,7 @@ impl Inputs {
             size: self.size,
             store: self.store,
             chips: self.chips,
+            menu: self.menu,
         })
     }
 }
@@ -37,6 +39,7 @@ const CHANGES: &[Change<Inputs>] = &[
     ("the size", |i| i.size = Some((80, 24))),
     ("the store", |i| i.store += 1),
     ("the chips", |i| i.chips += 1),
+    ("a menu opening", |i| i.menu = true),
 ];
 
 #[test]

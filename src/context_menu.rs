@@ -16,6 +16,7 @@ use crate::ui::{self, Icon, glass, icon};
 
 const MENU_DROP: f32 = 4.;
 const ROW_HEIGHT: f32 = 29.5;
+const NOTE_LINE: usize = 44;
 const SEPARATOR_HEIGHT: f32 = 9.;
 const FRAME_PADDING: f32 = 4.;
 const ABOVE_POINTER: f32 = 6.;
@@ -99,7 +100,14 @@ fn step(entries: &[Entry], from: Option<usize>, down: bool) -> Option<usize> {
 #[expect(clippy::cast_precision_loss, reason = "a menu has a few entries")]
 pub(crate) fn above(at: Point<Pixels>, entries: &[Entry]) -> Point<Pixels> {
     let separators = entries.iter().filter(|e| matches!(e, Entry::Separator)).count();
-    let rows = entries.len() - separators;
+    let wrapped: usize = entries
+        .iter()
+        .map(|e| match e {
+            Entry::Note(text) => text.len().saturating_sub(1) / NOTE_LINE,
+            _ => 0,
+        })
+        .sum();
+    let rows = entries.len() - separators + wrapped;
     let height = rows as f32 * ROW_HEIGHT + separators as f32 * SEPARATOR_HEIGHT + FRAME_PADDING * 2.;
     point(at.x, at.y - px(height + ABOVE_POINTER))
 }

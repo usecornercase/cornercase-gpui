@@ -15,7 +15,7 @@ fn release(text: &str) -> Release {
 fn a_view_line_lists_the_tunnels_of_its_server() {
     let session: Session = serde_json::from_str(VIEW_LINE).expect("a view line");
     let [tunnel] = session.tunnels.as_slice() else { panic!("one tunnel") };
-    assert_eq!((tunnel.port, tunnel.local, tunnel.state.as_str()), (47613, Some(63194), "up"));
+    assert_eq!((tunnel.port, tunnel.local, tunnel.state.as_str()), (8765, Some(65433), "up"));
     assert_eq!((tunnel.kind.as_str(), tunnel.holder, tunnel.error.as_deref()), ("hold", 5, None));
 }
 
@@ -28,7 +28,7 @@ fn a_view_line_without_tunnels_lists_none() {
 #[test]
 fn the_held_line_gives_the_local_port() {
     let held = held_line(HELD_LINE).expect("a held line");
-    assert_eq!((held.port, held.local), (47613, 63194));
+    assert_eq!((held.port, held.local), (8765, 65433));
 }
 
 #[test]

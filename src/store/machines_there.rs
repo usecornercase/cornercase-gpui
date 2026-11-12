@@ -157,7 +157,7 @@ fn home_in(status: &str) -> Option<String> {
 
 impl Store {
     pub(crate) fn pick_machine_place(&mut self, place: MachinePlace, cx: &mut Context<Self>) {
-        self.awaited = None;
+        self.placing.awaited = None;
         self.select_there(place, cx);
     }
 
@@ -169,7 +169,7 @@ impl Store {
     }
 
     pub(crate) fn leave_machine_place(&mut self, cx: &mut Context<Self>) {
-        self.awaited = None;
+        self.placing.awaited = None;
         if self.machine_place.take().is_some() {
             self.file_full_screen = false;
             cx.notify();

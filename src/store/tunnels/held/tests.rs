@@ -1,4 +1,4 @@
-use super::{Asked, Fate, Held, Hold, Settled, bring_back, failed_toast, fate, settled, up_toast};
+use super::{Asked, Fate, Held, Hold, Settled, bring_back, fate, settle_now, settled, up_toast, window_failure};
 
 fn hold(state: Held, was_up: bool) -> Hold {
     let mut hold = Hold::opening(5173, 1, Asked::Click, "boot-a");
@@ -11,17 +11,20 @@ fn hold(state: Held, was_up: bool) -> Hold {
 fn a_hold_that_fails_before_it_was_up_is_said_and_not_retried() {
     let said = "Error: could not tunnel port 5173: ssh: connect to host devbox port 22: Connection refused\n";
     let fate = fate(&hold(Held::Opening, false), Some(1), said);
-    let Fate::Failed(why) = fate else { panic!("failed, got {fate:?}") };
     assert_eq!(
-        failed_toast(5173, &why),
-        "Could not tunnel port 5173: ssh: connect to host devbox port 22: Connection refused"
+        fate,
+        Fate::Failed("Could not tunnel port 5173: ssh: connect to host devbox port 22: Connection refused".to_string())
     );
 }
 
 #[test]
 fn a_hold_with_nothing_on_stderr_says_its_status() {
-    let Fate::Failed(why) = fate(&hold(Held::Opening, false), Some(2), "") else { panic!("failed") };
-    assert_eq!(failed_toast(5173, &why), "Could not tunnel port 5173: cornercase tunnel hold ended with status 2");
+    let failed = fate(&hold(Held::Opening, false), Some(2), "");
+    assert_eq!(
+        failed,
+        Fate::Failed("Could not tunnel port 5173: cornercase tunnel hold ended with status 2".to_string())
+    );
+    assert_eq!(window_failure(5173, "no free port"), "Could not tunnel port 5173: no free port");
 }
 
 #[test]
@@ -79,4 +82,11 @@ fn an_open_says_the_local_port_only_when_it_differs() {
 fn a_port_brought_back_says_nothing() {
     assert!(up_toast(Asked::Back, 5173, 5174, "devbox").is_none());
     assert!(up_toast(Asked::Retry, 5173, 5174, "devbox").is_none());
+}
+
+#[test]
+fn an_exit_0_while_unlinked_waits_for_the_next_view_line() {
+    assert_eq!(settle_now(false, "boot-a", "boot-a"), None);
+    assert_eq!(settle_now(true, "boot-a", "boot-a"), Some(Settled::Closed));
+    assert_eq!(settle_now(true, "boot-a", "boot-b"), Some(Settled::Back));
 }

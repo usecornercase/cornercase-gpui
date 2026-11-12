@@ -23,6 +23,7 @@ pub(super) mod key;
 mod tunnels;
 
 const HEIGHT: f32 = 28.;
+const HOST_MAX: f32 = 150.;
 
 impl Root {
     pub(super) fn status_part(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> Drawn {
@@ -60,6 +61,7 @@ impl Root {
     fn connection_status(&self, cx: &Context<Self>) -> impl IntoElement + use<> {
         let (dot, label, why) = self.connection_label();
         let store = self.store.read(cx);
+        let menu_open = self.side.menu.is_some();
         let held = store.tunnel_way() == Way::Cornercase && self.host.is_some();
         let tip = connection_tip(why, self.host.as_deref().filter(|_| held));
         let parts = label_parts(self.host.as_deref(), if held { store.tunnel_count() } else { 0 }, &label);
@@ -77,7 +79,7 @@ impl Root {
             .hover(|s| s.bg(colours::hover()))
             .child(connection_dot(dot, self.conn == Conn::Starting))
             .child(label_element(parts))
-            .tooltip(notify::tip(tip))
+            .when(!menu_open, |d| d.tooltip(notify::tip(tip)))
             .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
                 if held {
                     this.open_machine_menu(e.position(), window, cx);
@@ -133,7 +135,7 @@ fn label_parts(host: Option<&str>, tunnels: usize, state: &str) -> LabelParts {
 fn label_element(parts: LabelParts) -> Div {
     let row = div().min_w_0().flex().items_center().gap(px(4.));
     let Some(host) = parts.host else { return row.child(ui::one_line(parts.state)) };
-    row.child(div().flex_none().child(host))
+    row.child(div().min_w_0().max_w(px(HOST_MAX)).child(ui::one_line(host)))
         .children(parts.count.map(|count| div().flex_none().text_color(colours::accent()).child(count)))
         .child(div().flex_none().child("·"))
         .child(div().min_w_0().child(ui::one_line(parts.state)))

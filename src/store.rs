@@ -11,8 +11,6 @@ use crate::cli::{self, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, ListMoves, Selection, Switch, switching_key};
-use crate::model::machines::run_on::Awaited;
-use crate::model::machines::run_on::clone::Cloned;
 use crate::model::machines::{self, Machine};
 use crate::model::{MachinePlace, Session};
 use crate::notify::Posted;
@@ -27,7 +25,7 @@ mod jobs;
 mod machine_read;
 mod machines_there;
 mod run_on;
-pub(crate) mod tunnels;
+mod tunnels;
 
 pub(crate) use jobs::Busy;
 use jobs::Jobs;
@@ -35,6 +33,7 @@ use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, Reach, TabThere};
 pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there, stale_note};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
+pub(crate) use tunnels::{Asked, Control, Held, TunnelRow, Whose, asks_note, none_note, remote_url};
 
 const NO_FLOW: &str = "This workspace runs no flow";
 
@@ -53,8 +52,8 @@ pub(crate) struct Store {
     pub app: Option<Value>,
     pub machines: Vec<Machine>,
     pub machine_place: Option<MachinePlace>,
-    awaited: Option<Awaited>,
-    cloned: Vec<Cloned>,
+    placing: run_on::Placing,
+    tunnels: tunnels::Tunnels,
     there: ThereState,
     pub dock: Option<PanelKind>,
     pub sheet: Option<PanelKind>,
@@ -155,8 +154,8 @@ impl Store {
             app: None,
             machines: Vec::new(),
             machine_place: None,
-            awaited: None,
-            cloned: Vec::new(),
+            placing: run_on::Placing::default(),
+            tunnels: tunnels::Tunnels::default(),
             there: ThereState::default(),
             dock: None,
             sheet: None,
@@ -192,6 +191,7 @@ impl Store {
 
     fn publish(store: Entity<Store>, cx: &mut App) -> Entity<Store> {
         cx.set_global(GlobalStore(store.clone()));
+        crate::panels::browser::follow_store(&store, cx);
         store.update(cx, |_, cx| detect_openers(cx));
         store
     }

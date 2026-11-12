@@ -309,8 +309,8 @@ const DRAWINGS: &[Drawing] = &[
     Drawing {
         what: "the status bar",
         files: &["src/app/status.rs", "src/app/status/key.rs"],
-        root: &["notifier", "store", "conn", "came_up", "host", "session", "machine", "parts"],
-        side: &[],
+        root: &["notifier", "store", "conn", "came_up", "host", "session", "machine", "parts", "side"],
+        side: &["menu"],
         parts: &["status", "store_seen", "chips_seen"],
     },
 ];

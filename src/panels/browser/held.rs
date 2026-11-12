@@ -1,4 +1,4 @@
-use gpui::{App, Context};
+use gpui::{App, Context, Entity};
 use serde_json::json;
 
 use super::Browser;
@@ -6,7 +6,7 @@ use crate::cli;
 use crate::model::link::{loopback_port, rewrite};
 use crate::model::tunnels::Way;
 use crate::store::Store;
-use crate::store::tunnels::held::{Asked, Held};
+use crate::store::{Asked, Held};
 
 pub(crate) struct HeldOpen {
     remote: u16,
@@ -14,6 +14,12 @@ pub(crate) struct HeldOpen {
     workspace: Option<u64>,
     navigate: bool,
     asked: bool,
+}
+
+impl HeldOpen {
+    pub(super) fn in_workspace(&self, workspace: Option<u64>) -> bool {
+        self.workspace == workspace
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,7 +91,7 @@ impl Browser {
         }
     }
 
-    fn follow_holds(&mut self, store: &gpui::Entity<Store>, cx: &mut Context<Self>) {
+    fn follow_holds(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
         let mut waiting = Vec::new();
         for mut open in std::mem::take(&mut self.dev.held_opens) {
             if !open.asked {
@@ -132,7 +138,20 @@ impl Browser {
         super::tunnels::quit();
         self.dev.tunnels.clear(cx);
         self.dev.held_opens.clear();
+        self.dev.forget_server();
         cx.notify();
+    }
+
+    fn follow_store(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+        self.watching = cx.observe(store, |this, store, cx| this.store_changed(&store, cx));
+        self.store_changed(store, cx);
+    }
+}
+
+pub(crate) fn follow_store(store: &Entity<Store>, cx: &mut App) {
+    if let Some(browser) = super::running(cx) {
+        let store = store.clone();
+        browser.update(cx, move |browser, cx| browser.follow_store(&store, cx));
     }
 }
 

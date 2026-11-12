@@ -5,9 +5,9 @@ use gpui::{
 
 use super::data::Port;
 use crate::notify::tip;
+use crate::store::Asked;
+use crate::store::Control;
 use crate::store::Store;
-use crate::store::tunnels::held::Asked;
-use crate::store::tunnels::rows::Control;
 use crate::theme::colours;
 use crate::ui::{self, Tone};
 
@@ -32,7 +32,8 @@ pub(super) fn tunnel_mark(port: &Port, store: &Store) -> Option<Stateful<Div>> {
     port.url.as_ref()?;
     let mark = store.tunnel_mark(port.number)?;
     let id = SharedString::from(format!("tunnel-mark-{}", port.key()));
-    let text = div().id(id).text_size(px(11.)).text_color(colours::accent()).child(mark.text);
+    let colour = if mark.waiting { colours::waiting() } else { colours::accent() };
+    let text = div().id(id).text_size(px(11.)).text_color(colour).child(mark.text);
     Some(match mark.tip {
         Some(why) => text.tooltip(tip(why)),
         None => text,

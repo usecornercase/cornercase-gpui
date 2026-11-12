@@ -36,8 +36,7 @@ impl TunnelRow {
         match &self.whose {
             Whose::Up { local } => format!("⇄ {port} → localhost:{local} · up"),
             Whose::Opening => format!("⇄ {port} · opening"),
-            Whose::Down { why } if why.is_empty() => format!("⇄ {port} · down"),
-            Whose::Down { why } => format!("⇄ {port} · down: {why}"),
+            Whose::Down { .. } => format!("⇄ {port} · down"),
             Whose::Window => format!("⇄ {port} · in another window"),
             Whose::Program => format!("⇄ {port} · in another program"),
             Whose::ClosedElsewhere => format!("⇄ {port} · closed in another window"),
@@ -103,22 +102,24 @@ pub(crate) fn row_control(way: &Way, held: Option<&Held>) -> Control {
 pub(crate) struct Mark {
     pub(crate) text: String,
     pub(crate) tip: Option<String>,
+    pub(crate) waiting: bool,
 }
 
 pub(crate) fn mark(way: &Way, held: Option<&Held>, elsewhere: bool) -> Option<Mark> {
     if *way != Way::Cornercase {
         return None;
     }
-    let plain = |text: &str| Some(Mark { text: text.to_string(), tip: None });
+    let plain = |text: &str| Some(Mark { text: text.to_string(), tip: None, waiting: false });
     match held {
         Some(Held::Up { local }) => plain(&format!("⇄ :{local}")),
         Some(Held::Opening) => plain("⇄ …"),
         Some(Held::Down { why }) => {
-            Some(Mark { text: "⇄ down".to_string(), tip: (!why.is_empty()).then(|| why.clone()) })
+            Some(Mark { text: "⇄ down".to_string(), tip: (!why.is_empty()).then(|| why.clone()), waiting: true })
         }
         None if elsewhere => Some(Mark {
             text: "⇄ elsewhere".to_string(),
             tip: Some("In another window or program: cornercase tunnels lists it".to_string()),
+            waiting: false,
         }),
         Some(Held::Ending) | None => None,
     }
@@ -128,8 +129,9 @@ pub(crate) fn asks_note(host: &str) -> String {
     format!("A program on {host} cannot open a tunnel here yet: needs {ASKS_ISSUE}")
 }
 
-pub(crate) fn none_note() -> &'static str {
-    "None yet: Tunnel on a port in Ports (⇧⌘O), or opening it in the Browser, makes one."
+pub(crate) fn none_note(keys: Option<&str>) -> String {
+    let ports = keys.map_or_else(|| "Ports".to_string(), |keys| format!("Ports ({keys})"));
+    format!("None yet: Tunnel on a port in {ports}, or opening it in the Browser, makes one.")
 }
 
 #[cfg(test)]

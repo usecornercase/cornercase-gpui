@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use super::data::{List, Port, list_command, stop_label, stop_many_warning, stop_warning, to_stop};
+use super::rows;
 use crate::test_util::fixture;
 
 fn ports() -> Vec<Port> {
@@ -100,4 +101,17 @@ fn the_question_names_each_program_and_warns_once() {
     assert!(text.contains("vite on port 1 (pid 2), vite on port 5 (pid 6)"));
     assert!(text.contains("An agent started some of them."));
     assert!(text.contains("No tab started some of them"));
+}
+
+#[test]
+fn the_ports_note_says_how_ports_there_open_by_way() {
+    use crate::model::tunnels::{Older, Way};
+
+    let held = rows::remote_notes("devbox", &Way::Cornercase);
+    assert_eq!(held.len(), 1);
+    assert!(held[0].contains("Tunnel forwards one") && held[0].contains("through cornercase"));
+    let own = rows::remote_notes("devbox", &Way::Own(Older::Server(None)));
+    assert_eq!(own.len(), 2);
+    assert!(own[0].contains("through an ssh tunnel") && own[1].contains("0.13.50 or newer on devbox"));
+    assert_eq!(rows::remote_notes("devbox", &Way::Waiting).len(), 1);
 }

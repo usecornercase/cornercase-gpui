@@ -10,6 +10,7 @@ pub(crate) struct StatusKey {
     size: Option<(u16, u16)>,
     store: u64,
     chips: u64,
+    menu: bool,
 }
 
 pub(crate) struct StatusInputs {
@@ -19,6 +20,7 @@ pub(crate) struct StatusInputs {
     pub(crate) size: Option<(u16, u16)>,
     pub(crate) store: u64,
     pub(crate) chips: u64,
+    pub(crate) menu: bool,
 }
 
 impl StatusKey {
@@ -30,6 +32,7 @@ impl StatusKey {
             size: inputs.size,
             store: inputs.store,
             chips: inputs.chips,
+            menu: inputs.menu,
         }
     }
 }
@@ -43,6 +46,7 @@ impl Root {
             size: self.shown().size,
             store: self.parts.store_seen,
             chips: self.parts.chips_seen,
+            menu: self.side.menu.is_some(),
         })
     }
 }
