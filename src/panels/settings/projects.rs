@@ -1,15 +1,27 @@
-use gpui::{AnyElement, Context, Div, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px};
+use gpui::{AnyElement, Context, Div, FontWeight, IntoElement, SharedString, Stateful, Window, div, prelude::*, px};
 
 use super::controls::Look;
 use super::data::{self, Described, ProjectEntry, Script};
 use super::{Role, SettingsPanel, role_id, widgets};
+use crate::notify::tip;
 use crate::platform::paths::Style;
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::{self, Icon};
 
-fn project_header(project: &ProjectEntry) -> Div {
+fn folder_name(project: &ProjectEntry) -> Stateful<Div> {
     let name = Some(Style::of_path(&project.folder).name(&project.folder)).filter(|n| !n.is_empty());
     let name = name.unwrap_or(&project.folder).to_string();
+    div()
+        .id(SharedString::from(format!("project-name-{}", project.folder)))
+        .min_w_0()
+        .flex()
+        .text_size(px(13.5))
+        .font_weight(FontWeight::SEMIBOLD)
+        .tooltip(tip(ui::home_relative(&project.folder)))
+        .child(ui::one_line(name))
+}
+
+fn project_header(project: &ProjectEntry) -> Div {
     let chips = [
         project.project.is_none().then(|| ui::quiet_chip("not open")),
         (!project.repository).then(|| ui::tinted_chip("not a git repository", colours::waiting())),
@@ -22,7 +34,7 @@ fn project_header(project: &ProjectEntry) -> Div {
         .border_b_1()
         .border_color(colours::border())
         .child(ui::icon(Icon::FolderOpen, 15.).text_color(colours::accent()))
-        .child(div().flex_none().text_size(px(13.5)).font_weight(FontWeight::SEMIBOLD).child(name))
+        .child(folder_name(project))
         .child(
             div()
                 .flex_1()

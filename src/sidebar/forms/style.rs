@@ -116,7 +116,7 @@ impl GroupStyle {
                     .items_center()
                     .gap(px(8.))
                     .child(div().text_size(px(18.)).text_color(palette_colour(choices.colour)).child(choices.icon))
-                    .child(ui::title(self.name.clone())),
+                    .child(ui::title(self.name.clone()).flex_1().min_w_0()),
             )
             .child(ui::field("Icon", div().flex().flex_wrap().gap(px(4.)).children(icons)))
             .child(ui::field("Colour", div().flex().flex_wrap().gap(px(6.)).children(swatches)))

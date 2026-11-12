@@ -1,12 +1,13 @@
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FontWeight, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
 use super::WorktreesPanel;
 use super::actions::{checking, freeing, removing};
 use super::data::{Tone, Worktree};
 use super::removal::{Said, Style};
+use crate::notify::tip;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui;
@@ -37,12 +38,23 @@ pub(super) fn said_lines(said: &[Said]) -> AnyElement {
     div().flex().flex_col().gap(px(2.)).children(said.iter().map(said_line)).into_any_element()
 }
 
+fn name(worktree: &Worktree) -> Stateful<Div> {
+    let title = worktree.title();
+    div()
+        .id(SharedString::from(format!("name-{}", worktree.path)))
+        .min_w_0()
+        .flex()
+        .font_weight(FontWeight::SEMIBOLD)
+        .tooltip(tip(title.clone()))
+        .child(ui::one_line(title))
+}
+
 fn heading(worktree: &Worktree, now: i64, measuring: bool) -> Div {
     div()
         .flex()
         .items_center()
         .gap(px(8.))
-        .child(div().font_weight(FontWeight::SEMIBOLD).child(worktree.title()))
+        .child(name(worktree))
         .children(worktree.marks().into_iter().map(|(text, tone)| mark(text, tone)))
         .child(div().flex_1())
         .child(ui::dim(worktree.age(now)))
