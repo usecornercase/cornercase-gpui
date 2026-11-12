@@ -13,6 +13,7 @@ pub(crate) struct HeldOpen {
     url: String,
     workspace: Option<u64>,
     navigate: bool,
+    session: Option<String>,
     asked: bool,
 }
 
@@ -32,8 +33,8 @@ pub(crate) enum Step {
 pub(crate) fn step(held: Option<&Held>, asked: bool) -> Step {
     match held {
         Some(Held::Up { local }) => Step::Open(*local),
-        Some(Held::Opening | Held::Down { .. }) => Step::Wait,
-        None | Some(Held::Ending) => {
+        Some(Held::Opening | Held::Down { .. } | Held::Ending) => Step::Wait,
+        None => {
             if asked {
                 Step::Drop
             } else {
@@ -65,7 +66,11 @@ impl Browser {
         (workspace, navigate): (Option<u64>, bool),
         cx: &mut Context<Self>,
     ) {
-        self.dev.held_opens.push(HeldOpen { remote, url, workspace, navigate, asked: false });
+        let session = self.active_session().filter(|_| navigate);
+        let again = |o: &HeldOpen| (o.remote, &o.url, o.workspace, o.navigate) == (remote, &url, workspace, navigate);
+        if !self.dev.held_opens.iter().any(again) {
+            self.dev.held_opens.push(HeldOpen { remote, url, workspace, navigate, session, asked: false });
+        }
         self.held_changed(cx);
     }
 
@@ -99,6 +104,7 @@ impl Browser {
                 open.asked = true;
             }
             let held = store.read(cx).held_tunnel(open.remote).cloned();
+            open.asked &= held != Some(Held::Ending);
             match step(held.as_ref(), open.asked) {
                 Step::Open(local) => self.open_held(&open, local, cx),
                 Step::Wait => waiting.push(open),
@@ -112,8 +118,9 @@ impl Browser {
 
     fn open_held(&mut self, open: &HeldOpen, local: u16, cx: &mut Context<Self>) {
         let url = rewrite(&open.url, local);
-        match self.active_session().filter(|_| open.navigate) {
-            Some(session) => self.send(Some(&session), "Page.navigate", json!({ "url": url })),
+        let session = open.session.as_ref().filter(|session| self.tabs.by_session(session).is_some());
+        match session {
+            Some(session) => self.send(Some(session), "Page.navigate", json!({ "url": url })),
             None => self.open_now(url, open.workspace, cx),
         }
     }
@@ -123,7 +130,7 @@ impl Browser {
         let store = Store::get(cx).read(cx);
         let listed = self.dev.ports.iter().flatten().any(|p| p.number == remote);
         let known = listed || store.held_tunnel(remote).is_some();
-        (store.tunnel_way() == Way::Cornercase && known).then_some(remote)
+        (matches!(store.tunnel_way(), Way::Cornercase | Way::Waiting) && known).then_some(remote)
     }
 
     pub(super) fn passage_to(&mut self, remote: u16, cx: &mut Context<Self>) -> Passage {

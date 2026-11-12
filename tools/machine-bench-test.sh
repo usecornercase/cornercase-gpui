@@ -502,6 +502,14 @@ free_port() {
   python3 -I -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])'
 }
 
+other_free_port() {
+  other=$(free_port)
+  while [ "$other" = "$1" ]; do
+    other=$(free_port)
+  done
+  printf '%s\n' "$other"
+}
+
 echo_server() {
   python3 -I -c '
 import socket, sys, threading
@@ -552,7 +560,7 @@ until_gone() {
 }
 
 forward_in() {
-  "$sh_cmd" "$1/bin/ssh" -N -T -o ExitOnForwardFailure=yes -o BatchMode=yes -L "127.0.0.1:$2:localhost:$3" -- vps.invalid \
+  "$sh_cmd" "$1/bin/ssh" -N -T -o ExitOnForwardFailure=yes -o BatchMode=yes "${4:--L}" "127.0.0.1:$2:localhost:$3" -- vps.invalid \
     > "$t/fout" 2> "$t/ferr" &
   forwarded=$!
   track "$forwarded"
@@ -560,7 +568,7 @@ forward_in() {
 
 the_stand_in_forwards_a_port_to_there() {
   far=$(free_port)
-  near=$(free_port)
+  near=$(other_free_port "$far")
   echo_server "$far"
   until_answers "$far" || { check "the echo server did not start" false; return 1; }
   forward_in "$b" "$near" "$far"
@@ -572,6 +580,17 @@ the_stand_in_forwards_a_port_to_there() {
 
 contains_args() {
   ps -o args= -p "$1" 2> /dev/null | grep -q -F -- "$2"
+}
+
+the_stand_in_forwards_a_reverse_forward_too() {
+  far=$(free_port)
+  near=$(other_free_port "$far")
+  echo_server "$far"
+  until_answers "$far" || { check "the echo server did not start" false; return 1; }
+  forward_in "$b" "$near" "$far" -R
+  until_answers "$near" || { check "nothing answered through the -R forward: $(cat "$t/ferr")" false; return 1; }
+  kill "$forwarded"
+  check "SIGTERM did not end the -R forward" until_gone "$forwarded"
 }
 
 the_stand_in_says_a_taken_port_as_ssh_does() {
@@ -603,7 +622,7 @@ the_stand_in_forwards_only_loopback() {
 
 the_stand_in_says_a_refused_connection_and_keeps_running() {
   far=$(free_port)
-  near=$(free_port)
+  near=$(other_free_port "$far")
   forward_in "$b" "$near" "$far"
   n=0
   while [ "$n" -lt 50 ] && [ -z "$(round_trip "$near")" ]; do
@@ -847,6 +866,7 @@ run_test the_stand_in_runs_the_command_while_slow_is_zero
 run_test the_stand_in_answers_127_while_missing
 run_test the_stand_in_refuses_other_hosts_masters_and_shells
 run_test the_stand_in_forwards_a_port_to_there
+run_test the_stand_in_forwards_a_reverse_forward_too
 run_test the_stand_in_says_a_taken_port_as_ssh_does
 run_test the_stand_in_refuses_a_forward_while_held
 run_test the_stand_in_forwards_only_loopback

@@ -86,7 +86,12 @@ fn a_port_brought_back_says_nothing() {
 
 #[test]
 fn an_exit_0_while_unlinked_waits_for_the_next_view_line() {
-    assert_eq!(settle_now(false, "boot-a", "boot-a"), None);
-    assert_eq!(settle_now(true, "boot-a", "boot-a"), Some(Settled::Closed));
-    assert_eq!(settle_now(true, "boot-a", "boot-b"), Some(Settled::Back));
+    assert_eq!(settle_now(false, false, "boot-a", "boot-a"), None);
+    assert_eq!(settle_now(true, false, "boot-a", "boot-a"), Some(Settled::Closed));
+    assert_eq!(settle_now(true, false, "boot-a", "boot-b"), Some(Settled::Back));
+}
+
+#[test]
+fn a_hold_started_again_is_not_forgotten_by_the_exit_that_came_before() {
+    assert_eq!(settle_now(true, true, "boot-a", "boot-a"), Some(Settled::Superseded));
 }

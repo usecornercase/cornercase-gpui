@@ -135,10 +135,10 @@ fn label_parts(host: Option<&str>, tunnels: usize, state: &str) -> LabelParts {
 fn label_element(parts: LabelParts) -> Div {
     let row = div().min_w_0().flex().items_center().gap(px(4.));
     let Some(host) = parts.host else { return row.child(ui::one_line(parts.state)) };
-    row.child(div().min_w_0().max_w(px(HOST_MAX)).child(ui::one_line(host)))
+    row.child(div().flex().min_w_0().max_w(px(HOST_MAX)).child(ui::one_line(host)))
         .children(parts.count.map(|count| div().flex_none().text_color(colours::accent()).child(count)))
         .child(div().flex_none().child("·"))
-        .child(div().min_w_0().child(ui::one_line(parts.state)))
+        .child(div().flex().min_w_0().child(ui::one_line(parts.state)))
 }
 
 fn connection_tip(why: Option<String>, tunnels_to: Option<&str>) -> String {

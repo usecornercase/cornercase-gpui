@@ -92,6 +92,7 @@ pub(crate) fn window_failure(port: u16, why: &str) -> String {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Settled {
+    Superseded,
     Closed,
     Back,
 }
@@ -100,8 +101,11 @@ pub(crate) fn settled(started_on: &str, now: &str) -> Settled {
     if started_on == now { Settled::Closed } else { Settled::Back }
 }
 
-pub(crate) fn settle_now(linked: bool, started_on: &str, now: &str) -> Option<Settled> {
-    linked.then(|| settled(started_on, now))
+pub(crate) fn settle_now(linked: bool, live: bool, started_on: &str, now: &str) -> Option<Settled> {
+    if !linked {
+        return None;
+    }
+    Some(if live { Settled::Superseded } else { settled(started_on, now) })
 }
 
 pub(crate) fn bring_back(remembered: &[u16], held: &[u16]) -> Vec<u16> {

@@ -221,4 +221,5 @@ fn rewriting_moves_the_url_to_the_local_end_and_keeps_the_rest() {
 fn rewriting_keeps_a_localhost_subdomain_for_servers_that_route_by_host() {
     assert_eq!(rewrite("http://app.localhost:3000/x", 61234), "http://app.localhost:61234/x");
     assert_eq!(rewrite("http://localhost/", 61234), "http://localhost:61234/");
+    assert_eq!(rewrite("http://APP.LOCALHOST:3000/x", 61234), "http://APP.LOCALHOST:61234/x");
 }

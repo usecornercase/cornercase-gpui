@@ -193,12 +193,20 @@ def pipe(source, target):
             target.sendall(data)
     except OSError:
         pass
-    finally:
-        for end in (source, target):
-            try:
-                end.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
+    try:
+        target.shutdown(socket.SHUT_WR)
+    except OSError:
+        pass
+
+
+def relay(client, far):
+    ends = [threading.Thread(target=pipe, args=pair, daemon=True) for pair in ((client, far), (far, client))]
+    for end in ends:
+        end.start()
+    for end in ends:
+        end.join()
+    client.close()
+    far.close()
 
 
 def serve(listener, host, port):
@@ -214,8 +222,8 @@ def serve(listener, host, port):
             sys.stderr.flush()
             client.close()
             continue
-        for source, target in ((client, far), (far, client)):
-            threading.Thread(target=pipe, args=(source, target), daemon=True).start()
+        far.settimeout(None)
+        threading.Thread(target=relay, args=(client, far), daemon=True).start()
 
 
 def loopback(name):
@@ -239,6 +247,7 @@ def parse(kind, spec):
 def listen_on(kind, bind, listen):
     family = socket.AF_INET6 if ":" in bind else socket.AF_INET
     listener = socket.socket(family, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         listener.bind((bind, listen))
         listener.listen(64)

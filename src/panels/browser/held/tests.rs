@@ -12,7 +12,6 @@ fn an_open_waits_for_its_hold_and_opens_on_the_local_port() {
 #[test]
 fn an_open_whose_hold_failed_is_dropped() {
     assert_eq!(step(None, true), Step::Drop);
-    assert_eq!(step(Some(&Held::Ending), true), Step::Drop);
 }
 
 #[test]
@@ -29,4 +28,10 @@ fn a_preview_goes_only_through_a_tunnel_that_is_up() {
 fn leaving_a_server_closes_the_tabs_of_its_workspaces_only() {
     let tabs = [("a", Some(3)), ("b", None), ("c", Some(7))];
     assert_eq!(tabs_of_a_server(tabs.into_iter()), ["a", "c"]);
+}
+
+#[test]
+fn an_open_waits_for_a_tunnel_being_closed_and_asks_again() {
+    assert_eq!(step(Some(&Held::Ending), true), Step::Wait);
+    assert_eq!(step(None, false), Step::Wait);
 }

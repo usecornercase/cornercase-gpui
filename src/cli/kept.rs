@@ -77,7 +77,9 @@ impl Kept {
         };
         let mut running = ended?;
         let code = running.child.wait().ok().and_then(|status| status.code());
-        running.let_go();
+        if self.how == End::LetGo {
+            running.let_go();
+        }
         code
     }
 

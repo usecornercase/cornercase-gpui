@@ -93,9 +93,7 @@ impl Store {
     }
 
     pub(crate) fn hold_tunnel(&mut self, port: u16, asked: Asked, cx: &mut Context<Self>) {
-        if self.tunnel_way() != Way::Cornercase
-            || self.tunnels.holds.iter().any(|h| h.port == port && h.state != Held::Ending)
-        {
+        if self.tunnel_way() != Way::Cornercase || self.tunnels.holds.iter().any(|h| h.port == port) {
             return;
         }
         self.start_hold(port, asked, None, cx);
@@ -241,8 +239,9 @@ impl Store {
         let verb = if forget { "forget" } else { "close" };
         let busy = Busy::new(closing_key(port), format!("Closing the tunnel of port {port} on {host}…"));
         let args = vec!["tunnel".to_string(), verb.to_string(), port.to_string()];
-        let work = move || cli::run(&args);
-        self.run_then(busy, work, move |this, result, cx| this.closed((port, forget), result, cx), cx);
+        let target = cli::target();
+        let work = move || cli::run_on(&target, &args, None);
+        self.run_then(busy, work, move |this, result, cx| this.closed((port, forget, host), result, cx), cx);
         cx.notify();
     }
 
@@ -259,8 +258,12 @@ impl Store {
         cx.notify();
     }
 
-    fn closed(&mut self, (port, forget): (u16, bool), result: anyhow::Result<String>, cx: &mut Context<Self>) {
-        let host = cli::host().unwrap_or_default();
+    fn closed(
+        &mut self,
+        (port, forget, host): (u16, bool, String),
+        result: anyhow::Result<String>,
+        cx: &mut Context<Self>,
+    ) {
         let verb = if forget { "forget" } else { "close" };
         match result {
             Ok(_) => {
@@ -312,8 +315,10 @@ impl Store {
         let Some(now) = self.session.as_ref().map(|s| s.boot.clone()) else { return };
         let linked = self.tunnels.link.is_some();
         for (port, started) in std::mem::take(&mut self.tunnels.settling) {
-            match settle_now(linked, &started, &now) {
+            let live = self.tunnels.holds.iter().any(|h| h.port == port && h.state != Held::Ending);
+            match settle_now(linked, live, &started, &now) {
                 None => self.tunnels.settling.push((port, started)),
+                Some(Settled::Superseded) => {}
                 Some(Settled::Closed) => self.forget_in_memory(host, port, cx),
                 Some(Settled::Back) => self.hold_tunnel(port, Asked::Back, cx),
             }

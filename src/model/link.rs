@@ -159,7 +159,7 @@ pub(crate) fn rewrite(url: &str, local: u16) -> String {
     let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let authority = rest[..end].rsplit_once('@').map_or(&rest[..end], |(_, host)| host);
     let name = authority.rsplit_once(':').map_or(authority, |(host, _)| host);
-    let host = if name.ends_with(".localhost") { name } else { "localhost" };
+    let host = if name.to_ascii_lowercase().ends_with(".localhost") { name } else { "localhost" };
     format!("{scheme}://{host}:{local}{}", &rest[end..])
 }
 
