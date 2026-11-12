@@ -10,6 +10,7 @@ use super::flow_page::block;
 use super::model::{self, Edge, FlowSpec, Message, Run, RunFile};
 use super::widgets::{chip, error_small, open_path, panel_box};
 use super::{FlowsPanel, Place};
+use crate::notify::tip;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, Tone, glass};
@@ -128,16 +129,20 @@ fn rail(colour: Rgba, (first, last): (bool, bool)) -> Div {
         )
 }
 
-fn who(flow: &FlowSpec, role: &str) -> Div {
+fn who(flow: &FlowSpec, role: &str, id: (&'static str, u64)) -> Stateful<Div> {
     let colour = role_colour(flow, role);
     let face = if flow.is_lead(role) { conductor(18.) } else { avatar(role, colour, 18.) };
+    let name = div().min_w_0().flex().font_weight(FontWeight::SEMIBOLD).text_color(colour);
     div()
+        .id(id)
+        .min_w_0()
+        .max_w(px(240.))
         .flex()
-        .flex_none()
         .items_center()
         .gap(px(5.))
+        .tooltip(tip(role.to_string()))
         .child(face)
-        .child(div().font_weight(FontWeight::SEMIBOLD).text_color(colour).child(role.to_string()))
+        .child(name.child(ui::one_line(role.to_string())))
 }
 
 fn edge_chip(flow: &FlowSpec, edge: Option<Edge>) -> Option<Div> {
@@ -156,9 +161,9 @@ fn header(flow: &FlowSpec, message: &Message, text: String, now: i64) -> Div {
         .items_center()
         .gap(px(6.))
         .text_size(px(12.))
-        .child(who(flow, &message.from))
+        .child(who(flow, &message.from, ("message-from", message.seq)))
         .child(ui::icon(Icon::ChevronRight, 12.).text_color(colours::faint()))
-        .child(who(flow, &message.to))
+        .child(who(flow, &message.to, ("message-to", message.seq)))
         .child(div().text_color(colours::muted()).child(message.verb().to_string()))
         .children(edge_chip(flow, message.edge))
         .child(div().flex_1())

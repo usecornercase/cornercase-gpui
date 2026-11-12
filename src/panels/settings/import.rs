@@ -281,24 +281,38 @@ impl SettingsPanel {
             (Some(preview), None) => preview_body(preview, &import.unticked, cx),
             (None, None) => div().pb(px(10.)).child(ui::busy("import-reading", "Reading what would change…")),
         };
-        let header = div()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .pt(px(12.))
-            .pb(px(8.))
-            .child(ui::icon(Icon::File, 14.).text_color(colours::accent()))
-            .child(div().flex_none().font_weight(FontWeight::SEMIBOLD).child(import.name.clone()))
-            .child(div().flex_1().min_w_0().text_size(px(12.)).text_color(colours::muted()).child(summary(import)));
         div()
             .flex()
             .flex_col()
             .border_t_1()
             .border_color(colours::border())
-            .child(header)
+            .child(file_heading(import))
             .child(body)
             .child(import_buttons(import, cx))
     }
+}
+
+fn file_heading(import: &Import) -> Div {
+    let name = div()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap(px(8.))
+        .child(ui::icon(Icon::File, 14.).text_color(colours::accent()))
+        .child(div().min_w_0().font_weight(FontWeight::SEMIBOLD).child(import.name.clone()));
+    let summary = summary(import);
+    div()
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .gap_x(px(8.))
+        .gap_y(px(4.))
+        .pt(px(12.))
+        .pb(px(8.))
+        .child(name)
+        .when(!summary.is_empty(), |d| {
+            d.child(div().flex_grow().min_w_0().text_size(px(12.)).text_color(colours::muted()).child(summary))
+        })
 }
 
 fn import_buttons(import: &Import, cx: &mut Context<SettingsPanel>) -> Div {
