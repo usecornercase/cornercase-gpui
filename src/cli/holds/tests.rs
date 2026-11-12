@@ -78,10 +78,13 @@ mod on_windows {
         tree.args(["/d", "/c", "ping", "-n", "120", "127.0.0.1"]);
         let (id, heard) = start(tree);
         end_hold(id);
-        let ended = std::iter::from_fn(|| heard.recv_timeout(WAIT).ok()).find_map(|heard| match heard {
-            Heard::End(ended) => Some(ended),
-            Heard::Line(_) => None,
-        });
-        assert!(ended.is_some(), "the ping the hold's cmd started was not ended with it");
+        let mut said = String::new();
+        let ended = loop {
+            match next(&heard) {
+                Heard::Line(line) => said.push_str(&line),
+                Heard::End(ended) => break ended,
+            }
+        };
+        assert!(!said.contains("Error") && !ended.said.contains("Error"), "the hold said {said:?}");
     }
 }
