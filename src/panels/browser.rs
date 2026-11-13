@@ -110,7 +110,7 @@ pub(crate) struct Browser {
     notices: Notices,
     previews: Previews,
     counting: Counting,
-    epoch: u64,
+    server_generation: u64,
 }
 
 struct Shared(Entity<Browser>);
@@ -186,7 +186,7 @@ impl Browser {
             notices: Notices::default(),
             previews: Previews::default(),
             counting: Counting::default(),
-            epoch: 0,
+            server_generation: 0,
         }
     }
 

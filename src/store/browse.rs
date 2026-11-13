@@ -56,10 +56,6 @@ impl Store {
         open_gate(gate, self.can_tunnel(&toward), || self.tunnel_refusal(&toward))
     }
 
-    pub(crate) fn hand_busy(&self, key: &str) -> bool {
-        self.jobs.busy(key)
-    }
-
     pub(crate) fn machines_known(&self) -> bool {
         self.app.is_some() || !self.machines.is_empty()
     }

@@ -94,10 +94,10 @@ impl Browser {
     }
 
     pub(super) fn open_tab(&mut self, url: &str, owner: Owner, through: Option<Through>, cx: &mut Context<Self>) {
-        let epoch = self.epoch;
+        let server_generation = self.server_generation;
         self.call((None, "Target.createTarget", json!({ "url": url })), cx, move |this, result, cx| {
             let Some(target) = result.ok().and_then(|r| r["targetId"].as_str().map(str::to_string)) else { return };
-            if late_claim(this.epoch, epoch, &owner) {
+            if late_claim(this.server_generation, server_generation, &owner) {
                 this.close_tab(&target);
                 return;
             }
@@ -145,7 +145,7 @@ impl Browser {
         let inherited = opener_tab.and_then(|t| t.through).filter(|t| loopback_port(url) == Some(t.local));
         let through = claimed.as_ref().and_then(|c| c.through).or(inherited);
         let owner = claimed.as_ref().map(|c| c.owner.clone()).or(opener.clone()).unwrap_or(Owner::Nobody);
-        let mut tab = Tab::new(target, info["url"].as_str().unwrap_or_default(), owner.clone());
+        let mut tab = Tab::new(target, url, owner.clone());
         tab.through = through;
         tab.title = info["title"].as_str().unwrap_or_default().to_string();
         self.tabs.add(tab);
@@ -225,10 +225,10 @@ impl Browser {
             Store::get(cx).update(cx, |s, cx| s.not_opened(&why, cx));
             return;
         }
+        self.supersede_waiting();
         if self.typed_through(&typed, cx) {
             return;
         }
-        self.supersede_waiting();
         let url = if self.place.machine().is_some() { typed } else { self.tunnelled(typed) };
         match self.active_session() {
             Some(session) => self.send(Some(&session), "Page.navigate", json!({ "url": url })),

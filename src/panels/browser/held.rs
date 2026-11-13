@@ -293,8 +293,13 @@ impl Browser {
             self.close_tab(&target);
         }
         self.restore.retain(|r| !r.owner.has_place());
-        self.claims.retain(|_, claim| !claim.owner.has_place());
-        self.epoch += 1;
+        let claimed: Vec<String> =
+            self.claims.iter().filter(|(_, c)| c.owner.has_place()).map(|(t, _)| t.clone()).collect();
+        for target in claimed {
+            self.claims.remove(&target);
+            self.close_tab(&target);
+        }
+        self.server_generation += 1;
         self.agents.chosen.retain(|owner, _| !owner.has_place());
         super::tunnels::quit();
         self.dev.tunnels.clear(cx);

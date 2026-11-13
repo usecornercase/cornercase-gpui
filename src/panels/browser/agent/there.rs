@@ -54,8 +54,9 @@ impl Browser {
         };
         let name = Self::agent_name(&Agent::There(there.clone()), cx);
         let key = format!("browser-hand:{}", there.key());
-        if store.read(cx).hand_busy(&key) {
-            toast(format!("Still handing to {name} on {}: wait for it", there.machine), ToastKind::Info, cx);
+        if store.read(cx).busy(&key) {
+            let why = format!("still handing to {name} on {}", there.machine);
+            store.update(cx, |s, cx| s.not_sent(&why, cx));
             return false;
         }
         let busy = Busy::new(key, format!("Handing to {name} on {}…", there.machine));

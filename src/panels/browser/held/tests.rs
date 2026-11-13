@@ -186,3 +186,11 @@ fn a_newer_typed_address_cancels_a_queued_one_without_a_session() {
     superseded_typed(&mut opens, &Owner::Nobody);
     assert_eq!(opens.len(), 1);
 }
+
+#[test]
+fn a_newer_held_typed_address_cancels_the_older_one_without_a_session() {
+    use super::{HeldOpen, superseded_typed};
+    let mut opens = vec![HeldOpen::waiting(8765, None), HeldOpen::waiting(3000, None)];
+    superseded_typed(&mut opens, &Owner::Nobody);
+    assert!(opens.is_empty());
+}
