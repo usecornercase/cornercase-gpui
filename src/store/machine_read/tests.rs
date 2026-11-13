@@ -382,3 +382,15 @@ fn a_home_is_never_read_for_another_machine_with_the_same_boot() {
     assert_eq!(homes.home("lab", "b1"), None);
     assert_eq!(homes.home("vps", "b1"), Some("/home/ana"));
 }
+
+#[test]
+fn a_refusal_is_kept_only_for_the_facts_the_request_started_under() {
+    let asked = facts_of(&seen(LinkState::Linked));
+    let restarted = Facts { boot: "b2".into(), ..asked.clone() };
+    let updated = Facts { here: Version::parse("0.13.58"), ..asked.clone() };
+    assert_eq!(still_current(Some(asked.clone()), Some(&asked)), Some(asked.clone()));
+    assert_eq!(still_current(Some(asked.clone()), Some(&restarted)), None);
+    assert_eq!(still_current(Some(asked.clone()), Some(&updated)), None);
+    assert_eq!(still_current(Some(asked), None), None);
+    assert_eq!(still_current(None, Some(&facts_of(&seen(LinkState::Linked)))), None);
+}

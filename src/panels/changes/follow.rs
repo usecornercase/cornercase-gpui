@@ -176,7 +176,7 @@ impl ChangesPanel {
         }
         self.stream = None;
         if let Some(machine) = self.machine_followed() {
-            Store::get(cx).update(cx, |s, cx| s.there_failed(&machine, None, cx));
+            Store::get(cx).update(cx, |s, cx| s.there_failed(&machine, cx));
             self.try_again_later(ended_reason(err), cx);
         } else {
             self.ended = Some(ended_reason(err));

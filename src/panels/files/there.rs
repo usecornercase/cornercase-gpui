@@ -213,7 +213,7 @@ impl FilesPanel {
 
     fn there_failed(&mut self, cx: &mut Context<Self>) {
         let Some(machine) = self.machine.as_ref().map(|read| read.aim.machine.clone()) else { return };
-        self.store.update(cx, |s, cx| s.there_failed(&machine, None, cx));
+        self.store.update(cx, |s, cx| s.there_failed(&machine, cx));
     }
 
     pub(super) fn machine_read_answered(&mut self, id: u64, content: Option<&Content>, cx: &mut Context<Self>) {

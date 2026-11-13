@@ -29,9 +29,10 @@ pub(crate) fn sample_there<T: 'static>(
     then: impl FnOnce(&mut T, Result<Vec<Port<ThereId>>, String>, &mut Context<T>) + 'static,
 ) {
     let (machine, destination) = (read.aim.machine.clone(), read.destination.clone());
+    let asked = Store::get(cx).read(cx).there_facts(&machine);
     store::run_on(cx, target, read.aim.ports_args(all), move |this, result, cx| {
         if let Err(e) = &result {
-            Store::get(cx).update(cx, |s, cx| s.there_failed(&machine, Some(e), cx));
+            Store::get(cx).update(cx, |s, cx| s.there_refused(&machine, (e, asked), cx));
         }
         let list = parse_text::<List<ThereId>>(result).map(|list| list.ports);
         then(this, list.map_err(|why| hide_destination(&why, &machine, &destination)), cx);

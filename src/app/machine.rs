@@ -642,7 +642,7 @@ impl Root {
             self.machine_down(Lost::Link, cx);
             return;
         }
-        self.store.update(cx, |s, cx| s.there_failed(&machine, None, cx));
+        self.store.update(cx, |s, cx| s.there_failed(&machine, cx));
         let lost = Lost::Stream { next: Instant::now() + wait, try_number, why: reason_of(err) };
         self.machine_down(lost, cx);
         cx.spawn(async move |this, cx| {

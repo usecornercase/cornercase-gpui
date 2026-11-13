@@ -79,7 +79,7 @@ pub(crate) fn older_note(machine: &str, older: &Older, os: Os) -> OlderNote {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Facts {
+pub(crate) struct Facts {
     boot: String,
     state: LinkState,
     version: Option<String>,
@@ -105,6 +105,10 @@ impl Facts {
 pub(super) struct KeptOlder {
     pub(super) facts: Facts,
     pub(super) older: Older,
+}
+
+pub(super) fn still_current(asked: Option<Facts>, now: Option<&Facts>) -> Option<Facts> {
+    asked.filter(|asked| now == Some(asked))
 }
 
 pub(super) fn kept_reach(reach: Reach, kept: Option<&KeptOlder>, facts: &Facts, machine: &str) -> Reach {
@@ -328,11 +332,25 @@ impl Store {
         }
     }
 
-    pub(crate) fn there_failed(&mut self, machine: &str, error: Option<&anyhow::Error>, cx: &mut Context<Self>) {
-        let Some(older) = error.and_then(cli::older_refusal) else { return self.check_there(machine, cx) };
-        let Some(seen) = self.session.as_ref().and_then(|session| session.machine(machine)) else { return };
-        let facts = self.facts_of(seen);
-        self.keep_older(machine, facts, older.clone(), cx);
+    pub(crate) fn there_facts(&self, machine: &str) -> Option<Facts> {
+        let seen = self.session.as_ref()?.machine(machine)?;
+        Some(self.facts_of(seen))
+    }
+
+    pub(crate) fn there_failed(&mut self, machine: &str, cx: &mut Context<Self>) {
+        self.check_there(machine, cx);
+    }
+
+    pub(crate) fn there_refused(
+        &mut self,
+        machine: &str,
+        (error, asked): (&anyhow::Error, Option<Facts>),
+        cx: &mut Context<Self>,
+    ) {
+        let Some(older) = cli::older_refusal(error) else { return self.check_there(machine, cx) };
+        if let Some(facts) = still_current(asked, self.there_facts(machine).as_ref()) {
+            self.keep_older(machine, facts, older.clone(), cx);
+        }
     }
 
     fn keep_older(&mut self, machine: &str, facts: Facts, older: Older, cx: &mut Context<Self>) {
