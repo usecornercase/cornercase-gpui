@@ -9,7 +9,7 @@ use gpui::{
 use crate::store::{Store, ToastKind};
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
-use crate::ui::selection::{self, Fit, Laid, Lit, Selecting, Selection, Styles, overlay};
+use crate::ui::selection::{self, Fit, Laid, Lit, Selecting, Selection, Styles};
 
 use super::diff::{Part, Spot};
 use super::pieces::{plural, toast};
@@ -214,15 +214,11 @@ impl CodeLine<'_> {
         }
     }
 
-    fn highlights(&self, lit: &Lit) -> Styles {
-        let styles = diff::runs(self.text, self.syntax, self.emphasis)
+    fn highlights(&self) -> Styles {
+        diff::runs(self.text, self.syntax, self.emphasis)
             .into_iter()
             .map(|run| (run.range, self.run_style(self.looks.get(run.style).copied(), run.emphasis)))
-            .collect();
-        match lit.drawn_range(self.text) {
-            Some(range) => overlay(styles, &[range], selection::selected_chars()),
-            None => styles,
-        }
+            .collect()
     }
 
     fn render(self) -> AnyElement {
@@ -230,7 +226,7 @@ impl CodeLine<'_> {
         let lit = self.picked.selection.map_or(Lit::Nothing, |selection| selection.lit(self.spot, self.text));
         let selected = lit == Lit::Line;
         let fit = self.picked.fit;
-        let cell = selection::code_cell(&self.picked.laid, (self.spot, self.text), self.highlights(&lit), fit);
+        let cell = selection::code_cell(&self.picked.laid, (self.spot, self.text), (self.highlights(), &lit), fit);
         fit.row(div())
             .w_full()
             .flex()

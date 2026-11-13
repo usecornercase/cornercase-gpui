@@ -13,7 +13,7 @@ use crate::platform::paths::Style;
 use crate::prefs::LongLines;
 use crate::store::Store;
 use crate::theme::{colours, radius};
-use crate::ui::selection::{self, Fit, Lit, Styles, overlay};
+use crate::ui::selection::{self, Fit, Lit, Styles};
 use crate::ui::{self, Icon};
 
 use super::disk::{self, Content};
@@ -231,14 +231,10 @@ impl FilesPanel {
             .into_any_element()
     }
 
-    fn line_styles(viewer: &Viewer, (ix, line): (usize, &str), fit: Fit, lit: &Lit) -> Styles {
+    fn line_styles(viewer: &Viewer, (ix, line): (usize, &str), fit: Fit) -> Styles {
         let styles = span_styles(viewer.spans.as_ref(), ix);
-        let styles = match &viewer.find {
+        match &viewer.find {
             Some(find) => find.paint_line(styles, (ix, line), fit),
-            None => styles,
-        };
-        match lit.drawn_range(line) {
-            Some(range) => overlay(styles, &[range], selection::selected_chars()),
             None => styles,
         }
     }
@@ -268,13 +264,13 @@ impl FilesPanel {
     ) -> impl IntoElement + use<> {
         let lit = viewer.selecting.lit(ix, line);
         let selected = lit == Lit::Line;
-        let styles = Self::line_styles(viewer, (ix, line), fit, &lit);
+        let styles = Self::line_styles(viewer, (ix, line), fit);
         let number = if selected { colours::accent() } else { colours::faint() };
         let mark = viewer.margin.gutter.as_ref().and_then(|gutter| gutter.at(ix)).map(|block| mark_cell(ix, block, cx));
         fit.row(code_frame(selected))
             .when(!selected, |d| d.hover(|s| s.bg(colours::panel())))
             .child(number_cell(width).relative().text_color(number).child((ix + 1).to_string()).children(mark))
-            .child(selection::code_cell(viewer.selecting.laid(), (ix, line), styles, fit))
+            .child(selection::code_cell(viewer.selecting.laid(), (ix, line), (styles, &lit), fit))
     }
 }
 

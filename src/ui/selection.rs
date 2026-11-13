@@ -5,7 +5,7 @@ mod pointer;
 use std::fmt::Display;
 use std::ops::Range;
 
-use gpui::{Bounds, HighlightStyle, Pixels, Point, Size, point, px};
+use gpui::{Bounds, HighlightStyle, Hsla, Pixels, Point, Size, point, px};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::theme::colours;
@@ -14,6 +14,7 @@ pub(crate) use caret::{ShownLines, Step};
 pub(crate) use code::{CODE_CELL, CODE_ROW, Fit, code_cell, plain_text, wrap_button};
 pub(crate) use pointer::{Laid, Off, Selecting, Selects, action, action_bar, body, keep_selection, layer, to_primary};
 
+pub(crate) const BREAK_WIDTH: Pixels = px(6.);
 const BAR_GAP: f32 = 4.;
 const BAR_MARGIN: f32 = 8.;
 const TAB_WIDTH: usize = 4;
@@ -48,11 +49,21 @@ impl Lit {
         }
     }
 
-    pub(crate) fn drawn_range(&self, line: &str) -> Option<Range<usize>> {
+    fn drawn_range(&self) -> Option<Range<usize>> {
         match self {
-            Self::Chars { line_break: true, .. } if line.is_empty() => Some(0..1),
             Self::Chars { range, .. } if !range.is_empty() => Some(range.clone()),
             _ => None,
+        }
+    }
+
+    fn draws_break(&self) -> bool {
+        matches!(self, Self::Chars { line_break: true, .. })
+    }
+
+    fn painted(&self, styles: Styles) -> Styles {
+        match self.drawn_range() {
+            Some(range) => overlay(styles, &[range], selected_chars()),
+            None => styles,
         }
     }
 }
@@ -337,8 +348,12 @@ pub(crate) fn bar_origin(host: Bounds<Pixels>, bar: Size<Pixels>, room: Bounds<P
     point(x, y.max(room.top() + px(BAR_MARGIN)))
 }
 
-pub(crate) fn selected_chars() -> HighlightStyle {
-    HighlightStyle { background_color: Some(colours::selection().into()), ..HighlightStyle::default() }
+fn selection_colour() -> Hsla {
+    colours::selection().into()
+}
+
+fn selected_chars() -> HighlightStyle {
+    HighlightStyle { background_color: Some(selection_colour()), ..HighlightStyle::default() }
 }
 
 fn covers(range: &Range<usize>, piece: &Range<usize>) -> bool {
@@ -350,7 +365,7 @@ fn covering<'a, T>(items: &'a [T], range_of: impl Fn(&T) -> &Range<usize>, piece
     items.get(at).filter(|item| covers(range_of(item), piece))
 }
 
-pub(crate) fn overlay(styles: Styles, lit: &[Range<usize>], paint: HighlightStyle) -> Styles {
+fn overlay(styles: Styles, lit: &[Range<usize>], paint: HighlightStyle) -> Styles {
     if lit.is_empty() {
         return styles;
     }

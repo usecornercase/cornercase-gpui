@@ -1,13 +1,13 @@
 use gpui::{
-    AnyElement, CursorStyle, Div, ElementId, HighlightStyle, IntoElement, ParentElement as _, Pixels, Stateful,
+    AnyElement, Bounds, CursorStyle, Div, ElementId, HighlightStyle, IntoElement, ParentElement as _, Pixels, Stateful,
     StatefulInteractiveElement as _, Styled as _, StyledText, div, px,
 };
 
 use crate::notify::tip;
 use crate::ui::{self, Icon};
 
-use super::Styles;
-use super::pointer::{Laid, row_probe};
+use super::pointer::{Laid, break_mark, row_probe};
+use super::{Lit, Styles};
 
 pub(crate) const CODE_CELL: f32 = 7.3;
 pub(crate) const CODE_ROW: f32 = 18.;
@@ -101,22 +101,38 @@ pub(super) fn past_the_cut(index: usize, kept: Option<usize>, len: usize) -> usi
     if kept.is_some_and(|kept| index > kept) { len } else { index }
 }
 
+pub(super) fn break_index(len: usize, kept: Option<usize>, shown: usize) -> usize {
+    if kept.is_some() { shown } else { len }
+}
+
+pub(super) fn break_x(bounds: Bounds<Pixels>, width: Pixels, len: usize) -> Pixels {
+    if width > bounds.size.width.ceil() {
+        bounds.right()
+    } else if len == 0 {
+        bounds.left()
+    } else {
+        bounds.left() + width
+    }
+}
+
 pub(crate) fn code_cell<S: Copy + Ord + 'static>(
     laid: &Laid<S>,
     (spot, line): (S, &str),
-    styles: Styles,
+    (styles, lit): (Styles, &Lit),
     fit: Fit,
 ) -> Div {
+    let styles = lit.painted(styles);
+    let mark = lit.draws_break().then(|| break_mark(laid, spot));
     let cell = div().relative().flex_1().min_w_0().pr(px(8.)).cursor(CursorStyle::IBeam);
     let Some(bytes) = fit.cap() else {
         let (laid, len) = (laid.clone(), line.len());
         let text = ui::one_line(stand_in(line)).highlights(styles);
-        return cell.child(text.on_laid(move |out| laid.add_line(spot, len, out)));
+        return cell.child(text.on_laid(move |out| laid.add_line(spot, len, out))).children(mark);
     };
     let capped = capped(line, styles, bytes);
     let text = StyledText::new(capped.shown).with_highlights(capped.styles);
     let probe = row_probe(laid, (spot, line.len(), capped.kept), text.layout().clone());
-    cell.child(text).child(probe)
+    cell.child(text).child(probe).children(mark)
 }
 
 pub(crate) fn plain_text(line: &str, fit: Fit) -> AnyElement {

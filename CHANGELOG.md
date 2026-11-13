@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.74
+
+- In the Files viewer, the Changes diff and a queued run's Text view, a selection that runs onto a later line now shows the line breaks it holds: a short mark after the line's last character, as text fields draw it. A selection from the end of a line to the start of the next no longer looks empty, and an empty line shows the same mark.
+
 ## 0.1.73
 
 - Renaming a tab or a sidebar row in place keeps a long name inside its field: the field shows the end of the name with the caret, ⌘← (Home on Linux and Windows) shows its start, and nothing is drawn over the tabs or rows beside it. Every one-line field does the same with a long text, so the Plugins sheet's Install field no longer runs under its buttons in a narrow window.

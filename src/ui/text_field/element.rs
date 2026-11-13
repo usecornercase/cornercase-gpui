@@ -12,7 +12,7 @@ use super::rows::{
 };
 use crate::theme::colours;
 
-const BREAK_WIDTH: Pixels = px(6.);
+const BREAK_WIDTH: Pixels = crate::ui::selection::BREAK_WIDTH;
 const THUMB_WIDTH: Pixels = px(3.);
 const THUMB_GAP: Pixels = px(4.);
 const SCROLLER_MARGIN: Pixels = px(12.);

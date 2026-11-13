@@ -25,7 +25,7 @@ struct Cut {
 
 pub(crate) struct LaidOut {
     pub(crate) bounds: Bounds<Pixels>,
-    line: ShapedLine,
+    pub(crate) line: ShapedLine,
     cut: Option<Cut>,
 }
 

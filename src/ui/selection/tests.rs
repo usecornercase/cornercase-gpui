@@ -4,7 +4,7 @@ use gpui::{Bounds, HighlightStyle, Hsla, point, px, size};
 
 use super::{
     Caret, Edge, Lit, Press, Selection, Span, Zone, bar_origin, edge_at, host, lines_label, off_centre, off_edge,
-    overlay, reference, row_at, row_from, row_near, word_at,
+    overlay, reference, selected_chars, row_at, row_from, row_near, word_at,
 };
 
 fn caret(spot: usize, at: usize) -> Caret<usize> {
@@ -68,15 +68,62 @@ fn a_last_line_with_nothing_selected_is_not_covered() {
 }
 
 #[test]
-fn an_empty_line_inside_a_selection_draws_its_stand_in() {
+fn an_empty_line_inside_a_selection_draws_its_break_and_lights_no_character() {
     let lit = chars((1, 0), (3, 1)).lit(2, "");
-    assert_eq!(lit.drawn_range(""), Some(0..1));
+    assert_eq!(lit.drawn_range(), None);
+    assert!(lit.draws_break());
 }
 
 #[test]
 fn nothing_selected_on_a_line_draws_nothing() {
     let lit = chars((1, 2), (3, 0)).lit(3, "abc");
-    assert_eq!(lit.drawn_range("abc"), None);
+    assert_eq!(lit.drawn_range(), None);
+    assert!(!lit.draws_break());
+}
+
+#[test]
+fn a_line_the_selection_runs_past_draws_its_characters_and_its_break() {
+    let lit = chars((0, 1), (2, 2)).lit(0, "abc");
+    assert_eq!(lit.drawn_range(), Some(1..3));
+    assert!(lit.draws_break());
+}
+
+#[test]
+fn from_a_line_s_end_to_the_next_line_s_start_only_the_break_is_drawn() {
+    let selection = chars((0, 3), (1, 0));
+    let first = selection.lit(0, "abc");
+    assert_eq!((first.drawn_range(), first.draws_break()), (None, true));
+    let second = selection.lit(1, "def");
+    assert_eq!((second.drawn_range(), second.draws_break()), (None, false));
+}
+
+#[test]
+fn the_last_line_of_a_selection_never_draws_a_break() {
+    for selection in [chars((0, 1), (2, 2)), chars((2, 2), (0, 1))] {
+        let lit = selection.lit(2, "abcd");
+        assert_eq!((lit.drawn_range(), lit.draws_break()), (Some(0..2), false));
+    }
+}
+
+#[test]
+fn whole_lines_draw_no_characters_and_no_break() {
+    let lit = lines(0, 2).lit(1, "abc");
+    assert_eq!((lit.drawn_range(), lit.draws_break()), (None, false));
+}
+
+#[test]
+fn a_shown_line_before_lines_not_shown_draws_its_break() {
+    let lit = chars((1, 1), (3, 2)).lit(1, "de");
+    assert_eq!((lit.drawn_range(), lit.draws_break()), (Some(1..2), true));
+}
+
+#[test]
+fn painting_lights_only_selected_characters() {
+    assert!(chars((1, 0), (3, 1)).lit(2, "").painted(Vec::new()).is_empty());
+    let lit = chars((0, 1), (2, 0)).lit(0, "abc");
+    assert_eq!(lit.painted(Vec::new()), vec![(1..3, selected_chars())]);
+    let styles = vec![(0..2, HighlightStyle::default())];
+    assert_eq!(Lit::Nothing.painted(styles.clone()), styles);
 }
 
 #[test]
