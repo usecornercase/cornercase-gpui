@@ -365,7 +365,7 @@ fn covering<'a, T>(items: &'a [T], range_of: impl Fn(&T) -> &Range<usize>, piece
     items.get(at).filter(|item| covers(range_of(item), piece))
 }
 
-fn overlay(styles: Styles, lit: &[Range<usize>], paint: HighlightStyle) -> Styles {
+pub(crate) fn overlay(styles: Styles, lit: &[Range<usize>], paint: HighlightStyle) -> Styles {
     if lit.is_empty() {
         return styles;
     }

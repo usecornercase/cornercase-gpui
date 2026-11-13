@@ -4,7 +4,7 @@ use gpui::{Bounds, HighlightStyle, Hsla, point, px, size};
 
 use super::{
     Caret, Edge, Lit, Press, Selection, Span, Zone, bar_origin, edge_at, host, lines_label, off_centre, off_edge,
-    overlay, reference, selected_chars, row_at, row_from, row_near, word_at,
+    overlay, reference, row_at, row_from, row_near, selected_chars, word_at,
 };
 
 fn caret(spot: usize, at: usize) -> Caret<usize> {
@@ -119,7 +119,8 @@ fn a_shown_line_before_lines_not_shown_draws_its_break() {
 
 #[test]
 fn painting_lights_only_selected_characters() {
-    assert!(chars((1, 0), (3, 1)).lit(2, "").painted(Vec::new()).is_empty());
+    let none: Vec<(Range<usize>, HighlightStyle)> = Vec::new();
+    assert_eq!(chars((1, 0), (3, 1)).lit(2, "").painted(Vec::new()), none);
     let lit = chars((0, 1), (2, 0)).lit(0, "abc");
     assert_eq!(lit.painted(Vec::new()), vec![(1..3, selected_chars())]);
     let styles = vec![(0..2, HighlightStyle::default())];

@@ -18,8 +18,8 @@ use crate::ui::one_line::LaidOut;
 use super::caret::{Keyed, extended};
 use super::code::{break_index, break_x, past_the_cut};
 use super::{
-    BREAK_WIDTH, Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Span, Step, Zone, bar_origin, edge_at, host, off_centre,
-    off_edge, row_at, row_from, row_near, selection_colour, word_at,
+    BREAK_WIDTH, Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Span, Step, Zone, bar_origin, edge_at, host,
+    off_centre, off_edge, row_at, row_from, row_near, selection_colour, word_at,
 };
 
 type Rule = fn(Span, Bounds<Pixels>, Pixels) -> Option<Pixels>;
