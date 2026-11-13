@@ -1,4 +1,4 @@
-cornercase 0.13.57: the help of every command and subcommand, in the order of `cornercase --help`.
+cornercase 0.13.62: the help of every command and subcommand, in the order of `cornercase --help`.
 Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
 
 ================================================================ cornercase status
@@ -553,6 +553,9 @@ Options:
       --json
           Print JSON instead of text
 
+      --boot <BOOT>
+          Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -567,7 +570,10 @@ after a restart (`resuming` in the JSON), where the text would reach its shell o
 send again once it is back, or pass --force. While a person is typing in the pane the text waits for them
 and goes right after their prompt (`held_sends` in the JSON); `cornercase held` acts on it from elsewhere.
 If they choose send now while they have a draft, the text is pasted after it without its Enter, and the
-command fails saying it is in their input.
+command fails saying it is in their input. A Claude Code agent whose turn ended on an API error is
+`failed`, not waiting, and takes the text. From a flow's orchestrator, a send that goes on to a stage
+while an earlier one has not run since the last change still goes, and prints `warning: stage 3 (reviewer)
+has not run since the last change in stage 2: …` on stderr (`warning` with --json).
 
 With --enter, the command returns once Claude Code, Codex, Gemini CLI, opencode, Grok Build, Cursor CLI,
 Vibe CLI or GitHub Copilot CLI has recorded the prompt in its own history, and fails with `not confirmed: the prompt may not
@@ -581,6 +587,10 @@ confirming a prompt record. A compact command
 (`/compact` of Claude Code and Codex) returns once the agent records the compaction, however long that takes
 while the agent works on it; --timeout bounds it. In other programs it returns once Enter is pressed.
 
+--boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
+a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is
+sent, and the command prints why and exits with 4.
+
 With --wait, the command fails if the agent does not start working within 10 seconds of the Enter,
 and otherwise prints how the wait ended; with --until it waits for that state instead, as
 `cornercase wait --until` does.
@@ -589,6 +599,7 @@ Examples:
   cornercase send --pane 12 --enter 'Now add tests for it'
   cornercase send --pane 12 --enter --wait --timeout 900 - < next-step.md
   cornercase send --pane 12 --enter --wait --until turn-over 'Run the tests'
+  cornercase --remote vps send --pane 9 --enter --boot 4242-1700000000 'Now add tests for it'
 
 ================================================================ cornercase keys
 Press keys in a pane
@@ -986,6 +997,7 @@ A pane marked as pending review shows a blue ● on its tab, and on its workspac
 group rows, until it is marked as reviewed or its agent starts working again on a new prompt or an
 answer to its question. Looking at the tab does not take it off, unlike the ✓ of an agent that finished while you looked elsewhere.
 Both marks are saved with the session, so they come back after a restart with the conversation.
+From a flow's orchestrator, marking its own pane prints one `warning: …` on stderr naming every stage not run since the last change.
 
 --boot BOOT says which run of the server the pane or tab id is from: `boot` in `status --json`, or in
 a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is
@@ -1766,7 +1778,17 @@ how a run ends. Stages count from 1 here; --json counts them from 0, as the diag
 server stops; each line has a revision that only goes up while the server runs. The answer of a run that
 has no message yet or no step has them null.
 
+After the work goes back to an earlier stage (a loop's round, or a step outside the plan), a run lists the
+stages it has not been through since: `not run since the last change: stage 3, stage 4`, or, once the
+orchestrator marked its pane, `ended with stage 3 and 4 not run on the last change` (not_run with --json,
+counted from 0, left out when there is none). A first pass that skips a stage shows only as outside the plan,
+and a restart forgets what was not run.
+
 A run that closes its agents once its pull request merges says so (close_when_merged with --json).
+
+A run that has stopped moving (its orchestrator's turn is over, no agent of the team works, it has not
+ended and no wake is being sent) says `stopped moving 50 min ago: …` (stopped with --json, the UTC time it
+stopped, left out while the run moves).
 
 Examples:
   cornercase flow runs
@@ -2000,9 +2022,9 @@ Programs that drive cornercase without this command line (an editor extension, a
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run; close, rename, mark, move-pane, collapse, expand, account restart and
-context take it as --boot, and then act only in that run. Each command is listed with whether it is
-available, and each stream with its version. A server without this command is older than the
+since ids last only one run; close, rename, mark, move-pane, collapse, expand, account restart, context,
+send, input and paste-file take it as --boot, and then act only in that run. Each command is listed
+with whether it is available, and each stream with its version. A server without this command is older than the
 contract.
 
 Examples:
@@ -2150,6 +2172,7 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --follow                    Keep running and send each line of standard input as soon as it arrives, until it ends (give - as the only EVENT)
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 For programs that draw cornercase's terminals themselves (see `cornercase surface`). Each
@@ -2172,6 +2195,10 @@ or the program is not reading its input, nothing is sent. Scripts and agents sho
 in the window, its x and y being cells of the popup's terminal; add --pane with the popup's id from its
 surface lines (popup.pane) so that nothing is sent if that popup closed and another one opened.
 
+--boot BOOT says which run of the server the pane id (with --popup, the popup's id) is from: `boot` in
+`status --json`, or in a machine's entry there. Ids last one run, so a server that restarted since
+refuses, nothing is typed, and the command prints why and exits with 4. --follow does not take it.
+
 With --follow it keeps running and reads one event per line from standard input (give - as the
 only EVENT) until it ends: each line goes as soon as it arrives, and the lines that arrive while
 the answer before is on its way go together, so a program types through one process (and with
@@ -2185,6 +2212,7 @@ Examples:
   cornercase input --pane 12 '{"text": "ls"}' '{"key": {"code": "enter"}}'
   cornercase input --pane 12 '{"mouse": {"kind": "scroll-up", "x": 10, "y": 5}}'
   cornercase input --popup --pane 40 '{"key": {"code": "down"}}' '{"key": {"code": "enter"}}'
+  cornercase --remote vps input --pane 9 '{"paste": "two\nlines"}' --boot 4242-1700000000
 
 ================================================================ cornercase requests
 Keep one connection and run each command of standard input as it arrives, for programs that send many
@@ -2363,6 +2391,7 @@ Options:
       --name <NAME>               The file's name there [default: FILE's name, else pasted, with an image's extension]
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Keeps a file of the machine you run this on in the server's state folder and pastes its path into the pane, followed by a space (bracketed when the program asked for pastes so), so an agent there can open it. With --remote DESTINATION the file goes to that machine through ssh: a screenshot on your laptop becomes a path the agent on that machine can read.
@@ -2371,8 +2400,11 @@ FILE is read here, up to 32 MB; without it, or with -, standard input is, and an
 
 Like `input`, it pastes whatever the program in the pane is doing: a dialog or a question there gets the path too.
 
+--boot BOOT says which run of the server the pane id is from: `boot` in `status --json`, or in a machine's entry there. Ids last one run, so a server that restarted since refuses, nothing is kept there or pasted, and the command prints why and exits with 4.
+
 Examples:
   cornercase --remote devbox paste-file --pane 12 ~/Desktop/shot.png
+  cornercase --remote devbox paste-file --pane 12 ~/Desktop/shot.png --boot 4242-1700000000
   pngpaste - | cornercase --remote devbox paste-file --pane 12
   wl-paste --type image/png | cornercase --remote devbox paste-file --pane 12 --name error.png
 
@@ -3392,10 +3424,13 @@ the reason ssh gave, or closed: a tunnel that was closed stays listed so the win
 (`tunnel forget` removes it). A window holds its tunnels as separate ssh processes, so a script on
 the server's machine lists and drives them with this command and `tunnel open`, `tunnel close`
 and `tunnel forget`. With several windows attached, each line says which one holds it, and a
-tunnel held by `tunnel hold` ends with (hold N). With --json it prints
-{"tunnels": [{"port", "local", "state", "error", "holder", "kind"}], "windows": N, "takers": N}:
-local and error are null when they do not apply, holder is the number of the holder's connection,
-kind is window or hold, windows is how many windows hold tunnels for this server, 0 when none is
+tunnel held by `tunnel hold` ends with (hold N). A reverse tunnel, held by `tunnel hold --reverse`,
+reads `9223 ← localhost:9222  up (reverse hold N)`: port 9223 of this server's machine reaches
+port 9222 of the computer that holds it. With --json it prints
+{"tunnels": [{"port", "local", "state", "error", "holder", "kind", "direction"}], "windows": N,
+"takers": N}: local and error are null when they do not apply, holder is the number of the
+holder's connection, kind is window or hold, direction is "reverse" for a reverse tunnel and left
+out for the others, windows is how many windows hold tunnels for this server, 0 when none is
 attached from another computer, and takers is how many programs take tunnel orders
 (`tunnel orders`).
 
@@ -3413,7 +3448,7 @@ Commands:
   open    Forward a port of this server's machine to the computer of the window attached to it
   close   Close the tunnel of a port
   forget  Forget a tunnel: close it and stop windows from opening it again
-  hold    Hold a tunnel to the machine of --remote with no window, until this command ends
+  hold    Hold a tunnel to the machine of --remote with no window, until this command ends (--reverse: from it to this computer)
   orders  Take the tunnel orders of the server of --remote for a program with no window, until this command ends
   failed  Tell the server that the tunnel of a port it asked for cannot be held from this computer
   help    Print this message or the help of the given subcommand(s)
@@ -3444,7 +3479,19 @@ holds the tunnel until it is killed (exit 0), its output reader leaves (0), `tun
 `tunnel forget PORT` is run on the server (0), or ssh or the server connection fails (1). It
 needs --remote (exit 2 without it), and it remembers nothing in tunnels.json. If it fails
 before the server counts it (ssh, or the local port), it tells the server, so a `tunnel open`
-that waits for it fails with the reason.
+that waits for it fails with the reason. With --local N it listens on N when PORT is taken on this
+computer (such as the port the hold had before, since it remembers nothing), and on any free port
+when N is taken too; the line says which.
+
+`cornercase --remote vps tunnel hold --reverse 9222` is the other direction: it makes port 9222 of
+this computer reachable on 127.0.0.1 of vps, with `ssh -N -R 127.0.0.1:THERE:localhost:9222 vps`,
+so a program on vps reaches, say, a browser's DevTools port here. THERE is a free port vps's ssh
+server picks, or the one of `--there PORT`, which fails at once when PORT is taken there. Once it
+is up it prints {"port", "local", "url", "direction": "reverse"}, where port is the port on vps
+and url is http://127.0.0.1:PORT, and it ends as a hold does: `tunnel close --reverse PORT` or
+`tunnel forget --reverse PORT` run on vps (0), killed (0), or ssh fails (1). It listens only on
+vps's loopback, which every program and user of vps can reach, and nothing on vps can open one.
+`tunnel close PORT` and `tunnel forget PORT` without --reverse never end it.
 
 `cornercase --remote vps tunnel orders` is for such a program too: it prints one JSON line once
 the server counts it, {"tunnels": [...], "windows": N, "takers": N}, then one line per order,
@@ -3462,6 +3509,10 @@ Examples:
   cornercase tunnel forget 5173
   cornercase --remote vps tunnel open 5173 --json
   cornercase --remote vps tunnel hold 5173
+  cornercase --remote vps tunnel hold 5173 --local 5174
+  cornercase --remote vps tunnel hold --reverse 9222
+  cornercase --remote vps tunnel hold --reverse 9222 --there 9223
+  cornercase tunnel close --reverse 9223
   cornercase --remote vps tunnel orders
   cornercase --remote vps tunnel failed 3000 "the user said no"
 
@@ -3485,11 +3536,12 @@ Close the tunnel of a port
 Usage: cornercase tunnel close [OPTIONS] <PORT>
 
 Arguments:
-  <PORT>  The port to tunnel, on this server's machine
+  <PORT>  The port of the tunnel, on this server's machine (for --reverse, the port it listens on there)
 
 Options:
-      --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --reverse                   Act on the reverse tunnel listening on PORT (`tunnel hold --reverse`), not on the tunnel of PORT
+      --json                      Print JSON instead of text
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
@@ -3499,25 +3551,29 @@ Forget a tunnel: close it and stop windows from opening it again
 Usage: cornercase tunnel forget [OPTIONS] <PORT>
 
 Arguments:
-  <PORT>  The port to tunnel, on this server's machine
+  <PORT>  The port of the tunnel, on this server's machine (for --reverse, the port it listens on there)
 
 Options:
-      --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --reverse                   Act on the reverse tunnel listening on PORT (`tunnel hold --reverse`), not on the tunnel of PORT
+      --json                      Print JSON instead of text
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
 ================================================================ cornercase tunnel hold
-Hold a tunnel to the machine of --remote with no window, until this command ends
+Hold a tunnel to the machine of --remote with no window, until this command ends (--reverse: from it to this computer)
 
-Usage: cornercase tunnel hold [OPTIONS] <PORT>
+Usage: cornercase tunnel hold [OPTIONS] [PORT]
 
 Arguments:
-  <PORT>  The port to tunnel, on the machine of --remote
+  [PORT]  The port to tunnel, on the machine of --remote
 
 Options:
+      --local <N>                 The port of this computer to listen on when PORT is taken here, such as the one the hold had before (any free one when N is taken too)
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --reverse <LOCAL>           Hold a reverse tunnel: make port LOCAL of this computer reachable on 127.0.0.1 of the machine of --remote
+      --there <PORT>              With --reverse, the port to listen on there; the hold fails when it is taken (without it, the machine's sshd picks a free one)
   -h, --help                      Print help
 
 ================================================================ cornercase tunnel orders
