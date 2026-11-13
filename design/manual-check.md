@@ -41,6 +41,7 @@ How to check a change in the running window on macOS, the way that worked (#113)
   ```
 
   `target/cornercase-$v/cornercase-aarch64-apple-darwin/cornercase`, as an absolute path, goes in `CORNERCASE_BIN`. `tools/cornercase-cli.sh` takes the same variable to make `docs/cornercase-cli.txt` from that release.
+- **A released build as the "before"** (2026-11-13, 0.1.72, 0.1.73 and 0.1.78): `gh release download vX --repo usecornercase/cornercase-gpui --pattern 'cornercase-gpui-universal-apple-darwin.dmg*'`, `shasum -a 256 -c` its `.sha256`, `hdiutil attach -nobrowse -readonly -mountpoint <mnt> <dmg>`, copy `<mnt>/*.app/Contents/MacOS/cornercase-gpui` to `<folder>/vX/target/debug/cornercase-gpui`, `hdiutil detach <mnt>`, then `codesign --force -s -` on the copy (see "A copy of a release's binary" under "A frame's cost"). The helper accepts it by that path, and `CORNERCASE_GPUI_OPEN` and `CORNERCASE_GPUI_SETTINGS` work in a release's binary. Running 0.1.72, 0.1.73 and the branch on one input tells which merge changed a drawing.
 - **Build and start.** `$!` must be the window's own pid, so the `cd` is a statement of its own, never `cd … && program &`. The first build compiles every dependency, a few minutes.
 
   ```sh
@@ -77,6 +78,7 @@ These reach a screen without a press:
 - `CORNERCASE_GPUI_OPEN=<panel>`, the panel's title in any case (`design/window.md`).
 - `--tab`, `--workspace` or `--project` with an id at start.
 - `CORNERCASE_GPUI_FONT_SIZE` and `CORNERCASE_GPUI_OPACITY` (the README's table).
+- A theme without a press (2026-11-13): `theme.json` beside `CORNERCASE_GPUI_SETTINGS`, `{"theme":"cornercase-light"}`, switches a running window live, and `cornercase-dark` back (`design/theme.md`).
 - `CORNERCASE_GPUI_RELEASES_URL=<url>` makes a debug build ask that fake release, for the update chip and dialog (`design/self-update.md`).
 - A `cornercase` command to that server.
 - A ⌘ key with `key`, below, which posts no mouse event.
@@ -101,6 +103,7 @@ target/manual-check scroll <pid> <x> <y> <dy> [dx]
 - **Points and pixels.** A capture's pixels divided by the scale `window` prints are points: the 2560×1600 capture of a 1280×800 window at scale 2 puts a pixel (60, 1532) at the point (30, 766).
 - **Keys** are `a` to `z`, `return`, `escape`, `tab`, `space`, `delete`, `quote` and the arrows only, posted down and up with `CGEvent.postToPid`: key codes are positions on a US keyboard, so punctuation would type another character on another layout, and the user's is Spanish (`design/browser.md`). ⌘F opened Search (`key <pid> f cmd`) and ⌘T made a tab. `text` posts a text's characters as keys carrying them, for letters no key here makes (made-up text only), and `quote` is a position: `´` (a dead key) on Spanish ISO, `'` on ABC. **A key needs no front**: with another debug window in front, ⌘F reached the window behind it (grey traffic lights) and opened its Search. Only presses and scrolls need `front`.
 - **Why the HID tap, with dates and versions.** Posted to the pid, mouse events only moved the hover in gpui 0.2.2 on macOS 26 (#102, #103, #104; the notes in `design/issues.md` and `design/remote.md`). Posted to `.cghidEventTap` with the debug window in front they press (#109's captures and #95's bench, `design/machines.md`, 2026-11-10), and pixel scrolls scroll what was sent. Run again on 2026-11-10: a press on the rail's Settings icon opened the sheet and a press on Appearance changed its page; `scroll <pid> 720 400 -300` over the page moved it up, so **a negative `dy` shows later rows**.
+- **A press that does not focus a field** (2026-11-13) tells a field laid out at no width from a colour problem: its hit area is its own bounds (#189). The viewer's Find button opens the find bar with no ⌘F in the viewer (`design/files-panel.md` says where ⌘F goes).
 - **Its cost.** A press or a scroll moves the real pointer, needs the window in front (keys the user types meanwhile go to it), and anything covering the point would take it. So the helper checks that the process is in front and that its window is the topmost at the point, posts a move, waits for the hover, checks both again just before the button goes down (exit 3 then, with only the move posted), does one per call and puts the pointer back. The pointer was where it started after each one here.
 - **Refusals seen.** A point outside the window, `press … middle`, `scroll … abc`, an unknown key or command, and a pid that is not a debug window (`front` on a shell, `press` on pid 1) each exit 2 with a sentence and nothing posted. With two debug windows on two private servers and the first in front, `press` and `scroll` on the second exit 3 (not in front) with nothing posted, and `front` on the second then a `press` on it worked.
 - **`size`** worked: 1100×700 and back to 1280×800, and `window` showed it.
@@ -110,6 +113,7 @@ target/manual-check scroll <pid> <x> <y> <dy> [dx]
 - `screencapture -x -o -l <window id> <file>.png`, the id from `window`; it needs no focus. At 1280×800 and scale 2 the file is 2560×1600 pixels.
 - **A plain prompt first**, in the pane behind the window: `"$CORNERCASE_BIN" send --pane <id> --enter "clear; exec env PS1='\$ ' /bin/sh"`. Plain sh reads no `.zshrc`, and a prompt theme rewrites a zsh `PS1` on every prompt. The tab then reads `bash` (macOS's sh), the status bar shows only the throwaway folder and the prompt is `$ `.
 - **Crop** in pixels: `sips -c <height> <width> --cropOffset <y> <x> in.png --out out.png`.
+- **Before and after side by side** (2026-11-13): `ffmpeg -i before.png -i after.png -filter_complex vstack pair.png`.
 - A user, host or home folder can still be in another pane's prompt, a tab's title or the sidebar. A capture with the glass's blur needs `-R` of the window's rectangle (`design/website.md`).
 
 ## Cleaning up
