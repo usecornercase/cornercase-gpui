@@ -605,7 +605,7 @@ fn a_tab_that_fell_or_still_opens_publishes_why_it_is_down() {
 }
 
 fn older() -> OlderNote {
-    OlderNote { line: "vps runs an older cornercase".into(), tip: "tip".into() }
+    OlderNote { line: "vps runs an older cornercase".into(), tip: "tip".into(), ..OlderNote::default() }
 }
 
 #[test]

@@ -200,7 +200,7 @@ fn a_tab_opened_before_the_list_named_a_destination_is_never_pointed_elsewhere()
 #[test]
 fn a_machine_refused_as_older_keeps_its_tabs() {
     let (s, same) = (linked(), listed("vps.invalid"));
-    let note = crate::store::OlderNote { line: "vps runs cornercase 0.13.39".into(), tip: String::new() };
+    let note = crate::store::OlderNote { line: "vps runs cornercase 0.13.39".into(), ..Default::default() };
     let facts =
         Facts { listed: Some(&same), known: true, machines: std::slice::from_ref(&s), reach: Some(Reach::Older(note)) };
     assert_eq!(answers(&owner(&s), &facts, Gate::Open), (true, Fate::Stays));
@@ -211,7 +211,7 @@ fn a_machine_refused_as_older_keeps_its_tabs() {
 fn typing_and_new_tabs_are_refused_only_for_a_refused_or_waiting_place() {
     assert_eq!(refused_why(Reach::Refused("r".into())), Some("r".into()));
     assert_eq!(refused_why(waiting_for_the_list()), Some("waiting for the machines list".into()));
-    let note = crate::store::OlderNote { line: "l".into(), tip: "t".into() };
+    let note = crate::store::OlderNote { line: "l".into(), tip: "t".into(), ..Default::default() };
     for reach in [up(), down(), Reach::Older(note)] {
         assert_eq!(refused_why(reach.clone()), None, "{reach:?}");
     }

@@ -304,10 +304,10 @@ fn a_tree_never_read_says_so_only_while_waiting_or_older_and_keeps_what_it_read(
     let said = |reach, listed| unread_root(&vps_read(reach), listed);
     assert_eq!(said(Reach::Waiting("w".into()), false).as_deref(), Some("Nothing read from vps"));
     assert_eq!(
-        said(Reach::Older(OlderNote { line: "l".into(), tip: "t".into() }), false).as_deref(),
+        said(Reach::Older(OlderNote { line: "l".into(), tip: "t".into(), ..OlderNote::default() }), false).as_deref(),
         Some("Nothing read from vps")
     );
-    assert_eq!(said(Reach::Older(OlderNote { line: "l".into(), tip: "t".into() }), true), None);
+    assert_eq!(said(Reach::Older(OlderNote { line: "l".into(), tip: "t".into(), ..OlderNote::default() }), true), None);
     assert_eq!(said(Reach::Down("d".into()), false), None);
     assert_eq!(said(Reach::Refused("r".into()), false), None);
     assert_eq!(said(Reach::Up(target()), false), None);

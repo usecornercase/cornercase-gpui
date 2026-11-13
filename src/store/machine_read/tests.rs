@@ -245,6 +245,24 @@ fn an_older_note_names_both_releases_and_the_update() {
     assert_eq!(mac.tip, "Update it from this Mac with cornercase --remote vps.invalid update");
     let linux = older_note("vps", &older, Os::Linux);
     assert_eq!(linux.line, "vps runs cornercase 0.13.39 and this computer runs 0.13.57: update it");
+    assert_eq!(
+        mac.tunnels,
+        "vps runs cornercase 0.13.39 and this Mac runs 0.13.57: nothing new is tunnelled to vps until it is updated"
+    );
+    assert!(linux.tunnels.contains("this computer runs 0.13.57"), "{}", linux.tunnels);
+    let update = UpdateThere {
+        machine: "vps".into(),
+        destination: "vps.invalid".into(),
+        args: ["--remote", "vps.invalid", "update"].map(String::from).to_vec(),
+    };
+    assert_eq!(mac.update.as_deref(), Some(&update));
+}
+
+#[test]
+fn a_refusal_without_update_words_offers_no_update() {
+    for words in [&[][..], &["sh", "update"][..]] {
+        assert_eq!(older_note("vps", &refusal_of(Some("0.13.39"), words), Os::Mac).update, None);
+    }
 }
 
 #[test]
@@ -415,4 +433,44 @@ fn a_probe_refused_as_older_under_the_current_facts_keeps_the_refusal() {
     assert_eq!(state.older.get("vps").map(|kept| &kept.facts), Some(&facts));
     state.probe_answered("vps", (facts.clone(), None), Some(&facts));
     assert!(state.older.is_empty());
+}
+
+#[test]
+fn a_recheck_of_a_kept_refusal_keeps_it_and_asks_for_a_probe() {
+    let facts = facts_of(&seen(LinkState::Linked));
+    let mut state = ThereState::default();
+    state.probe_answered("vps", (facts.clone(), Some(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
+    assert!(state.recheck("vps"));
+    assert!(state.older.contains_key("vps"));
+    assert!(!state.checks.contains_key("vps"));
+}
+
+#[test]
+fn a_recheck_without_a_refusal_only_forgets_the_last_check() {
+    let facts = facts_of(&seen(LinkState::Linked));
+    let mut state = ThereState::default();
+    state.checks.insert("vps".into(), Check::Answered { facts, at: Instant::now() });
+    assert!(!state.recheck("vps"));
+    assert!(!state.checks.contains_key("vps"));
+}
+
+#[test]
+fn a_recheck_while_a_probe_is_in_flight_sends_nothing_more() {
+    let facts = facts_of(&seen(LinkState::Linked));
+    let mut state = ThereState::default();
+    state.probe_answered("vps", (facts.clone(), Some(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
+    state.checks.insert("vps".into(), Check::InFlight);
+    assert!(!state.recheck("vps"));
+    assert_eq!(state.checks.get("vps"), Some(&Check::InFlight));
+}
+
+#[test]
+fn a_probe_says_whether_the_refusal_changed() {
+    let facts = facts_of(&seen(LinkState::Linked));
+    let mut state = ThereState::default();
+    let refused = || Some(refusal_of(Some("0.13.39"), &[]));
+    assert!(!state.probe_answered("vps", (facts.clone(), None), Some(&facts)));
+    assert!(state.probe_answered("vps", (facts.clone(), refused()), Some(&facts)));
+    assert!(!state.probe_answered("vps", (facts.clone(), refused()), Some(&facts)));
+    assert!(state.probe_answered("vps", (facts.clone(), None), Some(&facts)));
 }

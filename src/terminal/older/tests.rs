@@ -1,9 +1,7 @@
-use super::{
-    behind_heading, behind_lead, older_heading, older_lead, restart_args, restart_job, restart_question, update_job,
-    update_question,
-};
+use super::{behind_heading, behind_lead, older_heading, older_lead, restart_args, restart_job, restart_question};
 use crate::cli::{Behind, Older};
 use crate::platform::Os;
+use crate::store::update_job;
 
 fn older(there: Option<&str>) -> Older {
     Older {
@@ -41,14 +39,6 @@ fn the_page_says_this_computer_on_linux() {
 }
 
 #[test]
-fn the_update_asks_like_the_machines_sheet() {
-    let (title, message, button) = update_question("vps", Os::Mac);
-    assert_eq!(title, "Update cornercase on vps?");
-    assert!(message.contains("`cornercase update`") && message.contains("restarts nothing"), "{message}");
-    assert_eq!(button, "Update");
-}
-
-#[test]
 fn the_behind_page_names_the_servers_release() {
     assert_eq!(behind_heading(&behind()), "The server on vps still runs 0.13.21");
     let lead = behind_lead(&behind(), Os::Mac);
@@ -70,6 +60,6 @@ fn the_restart_runs_with_yes_on_the_windows_target() {
 
 #[test]
 fn the_jobs_name_the_machine() {
-    assert_eq!(update_job("vps").key(), "update-there:vps");
+    assert_eq!(update_job("vps", "vps").key(), "update-there:vps");
     assert_eq!(restart_job("vps").key(), "restart-there:vps");
 }

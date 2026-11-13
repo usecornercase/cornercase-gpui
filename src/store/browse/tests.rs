@@ -1,10 +1,11 @@
-use super::{MachineOpen, listed_gate, open_gate, owner_on_machine, toast_go};
+use super::{MachineOpen, listed_gate, open_gate, owner_on_machine, port_open, toast_go};
 use crate::cli::Version;
 use crate::model::Owner;
 use crate::model::machines::seen::{MachineSeen, ThereId, ThereProject, ThereWorkspace, WorkspaceThere};
 use crate::model::tunnels::Toward;
 use crate::model::tunnels::{Gate, Older};
 use crate::store::ToastGo;
+use crate::store::tunnels::Held;
 
 fn machine_owner(machine: &str) -> Owner {
     let ws = ThereWorkspace { id: ThereId::heard(3), ..Default::default() };
@@ -43,4 +44,14 @@ fn the_tunnel_gate_waits_while_the_machines_list_is_not_read() {
     assert_eq!(listed_gate(false, Gate::Open), Gate::Waiting);
     assert_eq!(listed_gate(true, older), older);
     assert_eq!(listed_gate(true, Gate::Open), Gate::Open);
+}
+
+#[test]
+fn an_up_tunnel_opens_whatever_the_machine_says() {
+    let closed = || MachineOpen::Closed("vps is older".into());
+    assert_eq!(port_open(closed(), Some(&Held::Up { local: 4000 })), MachineOpen::Open);
+    for held in [None, Some(&Held::Opening), Some(&Held::Down { why: String::new() })] {
+        assert_eq!(port_open(closed(), held), closed());
+    }
+    assert_eq!(port_open(MachineOpen::Waiting, None), MachineOpen::Waiting);
 }

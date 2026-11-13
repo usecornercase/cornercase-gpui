@@ -1,4 +1,4 @@
-use super::{MachineLink, followed, split_ended, split_stale};
+use super::{Linking, MachineLink, followed, linking, split_ended, split_stale, tunnel_target};
 use crate::model::MachineSeen;
 use crate::model::machines::{LinkState, Machine};
 use crate::model::tunnels::{Gate, Older, Toward, Way};
@@ -144,12 +144,73 @@ fn a_destination_not_known_when_made_is_never_another() {
     assert!(!MachineLink::Lost.stays_for(""));
 }
 
+fn note() -> crate::store::OlderNote {
+    crate::store::OlderNote {
+        line: "vps runs an older cornercase".into(),
+        tunnels: "vps is older: nothing new is tunnelled to vps until it is updated".into(),
+        ..crate::store::OlderNote::default()
+    }
+}
+
+fn older() -> MachineLink {
+    MachineLink::Older("vps.invalid".into())
+}
+
 #[test]
-fn an_older_refusal_keeps_the_link_up() {
+fn the_link_for_each_reach() {
     let machine = listed();
-    let note = crate::store::OlderNote { line: "vps runs an older cornercase".into(), tip: String::new() };
-    let expected = MachineLink::Up { boot: "boot-a".into(), destination: "vps.invalid".into() };
-    assert_eq!(link(Some(&machine), true, &Reach::Older(note), Gate::Open), expected);
+    let linked = MachineLink::Up { boot: "boot-a".into(), destination: "vps.invalid".into() };
+    let waiting = MachineLink::Waiting(Some("vps.invalid".into()));
+    assert_eq!(link(Some(&machine), true, &up(), Gate::Open), linked);
+    assert_eq!(link(Some(&machine), true, &Reach::Waiting("w".into()), Gate::Open), waiting);
+    assert_eq!(link(Some(&machine), true, &Reach::Older(note()), Gate::Open), older());
+    assert_eq!(link(Some(&machine), true, &Reach::Down("d".into()), Gate::Open), waiting);
+    assert_eq!(link(Some(&machine), true, &Reach::Refused("r".into()), Gate::Open), MachineLink::Lost);
+}
+
+#[test]
+fn a_refused_machine_keeps_what_it_holds_for_its_own_destination() {
+    assert!(older().stays_for("vps.invalid"));
+    assert!(older().stays_for(""));
+    assert!(!older().stays_for("other.invalid"));
+    let toward = Toward::Machine("vps".into());
+    let hold = || test_hold(toward.clone(), 8123, Held::Up { local: 1 });
+    let (ended, kept) = split_stale(vec![hold()], &toward, &older());
+    assert_eq!((ended.len(), kept.len()), (0, 1));
+    let (ended, kept) = split_stale(vec![hold()], &toward, &MachineLink::Older("other.invalid".into()));
+    assert_eq!((ended.len(), kept.len()), (1, 0));
+}
+
+#[test]
+fn a_refused_machine_loses_its_taker() {
+    let up = MachineLink::Up { boot: "b".into(), destination: "vps.invalid".into() };
+    assert!(!older().keeps_taker("vps.invalid"));
+    assert!(up.keeps_taker("vps.invalid"));
+    assert!(MachineLink::Waiting(Some("vps.invalid".into())).keeps_taker("vps.invalid"));
+}
+
+#[test]
+fn a_side_known_older_still_ends_a_refused_machine() {
+    let known = Gate::Older(Older::Server(Some(crate::cli::Version::new(0, 13, 45))));
+    assert_eq!(older().gated(known), MachineLink::Lost);
+    assert_eq!(older().gated(Gate::Open), older());
+    assert_eq!(older().gated(Gate::Waiting), older());
+}
+
+#[test]
+fn a_refused_machine_pauses_and_links_again_when_dropped() {
+    let up = MachineLink::Up { boot: "b".into(), destination: "vps.invalid".into() };
+    assert_eq!(linking(&older(), Some("b")), Linking::Pause);
+    assert_eq!(linking(&up, None), Linking::Link { boot: "b", destination: "vps.invalid" });
+    assert_eq!(linking(&up, Some("b")), Linking::Stay);
+    assert_eq!(linking(&MachineLink::Lost, Some("b")), Linking::Lose);
+}
+
+#[test]
+fn nothing_new_is_asked_of_a_refused_machine() {
+    assert_eq!(tunnel_target(Reach::Older(note())), Err(note().tunnels));
+    assert!(tunnel_target(Reach::Up(vps_target())).is_ok());
+    assert_eq!(tunnel_target(Reach::Down("d".into())), Err("d".into()));
 }
 
 #[test]

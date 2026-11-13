@@ -5,13 +5,13 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Result, bail};
-use gpui::{Context, Div};
+use gpui::{App, Context, Div};
 use serde::Deserialize;
 
 use crate::cli::Target;
 use crate::model::Aim;
 use crate::panels::on_machine::{self, Retry};
-use crate::store::{MachineRead, Reach};
+use crate::store::{MachineRead, Reach, Store};
 
 use super::disk::{Content, Stamp};
 use super::gutter::Gutter;
@@ -237,8 +237,11 @@ impl FilesPanel {
         }
     }
 
-    pub(super) fn machine_strip(&self) -> Option<Div> {
-        self.machine.as_ref().map(|read| on_machine::strip(read, &self.retry, &self.counting, true))
+    pub(super) fn machine_strip(&self, cx: &App) -> Option<Div> {
+        self.machine.as_ref().map(|read| {
+            let offer = Store::get(cx).read(cx).update_offer(read.reach.older());
+            on_machine::strip(read, &self.retry, &self.counting, (true, &offer))
+        })
     }
 
     pub(super) fn no_place_note(&self) -> String {

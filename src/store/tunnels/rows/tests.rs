@@ -1,12 +1,14 @@
 use std::collections::BTreeMap;
 
 use super::{
-    Control, Whose, count, elsewhere, machine_sections, mark, menu_rows, orders_notes, others_note, row_control,
+    Control, Tail, Whose, count, elsewhere, machine_sections, mark, menu_rows, orders_notes, others_note, row_control,
+    section_tail,
 };
 use crate::cli::Version;
 use crate::model::tunnels::{Gate, Older, Toward, TunnelSeen};
 use crate::store::tunnels::held::{Held, Hold, test_hold};
 use crate::store::tunnels::reverse::{ReverseHold, ReverseState};
+use crate::store::{OlderNote, UpdateOffer, UpdateThere};
 
 fn ours(port: u16, state: Held) -> Hold {
     test_hold(Toward::Server, port, state)
@@ -242,4 +244,48 @@ fn a_machine_with_only_a_reverse_hold_has_its_section() {
     let both = machine_sections(&holds, &reverses);
     let texts: Vec<String> = both[0].1.iter().map(super::TunnelRow::text).collect();
     assert_eq!(texts, ["⇄ 8765 → localhost:63235 · up", "⇄ 41234 ← this Chrome · open"]);
+}
+
+fn refused(machine: &str, release: &str) -> OlderNote {
+    OlderNote {
+        tunnels: format!("{machine} runs {release}: nothing new is tunnelled to {machine}"),
+        ..OlderNote::default()
+    }
+}
+
+fn update(machine: &str) -> UpdateThere {
+    UpdateThere { machine: machine.into(), destination: format!("{machine}.invalid"), args: Vec::new() }
+}
+
+#[test]
+fn a_refused_machine_has_one_line_and_its_update_under_its_tunnels() {
+    let note = refused("vps", "0.13.39");
+    let tail = section_tail(Some(&note), &UpdateOffer::Ask(update("vps")));
+    assert_eq!(tail, vec![Tail::Note(note.tunnels.clone()), Tail::Update(update("vps"))]);
+}
+
+#[test]
+fn two_refused_machines_each_say_their_own_releases() {
+    let (a, b) = (refused("vps", "0.13.39"), refused("box", "0.13.40"));
+    let lines = |note: &OlderNote| section_tail(Some(note), &UpdateOffer::Hidden);
+    assert_eq!(lines(&a), vec![Tail::Note(a.tunnels.clone())]);
+    assert_ne!(lines(&a), lines(&b));
+}
+
+#[test]
+fn a_refused_machine_updating_rests_its_entry() {
+    let note = refused("vps", "0.13.39");
+    let tail = section_tail(Some(&note), &UpdateOffer::Running("Updating cornercase on vps…".into()));
+    assert_eq!(tail, vec![Tail::Note(note.tunnels), Tail::Updating("Updating cornercase on vps…".into())]);
+}
+
+#[test]
+fn a_refusal_without_update_words_is_only_its_line() {
+    let note = refused("vps", "0.13.39");
+    assert_eq!(section_tail(Some(&note), &UpdateOffer::Hidden), vec![Tail::Note(note.tunnels)]);
+}
+
+#[test]
+fn a_machine_that_answers_adds_nothing() {
+    assert_eq!(section_tail(None, &UpdateOffer::Ask(update("vps"))), Vec::new());
 }

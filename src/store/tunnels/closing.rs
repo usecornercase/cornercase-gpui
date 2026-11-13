@@ -98,6 +98,9 @@ impl Store {
                 let text = format!("Could not {} the tunnel of port {port} on {label}: {why}", closing.verb());
                 self.toast(text, ToastKind::Error, cx);
                 self.restore_ending(&closing.toward, port);
+                if let Toward::Machine(name) = &closing.toward {
+                    self.there_failed(name, cx);
+                }
             }
         }
         cx.notify();

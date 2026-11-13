@@ -205,3 +205,13 @@ fn a_stable_stream_starts_the_count_again() {
     assert_eq!(after_end(7, true, Some(Duration::from_secs(300))), (1, false));
     assert_eq!(after_end(7, true, None), (8, true));
 }
+
+#[test]
+fn a_taker_toward_a_refused_machine_stops() {
+    let older = MachineLink::Older("vps.invalid".to_string());
+    let stays = orders_stay(older.keeps_taker("vps.invalid"), Gate::Open);
+    assert!(!stays);
+    assert_eq!(next(WAITING, Cause::Follow, (false, stays)), Next::Stop);
+    assert_eq!(next(RUNNING, Cause::Follow, (false, stays)), Next::Stop);
+    assert!(orders_stay(up("vps.invalid").keeps_taker("vps.invalid"), Gate::Open));
+}

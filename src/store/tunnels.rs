@@ -26,7 +26,7 @@ pub(crate) use held::{Asked, Held};
 pub(crate) use links::MachineLink;
 pub(crate) use reverse::{ReverseHold, ReverseState, address_there, copied_words};
 use rows::Mark;
-pub(crate) use rows::{Control, TunnelRow, Whose, heading, none_note, others_note};
+pub(crate) use rows::{Control, Tail, TunnelRow, Whose, heading, none_note, others_note, section_tail};
 
 use held::{
     Again, Fate, Hold, Reached, Settled, again_of, bring_back, came_back, fate, forgets_failed, live, local_before,
@@ -113,7 +113,7 @@ impl Store {
             }
             Toward::Machine(name) => {
                 let seen = session.machine(name).ok_or_else(|| format!("{name} is not shown here"))?;
-                let target = self.machine_target(seen)?;
+                let target = links::tunnel_target(self.reach_seen(seen))?;
                 let listed = self.machines.iter().find(|machine| machine.name == *name);
                 let destination = listed.map(|machine| machine.destination.clone()).unwrap_or_default();
                 Ok(Reached { target, boot: seen.boot.clone(), label: name.clone(), destination, toward })
@@ -319,6 +319,7 @@ impl Store {
         if forgets_failed(&fate, hold.added) {
             self.remember_tunnel(&hold.destination, hold.port, false, cx);
         }
+        let failing = matches!(fate, Fate::Failed(_) | Fate::Retry(_));
         match fate {
             Fate::Gone => drop(self.tunnels.holds.remove(at)),
             Fate::Failed(why) => {
@@ -328,11 +329,15 @@ impl Store {
             Fate::Retry(why) => self.fall(at, why, cx),
             Fate::Settle => {
                 self.tunnels.holds.remove(at);
-                let (toward, port, boot, destination) = (hold.toward, hold.port, hold.boot, hold.destination);
+                let (toward, port, boot) = (hold.toward.clone(), hold.port, hold.boot.clone());
+                let destination = hold.destination.clone();
                 let since = Instant::now();
                 self.tunnels.settling.push(Settling { toward, port, boot, destination, since });
                 later(SETTLE_AFTER, Self::settle_later, cx);
             }
+        }
+        if let (true, Toward::Machine(name)) = (failing, &hold.toward) {
+            self.there_failed(name, cx);
         }
         cx.notify();
     }
@@ -432,6 +437,18 @@ impl Store {
             self.retry_hold(toward, port, attempts, cx);
         }
         self.orders_linked(toward, cx);
+    }
+
+    pub(crate) fn try_tunnel_again(&mut self, toward: &Toward, port: u16, cx: &mut Context<Self>) {
+        if !self.can_tunnel(toward) {
+            if *toward != Toward::Server {
+                let why = self.tunnel_refusal(toward);
+                self.not_sent(&why, cx);
+            }
+            return;
+        }
+        self.drop_down_tunnel(toward, port);
+        self.hold_tunnel(toward, port, Asked::Click, cx);
     }
 
     pub(crate) fn drop_down_tunnel(&mut self, toward: &Toward, port: u16) {

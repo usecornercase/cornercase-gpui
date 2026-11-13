@@ -4,6 +4,7 @@ use super::held::{Held, Hold};
 use super::reverse::{ReverseHold, ReverseState};
 use crate::model::machines::listed;
 use crate::model::tunnels::{ELSEWHERE_ISSUE, Gate, Older, Toward, TunnelSeen, orders_note};
+use crate::store::{OlderNote, UpdateOffer, UpdateThere};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Control {
@@ -187,6 +188,24 @@ pub(crate) fn orders_notes(gates: &[(String, Gate)]) -> Vec<String> {
         _ => None,
     };
     gates.iter().filter_map(theirs).collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Tail {
+    Note(String),
+    Update(UpdateThere),
+    Updating(String),
+}
+
+pub(crate) fn section_tail(note: Option<&OlderNote>, offer: &UpdateOffer) -> Vec<Tail> {
+    let Some(note) = note else { return Vec::new() };
+    let mut tail = vec![Tail::Note(note.tunnels.clone())];
+    match offer {
+        UpdateOffer::Hidden => {}
+        UpdateOffer::Ask(update) => tail.push(Tail::Update(update.clone())),
+        UpdateOffer::Running(label) => tail.push(Tail::Updating(label.clone())),
+    }
+    tail
 }
 
 const HEADING_HOST: usize = 28;

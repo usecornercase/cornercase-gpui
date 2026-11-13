@@ -2,16 +2,15 @@ use gpui::{ClickEvent, Context, Div, ParentElement as _, Stateful, StatefulInter
 
 use super::no_tab::{answer_under, column, heading, lead_text, retry_button, row, scrolled, tall};
 use crate::app::{Conn, Root};
-use crate::cli::{self, Behind, Older, Target};
+use crate::cli::{self, Behind, Older};
 use crate::desktop;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::platform::Os;
 use crate::sidebar::tip;
-use crate::store::{Busy, release_clause};
+use crate::store::{AfterUpdate, Busy, release_clause, run_update, update_job, update_question};
 use crate::ui::{self, Icon, Tone};
 
-const UPDATE: &str = "Update";
 const RESTART: &str = "Restart";
 const NEEDS: &str = "To connect, the window needs the same release there, or a newer one.";
 
@@ -36,16 +35,6 @@ pub(crate) fn behind_lead(behind: &Behind, os: Os) -> String {
     )
 }
 
-fn update_question(destination: &str, os: Os) -> (String, String, &'static str) {
-    let title = format!("Update cornercase on {destination}?");
-    let message = format!(
-        "This runs `cornercase update` there from this {}, which installs the latest release and restarts nothing: \
-         its server keeps running the one it has until it restarts there. The window then connects again.",
-        desktop::machine(os)
-    );
-    (title, message, UPDATE)
-}
-
 fn restart_question(destination: &str) -> (String, String, &'static str) {
     let title = format!("Restart cornercase on {destination}?");
     let message = format!(
@@ -54,10 +43,6 @@ fn restart_question(destination: &str) -> (String, String, &'static str) {
          again."
     );
     (title, message, RESTART)
-}
-
-fn update_job(destination: &str) -> Busy {
-    Busy::new(format!("update-there:{destination}"), format!("Updating cornercase on {destination}…"))
 }
 
 fn restart_job(destination: &str) -> Busy {
@@ -98,7 +83,7 @@ impl Root {
     }
 
     fn older_page(&self, older: &Older, cx: &mut Context<Self>) -> Stateful<Div> {
-        let busy = self.store.read(cx).busy(update_job(&older.destination).key());
+        let busy = self.store.read(cx).busy(update_job(&older.destination, &older.destination).key());
         let buttons = row()
             .children(Self::update_button(older, busy, cx))
             .child(retry_button("older-retry", cx))
@@ -108,7 +93,7 @@ impl Root {
             .child(heading(&older_heading(older)))
             .child(lead_text(older_lead(older, Os::CURRENT)))
             .child(buttons)
-            .child(answer_under(self.answer_for(update_job(&older.destination).key())));
+            .child(answer_under(self.answer_for(update_job(&older.destination, &older.destination).key())));
         scrolled("older-page", content)
     }
 
@@ -154,14 +139,14 @@ impl Root {
     }
 
     fn ask_update(older: Older, window: &mut Window, cx: &mut Context<Self>) {
-        let question = update_question(&older.destination, Os::CURRENT);
+        let question = update_question(&older.destination, AfterUpdate::Connects, Os::CURRENT);
         Self::ask_then(question, move |this, cx| this.update_there(older.clone(), cx), window, cx);
     }
 
     fn update_there(&mut self, older: Older, cx: &mut Context<Self>) {
         let Some(args) = cli::update_args(&older) else { return };
-        let job = update_job(&older.destination);
-        let work = move || cli::answer_on(&Target::Local, &args);
+        let job = update_job(&older.destination, &older.destination);
+        let work = move || run_update(&args);
         self.run_answered(job, work, move |this, done, cx| this.update_answered(older, done, cx), cx);
     }
 

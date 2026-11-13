@@ -77,7 +77,7 @@ pub(super) fn remove_ask(name: &str) -> Ask {
 pub(super) fn update_ask(name: &str) -> Ask {
     Ask {
         title: format!("Update cornercase on {name}?"),
-        message: "This runs `cornercase update` there, which installs this version and restarts nothing: its server \
+        message: "This runs `cornercase update` there, which installs the latest release and restarts nothing: its server \
                   keeps running the one it has until it restarts there.",
         button: "Update",
         name: name.to_string(),

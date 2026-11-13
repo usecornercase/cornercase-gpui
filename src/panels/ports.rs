@@ -268,7 +268,10 @@ impl Render for PortsPanel {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let drawn = self.drawn(cx);
         let strip = match &drawn.source {
-            Source::There(read) => Some(on_machine::strip(read, &self.retry, &self.counting, false)),
+            Source::There(read) => {
+                let offer = Store::get(cx).read(cx).update_offer(read.reach.older());
+                Some(on_machine::strip(read, &self.retry, &self.counting, (false, &offer)))
+            }
             Source::Here(_) => None,
         };
         let panel = div().size_full().flex().flex_col().children(strip).child(self.body(&drawn, cx));

@@ -360,7 +360,7 @@ impl FilesPanel {
                 .track_focus(&self.focus)
                 .flex()
                 .flex_col()
-                .children(self.machine_strip())
+                .children(self.machine_strip(cx))
                 .child(ui::note(note))
                 .into_any_element();
         };
@@ -379,7 +379,7 @@ impl FilesPanel {
             .track_focus(&self.focus)
             .flex()
             .flex_col()
-            .children(self.machine_strip())
+            .children(self.machine_strip(cx))
             .when(!viewing, |d| d.child(self.render_bar(window, cx)))
             .child(body)
             .children(menu)

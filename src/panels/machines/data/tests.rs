@@ -94,6 +94,7 @@ fn removing_says_that_nothing_there_is_touched() {
 #[test]
 fn updating_says_that_nothing_restarts() {
     assert!(update_ask("vps").message.contains("restarts nothing"));
+    assert!(update_ask("vps").message.contains("installs the latest release"));
 }
 
 #[test]

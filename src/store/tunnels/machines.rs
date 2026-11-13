@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use gpui::Context;
 
 use super::Store;
-use super::links::{MachineLink, followed, split_stale};
+use super::links::{Linking, MachineLink, followed, linking, split_stale};
 use crate::model::tunnels::Toward;
 
 impl Store {
@@ -39,18 +39,17 @@ impl Store {
     fn follow_machine(&mut self, name: &str, cx: &mut Context<Self>) {
         let toward = Toward::Machine(name.to_string());
         let link = self.tunnel_link(name);
-        match &link {
-            MachineLink::Up { boot, destination } => {
-                if self.tunnels.machines.get(name) != Some(boot) {
-                    self.tunnels.machines.insert(name.to_string(), boot.clone());
-                    self.link_tunnels(&toward, destination, cx);
-                }
+        match linking(&link, self.tunnels.machines.get(name).map(String::as_str)) {
+            Linking::Link { boot, destination } => {
+                self.tunnels.machines.insert(name.to_string(), boot.to_string());
+                self.link_tunnels(&toward, destination, cx);
             }
-            MachineLink::Waiting(_) => drop(self.tunnels.machines.remove(name)),
-            MachineLink::Lost => {
+            Linking::Pause => drop(self.tunnels.machines.remove(name)),
+            Linking::Lose => {
                 self.tunnels.machines.remove(name);
                 self.tunnels.settling.retain(|settling| settling.toward != toward);
             }
+            Linking::Stay => {}
         }
         let (ended, kept) = split_stale(std::mem::take(&mut self.tunnels.holds), &toward, &link);
         self.tunnels.holds = kept;

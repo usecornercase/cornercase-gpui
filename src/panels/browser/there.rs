@@ -81,7 +81,8 @@ impl Browser {
 
     pub(super) fn machine_strip(&self, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
         let read = Store::get(cx).read(cx).machine_read().filter(|_| self.place.machine().is_some())?;
-        Some(on_machine::strip(&read, &self.dev.retry, &self.counting, false).into_any_element())
+        let offer = Store::get(cx).read(cx).update_offer(read.reach.older());
+        Some(on_machine::strip(&read, &self.dev.retry, &self.counting, (false, &offer)).into_any_element())
     }
 
     pub(super) fn refused_place(&self, cx: &Context<Self>) -> Option<String> {
