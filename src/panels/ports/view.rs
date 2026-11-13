@@ -99,17 +99,11 @@ pub(crate) fn row_links(url: Option<&str>, machine: bool, host: bool, local: Opt
     }
 }
 
-pub(crate) fn address_text(
-    url: Option<&str>,
-    number: u16,
-    machine: Option<&str>,
-    local: Option<u16>,
-) -> (String, bool) {
+pub(crate) fn address_text(url: Option<&str>, number: u16, machine: Option<&str>) -> (String, bool) {
     let Some(url) = url else { return (format!("port {number}"), true) };
-    match (machine, local) {
-        (Some(_), Some(local)) => (rewrite(url, local), true),
-        (Some(name), None) => (format!("{url} on {name}"), false),
-        (None, _) => (url.to_string(), true),
+    match machine {
+        Some(name) => (format!("{url} on {name}"), false),
+        None => (url.to_string(), true),
     }
 }
 

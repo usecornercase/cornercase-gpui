@@ -174,10 +174,9 @@ fn a_machines_port_has_no_open_and_its_links_only_once_tunnelled() {
 }
 
 #[test]
-fn a_machines_own_address_is_no_local_link_until_it_is_tunnelled() {
+fn a_machines_address_stays_the_machines_and_the_mark_gives_the_local_port() {
     let url = Some("http://localhost:8765");
-    assert_eq!(address_text(url, 8765, Some("vps"), None), ("http://localhost:8765 on vps".to_string(), false));
-    assert_eq!(address_text(url, 8765, Some("vps"), Some(63235)), ("http://localhost:63235".to_string(), true));
-    assert_eq!(address_text(url, 8765, None, None), ("http://localhost:8765".to_string(), true));
-    assert_eq!(address_text(None, 8765, Some("vps"), None), ("port 8765".to_string(), true));
+    assert_eq!(address_text(url, 8765, Some("vps")), ("http://localhost:8765 on vps".to_string(), false));
+    assert_eq!(address_text(url, 8765, None), ("http://localhost:8765".to_string(), true));
+    assert_eq!(address_text(None, 8765, Some("vps")), ("port 8765".to_string(), true));
 }

@@ -125,8 +125,7 @@ fn copy(url: &str, cx: &mut App) {
 }
 
 fn address_line(view: &PortView, side: &Side, store: &Store) -> Div {
-    let local = store.tunnel_local(&side.toward, view.number);
-    let (url, reachable) = address_text(view.url.as_deref(), view.number, side.machine(), local);
+    let (url, reachable) = address_text(view.url.as_deref(), view.number, side.machine());
     let colour = if reachable { colours::accent() } else { colours::soft() };
     div()
         .flex()
