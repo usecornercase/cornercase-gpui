@@ -10,6 +10,7 @@ use super::{Conn, GAP, Root};
 use crate::cli;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
+use crate::model::machines::listed;
 use crate::model::tunnels::Way;
 use crate::notify;
 use crate::platform::Os;
@@ -68,7 +69,7 @@ impl Root {
             None => !sections.is_empty(),
         };
         let names: Vec<String> = sections.into_iter().map(|(name, _)| name).collect();
-        let tunnelled = self.host.clone().or_else(|| held.then(|| joined(&names)));
+        let tunnelled = self.host.clone().or_else(|| held.then(|| listed(&names)));
         let tip = connection_tip(why, tunnelled.as_deref().filter(|_| held));
         let parts = label_parts(self.host.as_deref(), if held { store.tunnel_count() } else { 0 }, &label);
         div()
@@ -151,14 +152,6 @@ fn label_element(parts: LabelParts) -> Div {
         .children(parts.count.map(|count| div().flex_none().text_color(colours::accent()).child(count)))
         .child(div().flex_none().child("·"))
         .child(div().flex().min_w_0().child(ui::one_line(parts.state)))
-}
-
-fn joined(names: &[String]) -> String {
-    match names {
-        [] => String::new(),
-        [one] => one.clone(),
-        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
-    }
 }
 
 fn connection_tip(why: Option<String>, tunnels_to: Option<&str>) -> String {

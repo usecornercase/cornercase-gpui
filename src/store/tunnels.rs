@@ -110,7 +110,7 @@ impl Store {
         let Toward::Machine(name) = toward else { return String::new() };
         match self.machine_tunnel_gate(name) {
             Gate::Older(older) => gate_note(&older, name),
-            Gate::Waiting => "this computer's cornercase release is not read yet".to_string(),
+            Gate::Waiting => format!("this {}'s cornercase release is not read yet", crate::desktop::here()),
             Gate::Open => self.reached(toward).err().unwrap_or_default(),
         }
     }

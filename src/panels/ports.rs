@@ -1,5 +1,6 @@
 pub(crate) mod data;
 mod rows;
+mod source;
 mod there;
 mod tunnel;
 mod view;
@@ -13,29 +14,24 @@ use gpui::{
 };
 
 use crate::cli;
+use crate::model::Session;
 use crate::model::tunnels::Toward;
-use crate::model::{Session, ThereId};
 use crate::panels::PanelKind;
 use crate::panels::on_machine::{self, Retry};
 use crate::panels::poll::{Polled, Watch, parse};
-use crate::store::{self, Store};
+use crate::store::{self, Reach, Store};
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
 use crate::ui::counting::Counting;
 use data::{List, Port, list_command};
 use rows::Side;
-use there::{Scope, Source, machine_notes, scope_of, source_of, views};
-use view::{PortView, stop_label, to_stop};
+use source::{Listed, Scope, Source, scope_of, source_of, views};
+use there::machine_notes;
+use view::{PortView, here_key, stop_label, to_stop};
 
 const NO_PORTS: &str = "Nothing in this workspace listens on a TCP port.";
 const NO_WORKSPACE: &str = "No workspace on screen. Show one, or list every port.";
 const DOCKER_NOTE: &str = "Ports Docker publishes are held by Docker, so they show only under every port.";
-
-pub(crate) enum Listed {
-    None,
-    Here(Vec<Port>),
-    There(Vec<Port<ThereId>>),
-}
 
 pub(crate) struct PortsPanel {
     listed: Listed,
@@ -123,8 +119,7 @@ impl PortsPanel {
     }
 
     fn listed_here(&mut self, ports: Vec<Port>) {
-        let key = |p: &Port| format!("{}-{}", p.number, p.pid);
-        self.ticked.retain(|ticked| ports.iter().any(|p| key(p) == *ticked));
+        self.ticked.retain(|ticked| ports.iter().any(|p| here_key(p) == *ticked));
         self.listed = Listed::Here(ports);
         self.error = None;
     }
@@ -187,14 +182,14 @@ impl PortsPanel {
                 (false, Err(_)) => vec![ui::note(on_machine::nothing_read(read)).into_any_element()],
                 (false, Ok(_)) => vec![ui::loading("Looking for ports…").into_any_element()],
                 (true, _) if views.is_empty() => vec![ui::note(NO_PORTS).into_any_element()],
-                (true, _) => rows::rows(views, side, (self.all, &self.ticked), &self.watch, cx),
+                (true, _) => rows::rows(views, side, &self.ticked, &self.watch, cx),
             },
             Source::Here(workspace) => match (loaded, &self.error) {
                 (_, Some(e)) => vec![ui::note(e.clone()).text_color(colours::failed()).into_any_element()],
                 (false, None) => vec![ui::loading("Looking for ports…").into_any_element()],
                 (true, None) if !self.all && workspace.is_none() => vec![ui::note(NO_WORKSPACE).into_any_element()],
                 (true, None) if views.is_empty() => vec![ui::note(NO_PORTS).into_any_element()],
-                (true, None) => rows::rows(views, side, (self.all, &self.ticked), &self.watch, cx),
+                (true, None) => rows::rows(views, side, &self.ticked, &self.watch, cx),
             },
         }
     }
@@ -202,7 +197,10 @@ impl PortsPanel {
     fn notes(source: &Source, cx: &Context<Self>) -> Vec<String> {
         let store = Store::get(cx).read(cx);
         match source {
-            Source::There(read) => machine_notes(&store.machine_tunnel_gate(&read.aim.machine), &read.aim.machine),
+            Source::There(read) => {
+                let refused = matches!(read.reach, Reach::Refused(_));
+                machine_notes(&store.machine_tunnel_gate(&read.aim.machine), &read.aim.machine, refused)
+            }
             Source::Here(_) => {
                 cli::host().map(|host| rows::remote_notes(&host, &store.tunnel_way())).unwrap_or_default()
             }

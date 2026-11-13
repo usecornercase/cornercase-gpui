@@ -42,8 +42,17 @@ fn a_refused_or_older_machine_is_lost() {
     let machine = listed();
     let refused = Reach::Refused("not linked".into());
     assert_eq!(link(Some(&machine), true, &refused, &Gate::Open), Link::Lost);
-    let older = Gate::Older(Older::Server(None));
+    let older = Gate::Older(Older::Server(crate::cli::Version::parse("0.13.45")));
     assert_eq!(link(Some(&machine), true, &up(), &older), Link::Lost);
+    let here = Gate::Older(Older::ThisComputer(None));
+    assert_eq!(link(Some(&machine), true, &up(), &here), Link::Lost);
+}
+
+#[test]
+fn a_server_version_not_read_yet_only_waits() {
+    let machine = listed();
+    let unknown = Gate::Older(Older::Server(None));
+    assert_eq!(link(Some(&machine), true, &up(), &unknown), Link::Waiting);
 }
 
 #[test]

@@ -103,7 +103,7 @@ pub(crate) fn machine_gate(here: Release, server: Option<Version>) -> Gate {
     }
 }
 
-pub(crate) fn gate_note(older: &Older, machine: &str) -> String {
+fn older_words(older: &Older, machine: &str) -> (String, String) {
     let (place, found) = match older {
         Older::ThisComputer(found) => (format!("this {}", desktop::here()), found),
         Older::Server(found) => (machine.to_string(), found),
@@ -113,19 +113,16 @@ pub(crate) fn gate_note(older: &Older, machine: &str) -> String {
         (Older::Server(_), Some(version)) => format!(" (its server runs {version})"),
         (_, None) => String::new(),
     };
+    (place, has)
+}
+
+pub(crate) fn gate_note(older: &Older, machine: &str) -> String {
+    let (place, has) = older_words(older, machine);
     format!("Tunnel needs cornercase {TUNNEL_HOLD_SINCE} or newer on {place}{has}.")
 }
 
 pub(crate) fn older_note(older: &Older, host: &str) -> String {
-    let (place, found) = match older {
-        Older::ThisComputer(found) => (format!("this {}", desktop::here()), found),
-        Older::Server(found) => (host.to_string(), found),
-    };
-    let has = match (older, found) {
-        (Older::ThisComputer(_), Some(version)) => format!(" (it has {version})"),
-        (Older::Server(_), Some(version)) => format!(" (its server runs {version})"),
-        (_, None) => String::new(),
-    };
+    let (place, has) = older_words(older, host);
     format!(
         "These tunnels are this window's own: cornercase {TUNNEL_HOLD_SINCE} or newer on {place} lists them and \
          brings them back when the window connects{has}."

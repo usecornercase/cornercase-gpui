@@ -7,15 +7,14 @@ use gpui::{
 
 use super::PortsPanel;
 use super::tunnel::{tunnel_button, tunnel_mark};
-use super::view::{Go, PortView, stop_many_title, stop_many_warning, stop_title, stop_warning};
+use super::view::{Go, PortView, row_links, stop_many_title, stop_many_warning, stop_title, stop_warning};
 use crate::cli::Target;
 use crate::dialogs::Question;
-use crate::model::link::rewrite;
 use crate::model::tunnels::{Toward, Way, older_note};
 use crate::notify::tip;
 use crate::panels::poll::{Stop, StopOrder, Watch, confirm_stop, confirm_stops};
 use crate::panels::queue::open_pane;
-use crate::store::{Busy, NoticeThere, Store, ToastKind};
+use crate::store::{Busy, Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon};
 use crate::{cli, desktop};
@@ -52,10 +51,11 @@ impl Side {
         self.machine().is_none() || self.target.is_some()
     }
 
-    fn order(&self, busy: Busy, command: Vec<String>) -> StopOrder {
+    fn order(&self, busy: Busy, command: Vec<String>) -> Option<StopOrder> {
         match (self.machine(), &self.target) {
-            (Some(machine), Some(target)) => StopOrder::on(machine, target.clone(), busy, command),
-            _ => StopOrder::here(busy, command),
+            (Some(machine), Some(target)) => Some(StopOrder::on(machine, target.clone(), busy, command)),
+            (Some(_), None) => None,
+            (None, _) => Some(StopOrder::here(busy, command)),
         }
     }
 }
@@ -67,10 +67,12 @@ fn stopping(view: &PortView) -> String {
 fn ask_stop(view: &PortView, side: &Side, window: &mut Window, cx: &mut Context<PortsPanel>) {
     let title = stop_title(view, side.machine());
     let question = Question::new(title, stop_warning(view, side.machine()), "Stop", Vec::new());
-    confirm_stop(question, stop_entry(view, side), window, cx);
+    if let Some(order) = stop_entry(view, side) {
+        confirm_stop(question, order, window, cx);
+    }
 }
 
-fn stop_entry(view: &PortView, side: &Side) -> StopOrder {
+fn stop_entry(view: &PortView, side: &Side) -> Option<StopOrder> {
     let there = side.machine().map(|machine| format!(" on {machine}")).unwrap_or_default();
     let text = format!("Stopping {} on port {}{there}…", view.program, view.number);
     side.order(Busy::new(stopping(view), text), view.stop_command())
@@ -83,7 +85,7 @@ pub(super) fn ask_stop_many(views: &[&PortView], side: &Side, window: &mut Windo
     }
     let title = stop_many_title(views.len(), side.machine());
     let question = Question::new(title, stop_many_warning(views, side.machine()), "Stop", Vec::new());
-    confirm_stops(question, views.iter().map(|v| stop_entry(v, side)).collect(), window, cx);
+    confirm_stops(question, views.iter().filter_map(|v| stop_entry(v, side)).collect(), window, cx);
 }
 
 fn stop_button(view: &PortView, side: &Side, stop: Stop<PortsPanel>) -> Option<Stateful<Div>> {
@@ -132,55 +134,35 @@ fn address_line(view: &PortView, side: &Side, store: &Store) -> Div {
         .when(view.by_agent, |d| d.child(div().text_size(px(11.)).text_color(colours::waiting()).child("agent")))
 }
 
-fn reached_url(view: &PortView, side: &Side, store: &Store) -> Option<String> {
-    let url = view.url.clone()?;
-    match store.tunnel_local(&side.toward, view.number) {
-        Some(local) => Some(rewrite(&url, local)),
-        None if side.machine().is_some() => None,
-        None => Some(url),
-    }
-}
-
 fn go_button(id: SharedString, go: Go) -> Stateful<Div> {
     ui::button(id, "Go").on_click(move |_: &ClickEvent, _, cx| match &go {
         Go::Here(pane) => open_pane(*pane, cx),
-        Go::There { machine, boot, pane } => {
-            let there = NoticeThere {
-                machine: machine.clone(),
-                boot: boot.clone(),
-                panes: vec![*pane],
-                gone: format!("That pane is no longer on {machine}"),
-            };
-            Store::get(cx).update(cx, |s, cx| {
-                s.go_there(&there, cx);
-                s.close_sheet(cx);
-            });
-        }
+        Go::There(there) => Store::get(cx).update(cx, |s, cx| {
+            s.go_there(there, cx);
+            s.close_sheet(cx);
+        }),
     })
 }
 
 fn buttons(view: &PortView, side: &Side, stop: Stop<PortsPanel>, store: &Store) -> Div {
     let key = view.key.clone();
     let id = |what: &str| SharedString::from(format!("{what}-{key}"));
-    let reached = reached_url(view, side, store);
-    let tunnelled = store.tunnel_local(&side.toward, view.number).is_some();
-    let direct = side.machine().is_none() && cli::host().is_none();
-    let opened = view.url.clone().filter(|_| side.machine().is_none());
-    let copied = reached.clone();
-    let system = reached.filter(|_| direct || tunnelled).map(|url| system_browser(id("system"), url));
+    let local = store.tunnel_local(&side.toward, view.number);
+    let links = row_links(view.url.as_deref(), side.machine().is_some(), cli::host().is_some(), local);
+    let system = links.system.map(|url| system_browser(id("system"), url));
     div()
         .flex()
         .items_center()
         .gap(px(6.))
         .children(
-            opened.map(|url| {
+            links.open.map(|url| {
                 ui::button(id("open"), "Open").on_click(move |_: &ClickEvent, _, cx| browse(url.clone(), cx))
             }),
         )
         .children(system)
         .children(tunnel_button(view, &side.toward, store))
         .children(
-            copied.map(|url| ui::button(id("copy"), "Copy").on_click(move |_: &ClickEvent, _, cx| copy(&url, cx))),
+            links.copy.map(|url| ui::button(id("copy"), "Copy").on_click(move |_: &ClickEvent, _, cx| copy(&url, cx))),
         )
         .children(view.go.clone().map(|go| go_button(id("go"), go)))
         .children(stop_button(view, side, stop))
@@ -233,7 +215,7 @@ fn port_row(view: &PortView, row: Row<'_>) -> AnyElement {
 pub(super) fn rows(
     views: &[PortView],
     side: &Side,
-    (_all, ticked): (bool, &HashSet<String>),
+    ticked: &HashSet<String>,
     watch: &Watch,
     cx: &mut Context<PortsPanel>,
 ) -> Vec<AnyElement> {

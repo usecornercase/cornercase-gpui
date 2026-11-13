@@ -1,4 +1,6 @@
-use super::{Older, Release, TUNNEL_HOLD_SINCE, Way, held_line, older_note, way};
+use super::{
+    Gate, Older, Release, TUNNEL_HOLD_SINCE, Toward, Way, gate_note, held_line, machine_gate, older_note, way,
+};
 use crate::cli::Version;
 use crate::model::Session;
 use crate::test_util::fixture;
@@ -70,4 +72,46 @@ fn the_older_note_names_the_side_to_update() {
     let server = older_note(&Older::Server(Version::parse("0.13.48")), "devbox");
     assert!(server.contains("on devbox lists them") && server.ends_with("(its server runs 0.13.48)."), "{server}");
     assert!(!older_note(&Older::Server(None), "devbox").contains('('));
+}
+
+fn version(text: &str) -> Option<Version> {
+    Version::parse(text)
+}
+
+#[test]
+fn a_machines_tunnel_needs_both_releases() {
+    assert_eq!(machine_gate(Release::Unread, version("0.13.54")), Gate::Waiting);
+    let here_old = Release::Read(version("0.13.39"));
+    assert_eq!(machine_gate(here_old, version("0.13.54")), Gate::Older(Older::ThisComputer(version("0.13.39"))));
+    assert_eq!(machine_gate(Release::Read(None), version("0.13.54")), Gate::Older(Older::ThisComputer(None)));
+    let new = release("0.13.54");
+    assert_eq!(machine_gate(new, version("0.13.45")), Gate::Older(Older::Server(version("0.13.45"))));
+    assert_eq!(machine_gate(new, None), Gate::Older(Older::Server(None)));
+    assert_eq!(machine_gate(here_old, version("0.13.45")), Gate::Older(Older::ThisComputer(version("0.13.39"))));
+}
+
+#[test]
+fn a_machines_tunnel_opens_at_exactly_0_13_50_on_both() {
+    assert_eq!(machine_gate(release("0.13.50"), version("0.13.50")), Gate::Open);
+    assert_eq!(machine_gate(release("0.13.54"), version("0.14.0")), Gate::Open);
+    assert!(matches!(machine_gate(release("0.13.49"), version("0.13.50")), Gate::Older(_)));
+    assert!(matches!(machine_gate(release("0.13.50"), version("0.13.49")), Gate::Older(_)));
+}
+
+#[test]
+fn the_gate_note_names_the_side_and_the_machine() {
+    let server = gate_note(&Older::Server(version("0.13.45")), "vps");
+    assert_eq!(server, "Tunnel needs cornercase 0.13.50 or newer on vps (its server runs 0.13.45).");
+    let here = gate_note(&Older::ThisComputer(version("0.13.39")), "vps");
+    assert!(
+        here.starts_with("Tunnel needs cornercase 0.13.50 or newer on this ") && here.ends_with("(it has 0.13.39).")
+    );
+    assert_eq!(gate_note(&Older::Server(None), "vps"), "Tunnel needs cornercase 0.13.50 or newer on vps.");
+}
+
+#[test]
+fn a_toward_has_a_key_and_a_machine_only_for_a_machine() {
+    assert_eq!(Toward::Server.key(), "server");
+    assert_eq!(Toward::Machine("vps".into()).key(), "machine:vps");
+    assert_eq!((Toward::Server.machine(), Toward::Machine("vps".into()).machine()), (None, Some("vps")));
 }

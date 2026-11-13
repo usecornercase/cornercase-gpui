@@ -40,9 +40,9 @@ impl<Id> Port<Id> {
 
     pub(crate) fn how(&self, pane: Option<(String, Option<String>)>) -> String {
         match (self.via.as_deref(), pane) {
-            (Some("agent"), Some((p, _))) => format!("agent {} · pane {p}", self.agent.as_deref().unwrap_or("?")),
-            (_, Some((p, Some(tab)))) => format!("pane {p} · {tab}"),
-            (_, Some((p, None))) => format!("pane {p}"),
+            (Some("agent"), Some((p, _))) => format!("agent {} · {p}", self.agent.as_deref().unwrap_or("?")),
+            (_, Some((p, Some(tab)))) => format!("{p} · {tab}"),
+            (_, Some((p, None))) => p,
             (Some("cwd"), None) => "in the worktree, no tab".into(),
             _ => "no workspace".into(),
         }
@@ -51,7 +51,8 @@ impl<Id> Port<Id> {
 
 impl Port {
     pub(crate) fn place(&self, session: Option<&Session>, with_workspace: bool) -> String {
-        let pane = self.pane.map(|p| (p.to_string(), session.and_then(|s| s.tab_of_pane(p)).map(|t| t.name.clone())));
+        let pane =
+            self.pane.map(|p| (format!("pane {p}"), session.and_then(|s| s.tab_of_pane(p)).map(|t| t.name.clone())));
         let how = self.how(pane);
         let workspace = self.workspace.filter(|_| with_workspace).and_then(|id| session?.workspace(id));
         match workspace {

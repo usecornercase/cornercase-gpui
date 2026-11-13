@@ -4,6 +4,7 @@ use crate::app::Root;
 use crate::context_menu::{self, Entry};
 use crate::dialogs;
 use crate::keymap::{Command, keys_of};
+use crate::model::machines::listed;
 use crate::model::tunnels::Toward;
 use crate::panels::PanelKind;
 use crate::platform::Os;
@@ -96,8 +97,8 @@ fn machine_entries(sections: &[(String, Vec<TunnelRow>)]) -> Vec<Entry> {
         entries.extend(rows.iter().map(|row| context_menu::submenu(row.text(), actions(row))));
     }
     let names: Vec<String> = sections.iter().map(|(name, _)| name.clone()).collect();
-    entries.push(context_menu::note(asks_note(&names.join(", "))));
-    entries.push(context_menu::note(others_note(&names.join(", "))));
+    entries.push(context_menu::note(asks_note(&listed(&names))));
+    entries.push(context_menu::note(others_note(&listed(&names))));
     entries
 }
 

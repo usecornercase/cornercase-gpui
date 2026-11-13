@@ -1,6 +1,7 @@
 use super::conn_words;
 use crate::app::Conn;
 use crate::cli::{Behind, Older};
+use crate::model::machines::listed;
 use crate::platform::Os;
 use crate::terminal::{behind_lead, older_lead};
 
@@ -59,7 +60,7 @@ fn the_label_counts_a_machines_tunnels_on_this_computer() {
 
 #[test]
 fn the_tip_names_the_machines_with_tunnels() {
-    let names = |names: &[&str]| super::joined(&names.iter().map(ToString::to_string).collect::<Vec<_>>());
+    let names = |names: &[&str]| listed(&names.iter().map(ToString::to_string).collect::<Vec<_>>());
     assert_eq!(names(&["vps"]), "vps");
     assert_eq!(names(&["vps", "cap"]), "vps and cap");
     assert_eq!(names(&["vps", "cap", "nas"]), "vps, cap and nas");

@@ -23,8 +23,8 @@ impl ThereId {
         format!("there-{}", self.0)
     }
 
-    pub(crate) fn label(self) -> String {
-        self.0.to_string()
+    pub(crate) fn pane_words(self) -> String {
+        format!("pane {}", self.0)
     }
 }
 

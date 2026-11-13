@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 
 use super::data::Port;
+use crate::model::link::rewrite;
 use crate::model::{MachineSeen, Session, ThereId};
+use crate::store::NoticeThere;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Go {
     Here(u64),
-    There { machine: String, boot: String, pane: ThereId },
+    There(NoticeThere),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,19 +54,49 @@ pub(crate) fn there_key<Id>(port: &Port<Id>) -> String {
     format!("there-{}-{}", port.number, port.pid)
 }
 
+pub(crate) fn here_key<Id>(port: &Port<Id>) -> String {
+    format!("{}-{}", port.number, port.pid)
+}
+
 pub(crate) fn view_here(port: &Port, session: Option<&Session>, with_workspace: bool) -> PortView {
-    let key = format!("{}-{}", port.number, port.pid);
-    plain(port, key, port.place(session, with_workspace), port.pane.map(Go::Here))
+    plain(port, here_key(port), port.place(session, with_workspace), port.pane.map(Go::Here))
 }
 
 pub(crate) fn view_there(port: &Port<ThereId>, seen: Option<&MachineSeen>, with_workspace: bool) -> PortView {
-    let pane = port.pane.map(|p| (p.label(), seen.and_then(|s| s.tab_of_pane(p)).map(|tab| tab.name.clone())));
+    let pane = port.pane.map(|p| (p.pane_words(), seen.and_then(|s| s.tab_of_pane(p)).map(|tab| tab.name.clone())));
     let how = port.how(pane);
     let workspace = port.workspace.filter(|_| with_workspace).and_then(|id| seen?.place_name(id));
     let place = workspace.map_or_else(|| how.clone(), |name| format!("{name} · {how}"));
     let key = there_key(port);
-    let go = seen.zip(port.pane).map(|(s, pane)| Go::There { machine: s.name.clone(), boot: s.boot.clone(), pane });
+    let go = seen.zip(port.pane).map(|(s, pane)| Go::There(notice(s, pane)));
     plain(port, key, place, go)
+}
+
+fn notice(seen: &MachineSeen, pane: ThereId) -> NoticeThere {
+    let machine = seen.name.clone();
+    let gone = format!("That pane is no longer on {machine}");
+    NoticeThere { machine, boot: seen.boot.clone(), panes: vec![pane], gone }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RowLinks {
+    pub(crate) open: Option<String>,
+    pub(crate) system: Option<String>,
+    pub(crate) copy: Option<String>,
+}
+
+pub(crate) fn row_links(url: Option<&str>, machine: bool, host: bool, local: Option<u16>) -> RowLinks {
+    let reached = match (url, local) {
+        (Some(url), Some(local)) => Some(rewrite(url, local)),
+        (Some(url), None) if !machine => Some(url.to_string()),
+        _ => None,
+    };
+    let direct = !machine && !host;
+    RowLinks {
+        open: url.filter(|_| !machine).map(str::to_string),
+        system: reached.clone().filter(|_| direct || local.is_some()),
+        copy: reached,
+    }
 }
 
 pub(crate) fn stop_warning(view: &PortView, on: Option<&str>) -> String {
@@ -126,3 +158,6 @@ pub(crate) fn stop_many_title(count: usize, on: Option<&str>) -> String {
         None => format!("Stop {count} programs?"),
     }
 }
+
+#[cfg(test)]
+mod tests;

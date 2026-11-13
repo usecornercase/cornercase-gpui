@@ -3,6 +3,7 @@ use gpui::Context;
 use super::held::{Held, Hold, Reached, forgets_after_close, live};
 use super::{Busy, Store, ToastKind};
 use crate::cli;
+use crate::model::machines::hide_destination;
 use crate::model::tunnels::Toward;
 
 struct Closing {
@@ -93,8 +94,8 @@ impl Store {
                 self.toast(format!("{past} the tunnel of port {port} on {label}"), ToastKind::Info, cx);
             }
             Err(e) => {
-                let text =
-                    format!("Could not {} the tunnel of port {port} on {label}: {}", closing.verb(), cli::reason(&e));
+                let why = hide_destination(&cli::reason(&e), label, &closing.destination);
+                let text = format!("Could not {} the tunnel of port {port} on {label}: {why}", closing.verb());
                 self.toast(text, ToastKind::Error, cx);
                 self.restore_ending(&closing.toward, port);
             }

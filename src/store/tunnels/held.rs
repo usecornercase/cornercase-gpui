@@ -96,7 +96,11 @@ pub(crate) fn fate(hold: &Hold, code: Option<i32>, said: &str) -> Fate {
     }
     let line = cli::reason_of(said);
     if hold.was_up {
-        return Fate::Retry(if line.is_empty() { status_words(code) } else { capitalised(&line) });
+        let said = match &hold.toward {
+            Toward::Machine(name) if !line.is_empty() => hide_destination(&line, name, &hold.destination),
+            _ => line,
+        };
+        return Fate::Retry(if said.is_empty() { status_words(code) } else { capitalised(&said) });
     }
     if line.is_empty() {
         return Fate::Failed(window_failure(&hold.toward, hold.port, &status_words(code)));

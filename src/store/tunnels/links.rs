@@ -1,7 +1,7 @@
 use super::held::Hold;
 use crate::model::MachineSeen;
 use crate::model::machines::Machine;
-use crate::model::tunnels::{Gate, Toward, Way};
+use crate::model::tunnels::{Gate, Older, Toward, Way};
 use crate::store::Reach;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,8 +21,10 @@ pub(crate) fn machine_link(
     let Some(listed) = listed else { return if listing_known { Link::Lost } else { Link::Waiting } };
     let (Some(seen), Some(reach)) = (seen, reach) else { return Link::Lost };
     match (reach, gate) {
-        (Reach::Refused(_), _) | (Reach::Up(_), Gate::Older(_)) => Link::Lost,
-        (Reach::Down(_), _) | (Reach::Up(_), Gate::Waiting) => Link::Waiting,
+        (Reach::Refused(_), _) | (Reach::Up(_), Gate::Older(Older::ThisComputer(_) | Older::Server(Some(_)))) => {
+            Link::Lost
+        }
+        (Reach::Down(_), _) | (Reach::Up(_), Gate::Waiting | Gate::Older(Older::Server(None))) => Link::Waiting,
         (Reach::Up(_), Gate::Open) => Link::Up { boot: seen.boot.clone(), destination: listed.destination.clone() },
     }
 }
