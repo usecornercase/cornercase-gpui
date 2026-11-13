@@ -236,6 +236,66 @@ pub(crate) struct Run {
     pub messages: u64,
     pub state: Option<String>,
     pub close_when_merged: bool,
+    pub free_builds: bool,
+    #[serde(rename = "not_run")]
+    pub owed: Vec<usize>,
+    pub stopped: Option<String>,
+}
+
+pub(crate) const STOPPED_AFTER: i64 = 60;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Standing {
+    Closed,
+    Ended,
+    Stopped(i64),
+    Running,
+}
+
+impl Run {
+    pub(crate) fn standing_at(&self, now: i64) -> Standing {
+        if self.closed() {
+            return Standing::Closed;
+        }
+        if self.ended {
+            return Standing::Ended;
+        }
+        let quiet = self.stopped.as_deref().and_then(epoch).map(|then| (now - then).max(0));
+        quiet.filter(|secs| *secs >= STOPPED_AFTER).map_or(Standing::Running, Standing::Stopped)
+    }
+
+    pub(crate) fn standing(&self) -> Standing {
+        self.standing_at(now())
+    }
+
+    pub(crate) fn owes(&self, stage: usize) -> bool {
+        self.owed.contains(&stage)
+    }
+
+    pub(crate) fn not_run_line(&self) -> Option<String> {
+        if self.owed.is_empty() {
+            return None;
+        }
+        let stages = stages_in_words(&self.owed);
+        Some(if self.ended {
+            format!("ended with {stages} not run on the last change")
+        } else {
+            format!("{stages} not run since the last change")
+        })
+    }
+}
+
+pub(crate) fn stopped_line(secs: i64) -> String {
+    format!("stopped moving {} ago: the orchestrator's turn is over and no agent of the team works", age(secs))
+}
+
+pub(crate) fn stages_in_words(stages: &[usize]) -> String {
+    let numbers: Vec<String> = stages.iter().map(|stage| (stage + 1).to_string()).collect();
+    match numbers.split_last() {
+        None => String::new(),
+        Some((only, [])) => format!("stage {only}"),
+        Some((last, rest)) => format!("stage {} and {last}", rest.join(", ")),
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -421,6 +481,7 @@ pub(crate) struct Started {
     pub note: Option<String>,
     pub members: Vec<StartedMember>,
     pub close_when_merged: bool,
+    pub free_builds: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -487,8 +548,11 @@ pub(crate) fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 }
 
 pub(crate) fn ago(time: &str, now: i64) -> String {
-    let Some(then) = epoch(time) else { return String::new() };
-    let secs = (now - then).max(0);
+    epoch(time).map(|then| age(now - then)).unwrap_or_default()
+}
+
+pub(crate) fn age(secs: i64) -> String {
+    let secs = secs.max(0);
     match secs {
         0..=4 => "now".into(),
         5..=59 => format!("{secs}s"),

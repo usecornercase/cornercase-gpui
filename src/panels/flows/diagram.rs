@@ -411,7 +411,11 @@ pub(super) fn stage_ring(stage: usize) -> Div {
 
 fn marker(plan: Plan, at: Spot, stage: usize) -> Div {
     let base = stage_ring(stage).absolute().left(px(at.x - MARK / 2.)).top(px(at.y - MARK / 2.));
-    match plan.progress(stage) {
+    let progress = plan.progress(stage);
+    if plan.run.is_some_and(|run| run.owes(stage)) && progress != Some(Progress::Active) {
+        return base.bg(ground()).border_color(colours::waiting()).text_color(colours::waiting());
+    }
+    match progress {
         Some(Progress::Active) => base
             .bg(glass::cobalt())
             .border_color(tint(colours::brand_light(), 0.9))

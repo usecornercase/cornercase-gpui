@@ -10,7 +10,7 @@ use super::diagram::{Plan, role_colour};
 use super::flow_page::block;
 use super::hero::{facts, hero, stages_bar, task, title};
 use super::merged_view;
-use super::model::{Member, RoleSpec, Run, plural};
+use super::model::{Member, RoleSpec, Run, Standing, plural, stopped_line};
 use super::widgets::{loop_words, panel_box, pill, show_pane};
 use crate::store::{Store, args};
 use crate::theme::colours;
@@ -34,14 +34,16 @@ impl FlowsPanel {
 }
 
 fn run_hero(run: &Run, cx: &Context<FlowsPanel>) -> Div {
-    let (state, colour) = run_status(run);
-    let live = !run.closed() && !run.ended;
+    let standing = run.standing();
+    let (state, colour) = (hero_word(standing), standing_colour(standing));
+    let live = matches!(standing, Standing::Running);
     let heading = title(&run.flow, Some(run), run.flow.name.clone().into(), facts(run_facts(run, cx)));
     hero(&run.flow)
         .child(heading.child(pill(state, colour, live)))
         .child(
             div().relative().flex().items_center().gap(px(12.)).child(stages_bar(run).flex_1()).child(run_summary(run)),
         )
+        .children(run_notes(run, standing).into_iter().map(note))
         .child(run_buttons(run, cx))
         .children(merged_view::run_switch(run, cx))
 }
@@ -64,14 +66,41 @@ fn run_summary(run: &Run) -> Div {
         }))
 }
 
-fn run_status(run: &Run) -> (&'static str, Rgba) {
-    if run.closed() {
-        ("agents closed", colours::faint())
-    } else if run.ended {
-        ("reached its end", colours::accent())
-    } else {
-        ("running", colours::working())
+fn hero_word(standing: Standing) -> &'static str {
+    match standing {
+        Standing::Closed => "agents closed",
+        Standing::Ended => "reached its end",
+        Standing::Stopped(_) => "stopped moving",
+        Standing::Running => "running",
     }
+}
+
+fn standing_colour(standing: Standing) -> Rgba {
+    match standing {
+        Standing::Closed => colours::faint(),
+        Standing::Ended => colours::accent(),
+        Standing::Stopped(_) => colours::waiting(),
+        Standing::Running => colours::working(),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Note {
+    Stopped,
+    Owed,
+}
+
+fn run_notes(run: &Run, standing: Standing) -> Vec<(String, Note)> {
+    let stopped = match standing {
+        Standing::Stopped(secs) => Some((stopped_line(secs), Note::Stopped)),
+        _ => None,
+    };
+    stopped.into_iter().chain(run.not_run_line().map(|line| (line, Note::Owed))).collect()
+}
+
+fn note((text, kind): (String, Note)) -> Div {
+    let colour = if kind == Note::Owed { colours::waiting() } else { colours::muted() };
+    div().relative().text_size(px(12.)).text_color(colour).child(text)
 }
 
 fn run_facts(run: &Run, cx: &App) -> Vec<String> {

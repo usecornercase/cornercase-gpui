@@ -1,0 +1,11 @@
+{
+  "branch": "check-the-free",
+  "close_when_merged": true,
+  "free_builds": true,
+  "members": [
+    { "agent": "claude", "pane": 12, "role": "orchestrator", "tab": 15 }
+  ],
+  "project": 8,
+  "run": 11,
+  "workspace": 10
+}

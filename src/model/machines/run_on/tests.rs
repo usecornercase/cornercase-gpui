@@ -229,7 +229,7 @@ fn an_agent_is_still_starting_when_its_tab_answers() {
 
 #[test]
 fn a_flow_started_there_says_where_to_watch_it() {
-    let done = Starting::Flow { name: "Quick".into(), close_when_merged: false }
+    let done = Starting::Flow { name: "Quick".into(), close_when_merged: false, free_builds: false }
         .done("vps", &answer(fixture!("machines/there_flow.json")));
     assert_eq!(
         done,
@@ -326,16 +326,45 @@ fn a_start_on_a_machine_runs_on_its_servers_release_not_the_one_installed_there(
 #[test]
 fn a_flow_started_there_that_took_the_choice_says_so() {
     let took = answer(r#"{"branch":"probe-flow","workspace":17,"close_when_merged":true}"#);
-    let done = Starting::Flow { name: "Quick".into(), close_when_merged: true }.done("vps", &took);
+    let done = Starting::Flow { name: "Quick".into(), close_when_merged: true, free_builds: false }.done("vps", &took);
     assert!(done.contains("on probe-flow, and its agents close once the pull request merges. Follow it"));
 }
 
 #[test]
 fn a_flow_started_there_that_dropped_the_choice_says_its_agents_stay_open() {
     let dropped = answer(fixture!("machines/there_flow.json"));
-    let asked = Starting::Flow { name: "Quick".into(), close_when_merged: true };
+    let asked = Starting::Flow { name: "Quick".into(), close_when_merged: true, free_builds: false };
     let text = asked.left_open("vps", &dropped).expect("a warning");
     assert!(text.contains("vps") && text.contains("0.13.33"));
-    let not_asked = Starting::Flow { name: "Quick".into(), close_when_merged: false };
+    let not_asked = Starting::Flow { name: "Quick".into(), close_when_merged: false, free_builds: false };
     assert_eq!(not_asked.left_open("vps", &dropped), None);
+}
+
+fn asking(close_when_merged: bool, free_builds: bool) -> Starting {
+    Starting::Flow { name: "Quick".into(), close_when_merged, free_builds }
+}
+
+#[test]
+fn a_flow_started_there_that_frees_its_builds_says_so() {
+    let took = answer(r#"{"branch":"probe-flow","workspace":17,"close_when_merged":true,"free_builds":true}"#);
+    let done = asking(true, true).done("vps", &took);
+    assert!(done.contains(
+        "on probe-flow, and its agents close and their build folders are freed once the pull request merges."
+    ));
+}
+
+#[test]
+fn a_flow_started_there_that_dropped_the_free_says_its_builds_stay() {
+    let kept = answer(r#"{"branch":"probe-flow","workspace":17,"close_when_merged":true}"#);
+    let text = asking(true, true).left_open("vps", &kept).expect("a warning");
+    assert!(text.contains("build folders") && text.contains("vps") && text.contains("0.13.64"));
+    assert_eq!(asking(true, false).left_open("vps", &kept), None);
+    let nothing = answer(fixture!("machines/there_flow.json"));
+    let closing = asking(true, true).left_open("vps", &nothing).expect("a warning");
+    assert!(closing.contains("agents open") && closing.contains("0.13.33"));
+}
+
+#[test]
+fn a_machines_answer_without_the_field_frees_nothing() {
+    assert!(!answer(fixture!("machines/there_flow.json")).free_builds);
 }

@@ -1,0 +1,26 @@
+{
+  "revision": 4,
+  "runs": [
+    {
+      "run": 5,
+      "project": 1,
+      "workspace": 3,
+      "flow": {
+        "name": "Full issue",
+        "end": "pull_request",
+        "stages": [
+          { "roles": ["coder"], "back": null },
+          { "roles": ["reviewer"], "back": { "to": 0, "at_most": 3 } },
+          { "roles": ["tester"], "back": null }
+        ]
+      },
+      "roles": [],
+      "stage": 0,
+      "rounds": [0, 1, 0],
+      "close_when_merged": true,
+      "free_builds": true,
+      "not_run": [1, 2],
+      "stopped": "2026-11-13T10:00:00.000Z"
+    }
+  ]
+}

@@ -2,6 +2,9 @@ use super::*;
 
 const RUNS: &str = crate::test_util::fixture!("flows/runs.json");
 const CLOSED_RUN: &str = r#"{"revision":1,"runs":[{"run":2,"workspace":5,"flow":{"name":"Q","stages":[{"roles":["c"],"back":null}]},"roles":[],"stage":null,"rounds":[0],"state":"closed"}]}"#;
+const OWED: &str = crate::test_util::fixture!("flows/runs-not-run-stopped.json");
+const STARTED: &str = crate::test_util::fixture!("flows/started.json");
+const STARTED_FREE: &str = crate::test_util::fixture!("flows/started-free.json");
 const LIST: &str = crate::test_util::fixture!("flows/list.json");
 
 #[test]
@@ -221,4 +224,95 @@ fn a_start_answer_reads_close_when_merged() {
     assert!(started.close_when_merged);
     let plain: Started = serde_json::from_str(r#"{"run":1,"workspace":2,"branch":"b"}"#).expect("an answer");
     assert!(!plain.close_when_merged);
+}
+
+fn owed_run() -> Run {
+    parse_runs(OWED).expect("runs").runs.remove(0)
+}
+
+fn quiet_for(run: &Run, secs: i64) -> Standing {
+    let at = epoch(run.stopped.as_deref().expect("a stop time")).expect("a time");
+    run.standing_at(at + secs)
+}
+
+#[test]
+fn a_run_reads_the_stages_not_run_when_it_stopped_and_whether_it_frees_its_builds() {
+    let run = owed_run();
+    assert_eq!(run.owed, [1, 2]);
+    assert_eq!(run.stopped.as_deref(), Some("2026-11-13T10:00:00.000Z"));
+    assert!(run.free_builds && run.close_when_merged);
+}
+
+#[test]
+fn an_older_servers_run_has_no_stages_owed_no_stop_and_no_free() {
+    let runs = parse_runs(RUNS).expect("runs");
+    let run = &runs.runs[0];
+    assert_eq!((run.owed.is_empty(), run.stopped.as_deref(), run.free_builds), (true, None, false));
+    assert_eq!((run.not_run_line(), run.standing_at(i64::MAX), run.owes(0)), (None, Standing::Ended, false));
+}
+
+#[test]
+fn stages_read_as_words_counted_from_one() {
+    assert_eq!(stages_in_words(&[2]), "stage 3");
+    assert_eq!(stages_in_words(&[2, 3]), "stage 3 and 4");
+    assert_eq!(stages_in_words(&[1, 2, 3]), "stage 2, 3 and 4");
+    assert_eq!(stages_in_words(&[]), "");
+}
+
+#[test]
+fn a_live_run_lists_the_stages_it_has_not_run_since_the_last_change() {
+    let run = owed_run();
+    assert_eq!(run.not_run_line().as_deref(), Some("stage 2 and 3 not run since the last change"));
+    assert_eq!(Run { owed: vec![], ..run }.not_run_line(), None);
+}
+
+#[test]
+fn an_ended_run_says_which_stages_it_ended_without() {
+    let run = Run { ended: true, owed: vec![2], ..owed_run() };
+    assert_eq!(run.not_run_line().as_deref(), Some("ended with stage 3 not run on the last change"));
+}
+
+#[test]
+fn a_run_reads_as_stopped_once_it_has_not_moved_for_a_minute() {
+    let run = owed_run();
+    assert_eq!(quiet_for(&run, STOPPED_AFTER - 1), Standing::Running);
+    assert_eq!(quiet_for(&run, STOPPED_AFTER), Standing::Stopped(STOPPED_AFTER));
+    assert_eq!(quiet_for(&run, 600), Standing::Stopped(600));
+    assert_eq!(Run { stopped: None, ..run }.standing_at(i64::MAX), Standing::Running);
+}
+
+#[test]
+fn a_closed_or_ended_run_is_never_stopped() {
+    let run = owed_run();
+    let closed = Run { state: Some("closed".into()), ..run.clone() };
+    assert_eq!(quiet_for(&closed, 600), Standing::Closed);
+    assert_eq!(quiet_for(&Run { ended: true, ..run }, 600), Standing::Ended);
+}
+
+#[test]
+fn a_stop_time_that_cannot_be_read_reads_as_moving() {
+    let run = Run { stopped: Some("sometime".into()), ..owed_run() };
+    assert_eq!(run.standing_at(i64::MAX), Standing::Running);
+}
+
+#[test]
+fn a_stop_says_how_long_ago_in_the_windows_ages() {
+    let words = "the orchestrator's turn is over and no agent of the team works";
+    assert_eq!(stopped_line(60), format!("stopped moving 1m ago: {words}"));
+    assert_eq!(stopped_line(7200), format!("stopped moving 2h ago: {words}"));
+    assert_eq!(stopped_line(3 * 86_400), format!("stopped moving 3d ago: {words}"));
+}
+
+#[test]
+fn a_stage_not_run_since_the_last_change_is_owed() {
+    let run = owed_run();
+    assert_eq!([0, 1, 2].map(|stage| run.owes(stage)), [false, true, true]);
+}
+
+#[test]
+fn a_start_answer_reads_free_builds() {
+    let started: Started = serde_json::from_str(STARTED_FREE).expect("started");
+    assert!(started.close_when_merged && started.free_builds);
+    let plain: Started = serde_json::from_str(STARTED).expect("started");
+    assert!(!plain.free_builds);
 }

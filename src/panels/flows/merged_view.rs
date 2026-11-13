@@ -7,7 +7,10 @@ use gpui::{
 
 use super::FlowsPanel;
 use super::actions::toast;
-use super::merged::{LABEL, Switch, doing, how, key, parse_set, switch, switch_args, take};
+use super::merged::{
+    Choice, FREE_HOW, FREE_LABEL, LABEL, Press, Switch, doing, free_key, free_switch, how, key, parse_set, switch,
+    switch_args, take,
+};
 use super::model::Run;
 use crate::cli;
 use crate::model::Session;
@@ -19,9 +22,15 @@ pub(super) fn with_line(the_box: impl IntoElement, line: impl Into<SharedString>
 }
 
 impl FlowsPanel {
-    fn set_close_when_merged(workspace: u64, flow: &str, on: bool, cx: &mut Context<Self>) {
-        let busy = Busy::new(key(workspace), doing(flow, on));
-        store::run_busy(cx, busy, switch_args(workspace, on), |this, result, cx| {
+    fn set_choice(workspace: u64, flow: &str, press: Press, choice: Choice, cx: &mut Context<Self>) {
+        let jobs = &Store::get(cx).read(cx).jobs;
+        if jobs.doing(&key(workspace)).is_some() || jobs.doing(&free_key(workspace)).is_some() {
+            return;
+        }
+        let to = choice.pressed(press);
+        let job = if press == Press::Close { key(workspace) } else { free_key(workspace) };
+        let busy = Busy::new(job, doing(flow, press, to));
+        store::run_busy(cx, busy, switch_args(workspace, to), |this, result, cx| {
             match result.and_then(|out| parse_set(&out)) {
                 Ok(set) => {
                     take(&mut this.runs, &set);
@@ -38,19 +47,52 @@ pub(super) fn run_switch(run: &Run, cx: &Context<FlowsPanel>) -> Option<Div> {
     match switch(run, here) {
         Switch::Hidden => None,
         Switch::Rests(line) => Some(with_line(ui::resting_checkbox(false, LABEL), line)),
-        Switch::Offered(on) => Some(offered_switch(run, on, cx)),
+        Switch::Offered(_) => Some(offered_pair(run, Choice::of(run, here), free_switch(run, here), cx)),
     }
 }
 
-fn offered_switch(run: &Run, on: bool, cx: &Context<FlowsPanel>) -> Div {
+fn offered_pair(run: &Run, choice: Choice, free: Switch, cx: &Context<FlowsPanel>) -> Div {
+    let first = Row { run, press: Press::Close, choice, line: how(None, choice.free) };
+    let pair = div().flex().flex_col().gap(px(8.)).child(row(&first, cx));
+    pair.children(match free {
+        Switch::Hidden => None,
+        Switch::Rests(line) => Some(nested(with_line(ui::resting_checkbox(false, FREE_LABEL), line))),
+        Switch::Offered(_) => Some(nested(row(&Row { press: Press::Free, line: FREE_HOW.into(), ..first }, cx))),
+    })
+}
+
+fn nested(body: Div) -> Div {
+    body.ml(px(ui::TICK_BOX + 8.))
+}
+
+#[derive(Clone)]
+struct Row<'a> {
+    run: &'a Run,
+    press: Press,
+    choice: Choice,
+    line: String,
+}
+
+fn row(row: &Row, cx: &Context<FlowsPanel>) -> Div {
     let store = Store::get(cx).read(cx);
-    let key = key(run.workspace);
-    if let Some(doing) = store.jobs.doing(&key).filter(|_| store.jobs.shown(&key, Instant::now())) {
-        return with_line(ui::busy("run-merged-busy", doing.to_string()), how(None));
+    let (own, other) = match row.press {
+        Press::Close => (key(row.run.workspace), free_key(row.run.workspace)),
+        Press::Free => (free_key(row.run.workspace), key(row.run.workspace)),
+    };
+    let shown = |key: &str| store.jobs.doing(key).filter(|_| store.jobs.shown(key, Instant::now()));
+    let (id, busy_id, label, on) = match row.press {
+        Press::Close => ("run-merged", "run-merged-busy", LABEL, row.choice.close),
+        Press::Free => ("run-free", "run-free-busy", FREE_LABEL, row.choice.free),
+    };
+    if let Some(doing) = shown(&own) {
+        return with_line(ui::busy(busy_id, doing.to_string()), row.line.clone());
     }
-    let (workspace, flow) = (run.workspace, run.flow.name.clone());
-    let the_box = ui::checkbox("run-merged", on, LABEL).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
-        FlowsPanel::set_close_when_merged(workspace, &flow, !on, cx);
+    if shown(&other).is_some() {
+        return with_line(ui::resting_checkbox(on, label), row.line.clone());
+    }
+    let (workspace, flow, press, choice) = (row.run.workspace, row.run.flow.name.clone(), row.press, row.choice);
+    let the_box = ui::checkbox(id, on, label).on_click(cx.listener(move |_, _: &ClickEvent, _, cx| {
+        FlowsPanel::set_choice(workspace, &flow, press, choice, cx);
     }));
-    with_line(the_box, how(None))
+    with_line(the_box, row.line.clone())
 }

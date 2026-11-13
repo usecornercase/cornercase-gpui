@@ -23,3 +23,18 @@ fn a_dragged_list_still_leaves_the_page_its_least_width() {
     let dragged = LIST.restored(Some(600.), 2_000.);
     assert_eq!(columns(1_050., &dragged), Columns::Two { list: 430. });
 }
+
+#[test]
+fn a_rows_state_reads_closed_ended_stopped_moving_or_running() {
+    let words = [Standing::Closed, Standing::Ended, Standing::Stopped(90), Standing::Running].map(row_word);
+    assert_eq!(words, ["closed", "ended", "stopped moving", "running"]);
+}
+
+#[test]
+fn only_an_ended_run_names_in_its_row_the_stages_it_ended_without() {
+    let owed = Run { owed: vec![2], ..Run::default() };
+    assert_eq!(ended_without(&owed), None);
+    let ended = Run { ended: true, ..owed };
+    assert_eq!(ended_without(&ended).as_deref(), Some("ended with stage 3 not run on the last change"));
+    assert_eq!(ended_without(&Run { owed: vec![], ..ended }), None);
+}

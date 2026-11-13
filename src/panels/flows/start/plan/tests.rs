@@ -321,3 +321,25 @@ fn a_start_on_a_machine_sends_the_close_when_merged_flag_too() {
     let plan = plan("Quick", Some(3), None, &typed).expect("plans");
     assert!(plan.args_there(&shop_on_vps()).contains(&"--close-when-merged".to_string()));
 }
+
+#[test]
+fn a_start_that_frees_the_builds_sends_both_flags_in_order() {
+    let typed = Typed { close_when_merged: true, free_builds: true, ..task("Fix it", "", "") };
+    let args = plan("Quick", Some(3), None, &typed).expect("plans").args();
+    let at = |flag: &str| args.iter().position(|a| a == flag).expect("the flag");
+    assert_eq!(at("--free-builds"), at("--close-when-merged") + 1);
+}
+
+#[test]
+fn free_builds_never_goes_without_the_close() {
+    let typed = Typed { free_builds: true, ..task("Fix it", "", "") };
+    let args = plan("Quick", Some(3), None, &typed).expect("plans").args();
+    assert!(!args.iter().any(|a| a == "--free-builds" || a == "--close-when-merged"));
+}
+
+#[test]
+fn a_start_on_a_machine_sends_the_free_builds_flag_too() {
+    let typed = Typed { close_when_merged: true, free_builds: true, ..task("Fix it", "", "") };
+    let plan = plan("Quick", Some(3), None, &typed).expect("plans");
+    assert!(plan.args_there(&shop_on_vps()).contains(&"--free-builds".to_string()));
+}
