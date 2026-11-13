@@ -39,7 +39,7 @@ impl Browser {
             }))
     }
 
-    pub(super) fn close_devices(&mut self, cx: &mut Context<Self>) {
+    fn close_devices(&mut self, cx: &mut Context<Self>) {
         if std::mem::take(&mut self.devices_open) {
             cx.notify();
         }
