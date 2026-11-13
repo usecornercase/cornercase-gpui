@@ -245,6 +245,16 @@ def parse(kind, spec):
     return bind, listen, host, port
 
 
+def report(kind, bind, bound, host, port, asked, level):
+    if kind != "-R":
+        return
+    if asked == 0 and level in ("INFO", "VERBOSE", "DEBUG", "DEBUG1", "DEBUG2", "DEBUG3"):
+        sys.stderr.write("Allocated port %d for remote forward to %s:%d\n" % (bound, host, port))
+    elif asked != 0 and level.startswith("DEBUG"):
+        sys.stderr.write("debug1: remote forward success for: listen %s:%d, connect %s:%d\n" % (bind, bound, host, port))
+    sys.stderr.flush()
+
+
 def listen_on(kind, bind, listen):
     family = socket.AF_INET6 if ":" in bind else socket.AF_INET
     listener = socket.socket(family, socket.SOCK_STREAM)
@@ -268,9 +278,12 @@ def main():
     for found in sys.argv[1].split(","):
         kind, spec = found.split(":", 1)
         wanted.append((kind, parse(kind, spec)))
+    level = sys.argv[2].upper() if len(sys.argv) > 2 else "INFO"
     listeners = []
     for kind, (bind, listen, host, port) in wanted:
-        listeners.append((listen_on(kind, bind, listen), host, port))
+        listener = listen_on(kind, bind, listen)
+        report(kind, bind, listener.getsockname()[1], host, port, listen, level)
+        listeners.append((listener, host, port))
     threads = [threading.Thread(target=serve, args=found, daemon=True) for found in listeners]
     for thread in threads:
         thread.start()
@@ -291,6 +304,7 @@ write_ssh() {
 dir=@F@/ssh
 printf '%s %s\n' "$(date +%H:%M:%S)" "$*" >> "$dir/calls.log"
 config=0
+level=INFO
 net=0
 forwards=
 refuse_flag() {
@@ -310,7 +324,10 @@ while [ $# -gt 0 ]; do
     -L?*) add_forward -L "${1#-L}"; shift ;;
     -R?*) add_forward -R "${1#-R}"; shift ;;
     -f | -D* | -W* | -O*) refuse_flag "$1" ;;
-    -[BbcEeFIiJlmoPpQSw]) [ $# -ge 2 ] || exit 255; shift 2 ;;
+    -o) [ $# -ge 2 ] || exit 255
+      case $2 in [Ll][Oo][Gg][Ll][Ee][Vv][Ee][Ll]=*) level=${2#*=} ;; esac
+      shift 2 ;;
+    -[BbcEeFIiJlmPpQSw]) [ $# -ge 2 ] || exit 255; shift 2 ;;
     -*) shift ;;
     *) break ;;
   esac
@@ -361,7 +378,7 @@ if [ "$net" = 1 ]; then
     printf 'machine-bench ssh: forwarding needs python3\n' >&2
     exit 255
   }
-  exec python3 -I @F@/bin/forward "$forwards"
+  exec python3 -I @F@/bin/forward "$forwards" "$level"
 fi
 if [ -e "$dir/$dest.missing" ]; then
   printf 'sh: 1: cornercase: not found\n' >&2
@@ -581,7 +598,7 @@ summary() {
   printf 'every command      . %s/env   then here … and there …\n' "$folder"
   printf 'the window         . %s/env; cd %s/here/here-proj; "%s/target/debug/cornercase-gpui" > %s/window.log 2>&1 & echo $! > %s/window.pid\n' \
     "$folder" "$folder" "$repo" "$folder" "$folder"
-  printf 'forward a port     the stand-in forwards -N -L and -R to this computer'"'"'s loopback (python3): a port that is taken here lands on another local port\n'
+  printf 'forward a port     the stand-in forwards -N -L and -R to this computer'"'"'s loopback (python3): a port that is taken here lands on another local port, and a -R on port 0 says which port it got, as ssh does\n'
   printf 'cut the link       touch %s/ssh/%s.held; here machines retry %s   (rm it and retry to bring it back; on Linux the open link drops only when its cornercase proxy ends, by pid; .slow holds each ssh N s; each name, %s and %s, has its own files)\n' \
     "$folder" "$dest" "$name" "$dest" "$second"
   printf 'the window there   ⇧⌘K, type %s (target/manual-check text PID %s, then key PID return), or start it with --remote %s; This Mac in that dialog brings it back\n' \

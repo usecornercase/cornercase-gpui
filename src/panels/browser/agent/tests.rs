@@ -137,10 +137,3 @@ fn an_agent_waiting_or_resuming_there_gets_nothing() {
     assert_eq!(unready_pane(Some(&idle)), None);
     assert_eq!(unready_pane::<ThereId>(None).as_deref(), Some("That agent is gone"));
 }
-
-#[test]
-fn the_agents_menu_offers_no_endpoint_to_a_machines_agents() {
-    let [said, needs] = super::super::agent_tools::machine_agents_notes("vps");
-    assert!(said.starts_with("Agents on vps cannot drive this Chrome"));
-    assert_eq!(needs, "needs usecornercase/cornercase-terminal#794");
-}

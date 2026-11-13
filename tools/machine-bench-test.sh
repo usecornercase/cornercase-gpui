@@ -654,6 +654,55 @@ the_stand_in_forwards_a_reverse_forward_too() {
   check "SIGTERM did not end the -R forward" until_gone "$forwarded"
 }
 
+reverse_at_level() {
+  "$sh_cmd" "$b/bin/ssh" -N -T -o BatchMode=yes -o "LogLevel=$1" -R "127.0.0.1:$2:localhost:$3" -- vps.invalid \
+    > "$t/fout" 2> "$t/ferr" &
+  forwarded=$!
+  track "$forwarded"
+}
+
+the_stand_in_says_which_port_a_reverse_forward_on_port_0_got() {
+  far=$(free_port)
+  echo_server "$far"
+  until_answers "$far" || { check "the echo server did not start" false; return 1; }
+  reverse_at_level INFO 0 "$far"
+  n=0
+  while [ "$n" -lt 50 ] && ! grep -q '^Allocated port' "$t/ferr"; do
+    n=$((n + 1))
+    sleep 0.1
+  done
+  got=$(sed -n "s/^Allocated port \([0-9][0-9]*\) for remote forward to localhost:$far\$/\1/p" "$t/ferr")
+  check "ssh's line was not printed: $(cat "$t/ferr")" [ -n "$got" ] || return 1
+  check "nothing answered at the port it said" until_answers "$got"
+  answered=$?
+  kill "$forwarded"
+  until_gone "$forwarded"
+  return "$answered"
+}
+
+the_stand_in_says_a_fixed_reverse_forward_succeeded_at_debug_level() {
+  far=$(free_port)
+  near=$(other_free_port "$far")
+  echo_server "$far"
+  until_answers "$far" || { check "the echo server did not start" false; return 1; }
+  reverse_at_level DEBUG1 "$near" "$far"
+  until_answers "$near" || { check "nothing answered: $(cat "$t/ferr")" false; return 1; }
+  kill "$forwarded"
+  until_gone "$forwarded"
+  check "the debug1 line was not printed: $(cat "$t/ferr")" grep -q -F "debug1: remote forward success for: listen 127.0.0.1:$near, connect localhost:$far" "$t/ferr"
+}
+
+a_quiet_reverse_forward_says_nothing() {
+  far=$(free_port)
+  echo_server "$far"
+  until_answers "$far" || { check "the echo server did not start" false; return 1; }
+  reverse_at_level ERROR 0 "$far"
+  sleep 1
+  kill "$forwarded"
+  until_gone "$forwarded"
+  check "a quiet forward printed: $(cat "$t/ferr")" [ ! -s "$t/ferr" ]
+}
+
 the_stand_in_keeps_the_answer_after_a_client_half_closes() {
   far=$(free_port)
   near=$(other_free_port "$far")
@@ -961,6 +1010,9 @@ run_test the_stand_in_answers_127_while_missing
 run_test the_stand_in_refuses_other_hosts_masters_and_shells
 run_test the_stand_in_forwards_a_port_to_there
 run_test the_stand_in_forwards_a_reverse_forward_too
+run_test the_stand_in_says_which_port_a_reverse_forward_on_port_0_got
+run_test the_stand_in_says_a_fixed_reverse_forward_succeeded_at_debug_level
+run_test a_quiet_reverse_forward_says_nothing
 run_test the_stand_in_keeps_the_answer_after_a_client_half_closes
 run_test the_stand_in_says_a_taken_port_as_ssh_does
 run_test the_stand_in_refuses_a_forward_while_held

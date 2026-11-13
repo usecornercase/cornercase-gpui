@@ -22,7 +22,7 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use locate::{Inputs, Probe as _, System};
 use parking_lot::Mutex;
 
-pub(crate) use holds::{Ended, end_hold, end_holds, hold};
+pub(crate) use holds::{Ended, Holding, end_hold, end_holds, hold};
 pub(crate) use locate::parse_version;
 pub(crate) use locate::{Binary, INSTALL_GUIDE, MINIMUM, Missing, Origin, Problem, Version};
 #[cfg(test)]

@@ -11,7 +11,7 @@ use crate::panels::PanelKind;
 use crate::platform::Os;
 use crate::store::ToastKind;
 use crate::store::remote_url;
-use crate::store::{Asked, Store};
+use crate::store::{Asked, Store, address_there, copied_words};
 use crate::store::{TunnelRow, Whose, heading, none_note, others_note};
 
 fn closing(toward: &Toward, port: u16) -> Vec<Entry> {
@@ -71,7 +71,25 @@ fn try_again(toward: &Toward, port: u16) -> Entry {
     })
 }
 
-fn actions(row: &TunnelRow, shown: Option<Owner>) -> Vec<Entry> {
+fn reverse_actions(toward: &Toward, there: Option<u16>, name: &str) -> Vec<Entry> {
+    let close = toward.clone();
+    let mut entries = Vec::new();
+    if let Some(there) = there {
+        let (address, label, copied) =
+            (address_there(there), format!("Copy its address on {name}"), copied_words(name));
+        entries.push(context_menu::note(format!("Every user and program on {name} can drive it")));
+        entries.push(context_menu::item(label, move |this, _, cx| {
+            cx.write_to_clipboard(ClipboardItem::new_string(address.clone()));
+            this.store.update(cx, |s, cx| s.toast(copied.clone(), ToastKind::Info, cx));
+        }));
+    }
+    entries.push(context_menu::item("Close", move |this, _, cx| {
+        this.store.update(cx, |s, cx| s.close_reverse(&close, cx));
+    }));
+    entries
+}
+
+fn actions(row: &TunnelRow, shown: Option<Owner>, name: &str) -> Vec<Entry> {
     let (port, toward) = (row.port, &row.toward);
     match &row.whose {
         Whose::Up { local } => {
@@ -92,6 +110,7 @@ fn actions(row: &TunnelRow, shown: Option<Owner>) -> Vec<Entry> {
             entries.extend(closing(toward, port));
             entries
         }
+        Whose::Reverse { there } => reverse_actions(toward, *there, name),
         Whose::Window | Whose::Program | Whose::ClosedElsewhere => closing(toward, port),
     }
 }
@@ -101,7 +120,7 @@ fn server_entries(host: &str, tunnels: &[TunnelRow], notes: Vec<String>) -> Vec<
     if tunnels.is_empty() {
         entries.push(context_menu::note(none_note(keys_of(Command::Panel(PanelKind::Ports), Os::CURRENT).as_deref())));
     }
-    entries.extend(tunnels.iter().map(|row| context_menu::submenu(row.text(), actions(row, None))));
+    entries.extend(tunnels.iter().map(|row| context_menu::submenu(row.text(), actions(row, None, host))));
     entries.extend(notes.into_iter().map(context_menu::note));
     entries
 }
@@ -111,7 +130,7 @@ fn machine_entries(sections: &[(String, Vec<TunnelRow>)], store: &Store) -> Vec<
     for (name, rows) in sections {
         entries.push(Entry::Heading(heading(name).into()));
         let shown = store.owner_on(name);
-        entries.extend(rows.iter().map(|row| context_menu::submenu(row.text(), actions(row, shown.clone()))));
+        entries.extend(rows.iter().map(|row| context_menu::submenu(row.text(), actions(row, shown.clone(), name))));
     }
     let names: Vec<String> = sections.iter().map(|(name, _)| name.clone()).collect();
     let towards: Vec<Toward> = names.iter().cloned().map(Toward::Machine).collect();

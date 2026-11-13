@@ -13,17 +13,35 @@ pub(crate) struct Ended {
     pub(crate) said: String,
 }
 
-fn args(port: u16) -> [String; 3] {
-    ["tunnel".to_string(), "hold".to_string(), port.to_string()]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Holding {
+    Forward { port: u16, local: Option<u16> },
+    Reverse { local: u16 },
+}
+
+impl Holding {
+    fn args(self) -> Vec<String> {
+        let mut all = vec!["tunnel".to_string(), "hold".to_string()];
+        match self {
+            Self::Forward { port, local } => {
+                all.push(port.to_string());
+                if let Some(local) = local {
+                    all.extend(["--local".to_string(), local.to_string()]);
+                }
+            }
+            Self::Reverse { local } => all.extend(["--reverse".to_string(), local.to_string()]),
+        }
+        all
+    }
 }
 
 pub(crate) fn hold(
     target: &Target,
-    port: u16,
+    holding: Holding,
     on_line: impl FnMut(String) + Send + 'static,
     on_end: impl FnOnce(Ended) + Send + 'static,
 ) -> Result<(u64, Option<String>)> {
-    hold_with(target.command(&args(port)), on_line, on_end)
+    hold_with(target.command(&holding.args()), on_line, on_end)
 }
 
 fn hold_with(

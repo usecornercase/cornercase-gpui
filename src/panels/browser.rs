@@ -214,11 +214,14 @@ impl Browser {
             cx.notify();
         }
         self.dev_changed(store, cx);
+        Self::keep_own_reverse(store, cx);
+        self.agents_menu_changed(cx);
         self.held_changed(cx);
         self.repoint_tabs(store, cx);
     }
 
     fn ended(&mut self, why: String, cx: &mut Context<Self>) {
+        Store::get(cx).update(cx, Store::chrome_stopped);
         let tabs = std::mem::take(&mut self.tabs);
         self.restore = tabs.list.iter().map(Restore::of).collect();
         self.stale.borrow_mut().extend(tabs.list.into_iter().filter_map(|t| t.shot.map(|s| s.image)));

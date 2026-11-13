@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.85
+
+- **A tunnel comes back on the local port it had.** With cornercase 0.13.61 or newer on this computer, a tunnel the window brings back keeps its local port, so a tab, a bookmark or a login on `localhost:61011` keeps working. This covers the link dropping, the machine's server restarting and the window starting again; the window now remembers each tunnel's local port beside its port. When that port was taken meanwhile, the tunnel lands on another and a note says where; tabs in the Browser follow it. With an older cornercase nothing changes.
+- **A machine's agents can drive this browser.** With cornercase 0.13.61 or newer on this computer and on the machine, the Browser's agents menu has **Open this Chrome to vps…**. It asks first and says plainly that every user and program on the machine could then drive the browser. It then shows the address on the machine and **Tell claude on vps about it**. The status bar counts it, and it closes from there, from the menu, when the machine's link ends, when Chrome stops or when the window quits. It never opens by itself and is not remembered. A window connected to another server does the same through cornercase instead of its own ssh. With an older cornercase on either side, the menu says which side to update.
+- **Another program's reverse tunnel no longer shows as one of the window's tunnels.** It was listed in the status bar's menu as a tunnel of the window, with a Close that said "Closed" without closing anything, and Ports marked its port `⇄ elsewhere`. Reverse tunnels the window did not open are now left out.
+
 ## 0.1.84
 
 - **Escape no longer closes a docked panel.** In Changes, Files, TODO, Recap, the Browser and Flow, each press closes one thing the panel has open (a menu, the picked element's card, Files' find field, a selection, a file read full screen); once nothing is left, it gives the keys back to the terminal and the panel stays open. Its key, ⌘W while it has the focus, or its ✕ close it.

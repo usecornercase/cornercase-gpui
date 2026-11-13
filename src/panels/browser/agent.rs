@@ -11,9 +11,11 @@ use super::picker::Pick;
 use super::watch::Watch;
 use crate::cli;
 use crate::model::machines::seen::sighted;
+use crate::model::tunnels::Gate;
 use crate::model::{MachineSeen, Owner, PaneInfo, PaneThere, Session, Tab, ThereId, ThereWorkspace};
 use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::ui::TextField;
+use far::{Drive, drive};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Menu {
@@ -180,11 +182,27 @@ impl Browser {
         }
     }
 
-    pub(super) fn agent_endpoint(&self) -> Option<String> {
-        let port = self.port()?;
-        match cli::host() {
-            None => Some(endpoint(port)),
-            Some(host) => self.dev.tunnels.reverse(&host, port).map(endpoint),
+    pub(super) fn agents_menu_changed(&self, cx: &mut Context<Self>) {
+        if self.agents.menu == Some(Menu::Agents) {
+            cx.notify();
+        }
+    }
+
+    pub(super) fn drive(&self, cx: &App) -> Drive {
+        let host = cli::host();
+        let store = Store::get(cx).read(cx);
+        let toward = self.place.toward(host.as_deref());
+        let Some(toward) = toward.as_ref() else { return drive(None, Gate::Open, None, None) };
+        let held = store.reverse_hold(toward).map(|hold| hold.state);
+        drive(Some(toward), store.reverse_gate_of(toward), held, store.reverse_refusal(toward))
+    }
+
+    pub(super) fn agent_endpoint(&self, drive: &Drive) -> Option<String> {
+        match drive {
+            Drive::Here => self.port().map(endpoint),
+            Drive::Own => self.dev.tunnels.reverse(&cli::host()?, self.port()?).map(endpoint),
+            Drive::Open(there) => Some(store::address_there(*there)),
+            Drive::Needs(_) | Drive::Closed | Drive::Opening => None,
         }
     }
 
@@ -335,6 +353,7 @@ impl Browser {
     }
 }
 
+pub(super) mod far;
 mod there;
 
 #[cfg(test)]
