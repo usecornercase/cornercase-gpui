@@ -12,6 +12,7 @@ use super::agent::{Agent, Menu, toast};
 use super::agent_tools::reloaded;
 use super::picker::{Crop, Pick, Picked};
 use crate::dialogs;
+use crate::escape::{self, Top};
 use crate::store::ToastKind;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone, glass};
@@ -40,10 +41,13 @@ impl Browser {
         let ask = cx.new(|cx| TextField::new("What should change?", cx).wraps());
         cx.subscribe_in(&ask, window, |this, _, event, window, cx| match event {
             TextFieldEvent::Submit => this.send_pick(cx),
-            TextFieldEvent::Cancel => {
-                this.cancel_pick(cx);
-                window.focus(&this.focus);
-            }
+            TextFieldEvent::Cancel => match escape::first(&this.tops()) {
+                Some(Top::Pick) | None => {
+                    this.cancel_pick(cx);
+                    window.focus(&this.focus);
+                }
+                Some(top) => this.close_top(top, cx),
+            },
             TextFieldEvent::Changed => {}
         })
         .detach();
@@ -82,6 +86,7 @@ impl Browser {
         let said = format!("Handed to {}", Self::agent_name_on(&agent, cx));
         if Self::hand(&agent, Hand { text, files: crop, submit }, said, cx) {
             self.agents.pick = None;
+            self.drop_chooser();
             cx.notify();
         }
     }

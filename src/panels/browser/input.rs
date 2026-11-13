@@ -5,11 +5,14 @@ use gpui::{App, Bounds, ClipboardItem, Context, Focusable as _, Pixels, Window};
 use serde_json::{Value, json};
 
 use super::Browser;
+use super::agent::{Agents, Menu};
 use super::cdp::Event;
+use super::picker::Pick;
 use super::pointer::Pointer;
 use super::select::Choice;
 use super::typing::Typing;
 use super::viewport::Rect;
+use crate::escape::{self, Top};
 use crate::keymap::Command;
 
 #[derive(Default)]
@@ -49,6 +52,12 @@ pub(crate) fn keys_go(at: KeysAt, page_shown: bool, waiting: Waiting) -> (KeysGo
         (KeysAt::Address, Waiting::Same) => (KeysGo::Stay, true),
         _ => (KeysGo::Stay, false),
     }
+}
+
+pub(crate) fn escape_tops(choice: bool, agents: &Agents, devices: bool) -> Vec<Top> {
+    let card = matches!(agents.pick, Some(Pick::Picked(_)));
+    let menu = agents.menu.is_some_and(|menu| menu != Menu::Chooser || card);
+    escape::tops_of(&[(Top::Choice, choice), (Top::Menu, menu || devices), (Top::Pick, agents.pick.is_some())])
 }
 
 pub(crate) fn selection_script(cut: bool) -> Value {
@@ -105,11 +114,27 @@ impl Browser {
         }
     }
 
-    pub(crate) fn escape(&mut self, cx: &mut Context<Self>) {
-        if self.input.choice.is_some() {
-            self.close_choice(cx);
-        } else {
-            self.press_escape();
+    pub(crate) fn escape(&mut self) {
+        self.press_escape();
+    }
+
+    pub(crate) fn tops(&self) -> Vec<Top> {
+        escape_tops(self.input.choice.is_some(), &self.agents, self.devices_open)
+    }
+
+    pub(crate) fn close_top(&mut self, top: Top, cx: &mut Context<Self>) {
+        match top {
+            Top::Choice => self.close_choice(cx),
+            Top::Menu => {
+                if self.agents.menu.take().is_none() {
+                    self.close_devices(cx);
+                }
+                cx.notify();
+            }
+            Top::Pick => {
+                self.cancel_pick(cx);
+            }
+            Top::Find | Top::Selection => {}
         }
     }
 

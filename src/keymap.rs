@@ -190,7 +190,7 @@ const WINDOWS_SYSTEM_KEYS: &[(&str, &str)] =
     &[("Ctrl+Shift+M", "Minimise the window"), ("F11", "Full screen"), ("Alt+F4", "Quit")];
 
 const MAC_OTHER_KEYS: &[(&str, &str)] = &[
-    ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
+    ("Esc", "One press closes the top thing, then the shell; panels stay, pages get it"),
     ("Tab", "Next field of a dialog, ⇧Tab back"),
     ("↑ ↓ ↩", "Choose in a menu"),
     ("⇧← ⇧→ ⇧↑ ⇧↓", "Select in Files or Changes"),
@@ -200,7 +200,7 @@ const MAC_OTHER_KEYS: &[(&str, &str)] = &[
 ];
 
 const LINUX_OTHER_KEYS: &[(&str, &str)] = &[
-    ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
+    ("Esc", "One press closes the top thing, then the shell; panels stay, pages get it"),
     ("Tab", "Next field of a dialog, Shift+Tab back"),
     ("↑ ↓ Enter", "Choose in a menu"),
     ("Shift+arrows", "Select in Files or Changes"),
@@ -212,7 +212,7 @@ const LINUX_OTHER_KEYS: &[(&str, &str)] = &[
 ];
 
 const WINDOWS_OTHER_KEYS: &[(&str, &str)] = &[
-    ("Esc", "Close what is on top, or back to the shell; a page in the browser gets it"),
+    ("Esc", "One press closes the top thing, then the shell; panels stay, pages get it"),
     ("Tab", "Next field of a dialog, Shift+Tab back"),
     ("↑ ↓ Enter", "Choose in a menu"),
     ("Shift+arrows", "Select in Files or Changes"),

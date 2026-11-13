@@ -8,6 +8,7 @@ use gpui::{
     Styled as _, Subscription, Window, div, prelude::FluentBuilder as _, px,
 };
 
+use crate::escape::{self, Top};
 use crate::panels::queue::toast_outcome;
 use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::{colours, radius};
@@ -89,6 +90,17 @@ impl TodoPanel {
             }),
         ];
         Self { new_item, editing: None, sending: None, undo: None, _subscriptions: subscriptions }
+    }
+
+    pub(crate) fn tops(&self) -> Vec<Top> {
+        escape::tops_of(&[(Top::Menu, self.sending.is_some())])
+    }
+
+    pub(crate) fn close_top(&mut self, top: Top, cx: &mut Context<Self>) {
+        if top == Top::Menu {
+            self.sending = None;
+            cx.notify();
+        }
     }
 
     fn add(&mut self, cx: &mut Context<Self>) {

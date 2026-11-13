@@ -12,6 +12,7 @@ use gpui::{
 use grep_matcher::Matcher as _;
 use grep_regex::RegexMatcher;
 
+use crate::escape::{self, Top};
 use crate::theme::{colours, radius};
 use crate::ui::selection::{Fit, Styles, overlay};
 use crate::ui::{self, TextField, TextFieldEvent};
@@ -341,21 +342,31 @@ impl FilesPanel {
         cx.stop_propagation();
     }
 
-    pub(crate) fn escape(&mut self, cx: &mut Context<Self>) -> bool {
-        if self.menu.take().is_some() {
-            cx.notify();
-            return true;
+    pub(crate) fn tops(&self) -> Vec<Top> {
+        let viewer = self.place().and_then(|place| place.viewer.as_ref());
+        escape::tops_of(&[
+            (Top::Menu, self.menu.is_some()),
+            (Top::Find, viewer.is_some_and(|viewer| viewer.find.is_some())),
+            (Top::Selection, viewer.is_some_and(|viewer| viewer.selecting.shows())),
+        ])
+    }
+
+    pub(crate) fn close_top(&mut self, top: Top, cx: &mut Context<Self>) {
+        match top {
+            Top::Menu => self.menu = None,
+            Top::Find => {
+                if self.viewer_mut().and_then(|viewer| viewer.find.take()).is_some() {
+                    self.remeasure_first_line();
+                }
+            }
+            Top::Selection => {
+                if let Some(viewer) = self.viewer_mut() {
+                    viewer.selecting.clear();
+                }
+            }
+            Top::Choice | Top::Pick => return,
         }
-        let Some(viewer) = self.viewer_mut() else { return false };
-        let field_closed = viewer.find.take().is_some();
-        let gone = field_closed || viewer.selecting.clear();
-        if field_closed {
-            self.remeasure_first_line();
-        }
-        if gone {
-            cx.notify();
-        }
-        gone
+        cx.notify();
     }
 
     fn find_count(find: &Find, blank: bool) -> impl IntoElement + use<> {

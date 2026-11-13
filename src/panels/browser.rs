@@ -144,7 +144,7 @@ impl Browser {
         })
         .detach();
         let watching = cx.observe(&Store::get(cx), |this, store, cx| this.store_changed(&store, cx));
-        let address = cx.new(|cx| TextField::new("Address, a port such as 5173, or a search", cx));
+        let address = cx.new(|cx| TextField::new("Address, a port such as 5173, or a search", cx).reverts_on_escape());
         Self::watch_address(&address, window, cx);
         engine::start(tx.clone());
         let mut browser = Self::fresh(cx.focus_handle(), tx, (address, watching), DevServers::new(cx));
@@ -259,8 +259,15 @@ impl Browser {
         let focused = self.address.read(cx).focus_handle(cx).is_focused(window);
         if url != self.address_url && !focused {
             self.address_url.clone_from(&url);
-            self.address.update(cx, |field, cx| field.set_text(shown_address(&url), cx));
+            self.put_address(&url, cx);
         }
+    }
+
+    fn put_address(&self, url: &str, cx: &mut App) {
+        self.address.update(cx, |field, cx| {
+            field.keep_saved(shown_address(url), cx);
+            field.revert(cx);
+        });
     }
 
     fn body(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {

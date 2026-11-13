@@ -78,3 +78,11 @@ fn clearing_a_selection_of_nothing_is_no_step() {
     assert!(!selecting.clear());
     assert_eq!(selecting.selection, None);
 }
+
+#[test]
+fn a_selection_back_on_its_anchor_shows_nothing() {
+    assert!(!Selecting::<usize>::default().shows());
+    assert!(!Selecting::new(Some(chars((1, 2), (1, 2)))).shows());
+    assert!(Selecting::new(Some(chars((1, 2), (1, 4)))).shows());
+    assert!(Selecting::<usize>::new(Some(Selection::line(1))).shows());
+}

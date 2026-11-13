@@ -106,6 +106,7 @@ impl Browser {
 
     pub(crate) fn cancel_pick(&mut self, cx: &mut Context<Self>) -> bool {
         let Some(pick) = self.agents.pick.take() else { return false };
+        self.drop_chooser();
         if let Some(session) = pick.inspecting() {
             self.end_inspect(session);
         }

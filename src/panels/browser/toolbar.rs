@@ -7,7 +7,7 @@ use gpui::{
 };
 use serde_json::json;
 
-use super::{Browser, Status, shown_address};
+use super::{Browser, Status};
 use crate::notify::tip;
 use crate::store::Store;
 use crate::theme::colours;
@@ -143,7 +143,7 @@ impl Browser {
         }
         self.open_tab("about:blank", self.place.clone(), None, cx);
         self.address_url = "about:blank".to_string();
-        self.address.update(cx, TextField::clear);
+        self.put_address("", cx);
         window.focus(&self.address.read(cx).focus_handle(cx));
         cx.notify();
     }
@@ -164,7 +164,7 @@ impl Browser {
             }
             TextFieldEvent::Cancel => {
                 let url = self.active_url().unwrap_or_default();
-                field.update(cx, |field, cx| field.set_text(shown_address(&url), cx));
+                self.put_address(&url, cx);
                 self.select_address(window, cx);
             }
             TextFieldEvent::Changed => {}

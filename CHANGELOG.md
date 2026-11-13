@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.84
+
+- **Escape no longer closes a docked panel.** In Changes, Files, TODO, Recap, the Browser and Flow, each press closes one thing the panel has open (a menu, the picked element's card, Files' find field, a selection, a file read full screen); once nothing is left, it gives the keys back to the terminal and the panel stays open. Its key, ⌘W while it has the focus, or its ✕ close it.
+- **The Browser's menus close on their own with Escape.** The agents, screenshot and device menus closed the whole panel, and the agent chooser closed the picked element's card with it; each now closes alone. So does a TODO's send menu.
+- **Escape in a pane reaches the program while the Browser picks an element.** It used to cancel the pick instead, even with the Browser out of sight.
+- **Escape in the Browser's address goes on.** It puts back the page's address when you changed it, and otherwise gives the keys back, where it used to keep them.
+- **The keys no longer get lost when a panel's field closes.** After Escape or Return in a TODO's edit field, or sending a picked element to an agent, keys and shortcuts did nothing until a click; the panel now keeps them.
+
 ## 0.1.83
 
 - **A linked machine's workspace says it waits for the machines list, instead of "no longer listed".** For a moment after the window starts, Changes, Files, Ports, the Browser and the machine's tab said the machine was "no longer listed". They now say they wait for the machines list, ask nothing, and read by themselves as soon as it arrives. Typing an address or opening a tab in the Browser is still refused until then, now saying why.
