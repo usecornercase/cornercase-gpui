@@ -12,6 +12,7 @@ pub(crate) mod one_line;
 pub(crate) mod orbits;
 pub(crate) mod qr;
 pub(crate) mod selection;
+pub(crate) mod separated;
 pub(crate) mod signs;
 pub(crate) mod slider;
 pub(crate) mod split;
@@ -26,6 +27,7 @@ use gpui::{
 
 pub(crate) use icons::{Icon, icon};
 pub(crate) use one_line::{OneLine, one_line};
+pub(crate) use separated::{Separator, separated};
 pub(crate) use signs::{
     ROW_ACTION, accent_chip, callout, copy_button, done_line, dot, error_line, field_action, quiet_chip,
     resting_action, row_action, tinted_chip, warning_line,

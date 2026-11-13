@@ -72,3 +72,11 @@ fn with_the_model_off_the_context_still_shows() {
     let off = Look { model: false, ..Look::default() };
     assert_eq!(tab_detail(&tab, None, &off).as_deref(), Some("23%"));
 }
+
+#[test]
+fn tabs_move_to_the_row_while_the_sidebar_is_aside() {
+    assert!(tabs_in_row(false, false));
+    assert!(tabs_in_row(false, true));
+    assert!(tabs_in_row(true, true));
+    assert!(!tabs_in_row(true, false));
+}

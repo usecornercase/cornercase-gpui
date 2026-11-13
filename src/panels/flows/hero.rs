@@ -1,6 +1,6 @@
 use gpui::{
-    Div, FontWeight, IntoElement, ParentElement as _, Rgba, SharedString, Styled as _, div, linear_color_stop,
-    linear_gradient, prelude::FluentBuilder as _, px,
+    AnyElement, Div, FontWeight, IntoElement, ParentElement as _, Rgba, SharedString, Styled as _, div,
+    linear_color_stop, linear_gradient, px,
 };
 
 use super::cards::{avatar, ground};
@@ -9,7 +9,7 @@ use super::graph::float;
 use super::model::{FlowSpec, Progress, Run};
 use super::widgets::{eyebrow, glyph, panel_box};
 use crate::theme::{colours, radius};
-use crate::ui::{self, Icon, glass, glass::tint};
+use crate::ui::{self, Icon, Separator, glass, glass::tint};
 
 const GLYPH: f32 = 50.;
 const FACE: f32 = 26.;
@@ -65,13 +65,19 @@ pub(super) fn title(flow: &FlowSpec, run: Option<&Run>, name: SharedString, fact
 }
 
 pub(super) fn facts(parts: Vec<String>) -> Div {
-    let dot = || div().text_color(colours::faint()).child("·");
-    let mut line = div().flex().flex_wrap().items_center().gap(px(6.)).text_size(px(12.)).text_color(colours::muted());
-    for (i, part) in parts.into_iter().enumerate() {
-        let fact = div().flex().min_w_0().items_center().gap(px(6.)).when(i > 0, |d| d.child(dot()));
-        line = line.child(fact.child(ui::one_line(part)));
-    }
-    line
+    facts_and(parts, Vec::new())
+}
+
+pub(super) fn facts_and(parts: Vec<String>, extra: Vec<AnyElement>) -> Div {
+    let separators = fact_separators(parts.len(), extra.len());
+    let elements = parts.into_iter().map(|part| ui::one_line(part).into_any_element()).chain(extra);
+    let pieces = separators.into_iter().zip(elements).collect();
+    ui::separated(6., pieces).text_size(px(12.)).text_color(colours::muted())
+}
+
+fn fact_separators(facts: usize, extra: usize) -> Vec<Option<Separator>> {
+    let dots = (0..facts).map(|i| (i > 0).then_some(Separator::Dot));
+    dots.chain(std::iter::repeat_n(None, extra)).collect()
 }
 
 pub(super) fn team(flow: &FlowSpec) -> Div {
@@ -140,3 +146,6 @@ pub(super) fn task(text: &str) -> impl IntoElement + use<> {
                 .child(ui::clamped(8, 19.).text_size(px(13.)).child(text.to_string())),
         )
 }
+
+#[cfg(test)]
+mod tests;

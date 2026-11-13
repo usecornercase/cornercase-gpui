@@ -181,9 +181,19 @@ fn machine_tab(
         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_on_machine(place.clone(), cx)))
 }
 
+fn tabs_in_row(tabs_in_sidebar: bool, sidebar_aside: bool) -> bool {
+    !tabs_in_sidebar || sidebar_aside
+}
+
 impl Root {
-    pub(crate) fn render_tabs(&self, window_frame: Frame, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(crate) fn render_tabs(
+        &self,
+        window_frame: Frame,
+        lead: f32,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let row = div()
+            .pl(px(lead))
             .h(px(TITLEBAR_HEIGHT))
             .flex_none()
             .flex()
@@ -209,7 +219,7 @@ impl Root {
     pub(crate) fn tabs_part(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Drawn {
         self.parts.tab_spots.clear();
         let group = frame::claimed(self.tab_group(cx), Frame::read(window, Os::CURRENT), &self.focus);
-        let watched = !self.side.look.current.tabs_in_sidebar;
+        let watched = tabs_in_row(self.side.look.current.tabs_in_sidebar, self.side.aside);
         let root = div().size_full().flex().items_center().child(group);
         let root = root.when(watched, |d| d.child(strip::watcher(&self.side.strip, self.parts.tabs.entity_id())));
         Drawn { element: root.into_any_element(), counted: false }
@@ -217,7 +227,7 @@ impl Root {
 
     fn tab_group(&self, cx: &mut Context<Self>) -> Div {
         let group = div().flex().items_center().min_w_0().gap(px(STRIP_GAP)).overflow_hidden();
-        if self.side.look.current.tabs_in_sidebar {
+        if !tabs_in_row(self.side.look.current.tabs_in_sidebar, self.side.aside) {
             return group;
         }
         group.child(self.scrolled_tabs(cx)).when(self.machine.is_none(), |d| d.child(new_tab_button(cx)))

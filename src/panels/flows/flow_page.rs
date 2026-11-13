@@ -10,7 +10,7 @@ use super::FlowsPanel;
 use super::actions::{Question, ask_on_click, flow_buttons};
 use super::cards::{avatar, conductor};
 use super::diagram::{OnRole, Plan, role_colour};
-use super::hero::{description, facts, hero, team, title};
+use super::hero::{description, facts_and, hero, team, title};
 use super::model::{FlowInfo, FlowSpec, RoleSpec};
 use super::widgets::{agents_label, alert, chip, file_name, heading, open_path, panel_box, typed_chip};
 use crate::store::args;
@@ -136,9 +136,10 @@ fn flow_hero(flow: &FlowInfo, hidden: bool, cx: &Context<FlowsPanel>) -> Div {
 
 fn flow_title(flow: &FlowInfo, hidden: bool) -> Div {
     let spec = &flow.flow;
-    let line = facts(vec![agents_label(flow), spec.outline(), format!("then {}", spec.end_label())])
-        .children(flow.tags().into_iter().map(tag_chip))
-        .when(hidden, |d| d.child(chip(Some(Icon::Trash), "deleted", colours::failed())));
+    let tags = flow.tags().into_iter().map(|tag| tag_chip(tag).into_any_element());
+    let deleted = hidden.then(|| chip(Some(Icon::Trash), "deleted", colours::failed()).into_any_element());
+    let extra = tags.chain(deleted).collect();
+    let line = facts_and(vec![agents_label(flow), spec.outline(), format!("then {}", spec.end_label())], extra);
     title(spec, None, flow.name.clone().into(), line).child(team(spec))
 }
 

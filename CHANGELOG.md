@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.86
+
+- **A docked panel stays inside a narrow window.** When the window is too narrow for the sidebar, the terminal and an open panel side by side, the panel takes the sidebar's place until you close it or widen the window, and the terminal keeps room beside it. Before, the Browser and Flow panels ran past the window's right edge with their ✕ out of sight, and the other panels left the terminal no room. The widths you dragged come back when the window is wide enough again.
+- **A flow's page keeps its dots and its divider inside each line.** When the facts under a flow's or a run's name wrap, in the Flows sheet or the Flow panel, no line starts with a lone dot, and when a flow's buttons wrap, the divider before the icon buttons no longer hangs at the end of the first line.
+
 ## 0.1.85
 
 - **A tunnel comes back on the local port it had.** With cornercase 0.13.61 or newer on this computer, a tunnel the window brings back keeps its local port, so a tab, a bookmark or a login on `localhost:61011` keeps working. This covers the link dropping, the machine's server restarting and the window starting again; the window now remembers each tunnel's local port beside its port. When that port was taken meanwhile, the tunnel lands on another and a note says where; tabs in the Browser follow it. With an older cornercase nothing changes.

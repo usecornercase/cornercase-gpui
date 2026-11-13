@@ -140,6 +140,7 @@ pub(crate) struct SideState {
     pub hovered: Option<SharedString>,
     pub strip: crate::tabs::TabStrip,
     pub machine_place: Option<MachinePlace>,
+    pub aside: bool,
 }
 
 impl Root {
@@ -199,6 +200,31 @@ fn mark_lead(os: Os) -> (f32, f32) {
             (-rail, (rail - ui::brand::mark_size(MARK)) / 2.)
         }
     }
+}
+
+pub(crate) fn tabs_lead(os: Os) -> f32 {
+    match os {
+        Os::Mac => mark_lead(Os::Mac).1,
+        Os::Linux | Os::Windows => 0.,
+    }
+}
+
+pub(crate) fn corner(os: Os, window_frame: Frame) -> Option<Div> {
+    if os == Os::Mac {
+        return None;
+    }
+    let (pull, lead) = mark_lead(os);
+    let strip = div()
+        .absolute()
+        .top_0()
+        .left(px(pull))
+        .w(px(rail::COLUMN))
+        .h(px(TITLEBAR_HEIGHT))
+        .flex()
+        .items_center()
+        .pl(px(lead))
+        .child(ui::brand::mark(MARK, false));
+    Some(frame::title_row(strip, window_frame))
 }
 
 fn title_strip(os: Os) -> Div {
