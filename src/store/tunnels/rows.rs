@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use super::held::{Held, Hold};
-use crate::model::tunnels::{ASKS_ISSUE, ELSEWHERE_ISSUE, Toward, TunnelSeen};
+use crate::model::machines::listed;
+use crate::model::tunnels::{ELSEWHERE_ISSUE, Gate, Older, Toward, TunnelSeen, orders_note};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Control {
@@ -151,8 +152,21 @@ pub(crate) fn others_note(machines: &str) -> String {
     format!("Tunnels other windows or programs hold to {machines} are not listed here: needs {ELSEWHERE_ISSUE}")
 }
 
-pub(crate) fn asks_note(host: &str) -> String {
-    format!("A program on {host} cannot open a tunnel here yet: needs {ASKS_ISSUE}")
+pub(crate) fn orders_notes(gates: &[(String, Gate)]) -> Vec<String> {
+    let this = |gate: &Gate| match gate {
+        Gate::Older(older @ Older::ThisComputer(_)) => Some(*older),
+        _ => None,
+    };
+    if let Some(older) = gates.iter().find_map(|(_, gate)| this(gate)) {
+        let names: Vec<String> =
+            gates.iter().filter(|(_, gate)| this(gate).is_some()).map(|(n, _)| n.clone()).collect();
+        return vec![orders_note(&older, &listed(&names))];
+    }
+    let theirs = |(name, gate): &(String, Gate)| match gate {
+        Gate::Older(older @ Older::Server(_)) => Some(orders_note(older, name)),
+        _ => None,
+    };
+    gates.iter().filter_map(theirs).collect()
 }
 
 const HEADING_HOST: usize = 28;

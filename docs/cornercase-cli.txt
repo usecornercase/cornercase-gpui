@@ -1,4 +1,4 @@
-cornercase 0.13.53: the help of every command and subcommand, in the order of `cornercase --help`.
+cornercase 0.13.57: the help of every command and subcommand, in the order of `cornercase --help`.
 Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
 
 ================================================================ cornercase status
@@ -1260,7 +1260,7 @@ Options:
       --worktree <WORKTREE>       Branch for a worktree, made when missing
       --fresh                     Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches when the entry runs; edit keeps the entry's]
       --no-fresh                  Make a missing branch from the project's HEAD, whatever settings → worktrees → new branches says
-      --name <NAME>               Entry and tab name
+      --name <NAME>               Entry and tab name [default: the prompt's first words, cut after a whole word at 40 characters; with --issue, its number and title]
       --account <AGENT=ACCOUNT>   Start that agent with this account; AGENT= is its system login. Give it once per agent [default: the accounts chosen when it starts]
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -1291,7 +1291,7 @@ Options:
       --worktree <WORKTREE>       Branch for a worktree, made when missing
       --fresh                     Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches when the entry runs; edit keeps the entry's]
       --no-fresh                  Make a missing branch from the project's HEAD, whatever settings → worktrees → new branches says
-      --name <NAME>               Entry and tab name
+      --name <NAME>               Entry and tab name [default: the prompt's first words, cut after a whole word at 40 characters; with --issue, its number and title]
       --account <AGENT=ACCOUNT>   Start that agent with this account; AGENT= is its system login. Give it once per agent [default: the accounts chosen when it starts]
       --json                      Print JSON instead of text
   -h, --help                      Print help
@@ -1544,7 +1544,8 @@ Options:
 It makes the worktree (or uses a worktree already on that branch, if it runs no flow), opens a
 tab per role named after it, the orchestrator first, and starts every agent with its role prompt,
 answering their trust prompts. The orchestrator starts last, with a brief: the task, the team and
-its pane ids, the stages, and how to drive the agents. Nothing is shown in the window unless you
+its pane ids, the stages (when the work goes back to an earlier stage, that stage and every stage
+after it run again before the work goes on), and how to drive the agents. Nothing is shown in the window unless you
 pass --focus, which shows the orchestrator's tab and opens the Flow panel; with --view ID it shows
 that tab in the view instead, and the window and its Flow panel stay as they are.
 
@@ -1566,7 +1567,8 @@ opens, and --no-fresh asks for HEAD whatever the setting says. Role branches sta
 either way. --fresh needs a server that knows the `fresh-branches` feature.
 
 It prints the workspace's id, then one line per role: its pane's id and the role's name, separated
-by a tab. The run's folder for files, where every role writes its answers, is printed on stderr
+by a tab. The run's folder for files, where the task is saved as task.md before any agent starts (byte for
+byte the run's task in `flow runs --json`) and where every role writes its answers, is printed on stderr
 (run_dir with --json) and is in $CORNERCASE_RUN_DIR in the team's panes. A name is looked up in yours, then the built-in flows, then the project's: yours replaces
 a built-in flow of its name, and a project's flow never stands in for another of the same name; the
 command says so on stderr when it happens. A built-in flow deleted in Settings › Flows is refused,
@@ -1810,9 +1812,9 @@ Options:
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
-It lists the files in the run's folder, where every role writes its answers: name, size, when it was
-changed and its path, tab-separated under a header, newest first, at most 200. After the run ended it lists the
-last folder the workspace's runs made, for as long as the workspace lives.
+It lists the files in the run's folder, where the task is (task.md) and every role writes its
+answers: name, size, when it was changed and its path, tab-separated under a header, newest first, at most
+200. After the run ended it lists the last folder the workspace's runs made, for as long as the workspace lives.
 
 Examples:
   cornercase flow files
@@ -3391,10 +3393,11 @@ the reason ssh gave, or closed: a tunnel that was closed stays listed so the win
 the server's machine lists and drives them with this command and `tunnel open`, `tunnel close`
 and `tunnel forget`. With several windows attached, each line says which one holds it, and a
 tunnel held by `tunnel hold` ends with (hold N). With --json it prints
-{"tunnels": [{"port", "local", "state", "error", "holder", "kind"}], "windows": N}: local and
-error are null when they do not apply, holder is the number of the holder's connection, kind is
-window or hold, and windows is how many windows hold tunnels for this server, 0 when none is
-attached from another computer.
+{"tunnels": [{"port", "local", "state", "error", "holder", "kind"}], "windows": N, "takers": N}:
+local and error are null when they do not apply, holder is the number of the holder's connection,
+kind is window or hold, windows is how many windows hold tunnels for this server, 0 when none is
+attached from another computer, and takers is how many programs take tunnel orders
+(`tunnel orders`).
 
 Examples:
   cornercase tunnels
@@ -3411,6 +3414,8 @@ Commands:
   close   Close the tunnel of a port
   forget  Forget a tunnel: close it and stop windows from opening it again
   hold    Hold a tunnel to the machine of --remote with no window, until this command ends
+  orders  Take the tunnel orders of the server of --remote for a program with no window, until this command ends
+  failed  Tell the server that the tunnel of a port it asked for cannot be held from this computer
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -3422,21 +3427,34 @@ A tunnel forwards a port of this server's machine to the computer of a window at
 the window runs your own ssh, `ssh -N -L 127.0.0.1:LOCAL:localhost:PORT DESTINATION`, with the
 destination it used, so every ssh setting of yours applies, and the far end is always the
 machine's own loopback. The window listens on the same port when it is free there and on another
-when it is not, and says which. `tunnel open PORT` asks every attached window and waits up to
-45 s until it is up; it prints one line per window and exits with 1 when none came up, or when
-no window is attached (tunnels are held by windows opened with `cornercase remote`).
+when it is not, and says which. `tunnel open PORT` asks every attached window, and every
+program that takes tunnel orders, and waits up to 45 s until it is up; it prints one line per
+holder and exits with 1 when none came up, or when neither is attached (tunnels are held by
+windows opened with `cornercase remote`, or by programs that run `tunnel orders`).
 `tunnel close PORT` closes it but keeps it remembered, as closed. `tunnel forget PORT` removes it.
 A window remembers its tunnels per machine on its own computer, in tunnels.json beside
 machines.json: the next window to that machine brings back the ones that are not closed, on the
 same port when it is free. Windows of one computer share a tunnel: one runs the ssh and the others
-take it over when it ends. With --json they print {"tunnels": [...], "windows": N}, as
+take it over when it ends. With --json they print {"tunnels": [...], "windows": N, "takers": N}, as
 `cornercase tunnels --json` does.
 
 `cornercase --remote vps tunnel hold PORT` is for a program with no window: it starts its own ssh
 from this computer, waits until it is up and prints one line, {"port", "local", "url"}, then
 holds the tunnel until it is killed (exit 0), its output reader leaves (0), `tunnel close PORT` or
 `tunnel forget PORT` is run on the server (0), or ssh or the server connection fails (1). It
-needs --remote (exit 2 without it), and it remembers nothing in tunnels.json.
+needs --remote (exit 2 without it), and it remembers nothing in tunnels.json. If it fails
+before the server counts it (ssh, or the local port), it tells the server, so a `tunnel open`
+that waits for it fails with the reason.
+
+`cornercase --remote vps tunnel orders` is for such a program too: it prints one JSON line once
+the server counts it, {"tunnels": [...], "windows": N, "takers": N}, then one line per order,
+{"order": "open", "port": 3000} (or close, or forget), for as long as it runs. `tunnel open` on
+the server then asks it and waits: it answers by holding the port with `tunnel hold PORT`, or
+with `tunnel failed PORT REASON`, which fails the request with REASON; `tunnel failed` prints
+`reported that port 3000 could not be tunnelled` (with --json, that port's list) and exits 0 even
+when no request waits. close and forget tell it which ports to drop or forget. It ends with 0
+when its output reader leaves or the server stops, and 1 when the connection is lost; it needs
+--remote (exit 2 without it).
 
 Examples:
   cornercase tunnel open 5173
@@ -3444,6 +3462,8 @@ Examples:
   cornercase tunnel forget 5173
   cornercase --remote vps tunnel open 5173 --json
   cornercase --remote vps tunnel hold 5173
+  cornercase --remote vps tunnel orders
+  cornercase --remote vps tunnel failed 3000 "the user said no"
 
 ================================================================ cornercase tunnel open
 Forward a port of this server's machine to the computer of the window attached to it
@@ -3496,6 +3516,31 @@ Arguments:
   <PORT>  The port to tunnel, on the machine of --remote
 
 Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase tunnel orders
+Take the tunnel orders of the server of --remote for a program with no window, until this command ends
+
+Usage: cornercase tunnel orders [OPTIONS]
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase tunnel failed
+Tell the server that the tunnel of a port it asked for cannot be held from this computer
+
+Usage: cornercase tunnel failed [OPTIONS] <PORT> <REASON>
+
+Arguments:
+  <PORT>    The port that was asked for, on this server's machine
+  <REASON>  Why it cannot be held, as one line: `tunnel open` fails with it
+
+Options:
+      --json                      Print JSON instead of text
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help

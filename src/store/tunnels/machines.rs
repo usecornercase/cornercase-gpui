@@ -9,16 +9,17 @@ use crate::model::tunnels::Toward;
 use crate::store::machine_read::reach;
 
 impl Store {
-    fn machines_followed(&self) -> BTreeSet<String> {
+    pub(super) fn machines_followed(&self) -> BTreeSet<String> {
         let listed = self.machines.iter().map(|machine| machine.name.clone());
         let seen = self.session.iter().flat_map(|session| session.machines.iter().map(|seen| seen.name.clone()));
         let linked = self.tunnels.machines.keys().cloned();
         let held = self.tunnels.holds.iter().map(|hold| &hold.toward);
         let settling = self.tunnels.settling.iter().map(|settling| &settling.toward);
-        followed(listed.chain(seen).chain(linked), held.chain(settling))
+        let taking = self.tunnels.takers.keys();
+        followed(listed.chain(seen).chain(linked), held.chain(settling).chain(taking))
     }
 
-    fn link_of_machine(&self, name: &str) -> Link {
+    pub(super) fn link_of_machine(&self, name: &str) -> Link {
         let listed = self.machines.iter().find(|machine| machine.name == name);
         let seen = self.session.as_ref().and_then(|session| session.machine(name));
         let reached = seen.map(|seen| reach(&cli::target(), &self.machines, seen));
@@ -31,6 +32,7 @@ impl Store {
             self.follow_machine(&name, cx);
         }
         self.settle_tunnels(cx);
+        self.follow_takers(cx);
     }
 
     fn follow_machine(&mut self, name: &str, cx: &mut Context<Self>) {

@@ -1,5 +1,8 @@
-use super::{Control, Whose, count, elsewhere, machine_sections, mark, menu_rows, others_note, row_control};
-use crate::model::tunnels::{Toward, TunnelSeen};
+use super::{
+    Control, Whose, count, elsewhere, machine_sections, mark, menu_rows, orders_notes, others_note, row_control,
+};
+use crate::cli::Version;
+use crate::model::tunnels::{Gate, Older, Toward, TunnelSeen};
 use crate::store::tunnels::held::{Held, Hold, test_hold};
 
 fn ours(port: u16, state: Held) -> Hold {
@@ -141,4 +144,31 @@ fn a_long_destination_is_cut_in_the_menus_heading() {
     assert_eq!(super::heading("devbox"), "Tunnels to devbox");
     let long = super::heading("builder@ci-runner-07.eu-west-1.compute.example.invalid");
     assert_eq!(long, "Tunnels to builder@ci-runner-07.eu-west…");
+}
+
+fn gate_of(name: &str, gate: Gate) -> (String, Gate) {
+    (name.to_string(), gate)
+}
+
+#[test]
+fn no_line_when_both_sides_take_orders() {
+    let lines = orders_notes(&[gate_of("vps", Gate::Open), gate_of("lab", Gate::Waiting)]);
+    assert_eq!(lines.len(), 0);
+}
+
+#[test]
+fn this_computer_older_is_one_line_for_every_machine() {
+    let older = Gate::Older(Older::ThisComputer(Version::parse("0.13.56")));
+    let lines = orders_notes(&[gate_of("vps", older), gate_of("lab", older)]);
+    let [line] = lines.as_slice() else { panic!("one line") };
+    assert!(line.starts_with("A program on vps and lab cannot ask this window"), "{line}");
+    assert!(line.ends_with("(it has 0.13.56)."), "{line}");
+}
+
+#[test]
+fn a_machines_older_server_is_its_own_line() {
+    let older = Gate::Older(Older::Server(Version::parse("0.13.56")));
+    let lines = orders_notes(&[gate_of("vps", older), gate_of("lab", Gate::Open)]);
+    let [line] = lines.as_slice() else { panic!("one line") };
+    assert!(line.starts_with("A program on vps cannot ask") && line.ends_with("on vps (its server runs 0.13.56)."));
 }
