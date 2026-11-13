@@ -175,10 +175,11 @@ impl Browser {
     fn ask_to_open(toward: Toward, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         let (title, message, button) = far::confirm_words(name);
         let panel = cx.entity();
+        let approved = Store::get(cx).read(cx).reverse_destination(&toward).unwrap_or_default();
         let question = Question::new(title, message, button, Vec::new()).on_yes(move |cx| {
             let chrome = panel.read(cx).port();
             Store::get(cx).update(cx, |s, cx| match chrome {
-                Some(chrome) => s.open_reverse(&toward, chrome, cx),
+                Some(chrome) => s.open_reverse(&toward, (chrome, &approved), cx),
                 None => s.not_opened("This Chrome is not running", cx),
             });
         });

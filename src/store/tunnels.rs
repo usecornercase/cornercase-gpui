@@ -9,7 +9,7 @@ use super::browse::{listed_gate, toast_go};
 use super::{Busy, Store, ToastKind};
 use crate::cli::{self, Ended, Holding, Version};
 use crate::model::tunnels::{
-    Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, local_to_ask, machine_gate, way,
+    Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, local_kept, local_to_ask, machine_gate, way,
 };
 
 mod closing;
@@ -206,13 +206,14 @@ impl Store {
     ) -> Result<(), String> {
         let reached = self.reached(toward)?;
         let remembered = memory::remembered_local(&reached.destination, port);
-        let local = local_to_ask(self.heard_release(), port, local_before(again, remembered));
+        let before = local_before(again, remembered);
+        let local = local_to_ask(self.heard_release(), port, before);
         let spawned = Self::spawn_hold(&reached, Holding::Forward { port, local });
         let (process, rx) = spawned.inspect_err(|why| {
             self.toast(window_failure(&reached.toward, port, why), ToastKind::Error, cx);
         })?;
         let mut hold = Hold::opening(&reached, port, process, asked);
-        hold.asked_local = local;
+        hold.had_local = local_kept(self.heard_release(), before);
         let busy = Busy::new(job_key(toward, port), format!("Opening a tunnel to port {port} on {}…", reached.label));
         hold.job = Some(self.start_job(busy, cx));
         if let Some(Again { attempts, .. }) = again {
@@ -286,7 +287,7 @@ impl Store {
         hold.last_local = Some(local);
         let (port, asked, job) = (hold.port, hold.asked, hold.job.take());
         let (toward, label) = (hold.toward.clone(), hold.label().to_string());
-        let (destination, wanted) = (hold.destination.clone(), hold.asked_local);
+        let (destination, wanted) = (hold.destination.clone(), hold.had_local);
         if let Some(job) = job {
             self.end_job(job, cx);
         }

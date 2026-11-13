@@ -41,7 +41,7 @@ pub(crate) struct Hold {
     pub(crate) attempts: u32,
     pub(crate) job: Option<u64>,
     pub(crate) last_local: Option<u16>,
-    pub(crate) asked_local: Option<u16>,
+    pub(crate) had_local: Option<u16>,
     pub(crate) added: bool,
 }
 
@@ -59,7 +59,7 @@ impl Hold {
             attempts: 0,
             job: None,
             last_local: None,
-            asked_local: None,
+            had_local: None,
             added: false,
         }
     }
@@ -86,7 +86,7 @@ pub(crate) struct Again {
 }
 
 pub(crate) fn again_of(hold: &Hold) -> Again {
-    Again { attempts: hold.attempts, local: hold.last_local.or(hold.asked_local) }
+    Again { attempts: hold.attempts, local: hold.last_local.or(hold.had_local) }
 }
 
 pub(crate) fn local_before(again: Option<Again>, remembered: Option<u16>) -> Option<u16> {

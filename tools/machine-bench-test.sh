@@ -674,8 +674,10 @@ the_stand_in_says_which_port_a_reverse_forward_on_port_0_got() {
   got=$(sed -n "s/^Allocated port \([0-9][0-9]*\) for remote forward to localhost:$far\$/\1/p" "$t/ferr")
   check "ssh's line was not printed: $(cat "$t/ferr")" [ -n "$got" ] || return 1
   check "nothing answered at the port it said" until_answers "$got"
+  answered=$?
   kill "$forwarded"
   until_gone "$forwarded"
+  return "$answered"
 }
 
 the_stand_in_says_a_fixed_reverse_forward_succeeded_at_debug_level() {

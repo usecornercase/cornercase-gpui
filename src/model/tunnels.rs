@@ -145,9 +145,13 @@ pub(crate) fn reverse_gate(here: Release, server: Option<Version>) -> Gate {
     gate(TUNNEL_REVERSE_SINCE, here, server)
 }
 
-pub(crate) fn local_to_ask(here: Release, port: u16, before: Option<u16>) -> Option<u16> {
+pub(crate) fn local_kept(here: Release, before: Option<u16>) -> Option<u16> {
     let Release::Read(Some(version)) = here else { return None };
-    (version >= TUNNEL_LOCAL_SINCE).then_some(before).flatten().filter(|local| *local != port)
+    (version >= TUNNEL_LOCAL_SINCE).then_some(before).flatten()
+}
+
+pub(crate) fn local_to_ask(here: Release, port: u16, before: Option<u16>) -> Option<u16> {
+    local_kept(here, before).filter(|local| *local != port)
 }
 
 pub(crate) fn orders_gate(here: Release, server: Option<Version>) -> Gate {

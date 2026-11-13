@@ -74,6 +74,10 @@ pub(crate) fn ending_toast(state: ReverseState, code: Option<i32>, why: &str, la
     }
 }
 
+pub(crate) fn approved_destination(approved: &str, now: &str) -> Result<(), String> {
+    if approved == now { Ok(()) } else { Err("The machine's address changed since you were asked".to_string()) }
+}
+
 pub(crate) fn address_there(there: u16) -> String {
     format!("http://127.0.0.1:{there}")
 }
@@ -107,7 +111,11 @@ impl Store {
         self.tunnels.reverses.get(toward)
     }
 
-    pub(crate) fn open_reverse(&mut self, toward: &Toward, chrome: u16, cx: &mut Context<Self>) {
+    pub(crate) fn reverse_destination(&self, toward: &Toward) -> Option<String> {
+        self.reached(toward).ok().map(|reached| reached.destination)
+    }
+
+    pub(crate) fn open_reverse(&mut self, toward: &Toward, (chrome, approved): (u16, &str), cx: &mut Context<Self>) {
         if self.tunnels.reverses.contains_key(toward) {
             return;
         }
@@ -116,6 +124,10 @@ impl Store {
             return;
         }
         let Ok(reached) = self.reached(toward) else { return };
+        if let Err(why) = approved_destination(approved, &reached.destination) {
+            self.not_opened(&why, cx);
+            return;
+        }
         let (process, rx) = match Self::spawn_hold(&reached, Holding::Reverse { local: chrome }) {
             Ok(started) => started,
             Err(why) => {

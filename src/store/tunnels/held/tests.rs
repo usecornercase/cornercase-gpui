@@ -191,7 +191,7 @@ fn a_restarted_hold_asks_for_the_local_port_it_had() {
     up.last_local = Some(61011);
     assert_eq!(again_of(&up).local, Some(61011));
     let mut failed = hold(Held::Opening, true);
-    failed.asked_local = Some(61011);
+    failed.had_local = Some(61011);
     assert_eq!(again_of(&failed).local, Some(61011));
     failed.attempts = 2;
     assert_eq!(again_of(&failed).attempts, 2);
@@ -231,4 +231,23 @@ fn a_click_keeps_its_own_words_when_it_moved() {
     assert_eq!(came_back(Asked::Click, (8765, 61023), Some(61011), "vps"), None);
     assert_eq!(came_back(Asked::Program, (8765, 61023), Some(61011), "vps"), None);
     assert_eq!(came_back(Asked::Open, (8765, 61023), Some(61011), "vps"), None);
+}
+
+#[test]
+fn the_local_port_a_hold_came_up_on_wins_over_the_one_it_was_asked_for() {
+    let mut both = hold(Held::Up { local: 61023 }, true);
+    both.had_local = Some(55555);
+    both.last_local = Some(61023);
+    assert_eq!(again_of(&both).local, Some(61023));
+    both.last_local = None;
+    assert_eq!(again_of(&both).local, Some(55555));
+}
+
+#[test]
+fn a_quiet_hold_that_was_on_its_own_port_says_where_it_landed_when_that_is_taken() {
+    let here = crate::desktop::here();
+    let said = came_back(Asked::Back, (8765, 61023), Some(8765), "vps");
+    let words =
+        format!("Port 8765 on vps is back on localhost:61023 (localhost:8765, where it was, is taken on this {here})");
+    assert_eq!(said.as_deref(), Some(words.as_str()));
 }

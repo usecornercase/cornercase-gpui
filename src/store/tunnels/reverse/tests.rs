@@ -1,6 +1,6 @@
 use super::{
-    ReverseState, address_there, closed_toast, copied_words, ended_toast, ending_toast, failed_toast, opened_toast,
-    reverse_reason, stopped_toast,
+    ReverseState, address_there, approved_destination, closed_toast, copied_words, ended_toast, ending_toast,
+    failed_toast, opened_toast, reverse_reason, stopped_toast,
 };
 use crate::model::tunnels::Toward;
 use crate::store::ToastKind;
@@ -58,4 +58,11 @@ fn a_hold_that_ends_once_it_is_up_is_told_by_its_exit() {
     assert_eq!((text.as_str(), kind), ("This Chrome is no longer open to vps: ssh stopped", ToastKind::Error));
     let (text, _) = ending_toast(open, Some(1), "", "vps");
     assert_eq!(text, "This Chrome is no longer open to vps: cornercase tunnel hold ended with status 1");
+}
+
+#[test]
+fn a_machine_whose_address_changed_while_the_question_was_open_is_not_opened_to() {
+    assert_eq!(approved_destination("vps.invalid", "vps.invalid"), Ok(()));
+    let refused = approved_destination("vps.invalid", "other.invalid").expect_err("a different address");
+    assert_eq!(refused, "The machine's address changed since you were asked");
 }

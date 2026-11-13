@@ -1,6 +1,6 @@
 use super::{
     Gate, Older, Release, TUNNEL_HOLD_SINCE, TUNNEL_ORDERS_SINCE, Toward, TunnelSeen, Way, gate_note, held_line,
-    local_to_ask, machine_gate, older_note, orders_gate, orders_note, reverse_gate, reverse_note, way,
+    local_kept, local_to_ask, machine_gate, older_note, orders_gate, orders_note, reverse_gate, reverse_note, way,
 };
 use crate::cli::Version;
 use crate::model::Session;
@@ -238,4 +238,12 @@ fn the_reverse_note_names_the_side_and_its_release() {
         "needs cornercase 0.13.61 or newer on vps (its server runs 0.13.60)"
     );
     assert_eq!(reverse_note(&Older::Server(None), "vps"), "needs cornercase 0.13.61 or newer on vps");
+}
+
+#[test]
+fn a_previous_local_port_equal_to_the_port_is_kept_for_the_toast_but_not_asked() {
+    assert_eq!(local_kept(release("0.13.61"), Some(8765)), Some(8765));
+    assert_eq!(local_to_ask(release("0.13.61"), 8765, Some(8765)), None);
+    assert_eq!(local_kept(release("0.13.60"), Some(8765)), None);
+    assert_eq!(local_kept(Release::Unread, Some(8765)), None);
 }
