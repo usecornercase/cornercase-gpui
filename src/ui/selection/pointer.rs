@@ -60,7 +60,9 @@ impl Drawn {
 
     fn break_at(&self) -> Option<Bounds<Pixels>> {
         let (origin, height) = match &self.text {
-            DrawnText::Line(line) => (point(break_x(line, self.len), line.bounds.top()), line.bounds.size.height),
+            DrawnText::Line(line) => {
+                (point(break_x(self.len, line.bounds.left(), line.end_x()), line.bounds.top()), line.bounds.size.height)
+            }
             DrawnText::Wrapped(layout, kept) => {
                 let at = break_index(self.len, *kept, layout.len());
                 (layout.position_for_index(at)?, layout.line_height())

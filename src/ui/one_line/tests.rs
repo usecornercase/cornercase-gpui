@@ -78,13 +78,13 @@ fn a_line_that_fits_takes_the_closest_character() {
 
 #[test]
 fn the_ellipsis_stands_for_the_hidden_end_of_the_line() {
-    let cut = Some(Cut { kept: 12, mark_x: px(84.) });
+    let cut = Some(Cut { kept: 12, mark_x: px(84.), end_x: px(91.) });
     assert_eq!(caret_in(cut, 200, px(90.), 13), 200);
 }
 
 #[test]
 fn before_the_ellipsis_a_cut_line_stops_at_what_it_kept() {
-    let cut = Some(Cut { kept: 12, mark_x: px(84.) });
+    let cut = Some(Cut { kept: 12, mark_x: px(84.), end_x: px(91.) });
     assert_eq!(caret_in(cut, 200, px(83.), 13), 12);
     assert_eq!(caret_in(cut, 200, px(14.), 2), 2);
 }
@@ -117,12 +117,13 @@ fn box_at(width: f32) -> Bounds<gpui::Pixels> {
 
 #[test]
 fn a_line_that_is_not_cut_ends_where_its_text_does() {
-    assert_eq!(end_in(false, box_at(300.), px(70.)), px(110.));
+    assert_eq!(end_in(None, box_at(300.), px(70.)), px(110.));
 }
 
 #[test]
-fn a_cut_line_ends_at_the_box_s_edge_past_its_ellipsis() {
-    assert_eq!(end_in(true, box_at(300.), px(900.)), px(340.));
+fn a_cut_line_ends_right_after_its_ellipsis_even_when_the_cut_fell_in_spaces() {
+    let cut = Some(Cut { kept: 9, mark_x: px(66.), end_x: px(73.) });
+    assert_eq!(end_in(cut, box_at(300.), px(900.)), px(113.));
 }
 
 #[test]

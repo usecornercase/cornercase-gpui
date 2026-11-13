@@ -123,11 +123,13 @@ fn a_line_within_the_cap_or_a_cut_line_has_no_cut() {
 #[test]
 fn the_break_of_a_line_follows_its_last_character() {
     assert_eq!(break_index(5, None, 5), 5);
+    assert_eq!(break_x(9, px(40.), px(110.)), px(110.));
 }
 
 #[test]
 fn the_break_of_an_empty_line_sits_at_its_start_not_after_its_stand_in() {
     assert_eq!(break_index(0, None, 1), 0);
+    assert_eq!(break_x(0, px(40.), px(47.3)), px(40.));
 }
 
 #[test]

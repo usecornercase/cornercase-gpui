@@ -4,7 +4,6 @@ use gpui::{
 };
 
 use crate::notify::tip;
-use crate::ui::one_line::LaidOut;
 use crate::ui::{self, Icon};
 
 use super::pointer::{Laid, break_mark, row_probe};
@@ -106,8 +105,8 @@ pub(super) fn break_index(len: usize, kept: Option<usize>, shown: usize) -> usiz
     if kept.is_some() { shown } else { len }
 }
 
-pub(super) fn break_x(line: &LaidOut, len: usize) -> Pixels {
-    if len == 0 { line.bounds.left() } else { line.end_x() }
+pub(super) fn break_x(len: usize, start: Pixels, end: Pixels) -> Pixels {
+    if len == 0 { start } else { end }
 }
 
 pub(crate) fn code_cell<S: Copy + Ord + 'static>(

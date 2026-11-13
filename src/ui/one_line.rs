@@ -21,6 +21,7 @@ pub(crate) struct OneLine {
 struct Cut {
     kept: usize,
     mark_x: Pixels,
+    end_x: Pixels,
 }
 
 pub(crate) struct LaidOut {
@@ -36,7 +37,7 @@ impl LaidOut {
     }
 
     pub(crate) fn end_x(&self) -> Pixels {
-        end_in(self.cut.is_some(), self.bounds, self.line.width)
+        end_in(self.cut, self.bounds, self.line.width)
     }
 }
 
@@ -44,8 +45,8 @@ fn fits(width: Pixels, room: Pixels) -> bool {
     width <= room.ceil()
 }
 
-fn end_in(cut: bool, bounds: Bounds<Pixels>, width: Pixels) -> Pixels {
-    if cut { bounds.right() } else { bounds.left() + width }
+fn end_in(cut: Option<Cut>, bounds: Bounds<Pixels>, width: Pixels) -> Pixels {
+    bounds.left() + cut.map_or(width, |cut| cut.end_x)
 }
 
 fn caret_in(cut: Option<Cut>, len: usize, x: Pixels, closest: usize) -> usize {
@@ -84,7 +85,8 @@ impl OneLine {
         let at = measured.line.index_for_x(width - mark.width).unwrap_or(self.text.len());
         let kept = kept(&self.text, at);
         let text = SharedString::from(format!("{}{ELLIPSIS}", &self.text[..kept]));
-        let cut = Cut { kept, mark_x: measured.line.x_for_index(kept) };
+        let mark_x = measured.line.x_for_index(kept);
+        let cut = Cut { kept, mark_x, end_x: mark_x + mark.width };
         (system.shape_line(text, measured.font_size, &ending(&measured.runs, kept, measured.mark.clone()), None), cut)
     }
 }
