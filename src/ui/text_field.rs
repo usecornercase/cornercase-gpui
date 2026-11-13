@@ -9,12 +9,14 @@ use gpui::{
 use unicode_segmentation::UnicodeSegmentation;
 
 use self::element::{Layout, TextElement};
-use self::rows::{clamp_scroll, line_breaks, one_line, previous_grapheme, shown_without_controls};
+use self::rows::{clamp_scroll, line_breaks, one_line, previous_grapheme};
+use self::shown::Shown;
 use crate::desktop;
 use crate::platform::Os;
 
 mod element;
 mod rows;
+mod shown;
 
 actions!(
     text_field,
@@ -212,13 +214,13 @@ impl TextField {
     }
 
     fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.selected_range.is_empty() {
-            cx.write_to_clipboard(ClipboardItem::new_string(self.content[self.selected_range.clone()].to_string()));
+        if let Some(text) = shared(&self.content, &self.selected_range, self.options.masked) {
+            cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
         }
     }
     fn cut(&mut self, _: &Cut, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.selected_range.is_empty() {
-            cx.write_to_clipboard(ClipboardItem::new_string(self.content[self.selected_range.clone()].to_string()));
+        if let Some(text) = shared(&self.content, &self.selected_range, self.options.masked) {
+            cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
             self.replace_text_in_range(None, "", window, cx);
         }
     }
@@ -267,18 +269,7 @@ impl TextField {
     }
 
     fn offset_from_utf16(&self, offset: usize) -> usize {
-        let mut utf8_offset = 0;
-        let mut utf16_count = 0;
-
-        for ch in self.content.chars() {
-            if utf16_count >= offset {
-                break;
-            }
-            utf16_count += ch.len_utf16();
-            utf8_offset += ch.len_utf8();
-        }
-
-        utf8_offset
+        utf8_offset(&self.content, offset)
     }
 
     fn offset_to_utf16(&self, offset: usize) -> usize {
@@ -384,11 +375,7 @@ impl EntityInputHandler for TextField {
         } else {
             self.marked_range = Some(range.start..range.start + new_text.len());
         }
-        self.selected_range =
-            new_selected_range_utf16.as_ref().map(|range_utf16| self.range_from_utf16(range_utf16)).map_or_else(
-                || range.start + new_text.len()..range.start + new_text.len(),
-                |new_range| new_range.start + range.start..new_range.end + range.end,
-            );
+        self.selected_range = composed_selection(new_text, new_selected_range_utf16.as_ref(), range.start);
         self.caret_moved();
         cx.notify();
     }
@@ -424,15 +411,12 @@ impl EntityInputHandler for TextField {
 }
 
 impl TextField {
-    fn display_text(&self, colour: Hsla) -> (SharedString, Hsla) {
+    fn display_text(&self, colour: Hsla) -> (SharedString, Hsla, Shown) {
         if self.content.is_empty() {
-            return (self.placeholder.clone(), crate::theme::colours::muted().into());
+            return (self.placeholder.clone(), crate::theme::colours::muted().into(), Shown::Itself);
         }
-        if self.options.masked {
-            return ("•".repeat(self.content.chars().count()).into(), colour);
-        }
-        let shown = shown_without_controls(&self.content).map_or_else(|| self.content.clone(), SharedString::from);
-        (shown, colour)
+        let (text, shown) = Shown::for_content(&self.content, self.options.masked);
+        (text, colour, shown)
     }
 }
 
@@ -590,12 +574,34 @@ fn control_bindings(ctx: Option<&str>) -> Vec<KeyBinding> {
     ]
 }
 
-fn word_start(text: &str, at: usize) -> usize {
+fn utf8_offset(text: &str, utf16: usize) -> usize {
+    let mut units = 0;
+    text.char_indices()
+        .find(|(_, c)| {
+            let reached = units >= utf16;
+            units += c.len_utf16();
+            reached
+        })
+        .map_or(text.len(), |(index, _)| index)
+}
+
+fn composed_selection(new_text: &str, selected_utf16: Option<&Range<usize>>, start: usize) -> Range<usize> {
+    let Some(selected) = selected_utf16 else { return start + new_text.len()..start + new_text.len() };
+    start + utf8_offset(new_text, selected.start)..start + utf8_offset(new_text, selected.end)
+}
+
+fn word_start(text: &str, at: usize, masked: bool) -> usize {
+    if masked {
+        return 0;
+    }
     let before = text[..at].trim_end();
     before.char_indices().rev().find(|(_, c)| c.is_whitespace()).map_or(0, |(i, c)| i + c.len_utf8())
 }
 
-fn word_end(text: &str, at: usize) -> usize {
+fn word_end(text: &str, at: usize, masked: bool) -> usize {
+    if masked {
+        return text.len();
+    }
     let after = &text[at..];
     let lead = after.len() - after.trim_start().len();
     after[lead..].find(char::is_whitespace).map_or(text.len(), |i| at + lead + i)
@@ -731,24 +737,24 @@ impl TextField {
 
     fn delete_word_left(&mut self, _: &DeleteWordLeft, window: &mut Window, cx: &mut Context<Self>) {
         if self.selected_range.is_empty() {
-            self.select_to(word_start(&self.content, self.cursor_offset()), cx);
+            self.select_to(word_start(&self.content, self.cursor_offset(), self.options.masked), cx);
         }
         self.replace_text_in_range(None, "", window, cx);
     }
 
     fn delete_word_right(&mut self, _: &DeleteWordRight, window: &mut Window, cx: &mut Context<Self>) {
         if self.selected_range.is_empty() {
-            self.select_to(word_end(&self.content, self.cursor_offset()), cx);
+            self.select_to(word_end(&self.content, self.cursor_offset(), self.options.masked), cx);
         }
         self.replace_text_in_range(None, "", window, cx);
     }
 
     fn word_left(&mut self, _: &WordLeft, _: &mut Window, cx: &mut Context<Self>) {
-        self.move_to(word_start(&self.content, self.cursor_offset()), cx);
+        self.move_to(word_start(&self.content, self.cursor_offset(), self.options.masked), cx);
     }
 
     fn word_right(&mut self, _: &WordRight, _: &mut Window, cx: &mut Context<Self>) {
-        self.move_to(word_end(&self.content, self.cursor_offset()), cx);
+        self.move_to(word_end(&self.content, self.cursor_offset(), self.options.masked), cx);
     }
 }
 
@@ -779,8 +785,7 @@ impl TextField {
     fn row_ends(&self) -> Option<(usize, usize)> {
         self.options.rows.as_ref()?;
         let layout = self.last_layout.as_ref().filter(|_| !self.content.is_empty())?;
-        let row = layout.rows.get(layout.rows.row_of(self.cursor_offset()))?;
-        Some((row.start, row.last_caret(&self.content)))
+        layout.row_ends(self.cursor_offset(), &self.content)
     }
 
     fn down(&mut self, _: &Down, window: &mut Window, cx: &mut Context<Self>) {
@@ -805,14 +810,8 @@ impl TextField {
         let layout = self.last_layout.as_ref().filter(|_| !self.content.is_empty())?;
         let cursor = self.cursor_offset();
         let x = self.view.goal_x.unwrap_or_else(|| layout.position(cursor).x);
-        let here = layout.rows.row_of(cursor);
-        let row = if up { here.checked_sub(1).and_then(|row| layout.rows.get(row)) } else { layout.rows.get(here + 1) };
-        let target = match row {
-            Some(row) => layout.index_in_row(row, x, &self.content),
-            None if up => 0,
-            None => self.content.len(),
-        };
-        Some((target, x))
+        let end = if up { 0 } else { self.content.len() };
+        Some((layout.index_beside(cursor, up, x, &self.content).unwrap_or(end), x))
     }
 
     fn on_wheel(&mut self, event: &ScrollWheelEvent, _: &mut Window, cx: &mut Context<Self>) {

@@ -7,7 +7,7 @@ struct Failure: Error {
     let status: Int32
 }
 
-let usage = "usage: manual-check window|front|size|key|press|drag|scroll PID … (drag: x0 y0 x1 y1 [right] [hold MS])"
+let usage = "usage: manual-check window|front|size|key|text|press|drag|scroll PID … (drag: x0 y0 x1 y1 [right] [hold MS])"
 
 let keys: [String: Int] = [
     "a": kVK_ANSI_A, "b": kVK_ANSI_B, "c": kVK_ANSI_C, "d": kVK_ANSI_D, "e": kVK_ANSI_E, "f": kVK_ANSI_F,
@@ -16,7 +16,7 @@ let keys: [String: Int] = [
     "s": kVK_ANSI_S, "t": kVK_ANSI_T, "u": kVK_ANSI_U, "v": kVK_ANSI_V, "w": kVK_ANSI_W, "x": kVK_ANSI_X,
     "y": kVK_ANSI_Y, "z": kVK_ANSI_Z, "return": kVK_Return, "escape": kVK_Escape, "tab": kVK_Tab,
     "space": kVK_Space, "delete": kVK_Delete, "left": kVK_LeftArrow, "right": kVK_RightArrow,
-    "up": kVK_UpArrow, "down": kVK_DownArrow,
+    "up": kVK_UpArrow, "down": kVK_DownArrow, "quote": kVK_ANSI_Quote,
 ]
 
 let modifiers: [String: CGEventFlags] = [
@@ -246,6 +246,19 @@ func key(_ pid: pid_t, _ name: String, _ held: [String]) throws {
     }
 }
 
+func text(_ pid: pid_t, _ typed: String) throws {
+    try allowed()
+    for grapheme in typed {
+        let units = Array(String(grapheme).utf16)
+        for down in [true, false] {
+            let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: down)
+            event?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+            event?.postToPid(pid)
+            usleep(30_000)
+        }
+    }
+}
+
 func size(_ pid: pid_t, _ width: String, _ height: String) throws {
     var wanted = CGSize(width: try number(width, "width"), height: try number(height, "height"))
     try allowed()
@@ -287,12 +300,13 @@ func dragOptions(_ words: [String]) throws -> (right: Bool, hold: Int) {
 
 func run(_ args: [String]) throws {
     guard args.count >= 2, let pid = pid_t(args[1]) else { throw Failure(message: usage, status: 2) }
-    if ["front", "size", "key", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
+    if ["front", "size", "key", "text", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
     switch (args[0], args.count) {
     case ("window", 2): try describe(pid)
     case ("front", 2): try front(pid)
     case ("size", 4): try size(pid, args[2], args[3])
     case ("key", 3...): try key(pid, args[2], Array(args.dropFirst(3)))
+    case ("text", 3): try text(pid, args[2])
     case ("press", 4...5): try press(pid, args[2], args[3], right: try button(args, after: 4))
     case ("drag", 6...9):
         let (right, hold) = try dragOptions(Array(args.dropFirst(6)))

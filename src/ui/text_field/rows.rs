@@ -86,10 +86,6 @@ pub(super) fn one_line(pasted: &str) -> String {
     pasted.replace("\r\n", " ").replace(['\r', '\n'], " ")
 }
 
-pub(super) fn shown_without_controls(text: &str) -> Option<String> {
-    text.contains(['\t', '\r']).then(|| text.replace(['\t', '\r'], " "))
-}
-
 pub(super) fn rows_shown(rows: usize, limits: Option<&RangeInclusive<usize>>) -> usize {
     limits.map_or(rows, |limits| rows.clamp(*limits.start(), *limits.end()))
 }
