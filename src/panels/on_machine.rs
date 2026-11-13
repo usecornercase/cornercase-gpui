@@ -108,11 +108,6 @@ pub(crate) fn may_ask(read: &MachineRead, retry: &Retry) -> Result<Target, Strin
     }
 }
 
-pub(crate) fn unread_root(read: &MachineRead, listed: bool) -> Option<String> {
-    let waits = matches!(read.reach, Reach::Waiting(_) | Reach::Older(_));
-    (waits && !listed).then(|| nothing_read(read))
-}
-
 pub(crate) fn nothing_read(read: &MachineRead) -> String {
     format!("Nothing read from {}", read.aim.machine)
 }

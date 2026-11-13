@@ -9,12 +9,12 @@ use gpui::{
 
 use crate::notify::tip;
 use crate::panels::changes::{FileStatus, status_letter};
-use crate::panels::on_machine;
 use crate::platform::paths::Style;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, glass};
 
 use super::style::{chevron, ellipsis, file_icon, small_f32};
+use super::there::unread_root;
 use super::{FilesPanel, Target, tree};
 
 const INDENT: f32 = 18.;
@@ -89,7 +89,7 @@ impl FilesPanel {
         }
         let rows = tree::rows(&place.listings, &place.expanded, self.show_hidden);
         let listed = place.listings.contains_key(Path::new(""));
-        let unread = self.machine.as_ref().and_then(|read| on_machine::unread_root(read, listed));
+        let unread = self.machine.as_ref().and_then(|read| unread_root(read, listed));
         let loading = unread.is_none() && !listed;
         let truncated = place.listings.values().any(|l| l.truncated);
         let any_open = !place.expanded.is_empty();

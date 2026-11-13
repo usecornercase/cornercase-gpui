@@ -11,7 +11,7 @@ use serde::Deserialize;
 use crate::cli::Target;
 use crate::model::Aim;
 use crate::panels::on_machine::{self, Retry};
-use crate::store::MachineRead;
+use crate::store::{MachineRead, Reach};
 
 use super::disk::{Content, Stamp};
 use super::gutter::Gutter;
@@ -136,6 +136,11 @@ impl There {
     pub(super) fn search(&self, query: &str, mode: Mode) -> Results {
         self.search_with(&served::answer_on, query, mode)
     }
+}
+
+pub(super) fn unread_root(read: &MachineRead, listed: bool) -> Option<String> {
+    let waits = matches!(read.reach, Reach::Waiting(_) | Reach::Older(_));
+    (waits && !listed).then(|| on_machine::nothing_read(read))
 }
 
 impl FilesPanel {

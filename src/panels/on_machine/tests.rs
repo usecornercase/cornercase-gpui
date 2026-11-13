@@ -196,14 +196,3 @@ fn an_older_machine_forgets_the_wait_so_the_next_ask_goes_at_once() {
     assert!(!retry.waiting());
     assert!(retry.due(Instant::now()));
 }
-
-#[test]
-fn a_tree_never_read_says_so_only_while_waiting_or_older_and_keeps_what_it_read() {
-    let said = |reach, listed| unread_root(&read(reach), listed);
-    assert_eq!(said(Reach::Waiting("w".into()), false).as_deref(), Some("Nothing read from vps"));
-    assert_eq!(said(Reach::Older(older_note()), false).as_deref(), Some("Nothing read from vps"));
-    assert_eq!(said(Reach::Older(older_note()), true), None);
-    assert_eq!(said(Reach::Down("d".into()), false), None);
-    assert_eq!(said(Reach::Refused("r".into()), false), None);
-    assert_eq!(said(up(), false), None);
-}

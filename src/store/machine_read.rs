@@ -348,12 +348,11 @@ impl Store {
         cx: &mut Context<Self>,
     ) {
         let Some(older) = cli::older_refusal(error) else { return self.check_there(machine, cx) };
-        if let Some(facts) = still_current(asked, self.there_facts(machine).as_ref()) {
-            self.keep_older(machine, facts, older.clone(), cx);
-        }
+        self.keep_older(machine, asked, older.clone(), cx);
     }
 
-    fn keep_older(&mut self, machine: &str, facts: Facts, older: Older, cx: &mut Context<Self>) {
+    fn keep_older(&mut self, machine: &str, asked: Option<Facts>, older: Older, cx: &mut Context<Self>) {
+        let Some(facts) = still_current(asked, self.there_facts(machine).as_ref()) else { return };
         let kept = KeptOlder { facts: facts.clone(), older };
         let changed = self.there.older.insert(machine.to_owned(), kept.clone()) != Some(kept);
         self.there.checks.insert(machine.to_owned(), Check::Answered { facts, at: Instant::now() });
@@ -394,7 +393,7 @@ impl Store {
         let home = result.as_ref().ok().map(String::as_str).and_then(home_in);
         self.there.homes.answered(machine, boot, home);
         if let Some(older) = result.as_ref().err().and_then(cli::older_refusal) {
-            self.keep_older(machine, facts, older.clone(), cx);
+            self.keep_older(machine, Some(facts), older.clone(), cx);
         } else {
             self.there.older.remove(machine);
             self.there.checks.insert(machine.to_owned(), Check::Answered { facts, at: Instant::now() });
