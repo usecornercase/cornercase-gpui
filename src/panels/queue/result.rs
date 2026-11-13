@@ -210,12 +210,14 @@ pub(super) fn copied(answer: &Answer, page: Page, plain: bool) -> Option<String>
     (!text.trim().is_empty()).then_some(text)
 }
 
-pub(super) fn can_retry_talk(answer: &Answer) -> bool {
-    matches!(answer.talk, Some(Talk::Gone)) && answer.can_talk()
+impl Answer {
+    pub(super) fn forget_talk(&mut self) {
+        self.talk = None;
+    }
 }
 
-pub(super) fn survives(entries: &[Entry], id: u64, results: bool) -> bool {
-    results && entries.iter().any(|entry| entry.id == id)
+pub(super) fn can_retry_talk(answer: &Answer) -> bool {
+    matches!(answer.talk, Some(Talk::Gone)) && answer.can_talk()
 }
 
 pub(super) fn merged(before: Option<Answer>, mut answer: Answer, keep: Keep) -> (Answer, bool) {

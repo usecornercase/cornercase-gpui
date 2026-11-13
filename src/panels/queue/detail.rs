@@ -1,9 +1,9 @@
 use gpui::{ClipboardItem, Context, Focusable as _, ListAlignment, ListOffset, ListState, Window, px};
 
 use super::QueuePanel;
-use super::data::Entry;
+use super::data::{Entry, shown_entry};
 use super::read::{Ask, Keep, Reads, failed, job_key, job_words, show_args};
-use super::result::{Answer, Page, Talk, can_retry_talk, copied, merged, page_after, shown_lines, survives, with_talk};
+use super::result::{Answer, Page, Talk, can_retry_talk, copied, merged, page_after, shown_lines, with_talk};
 use crate::cli;
 use crate::store::{self, Busy, Store, ToastKind};
 use crate::ui::selection::Selecting;
@@ -144,9 +144,16 @@ impl QueuePanel {
         cx.notify();
     }
 
-    pub(super) fn close_detail(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn close_detail(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.detail = None;
+        self.give_focus_back(window, cx);
         cx.notify();
+    }
+
+    fn give_focus_back(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.focus.is_focused(window) {
+            window.focus(&self.filter.read(cx).focus_handle(cx));
+        }
     }
 
     pub(super) fn ask(&mut self, id: u64, ask: Ask, cx: &mut Context<Self>) {
@@ -175,6 +182,9 @@ impl QueuePanel {
         detail.page = page;
         detail.selecting.clear();
         let retry = detail.answer.as_ref().is_some_and(can_retry_talk);
+        if let Some(answer) = detail.answer.as_mut().filter(|_| retry && page == Page::Conversation) {
+            answer.forget_talk();
+        }
         let wants = (page == Page::Conversation).then(|| detail.reads.wants_talk(retry)).flatten();
         let (id, ask) = (detail.id, wants);
         if let Some(ask) = ask {
@@ -219,11 +229,9 @@ impl QueuePanel {
         cx: &mut Context<Self>,
     ) {
         let Some(id) = self.detail.as_ref().map(|detail| detail.id) else { return };
-        let Some(entry) = entries.iter().find(|e| e.id == id).filter(|_| survives(entries, id, results)) else {
+        let Some(entry) = shown_entry(entries, id, results) else {
             self.detail = None;
-            if self.focus.is_focused(window) {
-                window.focus(&self.filter.read(cx).focus_handle(cx));
-            }
+            self.give_focus_back(window, cx);
             return;
         };
         let ask = self.detail.as_mut().and_then(|detail| detail.moved(entry));

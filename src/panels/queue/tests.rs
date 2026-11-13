@@ -770,3 +770,12 @@ fn the_snapshot_offers_results_from_the_servers_release() {
     assert!(Snapshot::new(None, Some(session("0.13.53"))).results);
     assert!(!Snapshot::new(None, None).results);
 }
+
+#[test]
+fn the_detail_goes_when_its_entry_leaves_the_feed_or_the_release_stops_offering_it() {
+    use super::data::shown_entry;
+    let list = [entry(3, "started")];
+    assert_eq!(shown_entry(&list, 3, true).map(|e| e.id), Some(3));
+    assert_eq!(shown_entry(&list, 4, true), None);
+    assert_eq!(shown_entry(&list, 3, false), None);
+}

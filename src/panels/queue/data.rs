@@ -148,6 +148,10 @@ pub(super) fn offers_detail(entry: &Entry) -> bool {
     }
 }
 
+pub(super) fn shown_entry(entries: &[Entry], id: u64, results: bool) -> Option<&Entry> {
+    entries.iter().find(|entry| entry.id == id).filter(|_| results)
+}
+
 pub(super) fn offers_result(entry: &Entry, pane: Option<u64>, results: bool) -> bool {
     results && offers_detail(entry) && (pane.is_none() || entry.result_at.is_some())
 }

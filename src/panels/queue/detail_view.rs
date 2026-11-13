@@ -107,7 +107,7 @@ impl QueuePanel {
         });
         let close = ui::tool_button("queue-detail-close", Icon::Close, 26., false)
             .tooltip(tip("Close"))
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.close_detail(cx)));
+            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.close_detail(window, cx)));
         div().flex_none().flex().items_center().gap(px(6.)).children(open).children(copy).child(close)
     }
 

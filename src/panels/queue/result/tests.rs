@@ -2,7 +2,7 @@ use serde_json::json;
 
 use super::{
     Answer, Fact, Kept, Page, Said, Talk, can_copy, can_retry_talk, copied, facts, merged, message_lines, notes,
-    page_after, results_offered, role_word, said_heading, survives, talk_lines, time_words, with_talk,
+    page_after, results_offered, role_word, said_heading, talk_lines, time_words, with_talk,
 };
 use crate::cli::Version;
 use crate::panels::queue::data::Entry;
@@ -275,9 +275,10 @@ fn a_gone_record_can_be_asked_again_only_while_the_result_says_it_has_one() {
 }
 
 #[test]
-fn the_detail_goes_when_its_entry_leaves_the_feed_or_the_release_stops_offering_it() {
-    let list = [entry()];
-    assert!(survives(&list, 3, true));
-    assert!(!survives(&list, 4, true));
-    assert!(!survives(&list, 3, false));
+fn a_retry_shows_the_conversation_as_loading_until_it_answers() {
+    let text = json!({ "id": 1, "result": { "text": "x", "conversation": true }, "messages": null }).to_string();
+    let mut answer = Answer::read(&text, true).expect("it reads");
+    assert!(can_retry_talk(&answer));
+    answer.forget_talk();
+    assert_eq!(answer.talk, None);
 }
