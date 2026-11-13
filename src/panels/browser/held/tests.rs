@@ -194,3 +194,15 @@ fn a_newer_held_typed_address_cancels_the_older_one_without_a_session() {
     superseded_typed(&mut opens, &Owner::Nobody);
     assert!(opens.is_empty());
 }
+
+#[test]
+fn a_popup_made_blank_inherits_its_openers_hold() {
+    use super::inherited;
+    let through = Through { remote: 8765, local: 61000 };
+    assert_eq!(inherited(Some(through), ""), Some(through));
+    assert_eq!(inherited(Some(through), "about:blank"), Some(through));
+    assert_eq!(inherited(Some(through), "http://localhost:61000/b"), Some(through));
+    assert_eq!(inherited(Some(through), "http://localhost:62000/b"), None);
+    assert_eq!(inherited(Some(through), "https://example.invalid/"), None);
+    assert_eq!(inherited(None, ""), None);
+}

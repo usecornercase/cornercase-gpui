@@ -18,6 +18,37 @@ pub(crate) struct Input {
     pub(crate) typing: Typing,
     pub(crate) choice: Option<Choice>,
     pub(crate) bounds: Rc<Cell<Bounds<Pixels>>>,
+    pub(crate) page_waits: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum KeysGo {
+    Stay,
+    Page,
+    Address,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum KeysAt {
+    Viewport,
+    Address,
+    Elsewhere,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Waiting {
+    No,
+    Same,
+    Edited,
+}
+
+pub(crate) fn keys_go(at: KeysAt, page_shown: bool, waiting: Waiting) -> (KeysGo, bool) {
+    match (at, waiting) {
+        (KeysAt::Viewport, _) if !page_shown => (KeysGo::Address, false),
+        (KeysAt::Address, Waiting::Same) if page_shown => (KeysGo::Page, false),
+        (KeysAt::Address, Waiting::Same) => (KeysGo::Stay, true),
+        _ => (KeysGo::Stay, false),
+    }
 }
 
 pub(crate) fn selection_script(cut: bool) -> Value {
@@ -46,6 +77,32 @@ impl Browser {
 
     pub(crate) fn has_focus(&self, window: &Window, cx: &App) -> bool {
         self.page_focused(window) || (self.shown && self.address.read(cx).focus_handle(cx).is_focused(window))
+    }
+
+    pub(super) fn keep_the_keys(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let address = self.address.read(cx).focus_handle(cx);
+        let at = if self.focus.is_focused(window) {
+            KeysAt::Viewport
+        } else if address.is_focused(window) {
+            KeysAt::Address
+        } else {
+            KeysAt::Elsewhere
+        };
+        let typed = self.address.read(cx).text();
+        let waiting = match &self.input.page_waits {
+            None => Waiting::No,
+            Some(text) if *text == typed => Waiting::Same,
+            Some(_) => Waiting::Edited,
+        };
+        let (go, waits) = keys_go(at, self.page_shown(), waiting);
+        if !waits {
+            self.input.page_waits = None;
+        }
+        match go {
+            KeysGo::Stay => {}
+            KeysGo::Page => cx.defer_in(window, |this, window, _| window.focus(&this.focus)),
+            KeysGo::Address => cx.defer_in(window, move |_, window, _| window.focus(&address)),
+        }
     }
 
     pub(crate) fn escape(&mut self, cx: &mut Context<Self>) {

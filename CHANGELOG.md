@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.81
+
+- **Shortcuts keep answering while the Browser waits for a linked machine's page.** After you typed an address for a linked machine's workspace and pressed Return, ⇧⌘K, ⌘F and every other shortcut did nothing until the tunnel was up and its page showed (for good if the tunnel failed). They now reach the window all the time: the address keeps the keys while the page is on its way, the page takes them when it shows, and a page that goes away hands them back to the address.
+- **A page a link opens in a new tab follows its tunnel too.** When a linked machine's tunnel came back on another local port, the tab you had open moved to it but a page opened from it with a link (target=_blank) stayed on the old, dead port. It now moves with the tunnel.
+
 ## 0.1.80
 
 - **Settings' search field shows what you type again.** Since 0.1.73 it showed an empty box: no "Search settings", no letters and no caret, although the search worked.

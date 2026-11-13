@@ -4,6 +4,7 @@ umask 077
 
 name=vps
 dest=vps.invalid
+second=there.invalid
 agents="claude codex gemini opencode grok cursor copilot vibe"
 repo=$(cd "$(dirname "$0")/.." && pwd)
 me=$(basename "$0")
@@ -135,7 +136,7 @@ fresh_folder() {
 }
 
 emit() {
-  sed -e "s|@F@|$folder|g" -e "s|@S@|$side|g" -e "s|@B@|$window_bin|g" > "$1"
+  sed -e "s|@F@|$folder|g" -e "s|@S@|$side|g" -e "s|@B@|$window_bin|g" -e "s|@D@|$dest|g" -e "s|@E@|$second|g" > "$1"
   chmod "$2" "$1"
 }
 
@@ -336,10 +337,13 @@ elif [ $# -eq 0 ]; then
   printf 'machine-bench ssh: %s: no command; the bench opens no shell\n' "$dest" >&2
   exit 255
 fi
-if [ "$dest" != vps.invalid ]; then
-  printf 'ssh: Could not resolve hostname %s: Name or service not known\n' "$dest" >&2
-  exit 255
-fi
+case $dest in
+  @D@ | @E@) ;;
+  *)
+    printf 'ssh: Could not resolve hostname %s: Name or service not known\n' "$dest" >&2
+    exit 255
+    ;;
+esac
 held() {
   [ -e "$dir/$dest.held" ] || return 0
   printf 'ssh: connect to host %s port 22: Connection refused\n' "$dest" >&2
@@ -578,8 +582,12 @@ summary() {
   printf 'the window         . %s/env; cd %s/here/here-proj; "%s/target/debug/cornercase-gpui" > %s/window.log 2>&1 & echo $! > %s/window.pid\n' \
     "$folder" "$folder" "$repo" "$folder" "$folder"
   printf 'forward a port     the stand-in forwards -N -L and -R to this computer'"'"'s loopback (python3): a port that is taken here lands on another local port\n'
-  printf 'cut the link       touch %s/ssh/%s.held; here machines retry %s   (rm it and retry to bring it back; on Linux the open link drops only when its cornercase proxy ends, by pid; .slow holds each ssh N s)\n' \
-    "$folder" "$dest" "$name"
+  printf 'cut the link       touch %s/ssh/%s.held; here machines retry %s   (rm it and retry to bring it back; on Linux the open link drops only when its cornercase proxy ends, by pid; .slow holds each ssh N s; each name, %s and %s, has its own files)\n' \
+    "$folder" "$dest" "$name" "$dest" "$second"
+  printf 'the window there   ⇧⌘K, type %s (target/manual-check text PID %s, then key PID return), or start it with --remote %s; This Mac in that dialog brings it back\n' \
+    "$second" "$second" "$second"
+  printf 'vps elsewhere      here machines edit %s --destination %s points it at the same server by its other name (--destination %s puts it back)\n' \
+    "$name" "$second" "$dest"
   printf 'take it down       kill "%s(cat %s/window.pid)"; %s/tools/%s down %s\n' '$' "$folder" "$repo" "$me" "$folder"
 }
 
@@ -706,8 +714,10 @@ down() {
   marked
   refuse_inside
   refuse_window
-  : > "$folder/ssh/$dest.held"
-  rm -f "$folder/ssh/$dest.slow"
+  for d in "$dest" "$second"; do
+    : > "$folder/ssh/$d.held"
+    rm -f "$folder/ssh/$d.slow"
+  done
   snapshot=$(scan pids | tr '\n' ' ')$(socket_holders)
   stop_servers
   if ! wait_gone "$snapshot"; then
@@ -774,10 +784,12 @@ status() {
     json=$("$folder/bin/here" machines --json 2> /dev/null || true)
     machine_line
   fi
-  for f in held slow missing; do
-    if [ -e "$folder/ssh/$dest.$f" ]; then
-      printf '  ssh/%s.%s is there\n' "$dest" "$f"
-    fi
+  for d in "$dest" "$second"; do
+    for f in held slow missing; do
+      if [ -e "$folder/ssh/$d.$f" ]; then
+        printf '  ssh/%s.%s is there\n' "$d" "$f"
+      fi
+    done
   done
   printf '  window %s\n' "$(windows_on_bench | grep . || printf none)"
   forwarders_report

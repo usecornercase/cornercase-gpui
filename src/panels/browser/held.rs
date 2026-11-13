@@ -143,6 +143,11 @@ pub(crate) fn repointed(url: &str, through: Through, now: Option<u16>) -> Option
     (loopback_port(url) == Some(through.local)).then(|| (rewrite(url, local), Through { local, ..through }))
 }
 
+pub(crate) fn inherited(opener: Option<Through>, url: &str) -> Option<Through> {
+    let blank = url.is_empty() || url == "about:blank";
+    opener.filter(|through| blank || loopback_port(url) == Some(through.local))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Typed {
     Through(u16),
