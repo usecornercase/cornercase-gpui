@@ -54,8 +54,8 @@ pub(crate) fn keys_go(at: KeysAt, page_shown: bool, waiting: Waiting) -> (KeysGo
     }
 }
 
-pub(crate) fn escape_tops(choice: bool, agents: &Agents, devices: bool) -> Vec<Top> {
-    let card = matches!(agents.pick, Some(Pick::Picked(_)));
+pub(crate) fn escape_tops(choice: bool, agents: &Agents, devices: bool, many: bool) -> Vec<Top> {
+    let card = matches!(agents.pick, Some(Pick::Picked(_))) && many;
     let menu = agents.menu.is_some_and(|menu| menu != Menu::Chooser || card);
     escape::tops_of(&[(Top::Choice, choice), (Top::Menu, menu || devices), (Top::Pick, agents.pick.is_some())])
 }
@@ -118,8 +118,9 @@ impl Browser {
         self.press_escape();
     }
 
-    pub(crate) fn tops(&self) -> Vec<Top> {
-        escape_tops(self.input.choice.is_some(), &self.agents, self.devices_open)
+    pub(crate) fn tops(&self, cx: &App) -> Vec<Top> {
+        let many = self.agent_choices(cx).len() > 1;
+        escape_tops(self.input.choice.is_some(), &self.agents, self.devices_open, many)
     }
 
     pub(crate) fn close_top(&mut self, top: Top, cx: &mut Context<Self>) {

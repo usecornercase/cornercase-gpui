@@ -19,7 +19,7 @@ enum Shown {
 impl Shown {
     fn tops(&self, cx: &App) -> Vec<Top> {
         match self {
-            Self::Browser(browser) => browser.read(cx).tops(),
+            Self::Browser(browser) => browser.read(cx).tops(cx),
             Self::Files(files) => files.read(cx).tops(),
             Self::Changes(changes) => changes.read(cx).tops(),
             Self::Todo(todo) => todo.read(cx).tops(),

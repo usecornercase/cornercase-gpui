@@ -41,7 +41,7 @@ impl Browser {
         let ask = cx.new(|cx| TextField::new("What should change?", cx).wraps());
         cx.subscribe_in(&ask, window, |this, _, event, window, cx| match event {
             TextFieldEvent::Submit => this.send_pick(cx),
-            TextFieldEvent::Cancel => match escape::first(&this.tops()) {
+            TextFieldEvent::Cancel => match escape::first(&this.tops(cx)) {
                 Some(Top::Pick) | None => {
                     this.cancel_pick(cx);
                     window.focus(&this.focus);
