@@ -182,6 +182,29 @@ fn a_loop_label_says_its_limit_or_its_rounds_long_or_short() {
 }
 
 #[test]
+fn a_loop_label_is_its_words_then_its_count() {
+    let back = BackSpec { to: 1, when: "findings".into(), at_most: 3 };
+    let counts = [(None, false, "· at most 3"), (None, true, "≤ 3"), (Some(1), false, "· 1/3"), (Some(4), true, "4/3")];
+    for (rounds, short, count) in counts {
+        assert_eq!(back.count(rounds, short), count);
+        assert_eq!(back.label(rounds, short), format!("findings {count}"));
+    }
+}
+
+#[test]
+fn a_run_lists_the_loops_that_went_round_with_their_rounds() {
+    let runs = parse_runs(RUNS).expect("runs");
+    let run = &runs.runs[0];
+    assert_eq!(run.position(), "stage 1 of 2");
+    let looped: Vec<_> =
+        run.looped().into_iter().map(|(stage, back, rounds)| (stage, back.when.as_str(), rounds)).collect();
+    assert_eq!(looped, [(1, "findings", 1)]);
+    let line = r#"{"revision":1,"runs":[{"run":2,"workspace":5,"flow":{"name":"Q","stages":[{"roles":["c"],"back":null}]},"roles":[],"stage":null,"rounds":[0],"state":"closed"}]}"#;
+    let closed = &parse_runs(line).expect("runs").runs[0];
+    assert_eq!((closed.position().as_str(), closed.looped().len()), ("not started", 0));
+}
+
+#[test]
 fn a_team_names_each_of_its_agents_once_the_orchestrator_first() {
     let listing = parse_listing(LIST).expect("a listing");
     let quick = listing.flows.iter().find(|f| f.origin == "user").expect("the user's flow");

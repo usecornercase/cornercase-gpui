@@ -6,6 +6,8 @@ mod offers;
 mod status;
 mod window_processes;
 
+const ID_ROOM: f32 = 96.;
+
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::time::{Duration, Instant};
@@ -19,6 +21,7 @@ use gpui::{
 use crate::cli;
 use crate::dialogs::{self, PathQuestion};
 use crate::model::{Session, Shown};
+use crate::notify::tip;
 use crate::panels::PanelKind;
 use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::{colours, radius};
@@ -79,6 +82,26 @@ fn say(result: anyhow::Result<String>, cx: &mut App) {
 fn chip(text: impl Into<SharedString>, colour: Rgba) -> Div {
     let text: SharedString = text.into();
     div().px(px(7.)).rounded(px(radius::chip())).bg(colours::inset()).text_size(px(11.)).text_color(colour).child(text)
+}
+
+fn plugin_name(plugin: &Plugin) -> Stateful<Div> {
+    let name = plugin.name();
+    div()
+        .id(SharedString::from(format!("plugin-name-{}", plugin.id)))
+        .min_w_0()
+        .flex()
+        .font_weight(FontWeight::SEMIBOLD)
+        .tooltip(tip(name.clone()))
+        .child(ui::one_line(name))
+}
+
+fn plugin_id(plugin: &Plugin) -> Div {
+    let id = ui::dim(ui::one_line(plugin.id.clone()))
+        .id(SharedString::from(format!("plugin-id-{}", plugin.id)))
+        .min_w_0()
+        .flex()
+        .tooltip(tip(plugin.id.clone()));
+    div().flex_1().min_w(px(ID_ROOM)).flex().child(id)
 }
 
 fn health_colour(health: Health) -> Rgba {
@@ -313,10 +336,9 @@ impl PluginsPanel {
                     })
                     .when(!switchable, |d| d.opacity(0.4).cursor_default()),
             )
-            .child(div().font_weight(FontWeight::SEMIBOLD).child(plugin.name()))
+            .child(plugin_name(plugin))
             .children(plugin.manifest.as_ref().map(|m| ui::dim(m.version.clone())))
-            .child(ui::dim(plugin.id.clone()))
-            .child(div().flex_1())
+            .child(plugin_id(plugin))
             .child(chip)
     }
 

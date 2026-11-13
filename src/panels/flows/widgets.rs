@@ -7,8 +7,8 @@ use gpui::{
 };
 
 use super::diagram::role_colour;
-use super::graph::float;
-use super::model::{FlowInfo, FlowSpec, Progress, Run};
+use super::graph::{LOOP_LABEL_MAX, float};
+use super::model::{BackSpec, FlowInfo, FlowSpec, Progress, Run};
 use crate::notify::tip;
 use crate::platform::paths::Style;
 use crate::store::{self, Busy, Store};
@@ -33,10 +33,9 @@ pub(super) fn tag(text: &'static str) -> Div {
         .child(text)
 }
 
-pub(super) fn chip(glyph: Option<Icon>, text: impl Into<SharedString>, colour: Rgba) -> Div {
+fn chip_frame(colour: Rgba) -> Div {
     div()
         .flex()
-        .flex_none()
         .items_center()
         .gap(px(4.))
         .h(px(20.))
@@ -48,8 +47,38 @@ pub(super) fn chip(glyph: Option<Icon>, text: impl Into<SharedString>, colour: R
         .text_size(px(11.))
         .text_color(colour)
         .whitespace_nowrap()
-        .children(glyph.map(|g| ui::icon(g, 11.).text_color(colour)))
-        .child(text.into())
+}
+
+pub(super) fn chip(glyph: Option<Icon>, text: impl Into<SharedString>, colour: Rgba) -> Div {
+    chip_frame(colour).flex_none().children(glyph.map(|g| ui::icon(g, 11.).text_color(colour))).child(text.into())
+}
+
+pub(super) fn typed_chip(id: &'static str, text: String, colour: Rgba) -> Stateful<Div> {
+    chip_frame(colour)
+        .id(id)
+        .min_w_0()
+        .tooltip(tip(text.clone()))
+        .child(div().min_w_0().flex().child(ui::one_line(text)))
+}
+
+pub(super) fn loop_words(id: impl Into<ElementId>, back: &BackSpec, count: Option<String>) -> Stateful<Div> {
+    let whole = match &count {
+        Some(count) => format!("{} {count}", back.when),
+        None => back.when.clone(),
+    };
+    div()
+        .id(id)
+        .min_w_0()
+        .flex()
+        .items_center()
+        .tooltip(tip(whole))
+        .child(div().min_w_0().max_w(px(LOOP_LABEL_MAX)).flex().child(ui::one_line(back.when.clone())))
+        .children(count.map(|count| div().flex_none().child(format!(" {count}"))))
+}
+
+pub(super) fn loop_chip(id: &'static str, back: &BackSpec) -> Div {
+    let colour = colours::soft();
+    chip_frame(colour).min_w_0().child(ui::icon(Icon::Repeat, 11.).text_color(colour)).child(loop_words(id, back, None))
 }
 
 pub(super) fn heading(glyph: Icon, text: &str) -> Div {

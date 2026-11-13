@@ -74,14 +74,18 @@ pub(crate) struct BackSpec {
 }
 
 impl BackSpec {
-    pub(crate) fn label(&self, rounds: Option<u32>, short: bool) -> String {
-        let (when, most) = (&self.when, self.at_most);
+    pub(crate) fn count(&self, rounds: Option<u32>, short: bool) -> String {
+        let most = self.at_most;
         match (rounds, short) {
-            (Some(rounds), true) => format!("{when} {rounds}/{most}"),
-            (Some(rounds), false) => format!("{when} · {rounds}/{most}"),
-            (None, true) => format!("{when} ≤ {most}"),
-            (None, false) => format!("{when} · at most {most}"),
+            (Some(rounds), true) => format!("{rounds}/{most}"),
+            (Some(rounds), false) => format!("· {rounds}/{most}"),
+            (None, true) => format!("≤ {most}"),
+            (None, false) => format!("· at most {most}"),
         }
+    }
+
+    pub(crate) fn label(&self, rounds: Option<u32>, short: bool) -> String {
+        format!("{} {}", self.when, self.count(rounds, short))
     }
 }
 
@@ -298,22 +302,29 @@ impl Run {
         self.roles.iter().find(|m| m.role == role)
     }
 
-    pub(crate) fn summary(&self) -> String {
-        let position = match self.stage {
+    pub(crate) fn position(&self) -> String {
+        match self.stage {
             Some(stage) => format!("stage {} of {}", stage + 1, self.flow.stages.len()),
             None => "not started".to_string(),
-        };
-        let loops: String = self
-            .rounds
+        }
+    }
+
+    pub(crate) fn looped(&self) -> Vec<(usize, &BackSpec, u32)> {
+        self.rounds
             .iter()
             .enumerate()
             .filter(|(_, rounds)| **rounds > 0)
-            .filter_map(|(stage, rounds)| {
-                let back = self.flow.stages.get(stage)?.back.as_ref()?;
-                Some(format!(" · {} {rounds}/{}", back.when, back.at_most))
-            })
-            .collect();
-        position + &loops
+            .filter_map(|(stage, rounds)| Some((stage, self.flow.stages.get(stage)?.back.as_ref()?, *rounds)))
+            .collect()
+    }
+
+    pub(crate) fn summary(&self) -> String {
+        let mut summary = self.position();
+        for (_, back, rounds) in self.looped() {
+            summary.push_str(" · ");
+            summary.push_str(&back.label(Some(rounds), true));
+        }
+        summary
     }
 
     pub(crate) fn loudest(&self) -> Option<&str> {

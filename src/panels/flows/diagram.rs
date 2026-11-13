@@ -12,6 +12,7 @@ use super::FlowsPanel;
 use super::cards::{ground, lead_card, role_card};
 use super::graph::{self, Curve, Graph, Label, Rect, Spot, Wire};
 use super::model::{Edge, FlowSpec, Member, Progress, Run, Step};
+use super::widgets::loop_words;
 use super::wires::{self, Ink, Line};
 use crate::theme::colour::mix;
 use crate::theme::{colours, palette_rgba, radius};
@@ -339,7 +340,7 @@ fn marker(plan: Plan, at: Spot, stage: usize) -> Div {
 
 fn loop_label(plan: Plan, label: Label, short: bool) -> Option<Div> {
     let back = plan.flow.stages.get(label.stage)?.back.as_ref()?;
-    let text = back.label(plan.run.and_then(|r| r.rounds.get(label.stage).copied()), short);
+    let count = back.count(plan.run.and_then(|r| r.rounds.get(label.stage).copied()), short);
     let colour = loop_colour(plan, label.stage);
     Some(
         div()
@@ -359,7 +360,7 @@ fn loop_label(plan: Plan, label: Label, short: bool) -> Option<Div> {
             .text_size(px(11.))
             .text_color(colour)
             .child(ui::icon(Icon::Repeat, 12.).text_color(colour))
-            .child(text),
+            .child(loop_words(("loop-label", label.stage), back, Some(count))),
     )
 }
 

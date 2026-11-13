@@ -229,6 +229,24 @@ fn a_narrow_board_shrinks_the_cards_until_the_plan_fits() {
 }
 
 #[test]
+fn a_long_loop_label_counts_at_most_its_widest_width() {
+    let long = BackSpec { to: 1, when: "w".repeat(900), at_most: 3 };
+    let counted = float("· at most 3".chars().count() + 1) * CHAR_W + LABEL_PAD;
+    assert!(close(label_width(&long, false), LOOP_LABEL_MAX + counted));
+    let short = BackSpec { to: 1, when: "findings".into(), at_most: 3 };
+    assert!(close(label_width(&short, false), float(short.label(None, false).chars().count()) * CHAR_W + LABEL_PAD));
+}
+
+#[test]
+fn a_long_loop_label_leaves_the_boxes_their_width() {
+    let long = "word ".repeat(60);
+    let plan = flow(&[(&["coder"], None), (&["reviewer"], Some((1, long.as_str())))]);
+    let graph = fit(&plan, None, 720.);
+    assert!(graph.width <= 720.);
+    assert!(graph.cards.iter().all(|c| close(c.rect.w, CARD_W)));
+}
+
+#[test]
 fn loops_into_one_stage_point_at_it_side_by_side_the_outer_one_higher() {
     let graph = layout(&full_issue(), None);
     let (inner, outer) = (wire(&graph, Edge::Loop { stage: 1 }), wire(&graph, Edge::Loop { stage: 2 }));

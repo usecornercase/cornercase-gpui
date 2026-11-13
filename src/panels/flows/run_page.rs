@@ -11,7 +11,7 @@ use super::flow_page::block;
 use super::hero::{facts, hero, stages_bar, task, title};
 use super::merged_view;
 use super::model::{Member, RoleSpec, Run, plural};
-use super::widgets::{panel_box, pill, show_pane};
+use super::widgets::{loop_words, panel_box, pill, show_pane};
 use crate::store::{Store, args};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone, glass::tint};
@@ -40,16 +40,28 @@ fn run_hero(run: &Run, cx: &Context<FlowsPanel>) -> Div {
     hero(&run.flow)
         .child(heading.child(pill(state, colour, live)))
         .child(
-            div()
-                .relative()
-                .flex()
-                .items_center()
-                .gap(px(12.))
-                .child(stages_bar(run).flex_1())
-                .child(div().flex_none().text_size(px(11.)).text_color(colours::muted()).child(run.summary())),
+            div().relative().flex().items_center().gap(px(12.)).child(stages_bar(run).flex_1()).child(run_summary(run)),
         )
         .child(run_buttons(run, cx))
         .children(merged_view::run_switch(run, cx))
+}
+
+fn run_summary(run: &Run) -> Div {
+    div()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .text_size(px(11.))
+        .text_color(colours::muted())
+        .whitespace_nowrap()
+        .child(run.position())
+        .children(run.looped().into_iter().map(|(stage, back, rounds)| {
+            div().min_w_0().flex().items_center().child(" · ").child(loop_words(
+                ("run-loop", stage),
+                back,
+                Some(back.count(Some(rounds), true)),
+            ))
+        }))
 }
 
 fn run_status(run: &Run) -> (&'static str, Rgba) {
