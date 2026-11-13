@@ -4,11 +4,13 @@ use gpui::{
 };
 
 use super::Browser;
-use super::tunnels::{State, Tunnel, rewrite};
+use super::tunnels::{State, Tunnel};
 use crate::cli;
 use crate::model::Session;
-use crate::model::link::loopback_port;
+use crate::model::link::{loopback_port, rewrite};
+use crate::model::tunnels::{Way, older_note};
 use crate::panels::ports::{self, data::Port};
+use crate::store::Held;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, icon};
@@ -22,6 +24,19 @@ pub(crate) enum Reach {
     Direct(String),
     Tunnelled { url: String, state: State },
     Opening,
+    NotTunnelled,
+    Closing,
+}
+
+pub(crate) fn held_reach(port: &Port, held: Option<&Held>) -> Reach {
+    let url = port.url.clone().unwrap_or_default();
+    match held {
+        Some(Held::Up { local }) => Reach::Tunnelled { url: rewrite(&url, *local), state: State::Ready },
+        Some(Held::Down { .. }) => Reach::Tunnelled { url, state: State::Retrying },
+        Some(Held::Opening) => Reach::Opening,
+        Some(Held::Ending) => Reach::Closing,
+        None => Reach::NotTunnelled,
+    }
 }
 
 pub(crate) fn reach(port: &Port, tunnel: Option<&Tunnel>, remote: bool) -> Reach {
@@ -43,7 +58,8 @@ pub(crate) fn how_reached(port: &Port, reach: &Reach, host: &str) -> String {
         Reach::Tunnelled { state: State::Retrying, .. } => format!("via {host}: the tunnel stopped, trying again"),
         Reach::Tunnelled { url, .. } if loopback_port(url) == Some(port.number) => format!("via {host}"),
         Reach::Tunnelled { .. } => format!("via {host}, port {} there", port.number),
-        Reach::Opening => format!("port {} on {host}", port.number),
+        Reach::Opening | Reach::NotTunnelled => format!("port {} on {host}", port.number),
+        Reach::Closing => format!("closing the tunnel of port {} on {host}", port.number),
     }
 }
 
@@ -66,6 +82,7 @@ impl Browser {
 
     fn servers(&self, cx: &mut Context<Self>) -> Div {
         let list = div().w_full().max_w(px(560.)).flex().flex_col().gap(px(8.)).child(ui::section("Dev servers"));
+        let list = list.children(Self::older_line(cx));
         match (&self.dev.ports, &self.dev.error) {
             _ if self.workspace.is_none() => list.child(ui::dim(NO_WORKSPACE)),
             (_, Some(e)) => list.child(ui::dim(e.clone()).text_color(colours::failed())),
@@ -75,12 +92,25 @@ impl Browser {
         }
     }
 
+    fn older_line(cx: &Context<Self>) -> Option<Div> {
+        let host = cli::host()?;
+        match Store::get(cx).read(cx).tunnel_way() {
+            Way::Own(older) => Some(ui::dim(older_note(&older, &host))),
+            _ => None,
+        }
+    }
+
     fn port_rows(&self, ports: &[Port], cx: &Context<Self>) -> Vec<AnyElement> {
         let host = cli::host();
         let store = Store::get(cx);
+        let held = store.read(cx).tunnel_way() == Way::Cornercase;
         let session = store.read(cx).session.as_ref();
         let rows = ports.iter().map(|port| {
-            let reach = reach(port, self.dev.tunnels.get(port.number), host.is_some());
+            let reach = if held {
+                held_reach(port, store.read(cx).held_tunnel(port.number))
+            } else {
+                reach(port, self.dev.tunnels.get(port.number), host.is_some())
+            };
             port_row(port, &reach, (session, host.as_deref().unwrap_or_default()), cx)
         });
         rows.collect()
@@ -95,9 +125,10 @@ fn port_row(
 ) -> AnyElement {
     let url = match reach {
         Reach::Direct(url) | Reach::Tunnelled { url, .. } => url.clone(),
-        Reach::Opening => port.url.clone().unwrap_or_default(),
+        Reach::Opening | Reach::NotTunnelled | Reach::Closing => port.url.clone().unwrap_or_default(),
     };
     let opened = port.url.clone().unwrap_or_default();
+    let closing = matches!(reach, Reach::Closing);
     let place = [port.place(session, false), how_reached(port, reach, host)];
     ui::row(SharedString::from(format!("browser-port-{}", port.number)), false)
         .p(px(12.))
@@ -109,7 +140,12 @@ fn port_row(
         .child(icon(Icon::Ports, 16.).flex_none().text_color(colours::accent()))
         .child(port_text(shown_url(&url), port, &place))
         .child(open_hint(port.number, reach))
-        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.browse(opened.clone(), this.workspace, cx)))
+        .children(close_button(port.number, reach, cx))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            if !closing {
+                this.browse(opened.clone(), this.workspace, cx);
+            }
+        }))
         .into_any_element()
 }
 
@@ -128,8 +164,31 @@ fn port_text(url: &str, port: &Port, place: &[String]) -> Div {
         .child(ui::dim(ui::one_line(place)))
 }
 
+fn close_button(number: u16, reach: &Reach, cx: &Context<Browser>) -> Option<AnyElement> {
+    let held = Store::get(cx).read(cx).tunnel_way() == Way::Cornercase;
+    let tunnelled = matches!(reach, Reach::Tunnelled { .. });
+    (held && tunnelled).then(|| {
+        let store = Store::get(cx);
+        ui::button(SharedString::from(format!("browser-close-tunnel-{number}")), "Close tunnel")
+            .on_click(move |_: &ClickEvent, _, cx| {
+                cx.stop_propagation();
+                store.update(cx, |s, cx| s.close_tunnel(number, false, cx));
+            })
+            .into_any_element()
+    })
+}
+
 fn open_hint(number: u16, reach: &Reach) -> AnyElement {
     match reach {
+        Reach::Closing => {
+            ui::busy(SharedString::from(format!("browser-closing-{number}")), "Closing…").into_any_element()
+        }
+        Reach::NotTunnelled => div()
+            .flex_none()
+            .text_size(px(12.))
+            .text_color(colours::accent())
+            .child("Tunnel and open")
+            .into_any_element(),
         Reach::Opening | Reach::Tunnelled { state: State::Starting, .. } => {
             ui::busy(SharedString::from(format!("browser-tunnel-{number}")), "Tunnelling…").into_any_element()
         }

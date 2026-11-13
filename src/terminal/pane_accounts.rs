@@ -7,7 +7,7 @@ use gpui::{
 };
 
 use crate::app::Root;
-use crate::context_menu::{Entry, above, choice, item, submenu};
+use crate::context_menu::{Entry, choice, item, submenu};
 use crate::model::PaneInfo;
 use crate::model::accounts::{Switch, Switcher, switching_key};
 use crate::panels::PanelKind;
@@ -168,7 +168,7 @@ impl PaneChips {
                 cx.stop_propagation();
                 let _ = root.update(cx, |this, cx| {
                     let entries = this.account_entries(pane, &agent, cx);
-                    this.open_menu(above(e.position, &entries), entries, window, cx);
+                    this.open_menu_above(e.position, entries, window, cx);
                 });
             })
             .child(text)

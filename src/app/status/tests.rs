@@ -37,7 +37,29 @@ fn an_older_cornercase_there_reads_as_the_machines_sheet_says_it() {
 #[test]
 fn the_connection_tip_names_this_windows_version() {
     let window = format!("This window is {}", crate::self_update::version_line());
-    let with = super::connection_tip(Some("boom".into()));
+    let with = super::connection_tip(Some("boom".into()), None);
     assert_eq!(with, format!("boom\n{window}"));
-    assert!(super::connection_tip(None).ends_with(&window));
+    assert!(super::connection_tip(None, None).ends_with(&window));
+}
+
+#[test]
+fn the_label_counts_this_windows_tunnels_on_another_server() {
+    let parts = super::label_parts(Some("devbox"), 2, "cornercase 0.13.51");
+    assert_eq!(parts.count.as_deref(), Some("⇄2"));
+    assert_eq!(parts.host.as_deref(), Some("devbox"));
+    assert!(super::label_parts(Some("devbox"), 0, "x").count.is_none());
+}
+
+#[test]
+fn the_label_has_no_count_on_this_computer() {
+    let parts = super::label_parts(None, 3, "cornercase 0.13.51");
+    assert_eq!((parts.host, parts.count), (None, None));
+}
+
+#[test]
+fn the_tip_leads_with_the_tunnels_only_on_another_server() {
+    assert!(
+        super::connection_tip(None, Some("devbox")).starts_with("Tunnels to devbox, and connecting to another server")
+    );
+    assert!(super::connection_tip(Some("boom".into()), Some("devbox")).starts_with("boom"));
 }

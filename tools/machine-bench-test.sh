@@ -485,11 +485,204 @@ refused_by_stand_in() {
   check "a command ran ($*)" no_new_calls
 }
 
-the_stand_in_refuses_other_hosts_tunnels_and_shells() {
+the_stand_in_refuses_other_hosts_masters_and_shells() {
+  spec=127.0.0.1:61234:localhost:3000
   refused_by_stand_in -- devbox cmd &&
-    refused_by_stand_in -N -T -o ExitOnForwardFailure=yes -o BatchMode=yes -L 127.0.0.1:61234:localhost:3000 -- vps.invalid &&
+    refused_by_stand_in -N -T -L "$spec" -- devbox &&
     refused_by_stand_in -O check vps.invalid &&
-    refused_by_stand_in -- vps.invalid
+    refused_by_stand_in -- vps.invalid &&
+    refused_by_stand_in -f -N -L "$spec" -- vps.invalid &&
+    refused_by_stand_in -N -D 1080 -- vps.invalid &&
+    refused_by_stand_in -W localhost:3000 -- vps.invalid &&
+    refused_by_stand_in -N -- vps.invalid &&
+    refused_by_stand_in -N -L "$spec" -- vps.invalid "sh -c true"
+}
+
+free_port() {
+  python3 -I -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])'
+}
+
+other_free_port() {
+  other=$(free_port)
+  while [ "$other" = "$1" ]; do
+    other=$(free_port)
+  done
+  printf '%s\n' "$other"
+}
+
+echo_server() {
+  python3 -I -c '
+import socket, sys, threading
+def serve(c):
+    while True:
+        d = c.recv(100)
+        if not d:
+            break
+        c.sendall(d)
+l = socket.socket()
+l.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+l.bind(("127.0.0.1", int(sys.argv[1])))
+l.listen(5)
+while True:
+    c, _ = l.accept()
+    threading.Thread(target=serve, args=(c,), daemon=True).start()
+' "$1" > /dev/null 2>&1 &
+  track "$!"
+}
+
+late_server() {
+  python3 -I -c '
+import socket, sys, threading
+def serve(c):
+    while c.recv(100):
+        pass
+    c.sendall(b"pong")
+    c.close()
+l = socket.socket()
+l.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+l.bind(("127.0.0.1", int(sys.argv[1])))
+l.listen(5)
+while True:
+    c, _ = l.accept()
+    threading.Thread(target=serve, args=(c,), daemon=True).start()
+' "$1" > /dev/null 2>&1 &
+  track "$!"
+}
+
+half_close_trip() {
+  python3 -I -c '
+import socket, sys
+s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=5)
+s.sendall(b"ping")
+s.shutdown(socket.SHUT_WR)
+print(s.recv(10).decode())
+' "$1" 2> /dev/null
+}
+
+round_trip() {
+  python3 -I -c '
+import socket, sys
+s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=5)
+s.sendall(b"ping")
+print(s.recv(10).decode())
+' "$1" 2> /dev/null
+}
+
+until_answers() {
+  n=0
+  while [ "$n" -lt 50 ]; do
+    [ "$(round_trip "$1")" = ping ] && return 0
+    n=$((n + 1))
+    sleep 0.1
+  done
+  return 1
+}
+
+until_gone() {
+  n=0
+  while [ "$n" -lt 50 ]; do
+    kill -0 "$1" 2> /dev/null || return 0
+    n=$((n + 1))
+    sleep 0.1
+  done
+  return 1
+}
+
+forward_in() {
+  "$sh_cmd" "$1/bin/ssh" -N -T -o ExitOnForwardFailure=yes -o BatchMode=yes "${4:--L}" "127.0.0.1:$2:localhost:$3" -- vps.invalid \
+    > "$t/fout" 2> "$t/ferr" &
+  forwarded=$!
+  track "$forwarded"
+}
+
+the_stand_in_forwards_a_port_to_there() {
+  far=$(free_port)
+  near=$(other_free_port "$far")
+  echo_server "$far"
+  until_answers "$far" || { check "the echo server did not start" false; return 1; }
+  forward_in "$b" "$near" "$far"
+  until_answers "$near" || { check "nothing answered through the forward: $(cat "$t/ferr")" false; return 1; }
+  check "the forward is not the stand-in's own process" contains_args "$forwarded" "$b/bin/forward" || return 1
+  kill "$forwarded"
+  check "SIGTERM did not end the forward" until_gone "$forwarded"
+}
+
+contains_args() {
+  ps -o args= -p "$1" 2> /dev/null | grep -q -F -- "$2"
+}
+
+the_stand_in_forwards_a_reverse_forward_too() {
+  far=$(free_port)
+  near=$(other_free_port "$far")
+  echo_server "$far"
+  until_answers "$far" || { check "the echo server did not start" false; return 1; }
+  forward_in "$b" "$near" "$far" -R
+  until_answers "$near" || { check "nothing answered through the -R forward: $(cat "$t/ferr")" false; return 1; }
+  kill "$forwarded"
+  check "SIGTERM did not end the -R forward" until_gone "$forwarded"
+}
+
+the_stand_in_keeps_the_answer_after_a_client_half_closes() {
+  far=$(free_port)
+  near=$(other_free_port "$far")
+  late_server "$far"
+  n=0
+  while [ "$n" -lt 50 ] && ! python3 -I -c 'import socket,sys;socket.create_connection(("127.0.0.1",int(sys.argv[1])),timeout=1)' "$far" 2> /dev/null; do
+    n=$((n + 1))
+    sleep 0.1
+  done
+  forward_in "$b" "$near" "$far"
+  n=0
+  answer=
+  while [ "$n" -lt 50 ] && [ "$answer" != pong ]; do
+    answer=$(half_close_trip "$near")
+    n=$((n + 1))
+    [ "$answer" = pong ] || sleep 0.1
+  done
+  kill "$forwarded"
+  check "the answer after the client's half-close was '$answer', not pong" [ "$answer" = pong ]
+}
+
+the_stand_in_says_a_taken_port_as_ssh_does() {
+  taken=$(free_port)
+  far=$(free_port)
+  echo_server "$taken"
+  until_answers "$taken" || { check "the holder did not start" false; return 1; }
+  stand_in -N -T -L "127.0.0.1:$taken:localhost:$far" -- vps.invalid
+  check "exit $rc, not 255" [ "$rc" = 255 ] || return 1
+  check "no ssh line: $(cat "$t/err")" contains "$t/err" "Could not request local forwarding." || return 1
+  check "no bind line" contains "$t/err" "Address already in use"
+}
+
+the_stand_in_refuses_a_forward_while_held() {
+  : > "$b/ssh/vps.invalid.held"
+  stand_in -N -T -L "127.0.0.1:$(free_port):localhost:3000" -- vps.invalid
+  rm -f "$b/ssh/vps.invalid.held"
+  check "held: exit $rc" [ "$rc" = 255 ] || return 1
+  check "held: no Connection refused" contains "$t/err" "Connection refused"
+}
+
+the_stand_in_forwards_only_loopback() {
+  stand_in -N -T -L "0.0.0.0:$(free_port):localhost:3000" -- vps.invalid
+  check "a wildcard bind: exit $rc" [ "$rc" = 255 ] || return 1
+  stand_in -N -T -L "127.0.0.1:$(free_port):example.com:80" -- vps.invalid
+  check "another host: exit $rc" [ "$rc" = 255 ] || return 1
+  check "no word about loopback: $(cat "$t/err")" contains "$t/err" "loopback only"
+}
+
+the_stand_in_says_a_refused_connection_and_keeps_running() {
+  far=$(free_port)
+  near=$(other_free_port "$far")
+  forward_in "$b" "$near" "$far"
+  n=0
+  while [ "$n" -lt 50 ] && [ -z "$(round_trip "$near")" ]; do
+    n=$((n + 1))
+    sleep 0.1
+  done
+  check "the forward ended" kill -0 "$forwarded" || return 1
+  kill "$forwarded"
+  until_gone "$forwarded"
+  check "no open failed line: $(cat "$t/ferr")" contains "$t/ferr" "open failed: connect failed"
 }
 
 the_stand_in_answers_a_host_lookup_without_any_config() {
@@ -642,6 +835,43 @@ EOF
   check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
 }
 
+down_lists_a_forward_left_running() {
+  runb up "$t/b6" --here "$t/new/cornercase"
+  check "up: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  forward_in "$t/b6" "$(free_port)" "$(free_port)"
+  n=0
+  while [ "$n" -lt 50 ] && ! contains_args "$forwarded" "$t/b6/bin/forward"; do
+    n=$((n + 1))
+    sleep 0.1
+  done
+  runb status "$t/b6"
+  check "status names no forward: $(cat "$t/out")" contains "$t/out" "forward pid $forwarded" || { kill "$forwarded"; return 1; }
+  runb down "$t/b6"
+  rc1=$rc
+  kill "$forwarded" 2> /dev/null
+  until_gone "$forwarded"
+  check "down with a forward left: exit $rc1" [ "$rc1" = 1 ] || return 1
+  check "its pid is not listed" contains "$t/err" "$forwarded" || return 1
+  check "the folder was removed" [ -d "$t/b6" ] || return 1
+  sleep 1
+  runb down "$t/b6"
+  check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+status_names_both_remembered_lists() {
+  runb status "$b"
+  check "status: exit $rc" [ "$rc" = 0 ] || return 1
+  check "the lists are named: $(cat "$t/out")" contains "$t/out" "the window's own list: remembered-tunnels.json is not there" || return 1
+  mkdir -p "$b/window"
+  : > "$b/window/remembered-tunnels.json"
+  : > "$b/there/tunnels.json"
+  runb status "$b"
+  rm -f "$b/window/remembered-tunnels.json" "$b/there/tunnels.json"
+  check "the window's list is not there" contains "$t/out" "the window's own list: remembered-tunnels.json is there" || return 1
+  check "there's list is not there" contains "$t/out" "cornercase's list on there: tunnels.json is there" || return 1
+  check "here's list is there" contains "$t/out" "cornercase's list on here: tunnels.json is not there"
+}
+
 run_test up_needs_a_folder
 run_test up_refuses_unknown_words_and_options
 run_test up_refuses_a_relative_folder
@@ -684,15 +914,24 @@ run_test the_stand_in_runs_a_link_against_there
 run_test the_stand_in_refuses_while_held
 run_test the_stand_in_runs_the_command_while_slow_is_zero
 run_test the_stand_in_answers_127_while_missing
-run_test the_stand_in_refuses_other_hosts_tunnels_and_shells
+run_test the_stand_in_refuses_other_hosts_masters_and_shells
+run_test the_stand_in_forwards_a_port_to_there
+run_test the_stand_in_forwards_a_reverse_forward_too
+run_test the_stand_in_keeps_the_answer_after_a_client_half_closes
+run_test the_stand_in_says_a_taken_port_as_ssh_does
+run_test the_stand_in_refuses_a_forward_while_held
+run_test the_stand_in_forwards_only_loopback
+run_test the_stand_in_says_a_refused_connection_and_keeps_running
 run_test the_stand_in_answers_a_host_lookup_without_any_config
 run_test the_log_keeps_each_command_line_quoted
 run_test the_fake_agent_reports_states_and_spawns_a_child
+run_test status_names_both_remembered_lists
 run_test status_and_down_refuse_a_folder_up_did_not_make
 run_test down_refuses_from_inside_the_bench
 run_test down_refuses_while_a_window_runs
 run_test down_stops_here_then_there_and_removes_the_folder
 run_test down_keeps_the_folder_while_bench_processes_remain
+run_test down_lists_a_forward_left_running
 
 printf '%s tests, %s failed\n' "$total" "$failed"
 [ "$failed" = 0 ]

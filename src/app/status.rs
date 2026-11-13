@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, InteractiveElement as _, IntoElement, ParentElement as _, Rgba,
+    AnyElement, ClickEvent, Context, Div, InteractiveElement as _, IntoElement, ParentElement as _, Rgba,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
@@ -10,6 +10,7 @@ use super::{Conn, GAP, Root};
 use crate::cli;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
+use crate::model::tunnels::Way;
 use crate::notify;
 use crate::platform::Os;
 use crate::platform::paths;
@@ -19,8 +20,10 @@ use crate::theme::{colours, radius};
 use crate::ui::{self, motion};
 
 pub(super) mod key;
+mod tunnels;
 
 const HEIGHT: f32 = 28.;
+const HOST_MAX: f32 = 150.;
 
 impl Root {
     pub(super) fn status_part(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> Drawn {
@@ -44,7 +47,7 @@ impl Root {
             .pr(px(GAP + 4.))
             .text_size(px(11.))
             .text_color(colours::faint())
-            .child(self.connection_status())
+            .child(self.connection_status(cx))
             .child(div().flex_1().text_color(colours::muted()).child(ui::one_line(self.active_pane_summary())))
             .when_some(jobs, |d, jobs| {
                 d.child(ui::busy("jobs", jobs).flex_none().max_w(px(360.)).text_size(px(11.))).child(separator())
@@ -55,9 +58,13 @@ impl Root {
             .child(div().flex_none().child(self.shown().size.map(|(c, r)| format!("{c}×{r}")).unwrap_or_default()))
     }
 
-    fn connection_status(&self) -> impl IntoElement + use<> {
+    fn connection_status(&self, cx: &Context<Self>) -> impl IntoElement + use<> {
         let (dot, label, why) = self.connection_label();
-        let tip = connection_tip(why);
+        let store = self.store.read(cx);
+        let menu_open = self.side.menu.is_some();
+        let held = store.tunnel_way() == Way::Cornercase && self.host.is_some();
+        let tip = connection_tip(why, self.host.as_deref().filter(|_| held));
+        let parts = label_parts(self.host.as_deref(), if held { store.tunnel_count() } else { 0 }, &label);
         div()
             .id("conn")
             .flex_none()
@@ -71,9 +78,15 @@ impl Root {
             .cursor_pointer()
             .hover(|s| s.bg(colours::hover()))
             .child(connection_dot(dot, self.conn == Conn::Starting))
-            .child(div().min_w_0().child(ui::one_line(label)))
-            .tooltip(notify::tip(tip))
-            .on_click(|_: &ClickEvent, window, cx| dialogs::connect(window, cx))
+            .child(label_element(parts))
+            .when(!menu_open, |d| d.tooltip(notify::tip(tip)))
+            .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
+                if held {
+                    this.open_machine_menu(e.position(), window, cx);
+                } else {
+                    dialogs::connect(window, cx);
+                }
+            }))
     }
 
     fn connection_label(&self) -> (Rgba, String, Option<String>) {
@@ -85,11 +98,7 @@ impl Root {
             Conn::Older(_) | Conn::Behind(_) => colours::waiting(),
             Conn::Lost(_) | Conn::Missing(_) => colours::failed(),
         };
-        let label = match &self.host {
-            Some(host) => format!("{host} · {state}"),
-            None => state,
-        };
-        (dot, label, why)
+        (dot, state, why)
     }
 
     fn active_pane_summary(&self) -> String {
@@ -111,8 +120,33 @@ impl Root {
     }
 }
 
-fn connection_tip(why: Option<String>) -> String {
-    let lead = why.unwrap_or_else(|| with_keys("Connect to another server", Command::Connect));
+#[derive(Debug, PartialEq, Eq)]
+struct LabelParts {
+    host: Option<String>,
+    count: Option<String>,
+    state: String,
+}
+
+fn label_parts(host: Option<&str>, tunnels: usize, state: &str) -> LabelParts {
+    let count = (host.is_some() && tunnels > 0).then(|| format!("⇄{tunnels}"));
+    LabelParts { host: host.map(str::to_string), count, state: state.to_string() }
+}
+
+fn label_element(parts: LabelParts) -> Div {
+    let row = div().min_w_0().flex().items_center().gap(px(4.));
+    let Some(host) = parts.host else { return row.child(ui::one_line(parts.state)) };
+    row.child(div().flex().min_w_0().max_w(px(HOST_MAX)).child(ui::one_line(host)))
+        .children(parts.count.map(|count| div().flex_none().text_color(colours::accent()).child(count)))
+        .child(div().flex_none().child("·"))
+        .child(div().flex().min_w_0().child(ui::one_line(parts.state)))
+}
+
+fn connection_tip(why: Option<String>, tunnels_to: Option<&str>) -> String {
+    let connect = with_keys("connecting to another server", Command::Connect);
+    let lead = why.unwrap_or_else(|| match tunnels_to {
+        Some(host) => format!("Tunnels to {host}, and {connect}"),
+        None => with_keys("Connect to another server", Command::Connect),
+    });
     format!("{lead}\nThis window is {}", self_update::version_line())
 }
 

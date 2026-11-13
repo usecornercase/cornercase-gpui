@@ -5,9 +5,11 @@ use gpui::{App, Context, Entity};
 use serde_json::Value;
 
 use super::Browser;
+use super::held::HeldOpen;
 use super::tunnels::Tunnels;
 use crate::cli;
 use crate::model::link::loopback_port;
+use crate::model::tunnels::Way;
 use crate::panels::PanelKind;
 use crate::panels::poll::{Polled, Watch, parse};
 use crate::panels::ports::data::{List, Port, list_command};
@@ -17,7 +19,9 @@ pub(crate) struct DevServers {
     pub(crate) ports: Option<Vec<Port>>,
     pub(crate) error: Option<String>,
     pub(crate) tunnels: Tunnels,
+    pub(super) held_opens: Vec<HeldOpen>,
     workspace: Option<u64>,
+    generation: u64,
     seen: HashSet<(u64, u16)>,
     watch: Watch,
 }
@@ -26,7 +30,22 @@ impl DevServers {
     pub(crate) fn new(cx: &mut Context<Browser>) -> Self {
         let tunnels = Tunnels::new(cx);
         let watch = Watch::start(cx);
-        Self { ports: None, error: None, tunnels, workspace: None, seen: HashSet::new(), watch }
+        Self {
+            ports: None,
+            error: None,
+            tunnels,
+            held_opens: Vec::new(),
+            workspace: None,
+            generation: 0,
+            seen: HashSet::new(),
+            watch,
+        }
+    }
+
+    pub(super) fn forget_server(&mut self) {
+        (self.workspace, self.ports, self.error) = (None, None, None);
+        self.seen.clear();
+        self.generation += 1;
     }
 
     fn follow(&mut self, workspace: Option<u64>) -> bool {
@@ -36,6 +55,10 @@ impl DevServers {
         }
         moved
     }
+}
+
+pub(crate) fn still_asked(sample: (u64, u64), now: (Option<u64>, u64)) -> bool {
+    now.0 == Some(sample.0) && now.1 == sample.1
 }
 
 pub(crate) fn web_ports(ports: Vec<Port>) -> Vec<Port> {
@@ -85,7 +108,8 @@ impl Polled for Browser {
             return;
         }
         let command = list_command(false, Some(workspace));
-        store::run_json(cx, command, move |this, result, cx| this.sampled(workspace, result, cx));
+        let generation = self.dev.generation;
+        store::run_json(cx, command, move |this, result, cx| this.sampled((workspace, generation), result, cx));
     }
 }
 
@@ -100,9 +124,9 @@ impl Browser {
         }
     }
 
-    fn sampled(&mut self, workspace: u64, result: anyhow::Result<Value>, cx: &mut Context<Self>) {
+    fn sampled(&mut self, (workspace, generation): (u64, u64), result: anyhow::Result<Value>, cx: &mut Context<Self>) {
         self.dev.watch.end();
-        if self.dev.workspace != Some(workspace) {
+        if !still_asked((workspace, generation), (self.dev.workspace, self.dev.generation)) {
             self.measure(cx);
             return;
         }
@@ -110,7 +134,8 @@ impl Browser {
             Ok(list) => (self.dev.ports, self.dev.error) = (Some(web_ports(list.ports)), None),
             Err(e) => self.dev.error = Some(e),
         }
-        self.keep_tunnels(cx);
+        let own = matches!(Store::get(cx).read(cx).tunnel_way(), Way::Own(_));
+        self.keep_tunnels(own, cx);
         self.auto_open(workspace, cx);
         cx.notify();
     }
@@ -118,8 +143,9 @@ impl Browser {
     fn auto_open(&mut self, workspace: u64, cx: &mut Context<Self>) {
         let Some(ports) = &self.dev.ports else { return };
         let url = appeared(ports, &mut self.dev.seen, workspace);
-        let opening =
-            self.dev.tunnels.pending_in(Some(workspace)) || self.restore.iter().any(|r| r.1 == Some(workspace));
+        let opening = self.dev.tunnels.pending_in(Some(workspace))
+            || self.dev.held_opens.iter().any(|open| open.in_workspace(Some(workspace)))
+            || self.restore.iter().any(|r| r.1 == Some(workspace));
         let busy = opening || self.tabs.active(Some(workspace)).is_some();
         if let Some(url) = url.filter(|_| !busy) {
             self.browse(url, Some(workspace), cx);
@@ -127,9 +153,13 @@ impl Browser {
     }
 
     pub(super) fn browse(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
-        match loopback_port(&url).filter(|_| cli::host().is_some()) {
-            Some(remote) => self.browse_through(remote, url, workspace, cx),
-            None => self.open_now(url, workspace, cx),
+        let Some(remote) = loopback_port(&url).filter(|_| cli::host().is_some()) else {
+            return self.open_now(url, workspace, cx);
+        };
+        match Store::get(cx).read(cx).tunnel_way() {
+            Way::Own(_) => self.browse_through(remote, url, workspace, cx),
+            Way::Cornercase | Way::Waiting => self.browse_held((remote, url), (workspace, false), cx),
+            Way::Here => self.open_now(url, workspace, cx),
         }
     }
 

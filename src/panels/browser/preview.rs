@@ -9,9 +9,9 @@ use gpui::{AsyncApp, Context, Image, ImageFormat, Task, WeakEntity};
 use serde_json::{Value, json};
 
 use super::cdp::Cdp;
-use super::tunnels::rewrite;
+use super::held::Passage;
 use super::{Browser, Status};
-use crate::model::link::loopback_port;
+use crate::model::link::{loopback_port, rewrite};
 use crate::{cli, desktop};
 
 const WIDTH: u32 = 1280;
@@ -149,14 +149,21 @@ async fn reachable(this: &WeakEntity<Browser>, url: String, cx: &mut AsyncApp) -
     let Some(remote) = loopback_port(&url).filter(|_| cli::host().is_some()) else { return Ok(url) };
     let since = Instant::now();
     loop {
-        if let Some(local) = this.update(cx, |b, cx| b.tunnel_to(remote, cx))? {
-            return Ok(rewrite(&url, local));
+        match this.update(cx, |b, cx| b.passage_to(remote, cx))? {
+            Passage::Through(local) => return Ok(rewrite(&url, local)),
+            Passage::Not => bail!("{}", not_tunnelled(remote)),
+            Passage::Waiting => {}
         }
         if since.elapsed() > TUNNEL {
             bail!("No tunnel reached port {remote} on that machine.");
         }
         pause(cx, STEP).await;
     }
+}
+
+fn not_tunnelled(remote: u16) -> String {
+    let host = cli::host().unwrap_or_default();
+    format!("Port {remote} on {host} is not tunnelled to this {}: open it to tunnel it.", desktop::here())
 }
 
 async fn settle(cdp: &Cdp, session: Option<&str>, cx: &AsyncApp) {

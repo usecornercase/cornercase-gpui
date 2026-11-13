@@ -154,6 +154,15 @@ pub(crate) fn loopback_port(url: &str) -> Option<u16> {
     loopback_host(&host).then_some(port)
 }
 
+pub(crate) fn rewrite(url: &str, local: u16) -> String {
+    let Some((scheme, rest)) = url.split_once("://") else { return url.to_string() };
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let authority = rest[..end].rsplit_once('@').map_or(&rest[..end], |(_, host)| host);
+    let name = authority.rsplit_once(':').map_or(authority, |(host, _)| host);
+    let host = if name.to_ascii_lowercase().ends_with(".localhost") { name } else { "localhost" };
+    format!("{scheme}://{host}:{local}{}", &rest[end..])
+}
+
 pub(crate) fn is_loopback(url: &str) -> bool {
     loopback_port(url).is_some()
 }

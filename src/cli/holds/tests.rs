@@ -1,0 +1,104 @@
+use std::ffi::OsStr;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::time::Duration;
+
+use super::{Ended, args, end_hold, hold_with};
+use crate::cli::{Remote, Target};
+
+const WAIT: Duration = Duration::from_secs(20);
+
+#[test]
+fn a_hold_runs_tunnel_hold_with_the_windows_remote_flags() {
+    let target = Target::Remote(Remote::new("devbox", "~/bin/cornercase").expect("a destination"));
+    let command = target.command(&args(5173));
+    let all: Vec<&OsStr> = command.get_args().collect();
+    assert_eq!(all, ["--remote", "devbox", "--remote-command", "~/bin/cornercase", "tunnel", "hold", "5173"]);
+    assert!(command.get_envs().any(|(name, value)| name == "CORNERCASE_REMOTE" && value.is_none()));
+}
+
+enum Heard {
+    Line(String),
+    End(Ended),
+}
+
+fn start(mut command: Command) -> (u64, mpsc::Receiver<Heard>) {
+    command.stdin(Stdio::null());
+    let (tx, rx) = mpsc::channel();
+    let ended = tx.clone();
+    let on_line = move |line: String| {
+        let _ = tx.send(Heard::Line(line));
+    };
+    let on_end = move |end: Ended| {
+        let _ = ended.send(Heard::End(end));
+    };
+    let (id, _) = hold_with(command, on_line, on_end).expect("the hold starts");
+    (id, rx)
+}
+
+#[cfg(unix)]
+mod on_unix {
+    use super::*;
+
+    fn next(heard: &mpsc::Receiver<Heard>) -> Heard {
+        heard.recv_timeout(WAIT).expect("the hold says something")
+    }
+
+    fn shell(script: &str) -> Command {
+        let mut shell = crate::platform::command("/bin/sh");
+        shell.args(["-c", script]);
+        shell
+    }
+
+    #[test]
+    fn ending_a_hold_asks_it_to_stop_what_it_runs() {
+        let script = "trap 'echo asked to end; kill $!; exit 0' TERM; sleep 60 >/dev/null 2>&1 & echo ready; wait $!";
+        let (id, heard) = start(shell(script));
+        assert!(matches!(next(&heard), Heard::Line(line) if line == "ready\n"));
+        end_hold(id);
+        assert!(matches!(next(&heard), Heard::Line(line) if line == "asked to end\n"));
+        assert!(matches!(next(&heard), Heard::End(Ended { code: Some(0), .. })));
+    }
+
+    #[test]
+    fn a_hold_that_ends_by_itself_gives_its_status_and_stderr() {
+        let (_, heard) = start(shell("echo could not tunnel port 1 >&2; exit 1"));
+        let Heard::End(ended) = next(&heard) else { panic!("it ends") };
+        assert_eq!(ended, Ended { code: Some(1), said: "could not tunnel port 1".to_string() });
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use std::time::Instant;
+
+    use super::*;
+
+    #[test]
+    fn ending_a_hold_takes_what_it_started_along() {
+        let mut tree = crate::platform::command("cmd");
+        tree.args(["/d", "/c", "ping", "-n", "120", "127.0.0.1"]);
+        let (id, heard) = start(tree);
+        let until = Instant::now() + WAIT;
+        let mut said = String::new();
+        while !said.contains("127.0.0.1") {
+            match heard.recv_timeout(until.saturating_duration_since(Instant::now())) {
+                Ok(Heard::Line(line)) => said.push_str(&line),
+                Ok(Heard::End(_)) => panic!("the hold ended before ping said anything: {said:?}"),
+                Err(why) => panic!("ping did not start ({why}): {said:?}"),
+            }
+        }
+        end_hold(id);
+        let until = Instant::now() + WAIT;
+        loop {
+            match heard.recv_timeout(until.saturating_duration_since(Instant::now())) {
+                Ok(Heard::Line(line)) => said.push_str(&line),
+                Ok(Heard::End(ended)) => {
+                    assert_eq!(ended.said, ended.said.trim(), "the end's stderr is trimmed");
+                    break;
+                }
+                Err(why) => panic!("the ping the hold's cmd started outlived the hold ({why}); it said {said:?}"),
+            }
+        }
+    }
+}

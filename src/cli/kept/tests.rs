@@ -1,0 +1,131 @@
+#[cfg(unix)]
+mod on_unix {
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use super::super::{End, Kept};
+
+    const WAIT: Duration = Duration::from_secs(20);
+    const CATCHES_THE_END: &str = "trap 'echo asked to end; kill $!; exit 0' TERM; \
+                                   sleep 60 >/dev/null 2>&1 & echo ready; wait $!";
+
+    fn shell(script: &str) -> Command {
+        let mut shell = crate::platform::command("/bin/sh");
+        shell.args(["-c", script]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        shell
+    }
+
+    fn start(kept: &'static Kept, script: &str) -> (u64, mpsc::Receiver<String>) {
+        let (tx, rx) = mpsc::channel();
+        let ended = tx.clone();
+        let on_line = move |line: String| {
+            let _ = tx.send(line);
+        };
+        let on_end = move |why: String, _code: Option<i32>| {
+            let _ = ended.send(format!("ended: {why}"));
+        };
+        let (id, _) = kept.start(shell(script), on_line, on_end).expect("the shell starts");
+        (id, rx)
+    }
+
+    fn next(heard: &mpsc::Receiver<String>) -> String {
+        heard.recv_timeout(WAIT).expect("the shell says something")
+    }
+
+    #[test]
+    fn stopping_gives_the_process_the_chance_to_stop_what_it_runs() {
+        static KEPT: Kept = Kept::empty(End::LetGo);
+        let (_, heard) = start(&KEPT, CATCHES_THE_END);
+        assert_eq!(next(&heard), "ready\n");
+        KEPT.stop();
+        assert_eq!(next(&heard), "asked to end\n");
+        assert_eq!(next(&heard), "ended: ");
+        assert!(KEPT.children.lock().is_empty());
+    }
+
+    #[test]
+    fn one_that_ends_leaves_the_next_one_there_to_be_stopped() {
+        static KEPT: Kept = Kept::empty(End::LetGo);
+        let (_, newer) = start(&KEPT, CATCHES_THE_END);
+        assert_eq!(next(&newer), "ready\n");
+        let (_, older) = start(&KEPT, "exit 0");
+        assert_eq!(next(&older), "ended: ");
+        KEPT.stop();
+        assert_eq!(next(&newer), "asked to end\n");
+        assert_eq!(next(&newer), "ended: ");
+    }
+
+    #[test]
+    fn a_process_that_ended_by_itself_says_why_and_leaves_nothing_to_stop() {
+        static KEPT: Kept = Kept::empty(End::LetGo);
+        let (_, heard) = start(&KEPT, "echo no such thing >&2; exit 3");
+        assert_eq!(next(&heard), "ended: no such thing\n");
+        assert!(KEPT.children.lock().is_empty());
+    }
+
+    #[test]
+    fn stopping_one_leaves_the_others_running() {
+        static KEPT: Kept = Kept::empty(End::LetGo);
+        let (first, one) = start(&KEPT, CATCHES_THE_END);
+        let (_, other) = start(&KEPT, CATCHES_THE_END);
+        assert_eq!(next(&one), "ready\n");
+        assert_eq!(next(&other), "ready\n");
+        KEPT.stop_one(first);
+        assert_eq!(next(&one), "asked to end\n");
+        assert_eq!(next(&one), "ended: ");
+        assert!(other.try_recv().is_err());
+        assert_eq!(KEPT.children.lock().len(), 1);
+        KEPT.stop();
+        assert_eq!(next(&other), "asked to end\n");
+    }
+}
+
+#[cfg(windows)]
+mod on_windows {
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use windows::Win32::System::JobObjects::JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+
+    use super::super::{End, Kept, Running, win32};
+
+    #[test]
+    fn a_command_kept_on_windows_is_tied_to_the_window() {
+        static KEPT: Kept = Kept::empty(End::LetGo);
+        let (tx, ended) = mpsc::channel();
+        let mut ping = crate::platform::command("ping");
+        ping.args(["-n", "120", "127.0.0.1"]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let untied = KEPT
+            .start(
+                ping,
+                |_| {},
+                move |_, _| {
+                    let _ = tx.send(());
+                },
+            )
+            .expect("ping starts");
+        let held = KEPT.children.lock().iter().all(|running| running.job.is_some());
+        KEPT.stop();
+        ended.recv_timeout(Duration::from_secs(20)).expect("the command ends");
+        assert_eq!((untied.1, held), (None, true));
+        assert!(KEPT.children.lock().is_empty());
+    }
+
+    #[test]
+    fn stopping_lets_go_of_the_job_before_the_command_is_reaped() {
+        static KEPT: Kept = Kept::empty(End::LetGo);
+        let mut ping = crate::platform::command("ping");
+        ping.args(["-n", "120", "127.0.0.1"]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+        let child = ping.spawn().expect("ping starts");
+        let job = win32::tie(&child).expect("the command joins its job");
+        let seen = win32::copy(&job);
+        KEPT.children.lock().push(Running { id: 1, child, job: Some(job) });
+        KEPT.stop();
+        assert_eq!(win32::limits(&seen), JOB_OBJECT_LIMIT_BREAKAWAY_OK);
+        for mut running in KEPT.children.lock().drain(..) {
+            running.child.wait().expect("the command is reaped");
+        }
+    }
+}

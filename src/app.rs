@@ -227,6 +227,7 @@ impl Root {
             },
         );
         let store = Store::init(queue.clone(), cx);
+        crate::panels::browser::follow_store(&store, cx);
         let notifier = cx.new(|cx| Notifier::new(store.clone(), window, cx));
         cx.observe(&notifier, |this, _, cx| this.chips_moved(cx)).detach();
         if let Some(updater) = self_update::entity(cx) {
@@ -312,6 +313,8 @@ impl Root {
             font_size: self.font_size,
         };
         let left = cli::connect(target);
+        cli::end_holds();
+        crate::panels::browser::left_server(cx);
         plugins::follow_window_processes(cx);
         cli::kill_all();
         cli::leave(&left);
@@ -457,6 +460,7 @@ impl Root {
         self.conn = conn;
         self.store.update(cx, |s, cx| {
             s.view_id = None;
+            s.tunnels_unlinked();
             cx.notify();
         });
     }
@@ -530,6 +534,7 @@ impl Root {
             s.jobs.keep_leaving(|workspace| shared.workspace(workspace).is_some());
             s.follow_accounts(&shared, cx);
             s.session = Some(shared);
+            s.follow_tunnels(cx);
             s.follow_machines(cx);
             s.follow_awaited(cx);
             s.view_id = view_id;

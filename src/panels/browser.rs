@@ -14,6 +14,7 @@ mod element;
 mod engine;
 mod follow;
 mod frame;
+mod held;
 mod input;
 mod keyboard;
 mod notices;
@@ -48,8 +49,8 @@ use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{
     AnyView, App, AppContext as _, Context, CursorStyle, Entity, FocusHandle, Focusable as _, Global,
-    InteractiveElement as _, IntoElement, ParentElement as _, Render, RenderImage, SharedString, Styled as _, Window,
-    div, px,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, RenderImage, SharedString, Styled as _,
+    Subscription, Window, div, px,
 };
 
 use crate::panels::PanelKind;
@@ -58,6 +59,7 @@ use crate::theme::colours;
 use crate::ui::text_field::TextField;
 use crate::ui::{self, Icon};
 use engine::{Engine, Incoming};
+pub(crate) use held::{follow_store, left_server};
 use input::Input;
 use notices::Notices;
 use ports::DevServers;
@@ -89,6 +91,7 @@ pub(crate) struct Browser {
     casting: Option<String>,
     workspace: Option<u64>,
     shown: bool,
+    watching: Subscription,
     address: Entity<TextField>,
     address_url: String,
     restore: Vec<(String, Option<u64>)>,
@@ -135,16 +138,21 @@ impl Browser {
             {}
         })
         .detach();
-        cx.observe(&Store::get(cx), |this, store, cx| this.store_changed(&store, cx)).detach();
+        let watching = cx.observe(&Store::get(cx), |this, store, cx| this.store_changed(&store, cx));
         let address = cx.new(|cx| TextField::new("Address, a port such as 5173, or a search", cx));
         Self::watch_address(&address, window, cx);
         engine::start(tx.clone());
-        let mut browser = Self::fresh(cx.focus_handle(), tx, address, DevServers::new(cx));
+        let mut browser = Self::fresh(cx.focus_handle(), tx, (address, watching), DevServers::new(cx));
         browser.store_changed(&Store::get(cx), cx);
         browser
     }
 
-    fn fresh(focus: FocusHandle, tx: UnboundedSender<Incoming>, address: Entity<TextField>, dev: DevServers) -> Self {
+    fn fresh(
+        focus: FocusHandle,
+        tx: UnboundedSender<Incoming>,
+        (address, watching): (Entity<TextField>, Subscription),
+        dev: DevServers,
+    ) -> Self {
         Self {
             focus,
             status: Status::Starting,
@@ -157,6 +165,7 @@ impl Browser {
             casting: None,
             workspace: None,
             shown: false,
+            watching,
             address,
             address_url: String::new(),
             restore: Vec::new(),
@@ -197,6 +206,7 @@ impl Browser {
             cx.notify();
         }
         self.dev_changed(store, cx);
+        self.held_changed(cx);
     }
 
     fn ended(&mut self, why: String, cx: &mut Context<Self>) {
