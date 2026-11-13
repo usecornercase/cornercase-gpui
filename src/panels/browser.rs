@@ -242,7 +242,7 @@ impl Browser {
         }
     }
 
-    pub(super) fn page_shown(&self) -> bool {
+    fn page_shown(&self) -> bool {
         matches!(self.status, Status::Ready(_)) && self.tabs.active(&self.place).is_some()
     }
 
