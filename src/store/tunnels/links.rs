@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use super::held::Hold;
 use crate::model::MachineSeen;
 use crate::model::machines::Machine;
@@ -29,6 +31,13 @@ pub(crate) fn machine_link(
         }
         (Reach::Up(_), Gate::Open) => Link::Up { boot: seen.boot.clone(), destination: listed.destination.clone() },
     }
+}
+
+pub(crate) fn followed<'a>(
+    names: impl Iterator<Item = String>,
+    towards: impl Iterator<Item = &'a Toward>,
+) -> BTreeSet<String> {
+    names.chain(towards.filter_map(|toward| toward.machine().map(str::to_string))).collect()
 }
 
 pub(crate) fn hold_stays(hold_destination: &str, link: &Link) -> bool {

@@ -3,8 +3,7 @@ use std::collections::BTreeSet;
 use gpui::Context;
 
 use super::Store;
-use super::held::Hold;
-use super::links::{Link, machine_link, split_stale};
+use super::links::{Link, followed, machine_link, split_stale};
 use crate::cli;
 use crate::model::tunnels::Toward;
 use crate::store::machine_read::reach;
@@ -13,9 +12,10 @@ impl Store {
     fn machines_followed(&self) -> BTreeSet<String> {
         let listed = self.machines.iter().map(|machine| machine.name.clone());
         let seen = self.session.iter().flat_map(|session| session.machines.iter().map(|seen| seen.name.clone()));
-        let held = self.tunnels.holds.iter().filter_map(|hold: &Hold| hold.toward.machine().map(str::to_string));
         let linked = self.tunnels.machines.keys().cloned();
-        listed.chain(seen).chain(held).chain(linked).collect()
+        let held = self.tunnels.holds.iter().map(|hold| &hold.toward);
+        let settling = self.tunnels.settling.iter().map(|settling| &settling.toward);
+        followed(listed.chain(seen).chain(linked), held.chain(settling))
     }
 
     fn link_of_machine(&self, name: &str) -> Link {

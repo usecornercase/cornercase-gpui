@@ -1,4 +1,4 @@
-use super::{Link, hold_stays, machine_link, split_ended, split_stale};
+use super::{Link, followed, hold_stays, machine_link, split_ended, split_stale};
 use crate::model::MachineSeen;
 use crate::model::machines::{LinkState, Machine};
 use crate::model::tunnels::{Gate, Older, Toward, Way};
@@ -102,4 +102,13 @@ fn a_hold_to_a_destination_changed_while_the_link_waits_ends() {
     let holds = vec![test_hold(Toward::Machine("vps".into()), 8765, Held::Up { local: 1 })];
     let (ended, kept) = split_stale(holds, &Toward::Machine("vps".into()), &waiting);
     assert_eq!((ended.len(), kept.len()), (1, 0));
+}
+
+#[test]
+fn a_machine_with_only_a_settling_entry_is_still_followed() {
+    let vps = Toward::Machine("vps".into());
+    let names = followed(std::iter::empty(), [&vps, &Toward::Server].into_iter());
+    assert_eq!(names.into_iter().collect::<Vec<_>>(), ["vps"]);
+    let listed = followed(["cap".to_string()].into_iter(), std::iter::empty());
+    assert_eq!(listed.into_iter().collect::<Vec<_>>(), ["cap"]);
 }
