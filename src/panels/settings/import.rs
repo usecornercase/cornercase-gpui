@@ -14,6 +14,9 @@ use crate::store::{Store, ToastKind, args};
 use crate::theme::colours;
 use crate::ui::{self, Icon};
 
+const LABEL_WIDTH: f32 = 190.;
+const VALUES_LEAST: f32 = 240.;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub(super) struct Preview {
@@ -110,14 +113,19 @@ fn note_line(note: &Note) -> Div {
 fn change_row(change: &Change) -> Div {
     div()
         .flex()
+        .flex_wrap()
         .items_start()
-        .gap(px(10.))
+        .gap_x(px(10.))
+        .gap_y(px(2.))
         .py(px(3.))
         .text_size(px(12.))
-        .child(div().w(px(190.)).flex_none().text_color(colours::soft()).child(widgets::capitalised(&change.label)))
+        .child(
+            div().w(px(LABEL_WIDTH)).flex_none().text_color(colours::soft()).child(widgets::capitalised(&change.label)),
+        )
         .child(
             div()
-                .flex_1()
+                .flex_grow()
+                .flex_basis(px(VALUES_LEAST))
                 .min_w_0()
                 .flex()
                 .flex_wrap()

@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FocusHandle, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement, SharedString, Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window, div,
-    prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Div, ElementId, FocusHandle, InteractiveElement, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement, SharedString, Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window,
+    div, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::frame::{self, Frame};
@@ -26,6 +26,17 @@ mod strip;
 pub(crate) use strip::TabStrip;
 
 const TAB_HEIGHT: f32 = 28.;
+const NAME_MAX: f32 = 200.;
+
+fn tab_label(id: impl Into<ElementId>, name: &str) -> Stateful<Div> {
+    div()
+        .id(id)
+        .min_w_0()
+        .max_w(px(NAME_MAX))
+        .flex()
+        .tooltip(tip(name.to_string()))
+        .child(ui::one_line(name.to_string()))
+}
 
 fn faint(text: String) -> Div {
     div().text_size(px(11.)).text_color(colours::faint()).child(text)
@@ -162,7 +173,7 @@ fn machine_tab(
     tab_pill(SharedString::from(format!("machine-tab-{}", tab.id.key())), selected)
         .pr(px(10.))
         .children(status)
-        .child(div().whitespace_nowrap().child(tab.name.clone()))
+        .child(tab_label(SharedString::from(format!("machine-tab-name-{}", tab.id.key())), &tab.name))
         .when(others > 0, |d| d.child(faint(format!("+{others}"))))
         .when_some(detail, |d, text| d.child(faint(text).whitespace_nowrap()))
         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_on_machine(place.clone(), cx)))
@@ -277,8 +288,10 @@ impl Root {
 
     fn tab_name(&self, tab: &Tab) -> AnyElement {
         match self.side.rename.as_ref().filter(|r| r.what == Renaming::Here(Target::Tab(tab.id))) {
-            Some(r) => div().w(px(140.)).child(ui::input_box(r.field.clone(), true).py(px(0.))).into_any_element(),
-            None => div().whitespace_nowrap().child(tab.name.clone()).into_any_element(),
+            Some(r) => {
+                div().w(px(140.)).flex_none().child(ui::input_box(r.field.clone(), true).py(px(0.))).into_any_element()
+            }
+            None => tab_label(("tab-name", tab.id), &tab.name).into_any_element(),
         }
     }
 

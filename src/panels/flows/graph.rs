@@ -20,6 +20,7 @@ const BEND: f32 = 14.;
 const SPREAD: f32 = 12.;
 const NEAR: f32 = 3.;
 const LABEL_GAP: f32 = 14.;
+pub(crate) const LOOP_LABEL_MAX: f32 = 160.;
 const CHAR_W: f32 = 6.2;
 const LABEL_PAD: f32 = 44.;
 const MARGIN: f32 = 8.;
@@ -461,7 +462,8 @@ fn labels(flow: &FlowSpec, graph: &Graph, lanes: &[Lane]) -> Vec<Label> {
 }
 
 pub(crate) fn label_width(back: &BackSpec, short: bool) -> f32 {
-    float(back.label(None, short).chars().count()) * CHAR_W + LABEL_PAD
+    let words = (float(back.when.chars().count()) * CHAR_W).min(LOOP_LABEL_MAX);
+    words + float(back.count(None, short).chars().count() + 1) * CHAR_W + LABEL_PAD
 }
 
 fn width(flow: &FlowSpec, graph: &Graph, lanes: &[Lane]) -> f32 {

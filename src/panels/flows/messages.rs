@@ -7,7 +7,7 @@ use super::cards::{avatar, conductor, ground};
 use super::diagram::role_colour;
 use super::flow_page::block;
 use super::model::{self, Edge, FlowSpec, Message, Run, RunFile};
-use super::widgets::{chip, error_small, open_path, panel_box};
+use super::widgets::{chip, error_small, loop_chip, open_path, panel_box};
 use super::{FlowsPanel, Place};
 use crate::notify::tip;
 use crate::store::Store;
@@ -146,8 +146,8 @@ fn who(flow: &FlowSpec, role: &str, id: (&'static str, u64)) -> Stateful<Div> {
 
 fn edge_chip(flow: &FlowSpec, edge: Option<Edge>) -> Option<Div> {
     let (glyph, text, colour) = match edge? {
+        Edge::Loop { stage } => return Some(loop_chip("message-loop", flow.stages.get(stage)?.back.as_ref()?)),
         Edge::Forward { stage } => (Icon::ArrowDown, format!("stage {} → {}", stage + 1, stage + 2), colours::accent()),
-        Edge::Loop { stage } => (Icon::Repeat, flow.stages.get(stage)?.back.as_ref()?.when.clone(), colours::soft()),
         Edge::Outside { .. } => (Icon::Alert, "outside the plan".to_string(), colours::waiting()),
     };
     Some(chip(Some(glyph), text, colour))

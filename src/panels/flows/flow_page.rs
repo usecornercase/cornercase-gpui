@@ -1,8 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    ClickEvent, Context, Div, ElementId, FontWeight, InteractiveElement as _, ParentElement as _, Rgba, Stateful,
-    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Div, ElementId, FontWeight, InteractiveElement as _, IntoElement as _,
+    ParentElement as _, Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
+    px,
 };
 
 use super::FlowsPanel;
@@ -11,7 +12,7 @@ use super::cards::{avatar, conductor};
 use super::diagram::{OnRole, Plan, role_colour};
 use super::hero::{description, facts, hero, team, title};
 use super::model::{FlowInfo, FlowSpec, RoleSpec};
-use super::widgets::{agents_label, alert, chip, file_name, heading, open_path, panel_box};
+use super::widgets::{agents_label, alert, chip, file_name, heading, open_path, panel_box, typed_chip};
 use crate::store::args;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, Tone, glass::tint};
@@ -180,24 +181,24 @@ pub(super) fn role_head((i, role): (usize, &RoleSpec), colour: Rgba, open: bool,
         .child(ui::icon(if open { Icon::ChevronDown } else { Icon::ChevronRight }, 14.).text_color(colours::faint()))
 }
 
-pub(super) fn role_chips(role: &RoleSpec) -> Vec<Div> {
+pub(super) fn role_chips(role: &RoleSpec) -> Vec<AnyElement> {
     let muted = colours::muted();
-    let mut chips = vec![chip(Some(Icon::Agent), role.agent.clone(), colours::soft())];
-    chips.extend(role.model.clone().map(|model| chip(None, model, muted)));
-    chips.extend(role.effort.clone().map(|effort| chip(None, format!("effort {effort}"), muted)));
-    chips.push(if role.edits {
-        chip(Some(Icon::Pencil), "edits", muted)
-    } else {
-        chip(Some(Icon::Eye), "read only", muted)
-    });
+    let mut chips = vec![chip(Some(Icon::Agent), role.agent.clone(), colours::soft()).into_any_element()];
+    chips.extend(role.model.clone().map(|model| chip(None, model, muted).into_any_element()));
+    chips.extend(role.effort.clone().map(|effort| chip(None, format!("effort {effort}"), muted).into_any_element()));
+    chips.push(
+        if role.edits { chip(Some(Icon::Pencil), "edits", muted) } else { chip(Some(Icon::Eye), "read only", muted) }
+            .into_any_element(),
+    );
     if role.worktree == "own" {
-        chips.push(chip(Some(Icon::Branch), "own worktree", muted));
+        chips.push(chip(Some(Icon::Branch), "own worktree", muted).into_any_element());
     }
     if !role.env.is_empty() {
-        chips.push(chip(None, format!("env {}", role.env.keys().cloned().collect::<Vec<_>>().join(", ")), muted));
+        let names = role.env.keys().cloned().collect::<Vec<_>>().join(", ");
+        chips.push(typed_chip("role-env", format!("env {names}"), muted).into_any_element());
     }
     if !role.args.is_empty() {
-        chips.push(chip(None, format!("args {}", role.args.join(" ")), muted));
+        chips.push(typed_chip("role-args", format!("args {}", role.args.join(" ")), muted).into_any_element());
     }
     chips
 }
