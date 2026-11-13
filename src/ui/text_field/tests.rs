@@ -1,8 +1,8 @@
 use gpui::{KeyBinding, KeyContext};
 
 use super::{
-    Escaped, LINES_CONTEXT, NewLine, Submit, bindings, composed_selection, escaped, prompt_keys, send_key, shared,
-    word_end, word_start,
+    Escaped, LINES_CONTEXT, NewLine, Submit, bindings, composed_selection, escaped, handed, prompt_keys, send_key,
+    shared, word_end, word_start,
 };
 use crate::platform::Os;
 
@@ -95,4 +95,21 @@ fn a_prompt_is_sent_by_the_key_it_names() {
             bindings(os).iter().any(|key| key.action().partial_eq(&Submit) && key.keystrokes() == wanted.keystrokes());
         assert!(bound, "{os:?} binds {}", send_key(os).0);
     }
+}
+
+#[test]
+fn a_masked_field_hands_the_input_method_nothing() {
+    for range in [0..14, 5..7, 0..0, 20..30] {
+        assert_eq!(handed("made up secret", &range, true), None);
+    }
+    assert_eq!(handed("ab\u{b4}", &(2..3), true), None);
+}
+
+#[test]
+fn a_plain_field_hands_the_input_method_its_text_as_before() {
+    let content = "a\u{f1}\u{1f600}b";
+    assert_eq!(handed(content, &(0..5), false), Some((content.to_string(), 0..5)));
+    assert_eq!(handed(content, &(1..2), false), Some(("\u{f1}".to_string(), 1..2)));
+    assert_eq!(handed(content, &(3..4), false), Some((String::new(), 4..4)));
+    assert_eq!(handed(content, &(4..9), false), Some(("b".to_string(), 4..5)));
 }

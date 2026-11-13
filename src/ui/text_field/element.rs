@@ -1,12 +1,13 @@
 use std::ops::Range;
 
 use gpui::{
-    App, AvailableSpace, Bounds, ContentMask, DispatchPhase, Element, ElementInputHandler, Entity, GlobalElementId,
-    IntoElement, LayoutId, MouseMoveEvent, PaintQuad, Pixels, Point, ScrollHandle, SharedString, Size, Style,
-    TextAlign, TextRun, Window, WrappedLine, fill, point, px, relative, size,
+    App, AvailableSpace, Bounds, ContentMask, DispatchPhase, Element, Entity, GlobalElementId, IntoElement, LayoutId,
+    MouseMoveEvent, PaintQuad, Pixels, Point, ScrollHandle, SharedString, Size, Style, TextAlign, TextRun, Window,
+    WrappedLine, fill, point, px, relative, size,
 };
 
 use super::TextField;
+use super::handler::Handler;
 use super::rows::{
     CARET_WIDTH, Row, Rows, clamp_scroll, rows_shown, scroll_to_show, scroll_to_show_with_margins, sideways, thumb,
 };
@@ -233,7 +234,8 @@ impl Element for TextElement {
         let focus_handle = input.focus_handle.clone();
         let scrolls = input.options.rows.is_some() || !input.options.wraps;
         let multi_row = input.options.rows.is_some();
-        window.handle_input(&focus_handle, ElementInputHandler::new(bounds, self.input.clone()), cx);
+        let masked = input.options.masked;
+        window.handle_input(&focus_handle, Handler::new(bounds, self.input.clone(), masked), cx);
         if scrolls {
             self.follow_drag(window);
         }

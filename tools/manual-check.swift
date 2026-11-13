@@ -7,7 +7,7 @@ struct Failure: Error {
     let status: Int32
 }
 
-let usage = "usage: manual-check window|front|size|key|text|press|drag|scroll PID … (drag: x0 y0 x1 y1 [right] [hold MS])"
+let usage = "usage: manual-check window|front|size|key|hold|text|paste|press|drag|scroll PID … (hold: KEY [MS]; paste: TEXT; drag: x0 y0 x1 y1 [right] [hold MS])"
 
 let keys: [String: Int] = [
     "a": kVK_ANSI_A, "b": kVK_ANSI_B, "c": kVK_ANSI_C, "d": kVK_ANSI_D, "e": kVK_ANSI_E, "f": kVK_ANSI_F,
@@ -246,6 +246,61 @@ func key(_ pid: pid_t, _ name: String, _ held: [String]) throws {
     }
 }
 
+func hold(_ pid: pid_t, _ name: String, _ duration: String?) throws {
+    guard let code = keys[name] else { throw Failure(message: "unknown key \(name)", status: 2) }
+    let ms = try duration.map { Int(try wholeNumber($0, "ms")) } ?? 800
+    guard (0...10_000).contains(ms) else { throw Failure(message: "ms must be 0 to 10000", status: 2) }
+    try allowed()
+    func post(_ down: Bool, repeating: Bool) {
+        let event = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: down)
+        if repeating { event?.setIntegerValueField(.keyboardEventAutorepeat, value: 1) }
+        event?.postToPid(pid)
+    }
+    post(true, repeating: false)
+    for _ in 0..<(ms / 33) {
+        usleep(33_000)
+        post(true, repeating: true)
+    }
+    post(false, repeating: false)
+}
+
+func saved(_ board: NSPasteboard) -> [[(NSPasteboard.PasteboardType, Data)]] {
+    (board.pasteboardItems ?? []).map { item in item.types.compactMap { type in item.data(forType: type).map { (type, $0) } } }
+}
+
+func restore(_ items: [[(NSPasteboard.PasteboardType, Data)]], to board: NSPasteboard) throws {
+    board.clearContents()
+    let rebuilt = items.map { entries -> NSPasteboardItem in
+        let item = NSPasteboardItem()
+        for (type, data) in entries { item.setData(data, forType: type) }
+        return item
+    }
+    guard rebuilt.isEmpty || board.writeObjects(rebuilt) else {
+        throw Failure(message: "the clipboard could not be given back: tell the person who runs this check at once", status: 1)
+    }
+}
+
+func paste(_ pid: pid_t, _ typed: String) throws {
+    try allowed()
+    let board = NSPasteboard.general
+    let kept = saved(board)
+    let held = (board.pasteboardItems ?? []).map { $0.types.count }
+    guard kept.map({ $0.count }) == held else {
+        throw Failure(message: "the clipboard holds data that cannot be read back: nothing was done", status: 1)
+    }
+    board.clearContents()
+    board.setString(typed, forType: .string)
+    board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+    try key(pid, "v", ["cmd"])
+    usleep(300_000)
+    try restore(kept, to: board)
+    let back = saved(board)
+    guard back.count == kept.count, zip(back, kept).allSatisfy({ $0.count == $1.count }) else {
+        throw Failure(message: "the clipboard differs after it was given back: tell the person who runs this check at once", status: 1)
+    }
+    print("clipboard: \(kept.count) items, \(kept.reduce(0) { $0 + $1.count }) types, given back")
+}
+
 func text(_ pid: pid_t, _ typed: String) throws {
     try allowed()
     for grapheme in typed {
@@ -300,13 +355,15 @@ func dragOptions(_ words: [String]) throws -> (right: Bool, hold: Int) {
 
 func run(_ args: [String]) throws {
     guard args.count >= 2, let pid = pid_t(args[1]) else { throw Failure(message: usage, status: 2) }
-    if ["front", "size", "key", "text", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
+    if ["front", "size", "key", "hold", "text", "paste", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
     switch (args[0], args.count) {
     case ("window", 2): try describe(pid)
     case ("front", 2): try front(pid)
     case ("size", 4): try size(pid, args[2], args[3])
     case ("key", 3...): try key(pid, args[2], Array(args.dropFirst(3)))
+    case ("hold", 3...4): try hold(pid, args[2], args.count == 4 ? args[3] : nil)
     case ("text", 3): try text(pid, args[2])
+    case ("paste", 3): try paste(pid, args[2])
     case ("press", 4...5): try press(pid, args[2], args[3], right: try button(args, after: 4))
     case ("drag", 6...9):
         let (right, hold) = try dragOptions(Array(args.dropFirst(6)))
