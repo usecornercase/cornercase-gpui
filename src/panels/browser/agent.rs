@@ -215,6 +215,10 @@ impl Browser {
         }
     }
 
+    pub(super) fn many_agents(&self, cx: &App) -> bool {
+        self.agent_choices(cx).len() > 1
+    }
+
     pub(super) fn agent_choices(&self, cx: &App) -> Vec<Choice> {
         let store = Store::get(cx).read(cx);
         let Some(session) = store.session.as_ref() else { return Vec::new() };

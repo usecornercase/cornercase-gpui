@@ -78,6 +78,10 @@ fn every_browser_menu_is_one_thing_on_top() {
     assert_eq!(tops_with_agents(false, &agents(None, None), true), [Top::Menu]);
 }
 
+fn tops_with_agents(choice: bool, agents: &Agents, devices: bool) -> Vec<Top> {
+    escape_tops(choice, agents, devices, true)
+}
+
 fn picked() -> Pick {
     Pick::Picked(Box::new(Picked { element: Element::default(), crop: Crop::Missing }))
 }
@@ -115,13 +119,18 @@ fn nothing_open_is_nothing_on_top() {
     assert_eq!(tops_with_agents(false, &Agents::default(), false), Vec::<Top>::new());
 }
 
-fn tops_with_agents(choice: bool, agents: &Agents, devices: bool) -> Vec<Top> {
-    escape_tops(choice, agents, devices, true)
-}
-
 #[test]
 fn a_chooser_with_one_agent_left_is_nothing_on_top() {
     let one = agents(Some(Menu::Chooser), Some(picked()));
     assert_eq!(escape_tops(false, &one, false, false), [Top::Pick]);
     assert_eq!(escape_tops(false, &one, false, true), [Top::Menu, Top::Pick]);
+}
+
+#[test]
+fn a_hidden_chooser_does_not_keep_the_device_menu_open() {
+    let hidden = agents(Some(Menu::Chooser), Some(picked()));
+    assert!(!agents_menu_on_top(&hidden, false));
+    assert!(agents_menu_on_top(&hidden, true));
+    assert!(agents_menu_on_top(&agents(Some(Menu::Agents), None), false));
+    assert!(!agents_menu_on_top(&Agents::default(), true));
 }

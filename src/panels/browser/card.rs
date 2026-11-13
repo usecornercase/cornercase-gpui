@@ -145,7 +145,7 @@ impl Browser {
 
     fn chooser(&self, agent: &Agent, cx: &mut Context<Self>) -> Div {
         let name = Self::agent_name(agent, cx);
-        let many = self.agent_choices(cx).len() > 1;
+        let many = self.many_agents(cx);
         let label = div().min_w_0().flex().text_size(px(12.)).text_color(colours::soft()).child(ui::one_line(name));
         let open = self.agents.menu == Some(Menu::Chooser);
         let chip = div()

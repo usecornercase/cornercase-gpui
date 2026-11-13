@@ -54,10 +54,14 @@ pub(crate) fn keys_go(at: KeysAt, page_shown: bool, waiting: Waiting) -> (KeysGo
     }
 }
 
-pub(crate) fn escape_tops(choice: bool, agents: &Agents, devices: bool, many: bool) -> Vec<Top> {
+pub(crate) fn agents_menu_on_top(agents: &Agents, many: bool) -> bool {
     let card = matches!(agents.pick, Some(Pick::Picked(_))) && many;
-    let menu = agents.menu.is_some_and(|menu| menu != Menu::Chooser || card);
-    escape::tops_of(&[(Top::Choice, choice), (Top::Menu, menu || devices), (Top::Pick, agents.pick.is_some())])
+    agents.menu.is_some_and(|menu| menu != Menu::Chooser || card)
+}
+
+pub(crate) fn escape_tops(choice: bool, agents: &Agents, devices: bool, many: bool) -> Vec<Top> {
+    let menu = agents_menu_on_top(agents, many) || devices;
+    escape::tops_of(&[(Top::Choice, choice), (Top::Menu, menu), (Top::Pick, agents.pick.is_some())])
 }
 
 pub(crate) fn selection_script(cut: bool) -> Value {
@@ -119,7 +123,7 @@ impl Browser {
     }
 
     pub(crate) fn tops(&self, cx: &App) -> Vec<Top> {
-        let many = self.agent_choices(cx).len() > 1;
+        let many = self.many_agents(cx);
         escape_tops(self.input.choice.is_some(), &self.agents, self.devices_open, many)
     }
 
@@ -127,7 +131,9 @@ impl Browser {
         match top {
             Top::Choice => self.close_choice(cx),
             Top::Menu => {
-                if self.agents.menu.take().is_none() {
+                let on_top = agents_menu_on_top(&self.agents, self.many_agents(cx));
+                self.agents.menu = None;
+                if !on_top {
                     self.close_devices(cx);
                 }
                 cx.notify();
