@@ -5,11 +5,10 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use super::rows::Row;
 
-pub(super) const BULLET: char = '•';
+const BULLET: char = '•';
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(super) enum Shown {
-    #[default]
     Itself,
     Bullets(Vec<usize>),
 }
@@ -70,7 +69,7 @@ impl Shown {
     }
 }
 
-pub(super) fn shown_without_controls(text: &str) -> Option<String> {
+fn shown_without_controls(text: &str) -> Option<String> {
     text.contains(['\t', '\r']).then(|| text.replace(['\t', '\r'], " "))
 }
 

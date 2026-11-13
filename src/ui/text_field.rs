@@ -386,11 +386,7 @@ impl EntityInputHandler for TextField {
         } else {
             self.marked_range = Some(range.start..range.start + new_text.len());
         }
-        self.selected_range =
-            new_selected_range_utf16.as_ref().map(|range_utf16| self.range_from_utf16(range_utf16)).map_or_else(
-                || range.start + new_text.len()..range.start + new_text.len(),
-                |new_range| new_range.start + range.start..new_range.end + range.end,
-            );
+        self.selected_range = composed_selection(new_text, new_selected_range_utf16.as_ref(), range.start);
         self.caret_moved();
         cx.notify();
     }
@@ -587,6 +583,20 @@ fn control_bindings(ctx: Option<&str>) -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-shift-v", Paste, ctx),
         KeyBinding::new("ctrl-shift-c", Copy, ctx),
     ]
+}
+
+fn composed_selection(new_text: &str, selected_utf16: Option<&Range<usize>>, start: usize) -> Range<usize> {
+    let Some(selected) = selected_utf16 else { return start + new_text.len()..start + new_text.len() };
+    let at = |utf16: usize| {
+        let mut units = 0;
+        let found = new_text.char_indices().find(|(_, c)| {
+            let reached = units >= utf16;
+            units += c.len_utf16();
+            reached
+        });
+        start + found.map_or(new_text.len(), |(index, _)| index)
+    };
+    at(selected.start)..at(selected.end)
 }
 
 fn word_start(text: &str, at: usize, masked: bool) -> usize {

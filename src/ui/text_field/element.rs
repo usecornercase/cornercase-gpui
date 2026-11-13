@@ -95,7 +95,7 @@ impl Layout {
             .into_iter()
             .filter_map(|span| {
                 let row = self.rows.get(span.row)?;
-                let x = |offset| self.text_left() + self.x_in_row(row, offset);
+                let x = |index| self.text_left() + self.x_in_row(row, index);
                 let top = self.text_top() + self.line_height * span.row;
                 let tail = if span.line_break { BREAK_WIDTH } else { px(0.) };
                 let end = point(x(span.range.end) + tail, top + self.line_height);

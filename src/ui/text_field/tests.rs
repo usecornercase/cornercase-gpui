@@ -1,7 +1,8 @@
 use gpui::{KeyBinding, KeyContext};
 
 use super::{
-    Escaped, LINES_CONTEXT, NewLine, Submit, bindings, escaped, prompt_keys, send_key, shared, word_end, word_start,
+    Escaped, LINES_CONTEXT, NewLine, Submit, bindings, composed_selection, escaped, prompt_keys, send_key, shared,
+    word_end, word_start,
 };
 use crate::platform::Os;
 
@@ -49,6 +50,16 @@ fn a_selection_leaves_the_field_unless_it_is_empty_or_masked() {
 fn a_masked_field_is_one_word() {
     assert_eq!(word_start("made up words", 13, true), 0);
     assert_eq!(word_end("made up words", 0, true), 13);
+}
+
+#[test]
+fn a_composed_selection_is_read_within_the_new_text() {
+    for (new_text, utf16, start, want) in
+        [("´", 1..1, 3, 5..5), ("´", 1..1, 6, 8..8), ("´", 1..1, 0, 2..2), ("´", 0..0, 3, 3..3), ("😀", 2..2, 4, 8..8)]
+    {
+        assert_eq!(composed_selection(new_text, Some(&utf16), start), want, "{new_text:?} {utf16:?} {start}");
+    }
+    assert_eq!(composed_selection("´", None, 3), 5..5);
 }
 
 #[test]

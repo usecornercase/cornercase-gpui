@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.1.78
 
-- **A token's field in Settings puts its caret where you type.** The caret, a click, a drag, ⇧← and ⌘A now land on the dots you see, and a token longer than its field scrolls to keep the caret in view. Composing an accented letter with a dead key (´ then a) in it no longer risks closing the window. Each dot stands for one character as you see it, so an emoji, a flag or an accented letter is one dot.
+- **A token's field in Settings puts its caret where you type.** The caret, a click, a drag, ⇧← and ⌘A now land on the dots you see, and a token longer than its field scrolls to keep the caret in view. Composing an accented letter with a dead key (´ then a) in it no longer closes the window. Each dot stands for one character as you see it, so an emoji, a flag or an accented letter is one dot.
 - **Nothing can be copied out of a token's field.** ⌘C and ⌘X (Ctrl+C and Ctrl+X on Linux and Windows) do nothing there, as in the system's password fields. Deleting by word (⌥⌫, or Ctrl+⌫ on Linux and Windows) takes everything before the caret, and Ctrl+← and Ctrl+→ go to the token's start and end, so neither tells anything about what it holds. Pasting still works.
 
 ## 0.1.77
