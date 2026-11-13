@@ -1,6 +1,6 @@
-use gpui::{FontWeight, HighlightStyle, Hsla, TextRun, TextStyle, px};
+use gpui::{AvailableSpace, FontWeight, HighlightStyle, Hsla, TextRun, TextStyle, px};
 
-use super::{Cut, ELLIPSIS, caret_in, ending, kept, one_line, runs};
+use super::{Cut, ELLIPSIS, caret_in, ending, kept, natural, one_line, runs};
 
 fn bold() -> HighlightStyle {
     HighlightStyle { font_weight: Some(FontWeight::BOLD), ..Default::default() }
@@ -87,4 +87,26 @@ fn before_the_ellipsis_a_cut_line_stops_at_what_it_kept() {
     let cut = Some(Cut { kept: 12, mark_x: px(84.) });
     assert_eq!(caret_in(cut, 200, px(83.), 13), 12);
     assert_eq!(caret_in(cut, 200, px(14.), 2), 2);
+}
+
+#[test]
+fn a_plain_line_asks_for_nothing_at_its_least() {
+    assert_eq!(natural(px(120.), AvailableSpace::MinContent, None), px(0.));
+}
+
+#[test]
+fn a_line_with_a_widest_width_keeps_its_own_width_at_its_least() {
+    assert_eq!(natural(px(120.), AvailableSpace::MinContent, Some(px(240.))), px(120.));
+}
+
+#[test]
+fn a_line_longer_than_its_widest_width_asks_for_the_widest() {
+    let widest = Some(px(240.));
+    assert_eq!(natural(px(5000.), AvailableSpace::MinContent, widest), px(240.));
+    assert_eq!(natural(px(5000.), AvailableSpace::MaxContent, widest), px(240.));
+}
+
+#[test]
+fn a_box_narrower_than_the_widest_width_still_wins() {
+    assert_eq!(natural(px(5000.), AvailableSpace::Definite(px(100.)), Some(px(240.))), px(100.));
 }

@@ -7,10 +7,11 @@ use gpui::{
 };
 
 use super::TextField;
-use super::rows::{Row, Rows, clamp_scroll, rows_shown, scroll_to_show, scroll_to_show_with_margins, thumb};
+use super::rows::{
+    CARET_WIDTH, Row, Rows, clamp_scroll, rows_shown, scroll_to_show, scroll_to_show_with_margins, sideways, thumb,
+};
 use crate::theme::colours;
 
-const CARET_WIDTH: Pixels = px(2.);
 const BREAK_WIDTH: Pixels = px(6.);
 const THUMB_WIDTH: Pixels = px(3.);
 const THUMB_GAP: Pixels = px(4.);
@@ -23,6 +24,7 @@ pub(super) struct Layout {
     pub(super) line_height: Pixels,
     pub(super) bounds: Bounds<Pixels>,
     pub(super) scroll_top: Pixels,
+    pub(super) scroll_left: Pixels,
 }
 
 impl Layout {
@@ -50,7 +52,7 @@ impl Layout {
             return 0;
         }
         match self.rows.get((y / self.line_height) as usize) {
-            Some(row) => self.index_in_row(row, position.x - self.bounds.left(), text),
+            Some(row) => self.index_in_row(row, position.x - self.text_left(), text),
             None => text.len(),
         }
     }
@@ -65,7 +67,7 @@ impl Layout {
 
     fn caret(&self, offset: usize) -> PaintQuad {
         let at = self.position(offset);
-        let origin = point(self.bounds.left() + at.x, self.text_top() + at.y);
+        let origin = point(self.text_left() + at.x, self.text_top() + at.y);
         fill(Bounds::new(origin, size(CARET_WIDTH, self.line_height)), colours::accent())
     }
 
@@ -75,7 +77,7 @@ impl Layout {
             .into_iter()
             .filter_map(|span| {
                 let row = self.rows.get(span.row)?;
-                let x = |offset| self.bounds.left() + self.x_in_row(row, offset);
+                let x = |offset| self.text_left() + self.x_in_row(row, offset);
                 let top = self.text_top() + self.line_height * span.row;
                 let tail = if span.line_break { BREAK_WIDTH } else { px(0.) };
                 let end = point(x(span.range.end) + tail, top + self.line_height);
@@ -97,12 +99,24 @@ impl Layout {
         ContentMask { bounds: Bounds::new(origin, area) }
     }
 
+    fn text_width(&self) -> Pixels {
+        self.lines.first().map_or(px(0.), |line| line.unwrapped_layout.width)
+    }
+
+    fn text_left(&self) -> Pixels {
+        self.bounds.left() - self.scroll_left
+    }
+
+    fn mask(&self, multi_row: bool) -> ContentMask<Pixels> {
+        if multi_row { self.clip() } else { ContentMask { bounds: self.bounds } }
+    }
+
     fn paint_lines(&self, window: &mut Window, cx: &mut App) {
         let mut top = self.text_top();
         for line in &self.lines {
             let height = self.line_height * (line.wrap_boundaries().len() + 1);
             if top + height > self.bounds.top() && top < self.bounds.bottom() {
-                let origin = point(self.bounds.left(), top);
+                let origin = point(self.text_left(), top);
                 let _ = line.paint(origin, self.line_height, TextAlign::Left, None, window, cx);
             }
             top += height;
@@ -199,16 +213,17 @@ impl Element for TextElement {
     ) {
         let input = self.input.read(cx);
         let focus_handle = input.focus_handle.clone();
-        let clips = input.options.rows.is_some();
+        let scrolls = input.options.rows.is_some() || !input.options.wraps;
+        let multi_row = input.options.rows.is_some();
         window.handle_input(&focus_handle, ElementInputHandler::new(bounds, self.input.clone()), cx);
-        if clips {
+        if scrolls {
             self.follow_drag(window);
         }
         let Some(layout) = prepaint.layout.take() else { return };
         let selection = std::mem::take(&mut prepaint.selection);
         let cursor = prepaint.cursor.take();
         let focused = focus_handle.is_focused(window);
-        window.with_content_mask(clips.then(|| layout.clip()), |window| {
+        window.with_content_mask(scrolls.then(|| layout.mask(multi_row)), |window| {
             selection.into_iter().filter(|_| focused).for_each(|quad| window.paint_quad(quad));
             layout.paint_lines(window, cx);
             cursor.into_iter().filter(|_| focused).for_each(|quad| window.paint_quad(quad));
@@ -239,7 +254,7 @@ impl TextElement {
         }
         let rows = Rows::new(lines.iter().map(|line| (line.len(), row_starts(line))));
         let line_height = window.line_height();
-        Some(Layout { lines, rows, line_height, bounds, scroll_top: input.view.scroll_top })
+        Some(Layout { lines, rows, line_height, bounds, scroll_top: input.view.scroll_top, scroll_left: px(0.) })
     }
 
     fn settled(&self, mut layout: Layout, window: &Window, cx: &mut App) -> Layout {
@@ -254,13 +269,19 @@ impl TextElement {
             input.view.scroll_top
         };
         layout.scroll_top = clamp_scroll(shown, layout.content_height(), height);
+        if focused && !input.options.wraps {
+            let caret = layout.position(input.cursor_offset()).x;
+            layout.scroll_left =
+                sideways(input.view.scroll_left, (caret, layout.text_width()), layout.bounds.size.width);
+        }
         if let Some(scroller) = input.options.scroller.as_ref().filter(|_| reveal && focused) {
             let below = if input.options.rows.is_some() { PROMPT_MARGIN } else { SCROLLER_MARGIN };
             show_in_scroller(scroller, (layout.text_top() + caret, layout.line_height, below), window);
         }
-        let scroll_top = layout.scroll_top;
+        let (scroll_top, scroll_left) = (layout.scroll_top, layout.scroll_left);
         self.input.update(cx, |input, _| {
             input.view.scroll_top = scroll_top;
+            input.view.scroll_left = scroll_left;
             input.view.reveal = false;
             input.view.was_focused = focused;
         });

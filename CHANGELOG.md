@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.73
+
+- Renaming a tab or a sidebar row in place keeps a long name inside its field: the field shows the end of the name with the caret, ⌘← (Home on Linux and Windows) shows its start, and nothing is drawn over the tabs or rows beside it. Every one-line field does the same with a long text, so the Plugins sheet's Install field no longer runs under its buttons in a narrow window.
+- Dragging a tab or a sidebar row with a long name shows it on a short chip ending in "…" instead of a line as wide as the window.
+- In a narrow window long tab names are cut shorter, so the shown tab's `+N` and ✕ stay in view.
+
 ## 0.1.72
 
 - **A linked machine's dev servers, here.** With a machine's workspace picked, Ports (⇧⌘O, or **Ports…** in its menu) lists what listens there, and **Every port** lists the whole machine. **Stop** works there too and names the machine. With cornercase 0.13.50 or newer on this computer and on the machine, **Tunnel** forwards a port to this computer through cornercase: the row shows the local port, Copy and the system browser's icon use it, and the window says which port it took when the same one is busy here. The status bar counts the tunnels (`⇄2`) and its menu lists them under each machine. They end when the window closes or connects elsewhere, or the machine is removed, and come back when the machine links again. With an older cornercase on either side the ports still list and a line above them says which one needs 0.13.50.

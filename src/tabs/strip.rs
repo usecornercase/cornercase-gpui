@@ -6,7 +6,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, canvas, div, point, prelude::FluentBuilder as _, px,
 };
 
-use super::TAB_HEIGHT;
+use super::{NAME_MAX, STRIP_GAP, TAB_HEIGHT, TAB_PARTS};
 use crate::app::Root;
 use crate::sidebar::tip;
 use crate::theme::{colours, radius};
@@ -14,6 +14,8 @@ use crate::theme::{colours, radius};
 const ARROW_WIDTH: f32 = 20.;
 pub(super) const ARROW_GAP: f32 = 2.;
 const NEAR: f32 = 0.5;
+const NAME_LEAST: f32 = 64.;
+const STRIP_PARTS: f32 = 2. * (ARROW_WIDTH + ARROW_GAP) + STRIP_GAP + TAB_HEIGHT;
 const ARROWS_ROOM: f32 = 2. * (ARROW_WIDTH + ARROW_GAP) - 1.;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -31,10 +33,15 @@ pub(crate) struct TabStrip {
     arrows: Rc<Cell<bool>>,
     wanted: Rc<Cell<(Spot, Option<usize>)>>,
     followed: Rc<Cell<Spot>>,
+    slot: Rc<Cell<f32>>,
 }
 
 pub(super) fn overflows(max_offset: f32, arrows: bool) -> bool {
     max_offset > if arrows { ARROWS_ROOM } else { 0. }
+}
+
+pub(super) fn names_widest(slot: f32, most: f32) -> f32 {
+    if slot <= 0. { most } else { (slot - STRIP_PARTS - TAB_PARTS).clamp(NAME_LEAST.min(most), most) }
 }
 
 pub(super) fn stepped(items: &[(f32, f32)], width: f32, scrolled: f32, forward: bool) -> f32 {
@@ -78,6 +85,16 @@ impl TabStrip {
         let arrows = overflows(self.max_offset(), self.arrows.get());
         self.arrows.set(arrows);
         arrows
+    }
+
+    pub(super) fn name_widest(&self) -> f32 {
+        names_widest(self.slot.get(), NAME_MAX)
+    }
+
+    fn slot_changed(&self, slot: f32) -> bool {
+        let was = self.name_widest();
+        self.slot.set(slot);
+        (self.name_widest() - was).abs() > NEAR
     }
 
     pub(super) fn show(&self, workspace: Option<u64>, tab: Option<u64>, index: Option<usize>) {
@@ -130,15 +147,18 @@ impl TabStrip {
     }
 }
 
-fn settle(strip: &TabStrip, part: EntityId, cx: &mut App) {
-    if strip.settle() {
+fn settle(strip: &TabStrip, slot: f32, part: EntityId, cx: &mut App) {
+    let settled = strip.settle();
+    if strip.slot_changed(slot) || settled {
         cx.defer(move |cx| cx.notify(part));
     }
 }
 
 pub(super) fn watcher(strip: &TabStrip, part: EntityId) -> impl IntoElement + use<> {
     let strip = strip.clone();
-    canvas(move |_, _, cx| settle(&strip, part, cx), |_, (), _, _| {}).absolute().size(px(0.))
+    canvas(move |bounds, _, cx| settle(&strip, f32::from(bounds.size.width), part, cx), |_, (), _, _| {})
+        .absolute()
+        .inset_0()
 }
 
 pub(super) fn arrow(forward: bool, enabled: bool, cx: &mut Context<Root>) -> Stateful<Div> {

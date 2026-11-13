@@ -1,4 +1,7 @@
-use super::{ARROWS_ROOM, Spot, can_step, followed_scroll, in_view, overflows, stepped};
+use super::{
+    ARROWS_ROOM, NAME_LEAST, STRIP_PARTS, Spot, TAB_PARTS, TabStrip, can_step, followed_scroll, in_view, names_widest,
+    overflows, stepped,
+};
 
 const TABS: [(f32, f32); 4] = [(0., 100.), (104., 204.), (208., 308.), (312., 412.)];
 
@@ -122,4 +125,39 @@ fn a_narrower_strip_keeps_the_active_tab_in_view() {
 fn no_tab_shown_scrolls_nothing() {
     let was = spot(1, 1, 250., 58.);
     assert!(near(followed_scroll(was, Spot { tab: None, ..was }, None), 58.));
+}
+
+#[test]
+fn a_wide_window_keeps_names_at_their_widest() {
+    assert!(near(names_widest(880., 200.), 200.));
+}
+
+#[test]
+fn a_narrow_window_cuts_names_to_what_the_strip_leaves() {
+    assert!(near(names_widest(241., 200.), 241. - STRIP_PARTS - TAB_PARTS));
+}
+
+#[test]
+fn a_very_narrow_strip_keeps_names_at_their_least() {
+    assert!(near(names_widest(100., 200.), NAME_LEAST));
+}
+
+#[test]
+fn before_the_first_layout_names_keep_their_widest() {
+    assert!(near(names_widest(0., 200.), 200.));
+}
+
+#[test]
+fn a_slot_that_leaves_the_names_width_alone_asks_for_no_draw() {
+    let strip = TabStrip::default();
+    assert!(!strip.slot_changed(880.));
+    assert!(!strip.slot_changed(900.));
+}
+
+#[test]
+fn a_slot_that_changes_the_names_width_asks_for_one_draw() {
+    let strip = TabStrip::default();
+    assert!(strip.slot_changed(241.));
+    assert!(!strip.slot_changed(241.));
+    assert!(strip.slot_changed(880.));
 }

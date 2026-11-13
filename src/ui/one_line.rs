@@ -14,6 +14,7 @@ pub(crate) struct OneLine {
     text: SharedString,
     highlights: Vec<(Range<usize>, HighlightStyle)>,
     on_laid: Option<OnLaid>,
+    widest: Option<Pixels>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,12 +47,17 @@ fn caret_in(cut: Option<Cut>, len: usize, x: Pixels, closest: usize) -> usize {
 pub(crate) fn one_line(text: impl Into<SharedString>) -> OneLine {
     let text: SharedString = text.into();
     let text = if text.contains(BREAKS) { text.replace(BREAKS, " ").into() } else { text };
-    OneLine { text, highlights: Vec::new(), on_laid: None }
+    OneLine { text, highlights: Vec::new(), on_laid: None, widest: None }
 }
 
 impl OneLine {
     pub(crate) fn highlights(mut self, highlights: impl IntoIterator<Item = (Range<usize>, HighlightStyle)>) -> Self {
         self.highlights = highlights.into_iter().collect();
+        self
+    }
+
+    pub(crate) fn widest(mut self, widest: Pixels) -> Self {
+        self.widest = Some(widest);
         self
     }
 
@@ -106,8 +112,9 @@ impl Element for OneLine {
         let runs = runs(&self.text, &style, &self.highlights);
         let line = window.text_system().shape_line(self.text.clone(), font_size, &runs, None);
         let width = line.width.ceil();
+        let widest = self.widest;
         let layout = window.request_measured_layout(Style::default(), move |known, available, _, _| Size {
-            width: known.width.unwrap_or_else(|| natural(width, available.width)),
+            width: known.width.unwrap_or_else(|| natural(width, available.width, widest)),
             height: known.height.unwrap_or(line_height),
         });
         let mark = style.to_run(ELLIPSIS.len());
@@ -152,11 +159,12 @@ impl Element for OneLine {
     }
 }
 
-fn natural(width: Pixels, available: AvailableSpace) -> Pixels {
+fn natural(width: Pixels, available: AvailableSpace, widest: Option<Pixels>) -> Pixels {
+    let width = widest.map_or(width, |widest| width.min(widest));
     match available {
         AvailableSpace::Definite(room) => width.min(room),
-        AvailableSpace::MinContent => px(0.),
-        AvailableSpace::MaxContent => width,
+        AvailableSpace::MinContent if widest.is_none() => px(0.),
+        AvailableSpace::MinContent | AvailableSpace::MaxContent => width,
     }
 }
 

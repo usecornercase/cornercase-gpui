@@ -14,7 +14,7 @@ use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::{MachinePlace, MachineSeen, Tab, ThereId, ThereWorkspace, memory_size};
 use crate::platform::Os;
-use crate::sidebar::{Dragged, Look, Renaming, Target, cmd, draggable, order, status_of, tip};
+use crate::sidebar::{Dragged, Look, Renaming, Target, cmd, draggable, order, rename_box, status_of, tip};
 use crate::theme::{colours, radius};
 use crate::ui::orbits::{self, Spots};
 use crate::ui::{self, Icon};
@@ -27,15 +27,17 @@ pub(crate) use strip::TabStrip;
 
 const TAB_HEIGHT: f32 = 28.;
 const NAME_MAX: f32 = 200.;
+const STRIP_GAP: f32 = 6.;
+const PILL_GAP: f32 = 6.;
+const PILL_LEFT: f32 = 10.;
+const PILL_RIGHT: f32 = 6.;
+const PILL_BORDER: f32 = 2.;
+const CLOSE_SIZE: f32 = 16.;
+const COUNT_WIDTH: f32 = 14.;
+const TAB_PARTS: f32 = PILL_LEFT + PILL_RIGHT + PILL_BORDER + 3. * PILL_GAP + ui::BADGE_SLOT + COUNT_WIDTH + CLOSE_SIZE;
 
-fn tab_label(id: impl Into<ElementId>, name: &str) -> Stateful<Div> {
-    div()
-        .id(id)
-        .min_w_0()
-        .max_w(px(NAME_MAX))
-        .flex()
-        .tooltip(tip(name.to_string()))
-        .child(ui::one_line(name.to_string()))
+fn tab_label(id: impl Into<ElementId>, name: &str, widest: f32) -> Stateful<Div> {
+    div().id(id).min_w_0().max_w(px(widest)).flex().tooltip(tip(name.to_string())).child(ui::one_line(name.to_string()))
 }
 
 fn faint(text: String) -> Div {
@@ -64,7 +66,7 @@ fn close_button(tab: &Tab, group: SharedString, selected: bool, cx: &mut Context
     let tab = tab.clone();
     div()
         .id(SharedString::from(format!("tab-close-{}", tab.id)))
-        .size(px(16.))
+        .size(px(CLOSE_SIZE))
         .flex_none()
         .flex()
         .items_center()
@@ -144,10 +146,10 @@ fn tab_pill(group: SharedString, selected: bool) -> Stateful<Div> {
         .flex()
         .flex_none()
         .items_center()
-        .gap(px(6.))
+        .gap(px(PILL_GAP))
         .h(px(TAB_HEIGHT))
-        .pl(px(10.))
-        .pr(px(6.))
+        .pl(px(PILL_LEFT))
+        .pr(px(PILL_RIGHT))
         .relative()
         .rounded(px(radius::control()))
         .border_1()
@@ -163,7 +165,7 @@ fn machine_tab(
     (seen, ws): (&MachineSeen, &ThereWorkspace),
     tab: &Tab<ThereId>,
     selected: bool,
-    (look, spots): (&Look, &Spots),
+    (look, spots, widest): (&Look, &Spots, f32),
     cx: &mut Context<Root>,
 ) -> Stateful<Div> {
     let place = MachinePlace::at(seen, ws, Some(tab.id));
@@ -173,7 +175,7 @@ fn machine_tab(
     tab_pill(SharedString::from(format!("machine-tab-{}", tab.id.key())), selected)
         .pr(px(10.))
         .children(status)
-        .child(tab_label(SharedString::from(format!("machine-tab-name-{}", tab.id.key())), &tab.name))
+        .child(tab_label(SharedString::from(format!("machine-tab-name-{}", tab.id.key())), &tab.name, widest))
         .when(others > 0, |d| d.child(faint(format!("+{others}"))))
         .when_some(detail, |d, text| d.child(faint(text).whitespace_nowrap()))
         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_on_machine(place.clone(), cx)))
@@ -207,18 +209,18 @@ impl Root {
     pub(crate) fn tabs_part(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Drawn {
         self.parts.tab_spots.clear();
         let group = frame::claimed(self.tab_group(cx), Frame::read(window, Os::CURRENT), &self.focus);
-        Drawn { element: div().size_full().flex().items_center().child(group).into_any_element(), counted: false }
+        let watched = !self.side.look.current.tabs_in_sidebar;
+        let root = div().size_full().flex().items_center().child(group);
+        let root = root.when(watched, |d| d.child(strip::watcher(&self.side.strip, self.parts.tabs.entity_id())));
+        Drawn { element: root.into_any_element(), counted: false }
     }
 
     fn tab_group(&self, cx: &mut Context<Self>) -> Div {
-        let group = div().flex().items_center().min_w_0().gap(px(6.)).overflow_hidden();
+        let group = div().flex().items_center().min_w_0().gap(px(STRIP_GAP)).overflow_hidden();
         if self.side.look.current.tabs_in_sidebar {
             return group;
         }
-        group
-            .child(self.scrolled_tabs(cx))
-            .when(self.machine.is_none(), |d| d.child(new_tab_button(cx)))
-            .child(strip::watcher(&self.side.strip, self.parts.tabs.entity_id()))
+        group.child(self.scrolled_tabs(cx)).when(self.machine.is_none(), |d| d.child(new_tab_button(cx)))
     }
 
     fn scrolled_tabs(&self, cx: &mut Context<Self>) -> Div {
@@ -288,10 +290,8 @@ impl Root {
 
     fn tab_name(&self, tab: &Tab) -> AnyElement {
         match self.side.rename.as_ref().filter(|r| r.what == Renaming::Here(Target::Tab(tab.id))) {
-            Some(r) => {
-                div().w(px(140.)).flex_none().child(ui::input_box(r.field.clone(), true).py(px(0.))).into_any_element()
-            }
-            None => tab_label(("tab-name", tab.id), &tab.name).into_any_element(),
+            Some(r) => div().w(px(140.)).flex_none().child(rename_box(&r.field).py(px(0.))).into_any_element(),
+            None => tab_label(("tab-name", tab.id), &tab.name, self.side.strip.name_widest()).into_any_element(),
         }
     }
 
@@ -306,11 +306,8 @@ impl Root {
         let shown = self.side.machine_place.as_ref().and_then(|place| place.tab);
         let index = ws.tabs.iter().position(|tab| Some(tab.id) == shown);
         self.side.strip.show(None, index.and_then(|at| u64::try_from(at).ok()), index);
-        let look = &self.side.look.current;
-        ws.tabs
-            .iter()
-            .map(|tab| machine_tab((seen, ws), tab, Some(tab.id) == shown, (look, &self.parts.tab_spots), cx))
-            .collect()
+        let look = (&self.side.look.current, &self.parts.tab_spots, self.side.strip.name_widest());
+        ws.tabs.iter().map(|tab| machine_tab((seen, ws), tab, Some(tab.id) == shown, look, cx)).collect()
     }
 }
 

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Div, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    AnyElement, App, ClickEvent, Context, Div, Entity, FontWeight, InteractiveElement, IntoElement, MouseButton,
     MouseDownEvent, ParentElement, SharedString, Stateful, StatefulInteractiveElement, Styled, Window, div,
     prelude::FluentBuilder as _, px, relative,
 };
@@ -137,6 +137,10 @@ pub(super) fn row_frame(gid: SharedString, lit: bool) -> Stateful<Div> {
     if lit { glass::lit(row) } else { row.hover(|s| s.bg(colours::hover())) }
 }
 
+pub(crate) fn rename_box(field: &Entity<ui::TextField>) -> Div {
+    ui::input_box(field.clone(), true).on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+}
+
 pub(super) fn menu_button(target: Target, cx: &mut Context<Root>) -> Stateful<Div> {
     let id = SharedString::from(format!("{}-menu-{}", id_prefix(target), target.id()));
     hover_button(id, row_group_id(target), "⋯", 0).on_mouse_down(
@@ -242,7 +246,7 @@ impl Root {
         let Some(rename) = self.side.rename.as_ref().filter(|r| r.what == *what) else {
             return label.into_any_element();
         };
-        div().flex_1().min_w(px(0.)).child(ui::input_box(rename.field.clone(), true).py(px(1.))).into_any_element()
+        div().flex_1().min_w(px(0.)).child(rename_box(&rename.field).py(px(1.))).into_any_element()
     }
 
     pub(super) fn section_rows(

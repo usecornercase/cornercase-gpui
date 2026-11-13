@@ -39,6 +39,7 @@ pub(crate) use forms::{AgentCloseThere, CloseAgent, agent_checked, close_agent, 
 pub(crate) use look::{Arrangement, Look};
 pub(crate) use machine_rows::status_of;
 pub(crate) use menus::{mark_label, path_items, reopening};
+pub(crate) use rows::rename_box;
 
 const MARK: f32 = 1.25;
 
@@ -77,11 +78,18 @@ pub(crate) struct Dragged {
     pub label: SharedString,
 }
 
+const DRAG_NAME_MAX: f32 = 240.;
+
 pub(crate) struct DragPreview(SharedString);
 
 impl Render for DragPreview {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        ui::glass::dragged().px(px(10.)).py(px(4.)).text_size(px(12.)).child(self.0.clone())
+        ui::glass::dragged()
+            .flex()
+            .px(px(10.))
+            .py(px(4.))
+            .text_size(px(12.))
+            .child(ui::one_line(self.0.clone()).widest(px(DRAG_NAME_MAX)))
     }
 }
 
