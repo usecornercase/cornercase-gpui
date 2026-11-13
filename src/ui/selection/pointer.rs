@@ -6,7 +6,7 @@ use std::time::Duration;
 use gpui::{
     AnyElement, App, AvailableSpace, Bounds, Context, DispatchPhase, Div, ElementId, InteractiveElement as _,
     IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels, Point,
-    Stateful, Styled as _, Task, TextLayout, WeakEntity, Window, canvas, div, point, px,
+    Stateful, Styled as _, Task, TextLayout, WeakEntity, Window, canvas, div, fill, point, px, size,
 };
 
 use crate::desktop;
@@ -16,10 +16,10 @@ use crate::ui::glass;
 use crate::ui::one_line::LaidOut;
 
 use super::caret::{Keyed, extended};
-use super::code::past_the_cut;
+use super::code::{break_index, break_x, past_the_cut};
 use super::{
-    Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Span, Step, Zone, bar_origin, edge_at, host, off_centre,
-    off_edge, row_at, row_from, row_near, word_at,
+    BREAK_WIDTH, Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Span, Step, Zone, bar_origin, edge_at, host,
+    off_centre, off_edge, row_at, row_from, row_near, word_at,
 };
 
 type Rule = fn(Span, Bounds<Pixels>, Pixels) -> Option<Pixels>;
@@ -56,6 +56,19 @@ impl Drawn {
             DrawnText::Wrapped(layout, kept) => past_the_cut(wrapped_index(layout, at), *kept, self.len),
         };
         index.min(self.len)
+    }
+
+    fn break_at(&self) -> Option<Bounds<Pixels>> {
+        let (origin, height) = match &self.text {
+            DrawnText::Line(line) => {
+                (point(break_x(self.len, line.bounds.left(), line.end_x()), line.bounds.top()), line.bounds.size.height)
+            }
+            DrawnText::Wrapped(layout, kept) => {
+                let at = break_index(self.len, *kept, layout.len());
+                (layout.position_for_index(at)?, layout.line_height())
+            }
+        };
+        Some(Bounds::new(origin, size(BREAK_WIDTH, height)))
     }
 
     fn span_of(&self, at: usize) -> Span {
@@ -137,6 +150,10 @@ impl<S: Copy + Ord> Laid<S> {
         let frame = self.0.borrow();
         let Some(drawn) = frame.rows.get(&spot) else { return Off::Gone };
         rule(drawn.span_of(at), frame.body, px(inset)).map_or(Off::InView, Off::By)
+    }
+
+    fn break_of(&self, spot: S) -> Option<Bounds<Pixels>> {
+        self.0.borrow().rows.get(&spot).and_then(Drawn::break_at)
     }
 
     pub(crate) fn first_shown(&self, inset: f32) -> Option<Caret<S>> {
@@ -432,6 +449,22 @@ pub(super) fn row_probe<S: Copy + Ord + 'static>(
         .top_0()
         .left_0()
         .size_full()
+}
+
+pub(super) fn break_mark<S: Copy + Ord + 'static>(laid: &Laid<S>, spot: S) -> impl IntoElement + use<S> {
+    let (laid, colour) = (laid.clone(), colours::selection());
+    canvas(
+        move |_, _, _| laid.break_of(spot),
+        move |_, mark, window, _| {
+            if let Some(mark) = mark {
+                window.paint_quad(fill(mark, colour));
+            }
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
 }
 
 pub(crate) fn action(id: impl Into<ElementId>, label: &'static str) -> Stateful<Div> {

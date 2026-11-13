@@ -11,8 +11,8 @@ use super::rows::{
     CARET_WIDTH, Row, Rows, clamp_scroll, rows_shown, scroll_to_show, scroll_to_show_with_margins, sideways, thumb,
 };
 use crate::theme::colours;
+use crate::ui::selection::BREAK_WIDTH;
 
-const BREAK_WIDTH: Pixels = px(6.);
 const THUMB_WIDTH: Pixels = px(3.);
 const THUMB_GAP: Pixels = px(4.);
 const SCROLLER_MARGIN: Pixels = px(12.);

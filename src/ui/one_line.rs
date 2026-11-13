@@ -21,6 +21,7 @@ pub(crate) struct OneLine {
 struct Cut {
     kept: usize,
     mark_x: Pixels,
+    end_x: Pixels,
 }
 
 pub(crate) struct LaidOut {
@@ -34,6 +35,18 @@ impl LaidOut {
         let local = x - self.bounds.left();
         caret_in(self.cut, self.line.len(), local, self.line.closest_index_for_x(local))
     }
+
+    pub(crate) fn end_x(&self) -> Pixels {
+        end_in(self.cut, self.bounds, self.line.width)
+    }
+}
+
+fn fits(width: Pixels, room: Pixels) -> bool {
+    width <= room.ceil()
+}
+
+fn end_in(cut: Option<Cut>, bounds: Bounds<Pixels>, width: Pixels) -> Pixels {
+    bounds.left() + cut.map_or(width, |cut| cut.end_x)
 }
 
 fn caret_in(cut: Option<Cut>, len: usize, x: Pixels, closest: usize) -> usize {
@@ -72,7 +85,8 @@ impl OneLine {
         let at = measured.line.index_for_x(width - mark.width).unwrap_or(self.text.len());
         let kept = kept(&self.text, at);
         let text = SharedString::from(format!("{}{ELLIPSIS}", &self.text[..kept]));
-        let cut = Cut { kept, mark_x: measured.line.x_for_index(kept) };
+        let mark_x = measured.line.x_for_index(kept);
+        let cut = Cut { kept, mark_x, end_x: mark_x + mark.width };
         (system.shape_line(text, measured.font_size, &ending(&measured.runs, kept, measured.mark.clone()), None), cut)
     }
 }
@@ -130,7 +144,7 @@ impl Element for OneLine {
         window: &mut Window,
         _cx: &mut App,
     ) -> Self::PrepaintState {
-        let (shown, cut) = if measured.line.width <= bounds.size.width.ceil() {
+        let (shown, cut) = if fits(measured.line.width, bounds.size.width) {
             (measured.line.clone(), None)
         } else {
             let (shown, cut) = self.cut(measured, bounds.size.width, window);

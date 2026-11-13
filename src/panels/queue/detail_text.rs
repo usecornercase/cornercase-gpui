@@ -30,10 +30,6 @@ impl QueuePanel {
         let Some(detail) = self.detail.as_ref() else { return div().into_any_element() };
         let Some(line) = detail.lines().get(ix) else { return div().into_any_element() };
         let lit = detail.selecting.lit(ix, line);
-        let styles = match lit.drawn_range(line) {
-            Some(range) => selection::overlay(Vec::new(), &[range], selection::selected_chars()),
-            None => Vec::new(),
-        };
         let fit = Fit::of(true, px(self.side_width.size() - GUTTER - 8.));
         let frame = div()
             .flex()
@@ -46,7 +42,7 @@ impl QueuePanel {
         let frame = if ix == 0 { frame.pt(px(TOP)) } else { frame };
         frame
             .child(div().w(px(GUTTER)).flex_none())
-            .child(selection::code_cell(detail.selecting.laid(), (ix, line), styles, fit))
+            .child(selection::code_cell(detail.selecting.laid(), (ix, line), (Vec::new(), &lit), fit))
             .into_any_element()
     }
 
