@@ -24,10 +24,6 @@ pub(crate) fn drive(toward: Option<&Toward>, gate: Gate, held: Option<ReverseSta
     refused.map_or(Drive::Closed, Drive::Needs)
 }
 
-pub(crate) fn own_reverse_stays(gate: Gate) -> bool {
-    gate != Gate::Open
-}
-
 pub(crate) fn says(drive: &Drive, name: &str) -> String {
     match drive {
         Drive::Here | Drive::Own => {

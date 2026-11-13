@@ -1,5 +1,7 @@
-use super::{pick_local, wanted};
+use super::{own_reverse_stays, pick_local, wanted};
+use crate::cli::Version;
 use crate::model::link::loopback_port;
+use crate::model::tunnels::{Gate, Older};
 
 #[test]
 fn a_url_on_this_machine_names_its_port() {
@@ -56,4 +58,12 @@ fn a_tunnel_a_tab_still_uses_stays_after_its_port_goes() {
     let tunnels = [(3000, 50000), (8000, 8000)];
     let kept = wanted(&[], &[], &tunnels, &["http://localhost:50000/app", "https://example.com"]);
     assert_eq!(kept.into_iter().collect::<Vec<_>>(), [3000]);
+}
+
+#[test]
+fn the_windows_own_reverse_ssh_stops_once_the_hold_can_carry_it() {
+    let older = Gate::Older(Older::ThisComputer(Version::parse("0.13.60")));
+    assert!(!own_reverse_stays(Gate::Open));
+    assert!(own_reverse_stays(older));
+    assert!(own_reverse_stays(Gate::Waiting));
 }

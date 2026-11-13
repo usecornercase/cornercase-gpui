@@ -7,11 +7,10 @@ use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::{App, Context, Entity};
 
-use super::agent::far::own_reverse_stays;
 use super::{Browser, say};
 use crate::model::Owner;
 use crate::model::link::{loopback_port, rewrite};
-use crate::model::tunnels::Toward;
+use crate::model::tunnels::{Gate, Toward};
 use crate::store::{Busy, Store};
 use crate::{cli, desktop};
 
@@ -118,6 +117,10 @@ impl Drop for Tunnels {
         self.list.iter().filter_map(|t| t.process).for_each(ssh::stop);
         ssh::drop_reverse_unless(cli::host().as_deref());
     }
+}
+
+pub(crate) fn own_reverse_stays(gate: Gate) -> bool {
+    gate != Gate::Open
 }
 
 pub(crate) fn pick_local(

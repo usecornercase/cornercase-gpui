@@ -1,6 +1,6 @@
 use super::{
     Drive, close_label, confirm_words, drive, exposure, offers_tell, open_label, open_tooltip, opening_words,
-    own_exposure, own_reverse_stays, says,
+    own_exposure, says,
 };
 use crate::model::tunnels::{Gate, Older, Toward};
 use crate::store::ReverseState;
@@ -65,13 +65,6 @@ fn the_menu_says_what_each_state_offers() {
     assert_eq!(opening_words("vps"), "Opening this Chrome to vps…");
     assert_eq!(close_label("vps"), "Close it to vps");
     assert_eq!(open_tooltip("vps"), "Asks first: every user and program on vps could then drive it");
-}
-
-#[test]
-fn the_windows_own_reverse_ssh_stops_once_the_hold_can_carry_it() {
-    assert!(!own_reverse_stays(Gate::Open));
-    assert!(own_reverse_stays(older()));
-    assert!(own_reverse_stays(Gate::Waiting));
 }
 
 #[test]
