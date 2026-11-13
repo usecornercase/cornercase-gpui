@@ -16,6 +16,11 @@ use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, glass, glass::tint};
 use crate::{cli, desktop};
 
+pub(super) fn own_axis<E: gpui::Styled>(mut element: E) -> E {
+    element.style().restrict_scroll_to_axis = Some(true);
+    element
+}
+
 pub(super) fn tag(text: &'static str) -> Div {
     let default = text == "default";
     let colour = if default { colours::accent() } else { colours::muted() };

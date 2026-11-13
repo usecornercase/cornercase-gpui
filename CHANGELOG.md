@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.76
+
+- **The Flows sheet fits a narrow window.** When the window is too narrow for the list of runs and flows beside a page wide enough for its plan (under about 1,050 px), the sheet shows the page alone, with **‹ Runs and flows** above it to go back to the list; in a wider window the list narrows first. A plan still wider than its place now scrolls sideways instead of being cut off, in the Flows sheet, the Flow panel and the flow editor: swipe sideways, hold Shift while you scroll, or use the ‹ › beside its title, and scrolling up and down still moves the page. Role names such as `orchestrator` no longer break in the middle in the Roles card.
+- **Long texts stay on a plugin's card.** When a plugin's window processes stop, the card says why on a line of its own that wraps, with the rest of a very long line in its tooltip. A long action title, service name or version ends in "…" at the card's edge, whole in its tooltip.
+
 ## 0.1.75
 
 - With a linked machine's workspace picked, the Browser panel follows it: its tabs, its start page with that workspace's dev servers, and its address. Open on the Ports sheet's row, the card on the start page, the status bar's tunnels menu and its notice open the machine's port in the Browser through a tunnel, never this computer's port of the same number. The first new web port of that workspace opens by itself, as on another server. Leaving the machine's workspace brings your own workspace's tabs back.

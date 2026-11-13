@@ -35,6 +35,7 @@ use gpui::{
 
 use self::diagram::Played;
 pub(crate) use self::dock::build_dock;
+use self::list::Columns;
 use self::model::{Files, FlowInfo, Frame, Listing, Message, Run};
 use self::run_list::RunList;
 pub(crate) use self::start::{FlowStart, IssueTask, start_flow};
@@ -48,8 +49,10 @@ const POLL: Duration = Duration::from_secs(3);
 const AGES: Duration = Duration::from_secs(1);
 const KEPT: usize = 256;
 const LIST: Split = Split::new(330., 240., 700.);
-const DETAIL_KEEP: f32 = 320.;
+const PAGE_LEAST: f32 = 620.;
+const PAGE_PAD: f32 = 20.;
 const BOARD: f32 = 680.;
+const SHEET_AT_1280: f32 = 1_050.;
 
 struct ListGrip;
 
@@ -90,7 +93,9 @@ pub(crate) struct FlowsPanel {
     expanded: HashSet<u64>,
     prompt: Option<String>,
     list_width: Split,
-    board: Rc<Cell<f32>>,
+    sheet: Rc<Cell<f32>>,
+    list_open: bool,
+    board: diagram::Board,
     played: Played,
     run_list: RunList,
     editor: Option<Entity<editor::FlowEditor>>,
@@ -119,7 +124,9 @@ impl FlowsPanel {
             expanded: HashSet::new(),
             prompt: None,
             list_width: LIST,
-            board: Rc::new(Cell::new(BOARD)),
+            sheet: Rc::new(Cell::new(SHEET_AT_1280)),
+            list_open: false,
+            board: diagram::Board::new(BOARD),
             played: Played::default(),
             run_list: RunList::new(),
             editor: None,
@@ -375,6 +382,7 @@ impl FlowsPanel {
 
     fn select_run_in(&mut self, workspace: u64, cx: &mut Context<Self>) -> bool {
         let Some(id) = self.runs.iter().find(|r| r.workspace == workspace).map(|r| r.id) else { return false };
+        self.list_open = false;
         self.select(Selected::Run(id), cx);
         true
     }
@@ -398,13 +406,12 @@ impl FlowsPanel {
         if self.selected_run().is_some() {
             return div().flex_1().min_w_0().h_full().child(self.render_run(cx)).into_any_element();
         }
-        div()
-            .id(SharedString::from(format!("flows-detail-{:?}", self.selected)))
+        widgets::own_axis(div().id(SharedString::from(format!("flows-detail-{:?}", self.selected))))
             .flex_1()
             .min_w_0()
             .h_full()
             .overflow_y_scroll()
-            .p(px(20.))
+            .p(px(PAGE_PAD))
             .child(div().w_full().pb(px(12.)).child(self.detail(cx)))
             .into_any_element()
     }
@@ -464,15 +471,15 @@ impl Render for FlowsPanel {
             return div().size_full().child(editor.clone());
         }
         self.sync_run_list();
-        let width = self.list_width.size();
-        div()
-            .size_full()
-            .relative()
-            .flex()
-            .on_drag_move(split::follow::<_, ListGrip>(Edge::Right, DETAIL_KEEP, list_width, cx))
-            .child(self.sidebar(width, cx))
-            .child(self.detail_pane(cx))
-            .child(split::handle("flows-split", ListGrip, (Edge::Right, width), list_width, cx))
+        let sheet = div().size_full().relative().flex().child(wires::measure(self.sheet.clone()));
+        match list::columns(self.sheet.get(), &self.list_width) {
+            Columns::Two { list } => sheet
+                .on_drag_move(split::follow::<_, ListGrip>(Edge::Right, PAGE_LEAST, list_width, cx))
+                .child(self.sidebar(Some(list), cx))
+                .child(self.detail_pane(cx))
+                .child(split::handle("flows-split", ListGrip, (Edge::Right, list), list_width, cx)),
+            Columns::One => sheet.child(self.one_column(cx)),
+        }
     }
 }
 

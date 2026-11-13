@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::{Card, ENDED, Seen, Step, UNTIED, WindowProcesses};
+use super::{Card, ENDED, REASON_MOST, Seen, Step, UNTIED, WindowProcesses, shortened};
 use crate::test_util::fixture;
 
 const NOTES: &str = "acme.notes";
@@ -239,4 +239,28 @@ fn a_tied_start_says_nothing_and_leaves_the_one_telling() {
     let mut processes = WindowProcesses::default();
     assert_eq!(processes.untied(None), None);
     assert!(processes.untied(Some("no".to_string())).is_some());
+}
+
+#[test]
+fn a_reason_of_up_to_300_characters_is_shown_whole() {
+    assert_eq!(shortened(&"x".repeat(REASON_MOST)), None);
+    assert_eq!(shortened("permission denied"), None);
+}
+
+#[test]
+fn a_longer_reason_ends_in_an_ellipsis_after_its_first_300_characters() {
+    let cut = shortened(&"x".repeat(600)).expect("a long line is cut");
+    assert_eq!(cut, format!("{}…", "x".repeat(300)));
+}
+
+#[test]
+fn a_reason_is_cut_between_characters_not_bytes() {
+    let cut = shortened(&"é".repeat(400)).expect("a long line is cut");
+    assert_eq!(cut, format!("{}…", "é".repeat(300)));
+}
+
+#[test]
+fn a_cut_reason_drops_the_space_before_its_ellipsis() {
+    let cut = shortened(&"word ".repeat(100)).expect("a long line is cut");
+    assert!(cut.ends_with("word…"));
 }

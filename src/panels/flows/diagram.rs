@@ -4,16 +4,19 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, App, Div, FontWeight, IntoElement, ParentElement as _, Rgba,
-    SharedString, Styled as _, Window, div, ease_in_out, px,
+    Animation, AnimationExt as _, AnyElement, App, ClickEvent, Context, Div, EntityId, FontWeight,
+    InteractiveElement as _, IntoElement, ParentElement as _, Rgba, ScrollHandle, SharedString, Stateful,
+    StatefulInteractiveElement as _, Styled as _, Window, div, ease_in_out, point, prelude::FluentBuilder as _, px,
 };
 
 use super::FlowsPanel;
 use super::cards::{ground, lead_card, role_card};
+use super::flow_page::block_with;
 use super::graph::{self, Curve, Graph, Label, Rect, Spot, Wire};
 use super::model::{Edge, FlowSpec, Member, Progress, Run, Step};
-use super::widgets::loop_words;
+use super::widgets::{heading, loop_words, own_axis};
 use super::wires::{self, Ink, Line};
+use crate::notify::tip;
 use crate::theme::colour::mix;
 use crate::theme::{colours, palette_rgba, radius};
 use crate::ui::{self, Icon, glass, glass::tint, motion};
@@ -24,6 +27,8 @@ const TRAVEL: Duration = Duration::from_secs(1);
 const RISE: f32 = 12.;
 const MARK: f32 = 24.;
 const BOARD_PAD: f32 = 18.;
+const SIDEWAYS_NEAR: f32 = 1.;
+const STEP: f32 = 0.8;
 
 fn role_palette(index: usize) -> Rgba {
     match index % 6 {
@@ -97,23 +102,107 @@ impl<'a> Plan<'a> {
     }
 }
 
-impl FlowsPanel {
-    pub(super) fn diagram(&self, plan: Plan) -> Div {
-        draw(plan, &self.board, &self.played)
+#[derive(Clone)]
+pub(super) struct Board {
+    room: Rc<Cell<f32>>,
+    scroll: ScrollHandle,
+    plan: Rc<RefCell<String>>,
+}
+
+impl Board {
+    pub(super) fn new(room: f32) -> Self {
+        Self { room: Rc::new(Cell::new(room)), scroll: ScrollHandle::new(), plan: Rc::default() }
+    }
+
+    pub(super) fn room(&self) -> f32 {
+        self.room.get()
+    }
+
+    fn inner(&self) -> f32 {
+        self.room.get() - 2. * BOARD_PAD
+    }
+
+    fn follow(&self, key: &str) {
+        let mut plan = self.plan.borrow_mut();
+        if *plan != key {
+            *plan = key.to_string();
+            self.scroll_to(0.);
+        }
+    }
+
+    fn scrolled(&self) -> f32 {
+        -f32::from(self.scroll.offset().x)
+    }
+
+    fn scroll_to(&self, x: f32) {
+        self.scroll.set_offset(point(px(-x), px(0.)));
     }
 }
 
-pub(super) fn draw(plan: Plan, room: &Rc<Cell<f32>>, played: &Played) -> Div {
-    let graph = graph::fit(plan.flow, plan.run.and_then(|r| r.outside), room.get() - 2. * BOARD_PAD);
+pub(super) fn sideways(width: f32, shown: f32) -> f32 {
+    (width - shown).max(0.)
+}
+
+pub(super) fn can_step(scrolled: f32, most: f32, forward: bool) -> bool {
+    if forward { scrolled < most - SIDEWAYS_NEAR } else { scrolled > SIDEWAYS_NEAR }
+}
+
+pub(super) fn stepped(scrolled: f32, shown: f32, most: f32, forward: bool) -> f32 {
+    let by = shown * STEP;
+    (if forward { scrolled + by } else { scrolled - by }).clamp(0., most)
+}
+
+impl FlowsPanel {
+    pub(super) fn diagram(&self, plan: Plan, cx: &Context<Self>) -> Div {
+        plan_block(plan, &self.board, &self.played, cx.entity_id())
+    }
+}
+
+pub(super) fn plan_block(plan: Plan, board: &Board, played: &Played, view: EntityId) -> Div {
+    let graph = graph::fit(plan.flow, plan.run.and_then(|r| r.outside), board.inner());
+    board.follow(plan.key);
+    block_with(plan_heading(&graph, board, view)).child(draw(plan, &graph, board, played))
+}
+
+fn plan_heading(graph: &Graph, board: &Board, view: EntityId) -> Div {
+    let (shown, most) = (board.inner(), sideways(graph.width, board.inner()));
+    let arrows = most > SIDEWAYS_NEAR;
+    div().flex().items_center().child(heading(Icon::Flows, "Plan")).child(div().flex_1()).when(arrows, |d| {
+        d.child(arrow(board, view, (shown, most), false)).child(arrow(board, view, (shown, most), true))
+    })
+}
+
+fn arrow(board: &Board, view: EntityId, (shown, most): (f32, f32), forward: bool) -> Stateful<Div> {
+    let (id, glyph, label) = if forward {
+        ("plan-right", "›", "Scroll the plan right")
+    } else {
+        ("plan-left", "‹", "Scroll the plan left")
+    };
+    if !can_step(board.scrolled(), most, forward) {
+        return ui::resting_icon_button(id, glyph).line_height(px(16.));
+    }
+    let board = board.clone();
+    ui::icon_button(id, glyph).line_height(px(16.)).tooltip(tip(label)).on_click(
+        move |_: &ClickEvent, _, cx: &mut App| {
+            board.scroll_to(stepped(board.scrolled(), shown, most, forward));
+            cx.notify(view);
+        },
+    )
+}
+
+fn draw(plan: Plan, graph: &Graph, board: &Board, played: &Played) -> Div {
     let field = div()
         .relative()
         .flex_none()
         .mx_auto()
         .w(px(graph.width))
         .h(px(graph.height))
-        .children(layers(plan, &graph, played))
-        .children(travel(plan, &graph, played));
-    board(room.clone()).child(field).children(plan.run.and_then(|r| r.outside).and_then(outside_note))
+        .children(layers(plan, graph, played))
+        .children(travel(plan, graph, played));
+    let scroller = own_axis(div().id("plan-sideways").w_full().flex().overflow_x_scroll().track_scroll(&board.scroll));
+    board_frame(board.room.clone())
+        .child(scroller.px(px(BOARD_PAD)).child(field))
+        .children(plan.run.and_then(|r| r.outside).and_then(outside_note))
 }
 
 fn layers(plan: Plan, graph: &Graph, played: &Played) -> Vec<AnyElement> {
@@ -138,7 +227,7 @@ fn stage_layer(plan: Plan, graph: &Graph, stage: usize) -> Div {
         .children(labels.filter_map(|l| loop_label(plan, *l, graph.short)))
 }
 
-fn board(room: Rc<Cell<f32>>) -> Div {
+fn board_frame(room: Rc<Cell<f32>>) -> Div {
     div()
         .relative()
         .w_full()
@@ -146,7 +235,6 @@ fn board(room: Rc<Cell<f32>>) -> Div {
         .flex_col()
         .gap(px(14.))
         .py(px(26.))
-        .px(px(BOARD_PAD))
         .rounded(px(radius::card()))
         .bg(colours::inset())
         .border_1()

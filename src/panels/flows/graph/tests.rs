@@ -285,3 +285,11 @@ fn a_stage_a_loop_leaves_and_another_reaches_keeps_the_two_apart() {
     assert!(close(label.at.y, leaving.curves[0].from.y));
     assert!(label.at.x > wire(&graph, Edge::Loop { stage: 2 }).curves[2].from.x);
 }
+
+#[test]
+fn the_widest_built_in_plan_fits_a_page_beside_the_list() {
+    use crate::panels::flows::diagram::board_width;
+    use crate::panels::flows::{PAGE_LEAST, PAGE_PAD};
+    let narrowest = fit(&full_issue(), None, 0.).width;
+    assert!(board_width(narrowest) + 2. * PAGE_PAD <= PAGE_LEAST);
+}

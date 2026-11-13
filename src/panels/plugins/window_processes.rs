@@ -10,6 +10,7 @@ use super::status::{Health, Service};
 use crate::cli;
 use crate::store::{Store, ToastKind};
 
+const REASON_MOST: usize = 300;
 const ENDED: &str = "`cornercase plugin windows` ended";
 const UNTIED: &str = "If this window crashes, the plugins' window processes will keep running";
 
@@ -43,6 +44,11 @@ pub(super) enum Card {
     Starting,
     NotRunning(String),
     Processes(Vec<Service>),
+}
+
+pub(super) fn shortened(why: &str) -> Option<String> {
+    let (cut, _) = why.char_indices().nth(REASON_MOST)?;
+    Some(format!("{}…", why[..cut].trim_end()))
 }
 
 #[derive(Debug, Default)]

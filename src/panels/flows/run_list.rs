@@ -6,8 +6,8 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 
-use super::FlowsPanel;
 use super::model::Run;
+use super::{FlowsPanel, PAGE_PAD};
 
 const OVERDRAW: f32 = 600.;
 
@@ -99,7 +99,7 @@ impl FlowsPanel {
         };
         div()
             .w_full()
-            .px(px(20.))
+            .px(px(PAGE_PAD))
             .pt(px(before))
             .when(index + 1 == parts.len(), |d| d.pb(px(32.)))
             .when(part == Part::Feed && matches!(parts.get(index + 1), Some(Part::Message(_))), |d| d.pb(px(10.)))

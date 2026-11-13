@@ -28,8 +28,8 @@ impl FlowsPanel {
             .gap(px(22.))
             .child(run_hero(run, cx))
             .child(task(&run.task))
-            .child(block(Icon::Accounts, "Team").child(team(run, team_columns(self.board.get()))))
-            .child(block(Icon::Flows, "Plan").child(self.diagram(plan)))
+            .child(block(Icon::Accounts, "Team").child(team(run, team_columns(self.board.room()))))
+            .child(self.diagram(plan, cx))
     }
 }
 
