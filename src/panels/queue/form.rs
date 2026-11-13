@@ -321,6 +321,7 @@ impl QueuePanel {
         if self.config.is_none() {
             Self::load_config(cx);
         }
+        self.detail = None;
         let store = Store::get(cx);
         let session = store.read(cx).session.clone();
         let form = Form::new(entry, session.as_ref(), window, cx);

@@ -5,7 +5,8 @@ use gpui::{
 };
 use serde_json::Value;
 
-use super::data::{Click, Entry, Row, State, live_pane, notice, remove_tip, status_label};
+use super::data::{Click, Entry, Row, State, live_pane, notice, offers_result, remove_tip, status_label};
+use super::result::results_offered;
 use super::time::{Civil, local, now, relative, when_label};
 use super::{QueuePanel, open_pane, pausing, starting};
 use crate::model::Session;
@@ -19,6 +20,7 @@ const TOOL: f32 = 26.;
 const TEXT_KEEP: f32 = 100.;
 pub(super) const RUN_INDENT: f32 = WHEN + 38.;
 const PAUSE: &str = "Pause: it starts no run until you resume it";
+const RESULT_TIP: &str = "What its agent did: its last message, branch and pull request";
 const RESUME: &str = "Resume: it goes on from its next time, with no catch-up";
 
 pub(super) struct Snapshot {
@@ -26,18 +28,21 @@ pub(super) struct Snapshot {
     pub(super) session: Option<Session>,
     boot: Option<String>,
     pub(super) today: Civil,
-    now: i64,
+    pub(super) now: i64,
+    pub(super) results: bool,
 }
 
 impl Snapshot {
     pub(super) fn new(app: Option<&Value>, session: Option<Session>) -> Self {
         let now = now();
+        let results = results_offered(session.as_ref().and_then(Session::release));
         Self {
             loaded: app.is_some(),
             session,
             boot: app.and_then(|a| a.get("boot")).and_then(Value::as_str).map(str::to_string),
             today: local(now).unwrap_or(Civil::EPOCH),
             now,
+            results,
         }
     }
 }
@@ -46,12 +51,30 @@ pub(super) struct Shown {
     pub(super) state: State,
     pub(super) pane: Option<u64>,
     pub(super) click: Click,
+    pub(super) result: bool,
+    pub(super) beside: Beside,
     starting: bool,
     pausing: bool,
-    editing: bool,
 }
 
-fn state_colour(state: State) -> Rgba {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Beside {
+    Nothing,
+    Form,
+    Detail,
+}
+
+impl Shown {
+    fn editing(&self) -> bool {
+        self.beside == Beside::Form
+    }
+
+    pub(super) fn lit(&self) -> bool {
+        self.beside != Beside::Nothing
+    }
+}
+
+pub(super) fn state_colour(state: State) -> Rgba {
     match state {
         State::Pending | State::Repeating => colours::accent(),
         State::Starting => colours::working(),
@@ -184,7 +207,7 @@ fn pause_button(entry: &Entry, shown: &Shown, cx: &mut Context<QueuePanel>) -> A
 }
 
 fn edit_button(entry: &Entry, shown: &Shown, cx: &mut Context<QueuePanel>) -> AnyElement {
-    if shown.editing {
+    if shown.editing() {
         return tool_slot().into_any_element();
     }
     let edited = entry.clone();
@@ -193,6 +216,17 @@ fn edit_button(entry: &Entry, shown: &Shown, cx: &mut Context<QueuePanel>) -> An
         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
             cx.stop_propagation();
             this.open_form(Some(&edited), window, cx);
+        }))
+        .into_any_element()
+}
+
+fn result_button(entry: &Entry, cx: &mut Context<QueuePanel>) -> AnyElement {
+    let shown = entry.clone();
+    ui::tool_button(("queue-result", entry.id), Icon::Message, TOOL, false)
+        .tooltip(tip(RESULT_TIP))
+        .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+            cx.stop_propagation();
+            this.open_detail(&shown, window, cx);
         }))
         .into_any_element()
 }
@@ -231,9 +265,10 @@ fn actions(row: &Row, shown: &Shown, group: SharedString, cx: &mut Context<Queue
         .children(runnable.then(|| start_button(entry, shown, cx)))
         .children(entry.is_routine().then(|| pause_button(entry, shown, cx)))
         .children(runnable.then(|| edit_button(entry, shown, cx)))
+        .children(shown.result.then(|| result_button(entry, cx)))
         .children(shown.pane.map(|pane| open_button(entry.id, pane)))
         .children(row.removable().then(|| remove_button(entry, cx)));
-    if shown.editing || shown.starting || shown.pausing {
+    if shown.editing() || shown.starting || shown.pausing {
         buttons.flex_none().into_any_element()
     } else {
         revealed(group, buttons).into_any_element()
@@ -245,6 +280,7 @@ pub(super) fn run_actions(run: &Entry, shown: &Shown, group: SharedString, cx: &
         .flex()
         .items_center()
         .gap(px(4.))
+        .children(shown.result.then(|| result_button(run, cx)))
         .children(shown.pane.map(|pane| open_button(run.id, pane)))
         .children((shown.state != State::Starting).then(|| remove_button(run, cx)));
     revealed(group, buttons)
@@ -261,13 +297,24 @@ impl QueuePanel {
         let store = Store::get(cx).read(cx);
         let (starting, pausing) = (store.busy(&starting(entry.id)), store.busy(&pausing(entry.id)));
         let editing = self.form.as_ref().is_some_and(|f| f.edit == Some(entry.id));
-        Shown { state, pane, click: Click::of(entry, pane, starting || editing), starting, pausing, editing }
+        let click = Click::of(entry, pane, starting || editing, snapshot.results);
+        let result = offers_result(entry, pane, snapshot.results);
+        let detailed = self.detail.as_ref().is_some_and(|detail| detail.id == entry.id);
+        let beside = if editing {
+            Beside::Form
+        } else if detailed {
+            Beside::Detail
+        } else {
+            Beside::Nothing
+        };
+        Shown { state, pane, click, result, beside, starting, pausing }
     }
 
     pub(super) fn clicked(&mut self, click: Click, entry: &Entry, window: &mut Window, cx: &mut Context<Self>) {
         match click {
             Click::Edit => self.open_form(Some(entry), window, cx),
             Click::Open(pane) => open_pane(pane, cx),
+            Click::Detail => self.open_detail(entry, window, cx),
             Click::Nothing => {}
         }
     }
@@ -277,7 +324,7 @@ impl QueuePanel {
         let shown = self.shown(entry, snapshot, cx);
         let group = SharedString::from(format!("queue-row-{}", entry.id));
         let (click, clicked) = (shown.click, entry.clone());
-        base_row(entry.id, shown.editing, click, group.clone())
+        base_row(entry.id, shown.lit(), click, group.clone())
             .flex_wrap()
             .gap(px(12.))
             .px(px(12.))

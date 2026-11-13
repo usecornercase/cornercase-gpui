@@ -442,7 +442,7 @@ fn footer(form: &Form, cx: &mut Context<QueuePanel>) -> Div {
         .child(div().flex().justify_end().gap(px(8.)).child(cancel).child(save_button(form, cx)))
 }
 
-fn frame(width: f32) -> Div {
+pub(super) fn frame(width: f32) -> Div {
     div()
         .w(px(width))
         .flex_none()
@@ -473,6 +473,6 @@ impl QueuePanel {
             .child(section(Icon::Pencil, "Name", boxed(&form.name, window, cx)));
         let body =
             div().id("queue-form").flex_1().min_h_0().overflow_y_scroll().track_scroll(&form.scroller).child(fields);
-        Some(frame(self.form_width.size()).child(header(form)).child(body).child(footer(form, cx)).into_any_element())
+        Some(frame(self.side_width.size()).child(header(form)).child(body).child(footer(form, cx)).into_any_element())
     }
 }

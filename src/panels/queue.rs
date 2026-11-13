@@ -1,10 +1,16 @@
 mod data;
+mod detail;
+mod detail_text;
+mod detail_view;
 mod draft;
 mod empty;
 mod form;
 mod form_view;
+mod lines;
 mod list;
+mod read;
 mod repeat;
+mod result;
 mod rows;
 mod runs;
 mod time;
@@ -13,9 +19,9 @@ mod undo;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, AsyncApp, ClickEvent, Context, Div, Entity, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Subscription, WeakEntity,
-    Window, div, px,
+    AnyElement, AnyView, App, AppContext as _, AsyncApp, ClickEvent, Context, Div, Entity, FocusHandle,
+    InteractiveElement as _, IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _,
+    Subscription, WeakEntity, Window, div, px,
 };
 use serde_json::Value;
 
@@ -26,23 +32,27 @@ use crate::theme::colours;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{self, TextField, TextFieldEvent};
 use data::{Body, Entry, entries};
+use detail::Detail;
 use form::{FlowChoices, Form, Spot};
 use rows::Snapshot;
 pub(crate) use time::{days, now};
 use undo::{Removal, UNDO_FOR};
 
-const FORM: Split = Split::new(420., 360., 760.);
+const SIDE: Split = Split::new(420., 360., 760.);
 const LIST_KEEP: f32 = 320.;
 const NO_MATCH: &str = "No entry matches the filter.";
 
-struct FormGrip;
+struct SideGrip;
 
 pub(crate) struct QueuePanel {
     filter: Entity<TextField>,
     form: Option<Form>,
     config: Option<Value>,
     flows: FlowChoices,
-    form_width: Split,
+    side_width: Split,
+    detail: Option<Detail>,
+    focus: FocusHandle,
+    seqs: read::Counter,
     removal: Option<Removal>,
     _subscriptions: Vec<Subscription>,
 }
@@ -100,7 +110,10 @@ impl QueuePanel {
             form: None,
             config: None,
             flows: FlowChoices::default(),
-            form_width: FORM,
+            side_width: SIDE,
+            detail: None,
+            focus: cx.focus_handle(),
+            seqs: read::Counter::default(),
             removal: None,
             _subscriptions: subscriptions,
         }
@@ -238,23 +251,25 @@ impl Render for QueuePanel {
         self.sync_flows(cx);
         self.sync_accounts(cx);
         let snapshot = Snapshot::new(app.as_ref(), session);
+        self.sync_detail(&entries, snapshot.results, cx);
         let main = self.main(&entries, &snapshot, window, cx);
-        let at = (Edge::Left, self.form_width.size());
-        let handle = self.form.as_ref().map(|_| split::handle("queue-split", FormGrip, at, form_width, cx));
+        let at = (Edge::Left, self.side_width.size());
+        let side = self.form_view(window, cx).or_else(|| self.detail_view(&entries, &snapshot, cx));
+        let handle = side.as_ref().map(|_| split::handle("queue-split", SideGrip, at, side_width, cx));
         div()
             .size_full()
             .relative()
             .flex()
             .text_color(colours::text())
-            .on_drag_move(split::follow::<_, FormGrip>(Edge::Left, LIST_KEEP, form_width, cx))
+            .on_drag_move(split::follow::<_, SideGrip>(Edge::Left, LIST_KEEP, side_width, cx))
             .child(main)
-            .children(self.form_view(window, cx))
+            .children(side)
             .children(handle)
     }
 }
 
-fn form_width(panel: &mut QueuePanel) -> &mut Split {
-    &mut panel.form_width
+fn side_width(panel: &mut QueuePanel) -> &mut Split {
+    &mut panel.side_width
 }
 
 pub(crate) fn build(window: &mut Window, cx: &mut App) -> AnyView {

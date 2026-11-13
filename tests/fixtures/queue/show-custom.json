@@ -1,0 +1,28 @@
+{
+  "agent": "custom",
+  "at": 1794535415,
+  "command": "custom",
+  "earlier": false,
+  "id": 3,
+  "label": "hello custom",
+  "messages": null,
+  "mode": null,
+  "note": "no result was kept: its agent did not finish a turn while cornercase watched it",
+  "pane": 10,
+  "place": {
+    "branch": null,
+    "project": "/home/ana/code/shop",
+    "server": "24916-1794528152700453000",
+    "workspace": "/home/ana/code/shop",
+    "workspace_id": 3,
+    "workspace_name": null
+  },
+  "program": "custom",
+  "prompt": "hello custom",
+  "result": null,
+  "server": "24916-1794528152700453000",
+  "started": 1794528217,
+  "state": "started",
+  "submit": true,
+  "zone": "Europe/Madrid"
+}

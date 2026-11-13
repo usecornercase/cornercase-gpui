@@ -1,4 +1,4 @@
-cornercase 0.13.51: the help of every command and subcommand, in the order of `cornercase --help`.
+cornercase 0.13.53: the help of every command and subcommand, in the order of `cornercase --help`.
 Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
 
 ================================================================ cornercase status
@@ -2417,6 +2417,7 @@ Usage: cornercase config [OPTIONS] [COMMAND]
 
 Commands:
   search        Find settings by the start of each word, as the search of the settings modal does
+  models        List every model the flow editor offers for an agent, reading the agent's own list when it keeps one
   set           Change settings: KEY VALUE pairs, checked together, all or none
   project       Set the commands a project runs when it makes a worktree and before it removes one
   secret        Check and save a tracker's token or a bot's, read from standard input
@@ -2439,7 +2440,13 @@ project's setup and teardown. `--json` prints the whole answer, which a program 
 
 With --json it also lists `agents`: each agent the `agent` setting can name, with its title, whether
 cornercase reads its status (`reads_status`: a routine can remove the workspace of those only),
-whether a flow can run it (`flows`), and the `models` and `efforts` the flow editor offers for it.
+whether a flow can run it (`flows`), the `models` and `efforts` the flow editor offers for it at once,
+and whether it keeps more models in a list of its own (`catalogue`), which `config models AGENT` reads.
+
+`models AGENT` prints every model the flow editor offers for an agent, one per line and nothing when
+it offers none: its `models`, then, when `catalogue` is true (opencode: the models.dev list it
+caches), that list, which the server reads when asked. --json prints the agent and its models. An
+agent the `agent` setting cannot name is refused.
 
 `set` changes settings with the dialog's own checks and applies them at once, as the dialog does;
 nothing is saved unless every value is accepted. Values are converted by the setting's type: true or
@@ -2467,6 +2474,7 @@ meanwhile only rewrites the keys it touches, and it does not write over a file i
 Examples:
   cornercase config
   cornercase config --json
+  cornercase config models opencode --json
   cornercase config set sidebar tree
   cornercase config set fetch_minutes 10 counts false
   cornercase config set issue_tabs github,linear
@@ -2486,6 +2494,20 @@ Usage: cornercase config search [OPTIONS] <TEXT>...
 
 Arguments:
   <TEXT>...  The words to look for; every word must match
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+================================================================ cornercase config models
+List every model the flow editor offers for an agent, reading the agent's own list when it keeps one
+
+Usage: cornercase config models [OPTIONS] <AGENT>
+
+Arguments:
+  <AGENT>  The agent, as the agent setting names it, such as opencode
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
@@ -4563,14 +4585,24 @@ Options:
   -y, --yes                       Restart the server without asking
       --when-idle                 Wait until no agent is working, then restart
       --timeout <SECONDS>         With --when-idle, give up after this many seconds and keep the server running
+      --json                      Print what it did (with --check, what it found) as one line of JSON, for a program; it asks nothing and never restarts the server
   -h, --help                      Print help
 
 With --when-idle, it installs the release at once, then restarts the server on it once no agent
 is working, as `cornercase restart --when-idle` does. With --remote DESTINATION it runs on that machine, through ssh.
 
+When this cornercase cannot replace itself (Homebrew installed it, its folder cannot be written, an unknown platform), it
+changes nothing, prints the command to run instead and exits with 6; --check exits with 0 whatever it finds. --json prints
+one line of JSON instead, asks nothing and never restarts the server (run `cornercase restart` after it):
+{"outcome": "updated", "from", "version", "path"}, {"outcome": "up-to-date", "version"} or
+{"outcome": "manual", "version", "latest", "command"}, and with --check "available" (with "latest" and
+"path") where it would install. version is the binary on disk afterwards, on the machine it ran on. A failure prints
+nothing on stdout and exits with 1.
+
 Examples:
   cornercase update
   cornercase update --when-idle --yes
+  cornercase update --json
 
 ================================================================ cornercase restart
 Restart the server: every program in its terminals stops, and the session comes back with new shells

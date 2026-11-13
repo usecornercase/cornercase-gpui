@@ -140,7 +140,7 @@ export const ROLES = {
 export const SHEETS: { name: string; file: string; keys: string[]; line: string }[] = [
   { name: 'Search', file: 'search', keys: ['cmd', 'F'], line: 'Names, settings, and what agents and shells said.' },
   { name: 'Issues', file: 'issues', keys: ['cmd', 'I'], line: 'Your trackers, and an agent on any issue.' },
-  { name: 'Queue', file: 'queue', keys: ['shift', 'cmd', 'S'], line: 'Agents that start later, or repeat as routines.' },
+  { name: 'Queue', file: 'queue', keys: ['shift', 'cmd', 'S'], line: 'Agents that start later, or repeat as routines, and what each run did.' },
   { name: 'Flows', file: 'flows', keys: ['shift', 'cmd', 'G'], line: 'Teams of agents, their plans and runs.' },
   { name: 'Usage', file: 'usage', keys: ['cmd', 'U'], line: 'Plan limits and the numbers of your agents, on each machine.' },
   { name: 'Accounts', file: 'accounts', keys: ['shift', 'cmd', 'A'], line: 'Agent logins, and the account each agent starts and runs on.' },

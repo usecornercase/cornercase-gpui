@@ -27,8 +27,8 @@ use gpui::{
 pub(crate) use icons::{Icon, icon};
 pub(crate) use one_line::{OneLine, one_line};
 pub(crate) use signs::{
-    ROW_ACTION, accent_chip, callout, done_line, dot, error_line, field_action, quiet_chip, resting_action, row_action,
-    tinted_chip, warning_line,
+    ROW_ACTION, accent_chip, callout, copy_button, done_line, dot, error_line, field_action, quiet_chip,
+    resting_action, row_action, tinted_chip, warning_line,
 };
 pub(crate) use text_field::{TextField, TextFieldEvent};
 

@@ -7,10 +7,25 @@ use gpui::{
 };
 
 use super::{Block, Inline, Mark};
+use crate::model::link::is_web;
+use crate::store::{Store, ToastKind};
 use crate::theme::FONT_FAMILY;
 use crate::theme::{colours, radius};
 
 pub(crate) type OnLink = Rc<dyn Fn(&str, &mut App)>;
+
+pub(crate) fn open_web(address: &str, cx: &mut App) {
+    if is_web(address) {
+        cx.open_url(address);
+    } else {
+        let text = format!("{address} is not a web address, so it cannot be opened");
+        Store::get(cx).update(cx, |s, cx| s.toast(text, ToastKind::Info, cx));
+    }
+}
+
+pub(crate) fn opens_web_addresses() -> OnLink {
+    Rc::new(open_web)
+}
 
 pub(crate) fn blocks(id: &str, blocks: &[Block]) -> Vec<AnyElement> {
     linked_blocks(id, blocks, &opens_the_address())

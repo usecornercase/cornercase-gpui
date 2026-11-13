@@ -1,6 +1,6 @@
 use gpui::{
-    Div, ElementId, InteractiveElement as _, ParentElement as _, Rgba, SharedString, Stateful,
-    StatefulInteractiveElement as _, Styled as _, div, px,
+    ClickEvent, ClipboardItem, Div, ElementId, InteractiveElement as _, ParentElement as _, Rgba, SharedString,
+    Stateful, StatefulInteractiveElement as _, Styled as _, div, px,
 };
 
 use super::{Icon, glass, icon};
@@ -140,4 +140,19 @@ pub(crate) fn field_action(id: impl Into<ElementId>, glyph: Icon, hint: &'static
         .tooltip(tip(hint))
         .hover(|s| s.bg(colours::selected()))
         .child(icon(glyph, 12.).text_color(ink))
+}
+
+pub(crate) fn copy_button(id: impl Into<ElementId>, text: String) -> Stateful<Div> {
+    div()
+        .id(id)
+        .flex_none()
+        .p(px(4.))
+        .rounded(px(radius::chip()))
+        .cursor_pointer()
+        .hover(|s| s.bg(colours::selected()))
+        .child(icon(Icon::Copy, 12.).text_color(colours::faint()))
+        .on_click(move |_: &ClickEvent, _, cx| {
+            cx.stop_propagation();
+            cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+        })
 }

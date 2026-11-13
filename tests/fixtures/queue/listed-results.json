@@ -1,0 +1,29 @@
+{
+  "entries": [
+    {
+      "agent": "claude",
+      "at": 1794535383,
+      "command": "claude",
+      "id": 2,
+      "label": "fix the login",
+      "mode": null,
+      "pane": 8,
+      "place": {
+        "branch": null,
+        "project": "/home/ana/code/shop",
+        "server": "24916-1794528152700453000",
+        "workspace": "/home/ana/code/shop",
+        "workspace_id": 3,
+        "workspace_name": null
+      },
+      "program": "claude",
+      "prompt": "fix the login",
+      "result_at": 1794528204,
+      "server": "24916-1794528152700453000",
+      "started": 1794528185,
+      "state": "started",
+      "submit": true,
+      "zone": "Europe/Madrid"
+    }
+  ]
+}

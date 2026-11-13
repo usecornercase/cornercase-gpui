@@ -125,17 +125,31 @@ impl Body {
 pub(super) enum Click {
     Edit,
     Open(u64),
+    Detail,
     Nothing,
 }
 
 impl Click {
-    pub(super) fn of(entry: &Entry, pane: Option<u64>, busy: bool) -> Self {
+    pub(super) fn of(entry: &Entry, pane: Option<u64>, busy: bool, results: bool) -> Self {
         match pane {
             Some(pane) => Self::Open(pane),
             None if entry.runnable() && !busy => Self::Edit,
+            None if results && offers_detail(entry) => Self::Detail,
             None => Self::Nothing,
         }
     }
+}
+
+pub(super) fn offers_detail(entry: &Entry) -> bool {
+    match State::of(entry) {
+        State::Started | State::Kept | State::Removed => true,
+        State::Failed | State::Missed => entry.routine.is_some(),
+        _ => false,
+    }
+}
+
+pub(super) fn offers_result(entry: &Entry, pane: Option<u64>, results: bool) -> bool {
+    results && offers_detail(entry) && (pane.is_none() || entry.result_at.is_some())
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -169,6 +183,8 @@ pub(crate) struct Entry {
     pub paused: bool,
     pub next: Option<i64>,
     pub routine: Option<u64>,
+    pub started: Option<i64>,
+    pub result_at: Option<i64>,
 }
 
 impl Entry {

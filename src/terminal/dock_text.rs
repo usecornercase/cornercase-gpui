@@ -4,12 +4,17 @@ use crate::app::Root;
 use crate::panels::PanelKind;
 use crate::panels::changes::ChangesPanel;
 use crate::panels::files::FilesPanel;
+use crate::panels::queue::QueuePanel;
 use crate::store::Store;
 use crate::ui::selection::Step;
 
 impl Root {
     fn files_panel(&self) -> Option<Entity<FilesPanel>> {
         self.panels.get(&PanelKind::Files)?.clone().downcast::<FilesPanel>().ok()
+    }
+
+    fn queue_panel(&self) -> Option<Entity<QueuePanel>> {
+        self.panels.get(&PanelKind::Queue)?.clone().downcast::<QueuePanel>().ok()
     }
 
     fn changes_panel(&self) -> Option<Entity<ChangesPanel>> {
@@ -73,5 +78,13 @@ impl Root {
             }
             _ => false,
         }
+    }
+
+    pub(super) fn sheet_copy(&mut self, cx: &mut Context<Self>) -> bool {
+        let store = self.store.read(cx);
+        if store.dialog.is_some() || store.sheet != Some(PanelKind::Queue) {
+            return false;
+        }
+        self.queue_panel().is_some_and(|queue| queue.update(cx, QueuePanel::copy_selection))
     }
 }
