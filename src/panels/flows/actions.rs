@@ -13,7 +13,7 @@ use crate::cli;
 use crate::dialogs;
 use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::colours;
-use crate::ui::{self, Icon, Tone};
+use crate::ui::{self, Icon, Separator, Tone};
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
@@ -234,19 +234,20 @@ impl FlowsPanel {
 }
 
 pub(super) fn flow_buttons(flow: &FlowInfo, hidden: bool, cx: &Context<FlowsPanel>) -> Div {
-    let row = div().relative().flex().flex_wrap().items_center().gap(px(8.));
     if hidden {
-        return row.child(restore_hidden_button(flow, cx));
+        return ui::separated(8., vec![(None, restore_hidden_button(flow, cx).into_any_element())]);
     }
-    row.child(start_button(flow, cx))
-        .child(edit_button(flow, cx))
-        .child(ui::icon_text_button("flow-duplicate", Icon::CopyPlus, "Duplicate", Tone::Plain).on_click(with_flow(
-            flow,
-            cx,
-            FlowsPanel::duplicate,
-        )))
-        .child(div().w(px(1.)).h(px(18.)).mx(px(2.)).bg(colours::border()))
-        .child(tidy_buttons(flow, cx))
+    let duplicate = ui::icon_text_button("flow-duplicate", Icon::CopyPlus, "Duplicate", Tone::Plain)
+        .on_click(with_flow(flow, cx, FlowsPanel::duplicate));
+    ui::separated(
+        8.,
+        vec![
+            (None, start_button(flow, cx).into_any_element()),
+            (None, edit_button(flow, cx).into_any_element()),
+            (None, duplicate.into_any_element()),
+            (Some(Separator::Line), tidy_buttons(flow, cx).into_any_element()),
+        ],
+    )
 }
 
 fn edit_button(flow: &FlowInfo, cx: &Context<FlowsPanel>) -> impl IntoElement + use<> {

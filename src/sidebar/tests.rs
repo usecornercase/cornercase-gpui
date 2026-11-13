@@ -1,6 +1,6 @@
 use gpui::{DefiniteLength, Length, Styled as _, px};
 
-use super::{MARK, mark_lead, rail, title_strip};
+use super::{MARK, corner, mark_lead, rail, tabs_lead, title_strip};
 use crate::app::GAP;
 use crate::platform::Os;
 use crate::ui::brand::mark_size;
@@ -35,4 +35,18 @@ fn on_linux_the_mark_sits_centred_over_the_rails_icons() {
     let centre = rail::COLUMN + pull + lead + mark_size(MARK) / 2.;
     let rail_centre = GAP + (rail::COLUMN - 2. * GAP) / 2.;
     assert!((centre - rail_centre).abs() < f32::EPSILON);
+}
+
+#[test]
+fn with_the_sidebar_aside_the_tab_row_starts_where_the_mark_did_on_a_mac() {
+    assert!((tabs_lead(Os::Mac) - mark_lead(Os::Mac).1).abs() < f32::EPSILON);
+    assert!(tabs_lead(Os::Linux).abs() < f32::EPSILON);
+    assert!(tabs_lead(Os::Windows).abs() < f32::EPSILON);
+}
+
+#[test]
+fn with_the_sidebar_aside_the_mark_keeps_the_corner_off_a_mac() {
+    assert!(corner(Os::Mac).is_none());
+    assert!(corner(Os::Linux).is_some());
+    assert!(corner(Os::Windows).is_some());
 }

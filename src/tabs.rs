@@ -182,8 +182,14 @@ fn machine_tab(
 }
 
 impl Root {
-    pub(crate) fn render_tabs(&self, window_frame: Frame, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(crate) fn render_tabs(
+        &self,
+        window_frame: Frame,
+        lead: f32,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let row = div()
+            .pl(px(lead))
             .h(px(TITLEBAR_HEIGHT))
             .flex_none()
             .flex()

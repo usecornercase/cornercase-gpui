@@ -201,6 +201,28 @@ fn mark_lead(os: Os) -> (f32, f32) {
     }
 }
 
+pub(crate) fn tabs_lead(os: Os) -> f32 {
+    match os {
+        Os::Mac => mark_lead(Os::Mac).1,
+        Os::Linux | Os::Windows => 0.,
+    }
+}
+
+pub(crate) fn corner(os: Os) -> Option<Div> {
+    match os {
+        Os::Mac => None,
+        Os::Linux | Os::Windows => Some(
+            div()
+                .w(px(rail::COLUMN))
+                .h(px(TITLEBAR_HEIGHT))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(ui::brand::mark(MARK, false)),
+        ),
+    }
+}
+
 fn title_strip(os: Os) -> Div {
     let (pull, lead) = mark_lead(os);
     div()
