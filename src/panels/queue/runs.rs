@@ -43,7 +43,7 @@ impl QueuePanel {
         let shown = self.shown(run, snapshot, cx);
         let group = SharedString::from(format!("queue-row-{}", run.id));
         let (click, clicked) = (shown.click, run.clone());
-        let row = base_row(run.id, false, click, group.clone())
+        let row = base_row(run.id, shown.lit(), click, group.clone())
             .flex_1()
             .min_w(px(RUN_KEEP))
             .min_h(px(RUN_HEIGHT))

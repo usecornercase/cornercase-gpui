@@ -222,9 +222,9 @@ fn a_run_is_history_and_a_routine_can_be_edited_and_started() {
     assert!(routine(1, "2h").runnable());
     assert!(!run_of(1, 2, "failed").runnable());
     assert!(!run_of(1, 2, "missed").runnable());
-    assert_eq!(Click::of(&routine(1, "2h"), None, false), Click::Edit);
-    assert_eq!(Click::of(&run_of(1, 2, "failed"), None, false), Click::Nothing);
-    assert_eq!(Click::of(&run_of(1, 2, "kept"), Some(9), false), Click::Open(9));
+    assert_eq!(Click::of(&routine(1, "2h"), None, false, false), Click::Edit);
+    assert_eq!(Click::of(&run_of(1, 2, "failed"), None, false, false), Click::Nothing);
+    assert_eq!(Click::of(&run_of(1, 2, "kept"), Some(9), false, false), Click::Open(9));
 }
 
 #[test]
@@ -350,11 +350,11 @@ fn an_error_reads_as_a_sentence() {
 
 #[test]
 fn a_click_edits_what_can_run_and_shows_a_live_pane() {
-    assert_eq!(Click::of(&entry(1, "missed"), None, false), Click::Edit);
-    assert_eq!(Click::of(&entry(1, "pending"), None, true), Click::Nothing);
-    assert_eq!(Click::of(&entry(1, "started"), Some(9), false), Click::Open(9));
-    assert_eq!(Click::of(&entry(1, "started"), None, false), Click::Nothing);
-    assert_eq!(Click::of(&entry(1, "starting"), None, false), Click::Nothing);
+    assert_eq!(Click::of(&entry(1, "missed"), None, false, false), Click::Edit);
+    assert_eq!(Click::of(&entry(1, "pending"), None, true, false), Click::Nothing);
+    assert_eq!(Click::of(&entry(1, "started"), Some(9), false, false), Click::Open(9));
+    assert_eq!(Click::of(&entry(1, "started"), None, false, false), Click::Nothing);
+    assert_eq!(Click::of(&entry(1, "starting"), None, false, false), Click::Nothing);
 }
 
 #[test]
@@ -713,4 +713,69 @@ fn a_form_left_on_as_in_settings_sends_no_mode() {
     for edit in [None, Some(4)] {
         assert!(!sent_by_the_form(edit, None).iter().any(|arg| arg == "--mode"));
     }
+}
+
+fn kept_run(id: u64, state: &str, routine: Option<u64>) -> Entry {
+    Entry { routine, ..entry(id, state) }
+}
+
+#[test]
+fn which_rows_offer_the_detail() {
+    use super::data::offers_detail;
+    for state in ["started", "kept", "removed"] {
+        assert!(offers_detail(&kept_run(1, state, None)) && offers_detail(&kept_run(1, state, Some(9))), "{state}");
+    }
+    assert!(offers_detail(&kept_run(1, "failed", Some(9))) && offers_detail(&kept_run(1, "missed", Some(9))));
+    for state in ["failed", "missed", "pending", "starting", "other"] {
+        assert!(!offers_detail(&kept_run(1, state, None)), "{state}");
+    }
+    assert!(!offers_detail(&routine(1, "2h")));
+}
+
+#[test]
+fn with_results_a_row_whose_pane_is_gone_opens_its_detail() {
+    assert_eq!(Click::of(&entry(1, "started"), None, false, true), Click::Detail);
+    assert_eq!(Click::of(&kept_run(1, "removed", Some(2)), None, false, true), Click::Detail);
+    assert_eq!(Click::of(&kept_run(1, "failed", Some(2)), None, false, true), Click::Detail);
+    assert_eq!(Click::of(&entry(1, "failed"), None, false, true), Click::Edit);
+    assert_eq!(Click::of(&entry(1, "started"), Some(9), false, true), Click::Open(9));
+    assert_eq!(Click::of(&entry(1, "starting"), None, false, true), Click::Nothing);
+    assert_eq!(Click::of(&entry(1, "removed"), None, false, false), Click::Nothing);
+}
+
+#[test]
+fn the_result_action_waits_for_a_live_panes_result() {
+    use super::data::offers_result;
+    let mut live = entry(1, "started");
+    assert!(!offers_result(&live, Some(9), true));
+    live.result_at = Some(5);
+    assert!(offers_result(&live, Some(9), true) && offers_result(&live, None, true));
+    assert!(!offers_result(&live, Some(9), false) && !offers_result(&entry(1, "started"), None, false));
+    assert!(offers_result(&entry(1, "started"), None, true));
+}
+
+#[test]
+fn reads_when_an_entry_started_and_kept_a_result() {
+    let list: serde_json::Value = serde_json::from_str(fixture!("queue/listed-results.json")).expect("the fixture");
+    let list = entries(Some(&json!({ "queue": list["entries"] })));
+    assert!(list.iter().any(|e| e.started.is_some() && e.result_at.is_some()));
+    assert_eq!(entry(1, "started").started, None);
+}
+
+#[test]
+fn the_snapshot_offers_results_from_the_servers_release() {
+    use super::rows::Snapshot;
+    let session = |version: &str| Session { version: version.into(), ..Session::default() };
+    assert!(!Snapshot::new(None, Some(session("0.13.39"))).results);
+    assert!(Snapshot::new(None, Some(session("0.13.53"))).results);
+    assert!(!Snapshot::new(None, None).results);
+}
+
+#[test]
+fn the_detail_goes_when_its_entry_leaves_the_feed_or_the_release_stops_offering_it() {
+    use super::data::shown_entry;
+    let list = [entry(3, "started")];
+    assert_eq!(shown_entry(&list, 3, true).map(|e| e.id), Some(3));
+    assert_eq!(shown_entry(&list, 4, true), None);
+    assert_eq!(shown_entry(&list, 3, false), None);
 }

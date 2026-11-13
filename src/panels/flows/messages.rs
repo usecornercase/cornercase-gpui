@@ -1,7 +1,6 @@
 use gpui::{
-    AnyElement, App, ClickEvent, ClipboardItem, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, px,
+    AnyElement, App, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use super::cards::{avatar, conductor, ground};
@@ -12,7 +11,7 @@ use super::widgets::{chip, error_small, open_path, panel_box};
 use super::{FlowsPanel, Place};
 use crate::notify::tip;
 use crate::store::Store;
-use crate::theme::{colours, radius};
+use crate::theme::colours;
 use crate::ui::{self, Icon, Tone, glass};
 
 const PREVIEW: usize = 1200;
@@ -168,22 +167,7 @@ fn header(flow: &FlowSpec, message: &Message, text: String, now: i64) -> Div {
         .children(edge_chip(flow, message.edge))
         .child(div().flex_1())
         .child(ui::dim(format!("#{} · {}", message.seq, model::ago(&message.time, now))))
-        .when(!text.is_empty(), |d| d.child(copy_button(message.seq, text)))
-}
-
-fn copy_button(seq: u64, text: String) -> Stateful<Div> {
-    div()
-        .id(("copy-message", seq))
-        .flex_none()
-        .p(px(4.))
-        .rounded(px(radius::chip()))
-        .cursor_pointer()
-        .hover(|s| s.bg(colours::selected()))
-        .child(ui::icon(Icon::Copy, 12.).text_color(colours::faint()))
-        .on_click(move |_: &ClickEvent, _, cx| {
-            cx.stop_propagation();
-            cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
-        })
+        .when(!text.is_empty(), |d| d.child(ui::copy_button(("copy-message", message.seq), text)))
 }
 
 fn body(shown: String, whole: bool) -> Div {

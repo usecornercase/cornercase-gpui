@@ -1,0 +1,38 @@
+{
+  "agent": "claude",
+  "at": 1794535383,
+  "command": "claude",
+  "earlier": false,
+  "id": 2,
+  "label": "fix the login",
+  "messages": null,
+  "mode": null,
+  "note": "claude no longer has this conversation's record",
+  "pane": 8,
+  "place": {
+    "branch": null,
+    "project": "/home/ana/code/shop",
+    "server": "24916-1794528152700453000",
+    "workspace": "/home/ana/code/shop",
+    "workspace_id": 3,
+    "workspace_name": null
+  },
+  "program": "claude",
+  "prompt": "fix the login",
+  "result": {
+    "agent": "claude",
+    "at": 1794528204,
+    "branch": "main",
+    "conversation": false,
+    "cut": false,
+    "pull_request": null,
+    "text": "## Done: fix the login When you finish, end your last message with a short summary of what you did and what is left to do.\n\n- changed the **login** flow\n- see https://example.com/pull/1 and [the docs](https://example.com/docs)\n\n```\ncargo test\n```",
+    "written": "2026-11-13T00:03:07.000Z"
+  },
+  "result_at": 1794528204,
+  "server": "24916-1794528152700453000",
+  "started": 1794528185,
+  "state": "started",
+  "submit": true,
+  "zone": "Europe/Madrid"
+}

@@ -7,6 +7,7 @@ use super::names;
 use crate::model::link::is_web;
 use crate::model::{PaneInfo, Session};
 use crate::store::{Store, ToastKind};
+use crate::ui::markdown::text;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Go {
@@ -62,7 +63,7 @@ pub(super) fn out_of_reach(name: &str, place: &Place) -> String {
 pub(super) fn follow(link: &str, places: &BTreeMap<String, Place>, cx: &mut App) {
     match places.get(link) {
         Some(place) => reach(link, place, cx),
-        None => open(link, cx),
+        None => text::open_web(link, cx),
     }
 }
 
@@ -76,14 +77,6 @@ fn reach(id: &str, place: &Place, cx: &mut App) {
         Go::Project(project) => ("project", project),
     };
     store.update(cx, |s, cx| s.show_in_terminal(kind, shown, cx));
-}
-
-fn open(address: &str, cx: &mut App) {
-    if is_web(address) {
-        cx.open_url(address);
-    } else {
-        tell(format!("{address} is not a web address, so it cannot be opened"), cx);
-    }
 }
 
 fn tell(text: String, cx: &mut App) {
