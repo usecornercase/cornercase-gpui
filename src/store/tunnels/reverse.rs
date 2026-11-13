@@ -1,11 +1,10 @@
 use gpui::Context;
 
-use super::{Heard, Store, ToastKind, listen_to_hold};
+use super::held::status_words;
+use super::{Busy, Heard, Store, ToastKind, listed_gate, listen_to_hold};
 use crate::cli::{self, Holding};
 use crate::model::machines::hide_destination;
-use crate::model::tunnels::{Gate, Toward, held_line, reverse_note};
-use crate::store::Busy;
-use crate::store::browse::listed_gate;
+use crate::model::tunnels::{Gate, Toward, held_line, reverse_gate, reverse_note};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReverseState {
@@ -23,7 +22,7 @@ pub(crate) struct ReverseHold {
 }
 
 pub(crate) fn opened_toast(label: &str, there: u16) -> String {
-    format!("Opened this Chrome to {label}: its agents reach it at http://127.0.0.1:{there}")
+    format!("Opened this Chrome to {label}: its agents reach it at {}", address_there(there))
 }
 
 pub(crate) fn failed_toast(label: &str, why: &str) -> String {
@@ -60,13 +59,32 @@ pub(crate) fn reverse_reason(said: &str, toward: &Toward, label: &str, destinati
     line
 }
 
+pub(crate) fn ending_toast(state: ReverseState, code: Option<i32>, why: &str, label: &str) -> (String, ToastKind) {
+    let why = (!why.is_empty()).then_some(why);
+    match (state, code) {
+        (ReverseState::Opening, _) => {
+            let why = why.map_or_else(|| status_words(code), str::to_string);
+            (failed_toast(label, &why), ToastKind::Error)
+        }
+        (ReverseState::Open { .. }, Some(0)) => (ended_toast(label, None), ToastKind::Info),
+        (ReverseState::Open { .. }, _) => {
+            let why = why.map_or_else(|| status_words(code), str::to_string);
+            (ended_toast(label, Some(&why)), ToastKind::Error)
+        }
+    }
+}
+
 pub(crate) fn address_there(there: u16) -> String {
     format!("http://127.0.0.1:{there}")
 }
 
+pub(crate) fn copied_words(name: &str) -> String {
+    format!("Copied the DevTools address on {name}")
+}
+
 impl Store {
     pub(crate) fn reverse_gate_of(&self, toward: &Toward) -> Gate {
-        let gate = self.release_gate(toward, crate::model::tunnels::reverse_gate);
+        let gate = self.release_gate(toward, reverse_gate);
         match toward {
             Toward::Server => gate,
             Toward::Machine(_) => listed_gate(self.machines_known(), gate),
@@ -173,16 +191,8 @@ impl Store {
             self.end_job(job, cx);
         }
         let why = reverse_reason(&ended.said, toward, &hold.label, &hold.destination);
-        let why = (!why.is_empty()).then_some(why);
-        let said = match (hold.state, ended.code) {
-            (ReverseState::Opening, _) => {
-                let why = why.unwrap_or_else(|| format!("cornercase tunnel hold ended with status {:?}", ended.code));
-                (failed_toast(&hold.label, &why), ToastKind::Error)
-            }
-            (ReverseState::Open { .. }, Some(0)) => (ended_toast(&hold.label, None), ToastKind::Info),
-            (ReverseState::Open { .. }, _) => (ended_toast(&hold.label, why.as_deref()), ToastKind::Error),
-        };
-        self.toast(said.0, said.1, cx);
+        let (text, kind) = ending_toast(hold.state, ended.code, &why, &hold.label);
+        self.toast(text, kind, cx);
         cx.notify();
     }
 
@@ -196,14 +206,10 @@ impl Store {
         let toward = Toward::Machine(name.to_string());
         let Some(hold) = self.tunnels.reverses.get(&toward) else { return };
         let link = self.machine_link(name).gated(self.reverse_gate_of(&toward));
-        if !reverse_stays(&link, &hold.destination) {
+        if !link.stays_for(&hold.destination) {
             self.end_reverse(&toward, None, cx);
         }
     }
-}
-
-pub(crate) fn reverse_stays(link: &super::MachineLink, destination: &str) -> bool {
-    link.stays_for(destination)
 }
 
 #[cfg(test)]

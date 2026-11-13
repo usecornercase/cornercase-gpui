@@ -1,9 +1,9 @@
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, App, ClickEvent, ClipboardItem, Context, Corner, Div, InteractiveElement as _, IntoElement,
-    MouseButton, MouseDownEvent, ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _,
-    Styled as _, Window, anchored, deferred, div, point, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, ClipboardItem, Context, Corner, Div, InteractiveElement as _, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window,
+    anchored, deferred, div, point, prelude::FluentBuilder as _, px,
 };
 
 use super::Browser;
@@ -16,7 +16,7 @@ use crate::dialogs;
 use crate::dialogs::Question;
 use crate::model::tunnels::Toward;
 use crate::notify::tip;
-use crate::store::{Store, ToastKind};
+use crate::store::{Store, ToastKind, copied_words};
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, Tone, glass};
 
@@ -122,14 +122,14 @@ impl Browser {
         let name = self.far_name();
         let endpoint = self.agent_endpoint(&drive);
         let shows_endpoint = matches!(drive, Drive::Here | Drive::Own | Drive::Open(_));
-        let copied = matches!(drive, Drive::Open(_)).then(|| far::copied_words(&name));
+        let copied = matches!(drive, Drive::Open(_)).then(|| copied_words(&name));
         menu_card("browser-agents-menu", 320., cx)
             .child(ui::section("Agents and this browser").px(px(10.)).pt(px(6.)))
             .child(div().px(px(10.)).text_size(px(12.)).text_color(colours::muted()).child(far::says(&drive, &name)))
             .children(drive_note(&drive, &name))
             .children(self.open_control(&drive, &name, cx))
             .children(shows_endpoint.then(|| endpoint_row(endpoint.clone(), copied, cx).into_any_element()))
-            .child(self.tell_row(endpoint.is_some(), cx))
+            .children(self.tell_row(&drive, endpoint.is_some(), cx))
             .children(self.close_control(&drive, &name, cx))
             .children(self.agent_rows(cx))
             .child(div().mx(px(6.)).my(px(4.)).h(px(1.)).bg(colours::border()))
@@ -143,9 +143,8 @@ impl Browser {
             Drive::Closed => {
                 let toward = self.place.toward(cli::host().as_deref())?;
                 let name = name.to_string();
-                let tip_text = format!("Asks first: every user and program on {name} could then drive it");
                 let label = far::open_label(&name);
-                let row = entry("browser-agents-open-far", Icon::Share, label).tooltip(tip(tip_text));
+                let row = entry("browser-agents-open-far", Icon::Share, label).tooltip(tip(far::open_tooltip(&name)));
                 Some(
                     row.on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                         this.agents.menu = None;
@@ -173,10 +172,11 @@ impl Browser {
         )
     }
 
-    fn ask_to_open(toward: Toward, name: &str, window: &mut Window, cx: &mut App) {
+    fn ask_to_open(toward: Toward, name: &str, window: &mut Window, cx: &mut Context<Self>) {
         let (title, message, button) = far::confirm_words(name);
+        let panel = cx.entity();
         let question = Question::new(title, message, button, Vec::new()).on_yes(move |cx| {
-            let chrome = super::running(cx).and_then(|browser| browser.read(cx).port());
+            let chrome = panel.read(cx).port();
             Store::get(cx).update(cx, |s, cx| match chrome {
                 Some(chrome) => s.open_reverse(&toward, chrome, cx),
                 None => s.not_opened("This Chrome is not running", cx),
@@ -200,14 +200,18 @@ impl Browser {
             .into_any_element()
     }
 
-    fn tell_row(&self, ready: bool, cx: &mut Context<Self>) -> AnyElement {
-        let Some(agent) = self.target_agent(cx) else { return self.no_agent_row(cx) };
+    fn tell_row(&self, drive: &Drive, ready: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let Some(agent) = self.target_agent(cx) else { return Some(self.no_agent_row(cx)) };
+        if !far::offers_tell(drive) {
+            return None;
+        }
         let label = format!("Tell {} about it", Self::agent_name_on(&agent, cx));
         entry("browser-agents-tell", Icon::Send, label)
             .when(!ready, |e| e.opacity(0.35))
             .tooltip(tip("Pastes a note into its prompt: where this Chrome runs and how to connect to it"))
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.tell_agent(cx)))
             .into_any_element()
+            .into()
     }
 
     fn agent_rows(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {

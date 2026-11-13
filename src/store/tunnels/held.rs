@@ -139,7 +139,7 @@ fn machine_reason(line: &str, name: &str, destination: &str) -> String {
     rest.map_or_else(|| hidden.clone(), |(_, why)| why.to_string())
 }
 
-fn status_words(code: Option<i32>) -> String {
+pub(super) fn status_words(code: Option<i32>) -> String {
     match code {
         Some(code) => format!("cornercase tunnel hold ended with status {code}"),
         None => "cornercase tunnel hold was stopped".to_string(),

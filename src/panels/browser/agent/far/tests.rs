@@ -1,9 +1,8 @@
 use super::{
-    Drive, close_label, confirm_words, copied_words, drive, exposure, open_label, opening_words, own_exposure,
-    own_reverse_stays, says,
+    Drive, close_label, confirm_words, drive, exposure, offers_tell, open_label, open_tooltip, opening_words,
+    own_exposure, own_reverse_stays, says,
 };
 use crate::model::tunnels::{Gate, Older, Toward};
-use crate::panels::browser::agent::endpoint;
 use crate::store::ReverseState;
 
 fn machine() -> Toward {
@@ -44,7 +43,6 @@ fn an_opening_or_open_hold_wins_over_the_gate() {
     assert_eq!(opening, Drive::Opening);
     let open = drive(Some(&machine()), Gate::Open, Some(ReverseState::Open { there: 41234 }), None);
     assert_eq!(open, Drive::Open(41234));
-    assert_eq!(endpoint(41234), "http://127.0.0.1:41234");
 }
 
 #[test]
@@ -66,7 +64,7 @@ fn the_menu_says_what_each_state_offers() {
     assert_eq!(open_label("vps"), "Open this Chrome to vps…");
     assert_eq!(opening_words("vps"), "Opening this Chrome to vps…");
     assert_eq!(close_label("vps"), "Close it to vps");
-    assert_eq!(copied_words("vps"), "Copied the DevTools address on vps");
+    assert_eq!(open_tooltip("vps"), "Asks first: every user and program on vps could then drive it");
 }
 
 #[test]
@@ -74,4 +72,14 @@ fn the_windows_own_reverse_ssh_stops_once_the_hold_can_carry_it() {
     assert!(!own_reverse_stays(Gate::Open));
     assert!(own_reverse_stays(older()));
     assert!(own_reverse_stays(Gate::Waiting));
+}
+
+#[test]
+fn tell_is_offered_only_where_the_menu_has_an_address() {
+    for offered in [Drive::Here, Drive::Own, Drive::Open(41234)] {
+        assert!(offers_tell(&offered), "{offered:?}");
+    }
+    for hidden in [Drive::Closed, Drive::Opening, Drive::Needs("needs cornercase 0.13.61".to_string())] {
+        assert!(!offers_tell(&hidden), "{hidden:?}");
+    }
 }

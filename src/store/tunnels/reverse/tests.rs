@@ -1,8 +1,9 @@
 use super::{
-    ReverseState, closed_toast, ended_toast, failed_toast, opened_toast, reverse_reason, reverse_stays, stopped_toast,
+    ReverseState, address_there, closed_toast, copied_words, ended_toast, ending_toast, failed_toast, opened_toast,
+    reverse_reason, stopped_toast,
 };
-use crate::model::tunnels::{Gate, Older, Toward};
-use crate::store::MachineLink;
+use crate::model::tunnels::Toward;
+use crate::store::ToastKind;
 use crate::test_util::fixture;
 
 #[test]
@@ -32,13 +33,29 @@ fn a_reverse_holds_reason_hides_the_destination_and_drops_its_lead() {
 }
 
 #[test]
-fn a_reverse_hold_ends_when_its_machines_link_is_lost_and_waits_with_it() {
-    let up = |destination: &str| MachineLink::Up { boot: "b".to_string(), destination: destination.to_string() };
-    assert!(!reverse_stays(&MachineLink::Lost, "vps.invalid"));
-    assert!(reverse_stays(&MachineLink::Waiting(Some("vps.invalid".to_string())), "vps.invalid"));
-    assert!(reverse_stays(&up("vps.invalid"), "vps.invalid"));
-    assert!(!reverse_stays(&up("other.invalid"), "vps.invalid"));
-    let older = Gate::Older(Older::Server(crate::cli::Version::parse("0.13.60")));
-    assert!(!reverse_stays(&up("vps.invalid").gated(older), "vps.invalid"));
-    assert_eq!(ReverseState::Opening, ReverseState::Opening);
+fn the_address_on_the_machine_is_one_text_for_the_toast_the_menu_and_the_copy() {
+    assert_eq!(address_there(41234), "http://127.0.0.1:41234");
+    assert!(opened_toast("vps", 41234).ends_with(&address_there(41234)));
+    assert_eq!(copied_words("vps"), "Copied the DevTools address on vps");
+}
+
+#[test]
+fn a_hold_that_ends_before_it_is_up_says_why_or_its_status() {
+    let say = |code, why| ending_toast(ReverseState::Opening, code, why, "vps");
+    let (text, kind) = say(Some(0), "");
+    assert_eq!(text, "Could not open this Chrome to vps: cornercase tunnel hold ended with status 0");
+    assert_eq!(kind, ToastKind::Error);
+    assert_eq!(say(None, "").0, "Could not open this Chrome to vps: cornercase tunnel hold was stopped");
+    assert_eq!(say(Some(1), "ssh stopped").0, "Could not open this Chrome to vps: ssh stopped");
+}
+
+#[test]
+fn a_hold_that_ends_once_it_is_up_is_told_by_its_exit() {
+    let open = ReverseState::Open { there: 41234 };
+    let (text, kind) = ending_toast(open, Some(0), "", "vps");
+    assert_eq!((text.as_str(), kind), ("This Chrome is no longer open to vps", ToastKind::Info));
+    let (text, kind) = ending_toast(open, Some(1), "ssh stopped", "vps");
+    assert_eq!((text.as_str(), kind), ("This Chrome is no longer open to vps: ssh stopped", ToastKind::Error));
+    let (text, _) = ending_toast(open, Some(1), "", "vps");
+    assert_eq!(text, "This Chrome is no longer open to vps: cornercase tunnel hold ended with status 1");
 }

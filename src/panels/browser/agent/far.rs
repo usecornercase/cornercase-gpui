@@ -63,8 +63,12 @@ pub(crate) fn close_label(name: &str) -> String {
     format!("Close it to {name}")
 }
 
-pub(crate) fn copied_words(name: &str) -> String {
-    format!("Copied the DevTools address on {name}")
+pub(crate) fn open_tooltip(name: &str) -> String {
+    format!("Asks first: every user and program on {name} could then drive it")
+}
+
+pub(crate) fn offers_tell(drive: &Drive) -> bool {
+    matches!(drive, Drive::Here | Drive::Own | Drive::Open(_))
 }
 
 pub(crate) fn confirm_words(name: &str) -> (String, String, String) {

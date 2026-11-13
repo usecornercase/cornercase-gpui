@@ -1,7 +1,6 @@
 use super::{
-    Gate, Older, Release, TUNNEL_HOLD_SINCE, TUNNEL_LOCAL_SINCE, TUNNEL_ORDERS_SINCE, Toward, TunnelSeen, Way,
-    gate_note, held_line, local_to_ask, machine_gate, older_note, orders_gate, orders_note, reverse_gate, reverse_note,
-    way,
+    Gate, Older, Release, TUNNEL_HOLD_SINCE, TUNNEL_ORDERS_SINCE, Toward, TunnelSeen, Way, gate_note, held_line,
+    local_to_ask, machine_gate, older_note, orders_gate, orders_note, reverse_gate, reverse_note, way,
 };
 use crate::cli::Version;
 use crate::model::Session;
@@ -217,11 +216,6 @@ fn the_local_port_is_asked_from_0_13_61_on_this_computer() {
 fn the_local_port_is_not_asked_when_it_is_the_port_or_unknown() {
     assert_eq!(local_to_ask(release("0.13.61"), 8765, Some(8765)), None);
     assert_eq!(local_to_ask(release("0.13.61"), 8765, None), None);
-}
-
-#[test]
-fn the_server_plays_no_part_in_the_local_port() {
-    assert_eq!(TUNNEL_LOCAL_SINCE, Version::new(0, 13, 61));
 }
 
 #[test]

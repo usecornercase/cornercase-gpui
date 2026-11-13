@@ -5,11 +5,13 @@ use std::collections::BTreeSet;
 use anyhow::anyhow;
 use futures::StreamExt as _;
 use futures::channel::mpsc::{UnboundedSender, unbounded};
-use gpui::Context;
+use gpui::{App, Context, Entity};
 
+use super::agent::far::own_reverse_stays;
 use super::{Browser, say};
 use crate::model::Owner;
 use crate::model::link::{loopback_port, rewrite};
+use crate::model::tunnels::Toward;
 use crate::store::{Busy, Store};
 use crate::{cli, desktop};
 
@@ -106,10 +108,6 @@ impl Tunnels {
         self.pending.clear();
     }
 
-    pub(crate) fn drop_own_reverse() {
-        ssh::drop_reverse_unless(None);
-    }
-
     pub(crate) fn reverse(&self, host: &str, browser: u16) -> Option<u16> {
         ssh::reverse(host, browser, &self.events)
     }
@@ -162,6 +160,13 @@ impl Browser {
             }
         }
         cx.notify();
+    }
+
+    pub(super) fn keep_own_reverse(store: &Entity<Store>, cx: &App) {
+        let gate = store.read(cx).reverse_gate_of(&Toward::Server);
+        if cli::host().is_some() && !own_reverse_stays(gate) {
+            ssh::drop_reverse_unless(None);
+        }
     }
 
     pub(super) fn keep_tunnels(&mut self, own: bool, cx: &mut Context<Self>) {

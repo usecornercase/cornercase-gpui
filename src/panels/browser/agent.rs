@@ -182,6 +182,12 @@ impl Browser {
         }
     }
 
+    pub(super) fn agents_menu_changed(&self, cx: &mut Context<Self>) {
+        if self.agents.menu == Some(Menu::Agents) {
+            cx.notify();
+        }
+    }
+
     pub(super) fn drive(&self, cx: &App) -> Drive {
         let host = cli::host();
         let store = Store::get(cx).read(cx);
@@ -195,7 +201,7 @@ impl Browser {
         match drive {
             Drive::Here => self.port().map(endpoint),
             Drive::Own => self.dev.tunnels.reverse(&cli::host()?, self.port()?).map(endpoint),
-            Drive::Open(there) => Some(endpoint(*there)),
+            Drive::Open(there) => Some(store::address_there(*there)),
             Drive::Needs(_) | Drive::Closed | Drive::Opening => None,
         }
     }

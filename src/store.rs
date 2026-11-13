@@ -35,8 +35,8 @@ pub(crate) use machine_read::{AgentReach, MachineRead, OlderNote, Reach, TabTher
 pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there, stale_note};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 pub(crate) use tunnels::{
-    Asked, Control, Held, MachineLink, ReverseState, TunnelRow, Whose, address_there, heading, none_note, others_note,
-    remote_url,
+    Asked, Control, Held, MachineLink, ReverseState, TunnelRow, Whose, address_there, copied_words, heading, none_note,
+    others_note, remote_url,
 };
 
 const NO_FLOW: &str = "This workspace runs no flow";

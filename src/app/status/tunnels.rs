@@ -11,7 +11,7 @@ use crate::panels::PanelKind;
 use crate::platform::Os;
 use crate::store::ToastKind;
 use crate::store::remote_url;
-use crate::store::{Asked, Store, address_there};
+use crate::store::{Asked, Store, address_there, copied_words};
 use crate::store::{TunnelRow, Whose, heading, none_note, others_note};
 
 fn closing(toward: &Toward, port: u16) -> Vec<Entry> {
@@ -75,11 +75,8 @@ fn reverse_actions(toward: &Toward, there: Option<u16>, name: &str) -> Vec<Entry
     let close = toward.clone();
     let mut entries = Vec::new();
     if let Some(there) = there {
-        let (address, label, copied) = (
-            address_there(there),
-            format!("Copy its address on {name}"),
-            format!("Copied the DevTools address on {name}"),
-        );
+        let (address, label, copied) =
+            (address_there(there), format!("Copy its address on {name}"), copied_words(name));
         entries.push(context_menu::note(format!("Every user and program on {name} can drive it")));
         entries.push(context_menu::item(label, move |this, _, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(address.clone()));

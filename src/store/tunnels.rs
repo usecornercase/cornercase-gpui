@@ -24,7 +24,7 @@ mod taker;
 
 pub(crate) use held::{Asked, Held};
 pub(crate) use links::MachineLink;
-pub(crate) use reverse::{ReverseHold, ReverseState, address_there};
+pub(crate) use reverse::{ReverseHold, ReverseState, address_there, copied_words};
 use rows::Mark;
 pub(crate) use rows::{Control, TunnelRow, Whose, heading, none_note, others_note};
 
