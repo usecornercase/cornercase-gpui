@@ -5,11 +5,13 @@ use crate::app::Root;
 use crate::context_menu::{Entry, item, resting};
 use crate::dialogs::{self, Question};
 use crate::model::machines::seen::sighted;
-use crate::model::{Aim, PaneAim, ThereWorkspace};
+use crate::model::{Aim, MachinePlace, PaneAim, ThereWorkspace};
+use crate::panels::PanelKind;
 use crate::panels::worktrees::{self, Whose, WorktreeRow};
 use crate::store::{MachineAct, Store};
 
 const RENAME_WORKSPACE: &str = "Rename workspace";
+const PORTS: &str = "Ports…";
 
 fn sentence(count: usize, one: &str, many: impl Fn(usize) -> String) -> String {
     match count {
@@ -30,11 +32,23 @@ fn close_question(ws: &ThereWorkspace, machine: &str) -> (String, String) {
     (title, format!("{tabs}Its folder stays on disk there.{closed}"))
 }
 
-fn there_entries(reach: Result<(), String>, aim: Aim) -> Vec<Entry> {
-    match reach {
+fn ports_item(place: MachinePlace) -> Entry {
+    item(PORTS, move |this, _, cx| {
+        let place = place.clone();
+        this.store.update(cx, |s, cx| {
+            s.pick_machine_place(place, cx);
+            s.open(PanelKind::Ports, cx);
+        });
+    })
+}
+
+fn there_entries(reach: Result<(), String>, aim: Aim, place: Option<MachinePlace>) -> Vec<Entry> {
+    let mut entries = match reach {
         Ok(()) => vec![item(RENAME_WORKSPACE, move |this, window, cx| this.start_there_rename(&aim, window, cx))],
         Err(why) => vec![resting(why), resting(RENAME_WORKSPACE)],
-    }
+    };
+    entries.extend(place.map(ports_item));
+    entries
 }
 
 fn there_agent_entries(reach: Result<(), String>, aim: PaneAim) -> Vec<Entry> {
@@ -67,7 +81,9 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         let reach = self.store.read(cx).reach_machine(aim).map(|_| ());
-        self.open_menu(at, there_entries(reach, aim.clone()), window, cx);
+        let machines = self.session.as_ref().map_or(&[][..], |session| &session.machines);
+        let place = sighted(machines, aim).ok().map(|(seen, ws)| MachinePlace::at(seen, ws, None));
+        self.open_menu(at, there_entries(reach, aim.clone(), place), window, cx);
     }
 
     pub(super) fn start_there_rename(&mut self, aim: &Aim, window: &mut Window, cx: &mut Context<Self>) {

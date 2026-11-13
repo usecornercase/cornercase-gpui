@@ -33,7 +33,9 @@ use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, Reach, TabThere};
 pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there, stale_note};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
-pub(crate) use tunnels::{Asked, Control, Held, TunnelRow, Whose, asks_note, heading, none_note, remote_url};
+pub(crate) use tunnels::{
+    Asked, Control, Held, TunnelRow, Whose, asks_note, heading, none_note, others_note, remote_url,
+};
 
 const NO_FLOW: &str = "This workspace runs no flow";
 
@@ -107,6 +109,7 @@ pub(crate) enum ToastGo {
     Machine(NoticeThere),
     Update(Updating),
     Browse(String),
+    Visit(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -215,11 +218,13 @@ impl Store {
             self.list_accounts(cx);
         }
         self.app = Some(value);
+        self.follow_machine_tunnels(cx);
         cx.notify();
     }
 
     pub(crate) fn take_machines(&mut self, machines: Vec<Machine>, cx: &mut Context<Self>) {
         self.machines = machines;
+        self.follow_machine_tunnels(cx);
         cx.notify();
     }
 
@@ -379,6 +384,7 @@ impl Store {
             ToastGo::Run(args) => self.act(args.clone()),
             ToastGo::Machine(there) => self.go_there(there, cx),
             ToastGo::Browse(url) => self.open_in_browser(url.clone(), None, cx),
+            ToastGo::Visit(url) => cx.open_url(url),
             ToastGo::Update(updating) => {
                 self.asks.open_update = Some(*updating);
                 cx.notify();

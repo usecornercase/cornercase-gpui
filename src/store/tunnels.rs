@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use futures::StreamExt as _;
@@ -6,17 +7,20 @@ use gpui::Context;
 
 use super::{Busy, Store, ToastGo, ToastKind};
 use crate::cli::{self, Ended};
-use crate::model::tunnels::{Release, TunnelSeen, Way, held_line, way};
+use crate::model::tunnels::{Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, machine_gate, way};
 
+mod closing;
 mod held;
+mod links;
+mod machines;
 mod memory;
 mod rows;
 
 pub(crate) use held::{Asked, Held};
 use rows::Mark;
-pub(crate) use rows::{Control, TunnelRow, Whose, asks_note, heading, none_note};
+pub(crate) use rows::{Control, TunnelRow, Whose, asks_note, heading, none_note, others_note};
 
-use held::{Fate, Hold, Settled, bring_back, fate, forgets_after_close, settle_now, up_toast, window_failure};
+use held::{Fate, Hold, Reached, Settled, bring_back, fate, live, settle_now, up_toast, window_failure};
 
 const SETTLE_AFTER: Duration = Duration::from_secs(3);
 
@@ -24,7 +28,15 @@ const SETTLE_AFTER: Duration = Duration::from_secs(3);
 pub(crate) struct Tunnels {
     holds: Vec<Hold>,
     link: Option<String>,
-    settling: Vec<(u16, String)>,
+    machines: BTreeMap<String, String>,
+    settling: Vec<Settling>,
+}
+
+struct Settling {
+    toward: Toward,
+    port: u16,
+    boot: String,
+    destination: String,
 }
 
 enum Heard {
@@ -40,16 +52,21 @@ fn later(wait: Duration, then: impl FnOnce(&mut Store, &mut Context<Store>) + 's
     .detach();
 }
 
-fn job_key(port: u16) -> String {
-    format!("tunnel:{port}")
-}
-
-fn closing_key(port: u16) -> String {
-    format!("tunnel-close:{port}")
+fn job_key(toward: &Toward, port: u16) -> String {
+    format!("tunnel:{}:{port}", toward.key())
 }
 
 pub(crate) fn remote_url(port: u16) -> String {
     format!("http://localhost:{port}/")
+}
+
+fn listen_to_hold(process: u64, mut rx: futures::channel::mpsc::UnboundedReceiver<Heard>, cx: &mut Context<Store>) {
+    cx.spawn(async move |this, cx| {
+        while let Some(heard) = rx.next().await
+            && this.update(cx, |this, cx| this.hold_heard(process, heard, cx)).is_ok()
+        {}
+    })
+    .detach();
 }
 
 impl Store {
@@ -58,17 +75,52 @@ impl Store {
         way(cli::host().as_deref(), self.heard_release(), server)
     }
 
-    fn live_hold(&self, port: u16) -> Option<&Hold> {
-        let ours = || self.tunnels.holds.iter().filter(move |hold| hold.port == port);
-        ours().find(|hold| hold.state != Held::Ending).or_else(|| ours().next())
+    pub(crate) fn machine_tunnel_gate(&self, name: &str) -> Gate {
+        let server = crate::model::machines::run_on::server_release(Some(name), self.session.as_ref(), &self.machines);
+        machine_gate(self.heard_release(), server)
     }
 
-    pub(crate) fn held_tunnel(&self, port: u16) -> Option<&Held> {
-        self.live_hold(port).map(|hold| &hold.state)
+    fn reached(&self, toward: &Toward) -> Result<Reached, String> {
+        let session = self.session.as_ref().ok_or_else(|| "not connected".to_string())?;
+        let toward = toward.clone();
+        match &toward {
+            Toward::Server => {
+                let host = cli::host().ok_or_else(|| "not on another server".to_string())?;
+                let boot = session.boot.clone();
+                Ok(Reached { toward, target: cli::target(), boot, label: host.clone(), destination: host })
+            }
+            Toward::Machine(name) => {
+                let seen = session.machine(name).ok_or_else(|| format!("{name} is not shown here"))?;
+                let target = self.machine_target(seen)?;
+                let listed = self.machines.iter().find(|machine| machine.name == *name);
+                let destination = listed.map(|machine| machine.destination.clone()).unwrap_or_default();
+                Ok(Reached { target, boot: seen.boot.clone(), label: name.clone(), destination, toward })
+            }
+        }
     }
 
-    pub(crate) fn tunnel_local(&self, port: u16) -> Option<u16> {
-        self.live_hold(port).and_then(Hold::local)
+    pub(crate) fn can_tunnel(&self, toward: &Toward) -> bool {
+        match toward {
+            Toward::Server => self.tunnel_way() == Way::Cornercase,
+            Toward::Machine(name) => self.machine_tunnel_gate(name) == Gate::Open && self.reached(toward).is_ok(),
+        }
+    }
+
+    fn tunnel_refusal(&self, toward: &Toward) -> String {
+        let Toward::Machine(name) = toward else { return String::new() };
+        match self.machine_tunnel_gate(name) {
+            Gate::Older(older) => gate_note(&older, name),
+            Gate::Waiting => "this computer's cornercase release is not read yet".to_string(),
+            Gate::Open => self.reached(toward).err().unwrap_or_default(),
+        }
+    }
+
+    pub(crate) fn held_tunnel(&self, toward: &Toward, port: u16) -> Option<&Held> {
+        live(&self.tunnels.holds, toward, port).map(|hold| &hold.state)
+    }
+
+    pub(crate) fn tunnel_local(&self, toward: &Toward, port: u16) -> Option<u16> {
+        live(&self.tunnels.holds, toward, port).and_then(Hold::local)
     }
 
     pub(crate) fn tunnel_count(&self) -> usize {
@@ -83,28 +135,67 @@ impl Store {
         rows::menu_rows(self.listed_tunnels(), &self.tunnels.holds)
     }
 
-    pub(crate) fn tunnel_control(&self, port: u16) -> Control {
-        rows::row_control(&self.tunnel_way(), self.held_tunnel(port))
+    pub(crate) fn machine_tunnel_sections(&self) -> Vec<(String, Vec<TunnelRow>)> {
+        rows::machine_sections(&self.tunnels.holds)
     }
 
-    pub(crate) fn tunnel_mark(&self, port: u16) -> Option<Mark> {
-        let there = rows::elsewhere(port, self.listed_tunnels(), &self.tunnels.holds);
-        rows::mark(&self.tunnel_way(), self.held_tunnel(port), there)
+    pub(crate) fn tunnel_control(&self, toward: &Toward, port: u16) -> Control {
+        rows::row_control(self.can_tunnel(toward), self.held_tunnel(toward, port))
     }
 
-    pub(crate) fn hold_tunnel(&mut self, port: u16, asked: Asked, cx: &mut Context<Self>) {
-        if self.tunnel_way() != Way::Cornercase || self.tunnels.holds.iter().any(|h| h.port == port) {
+    pub(crate) fn tunnel_mark(&self, toward: &Toward, port: u16) -> Option<Mark> {
+        let there = *toward == Toward::Server && rows::elsewhere(port, self.listed_tunnels(), &self.tunnels.holds);
+        rows::mark(self.can_tunnel(toward), self.held_tunnel(toward, port), there)
+    }
+
+    pub(crate) fn hold_tunnel(&mut self, toward: &Toward, port: u16, asked: Asked, cx: &mut Context<Self>) {
+        if live(&self.tunnels.holds, toward, port).is_some() {
             return;
         }
-        self.start_hold(port, asked, None, cx);
+        if !self.can_tunnel(toward) {
+            if asked == Asked::Click && *toward != Toward::Server {
+                let why = self.tunnel_refusal(toward);
+                self.not_sent(&why, cx);
+            }
+            return;
+        }
+        self.start_hold(toward, port, (asked, None), cx);
     }
 
-    fn start_hold(&mut self, port: u16, asked: Asked, attempts: Option<u32>, cx: &mut Context<Self>) {
-        let (Some(host), Some(boot)) = (cli::host(), self.session.as_ref().map(|s| s.boot.clone())) else { return };
-        let (lines, mut rx) = unbounded::<Heard>();
+    fn start_hold(
+        &mut self,
+        toward: &Toward,
+        port: u16,
+        (asked, attempts): (Asked, Option<u32>),
+        cx: &mut Context<Self>,
+    ) {
+        let Ok(reached) = self.reached(toward) else { return };
+        let Some((process, rx)) = self.spawn_hold(&reached, port, cx) else { return };
+        let mut hold = Hold::opening(&reached, port, process, asked);
+        let busy = Busy::new(job_key(toward, port), format!("Opening a tunnel to port {port} on {}…", reached.label));
+        hold.job = Some(self.start_job(busy, cx));
+        if let Some(attempts) = attempts {
+            hold.attempts = attempts;
+            hold.was_up = true;
+        }
+        self.tunnels.holds.push(hold);
+        if asked != Asked::Back && asked != Asked::Retry {
+            self.remember_tunnel(&reached.destination, port, true, cx);
+        }
+        listen_to_hold(process, rx, cx);
+        cx.notify();
+    }
+
+    fn spawn_hold(
+        &mut self,
+        reached: &Reached,
+        port: u16,
+        cx: &mut Context<Self>,
+    ) -> Option<(u64, futures::channel::mpsc::UnboundedReceiver<Heard>)> {
+        let (lines, rx) = unbounded::<Heard>();
         let ends = lines.clone();
         let started = cli::hold(
-            &cli::target(),
+            &reached.target,
             port,
             move |line| {
                 let _ = lines.unbounded_send(Heard::Line(line));
@@ -113,41 +204,22 @@ impl Store {
                 let _ = ends.unbounded_send(Heard::Ended(ended));
             },
         );
-        let process = match started {
-            Ok((process, None)) => process,
+        let why = match started {
+            Ok((process, None)) => return Some((process, rx)),
             Ok((process, Some(why))) => {
                 cli::end_hold(process);
-                return self.toast(window_failure(port, &why), ToastKind::Error, cx);
+                why
             }
-            Err(e) => return self.toast(window_failure(port, &cli::reason(&e)), ToastKind::Error, cx),
+            Err(e) => cli::reason(&e),
         };
-        let mut hold = Hold::opening(port, process, asked, &boot);
-        hold.job =
-            Some(self.start_job(Busy::new(job_key(port), format!("Opening a tunnel to port {port} on {host}…")), cx));
-        if let Some(attempts) = attempts {
-            hold.attempts = attempts;
-            hold.was_up = true;
-        }
-        self.tunnels.holds.push(hold);
-        if asked != Asked::Back && asked != Asked::Retry {
-            self.remember_tunnel(&host, port, true, cx);
-        }
-        cx.spawn(async move |this, cx| {
-            while let Some(heard) = rx.next().await
-                && this.update(cx, |this, cx| this.hold_heard(process, heard, cx)).is_ok()
-            {}
-        })
-        .detach();
-        cx.notify();
+        self.toast(window_failure(&reached.toward, port, &why), ToastKind::Error, cx);
+        None
     }
 
-    fn remember_tunnel(&mut self, host: &str, port: u16, keep: bool, cx: &mut Context<Self>) {
-        let saved =
-            memory::save(
-                |text| {
-                    if keep { memory::remember(text, host, port) } else { memory::forget(text, host, port) }
-                },
-            );
+    fn remember_tunnel(&mut self, destination: &str, port: u16, keep: bool, cx: &mut Context<Self>) {
+        let saved = memory::save(|text| {
+            if keep { memory::remember(text, destination, port) } else { memory::forget(text, destination, port) }
+        });
         if let Err(e) = saved {
             self.toast(format!("Could not save the tunnels to bring back: {e:#}"), ToastKind::Error, cx);
         }
@@ -173,12 +245,16 @@ impl Store {
         (hold.was_up, hold.attempts) = (true, 0);
         hold.last_local = Some(local);
         let (port, asked, job) = (hold.port, hold.asked, hold.job.take());
+        let (toward, label) = (hold.toward.clone(), hold.label().to_string());
         if let Some(job) = job {
             self.end_job(job, cx);
         }
-        let Some(host) = cli::host() else { return };
-        if let Some((text, open)) = up_toast(asked, port, local, &host) {
-            let action = open.then(|| ("Open".to_string(), ToastGo::Browse(remote_url(port))));
+        if let Some((text, open)) = up_toast(asked, port, local, &label) {
+            let go = match toward {
+                Toward::Server => ToastGo::Browse(remote_url(port)),
+                Toward::Machine(_) => ToastGo::Visit(format!("http://localhost:{local}")),
+            };
+            let action = open.then(|| ("Open".to_string(), go));
             self.toast_with(text, ToastKind::Info, action, cx);
         }
         cx.notify();
@@ -199,7 +275,8 @@ impl Store {
             Fate::Retry(why) => self.fall(at, why, cx),
             Fate::Settle => {
                 self.tunnels.holds.remove(at);
-                self.tunnels.settling.push((hold.port, hold.boot));
+                let (toward, port, boot, destination) = (hold.toward, hold.port, hold.boot, hold.destination);
+                self.tunnels.settling.push(Settling { toward, port, boot, destination });
                 later(SETTLE_AFTER, Self::settle_later, cx);
             }
         }
@@ -211,151 +288,117 @@ impl Store {
         hold.state = Held::Down { why };
         (hold.job, hold.process) = (None, 0);
         hold.attempts += 1;
-        let (port, attempts) = (hold.port, hold.attempts);
-        later(cli::backoff(attempts - 1), move |this, cx| this.retry_hold(port, attempts, cx), cx);
+        let (toward, port, attempts) = (hold.toward.clone(), hold.port, hold.attempts);
+        later(cli::backoff(attempts - 1), move |this, cx| this.retry_hold(&toward, port, attempts, cx), cx);
     }
 
-    fn retry_hold(&mut self, port: u16, attempts: u32, cx: &mut Context<Self>) {
-        let waiting = |h: &Hold| h.port == port && h.attempts == attempts && matches!(h.state, Held::Down { .. });
+    fn linked(&self, toward: &Toward) -> bool {
+        match toward {
+            Toward::Server => self.tunnels.link.is_some(),
+            Toward::Machine(name) => self.tunnels.machines.contains_key(name),
+        }
+    }
+
+    fn retry_hold(&mut self, toward: &Toward, port: u16, attempts: u32, cx: &mut Context<Self>) {
+        let waiting = |h: &Hold| {
+            h.port == port && h.toward == *toward && h.attempts == attempts && matches!(h.state, Held::Down { .. })
+        };
         let Some(at) = self.tunnels.holds.iter().position(waiting) else { return };
-        if self.tunnel_way() != Way::Cornercase || self.tunnels.link.is_none() {
+        if !self.can_tunnel(toward) || !self.linked(toward) {
             return;
         }
         self.tunnels.holds.remove(at);
-        self.start_hold(port, Asked::Retry, Some(attempts), cx);
-    }
-
-    pub(crate) fn close_tunnel(&mut self, port: u16, forget: bool, cx: &mut Context<Self>) {
-        let Some(host) = cli::host() else { return };
-        let ours = self.tunnels.holds.iter().position(|h| h.port == port && h.state != Held::Ending);
-        let quick = ours.is_some_and(|at| !matches!(self.tunnels.holds[at].state, Held::Up { .. }));
-        if let Some(at) = ours {
-            if quick {
-                self.forget_in_memory(&host, port, cx);
-                return self.drop_hold(at, cx);
-            }
-            self.tunnels.holds[at].state = Held::Ending;
-        }
-        let verb = if forget { "forget" } else { "close" };
-        let busy = Busy::new(closing_key(port), format!("Closing the tunnel of port {port} on {host}…"));
-        let args = vec!["tunnel".to_string(), verb.to_string(), port.to_string()];
-        let target = cli::target();
-        let work = move || cli::run_on(&target, &args, None);
-        self.run_then(busy, work, move |this, result, cx| this.closed((port, forget, host), result, cx), cx);
-        cx.notify();
-    }
-
-    fn forget_in_memory(&mut self, host: &str, port: u16, cx: &mut Context<Self>) {
-        self.remember_tunnel(host, port, false, cx);
-    }
-
-    fn drop_hold(&mut self, at: usize, cx: &mut Context<Self>) {
-        let hold = self.tunnels.holds.remove(at);
-        cli::end_hold(hold.process);
-        if let Some(job) = hold.job {
-            self.end_job(job, cx);
-        }
-        cx.notify();
-    }
-
-    fn closed(
-        &mut self,
-        (port, forget, host): (u16, bool, String),
-        result: anyhow::Result<String>,
-        cx: &mut Context<Self>,
-    ) {
-        let verb = if forget { "forget" } else { "close" };
-        match result {
-            Ok(_) => {
-                let live = self.tunnels.holds.iter().any(|h| h.port == port && h.state != Held::Ending);
-                if forgets_after_close(live) {
-                    self.forget_in_memory(&host, port, cx);
-                }
-                let past = if forget { "Forgot" } else { "Closed" };
-                self.toast(format!("{past} the tunnel of port {port} on {host}"), ToastKind::Info, cx);
-            }
-            Err(e) => {
-                let text = format!("Could not {verb} the tunnel of port {port} on {host}: {}", cli::reason(&e));
-                self.toast(text, ToastKind::Error, cx);
-                self.restore_ending(port);
-            }
-        }
-        cx.notify();
-    }
-
-    fn restore_ending(&mut self, port: u16) {
-        for hold in self.tunnels.holds.iter_mut().filter(|h| h.port == port && h.state == Held::Ending) {
-            if let (Some(local), true) = (hold.last_local, hold.process != 0) {
-                hold.state = Held::Up { local };
-            }
-        }
+        self.start_hold(toward, port, (Asked::Retry, Some(attempts)), cx);
     }
 
     pub(crate) fn follow_tunnels(&mut self, cx: &mut Context<Self>) {
-        if self.tunnel_way() != Way::Cornercase {
-            if !self.tunnels.holds.is_empty() {
-                self.end_tunnels_here(cx);
-            }
+        self.follow_own_tunnels(cx);
+        self.follow_machine_tunnels(cx);
+    }
+
+    fn follow_own_tunnels(&mut self, cx: &mut Context<Self>) {
+        let way = self.tunnel_way();
+        if way != Way::Cornercase {
+            self.end_own_holds(&way, cx);
             self.tunnels.link = None;
             return;
         }
-        let (Some(host), Some(boot)) = (cli::host(), self.session.as_ref().map(|s| s.boot.clone())) else { return };
+        let Some(boot) = self.session.as_ref().map(|s| s.boot.clone()) else { return };
         let relink = self.tunnels.link.as_ref() != Some(&boot);
         self.tunnels.link = Some(boot);
-        self.settle_tunnels(&host, cx);
-        if relink {
-            self.link_tunnels(&host, cx);
+        self.settle_tunnels(cx);
+        if let (true, Some(host)) = (relink, cli::host()) {
+            self.link_tunnels(&Toward::Server, &host, cx);
         }
     }
 
     fn settle_later(&mut self, cx: &mut Context<Self>) {
-        if let Some(host) = cli::host() {
-            self.settle_tunnels(&host, cx);
+        self.settle_tunnels(cx);
+    }
+
+    fn boot_of(&self, toward: &Toward) -> Option<String> {
+        let session = self.session.as_ref()?;
+        match toward {
+            Toward::Server => Some(session.boot.clone()),
+            Toward::Machine(name) => session.machine(name).map(|seen| seen.boot.clone()),
         }
     }
 
-    fn settle_tunnels(&mut self, host: &str, cx: &mut Context<Self>) {
-        let Some(now) = self.session.as_ref().map(|s| s.boot.clone()) else { return };
-        let linked = self.tunnels.link.is_some();
-        for (port, started) in std::mem::take(&mut self.tunnels.settling) {
-            let live = self.tunnels.holds.iter().any(|h| h.port == port && h.state != Held::Ending);
-            match settle_now(linked, live, &started, &now) {
-                None => self.tunnels.settling.push((port, started)),
+    pub(super) fn settle_tunnels(&mut self, cx: &mut Context<Self>) {
+        for Settling { toward, port, boot: started, destination } in std::mem::take(&mut self.tunnels.settling) {
+            let Some(now) = self.boot_of(&toward) else { continue };
+            let live = live(&self.tunnels.holds, &toward, port).is_some_and(|hold| hold.state != Held::Ending);
+            match settle_now(self.linked(&toward), live, &started, &now) {
+                None => self.tunnels.settling.push(Settling { toward, port, boot: started, destination }),
                 Some(Settled::Superseded) => {}
-                Some(Settled::Closed) => self.forget_in_memory(host, port, cx),
-                Some(Settled::Back) => self.hold_tunnel(port, Asked::Back, cx),
+                Some(Settled::Closed) => self.remember_tunnel(&destination, port, false, cx),
+                Some(Settled::Back) => self.hold_tunnel(&toward, port, Asked::Back, cx),
             }
         }
     }
 
-    fn link_tunnels(&mut self, host: &str, cx: &mut Context<Self>) {
-        let held: Vec<u16> = self.tunnels.holds.iter().map(|h| h.port).collect();
-        for port in bring_back(&memory::remembered(host), &held) {
-            self.hold_tunnel(port, Asked::Back, cx);
+    fn link_tunnels(&mut self, toward: &Toward, destination: &str, cx: &mut Context<Self>) {
+        let held: Vec<u16> = self.tunnels.holds.iter().filter(|h| h.toward == *toward).map(|h| h.port).collect();
+        for port in bring_back(&memory::remembered(destination), &held) {
+            self.hold_tunnel(toward, port, Asked::Back, cx);
         }
         let down: Vec<(u16, u32)> = self
             .tunnels
             .holds
             .iter()
-            .filter(|h| matches!(h.state, Held::Down { .. }))
+            .filter(|h| h.toward == *toward && matches!(h.state, Held::Down { .. }))
             .map(|h| (h.port, h.attempts))
             .collect();
         for (port, attempts) in down {
-            self.retry_hold(port, attempts, cx);
+            self.retry_hold(toward, port, attempts, cx);
         }
     }
 
-    pub(crate) fn drop_down_tunnel(&mut self, port: u16) {
-        self.tunnels.holds.retain(|hold| !(hold.port == port && matches!(hold.state, Held::Down { .. })));
+    pub(crate) fn drop_down_tunnel(&mut self, toward: &Toward, port: u16) {
+        self.tunnels
+            .holds
+            .retain(|hold| !(hold.port == port && hold.toward == *toward && matches!(hold.state, Held::Down { .. })));
     }
 
     pub(crate) fn tunnels_unlinked(&mut self) {
         self.tunnels.link = None;
+        self.tunnels.machines.clear();
     }
 
-    fn end_tunnels_here(&mut self, cx: &mut Context<Self>) {
-        cli::end_holds();
-        for hold in std::mem::take(&mut self.tunnels.holds) {
+    fn end_own_holds(&mut self, way: &Way, cx: &mut Context<Self>) {
+        let (ended, kept) = links::split_ended(std::mem::take(&mut self.tunnels.holds), way);
+        self.tunnels.holds = kept;
+        self.end_holds_now(ended, cx);
+    }
+
+    fn end_holds_now(&mut self, ended: Vec<Hold>, cx: &mut Context<Self>) {
+        if ended.is_empty() {
+            return;
+        }
+        for hold in ended {
+            if hold.process != 0 {
+                cli::end_hold(hold.process);
+            }
             if let Some(job) = hold.job {
                 self.end_job(job, cx);
             }

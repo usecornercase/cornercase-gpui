@@ -62,8 +62,14 @@ impl Root {
         let (dot, label, why) = self.connection_label();
         let store = self.store.read(cx);
         let menu_open = self.side.menu.is_some();
-        let held = store.tunnel_way() == Way::Cornercase && self.host.is_some();
-        let tip = connection_tip(why, self.host.as_deref().filter(|_| held));
+        let sections = store.machine_tunnel_sections();
+        let held = match &self.host {
+            Some(_) => store.tunnel_way() == Way::Cornercase,
+            None => !sections.is_empty(),
+        };
+        let names: Vec<String> = sections.into_iter().map(|(name, _)| name).collect();
+        let tunnelled = self.host.clone().or_else(|| held.then(|| joined(&names)));
+        let tip = connection_tip(why, tunnelled.as_deref().filter(|_| held));
         let parts = label_parts(self.host.as_deref(), if held { store.tunnel_count() } else { 0 }, &label);
         div()
             .id("conn")
@@ -128,17 +134,31 @@ struct LabelParts {
 }
 
 fn label_parts(host: Option<&str>, tunnels: usize, state: &str) -> LabelParts {
-    let count = (host.is_some() && tunnels > 0).then(|| format!("⇄{tunnels}"));
+    let count = (tunnels > 0).then(|| format!("⇄{tunnels}"));
     LabelParts { host: host.map(str::to_string), count, state: state.to_string() }
 }
 
 fn label_element(parts: LabelParts) -> Div {
     let row = div().min_w_0().flex().items_center().gap(px(4.));
-    let Some(host) = parts.host else { return row.child(ui::one_line(parts.state)) };
+    let Some(host) = parts.host else {
+        let Some(count) = parts.count else { return row.child(ui::one_line(parts.state)) };
+        return row
+            .child(div().flex_none().text_color(colours::accent()).child(count))
+            .child(div().flex_none().child("·"))
+            .child(div().flex().min_w_0().child(ui::one_line(parts.state)));
+    };
     row.child(div().flex().min_w_0().max_w(px(HOST_MAX)).child(ui::one_line(host)))
         .children(parts.count.map(|count| div().flex_none().text_color(colours::accent()).child(count)))
         .child(div().flex_none().child("·"))
         .child(div().flex().min_w_0().child(ui::one_line(parts.state)))
+}
+
+fn joined(names: &[String]) -> String {
+    match names {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
 }
 
 fn connection_tip(why: Option<String>, tunnels_to: Option<&str>) -> String {

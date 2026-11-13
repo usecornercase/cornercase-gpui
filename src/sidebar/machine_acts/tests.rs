@@ -48,16 +48,26 @@ fn closing_adds_the_closed_agents_the_snapshot_counts() {
     assert_eq!(two, "Its folder stays on disk there. Its 3 closed agents are forgotten.");
 }
 
-#[test]
-fn a_linked_machines_menu_offers_only_the_rename() {
-    let entries = there_entries(Ok(()), aim());
-    assert_eq!(labels(&entries), [(RENAME_WORKSPACE.to_string(), true)]);
+fn place() -> Option<MachinePlace> {
+    let session: crate::model::Session =
+        serde_json::from_str(crate::test_util::fixture!("machines/view.json")).expect("a view line");
+    let seen = session.machine("vps")?;
+    Some(MachinePlace::at(seen, seen.workspace(ThereId::heard(7))?, None))
 }
 
 #[test]
-fn a_machine_that_is_not_linked_says_why_and_rests_the_rename() {
-    let entries = there_entries(Err("vps unreachable".to_string()), aim());
-    assert_eq!(labels(&entries), [("vps unreachable".to_string(), false), (RENAME_WORKSPACE.to_string(), false)]);
+fn a_linked_machines_menu_offers_the_rename_and_the_ports() {
+    let entries = there_entries(Ok(()), aim(), place());
+    assert_eq!(labels(&entries), [(RENAME_WORKSPACE.to_string(), true), (PORTS.to_string(), true)]);
+}
+
+#[test]
+fn a_machine_that_is_not_linked_says_why_and_rests_the_rename_but_still_offers_the_ports() {
+    let entries = there_entries(Err("vps unreachable".to_string()), aim(), place());
+    assert_eq!(
+        labels(&entries),
+        [("vps unreachable".to_string(), false), (RENAME_WORKSPACE.to_string(), false), (PORTS.to_string(), true)]
+    );
 }
 
 fn pane_aim(collapse: bool) -> PaneAim {

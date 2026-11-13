@@ -22,6 +22,10 @@ impl ThereId {
     pub(crate) fn key(self) -> String {
         format!("there-{}", self.0)
     }
+
+    pub(crate) fn label(self) -> String {
+        self.0.to_string()
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -143,6 +147,10 @@ impl MachineSeen {
         self.projects.iter().flat_map(|project| &project.workspaces)
     }
 
+    pub(crate) fn tab_of_pane(&self, pane: ThereId) -> Option<&Tab<ThereId>> {
+        self.workspaces().find_map(|ws| ws.tabs.iter().find(|tab| tab.panes.iter().any(|p| p.id == pane)))
+    }
+
     pub(crate) fn workspace(&self, id: ThereId) -> Option<&ThereWorkspace> {
         self.workspaces().find(|ws| ws.id == id)
     }
@@ -186,6 +194,10 @@ impl Aim {
 
     pub(crate) fn close_args(&self) -> Vec<String> {
         args(&["close", "--workspace", &self.id(), "--boot", &self.boot])
+    }
+
+    pub(crate) fn ports_args(&self, all: bool) -> Vec<String> {
+        if all { args(&["ports", "--json", "--all"]) } else { args(&["ports", "--json", "--workspace", &self.id()]) }
     }
 }
 

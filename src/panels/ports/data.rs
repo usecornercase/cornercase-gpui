@@ -1,19 +1,17 @@
-use std::collections::HashSet;
-
 use serde::Deserialize;
 
 use crate::model::Session;
 use crate::panels::processes::data::command_line;
 
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
-pub(crate) struct List {
-    pub(crate) ports: Vec<Port>,
+#[serde(default, bound(deserialize = "Id: Deserialize<'de> + Default"))]
+pub(crate) struct List<Id = u64> {
+    pub(crate) ports: Vec<Port<Id>>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
-pub(crate) struct Port {
+#[serde(default, bound(deserialize = "Id: Deserialize<'de> + Default"))]
+pub(crate) struct Port<Id = u64> {
     #[serde(rename = "port")]
     pub(crate) number: u16,
     pub(crate) addresses: Vec<String>,
@@ -21,44 +19,40 @@ pub(crate) struct Port {
     pub(crate) pid: u64,
     pub(crate) program: String,
     pub(crate) args: Vec<String>,
-    pub(crate) workspace: Option<u64>,
-    pub(crate) pane: Option<u64>,
+    pub(crate) workspace: Option<Id>,
+    pub(crate) pane: Option<Id>,
     pub(crate) via: Option<String>,
     pub(crate) agent: Option<String>,
 }
 
-impl Port {
-    pub(super) fn key(&self) -> String {
-        format!("{}-{}", self.number, self.pid)
-    }
-
+impl<Id> Port<Id> {
     pub(crate) fn command_line(&self) -> String {
         command_line(&self.program, &self.args)
     }
 
-    pub(super) fn stoppable(&self) -> bool {
+    pub(crate) fn stoppable(&self) -> bool {
         self.workspace.is_some()
-    }
-
-    pub(super) fn stop_command(&self) -> Vec<String> {
-        ["ports", "stop", &self.number.to_string(), "--pid", &self.pid.to_string()].map(str::to_string).to_vec()
     }
 
     pub(crate) fn by_agent(&self) -> bool {
         self.via.as_deref() == Some("agent")
     }
 
-    pub(crate) fn place(&self, session: Option<&Session>, with_workspace: bool) -> String {
-        let pane = self.pane.map(|p| (p, session.and_then(|s| s.tab_of_pane(p)).map(|t| t.name.clone())));
-        let how = match (self.via.as_deref(), pane) {
-            (Some("agent"), Some((p, _))) => {
-                format!("agent {} · pane {p}", self.agent.as_deref().unwrap_or("?"))
-            }
+    pub(crate) fn how(&self, pane: Option<(String, Option<String>)>) -> String {
+        match (self.via.as_deref(), pane) {
+            (Some("agent"), Some((p, _))) => format!("agent {} · pane {p}", self.agent.as_deref().unwrap_or("?")),
             (_, Some((p, Some(tab)))) => format!("pane {p} · {tab}"),
             (_, Some((p, None))) => format!("pane {p}"),
             (Some("cwd"), None) => "in the worktree, no tab".into(),
             _ => "no workspace".into(),
-        };
+        }
+    }
+}
+
+impl Port {
+    pub(crate) fn place(&self, session: Option<&Session>, with_workspace: bool) -> String {
+        let pane = self.pane.map(|p| (p.to_string(), session.and_then(|s| s.tab_of_pane(p)).map(|t| t.name.clone())));
+        let how = self.how(pane);
         let workspace = self.workspace.filter(|_| with_workspace).and_then(|id| session?.workspace(id));
         match workspace {
             Some((project, ws)) => format!("{} › {} · {how}", project.name, ws.name),
@@ -75,48 +69,4 @@ pub(crate) fn list_command(all: bool, workspace: Option<u64>) -> Vec<String> {
         (false, None) => {}
     }
     command
-}
-
-pub(super) fn stop_warning(port: &Port) -> String {
-    let mut text = format!(
-        "{} (pid {}) gets SIGTERM, then SIGKILL if port {} is still held after 3 s. \
-         Only that process is signalled; the shell or agent that started it stays.",
-        port.program, port.pid, port.number
-    );
-    if port.by_agent() {
-        text.push_str(" An agent started it, or it is the agent itself.");
-    }
-    if port.pane.is_none() {
-        text.push_str(" No tab started it: it was found by its folder.");
-    }
-    text
-}
-
-pub(super) fn to_stop<'a>(ports: &'a [Port], ticked: &HashSet<String>, every_port: bool) -> Vec<&'a Port> {
-    let stoppable = ports.iter().filter(|p| p.stoppable());
-    if ticked.is_empty() && !every_port {
-        return stoppable.collect();
-    }
-    stoppable.filter(|p| ticked.contains(&p.key())).collect()
-}
-
-pub(super) fn stop_label(count: usize, ticked: bool) -> String {
-    if ticked { format!("Stop {count}…") } else { "Stop all…".to_string() }
-}
-
-pub(super) fn stop_many_warning(ports: &[&Port]) -> String {
-    let named: Vec<String> =
-        ports.iter().map(|p| format!("{} on port {} (pid {})", p.program, p.number, p.pid)).collect();
-    let mut text = format!(
-        "{} each get SIGTERM, then SIGKILL if the port is still held after 3 s. Only those processes are signalled; \
-         the shells and agents that started them stay.",
-        named.join(", ")
-    );
-    if ports.iter().any(|p| p.by_agent()) {
-        text.push_str(" An agent started some of them.");
-    }
-    if ports.iter().any(|p| p.pane.is_none()) {
-        text.push_str(" No tab started some of them: they were found by their folder.");
-    }
-    text
 }

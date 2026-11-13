@@ -6,16 +6,16 @@ use gpui::{
 };
 
 use super::PortsPanel;
-use super::data::{Port, stop_many_warning, stop_warning};
 use super::tunnel::{tunnel_button, tunnel_mark};
+use super::view::{Go, PortView, stop_many_title, stop_many_warning, stop_title, stop_warning};
+use crate::cli::Target;
 use crate::dialogs::Question;
-use crate::model::Session;
 use crate::model::link::rewrite;
-use crate::model::tunnels::{Way, older_note};
+use crate::model::tunnels::{Toward, Way, older_note};
 use crate::notify::tip;
-use crate::panels::poll::{Stop, Watch, confirm_stop, confirm_stops};
+use crate::panels::poll::{Stop, StopOrder, Watch, confirm_stop, confirm_stops};
 use crate::panels::queue::open_pane;
-use crate::store::{Busy, Store, ToastKind};
+use crate::store::{Busy, NoticeThere, Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon};
 use crate::{cli, desktop};
@@ -37,41 +37,64 @@ pub(super) fn remote_notes(host: &str, way: &Way) -> Vec<String> {
     }
 }
 
-fn stopping(port: &Port) -> String {
-    format!("stop-port:{}", port.key())
+#[derive(Clone)]
+pub(super) struct Side {
+    pub(super) toward: Toward,
+    pub(super) target: Option<Target>,
 }
 
-fn ask_stop(port: &Port, window: &mut Window, cx: &mut Context<PortsPanel>) {
-    let title = format!("Stop {} on port {}?", port.program, port.number);
-    let question = Question::new(title, stop_warning(port), "Stop", Vec::new());
-    let (busy, command) = stop_entry(port);
-    confirm_stop(question, busy, command, window, cx);
+impl Side {
+    pub(super) fn machine(&self) -> Option<&str> {
+        self.toward.machine()
+    }
+
+    pub(super) fn can_stop(&self) -> bool {
+        self.machine().is_none() || self.target.is_some()
+    }
+
+    fn order(&self, busy: Busy, command: Vec<String>) -> StopOrder {
+        match (self.machine(), &self.target) {
+            (Some(machine), Some(target)) => StopOrder::on(machine, target.clone(), busy, command),
+            _ => StopOrder::here(busy, command),
+        }
+    }
 }
 
-fn stop_entry(port: &Port) -> (Busy, Vec<String>) {
-    let busy = Busy::new(stopping(port), format!("Stopping {} on port {}…", port.program, port.number));
-    (busy, port.stop_command())
+fn stopping(view: &PortView) -> String {
+    format!("stop-port:{}", view.key)
 }
 
-pub(super) fn ask_stop_many(ports: &[&Port], window: &mut Window, cx: &mut Context<PortsPanel>) {
-    if let [one] = ports {
-        ask_stop(one, window, cx);
+fn ask_stop(view: &PortView, side: &Side, window: &mut Window, cx: &mut Context<PortsPanel>) {
+    let title = stop_title(view, side.machine());
+    let question = Question::new(title, stop_warning(view, side.machine()), "Stop", Vec::new());
+    confirm_stop(question, stop_entry(view, side), window, cx);
+}
+
+fn stop_entry(view: &PortView, side: &Side) -> StopOrder {
+    let there = side.machine().map(|machine| format!(" on {machine}")).unwrap_or_default();
+    let text = format!("Stopping {} on port {}{there}…", view.program, view.number);
+    side.order(Busy::new(stopping(view), text), view.stop_command())
+}
+
+pub(super) fn ask_stop_many(views: &[&PortView], side: &Side, window: &mut Window, cx: &mut Context<PortsPanel>) {
+    if let [one] = views {
+        ask_stop(one, side, window, cx);
         return;
     }
-    let question =
-        Question::new(format!("Stop {} programs?", ports.len()), stop_many_warning(ports), "Stop", Vec::new());
-    confirm_stops(question, ports.iter().map(|p| stop_entry(p)).collect(), window, cx);
+    let title = stop_many_title(views.len(), side.machine());
+    let question = Question::new(title, stop_many_warning(views, side.machine()), "Stop", Vec::new());
+    confirm_stops(question, views.iter().map(|v| stop_entry(v, side)).collect(), window, cx);
 }
 
-fn stop_button(port: &Port, stop: Stop<PortsPanel>) -> Option<Stateful<Div>> {
-    let id = SharedString::from(format!("stop-{}", port.key()));
+fn stop_button(view: &PortView, side: &Side, stop: Stop<PortsPanel>) -> Option<Stateful<Div>> {
+    let id = SharedString::from(format!("stop-{}", view.key));
     match stop {
         Stop::Never => None,
         Stop::Stopping => Some(ui::busy_button(id, "Stopping…", ui::Tone::Danger)),
         Stop::Ask(panel) => {
-            let stopped = port.clone();
+            let (stopped, side) = (view.clone(), side.clone());
             Some(ui::danger_button(id, "Stop").on_click(move |_: &ClickEvent, window, cx| {
-                panel.update(cx, |_, cx| ask_stop(&stopped, window, cx));
+                panel.update(cx, |_, cx| ask_stop(&stopped, &side, window, cx));
             }))
         }
     }
@@ -97,34 +120,54 @@ fn copy(url: &str, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.toast(text, ToastKind::Info, cx));
 }
 
-fn address_line(port: &Port, store: &Store) -> Div {
-    let url = port.url.clone().unwrap_or_else(|| format!("port {}", port.number));
+fn address_line(view: &PortView, side: &Side, store: &Store) -> Div {
+    let url = view.url.clone().unwrap_or_else(|| format!("port {}", view.number));
     div()
         .flex()
         .items_center()
         .gap(px(8.))
         .child(div().font_weight(FontWeight::SEMIBOLD).text_color(colours::accent()).child(url))
-        .child(ui::dim(port.addresses.join(", ")))
-        .children(tunnel_mark(port, store))
-        .when(port.by_agent(), |d| d.child(div().text_size(px(11.)).text_color(colours::waiting()).child("agent")))
+        .child(ui::dim(view.addresses.join(", ")))
+        .children(tunnel_mark(view, &side.toward, store))
+        .when(view.by_agent, |d| d.child(div().text_size(px(11.)).text_color(colours::waiting()).child("agent")))
 }
 
-fn reached_url(port: &Port, store: &Store) -> Option<String> {
-    let url = port.url.clone()?;
-    match store.tunnel_local(port.number).filter(|_| cli::host().is_some()) {
+fn reached_url(view: &PortView, side: &Side, store: &Store) -> Option<String> {
+    let url = view.url.clone()?;
+    match store.tunnel_local(&side.toward, view.number) {
         Some(local) => Some(rewrite(&url, local)),
+        None if side.machine().is_some() => None,
         None => Some(url),
     }
 }
 
-fn buttons(port: &Port, stop: Stop<PortsPanel>, store: &Store) -> Div {
-    let key = port.key();
+fn go_button(id: SharedString, go: Go) -> Stateful<Div> {
+    ui::button(id, "Go").on_click(move |_: &ClickEvent, _, cx| match &go {
+        Go::Here(pane) => open_pane(*pane, cx),
+        Go::There { machine, boot, pane } => {
+            let there = NoticeThere {
+                machine: machine.clone(),
+                boot: boot.clone(),
+                panes: vec![*pane],
+                gone: format!("That pane is no longer on {machine}"),
+            };
+            Store::get(cx).update(cx, |s, cx| {
+                s.go_there(&there, cx);
+                s.close_sheet(cx);
+            });
+        }
+    })
+}
+
+fn buttons(view: &PortView, side: &Side, stop: Stop<PortsPanel>, store: &Store) -> Div {
+    let key = view.key.clone();
     let id = |what: &str| SharedString::from(format!("{what}-{key}"));
-    let reached = reached_url(port, store);
-    let tunnelled = store.tunnel_local(port.number).is_some();
-    let (opened, copied) = (port.url.clone(), reached.clone());
-    let system = reached.filter(|_| cli::host().is_none() || tunnelled);
-    let elsewhere = system.map(|url| system_browser(id("system"), url));
+    let reached = reached_url(view, side, store);
+    let tunnelled = store.tunnel_local(&side.toward, view.number).is_some();
+    let direct = side.machine().is_none() && cli::host().is_none();
+    let opened = view.url.clone().filter(|_| side.machine().is_none());
+    let copied = reached.clone();
+    let system = reached.filter(|_| direct || tunnelled).map(|url| system_browser(id("system"), url));
     div()
         .flex()
         .items_center()
@@ -134,28 +177,25 @@ fn buttons(port: &Port, stop: Stop<PortsPanel>, store: &Store) -> Div {
                 ui::button(id("open"), "Open").on_click(move |_: &ClickEvent, _, cx| browse(url.clone(), cx))
             }),
         )
-        .children(elsewhere)
-        .children(tunnel_button(port, store))
+        .children(system)
+        .children(tunnel_button(view, &side.toward, store))
         .children(
             copied.map(|url| ui::button(id("copy"), "Copy").on_click(move |_: &ClickEvent, _, cx| copy(&url, cx))),
         )
-        .children(
-            port.pane.map(|pane| ui::button(id("go"), "Go").on_click(move |_: &ClickEvent, _, cx| open_pane(pane, cx))),
-        )
-        .children(stop_button(port, stop))
+        .children(view.go.clone().map(|go| go_button(id("go"), go)))
+        .children(stop_button(view, side, stop))
 }
 
 struct Row<'a> {
-    session: Option<&'a Session>,
     store: &'a Store,
-    all: bool,
+    side: &'a Side,
     stop: Stop<PortsPanel>,
     ticked: bool,
 }
 
-fn tick(port: &Port, row: &Row<'_>) -> AnyElement {
+fn tick(view: &PortView, row: &Row<'_>) -> AnyElement {
     let Stop::Ask(panel) = &row.stop else { return div().w(px(TICK)).flex_none().into_any_element() };
-    let (panel, key) = (panel.clone(), port.key());
+    let (panel, key) = (panel.clone(), view.key.clone());
     ui::checkbox(SharedString::from(format!("tick-{key}")), row.ticked, "")
         .w(px(TICK))
         .flex_none()
@@ -163,8 +203,8 @@ fn tick(port: &Port, row: &Row<'_>) -> AnyElement {
         .into_any_element()
 }
 
-fn port_row(port: &Port, row: Row<'_>) -> AnyElement {
-    let tick = tick(port, &row);
+fn port_row(view: &PortView, row: Row<'_>) -> AnyElement {
+    let tick = tick(view, &row);
     div()
         .flex()
         .items_center()
@@ -182,32 +222,27 @@ fn port_row(port: &Port, row: Row<'_>) -> AnyElement {
                 .flex()
                 .flex_col()
                 .gap(px(3.))
-                .child(address_line(port, row.store))
-                .child(super::command_line(port))
-                .child(ui::dim(format!("pid {} · {}", port.pid, port.place(row.session, row.all)))),
+                .child(address_line(view, row.side, row.store))
+                .child(super::command_text(view.command_line.clone()))
+                .child(ui::dim(format!("pid {} · {}", view.pid, view.place))),
         )
-        .child(buttons(port, row.stop, row.store))
+        .child(buttons(view, row.side, row.stop, row.store))
         .into_any_element()
 }
 
 pub(super) fn rows(
-    ports: &[Port],
-    (all, ticked): (bool, &HashSet<String>),
+    views: &[PortView],
+    side: &Side,
+    (_all, ticked): (bool, &HashSet<String>),
     watch: &Watch,
     cx: &mut Context<PortsPanel>,
 ) -> Vec<AnyElement> {
     let (panel, store) = (cx.entity(), Store::get(cx).read(cx));
-    let stop = |p: &Port| Stop::of(p.stoppable(), watch.stopping(&stopping(p), store), &panel);
-    let row = |p: &Port| Row {
-        session: store.session.as_ref(),
-        store,
-        all,
-        stop: stop(p),
-        ticked: ticked.contains(&p.key()),
-    };
-    ports.iter().map(|p| port_row(p, row(p))).collect()
+    let stop = |p: &PortView| Stop::of(p.stoppable && side.can_stop(), watch.stopping(&stopping(p), store), &panel);
+    let row = |p: &PortView| Row { store, side, stop: stop(p), ticked: ticked.contains(&p.key) };
+    views.iter().map(|p| port_row(p, row(p))).collect()
 }
 
-pub(super) fn busy_stopping(port: &Port, watch: &Watch, store: &Store) -> bool {
-    watch.stopping(&stopping(port), store)
+pub(super) fn busy_stopping(view: &PortView, watch: &Watch, store: &Store) -> bool {
+    watch.stopping(&stopping(view), store)
 }

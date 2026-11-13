@@ -5,9 +5,10 @@ use gpui::{AsyncApp, Context, Entity, Task, WeakEntity, Window};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+use crate::cli::Target;
 use crate::dialogs::{self, Question};
 use crate::panels::PanelKind;
-use crate::store::{self, Busy, Store, ToastKind};
+use crate::store::{self, Busy, Store, ToastKind, failed_there};
 
 pub(crate) trait Polled: Sized + 'static {
     const KIND: PanelKind;
@@ -126,38 +127,65 @@ impl<T> Stop<T> {
     }
 }
 
-pub(crate) fn confirm_stop<T: Polled>(
-    question: Question,
+#[derive(Clone)]
+pub(crate) struct StopOrder {
     busy: Busy,
     command: Vec<String>,
-    window: &mut Window,
-    cx: &mut Context<T>,
-) {
-    confirm_stops(question, vec![(busy, command)], window, cx);
+    there: Option<(String, Target)>,
+}
+
+impl StopOrder {
+    pub(crate) fn here(busy: Busy, command: Vec<String>) -> Self {
+        Self { busy, command, there: None }
+    }
+
+    pub(crate) fn on(machine: &str, target: Target, busy: Busy, command: Vec<String>) -> Self {
+        Self { busy, command, there: Some((machine.to_string(), target)) }
+    }
+}
+
+pub(crate) fn confirm_stop<T: Polled>(question: Question, order: StopOrder, window: &mut Window, cx: &mut Context<T>) {
+    confirm_stops(question, vec![order], window, cx);
 }
 
 pub(crate) fn confirm_stops<T: Polled>(
     question: Question,
-    stops: Vec<(Busy, Vec<String>)>,
+    orders: Vec<StopOrder>,
     window: &mut Window,
     cx: &mut Context<T>,
 ) {
     let this = cx.entity();
     let question = question.on_yes(move |cx| {
-        this.update(cx, |_, cx| stops.iter().for_each(|(busy, command)| stop_now(busy.clone(), command.clone(), cx)));
+        this.update(cx, |_, cx| orders.iter().for_each(|order| stop_now(order.clone(), cx)));
     });
     dialogs::confirm(question, window, cx);
 }
 
-pub(crate) fn stop_now<T: Polled>(busy: Busy, command: Vec<String>, cx: &mut Context<T>) {
-    let key = busy.key().to_string();
-    store::run_busy(cx, busy, command, move |this, r, cx| stopped(this, &key, r, cx));
+pub(crate) fn stop_now<T: Polled>(order: StopOrder, cx: &mut Context<T>) {
+    let key = order.busy.key().to_string();
+    let StopOrder { busy, command, there } = order;
+    match there {
+        None => store::run_busy(cx, busy, command, move |this, r, cx| stopped(this, &key, None, r, cx)),
+        Some((machine, target)) => {
+            let named = Some(machine);
+            store::run_on_busy(cx, busy, target, command, move |this, r, cx| stopped(this, &key, named, r, cx));
+        }
+    }
 }
 
-fn stopped<T: Polled>(this: &mut T, key: &str, result: anyhow::Result<String>, cx: &mut Context<T>) {
+fn stopped<T: Polled>(
+    this: &mut T,
+    key: &str,
+    machine: Option<String>,
+    result: anyhow::Result<String>,
+    cx: &mut Context<T>,
+) {
     match result {
         Ok(_) => this.watch().stopped.mark(key),
-        Err(e) => Store::get(cx).update(cx, |s, cx| s.toast(e.to_string(), ToastKind::Error, cx)),
+        Err(e) => {
+            let text = machine.map_or_else(|| e.to_string(), |machine| failed_there(&machine, &e));
+            Store::get(cx).update(cx, |s, cx| s.toast(text, ToastKind::Error, cx));
+        }
     }
     this.measure(cx);
 }

@@ -88,7 +88,7 @@ impl MachineRead {
     }
 }
 
-fn reach(window: &Target, list: &[Machine], seen: &MachineSeen) -> Reach {
+pub(super) fn reach(window: &Target, list: &[Machine], seen: &MachineSeen) -> Reach {
     let comes_back = matches!(seen.state, LinkState::Unreachable | LinkState::Connecting);
     match machine_target(window, list, seen) {
         Ok(target) => Reach::Up(target),

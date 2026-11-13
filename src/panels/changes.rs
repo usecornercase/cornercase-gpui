@@ -262,7 +262,9 @@ impl Render for ChangesPanel {
             .flex()
             .flex_col()
             .text_size(px(12.))
-            .children(self.machine_shown().map(|read| on_machine::strip(read, &self.hearing.retry, &self.counting)))
+            .children(
+                self.machine_shown().map(|read| on_machine::strip(read, &self.hearing.retry, &self.counting, true)),
+            )
             .child(self.render_header(session, window, cx))
             .child(self.render_body(session, cx))
             .child(self.render_footer());

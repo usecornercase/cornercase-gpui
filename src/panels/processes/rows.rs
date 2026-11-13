@@ -7,7 +7,7 @@ use super::ProcessesPanel;
 use super::columns::{ACTION, CARD_PAD, LEAD, ROW_PAD, cell, cpu_text, cpu_with_meter, figures, memory_text};
 use super::data::{Closing, Found, Own, PaneUse, Process, Sample, folded, found, heading, ordered, place, under};
 use crate::dialogs::Question;
-use crate::panels::poll::{Stop, confirm_stop, stop_now};
+use crate::panels::poll::{Stop, StopOrder, confirm_stop, stop_now};
 use crate::panels::queue::open_pane;
 use crate::sidebar::close_agent;
 use crate::store::{Busy, Store};
@@ -86,7 +86,7 @@ fn ask_stop(process: &Process, window: &mut Window, cx: &mut Context<ProcessesPa
         Vec::new(),
     );
     let busy = Busy::new(stopping(process.pid), format!("Stopping {program}…"));
-    confirm_stop(question, busy, process.stop_command(), window, cx);
+    confirm_stop(question, StopOrder::here(busy, process.stop_command()), window, cx);
 }
 
 fn closing_key(pane: u64) -> String {
@@ -97,11 +97,11 @@ fn close_pane(pane: &PaneUse, window: &mut Window, cx: &mut Context<ProcessesPan
     let busy = Busy::new(closing_key(pane.pane), format!("Closing {}…", heading(pane)));
     match pane.closing() {
         Closing::Agent => close_agent(pane.pane, window, cx),
-        Closing::Now => stop_now(busy, pane.close_command(), cx),
+        Closing::Now => stop_now(StopOrder::here(busy, pane.close_command()), cx),
         Closing::Asks(names) => {
             let message = format!("It runs {names}: closing the pane stops it.");
             let question = Question::new("Close this pane?", message, "Close pane", Vec::new());
-            confirm_stop(question, busy, pane.close_command(), window, cx);
+            confirm_stop(question, StopOrder::here(busy, pane.close_command()), window, cx);
         }
     }
 }

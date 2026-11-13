@@ -1,4 +1,6 @@
-use crate::cli;
+use crate::cli::{self, Target};
+use crate::model::machines::hide_destination;
+use crate::model::tunnels::Toward;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Asked {
@@ -17,7 +19,18 @@ pub(crate) enum Held {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct Reached {
+    pub(crate) toward: Toward,
+    pub(crate) target: Target,
+    pub(crate) boot: String,
+    pub(crate) label: String,
+    pub(crate) destination: String,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct Hold {
+    pub(crate) toward: Toward,
+    pub(crate) destination: String,
     pub(crate) port: u16,
     pub(crate) process: u64,
     pub(crate) state: Held,
@@ -30,17 +43,26 @@ pub(crate) struct Hold {
 }
 
 impl Hold {
-    pub(crate) fn opening(port: u16, process: u64, asked: Asked, boot: &str) -> Self {
+    pub(crate) fn opening(reached: &Reached, port: u16, process: u64, asked: Asked) -> Self {
         Self {
+            toward: reached.toward.clone(),
+            destination: reached.destination.clone(),
             port,
             process,
             state: Held::Opening,
             asked,
             was_up: false,
-            boot: boot.to_string(),
+            boot: reached.boot.clone(),
             attempts: 0,
             job: None,
             last_local: None,
+        }
+    }
+
+    pub(crate) fn label(&self) -> &str {
+        match &self.toward {
+            Toward::Server => &self.destination,
+            Toward::Machine(name) => name,
         }
     }
 
@@ -50,6 +72,11 @@ impl Hold {
             _ => None,
         }
     }
+}
+
+pub(crate) fn live<'a>(holds: &'a [Hold], toward: &Toward, port: u16) -> Option<&'a Hold> {
+    let ours = || holds.iter().filter(move |hold| hold.port == port && hold.toward == *toward);
+    ours().find(|hold| hold.state != Held::Ending).or_else(|| ours().next())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,7 +98,22 @@ pub(crate) fn fate(hold: &Hold, code: Option<i32>, said: &str) -> Fate {
     if hold.was_up {
         return Fate::Retry(if line.is_empty() { status_words(code) } else { capitalised(&line) });
     }
-    Fate::Failed(if line.is_empty() { window_failure(hold.port, &status_words(code)) } else { capitalised(&line) })
+    if line.is_empty() {
+        return Fate::Failed(window_failure(&hold.toward, hold.port, &status_words(code)));
+    }
+    Fate::Failed(match &hold.toward {
+        Toward::Server => capitalised(&line),
+        Toward::Machine(name) => {
+            window_failure(&hold.toward, hold.port, &machine_reason(&line, name, &hold.destination))
+        }
+    })
+}
+
+fn machine_reason(line: &str, name: &str, destination: &str) -> String {
+    let hidden = hide_destination(line, name, destination);
+    let lead = ["could not tunnel port ", "Could not tunnel port "];
+    let rest = lead.iter().find_map(|lead| hidden.strip_prefix(lead)).and_then(|rest| rest.split_once(": "));
+    rest.map_or_else(|| hidden.clone(), |(_, why)| why.to_string())
 }
 
 fn status_words(code: Option<i32>) -> String {
@@ -86,8 +128,11 @@ fn capitalised(text: &str) -> String {
     chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
 
-pub(crate) fn window_failure(port: u16, why: &str) -> String {
-    format!("Could not tunnel port {port}: {why}")
+pub(crate) fn window_failure(toward: &Toward, port: u16, why: &str) -> String {
+    match toward {
+        Toward::Server => format!("Could not tunnel port {port}: {why}"),
+        Toward::Machine(name) => format!("Could not tunnel port {port} on {name}: {why}"),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +173,20 @@ pub(crate) fn up_toast(asked: Asked, port: u16, local: u16, host: &str) -> Optio
 fn tunnelled(port: u16, local: u16, host: &str, moved: bool) -> String {
     let taken = if moved { format!(" ({port} is taken on this {})", crate::desktop::here()) } else { String::new() };
     format!("Port {port} on {host} is tunnelled to localhost:{local}{taken}")
+}
+
+#[cfg(test)]
+pub(crate) fn test_hold(toward: Toward, port: u16, state: Held) -> Hold {
+    let destination = match &toward {
+        Toward::Server => "devbox".to_string(),
+        Toward::Machine(_) => "vps.invalid".to_string(),
+    };
+    let label = destination.clone();
+    let reached =
+        Reached { toward, target: crate::test_util::vps_target(), boot: "boot".to_string(), label, destination };
+    let mut hold = Hold::opening(&reached, port, 1, Asked::Click);
+    hold.state = state;
+    hold
 }
 
 #[cfg(test)]
