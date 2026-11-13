@@ -208,19 +208,22 @@ pub(crate) fn tabs_lead(os: Os) -> f32 {
     }
 }
 
-pub(crate) fn corner(os: Os) -> Option<Div> {
-    match os {
-        Os::Mac => None,
-        Os::Linux | Os::Windows => Some(
-            div()
-                .w(px(rail::COLUMN))
-                .h(px(TITLEBAR_HEIGHT))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(ui::brand::mark(MARK, false)),
-        ),
+pub(crate) fn corner(os: Os, window_frame: Frame) -> Option<Div> {
+    if os == Os::Mac {
+        return None;
     }
+    let (pull, lead) = mark_lead(os);
+    let strip = div()
+        .absolute()
+        .top_0()
+        .left(px(pull))
+        .w(px(rail::COLUMN))
+        .h(px(TITLEBAR_HEIGHT))
+        .flex()
+        .items_center()
+        .pl(px(lead))
+        .child(ui::brand::mark(MARK, false));
+    Some(frame::title_row(strip, window_frame))
 }
 
 fn title_strip(os: Os) -> Div {

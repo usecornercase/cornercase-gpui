@@ -13,7 +13,9 @@ pub(crate) enum Separator {
 
 pub(crate) type Piece = (Option<Separator>, AnyElement);
 
-const DOT: f32 = 3.;
+const DOT: f32 = 2.;
+const DOT_ROOM: f32 = 3.;
+const DOT_DROP: f32 = 1.5;
 const LINE_WIDTH: f32 = 1.;
 const LINE_HEIGHT: f32 = 18.;
 const LINE_ROOM: f32 = 5.;
@@ -28,8 +30,15 @@ impl Separator {
 
     fn room(self) -> f32 {
         match self {
-            Self::Dot => DOT,
+            Self::Dot => DOT_ROOM,
             Self::Line => LINE_ROOM,
+        }
+    }
+
+    fn drop(self) -> f32 {
+        match self {
+            Self::Dot => DOT_DROP,
+            Self::Line => 0.,
         }
     }
 
@@ -60,7 +69,7 @@ fn marks(separators: &[Option<Separator>], bounds: &[Bounds<Pixels>]) -> Vec<(Se
             continue;
         }
         let x = f32::from(before.right() + after.left()) / 2. - separator.width() / 2.;
-        let y = f32::from(before.center().y + after.center().y) / 2. - separator.height() / 2.;
+        let y = f32::from(before.center().y + after.center().y) / 2. - separator.height() / 2. + separator.drop();
         let origin = point(px(x.round()), px(y.round()));
         marks.push((*separator, Bounds::new(origin, size(px(separator.width()), px(separator.height())))));
     }

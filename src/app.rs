@@ -35,7 +35,7 @@ use crate::render::Metrics;
 use crate::render::layout::{Along, Layout};
 use crate::render::moving::Moves;
 use crate::self_update;
-use crate::sidebar::{self, Arrangement, Fold, SideState, rail};
+use crate::sidebar::{self, Arrangement, Fold, SideState};
 use crate::store::{Store, ToastKind};
 use crate::terminal::Pointer;
 use crate::theme::{self, colours, radius};
@@ -632,7 +632,7 @@ impl Root {
     fn render_leaving_dock(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
         let (serial, kind) = self.leaving_dock.gone().map(|(serial, kind)| (serial, *kind))?;
         let view = self.panel(kind, window, cx);
-        let width = Some(self.arrangement(Some(kind), window).dock);
+        let width = Some(self.fit(Some(kind), window).dock);
         let card = dock_card(kind, view, &self.store, width).track_focus(&self.dock_focus);
         Some(
             div()
@@ -704,42 +704,42 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let arranged = self.arrangement(self.store.read(cx).shown_dock(), window);
+        let shown = self.store.read(cx).shown_dock();
+        let fitted = self.fit(shown, window);
         let main = div().flex_1().min_w_0().h_full().relative().flex().flex_row();
-        if !arranged.sidebar {
-            let corner = sidebar::corner(Os::CURRENT)
-                .map(|mark| frame::title_row(mark.absolute().top_0().left(px(-rail::COLUMN)), window_frame));
-            return main.children(corner).child(self.render_workspace_area(window_frame, arranged, window, cx));
+        if !fitted.sidebar {
+            let corner = sidebar::corner(Os::CURRENT, window_frame);
+            return main.children(corner).child(self.render_workspace_area(window_frame, fitted, window, cx));
         }
         let at = (Edge::Right, self.sidebar_extent());
         main.on_drag_move(split::follow::<_, SidebarGrip>(
             Edge::Right,
-            TERMINAL_KEEP + arranged.dock,
+            widths::sidebar_keep(shown.map(|kind| self.dock_split(kind).min())),
             sidebar_width,
             cx,
         ))
         .child(self.render_sidebar(window_frame))
-        .child(self.render_workspace_area(window_frame, arranged, window, cx))
+        .child(self.render_workspace_area(window_frame, fitted, window, cx))
         .child(split::handle("sidebar-split", SidebarGrip, at, sidebar_width, cx))
     }
 
     fn render_workspace_area(
         &mut self,
         window_frame: frame::Frame,
-        arranged: widths::Arranged,
+        fitted: widths::Fit,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let lead = if arranged.sidebar { 0. } else { sidebar::tabs_lead(Os::CURRENT) };
+        let lead = if fitted.sidebar { 0. } else { sidebar::tabs_lead(Os::CURRENT) };
         div()
             .flex_1()
             .h_full()
             .flex()
             .flex_col()
-            .when(arranged.sidebar, |d| d.pl(px(GAP)))
+            .when(fitted.sidebar, |d| d.pl(px(GAP)))
             .overflow_hidden()
             .child(self.render_tabs(window_frame, lead, cx))
-            .child(self.render_body(arranged.dock, window, cx))
+            .child(self.render_body(fitted.dock, window, cx))
             .child(self.status_slot())
     }
 
@@ -823,10 +823,6 @@ struct Overlays {
 
 fn sheet_gave_way(before: Option<PanelKind>, now: Option<PanelKind>) -> bool {
     before.is_some() && now.is_some() && before != now
-}
-
-fn wide_default(window_width: f32) -> f32 {
-    (window_width / 2.).clamp(DOCK.size(), WIDE_DOCK.size())
 }
 
 fn bell_flash() -> Div {

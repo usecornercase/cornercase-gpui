@@ -18,14 +18,14 @@ fn a_separator_shows_between_two_parts_on_one_line() {
     let bounds = [at(0., 0., 50., 16.), at(65., 0., 40., 16.), at(120., 0., 30., 16.)];
     let found = marks(&[None, DOT, DOT], &bounds);
     assert_eq!(found.len(), 2);
-    assert_eq!(origins(&found), vec![(56., 7.), (111., 7.)]);
+    assert_eq!(origins(&found), vec![(57., 9.), (112., 9.)]);
 }
 
 #[test]
 fn a_wrap_drops_the_separator_at_both_ends_of_the_lines() {
     let bounds = [at(0., 0., 50., 16.), at(65., 0., 40., 16.), at(0., 24., 30., 16.)];
     let found = marks(&[None, DOT, DOT], &bounds);
-    assert_eq!(origins(&found), vec![(56., 7.)]);
+    assert_eq!(origins(&found), vec![(57., 9.)]);
 }
 
 #[test]
@@ -84,4 +84,19 @@ fn a_separator_is_drawn_on_whole_points() {
     for (x, y) in origins(&found) {
         assert!((x - x.round()).abs() < f32::EPSILON && (y - y.round()).abs() < f32::EPSILON);
     }
+}
+
+#[test]
+fn a_part_that_starts_left_of_the_one_before_is_not_on_its_line() {
+    let bounds = [at(0., 0., 50., 40.), at(0., 30., 30., 16.)];
+    assert_eq!(marks(&[None, DOT], &bounds).len(), 0);
+}
+
+#[test]
+fn a_dot_is_as_small_as_a_typed_one_and_sits_below_the_lines_middle() {
+    let bounds = [at(0., 0., 50., 16.), at(65., 0., 40., 16.)];
+    let found = marks(&[None, DOT], &bounds);
+    let (_, dot) = found[0];
+    assert!((f32::from(dot.size.width) - 2.).abs() < f32::EPSILON);
+    assert!(f32::from(dot.center().y) > 8.);
 }
