@@ -240,6 +240,7 @@ impl Root {
         })
         .detach();
         cx.observe_in(&store, window, |this, store, window, cx| this.store_changed(&store, window, cx)).detach();
+        cx.on_focus_lost(window, Self::focus_lost).detach();
         Self::follow_activation(window, cx);
         let parts = Parts::new(&cx.weak_entity(), cx);
         let mut root = Self::fresh((focus, cx.focus_handle()), (store, notifier, tx, queue), parts);

@@ -6,6 +6,7 @@ mod cli;
 mod context_menu;
 mod desktop;
 mod dialogs;
+mod escape;
 mod keymap;
 mod keys;
 mod model;

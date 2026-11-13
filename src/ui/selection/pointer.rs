@@ -235,6 +235,10 @@ impl<S: Copy + Ord> Selecting<S> {
         &self.laid
     }
 
+    pub(crate) fn shows(&self) -> bool {
+        self.selection.is_some_and(|selection| !selection.is_empty())
+    }
+
     pub(crate) fn clear(&mut self) -> bool {
         self.selection.take().is_some_and(|selection| !selection.is_empty())
     }

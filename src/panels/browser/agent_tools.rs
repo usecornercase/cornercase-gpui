@@ -60,6 +60,12 @@ impl Browser {
         }
     }
 
+    pub(super) fn drop_chooser(&mut self) {
+        if self.agents.menu == Some(Menu::Chooser) {
+            self.agents.menu = None;
+        }
+    }
+
     fn close_menu(&mut self, cx: &mut Context<Self>) {
         if let Some(menu) = self.agents.menu.take() {
             self.agents.closed = Some((menu, Instant::now()));

@@ -5,19 +5,23 @@ use crate::panels::PanelKind;
 use crate::panels::changes::ChangesPanel;
 use crate::panels::files::FilesPanel;
 use crate::panels::queue::QueuePanel;
-use crate::store::Store;
+use crate::panels::todo::TodoPanel;
 use crate::ui::selection::Step;
 
 impl Root {
-    fn files_panel(&self) -> Option<Entity<FilesPanel>> {
+    pub(super) fn files_panel(&self) -> Option<Entity<FilesPanel>> {
         self.panels.get(&PanelKind::Files)?.clone().downcast::<FilesPanel>().ok()
+    }
+
+    pub(super) fn todo_panel(&self) -> Option<Entity<TodoPanel>> {
+        self.panels.get(&PanelKind::Todo)?.clone().downcast::<TodoPanel>().ok()
     }
 
     fn queue_panel(&self) -> Option<Entity<QueuePanel>> {
         self.panels.get(&PanelKind::Queue)?.clone().downcast::<QueuePanel>().ok()
     }
 
-    fn changes_panel(&self) -> Option<Entity<ChangesPanel>> {
+    pub(super) fn changes_panel(&self) -> Option<Entity<ChangesPanel>> {
         self.panels.get(&PanelKind::Changes)?.clone().downcast::<ChangesPanel>().ok()
     }
 
@@ -34,21 +38,6 @@ impl Root {
         if let Some(files) = self.files_panel() {
             files.update(cx, |files, cx| files.open_find(window, cx));
         }
-    }
-
-    pub(super) fn dock_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        let answered = match self.focused_dock(window, cx) {
-            Some(PanelKind::Files) => self.files_panel().is_some_and(|files| files.update(cx, FilesPanel::escape)),
-            Some(PanelKind::Changes) => {
-                self.changes_panel().is_some_and(|changes| changes.update(cx, ChangesPanel::escape))
-            }
-            _ => false,
-        };
-        let answered = answered || self.store.update(cx, Store::leave_file_full_screen);
-        if answered {
-            window.focus(&self.dock_focus);
-        }
-        answered
     }
 
     pub(super) fn dock_select(&mut self, ks: &Keystroke, window: &Window, cx: &mut Context<Self>) -> bool {

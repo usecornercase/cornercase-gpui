@@ -5,6 +5,7 @@ use gpui::{
     px,
 };
 
+use crate::escape::{self, Top};
 use crate::store::{Store, ToastKind};
 use crate::ui::selection::{self, Caret, Edge, Fit, Off, Selecting, Selection, Selects, ShownLines, Step};
 
@@ -132,12 +133,15 @@ impl Selects for ChangesPanel {
 }
 
 impl ChangesPanel {
-    pub(crate) fn escape(&mut self, cx: &mut Context<Self>) -> bool {
-        let gone = self.open.selecting.clear();
-        if gone {
+    pub(crate) fn tops(&self) -> Vec<Top> {
+        escape::tops_of(&[(Top::Selection, self.open.selecting.shows())])
+    }
+
+    pub(crate) fn close_top(&mut self, top: Top, cx: &mut Context<Self>) {
+        if top == Top::Selection {
+            self.open.selecting.clear();
             cx.notify();
         }
-        gone
     }
 
     pub(crate) fn copy_selection(&mut self, cx: &mut Context<Self>) -> bool {

@@ -29,6 +29,7 @@ pub(crate) use older::{behind_lead, older_lead};
 
 mod browser;
 mod dock_text;
+mod escape;
 mod input;
 mod links;
 mod machine_card;
@@ -142,23 +143,10 @@ impl Root {
         }
     }
 
-    fn escape(&mut self, terminal: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
-        if self.cancel_pane_drag(cx)
-            || self.store.update(cx, Store::close_overlay)
-            || self.browser_cancel_pick(cx)
-            || self.browser_escape(window, cx)
-            || self.dock_escape(window, cx)
-        {
-            return true;
+    pub(crate) fn focus_lost(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.overlay_open(cx) && self.store.read(cx).shown_dock().is_some() {
+            window.focus(&self.dock_focus);
         }
-        if terminal {
-            return false;
-        }
-        if self.dock_focused(window, cx) {
-            self.store.update(cx, Store::close_dock);
-        }
-        window.focus(&self.focus);
-        true
     }
 
     fn dock_focused(&self, window: &Window, cx: &App) -> bool {
