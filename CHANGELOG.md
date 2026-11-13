@@ -7,6 +7,7 @@ Every pull request that changes the app adds a section here for its new version.
 - A script or an agent on another machine can now open a tunnel to this computer with `cornercase tunnel open PORT`, on the window's `--remote` server and on a linked machine, with cornercase 0.13.57 or newer on both. The window holds it as if you had pressed Tunnel: a notice says a program on that machine asked and offers Open, the port is in the status bar's tunnels menu and in Ports, and it comes back next time.
 - `cornercase tunnel close PORT` and `tunnel forget PORT` run there close the tunnel here too, without a notice.
 - When the window cannot hold a port (it is closing that tunnel, the machine is not linked, or 32 tunnels already go there), the program is told why at once instead of waiting 45 seconds.
+- A tunnel that fails to open is no longer tried again, with the same error, each time the window or the machine connects: press Tunnel again once the cause is fixed.
 - With an older cornercase on either side tunnels work as before, and the tunnels menu says which computer needs 0.13.57 for a program to ask.
 
 ## 0.1.76

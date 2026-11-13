@@ -41,6 +41,7 @@ pub(crate) struct Hold {
     pub(crate) attempts: u32,
     pub(crate) job: Option<u64>,
     pub(crate) last_local: Option<u16>,
+    pub(crate) added: bool,
 }
 
 impl Hold {
@@ -57,6 +58,7 @@ impl Hold {
             attempts: 0,
             job: None,
             last_local: None,
+            added: false,
         }
     }
 
@@ -177,6 +179,10 @@ pub(crate) fn bring_back(remembered: &[u16], held: &[u16]) -> Vec<u16> {
 
 pub(crate) fn remembers(asked: Asked) -> bool {
     matches!(asked, Asked::Click | Asked::Open | Asked::Program)
+}
+
+pub(crate) fn forgets_failed(fate: &Fate, added: bool) -> bool {
+    matches!(fate, Fate::Failed(_)) && added
 }
 
 pub(crate) fn up_toast(asked: Asked, port: u16, local: u16, host: &str) -> Option<(String, bool)> {

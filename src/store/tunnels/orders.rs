@@ -1,10 +1,12 @@
+use std::time::Instant;
+
 use gpui::Context;
 
 use super::held::{Asked, Held};
 use super::links::hold_stays;
 use super::taker::{
-    Answer, Cause, Next, Taker, answer, keeps, may_take, next, orders_stay, refusal_words, split_closed, tells,
-    unheard, untold, wait_after,
+    Answer, Cause, Next, Taker, after_end, answer, keeps, may_take, next, orders_stay, refusal_words, split_closed,
+    tells, unheard, untold, wait_after,
 };
 use super::{Store, ToastKind, later, rows};
 use crate::cli;
@@ -102,7 +104,7 @@ impl Store {
         let attempts = self.tunnels.takers.get(toward).map_or(0, |taker| taker.attempts);
         let told = self.tunnels.takers.get(toward).is_some_and(|taker| taker.told);
         let (destination, label, target) = (reached.destination, reached.label, reached.target);
-        let taker = Taker { destination, label, target, stream, attempts, told, generation };
+        let taker = Taker { destination, label, target, stream, attempts, up_since: None, told, generation };
         self.tunnels.takers.insert(toward.clone(), taker);
     }
 
@@ -113,7 +115,7 @@ impl Store {
     fn orders_heard(&mut self, toward: &Toward, generation: u64, line: &str, cx: &mut Context<Self>) {
         let Some(taker) = self.current_taker(toward, generation) else { return };
         match orders_line(line) {
-            Some(OrdersLine::Taking(_)) => (taker.attempts, taker.told) = (0, false),
+            Some(OrdersLine::Taking(_)) => taker.up_since = Some(Instant::now()),
             Some(OrdersLine::Order(Order::Open(port))) => self.ordered_open(toward, port, cx),
             Some(OrdersLine::Order(order @ (Order::Close(port) | Order::Forget(port)))) => {
                 self.ordered_closed(toward, (order, port), cx);
@@ -125,7 +127,8 @@ impl Store {
     fn orders_ended(&mut self, toward: &Toward, generation: u64, said: &str, cx: &mut Context<Self>) {
         let Some(taker) = self.current_taker(toward, generation) else { return };
         taker.stream = None;
-        taker.attempts += 1;
+        (taker.attempts, taker.told) =
+            after_end(taker.attempts, taker.told, taker.up_since.take().map(|at| at.elapsed()));
         let wait = wait_after(taker.attempts);
         let tell = tells(taker.attempts, taker.told).then(|| unheard(toward, (&taker.label, &taker.destination), said));
         taker.told |= tell.is_some();
@@ -186,8 +189,8 @@ impl Store {
 
     fn ordered_closed(&mut self, toward: &Toward, (order, port): (Order, u16), cx: &mut Context<Self>) {
         let Some(destination) = self.tunnels.takers.get(toward).map(|taker| taker.destination.clone()) else { return };
-        self.tunnels.settling.retain(|settling| !(settling.toward == *toward && settling.port == port));
-        let (ended, kept) = split_closed(std::mem::take(&mut self.tunnels.holds), toward, port);
+        self.tunnels.settling.retain(|s| !(s.destination == destination && s.port == port));
+        let (ended, kept) = split_closed(std::mem::take(&mut self.tunnels.holds), &destination, port);
         self.tunnels.holds = kept;
         self.end_holds_now(ended, cx);
         self.remember_tunnel(&destination, port, keeps(order), cx);

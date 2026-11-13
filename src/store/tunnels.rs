@@ -23,7 +23,10 @@ pub(crate) use held::{Asked, Held};
 use rows::Mark;
 pub(crate) use rows::{Control, TunnelRow, Whose, heading, none_note, others_note};
 
-use held::{Fate, Hold, Reached, Settled, bring_back, fate, live, remembers, settle_now, up_toast, window_failure};
+use held::{
+    Fate, Hold, Reached, Settled, bring_back, fate, forgets_failed, live, remembers, settle_now, up_toast,
+    window_failure,
+};
 
 const SETTLE_AFTER: Duration = Duration::from_secs(3);
 
@@ -184,6 +187,7 @@ impl Store {
             hold.attempts = attempts;
             hold.was_up = true;
         }
+        hold.added = remembers(asked) && !memory::remembered(&reached.destination).contains(&port);
         self.tunnels.holds.push(hold);
         if remembers(asked) {
             self.remember_tunnel(&reached.destination, port, true, cx);
@@ -270,7 +274,11 @@ impl Store {
         if let Some(job) = hold.job {
             self.end_job(job, cx);
         }
-        match fate(&hold, ended.code, &ended.said) {
+        let fate = fate(&hold, ended.code, &ended.said);
+        if forgets_failed(&fate, hold.added) {
+            self.remember_tunnel(&hold.destination, hold.port, false, cx);
+        }
+        match fate {
             Fate::Gone => drop(self.tunnels.holds.remove(at)),
             Fate::Failed(why) => {
                 self.tunnels.holds.remove(at);

@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use super::{
-    Answer, Cause, MOST_ASKED, Next, Phase, answer, keeps, may_take, next, orders_stay, refusal_words, split_closed,
-    tells, unheard, untold, wait_after,
+    Answer, Cause, MOST_ASKED, Next, Phase, after_end, answer, keeps, may_take, next, orders_stay, refusal_words,
+    split_closed, tells, unheard, untold, wait_after,
 };
 use crate::model::tunnels::{Gate, Older, Order, Toward};
 use crate::store::tunnels::held::{Held, test_hold};
@@ -123,20 +123,31 @@ fn asks_stop_at_32_tunnels_to_one_place() {
 #[test]
 fn a_close_order_ends_that_ports_holds_but_one_being_closed_here() {
     let vps = || Toward::Machine("vps".to_string());
+    let mut lab = test_hold(Toward::Machine("lab".to_string()), 8765, Held::Up { local: 1 });
+    lab.destination = "lab.invalid".to_string();
     let holds = vec![
         test_hold(vps(), 8765, Held::Opening),
         test_hold(vps(), 8765, Held::Up { local: 1 }),
         test_hold(vps(), 8765, Held::Down { why: String::new() }),
         test_hold(vps(), 8765, Held::Ending),
         test_hold(Toward::Server, 8765, Held::Up { local: 1 }),
-        test_hold(Toward::Machine("lab".to_string()), 8765, Held::Up { local: 1 }),
+        lab,
         test_hold(vps(), 9000, Held::Up { local: 1 }),
     ];
-    let (ended, kept) = split_closed(holds, &vps(), 8765);
+    let (ended, kept) = split_closed(holds, "vps.invalid", 8765);
     assert_eq!(ended.len(), 3);
     let states: Vec<&Held> = kept.iter().map(|hold| &hold.state).collect();
     assert_eq!(kept.len(), 4);
     assert!(states.contains(&&Held::Ending));
+}
+
+#[test]
+fn a_close_order_ends_the_holds_of_every_name_for_that_destination() {
+    let alias = test_hold(Toward::Machine("vps-alias".to_string()), 8765, Held::Up { local: 2 });
+    let own = test_hold(Toward::Server, 8765, Held::Up { local: 3 });
+    let (ended, kept) = split_closed(vec![alias, own], "vps.invalid", 8765);
+    assert_eq!((ended.len(), kept.len()), (1, 1));
+    assert_eq!(kept[0].toward, Toward::Server);
 }
 
 #[test]
@@ -176,4 +187,21 @@ fn the_words_for_a_taker_that_cannot_attach_hide_a_machines_address() {
         untold(&Toward::Server, ("devbox", "devbox"), 8765, "x"),
         "Could not tell devbox that port 8765 is not tunnelled here: x"
     );
+}
+
+#[test]
+fn a_stream_that_greets_and_ends_at_once_still_backs_off_and_is_told() {
+    let short = Some(Duration::from_secs(1));
+    let (mut attempts, mut told) = (0, false);
+    for _ in 0..5 {
+        (attempts, told) = after_end(attempts, told, short);
+    }
+    assert_eq!(attempts, 5);
+    assert!(tells(attempts, told));
+}
+
+#[test]
+fn a_stable_stream_starts_the_count_again() {
+    assert_eq!(after_end(7, true, Some(Duration::from_secs(300))), (1, false));
+    assert_eq!(after_end(7, true, None), (8, true));
 }

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::held::{Held, Hold};
 use crate::cli::{self, Stream, Target};
@@ -11,6 +11,7 @@ pub(super) struct Taker {
     pub(super) target: Target,
     pub(super) stream: Option<Stream>,
     pub(super) attempts: u32,
+    pub(super) up_since: Option<Instant>,
     pub(super) told: bool,
     pub(super) generation: u64,
 }
@@ -103,8 +104,16 @@ pub(crate) fn answer(held: Option<&Held>, live: usize, cannot: Option<String>, (
     Answer::Hold
 }
 
-pub(crate) fn split_closed(holds: Vec<Hold>, toward: &Toward, port: u16) -> (Vec<Hold>, Vec<Hold>) {
-    holds.into_iter().partition(|hold| hold.toward == *toward && hold.port == port && hold.state != Held::Ending)
+pub(crate) fn split_closed(holds: Vec<Hold>, destination: &str, port: u16) -> (Vec<Hold>, Vec<Hold>) {
+    holds
+        .into_iter()
+        .partition(|hold| hold.destination == destination && hold.port == port && hold.state != Held::Ending)
+}
+
+const STABLE_AFTER: Duration = Duration::from_secs(30);
+
+pub(crate) fn after_end(attempts: u32, told: bool, up: Option<Duration>) -> (u32, bool) {
+    if up.is_some_and(|up| up >= STABLE_AFTER) { (1, false) } else { (attempts + 1, told) }
 }
 
 pub(crate) fn untold(toward: &Toward, (label, destination): (&str, &str), port: u16, reason: &str) -> String {

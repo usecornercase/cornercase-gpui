@@ -1,6 +1,6 @@
 use super::{
-    Asked, Fate, Held, Hold, Settled, bring_back, fate, forgets_after_close, live, remembers, settle_now, settled,
-    test_hold, up_toast, window_failure,
+    Asked, Fate, Held, Hold, Settled, bring_back, fate, forgets_after_close, forgets_failed, live, remembers,
+    settle_now, settled, test_hold, up_toast, window_failure,
 };
 use crate::model::tunnels::Toward;
 
@@ -174,4 +174,13 @@ fn a_programs_open_says_who_asked_and_where_the_port_is() {
 fn an_asked_open_is_remembered_as_a_click_is() {
     assert!([Asked::Click, Asked::Open, Asked::Program].into_iter().all(remembers));
     assert!(![Asked::Back, Asked::Retry].into_iter().any(remembers));
+}
+
+#[test]
+fn a_failed_hold_forgets_only_the_port_it_added() {
+    let failed = Fate::Failed("no".to_string());
+    assert!(forgets_failed(&failed, true));
+    assert!(!forgets_failed(&failed, false));
+    assert!(!forgets_failed(&Fate::Gone, true));
+    assert!(!forgets_failed(&Fate::Retry("x".to_string()), true));
 }
