@@ -18,8 +18,7 @@ pub(super) fn covered_by(selection: Option<Selection<usize>>) -> Option<(usize, 
 pub(super) fn selected_text(text: &Text, selection: Selection<usize>) -> String {
     let (first, last) = selection.ends();
     let lines = (first..=last).filter_map(|ix| text.lines.get(ix).map(|line| (ix, line.as_str())));
-    let parts = selection.parts(lines);
-    parts.into_iter().map(|(ix, range)| text.own(ix, range)).collect::<Vec<_>>().join("\n")
+    selection.text(lines, |ix, range| text.own(ix, range))
 }
 
 impl Viewer {

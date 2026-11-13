@@ -8,10 +8,7 @@ use crate::ui::selection::{Edge, Selecting, Selection, Selects};
 pub(super) fn selected_text(lines: &[String], selection: Selection<usize>) -> String {
     let (first, last) = selection.ends();
     let shown = (first..=last).filter_map(|ix| lines.get(ix).map(|line| (ix, line.as_str())));
-    let parts = selection.parts(shown);
-    let ends_on_a_break = parts.last().is_some_and(|(ix, _)| *ix < last);
-    let text = parts.into_iter().filter_map(|(ix, range)| lines.get(ix)?.get(range)).collect::<Vec<_>>().join("\n");
-    if ends_on_a_break { text + "\n" } else { text }
+    selection.text(shown, |ix, range| lines.get(ix).and_then(|line| line.get(range)).unwrap_or_default())
 }
 
 pub(super) fn picked(selection: Selection<usize>) -> String {

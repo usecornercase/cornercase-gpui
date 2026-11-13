@@ -53,10 +53,8 @@ impl DiffData {
     }
 
     pub(super) fn selected_text(&self, selection: Selection<Spot>) -> String {
-        let parts = selection.parts(self.shown_lines().map(|(spot, line)| (spot, line.text)));
-        let cut =
-            |(spot, range): (Spot, Range<usize>)| self.line_at(spot).map(|line| line.own(range)).unwrap_or_default();
-        parts.into_iter().map(cut).collect::<Vec<_>>().join("\n")
+        let shown = self.shown_lines().map(|(spot, line)| (spot, line.text));
+        selection.text(shown, |spot, range| self.line_at(spot).map(|line| line.own(range)).unwrap_or_default())
     }
 
     pub(super) fn selected_lines(&self, selection: Selection<Spot>) -> Option<(u32, u32)> {
