@@ -316,3 +316,9 @@ fn a_start_answer_reads_free_builds() {
     let plain: Started = serde_json::from_str(STARTED).expect("started");
     assert!(!plain.free_builds);
 }
+
+#[test]
+fn an_age_below_zero_reads_as_now() {
+    assert_eq!(age(-5), "now");
+    assert_eq!(age(0), "now");
+}
