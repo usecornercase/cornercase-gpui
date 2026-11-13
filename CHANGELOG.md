@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.1.70
 
-- **Long names and labels stay in their place in the tab bar, a flow's page, the Plugins sheet and Settings' import.** A tab with a long name, such as a routine's run named after its whole prompt, ends it in "…" so the tab's status, its details and its ✕ stay in view; rest the pointer on the name to read it whole. On a flow's page, a role's long arguments or variable names end in "…" at the card's edge, and a long loop label ends in "…" in the plan, in a message and in a run's progress, with its count still after it; both read whole in a tooltip. The Plugins sheet ends a long plugin name or id in "…" and keeps the switch and the on or off chip in view. In a narrow window, Settings' import shows each change's values under its name instead of breaking their words.
+- **Long names and labels stay in their place in the tab bar, a flow's page, the Plugins sheet and Settings' import.** A tab with a long name, such as a routine's run named after its whole prompt, ends it in "…" so the tab stays short; rest the pointer on the name to read it whole. On a flow's page, a role's long arguments or variable names end in "…" at the card's edge, and a long loop label ends in "…" in the plan, in a message and in a run's progress, with its count still after it; both read whole in a tooltip. The Plugins sheet ends a long plugin name or id in "…" and keeps the switch and the on or off chip in view. In a narrow window, Settings' import shows each change's values under its name instead of breaking their words.
 
 ## 0.1.69
 
