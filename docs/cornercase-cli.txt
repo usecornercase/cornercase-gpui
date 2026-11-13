@@ -1,4 +1,4 @@
-cornercase 0.13.62: the help of every command and subcommand, in the order of `cornercase --help`.
+cornercase 0.13.64: the help of every command and subcommand, in the order of `cornercase --help`.
 Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
 
 ================================================================ cornercase status
@@ -98,6 +98,7 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 PATH is a folder, or a VS Code .code-workspace file, which is read on the server's machine and
@@ -201,6 +202,7 @@ Options:
       --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 The workspace gets one tab. A worktree goes in the worktrees folder from settings, on a new
@@ -216,6 +218,8 @@ With --machine NAME the workspace is made on that machine of `cornercase machine
 --project is that machine's id, as `status --json` lists it under machines, and so is the id printed.
 --focus shows it in this window once the machine lists it. It needs a server that knows the
 `machine-start` feature.
+--boot does not go with --machine, whose ids are that machine's: send the command there with
+--remote and its boot.
 
 Examples:
   cornercase new-workspace experiments
@@ -265,6 +269,9 @@ Options:
       --json
           Print JSON instead of text
 
+      --boot <BOOT>
+          Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -305,6 +312,9 @@ Options:
       --json
           Print JSON instead of text
 
+      --boot <BOOT>
+          Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -325,6 +335,7 @@ Options:
       --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Runs the project's setup again in a new tab of a worktree's workspace, as run setup in the
@@ -442,6 +453,9 @@ Options:
       --json
           Print JSON instead of text
 
+      --boot <BOOT>
+          Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -471,9 +485,9 @@ is checked out as it is, with no fetch. --fresh needs a server that knows the `f
 With --machine NAME the agent starts on that machine of `cornercase machines`, by its server, as if
 the command ran there: --project, --workspace and the pane's id printed are that machine's ids, as
 `status --json` lists them under machines, and the agent, its accounts, profiles and issue trackers
-are the machine's own. --wait, --until and --timeout are refused: follow the agent there, with
-`cornercase --remote`. --focus shows its tab in this window once the machine lists it. It needs a
-server that knows the `machine-start` feature.
+are the machine's own. --wait, --until, --timeout and --boot (the ids are that machine's) are refused:
+follow the agent there, with `cornercase --remote` and its boot. --focus shows its tab in this window
+once the machine lists it. It needs a server that knows the `machine-start` feature.
 
 With --placed the command answers as soon as the tab is open, after its worktree is made or its
 issue read, with the same ids, and the launch goes on, here or on a machine, as the window's dialogs
@@ -616,6 +630,7 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --tab <ID>                  A tab: its agent's pane, else its active one
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Keys are encoded the way the program in the pane asked for.
@@ -623,6 +638,7 @@ Keys are encoded the way the program in the pane asked for.
 Examples:
   cornercase keys --pane 12 ctrl+c
   cornercase keys --pane 12 down enter
+  cornercase --remote vps keys --pane 9 ctrl+c --boot 4242-1700000000
 
 ================================================================ cornercase held
 Send now a message that `send` holds for a person typing in a pane, or say it can wait its turn
@@ -638,6 +654,7 @@ Options:
       --send-now                  Send the first held message at once, still after an earlier Enter; over the person's draft it is pasted without its Enter, which is left to them
       --wait-turn                 Only say the person saw it: the messages held so far still go after their prompt
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 `cornercase send` holds a message while a person is typing in the pane, and the window's bar on that
@@ -669,6 +686,7 @@ them. A server without the feature held-after-draft (`cornercase contract`) send
 Examples:
   cornercase held --pane 9 --send-now
   cornercase held --pane 9 --wait-turn --json
+  cornercase --remote vps held --pane 9 --send-now --boot 4242-1700000000
 
 ================================================================ cornercase read
 Print the screen of a pane as text, or its last lines
@@ -883,6 +901,7 @@ Options:
       --reveal <TEXT>             Also scroll the pane to this text and select it, as Enter on a result of the search does: the text `cornercase search` looked for
       --line <LINE>               The match's line as `cornercase search` printed it (screen matches); without it, the newest place the pane shows the text
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Shows it in the window, or with --view ID in that view only (`cornercase view`), which then
@@ -899,6 +918,8 @@ stderr and the exit status is 0.
 take the ids `cornercase status` lists under that machine. The machine must have sent its workspaces
 since this server started. The window then shows that tab, or the workspace's active tab, streamed
 from the machine, and `status --json` reports it as `shown_remote`, with its stream's state.
+--boot does not go with --machine, whose ids are that machine's: send the command there with
+--remote and its boot.
 
 --json prints the answer: `revealed` with --reveal, and with --view the view's new tab and its
 `projection`, the number a view's lines and surface frames carry, which goes up each time what the
@@ -1131,6 +1152,7 @@ Options:
       --tab <ID>                  A tab: its agent's pane, else its active one
       --force                     Send even when the agent shows a dialog, a panel or its shell mode instead of its input box, or its feedback survey
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Types the item's text into the agent and presses Enter, as
@@ -1275,6 +1297,7 @@ Options:
       --name <NAME>               Entry and tab name [default: the prompt's first words, cut after a whole word at 40 characters; with --issue, its number and title]
       --account <AGENT=ACCOUNT>   Start that agent with this account; AGENT= is its system login. Give it once per agent [default: the accounts chosen when it starts]
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase queue edit
@@ -1306,6 +1329,7 @@ Options:
       --name <NAME>               Entry and tab name [default: the prompt's first words, cut after a whole word at 40 characters; with --issue, its number and title]
       --account <AGENT=ACCOUNT>   Start that agent with this account; AGENT= is its system login. Give it once per agent [default: the accounts chosen when it starts]
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase queue list
@@ -1546,6 +1570,7 @@ Options:
       --account <AGENT=ACCOUNT>   Start that agent with this account, over the default ones; AGENT= is its own login. Give it once per agent
       --machine <NAME>            Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers
       --close-when-merged         Close the team's agents, as agents close does, once the run's pull request has merged and none of them has worked for 3 minutes; the workspace's ▶ or agents reopen brings them back
+      --free-builds               With --close-when-merged, also free the build folders of the run's worktrees once its agents close, as worktrees free-builds does without --force; the worktrees and their branches stay
       --fresh                     Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches]
       --no-fresh                  Make a missing branch from the project's HEAD, whatever settings → worktrees → new branches says
       --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
@@ -1592,6 +1617,13 @@ and nothing in the workspace has worked, waited, started or been typed into for 
 keeps them open. A flow that leaves the commits has no pull request, so it is refused. It needs a server that knows the
 `flow-close-when-merged` feature; `flow close-when-merged` turns it on or off for a run that is already going.
 
+With --free-builds too, once the agents closed it frees the build folders of the run's worktree and of its roles'
+own worktrees, as `worktrees free-builds` does without --force: only git-ignored folders on the project's list
+(node_modules, target...); a worktree where a program still runs, or whose build folder holds a git checkout,
+keeps them, and the toast and the `flow-merged` message say what was freed or why not. The worktrees, their branches
+and the run's folder stay, so reopening the agents rebuilds what they need. --free-builds needs --close-when-merged
+and a server that knows the `flow-free-builds` feature.
+
 With --machine NAME the flow runs on that machine of `cornercase machines`, by its server: the flow,
 its agents and accounts are the machine's, --project and the ids printed are that machine's, as
 `status --json` lists them under machines, and so is the run's folder. --focus shows the run in this
@@ -1604,6 +1636,7 @@ Examples:
   cornercase flow run 'Full issue' --issue '#482' --prompt-file task.md
   cornercase flow run Quick --issue '#482' --project 2 --machine vps
   cornercase flow run 'Full issue' --issue '#482' --close-when-merged
+  cornercase flow run 'Full issue' --issue '#482' --close-when-merged --free-builds
 
 ================================================================ cornercase flow export
 Print a flow as text to share it: a file to send to a teammate, or to commit
@@ -1784,7 +1817,7 @@ orchestrator marked its pane, `ended with stage 3 and 4 not run on the last chan
 counted from 0, left out when there is none). A first pass that skips a stage shows only as outside the plan,
 and a restart forgets what was not run.
 
-A run that closes its agents once its pull request merges says so (close_when_merged with --json).
+A run that closes its agents once its pull request merges says so (close_when_merged with --json), and one that frees its builds then too (free_builds).
 
 A run that has stopped moving (its orchestrator's turn is over, no agent of the team works, it has not
 ended and no wake is being sent) says `stopped moving 50 min ago: …` (stopped with --json, the UTC time it
@@ -1967,6 +2000,7 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --off                       Keep the run's agents open after its pull request merges
+      --free-builds               Also free the build folders of the run's worktrees once its agents close; without it they are kept
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -1975,10 +2009,13 @@ its workspace has worked, waited, started or been typed into for 3 minutes, as `
 The agents are kept, as `agents close` keeps them: the workspace's ▶ or `agents reopen` brings them back. A flow
 that leaves the commits has no pull request, so it cannot be turned on; --off is always accepted. Without --workspace
 or --worktree it is the workspace this runs in, else the shown one. It sets the choice, never toggles it, so
-saying it twice changes nothing the second time.
+saying it twice changes nothing the second time. --free-builds also frees the build folders of the run's worktrees
+once its agents close, as `flow run --free-builds` does; without it they are kept, and --off turns both off
+(--free-builds with --off is refused).
 
 Examples:
   cornercase flow close-when-merged --worktree fix-login
+  cornercase flow close-when-merged --worktree fix-login --free-builds
   cornercase flow close-when-merged --worktree fix-login --off
 
 ================================================================ cornercase flow order
@@ -2022,8 +2059,14 @@ Programs that drive cornercase without this command line (an editor extension, a
 the server for it before anything else. `contract` is the version of the requests and answers: it
 goes up only when one changes in a way an older client would misread, while new commands, fields
 and events are added without it. `boot` names this run of the server and changes on every restart,
-since ids last only one run; close, rename, mark, move-pane, collapse, expand, account restart, context,
-send, input and paste-file take it as --boot, and then act only in that run. Each command is listed
+since ids last only one run; account add, account login, account restart, agents close, agents
+forget, agents reopen, changes base, changes discard, changes stage,
+changes unstage, changes viewed, close, collapse, config project,
+context, expand, focus, group delete, group style, held, input,
+keys, mark, move, move-pane, new-tab, new-workspace, open,
+paste-file, plugin run, queue add, queue edit, ratio, redraw,
+rename, resize, scroll, selection, send, setup, split, start, todo
+send, view-set and worktrees free-builds take it as --boot, and then act only in that run. Each command is listed
 with whether it is available, and each stream with its version. A server without this command is older than the
 contract.
 
@@ -2143,6 +2186,7 @@ Options:
       --visible                   Its window is back: agents in the tab it shows count as seen, and open pull requests are read again
       --hidden                    Its window is hidden or minimised: agents in the tab it shows notify again
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Changes a view that `cornercase view` holds open. --cols and --rows resize it, --inactive makes it
@@ -2197,7 +2241,8 @@ surface lines (popup.pane) so that nothing is sent if that popup closed and anot
 
 --boot BOOT says which run of the server the pane id (with --popup, the popup's id) is from: `boot` in
 `status --json`, or in a machine's entry there. Ids last one run, so a server that restarted since
-refuses, nothing is typed, and the command prints why and exits with 4. --follow does not take it.
+refuses, nothing is typed, and the command prints why and exits with 4. With --follow it goes with every
+line: when the server restarted since, the first line ends the command with 4, and nothing after it is sent.
 
 With --follow it keeps running and reads one event per line from standard input (give - as the
 only EVENT) until it ends: each line goes as soon as it arrives, and the lines that arrive while
@@ -2205,10 +2250,11 @@ the answer before is on its way go together, so a program types through one proc
 --remote one ssh connection). A line may name its pane, {"pane": 14, "key": {"code": "enter"}},
 else it goes to --pane. Each request is all or nothing on its own: with --json it prints one line
 each, the answer with events (how many lines it answers) or its error, and a line that is wrong or
-refused does not stop the next ones; the command then exits with 3.
+refused (except one refused for --boot) does not stop the next ones; the command then exits with 3.
 
 Examples:
   cornercase input --pane 12 --follow --json -
+  cornercase --remote vps input --pane 9 --follow --json - --boot 4242-1700000000
   cornercase input --pane 12 '{"text": "ls"}' '{"key": {"code": "enter"}}'
   cornercase input --pane 12 '{"mouse": {"kind": "scroll-up", "x": 10, "y": 5}}'
   cornercase input --popup --pane 40 '{"key": {"code": "down"}}' '{"key": {"code": "enter"}}'
@@ -2252,6 +2298,7 @@ Options:
       --top                       To the oldest line kept
       --bottom                    Back to the live screen
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Moves the pane's view through its history, as the wheel does in the window, which shows the same
@@ -2277,6 +2324,7 @@ Options:
       --clear                     Remove the selection
       --copy                      Also copy the selection to the clipboard, through the window
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Without --from and --to, prints what is selected in the pane. With them, selects from one cell to
@@ -2301,6 +2349,7 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --rows <N>                  Rows to lay the tab out in (1 to 500)
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Lays a running `cornercase surface` out at another size, without starting it again: its next line
@@ -2320,6 +2369,7 @@ Options:
       --surface <ID>              The surface: the `surface` of the lines `cornercase surface` prints
       --json                      Print JSON instead of text
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Sends a running `cornercase surface` a complete line now, like its first one, even when nothing
@@ -2343,6 +2393,7 @@ Options:
       --path <PATH>               The divider, as first or second at each level down [default: the outermost] [possible values: first, second]
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 RATIO is the share of the divider's first side, between 0 and 1. --path names the divider as a
@@ -2578,6 +2629,7 @@ Options:
       --setup <SETUP>             The commands to run after a worktree is made; empty removes them
       --teardown <TEARDOWN>       The commands to run before a worktree is removed; empty removes them
       --builds <NAMES>            The folders `worktrees free-builds` deletes, separated by spaces or commas; `default` restores the usual list; empty means none
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
@@ -2708,6 +2760,7 @@ Options:
       --last                      At the end of its list
       --into <GROUP>              Into this group, after its projects
       --ungroup                   Out of its group, after the projects that have none
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Puts a group, a project, a workspace or a tab before another of its kind, or at the end of its
@@ -2869,6 +2922,7 @@ Options:
       --colour <N>                A palette index: 1 9 208 214 3 11 2 10 6 14 4 12 99 5 13 205
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase group delete
@@ -2882,6 +2936,7 @@ Arguments:
 Options:
       --close-projects            Close its projects too, then delete the group once their shells have stopped
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
@@ -3123,6 +3178,7 @@ Options:
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase changes merge-check
@@ -3169,6 +3225,7 @@ Options:
       --workspace <ID>            The workspace [default: the one this runs in, else the shown one]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --mode <MODE>               What to compare: uncommitted, commits or all [default: uncommitted] [possible values: uncommitted, commits, all]
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase changes discard
@@ -3186,6 +3243,7 @@ Options:
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --digest <HEX>              Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]
   -y, --yes                       Discard without asking
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase changes stage
@@ -3202,6 +3260,7 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --digest <HEX>              Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase changes unstage
@@ -3218,6 +3277,7 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --digest <HEX>              Act only on the version with this digest, from `changes list --json` or `changes file --json` (the Uncommitted one for stage, unstage and discard): a file that changed since is left alone [default: the version there now]
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase files
@@ -3921,6 +3981,7 @@ Options:
       --json                      Print JSON instead of text
       --check                     Print what would be freed and what runs there, and delete nothing
       --force                     Go on while a program runs in the worktree or a build folder holds a git checkout
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Deletes the build folders of a worktree: only folders git ignores whose names are on the
@@ -4307,6 +4368,7 @@ Options:
       --check                     Say what would close and close nothing
       --force                     Close even agents that are working or cannot resume, and the other panes of their tabs
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase agents reopen
@@ -4320,6 +4382,7 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase agents forget
@@ -4334,6 +4397,7 @@ Options:
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
   -y, --yes                       Forget without asking
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase account
@@ -4417,6 +4481,7 @@ Options:
       --focus                     Also show the login tab in the window, or in the view with --view
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase account login
@@ -4436,6 +4501,7 @@ Options:
       --focus                     Also show the login tab in the window, or in the view with --view
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase account remove
@@ -5030,6 +5096,7 @@ Options:
       --view <ID>                 Act for this view (see `cornercase view`): a button action with no target runs on what it shows, and a popup opens with no window attached, sized from it
       --revision <N>              The revision `plugin actions --json` printed; refused once the plugins changed. Left out, the current one
       --json                      Print JSON instead of text
+      --boot <BOOT>               Act only if the server is still this run of it, the `boot` of `status --json`; else nothing is done and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 ================================================================ cornercase plugin popup-close

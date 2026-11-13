@@ -5,8 +5,8 @@ use gpui::{
 };
 
 use super::cards::badge;
-use super::model::{Broken, FlowInfo, Listing, Run};
-use super::widgets::{error_small, file_name, flow_summary, glyph, name_line};
+use super::model::{Broken, FlowInfo, Listing, Run, Standing};
+use super::widgets::{error_small, file_name, flow_summary, glyph, name_line, standing_colour};
 use super::{FlowsPanel, PAGE_LEAST, Selected};
 use crate::model::Session;
 use crate::store::Store;
@@ -106,7 +106,12 @@ impl FlowsPanel {
                             .text_color(colours::soft())
                             .child(ui::one_line(run.headline().to_string())),
                     )
-                    .child(ui::dim(ui::one_line(format!("{} · {}", run_place(run, session), run.summary())))),
+                    .child(ui::dim(ui::one_line(format!("{} · {}", run_place(run, session), run.summary()))))
+                    .children(
+                        ended_without(run).map(|line| {
+                            div().text_size(px(11.)).text_color(colours::waiting()).child(ui::one_line(line))
+                        }),
+                    ),
             )
     }
 
@@ -221,13 +226,21 @@ fn back_bar(cx: &Context<FlowsPanel>) -> Div {
 }
 
 fn run_state(run: &Run) -> (&'static str, Rgba) {
-    if run.closed() {
-        ("closed", colours::faint())
-    } else if run.ended {
-        ("ended", colours::accent())
-    } else {
-        ("running", colours::working())
+    let standing = run.standing();
+    (row_word(standing), standing_colour(standing))
+}
+
+fn row_word(standing: Standing) -> &'static str {
+    match standing {
+        Standing::Closed => "closed",
+        Standing::Ended => "ended",
+        Standing::Stopped(_) => "stopped moving",
+        Standing::Running => "running",
     }
+}
+
+fn ended_without(run: &Run) -> Option<String> {
+    run.ended.then(|| run.not_run_line()).flatten()
 }
 
 fn run_place(run: &Run, session: Option<&Session>) -> String {

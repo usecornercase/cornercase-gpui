@@ -53,3 +53,12 @@ fn the_arrows_rest_at_the_ends_of_the_plan() {
     assert!(can_step(most / 2., most, false));
     assert!(sideways(100.5, 100.) <= SIDEWAYS_NEAR);
 }
+
+#[test]
+fn a_stage_not_run_is_ringed_unless_it_is_the_active_one() {
+    assert!(owed_ring(true, Some(Progress::Ahead)));
+    assert!(owed_ring(true, Some(Progress::Passed)));
+    assert!(owed_ring(true, None));
+    assert!(!owed_ring(true, Some(Progress::Active)));
+    assert!(!owed_ring(false, Some(Progress::Ahead)));
+}

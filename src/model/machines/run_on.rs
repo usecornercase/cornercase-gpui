@@ -6,7 +6,7 @@ use super::seen::{MachinePlace, MachineSeen, Spot, ThereId};
 use super::{Machine, MachineIcon};
 use crate::cli::Version;
 use crate::model::{Project, Session};
-use crate::panels::flows::merged::{CLOSE_WHEN_MERGED_SINCE, closes_clause};
+use crate::panels::flows::merged::{CLOSE_WHEN_MERGED_SINCE, FREE_BUILDS_SINCE, closes_clause};
 
 pub(crate) mod checks;
 pub(crate) mod clone;
@@ -138,7 +138,7 @@ impl Looking<'_> {
 pub(crate) enum Starting {
     Agent { agent: String, issue: String },
     Workspace { name: String },
-    Flow { name: String, close_when_merged: bool },
+    Flow { name: String, close_when_merged: bool, free_builds: bool },
     LoginTab { agent: String },
 }
 
@@ -159,17 +159,22 @@ impl Starting {
             Self::Flow { name, .. } => format!(
                 "Started {name} on {machine}{}{}. Follow it in its tab: the run page reads this computer's runs",
                 answer.branch.as_deref().map(|branch| format!(", on {branch}")).unwrap_or_default(),
-                closes_clause(answer.close_when_merged)
+                closes_clause(answer.close_when_merged, answer.free_builds)
             ),
             Self::LoginTab { agent } => format!("Opened a tab for {agent} on {machine}"),
         }
     }
 
     pub(crate) fn left_open(&self, machine: &str, answer: &Answer) -> Option<String> {
-        let Self::Flow { name, close_when_merged: true } = self else { return None };
-        (!answer.close_when_merged).then(|| {
-            format!(
+        let Self::Flow { name, close_when_merged, free_builds } = self else { return None };
+        if *close_when_merged && !answer.close_when_merged {
+            return Some(format!(
                 "{name} on {machine} keeps its agents open after the merge: its cornercase did not take the choice, which needs {CLOSE_WHEN_MERGED_SINCE} or newer there"
+            ));
+        }
+        (*close_when_merged && *free_builds && !answer.free_builds).then(|| {
+            format!(
+                "{name} on {machine} keeps its build folders after the merge: its cornercase did not take the choice, which needs {FREE_BUILDS_SINCE} or newer there"
             )
         })
     }
@@ -184,6 +189,7 @@ pub(crate) struct Answer {
     pub note: Option<String>,
     pub members: Vec<AnswerMember>,
     pub close_when_merged: bool,
+    pub free_builds: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]

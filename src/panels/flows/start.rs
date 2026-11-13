@@ -14,7 +14,7 @@ use self::project::{ProjectChoice, ProjectMenu};
 use super::FlowsPanel;
 use super::actions::announce;
 use super::dialog::{Submit, boxed, buttons, field_in, filled_field, prompt_field};
-use super::merged;
+use super::merged::{self, Switch};
 use super::merged_view;
 use super::model::{self, FlowInfo, Listing, Started, project_args};
 use super::widgets::{error_text, flow_summary, glyph};
@@ -53,6 +53,7 @@ struct Fields {
 struct Ticks {
     focus: bool,
     close_when_merged: bool,
+    free_builds: bool,
 }
 
 pub(super) struct StartFlow {
@@ -159,7 +160,7 @@ impl StartFlow {
             keep_flow: None,
             loading: false,
             accounts: AccountPickers::default(),
-            ticks: Ticks { focus: true, close_when_merged: false },
+            ticks: Ticks { focus: true, close_when_merged: false, free_builds: false },
             busy: false,
             error: None,
             issue_read: IssueRead::Done,
@@ -258,13 +259,15 @@ impl StartFlow {
     fn typed(&self, cx: &App) -> Typed {
         let text = |field: &Entity<TextField>| field.read(cx).text();
         let fields = &self.fields;
+        let close = self.ticks.close_when_merged && self.merged_rests(cx).is_none();
         Typed {
             prompt: text(&fields.prompt),
             issue: text(&fields.issue),
             branch: text(&fields.branch),
             workspace: text(&fields.workspace),
             focus: self.ticks.focus,
-            close_when_merged: self.ticks.close_when_merged && self.merged_rests(cx).is_none(),
+            close_when_merged: close,
+            free_builds: close && self.ticks.free_builds && matches!(self.free_rests(cx), Switch::Offered(_)),
             accounts: self.accounts.picks(&self.team(), cx),
         }
     }
@@ -396,24 +399,55 @@ impl StartFlow {
         ))
     }
 
-    fn merged_rests(&self, cx: &App) -> Option<String> {
+    fn with_releases<T>(&self, cx: &App, then: impl FnOnce(&merged::Releases<'_>) -> T) -> T {
         let here = Store::get(cx).read(cx).session.as_ref().and_then(Session::release);
         let run_on = self.run_on.read(cx);
         let machine = run_on.machine().map(|name| (name, run_on.release(cx)));
-        merged::rests(self.selected(), &merged::Releases { here, machine })
+        then(&merged::Releases { here, machine })
+    }
+
+    fn merged_rests(&self, cx: &App) -> Option<String> {
+        self.with_releases(cx, |releases| merged::rests(self.selected(), releases))
+    }
+
+    fn free_rests(&self, cx: &App) -> Switch {
+        let ticks = self.ticks;
+        self.with_releases(cx, |releases| {
+            merged::free_box(self.selected(), releases, ticks.close_when_merged, ticks.free_builds)
+        })
     }
 
     fn merged_box(&self, cx: &Context<Self>) -> Div {
+        let free = self.free_rests(cx);
         if let Some(line) = self.merged_rests(cx) {
             return merged_view::with_line(ui::resting_checkbox(self.ticks.close_when_merged, merged::LABEL), line);
         }
+        let freed = self.ticks.free_builds && matches!(free, Switch::Offered(_));
         let the_box = ui::checkbox("start-merged", self.ticks.close_when_merged, merged::LABEL).on_click(cx.listener(
             |this, _: &ClickEvent, _, cx| {
                 this.ticks.close_when_merged = !this.ticks.close_when_merged;
+                this.ticks.free_builds &= this.ticks.close_when_merged;
                 cx.notify();
             },
         ));
-        merged_view::with_line(the_box, merged::how(self.run_on.read(cx).machine()))
+        let first = merged_view::with_line(the_box, merged::how(self.run_on.read(cx).machine(), freed));
+        merged_view::pair(first, Self::free_row(free, cx))
+    }
+
+    fn free_row(free: Switch, cx: &Context<Self>) -> Option<Div> {
+        match free {
+            Switch::Hidden => None,
+            Switch::Rests(line) => Some(merged_view::free_resting(line)),
+            Switch::Offered(on) => {
+                let the_box = ui::checkbox("start-free", on, merged::FREE_LABEL).on_click(cx.listener(
+                    |this, _: &ClickEvent, _, cx| {
+                        this.ticks.free_builds = !this.ticks.free_builds;
+                        cx.notify();
+                    },
+                ));
+                Some(merged_view::free_offered(the_box))
+            }
+        }
     }
 
     fn footnote(&self, cx: &App) -> String {
@@ -449,7 +483,11 @@ impl StartFlow {
 fn finish(name: &str, focus: bool, started: &Started, cx: &mut App) {
     announce(
         started.note.as_deref(),
-        format!("Started {name} on {}{}", started.branch, merged::closes_clause(started.close_when_merged)),
+        format!(
+            "Started {name} on {}{}",
+            started.branch,
+            merged::closes_clause(started.close_when_merged, started.free_builds)
+        ),
         cx,
     );
     let (workspace, (kind, id)) = (started.workspace, started.place());
