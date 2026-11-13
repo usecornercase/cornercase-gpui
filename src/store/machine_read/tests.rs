@@ -419,7 +419,7 @@ fn a_probe_refused_as_older_after_the_facts_moved_ends_its_wait_and_keeps_nothin
     let now = Facts { boot: "b2".into(), ..asked.clone() };
     let mut state = ThereState::default();
     state.checks.insert("vps".into(), Check::InFlight);
-    state.probe_answered("vps", (asked.clone(), Some(refusal_of(Some("0.13.39"), &[]))), Some(&now));
+    state.probe_answered("vps", (asked.clone(), Probe::Older(refusal_of(Some("0.13.39"), &[]))), Some(&now));
     assert!(state.older.is_empty());
     assert!(may_check(&up(), state.checks.get("vps"), &now, Instant::now()));
     assert!(!may_check(&up(), Some(&Check::InFlight), &now, Instant::now()));
@@ -429,9 +429,9 @@ fn a_probe_refused_as_older_after_the_facts_moved_ends_its_wait_and_keeps_nothin
 fn a_probe_refused_as_older_under_the_current_facts_keeps_the_refusal() {
     let facts = facts_of(&seen(LinkState::Linked));
     let mut state = ThereState::default();
-    state.probe_answered("vps", (facts.clone(), Some(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
+    state.probe_answered("vps", (facts.clone(), Probe::Older(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
     assert_eq!(state.older.get("vps").map(|kept| &kept.facts), Some(&facts));
-    state.probe_answered("vps", (facts.clone(), None), Some(&facts));
+    state.probe_answered("vps", (facts.clone(), Probe::Fine), Some(&facts));
     assert!(state.older.is_empty());
 }
 
@@ -439,7 +439,7 @@ fn a_probe_refused_as_older_under_the_current_facts_keeps_the_refusal() {
 fn a_recheck_of_a_kept_refusal_keeps_it_and_asks_for_a_probe() {
     let facts = facts_of(&seen(LinkState::Linked));
     let mut state = ThereState::default();
-    state.probe_answered("vps", (facts.clone(), Some(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
+    state.probe_answered("vps", (facts.clone(), Probe::Older(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
     assert!(state.recheck("vps"));
     assert!(state.older.contains_key("vps"));
     assert!(!state.checks.contains_key("vps"));
@@ -458,7 +458,7 @@ fn a_recheck_without_a_refusal_only_forgets_the_last_check() {
 fn a_recheck_while_a_probe_is_in_flight_sends_nothing_more() {
     let facts = facts_of(&seen(LinkState::Linked));
     let mut state = ThereState::default();
-    state.probe_answered("vps", (facts.clone(), Some(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
+    state.probe_answered("vps", (facts.clone(), Probe::Older(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
     state.checks.insert("vps".into(), Check::InFlight);
     assert!(!state.recheck("vps"));
     assert_eq!(state.checks.get("vps"), Some(&Check::InFlight));
@@ -468,11 +468,11 @@ fn a_recheck_while_a_probe_is_in_flight_sends_nothing_more() {
 fn a_probe_says_whether_the_refusal_changed() {
     let facts = facts_of(&seen(LinkState::Linked));
     let mut state = ThereState::default();
-    let refused = || Some(refusal_of(Some("0.13.39"), &[]));
-    assert!(!state.probe_answered("vps", (facts.clone(), None), Some(&facts)));
+    let refused = || Probe::Older(refusal_of(Some("0.13.39"), &[]));
+    assert!(!state.probe_answered("vps", (facts.clone(), Probe::Fine), Some(&facts)));
     assert!(state.probe_answered("vps", (facts.clone(), refused()), Some(&facts)));
     assert!(!state.probe_answered("vps", (facts.clone(), refused()), Some(&facts)));
-    assert!(state.probe_answered("vps", (facts.clone(), None), Some(&facts)));
+    assert!(state.probe_answered("vps", (facts.clone(), Probe::Fine), Some(&facts)));
 }
 
 #[test]
@@ -482,4 +482,15 @@ fn an_update_reads_every_machine_that_shares_its_destination() {
         [("vps", kept()), ("twin", kept()), ("far", other)].map(|(name, kept)| (name.to_string(), kept)).into();
     assert_eq!(sharing_destination(&kept_for, "vps", "vps.invalid"), ["vps", "twin"]);
     assert_eq!(sharing_destination(&kept_for, "twin", "vps.invalid"), ["twin", "vps"]);
+}
+
+#[test]
+fn a_probe_that_failed_without_an_answer_keeps_the_refusal() {
+    let facts = facts_of(&seen(LinkState::Linked));
+    let mut state = ThereState::default();
+    state.probe_answered("vps", (facts.clone(), Probe::Older(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
+    assert!(!state.probe_answered("vps", (facts.clone(), Probe::Failed), Some(&facts)));
+    assert!(state.older.contains_key("vps"));
+    assert_eq!(probe_of(&Err(anyhow::anyhow!("ssh: connection closed"))), Probe::Failed);
+    assert_eq!(probe_of(&Ok("{}".to_string())), Probe::Fine);
 }

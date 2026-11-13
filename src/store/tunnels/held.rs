@@ -189,6 +189,10 @@ pub(crate) fn settle_now(
     (decided == Settled::Back || waited).then_some(decided)
 }
 
+pub(crate) fn ports_kept(holds: &[Hold], toward: &Toward, settling: impl Iterator<Item = u16>) -> Vec<u16> {
+    holds.iter().filter(|hold| hold.toward == *toward).map(|hold| hold.port).chain(settling).collect()
+}
+
 pub(crate) fn bring_back(remembered: &[u16], held: &[u16]) -> Vec<u16> {
     remembered.iter().copied().filter(|port| !held.contains(port)).collect()
 }

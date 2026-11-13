@@ -30,7 +30,7 @@ pub(crate) use rows::{Control, Tail, TunnelRow, Whose, heading, none_note, other
 
 use held::{
     Again, Fate, Hold, Reached, Settled, again_of, bring_back, came_back, fate, forgets_failed, live, local_before,
-    remembers, settle_now, up_toast, window_failure,
+    ports_kept, remembers, settle_now, up_toast, window_failure,
 };
 
 const SETTLE_AFTER: Duration = Duration::from_secs(3);
@@ -422,7 +422,8 @@ impl Store {
     }
 
     fn link_tunnels(&mut self, toward: &Toward, destination: &str, cx: &mut Context<Self>) {
-        let held: Vec<u16> = self.tunnels.holds.iter().filter(|h| h.toward == *toward).map(|h| h.port).collect();
+        let settling = self.tunnels.settling.iter().filter(|s| s.toward == *toward).map(|s| s.port);
+        let held = ports_kept(&self.tunnels.holds, toward, settling);
         for port in bring_back(&memory::remembered(destination), &held) {
             self.hold_tunnel(toward, port, Asked::Back, cx);
         }

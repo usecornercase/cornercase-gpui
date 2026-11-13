@@ -125,6 +125,20 @@ pub(super) struct KeptOlder {
     pub(super) older: Older,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Probe {
+    Older(Older),
+    Fine,
+    Failed,
+}
+
+fn probe_of(result: &anyhow::Result<String>) -> Probe {
+    match result {
+        Ok(_) => Probe::Fine,
+        Err(error) => cli::older_refusal(error).cloned().map_or(Probe::Failed, Probe::Older),
+    }
+}
+
 pub(super) fn sharing_destination(kept: &HashMap<String, KeptOlder>, first: &str, destination: &str) -> Vec<String> {
     let mut sharing: Vec<String> =
         kept.iter().filter(|(_, kept)| kept.older.destination == destination).map(|(name, _)| name.clone()).collect();
@@ -205,12 +219,13 @@ impl ThereState {
         self.older.insert(machine.to_owned(), kept.clone()) != Some(kept)
     }
 
-    fn probe_answered(&mut self, machine: &str, answer: (Facts, Option<Older>), current: Option<&Facts>) -> bool {
-        let (facts, older) = answer;
+    fn probe_answered(&mut self, machine: &str, answer: (Facts, Probe), current: Option<&Facts>) -> bool {
+        let (facts, probe) = answer;
         self.checks.insert(machine.to_owned(), Check::Answered { facts: facts.clone(), at: Instant::now() });
-        match older {
-            Some(older) => self.keep(machine, Some(facts), current, older),
-            None => self.older.remove(machine).is_some(),
+        match probe {
+            Probe::Older(older) => self.keep(machine, Some(facts), current, older),
+            Probe::Fine => self.older.remove(machine).is_some(),
+            Probe::Failed => false,
         }
     }
 
@@ -448,9 +463,8 @@ impl Store {
     ) {
         let home = result.as_ref().ok().map(String::as_str).and_then(home_in);
         self.there.homes.answered(machine, boot, home);
-        let older = result.as_ref().err().and_then(cli::older_refusal).cloned();
         let current = self.there_facts(machine);
-        if self.there.probe_answered(machine, (facts, older), current.as_ref()) {
+        if self.there.probe_answered(machine, (facts, probe_of(result)), current.as_ref()) {
             self.older_changed(cx);
         }
         cx.notify();
