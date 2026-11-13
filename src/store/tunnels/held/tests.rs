@@ -90,14 +90,14 @@ fn a_port_brought_back_says_nothing() {
 
 #[test]
 fn an_exit_0_while_unlinked_waits_for_the_next_view_line() {
-    assert_eq!(settle_now(false, false, "boot-a", "boot-a"), None);
-    assert_eq!(settle_now(true, false, "boot-a", "boot-a"), Some(Settled::Closed));
-    assert_eq!(settle_now(true, false, "boot-a", "boot-b"), Some(Settled::Back));
+    assert_eq!(settle_now(false, false, "boot-a", Some("boot-a")), None);
+    assert_eq!(settle_now(true, false, "boot-a", Some("boot-a")), Some(Settled::Closed));
+    assert_eq!(settle_now(true, false, "boot-a", Some("boot-b")), Some(Settled::Back));
 }
 
 #[test]
 fn a_hold_started_again_is_not_forgotten_by_the_exit_that_came_before() {
-    assert_eq!(settle_now(true, true, "boot-a", "boot-a"), Some(Settled::Superseded));
+    assert_eq!(settle_now(true, true, "boot-a", Some("boot-a")), Some(Settled::Superseded));
 }
 
 #[test]
@@ -147,4 +147,10 @@ fn a_machines_dropped_tunnel_reason_hides_its_destination() {
     let said = "Error: the tunnel of port 8765 ended: ssh: connect to host vps.invalid port 22: Connection refused\n";
     let Fate::Retry(why) = fate(&held, Some(1), said) else { panic!("a retry") };
     assert!(why.contains("connect to host vps port 22") && !why.contains("vps.invalid"), "{why}");
+}
+
+#[test]
+fn an_exit_0_waits_while_the_boot_to_compare_is_not_known() {
+    assert_eq!(settle_now(true, false, "boot-a", None), None);
+    assert_eq!(settle_now(true, true, "boot-a", None), None);
 }

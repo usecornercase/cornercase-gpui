@@ -7,7 +7,7 @@ use crate::store::Reach;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Link {
     Up { boot: String, destination: String },
-    Waiting,
+    Waiting(Option<String>),
     Lost,
 }
 
@@ -18,13 +18,15 @@ pub(crate) fn machine_link(
     reach: Option<&Reach>,
     gate: &Gate,
 ) -> Link {
-    let Some(listed) = listed else { return if listing_known { Link::Lost } else { Link::Waiting } };
+    let Some(listed) = listed else { return if listing_known { Link::Lost } else { Link::Waiting(None) } };
     let (Some(seen), Some(reach)) = (seen, reach) else { return Link::Lost };
     match (reach, gate) {
         (Reach::Refused(_), _) | (Reach::Up(_), Gate::Older(Older::ThisComputer(_) | Older::Server(Some(_)))) => {
             Link::Lost
         }
-        (Reach::Down(_), _) | (Reach::Up(_), Gate::Waiting | Gate::Older(Older::Server(None))) => Link::Waiting,
+        (Reach::Down(_), _) | (Reach::Up(_), Gate::Waiting | Gate::Older(Older::Server(None))) => {
+            Link::Waiting(Some(listed.destination.clone()))
+        }
         (Reach::Up(_), Gate::Open) => Link::Up { boot: seen.boot.clone(), destination: listed.destination.clone() },
     }
 }
@@ -33,7 +35,7 @@ pub(crate) fn hold_stays(hold_destination: &str, link: &Link) -> bool {
     match link {
         Link::Lost => false,
         Link::Up { destination, .. } => destination == hold_destination,
-        Link::Waiting => true,
+        Link::Waiting(destination) => destination.as_deref().is_none_or(|destination| destination == hold_destination),
     }
 }
 

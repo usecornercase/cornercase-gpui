@@ -154,7 +154,8 @@ pub(crate) fn forgets_after_close(live_hold: bool) -> bool {
     !live_hold
 }
 
-pub(crate) fn settle_now(linked: bool, live: bool, started_on: &str, now: &str) -> Option<Settled> {
+pub(crate) fn settle_now(linked: bool, live: bool, started_on: &str, now: Option<&str>) -> Option<Settled> {
+    let now = now?;
     if !linked {
         return None;
     }

@@ -33,8 +33,8 @@ fn a_linked_machine_with_both_releases_is_up_on_its_boot() {
 fn a_link_that_comes_back_by_itself_only_waits() {
     let machine = listed();
     let down = Reach::Down("vps unreachable".into());
-    assert_eq!(link(Some(&machine), true, &down, &Gate::Open), Link::Waiting);
-    assert_eq!(link(Some(&machine), true, &up(), &Gate::Waiting), Link::Waiting);
+    assert_eq!(link(Some(&machine), true, &down, &Gate::Open), Link::Waiting(Some("vps.invalid".into())));
+    assert_eq!(link(Some(&machine), true, &up(), &Gate::Waiting), Link::Waiting(Some("vps.invalid".into())));
 }
 
 #[test]
@@ -52,13 +52,13 @@ fn a_refused_or_older_machine_is_lost() {
 fn a_server_version_not_read_yet_only_waits() {
     let machine = listed();
     let unknown = Gate::Older(Older::Server(None));
-    assert_eq!(link(Some(&machine), true, &up(), &unknown), Link::Waiting);
+    assert_eq!(link(Some(&machine), true, &up(), &unknown), Link::Waiting(Some("vps.invalid".into())));
 }
 
 #[test]
 fn a_machine_that_is_not_listed_is_lost_once_the_list_is_known() {
     assert_eq!(link(None, true, &up(), &Gate::Open), Link::Lost);
-    assert_eq!(link(None, false, &up(), &Gate::Open), Link::Waiting);
+    assert_eq!(link(None, false, &up(), &Gate::Open), Link::Waiting(None));
     assert_eq!(machine_link(Some(&listed()), true, None, None, &Gate::Open), Link::Lost);
 }
 
@@ -67,7 +67,8 @@ fn a_hold_stays_only_for_the_destination_it_was_started_with() {
     let up = |destination: &str| Link::Up { boot: "b".into(), destination: destination.into() };
     assert!(hold_stays("vps.invalid", &up("vps.invalid")));
     assert!(!hold_stays("vps.invalid", &up("other.invalid")));
-    assert!(hold_stays("vps.invalid", &Link::Waiting));
+    assert!(hold_stays("vps.invalid", &Link::Waiting(None)));
+    assert!(hold_stays("vps.invalid", &Link::Waiting(Some("vps.invalid".into()))));
     assert!(!hold_stays("vps.invalid", &Link::Lost));
 }
 
@@ -92,4 +93,13 @@ fn a_lost_machine_ends_only_its_own_holds() {
     let (ended, kept) = split_stale(holds, &Toward::Machine("vps".into()), &Link::Lost);
     assert_eq!(ended.len(), 1);
     assert_eq!(kept.len(), 2);
+}
+
+#[test]
+fn a_hold_to_a_destination_changed_while_the_link_waits_ends() {
+    let waiting = Link::Waiting(Some("other.invalid".into()));
+    assert!(!hold_stays("vps.invalid", &waiting));
+    let holds = vec![test_hold(Toward::Machine("vps".into()), 8765, Held::Up { local: 1 })];
+    let (ended, kept) = split_stale(holds, &Toward::Machine("vps".into()), &waiting);
+    assert_eq!((ended.len(), kept.len()), (1, 0));
 }

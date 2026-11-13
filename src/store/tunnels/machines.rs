@@ -43,7 +43,7 @@ impl Store {
                     self.link_tunnels(&toward, destination, cx);
                 }
             }
-            Link::Waiting => drop(self.tunnels.machines.remove(name)),
+            Link::Waiting(_) => drop(self.tunnels.machines.remove(name)),
             Link::Lost => {
                 self.tunnels.machines.remove(name);
                 self.tunnels.settling.retain(|settling| settling.toward != toward);

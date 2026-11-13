@@ -346,9 +346,9 @@ impl Store {
 
     pub(super) fn settle_tunnels(&mut self, cx: &mut Context<Self>) {
         for Settling { toward, port, boot: started, destination } in std::mem::take(&mut self.tunnels.settling) {
-            let Some(now) = self.boot_of(&toward) else { continue };
+            let now = self.boot_of(&toward);
             let live = live(&self.tunnels.holds, &toward, port).is_some_and(|hold| hold.state != Held::Ending);
-            match settle_now(self.linked(&toward), live, &started, &now) {
+            match settle_now(self.linked(&toward), live, &started, now.as_deref()) {
                 None => self.tunnels.settling.push(Settling { toward, port, boot: started, destination }),
                 Some(Settled::Superseded) => {}
                 Some(Settled::Closed) => self.remember_tunnel(&destination, port, false, cx),
