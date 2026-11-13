@@ -269,18 +269,7 @@ impl TextField {
     }
 
     fn offset_from_utf16(&self, offset: usize) -> usize {
-        let mut utf8_offset = 0;
-        let mut utf16_count = 0;
-
-        for ch in self.content.chars() {
-            if utf16_count >= offset {
-                break;
-            }
-            utf16_count += ch.len_utf16();
-            utf8_offset += ch.len_utf8();
-        }
-
-        utf8_offset
+        utf8_offset(&self.content, offset)
     }
 
     fn offset_to_utf16(&self, offset: usize) -> usize {
@@ -585,18 +574,20 @@ fn control_bindings(ctx: Option<&str>) -> Vec<KeyBinding> {
     ]
 }
 
-fn composed_selection(new_text: &str, selected_utf16: Option<&Range<usize>>, start: usize) -> Range<usize> {
-    let Some(selected) = selected_utf16 else { return start + new_text.len()..start + new_text.len() };
-    let at = |utf16: usize| {
-        let mut units = 0;
-        let found = new_text.char_indices().find(|(_, c)| {
+fn utf8_offset(text: &str, utf16: usize) -> usize {
+    let mut units = 0;
+    text.char_indices()
+        .find(|(_, c)| {
             let reached = units >= utf16;
             units += c.len_utf16();
             reached
-        });
-        start + found.map_or(new_text.len(), |(index, _)| index)
-    };
-    at(selected.start)..at(selected.end)
+        })
+        .map_or(text.len(), |(index, _)| index)
+}
+
+fn composed_selection(new_text: &str, selected_utf16: Option<&Range<usize>>, start: usize) -> Range<usize> {
+    let Some(selected) = selected_utf16 else { return start + new_text.len()..start + new_text.len() };
+    start + utf8_offset(new_text, selected.start)..start + utf8_offset(new_text, selected.end)
 }
 
 fn word_start(text: &str, at: usize, masked: bool) -> usize {
