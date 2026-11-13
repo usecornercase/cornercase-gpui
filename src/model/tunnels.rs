@@ -97,6 +97,12 @@ pub(crate) enum Gate {
     Open,
 }
 
+impl Gate {
+    pub(crate) fn known_older(self) -> bool {
+        matches!(self, Self::Older(Older::ThisComputer(_) | Older::Server(Some(_))))
+    }
+}
+
 fn gate(since: Version, here: Release, server: Option<Version>) -> Gate {
     let Release::Read(here) = here else { return Gate::Waiting };
     if !since.reached_by(here) {

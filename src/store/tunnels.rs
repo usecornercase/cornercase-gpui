@@ -20,6 +20,7 @@ mod rows;
 mod taker;
 
 pub(crate) use held::{Asked, Held};
+pub(crate) use links::MachineLink;
 use rows::Mark;
 pub(crate) use rows::{Control, TunnelRow, Whose, heading, none_note, others_note};
 

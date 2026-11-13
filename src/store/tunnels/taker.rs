@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use super::held::{Held, Hold};
 use crate::cli::{self, Stream, Target};
 use crate::model::machines::hide_destination;
-use crate::model::tunnels::{Gate, Older, Order, Toward};
+use crate::model::tunnels::{Gate, Order, Toward};
 
 pub(super) struct Taker {
     pub(super) destination: String,
@@ -65,7 +65,7 @@ pub(crate) fn wait_after(attempts: u32) -> Duration {
 }
 
 pub(crate) fn orders_stay(link_stays: bool, gate: Gate) -> bool {
-    link_stays && !matches!(gate, Gate::Older(Older::ThisComputer(_) | Older::Server(Some(_))))
+    link_stays && !gate.known_older()
 }
 
 pub(crate) fn may_take(gate: Gate, linked: bool, shared: bool) -> bool {

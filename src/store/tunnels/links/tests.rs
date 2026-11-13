@@ -1,4 +1,4 @@
-use super::{Link, followed, hold_stays, machine_link, split_ended, split_stale};
+use super::{MachineLink, followed, split_ended, split_stale};
 use crate::model::MachineSeen;
 use crate::model::machines::{LinkState, Machine};
 use crate::model::tunnels::{Gate, Older, Toward, Way};
@@ -18,58 +18,58 @@ fn up() -> Reach {
     Reach::Up(vps_target())
 }
 
-fn link(listed: Option<&Machine>, known: bool, reach: &Reach, gate: &Gate) -> Link {
-    machine_link(listed, known, Some(&seen()), Some(reach), gate)
+fn link(listed: Option<&Machine>, known: bool, reach: &Reach, gate: Gate) -> MachineLink {
+    MachineLink::of(listed, known, Some(&seen()), Some(reach)).gated(gate)
 }
 
 #[test]
 fn a_linked_machine_with_both_releases_is_up_on_its_boot() {
     let machine = listed();
-    let expected = Link::Up { boot: "boot-a".into(), destination: "vps.invalid".into() };
-    assert_eq!(link(Some(&machine), true, &up(), &Gate::Open), expected);
+    let expected = MachineLink::Up { boot: "boot-a".into(), destination: "vps.invalid".into() };
+    assert_eq!(link(Some(&machine), true, &up(), Gate::Open), expected);
 }
 
 #[test]
 fn a_link_that_comes_back_by_itself_only_waits() {
     let machine = listed();
     let down = Reach::Down("vps unreachable".into());
-    assert_eq!(link(Some(&machine), true, &down, &Gate::Open), Link::Waiting(Some("vps.invalid".into())));
-    assert_eq!(link(Some(&machine), true, &up(), &Gate::Waiting), Link::Waiting(Some("vps.invalid".into())));
+    assert_eq!(link(Some(&machine), true, &down, Gate::Open), MachineLink::Waiting(Some("vps.invalid".into())));
+    assert_eq!(link(Some(&machine), true, &up(), Gate::Waiting), MachineLink::Waiting(Some("vps.invalid".into())));
 }
 
 #[test]
 fn a_refused_or_older_machine_is_lost() {
     let machine = listed();
     let refused = Reach::Refused("not linked".into());
-    assert_eq!(link(Some(&machine), true, &refused, &Gate::Open), Link::Lost);
+    assert_eq!(link(Some(&machine), true, &refused, Gate::Open), MachineLink::Lost);
     let older = Gate::Older(Older::Server(crate::cli::Version::parse("0.13.45")));
-    assert_eq!(link(Some(&machine), true, &up(), &older), Link::Lost);
+    assert_eq!(link(Some(&machine), true, &up(), older), MachineLink::Lost);
     let here = Gate::Older(Older::ThisComputer(None));
-    assert_eq!(link(Some(&machine), true, &up(), &here), Link::Lost);
+    assert_eq!(link(Some(&machine), true, &up(), here), MachineLink::Lost);
 }
 
 #[test]
 fn a_server_version_not_read_yet_only_waits() {
     let machine = listed();
     let unknown = Gate::Older(Older::Server(None));
-    assert_eq!(link(Some(&machine), true, &up(), &unknown), Link::Waiting(Some("vps.invalid".into())));
+    assert_eq!(link(Some(&machine), true, &up(), unknown), MachineLink::Waiting(Some("vps.invalid".into())));
 }
 
 #[test]
 fn a_machine_that_is_not_listed_is_lost_once_the_list_is_known() {
-    assert_eq!(link(None, true, &up(), &Gate::Open), Link::Lost);
-    assert_eq!(link(None, false, &up(), &Gate::Open), Link::Waiting(None));
-    assert_eq!(machine_link(Some(&listed()), true, None, None, &Gate::Open), Link::Lost);
+    assert_eq!(link(None, true, &up(), Gate::Open), MachineLink::Lost);
+    assert_eq!(link(None, false, &up(), Gate::Open), MachineLink::Waiting(None));
+    assert_eq!(MachineLink::of(Some(&listed()), true, None, None), MachineLink::Lost);
 }
 
 #[test]
 fn a_hold_stays_only_for_the_destination_it_was_started_with() {
-    let up = |destination: &str| Link::Up { boot: "b".into(), destination: destination.into() };
-    assert!(hold_stays("vps.invalid", &up("vps.invalid")));
-    assert!(!hold_stays("vps.invalid", &up("other.invalid")));
-    assert!(hold_stays("vps.invalid", &Link::Waiting(None)));
-    assert!(hold_stays("vps.invalid", &Link::Waiting(Some("vps.invalid".into()))));
-    assert!(!hold_stays("vps.invalid", &Link::Lost));
+    let up = |destination: &str| MachineLink::Up { boot: "b".into(), destination: destination.into() };
+    assert!(up("vps.invalid").stays_for("vps.invalid"));
+    assert!(!up("other.invalid").stays_for("vps.invalid"));
+    assert!(MachineLink::Waiting(None).stays_for("vps.invalid"));
+    assert!(MachineLink::Waiting(Some("vps.invalid".into())).stays_for("vps.invalid"));
+    assert!(!MachineLink::Lost.stays_for("vps.invalid"));
 }
 
 #[test]
@@ -90,15 +90,15 @@ fn a_lost_machine_ends_only_its_own_holds() {
         test_hold(Toward::Machine("vps".into()), 5173, Held::Opening),
         test_hold(Toward::Machine("cap".into()), 5173, Held::Opening),
     ];
-    let (ended, kept) = split_stale(holds, &Toward::Machine("vps".into()), &Link::Lost);
+    let (ended, kept) = split_stale(holds, &Toward::Machine("vps".into()), &MachineLink::Lost);
     assert_eq!(ended.len(), 1);
     assert_eq!(kept.len(), 2);
 }
 
 #[test]
 fn a_hold_to_a_destination_changed_while_the_link_waits_ends() {
-    let waiting = Link::Waiting(Some("other.invalid".into()));
-    assert!(!hold_stays("vps.invalid", &waiting));
+    let waiting = MachineLink::Waiting(Some("other.invalid".into()));
+    assert!(!waiting.stays_for("vps.invalid"));
     let holds = vec![test_hold(Toward::Machine("vps".into()), 8765, Held::Up { local: 1 })];
     let (ended, kept) = split_stale(holds, &Toward::Machine("vps".into()), &waiting);
     assert_eq!((ended.len(), kept.len()), (1, 0));
@@ -111,4 +111,35 @@ fn a_machine_with_only_a_settling_entry_is_still_followed() {
     assert_eq!(names.into_iter().collect::<Vec<_>>(), ["vps"]);
     let listed = followed(["cap".to_string()].into_iter(), std::iter::empty());
     assert_eq!(listed.into_iter().collect::<Vec<_>>(), ["cap"]);
+}
+
+#[test]
+fn a_reachable_listed_machine_is_up_before_any_gate() {
+    let machine = listed();
+    let expected = MachineLink::Up { boot: "boot-a".into(), destination: "vps.invalid".into() };
+    assert_eq!(MachineLink::of(Some(&machine), true, Some(&seen()), Some(&up())), expected);
+}
+
+#[test]
+fn the_gate_leaves_a_waiting_or_lost_link_as_it_is() {
+    let older = Gate::Older(Older::Server(crate::cli::Version::parse("0.13.45")));
+    assert_eq!(MachineLink::Waiting(None).gated(Gate::Open), MachineLink::Waiting(None));
+    let waiting = MachineLink::Waiting(Some("vps.invalid".into()));
+    assert_eq!(waiting.clone().gated(older), waiting);
+    assert_eq!(MachineLink::Lost.gated(Gate::Open), MachineLink::Lost);
+}
+
+#[test]
+fn a_refused_reach_only_waits_while_the_list_is_not_read() {
+    let refused = Reach::Refused("vps is no longer listed".into());
+    assert_eq!(MachineLink::of(None, false, Some(&seen()), Some(&refused)), MachineLink::Waiting(None));
+}
+
+#[test]
+fn a_destination_not_known_when_made_is_never_another() {
+    let up = MachineLink::Up { boot: "b".into(), destination: "vps.invalid".into() };
+    assert!(up.stays_for(""));
+    assert!(MachineLink::Waiting(Some("vps.invalid".into())).stays_for(""));
+    assert!(MachineLink::Waiting(None).stays_for(""));
+    assert!(!MachineLink::Lost.stays_for(""));
 }
