@@ -1,5 +1,7 @@
+use std::collections::BTreeMap;
+
 use super::held::{Held, Hold};
-use crate::model::tunnels::{ASKS_ISSUE, TunnelSeen, Way};
+use crate::model::tunnels::{ASKS_ISSUE, ELSEWHERE_ISSUE, Toward, TunnelSeen};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Control {
@@ -22,6 +24,7 @@ pub(crate) enum Whose {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TunnelRow {
+    pub(crate) toward: Toward,
     pub(crate) port: u16,
     pub(crate) whose: Whose,
 }
@@ -55,10 +58,10 @@ fn ours_row(hold: &Hold) -> Option<TunnelRow> {
         Held::Down { why } => Whose::Down { why: why.clone() },
         Held::Ending => return None,
     };
-    Some(TunnelRow { port: hold.port, whose })
+    Some(TunnelRow { toward: hold.toward.clone(), port: hold.port, whose })
 }
 
-fn is_ours(seen: &TunnelSeen, ours: &[Hold]) -> bool {
+fn is_ours(seen: &TunnelSeen, ours: &[&Hold]) -> bool {
     seen.kind == "hold"
         && ours.iter().any(|hold| hold.port == seen.port && hold.local().is_none_or(|local| Some(local) == seen.local))
 }
@@ -71,27 +74,46 @@ fn others_row(seen: &TunnelSeen) -> TunnelRow {
     } else {
         Whose::Program
     };
-    TunnelRow { port: seen.port, whose }
+    TunnelRow { toward: Toward::Server, port: seen.port, whose }
 }
 
-pub(crate) fn menu_rows(listed: &[TunnelSeen], ours: &[Hold]) -> Vec<TunnelRow> {
-    let mine = ours.iter().filter_map(ours_row);
-    let others = listed.iter().filter(|seen| !is_ours(seen, ours)).map(others_row);
+fn on_server(held: &[Hold]) -> Vec<&Hold> {
+    held.iter().filter(|hold| hold.toward == Toward::Server).collect()
+}
+
+pub(crate) fn menu_rows(listed: &[TunnelSeen], held: &[Hold]) -> Vec<TunnelRow> {
+    let ours = on_server(held);
+    let mine = ours.iter().copied().filter_map(ours_row);
+    let others = listed.iter().filter(|seen| !is_ours(seen, &ours)).map(others_row);
     let mut rows: Vec<TunnelRow> = mine.chain(others).collect();
     rows.sort_by_key(|row| (row.port, !row.ours()));
     rows
 }
 
-pub(crate) fn elsewhere(port: u16, listed: &[TunnelSeen], ours: &[Hold]) -> bool {
-    listed.iter().any(|seen| seen.port == port && seen.state != "closed" && !is_ours(seen, ours))
+pub(crate) fn machine_sections(holds: &[Hold]) -> Vec<(String, Vec<TunnelRow>)> {
+    let mut by_machine: BTreeMap<String, Vec<TunnelRow>> = BTreeMap::new();
+    for row in holds.iter().filter_map(ours_row) {
+        if let Toward::Machine(name) = &row.toward {
+            by_machine.entry(name.clone()).or_default().push(row);
+        }
+    }
+    by_machine.into_iter().map(|(name, rows)| (name, sorted(rows))).collect()
 }
 
-pub(crate) fn row_control(way: &Way, held: Option<&Held>) -> Control {
-    if *way != Way::Cornercase {
-        return Control::Hidden;
-    }
+fn sorted(mut rows: Vec<TunnelRow>) -> Vec<TunnelRow> {
+    rows.sort_by_key(|row| row.port);
+    rows
+}
+
+pub(crate) fn elsewhere(port: u16, listed: &[TunnelSeen], held: &[Hold]) -> bool {
+    let ours = on_server(held);
+    listed.iter().any(|seen| seen.port == port && seen.state != "closed" && !is_ours(seen, &ours))
+}
+
+pub(crate) fn row_control(can_tunnel: bool, held: Option<&Held>) -> Control {
     match held {
-        None => Control::Tunnel,
+        None if can_tunnel => Control::Tunnel,
+        None => Control::Hidden,
         Some(Held::Opening) => Control::Opening,
         Some(Held::Up { .. } | Held::Down { .. }) => Control::Close,
         Some(Held::Ending) => Control::Closing,
@@ -105,8 +127,8 @@ pub(crate) struct Mark {
     pub(crate) waiting: bool,
 }
 
-pub(crate) fn mark(way: &Way, held: Option<&Held>, elsewhere: bool) -> Option<Mark> {
-    if *way != Way::Cornercase {
+pub(crate) fn mark(shows: bool, held: Option<&Held>, elsewhere: bool) -> Option<Mark> {
+    if !shows && held.is_none() {
         return None;
     }
     let plain = |text: &str| Some(Mark { text: text.to_string(), tip: None, waiting: false });
@@ -123,6 +145,10 @@ pub(crate) fn mark(way: &Way, held: Option<&Held>, elsewhere: bool) -> Option<Ma
         }),
         Some(Held::Ending) | None => None,
     }
+}
+
+pub(crate) fn others_note(machines: &str) -> String {
+    format!("Tunnels other windows or programs hold to {machines} are not listed here: needs {ELSEWHERE_ISSUE}")
 }
 
 pub(crate) fn asks_note(host: &str) -> String {

@@ -446,3 +446,23 @@ fn a_boot_goes_before_the_words_after_two_dashes() {
     let args = with_boot(args(&["account", "restart", "--json", "--pane", "9", "--", "claude", "work"]), "b1");
     assert_eq!(args, ["account", "restart", "--json", "--pane", "9", "--boot", "b1", "--", "claude", "work"]);
 }
+
+#[test]
+fn a_machine_workspaces_ports_go_by_its_own_id() {
+    let session = session();
+    let seen = vps(&session);
+    let aim = seen.aim_at(named(seen, "main"));
+    let id = aim.workspace_arg();
+    assert_eq!(aim.ports_args(false), ["ports", "--json", "--workspace", id.as_str()]);
+    assert_eq!(aim.ports_args(true), ["ports", "--json", "--all"]);
+}
+
+#[test]
+fn a_panes_tab_is_found_among_the_machines_workspaces() {
+    let session = session();
+    let seen = vps(&session);
+    let tab = seen.tab_of_pane(ThereId::heard(15)).expect("the agent's tab");
+    assert_eq!(tab.name, "fake-agent");
+    assert!(seen.tab_of_pane(ThereId::heard(999)).is_none());
+    assert_eq!(ThereId::heard(15).pane_words(), "pane 15");
+}

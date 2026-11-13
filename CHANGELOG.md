@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.72
+
+- **A linked machine's dev servers, here.** With a machine's workspace picked, Ports (⇧⌘O, or **Ports…** in its menu) lists what listens there, and **Every port** lists the whole machine. **Stop** works there too and names the machine. With cornercase 0.13.50 or newer on this computer and on the machine, **Tunnel** forwards a port to this computer through cornercase: the row shows the local port, Copy and the system browser's icon use it, and the window says which port it took when the same one is busy here. The status bar counts the tunnels (`⇄2`) and its menu lists them under each machine. They end when the window closes or connects elsewhere, or the machine is removed, and come back when the machine links again. With an older cornercase on either side the ports still list and a line above them says which one needs 0.13.50.
+- The Browser panel does not open a machine's pages yet, and a program on the machine cannot ask for a tunnel here (usecornercase/cornercase-terminal#776).
+
 ## 0.1.71
 
 - In the Files viewer and the Changes diff, a selection that ends at the start of a line now copies the line break before it, as the Queue's run detail and text editors do.

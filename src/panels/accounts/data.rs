@@ -1,4 +1,5 @@
 pub(super) use crate::model::accounts::{Account, AccountsInfo, Login, LoginState, Profile, Provider};
+use crate::model::machines::listed;
 use crate::platform::{Os, paths};
 use crate::store::args;
 
@@ -216,14 +217,6 @@ pub(super) fn valid_name(name: &str) -> bool {
 
 pub(super) fn profile_accounts<'a>(profile: &'a Profile, providers: &'a [Provider]) -> Vec<(&'a Provider, &'a str)> {
     providers.iter().map(|p| (p, profile.accounts.get(&p.id).map_or("", String::as_str))).collect()
-}
-
-fn listed(names: &[String]) -> String {
-    match names {
-        [] => String::new(),
-        [one] => one.clone(),
-        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
-    }
 }
 
 pub(super) fn tokens_title(tokens: &[String]) -> String {

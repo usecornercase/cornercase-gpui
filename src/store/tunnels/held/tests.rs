@@ -1,11 +1,12 @@
 use super::{
-    Asked, Fate, Held, Hold, Settled, bring_back, fate, forgets_after_close, settle_now, settled, up_toast,
-    window_failure,
+    Asked, Fate, Held, Hold, Settled, bring_back, fate, forgets_after_close, live, settle_now, settled, test_hold,
+    up_toast, window_failure,
 };
+use crate::model::tunnels::Toward;
 
 fn hold(state: Held, was_up: bool) -> Hold {
-    let mut hold = Hold::opening(5173, 1, Asked::Click, "boot-a");
-    hold.state = state;
+    let mut hold = test_hold(Toward::Server, 5173, state);
+    hold.boot = "boot-a".to_string();
     hold.was_up = was_up;
     hold
 }
@@ -27,7 +28,7 @@ fn a_hold_with_nothing_on_stderr_says_its_status() {
         failed,
         Fate::Failed("Could not tunnel port 5173: cornercase tunnel hold ended with status 2".to_string())
     );
-    assert_eq!(window_failure(5173, "no free port"), "Could not tunnel port 5173: no free port");
+    assert_eq!(window_failure(&Toward::Server, 5173, "no free port"), "Could not tunnel port 5173: no free port");
 }
 
 #[test]
@@ -89,18 +90,67 @@ fn a_port_brought_back_says_nothing() {
 
 #[test]
 fn an_exit_0_while_unlinked_waits_for_the_next_view_line() {
-    assert_eq!(settle_now(false, false, "boot-a", "boot-a"), None);
-    assert_eq!(settle_now(true, false, "boot-a", "boot-a"), Some(Settled::Closed));
-    assert_eq!(settle_now(true, false, "boot-a", "boot-b"), Some(Settled::Back));
+    assert_eq!(settle_now(false, false, "boot-a", Some("boot-a")), None);
+    assert_eq!(settle_now(true, false, "boot-a", Some("boot-a")), Some(Settled::Closed));
+    assert_eq!(settle_now(true, false, "boot-a", Some("boot-b")), Some(Settled::Back));
 }
 
 #[test]
 fn a_hold_started_again_is_not_forgotten_by_the_exit_that_came_before() {
-    assert_eq!(settle_now(true, true, "boot-a", "boot-a"), Some(Settled::Superseded));
+    assert_eq!(settle_now(true, true, "boot-a", Some("boot-a")), Some(Settled::Superseded));
 }
 
 #[test]
 fn a_close_answered_after_the_port_was_opened_again_keeps_it() {
     assert!(!forgets_after_close(true));
     assert!(forgets_after_close(false));
+}
+
+#[test]
+fn a_port_is_held_once_per_place() {
+    let machine = Toward::Machine("vps".to_string());
+    let holds =
+        [test_hold(Toward::Server, 5173, Held::Up { local: 5173 }), test_hold(machine.clone(), 5173, Held::Opening)];
+    assert_eq!(live(&holds, &Toward::Server, 5173).map(|h| h.state.clone()), Some(Held::Up { local: 5173 }));
+    assert_eq!(live(&holds, &machine, 5173).map(|h| h.state.clone()), Some(Held::Opening));
+    assert!(live(&holds, &Toward::Machine("other".to_string()), 5173).is_none());
+    assert!(live(&holds, &Toward::Server, 80).is_none());
+}
+
+#[test]
+fn a_machines_failure_names_it_and_hides_its_destination() {
+    let machine = Toward::Machine("vps".to_string());
+    let mut held = test_hold(machine.clone(), 8765, Held::Opening);
+    held.was_up = false;
+    let said = "Error: could not reach cornercase on `vps.invalid`: ssh: connect to host vps.invalid port 22: Connection refused\n";
+    let Fate::Failed(text) = fate(&held, Some(1), said) else { panic!("a failure") };
+    assert!(text.starts_with("Could not tunnel port 8765 on vps: could not reach cornercase on"), "{text}");
+    assert!(!text.contains("vps.invalid"), "{text}");
+    let said = "Error: could not tunnel port 8765: ssh: no route\n";
+    let Fate::Failed(text) = fate(&held, Some(1), said) else { panic!("a failure") };
+    assert_eq!(text, "Could not tunnel port 8765 on vps: ssh: no route");
+    assert_eq!(window_failure(&machine, 8765, "x"), "Could not tunnel port 8765 on vps: x");
+}
+
+#[test]
+fn a_machines_tunnel_is_labelled_by_its_name() {
+    let (text, _) = up_toast(Asked::Click, 8765, 63235, "vps").expect("a toast");
+    assert!(text.starts_with("Port 8765 on vps is tunnelled to localhost:63235 (8765 is taken on this "), "{text}");
+    assert_eq!(test_hold(Toward::Machine("vps".to_string()), 1, Held::Opening).label(), "vps");
+}
+
+#[test]
+fn a_machines_dropped_tunnel_reason_hides_its_destination() {
+    let machine = Toward::Machine("vps".to_string());
+    let mut held = test_hold(machine, 8765, Held::Up { local: 8765 });
+    held.was_up = true;
+    let said = "Error: the tunnel of port 8765 ended: ssh: connect to host vps.invalid port 22: Connection refused\n";
+    let Fate::Retry(why) = fate(&held, Some(1), said) else { panic!("a retry") };
+    assert!(why.contains("connect to host vps port 22") && !why.contains("vps.invalid"), "{why}");
+}
+
+#[test]
+fn an_exit_0_waits_while_the_boot_to_compare_is_not_known() {
+    assert_eq!(settle_now(true, false, "boot-a", None), None);
+    assert_eq!(settle_now(true, true, "boot-a", None), None);
 }

@@ -155,6 +155,14 @@ fn hide_word(text: &str, hidden: &str, name: &str) -> String {
     shown
 }
 
+pub(crate) fn listed(names: &[String]) -> String {
+    match names {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
 pub(crate) fn hide_destination(text: &str, name: &str, destination: &str) -> String {
     let host = destination.rsplit_once('@').map_or(destination, |(_, host)| host);
     let hidden = [destination, host].into_iter().filter(|hidden| !hidden.is_empty());

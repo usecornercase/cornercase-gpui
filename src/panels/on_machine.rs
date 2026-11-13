@@ -99,7 +99,7 @@ pub(crate) fn nothing_read(read: &MachineRead) -> String {
     format!("Nothing read from {}", read.aim.machine)
 }
 
-fn where_line(read: &MachineRead) -> impl IntoElement + use<> {
+fn where_line(read: &MachineRead, read_only: bool) -> impl IntoElement + use<> {
     div()
         .id("on-machine")
         .flex()
@@ -109,7 +109,7 @@ fn where_line(read: &MachineRead) -> impl IntoElement + use<> {
         .child(ui::icon(read.icon.icon(), 12.).flex_none().text_color(colours::muted()))
         .child(div().flex_none().text_color(colours::text()).child(format!("on {}", read.aim.machine)))
         .child(div().flex_1().min_w_0().text_color(colours::faint()).child(ui::one_line(read.place.clone())))
-        .child(div().flex_none().text_color(colours::faint()).child("read only"))
+        .when(read_only, |d| d.child(div().flex_none().text_color(colours::faint()).child("read only")))
 }
 
 fn note_line(note: &Note, why: Option<&str>) -> AnyElement {
@@ -123,7 +123,7 @@ fn note_line(note: &Note, why: Option<&str>) -> AnyElement {
     div().id("on-machine-note").when_some(why, |d, why| d.tooltip(tip(why))).child(line).into_any_element()
 }
 
-pub(crate) fn strip(read: &MachineRead, retry: &Retry, counting: &Counting) -> Div {
+pub(crate) fn strip(read: &MachineRead, retry: &Retry, counting: &Counting, read_only: bool) -> Div {
     let note = note(read, retry);
     if note.as_ref().is_some_and(Note::counts) {
         counting.drawn();
@@ -138,7 +138,7 @@ pub(crate) fn strip(read: &MachineRead, retry: &Retry, counting: &Counting) -> D
         .border_b_1()
         .border_color(colours::border())
         .text_size(px(11.))
-        .child(where_line(read))
+        .child(where_line(read, read_only))
         .children(note.map(|note| note_line(&note, retry.why.as_deref())))
 }
 

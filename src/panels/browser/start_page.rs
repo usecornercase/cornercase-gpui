@@ -8,7 +8,7 @@ use super::tunnels::{State, Tunnel};
 use crate::cli;
 use crate::model::Session;
 use crate::model::link::{loopback_port, rewrite};
-use crate::model::tunnels::{Way, older_note};
+use crate::model::tunnels::{Toward, Way, older_note};
 use crate::panels::ports::{self, data::Port};
 use crate::store::Held;
 use crate::store::Store;
@@ -107,7 +107,7 @@ impl Browser {
         let session = store.read(cx).session.as_ref();
         let rows = ports.iter().map(|port| {
             let reach = if held {
-                held_reach(port, store.read(cx).held_tunnel(port.number))
+                held_reach(port, store.read(cx).held_tunnel(&Toward::Server, port.number))
             } else {
                 reach(port, self.dev.tunnels.get(port.number), host.is_some())
             };
@@ -172,7 +172,7 @@ fn close_button(number: u16, reach: &Reach, cx: &Context<Browser>) -> Option<Any
         ui::button(SharedString::from(format!("browser-close-tunnel-{number}")), "Close tunnel")
             .on_click(move |_: &ClickEvent, _, cx| {
                 cx.stop_propagation();
-                store.update(cx, |s, cx| s.close_tunnel(number, false, cx));
+                store.update(cx, |s, cx| s.close_tunnel(&Toward::Server, number, false, cx));
             })
             .into_any_element()
     })

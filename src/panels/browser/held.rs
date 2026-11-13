@@ -4,7 +4,7 @@ use serde_json::json;
 use super::Browser;
 use crate::cli;
 use crate::model::link::{loopback_port, rewrite};
-use crate::model::tunnels::Way;
+use crate::model::tunnels::{Toward, Way};
 use crate::store::Store;
 use crate::store::{Asked, Held};
 
@@ -123,12 +123,12 @@ impl Browser {
     fn follow_holds(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
         let mut waiting = Vec::new();
         for mut open in std::mem::take(&mut self.dev.held_opens) {
-            let before = store.read(cx).held_tunnel(open.remote).cloned();
+            let before = store.read(cx).held_tunnel(&Toward::Server, open.remote).cloned();
             if asks_now(open.asked, before.as_ref()) {
-                store.update(cx, |s, cx| s.hold_tunnel(open.remote, Asked::Open, cx));
+                store.update(cx, |s, cx| s.hold_tunnel(&Toward::Server, open.remote, Asked::Open, cx));
                 open.asked = true;
             }
-            let held = store.read(cx).held_tunnel(open.remote).cloned();
+            let held = store.read(cx).held_tunnel(&Toward::Server, open.remote).cloned();
             match step(held.as_ref(), open.asked) {
                 Step::Open(local) => self.open_held(&open, local, cx),
                 Step::Wait => waiting.push(open),
@@ -153,7 +153,7 @@ impl Browser {
         let remote = loopback_port(url).filter(|_| cli::host().is_some())?;
         let store = Store::get(cx).read(cx);
         let listed = self.dev.ports.iter().flatten().any(|p| p.number == remote);
-        let known = listed || store.held_tunnel(remote).is_some();
+        let known = listed || store.held_tunnel(&Toward::Server, remote).is_some();
         (matches!(store.tunnel_way(), Way::Cornercase | Way::Waiting) && known).then_some(remote)
     }
 
@@ -162,7 +162,7 @@ impl Browser {
         if matches!(way, Way::Own(_)) {
             return self.tunnel_to(remote, cx).map_or(Passage::Waiting, Passage::Through);
         }
-        passage(&way, Store::get(cx).read(cx).held_tunnel(remote))
+        passage(&way, Store::get(cx).read(cx).held_tunnel(&Toward::Server, remote))
     }
 
     pub(super) fn supersede_waiting(&mut self) {

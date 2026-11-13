@@ -1,0 +1,26 @@
+{
+  "ports": [
+    {
+      "addresses": [
+        "127.0.0.1"
+      ],
+      "agent": null,
+      "args": [
+        "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python",
+        "-m",
+        "http.server",
+        "8765",
+        "--bind",
+        "127.0.0.1"
+      ],
+      "pane": 3,
+      "pid": 81382,
+      "port": 8765,
+      "program": "Python",
+      "project": 1,
+      "url": "http://localhost:8765",
+      "via": "pane",
+      "workspace": 2
+    }
+  ]
+}

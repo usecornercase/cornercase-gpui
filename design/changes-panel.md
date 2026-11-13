@@ -1,6 +1,6 @@
 # Changes panel
 
-Code: `panels/changes.rs`, `panels/changes/`, `panels/on_machine.rs` (what it shares with Files on a machine)
+Code: `panels/changes.rs`, `panels/changes/`, `panels/on_machine.rs` (what it shares with Files and Ports on a machine)
 
 The workspace's git changes, through `cornercase changes`, with the actions of the TUI's panel (cornercase's `design/changes-panel.md`).
 

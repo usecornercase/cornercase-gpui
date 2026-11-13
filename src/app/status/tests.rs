@@ -1,6 +1,7 @@
 use super::conn_words;
 use crate::app::Conn;
 use crate::cli::{Behind, Older};
+use crate::model::machines::listed;
 use crate::platform::Os;
 use crate::terminal::{behind_lead, older_lead};
 
@@ -51,9 +52,19 @@ fn the_label_counts_this_windows_tunnels_on_another_server() {
 }
 
 #[test]
-fn the_label_has_no_count_on_this_computer() {
-    let parts = super::label_parts(None, 3, "cornercase 0.13.51");
-    assert_eq!((parts.host, parts.count), (None, None));
+fn the_label_counts_a_machines_tunnels_on_this_computer() {
+    let parts = super::label_parts(None, 2, "cornercase 0.13.54");
+    assert_eq!((parts.host, parts.count.as_deref()), (None, Some("⇄2")));
+    assert!(super::label_parts(None, 0, "x").count.is_none());
+}
+
+#[test]
+fn the_tip_names_the_machines_with_tunnels() {
+    let names = |names: &[&str]| listed(&names.iter().map(ToString::to_string).collect::<Vec<_>>());
+    assert_eq!(names(&["vps"]), "vps");
+    assert_eq!(names(&["vps", "cap"]), "vps and cap");
+    assert_eq!(names(&["vps", "cap", "nas"]), "vps, cap and nas");
+    assert!(super::connection_tip(None, Some("vps")).starts_with("Tunnels to vps, and connecting to another server"));
 }
 
 #[test]
