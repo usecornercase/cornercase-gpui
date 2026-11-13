@@ -147,7 +147,7 @@ impl Browser {
     fn painting(&self, cx: &Context<Self>) -> Painting {
         Painting {
             stale: self.stale.clone(),
-            shot: self.tabs.active(self.workspace).and_then(|t| t.shot.clone()),
+            shot: self.tabs.active(&self.place).and_then(|t| t.shot.clone()),
             entity: cx.entity(),
             focus: self.focus.clone(),
             dragging: self.input.pointer.dragging().then_some(self.cursor),

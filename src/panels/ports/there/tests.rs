@@ -2,9 +2,12 @@ use super::*;
 use crate::model::tunnels::Older;
 
 #[test]
-fn the_machines_notes_follow_the_gate() {
+fn a_machines_note_says_open_shows_it_in_the_browser_and_follows_the_gate() {
     let open = machine_notes(&Gate::Open, "vps", false);
-    assert!(open[0].contains("Tunnel forwards a port") && open[0].contains("does not open a machine's ports"));
+    assert!(
+        open[0].starts_with("These ports are on vps: Tunnel forwards one to this ")
+            && open[0].contains("Open shows it in the Browser panel")
+    );
     let here = machine_notes(&Gate::Older(Older::ThisComputer(crate::cli::Version::parse("0.13.39"))), "vps", false);
     assert!(
         here[0].starts_with("Tunnel needs cornercase 0.13.50 or newer on this ")

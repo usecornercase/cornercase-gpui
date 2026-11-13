@@ -125,3 +125,17 @@ fn a_hyperlink_redrawn_with_another_destination_is_another_spot() {
     assert_eq!((old.text.as_str(), old.start, old.end), (new.text.as_str(), new.start, new.end));
     assert_ne!(old, new);
 }
+
+#[test]
+fn a_machine_tab_keeps_web_addresses_and_never_asks_about_paths() {
+    assert!(spot_kept(true, true));
+    assert!(!spot_kept(true, false));
+    assert!(spot_kept(false, false));
+}
+
+#[test]
+fn a_loopback_address_on_a_machine_tab_always_opens_in_the_panel() {
+    assert!(!outside(true, true));
+    assert!(outside(true, false));
+    assert!(outside(false, true));
+}

@@ -22,7 +22,7 @@ impl Store {
         let listed = self.machines.iter().find(|machine| machine.name == name);
         let seen = self.session.as_ref().and_then(|session| session.machine(name));
         let reached = seen.map(|seen| reach(&cli::target(), &self.machines, seen));
-        let known = self.app.is_some() || !self.machines.is_empty();
+        let known = self.machines_known();
         machine_link(listed, known, seen, reached.as_ref(), &self.machine_tunnel_gate(name))
     }
 

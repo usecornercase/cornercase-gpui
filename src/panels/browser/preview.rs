@@ -12,6 +12,7 @@ use super::cdp::Cdp;
 use super::held::Passage;
 use super::{Browser, Status};
 use crate::model::link::{loopback_port, rewrite};
+use crate::model::tunnels::Toward;
 use crate::{cli, desktop};
 
 const WIDTH: u32 = 1280;
@@ -145,14 +146,20 @@ async fn context(this: &WeakEntity<Browser>, cdp: &Cdp, cx: &mut AsyncApp) -> Re
     Ok(id)
 }
 
-async fn reachable(this: &WeakEntity<Browser>, url: String, cx: &mut AsyncApp) -> Result<String> {
-    let Some(remote) = loopback_port(&url).filter(|_| cli::host().is_some()) else { return Ok(url) };
+async fn reachable(
+    this: &WeakEntity<Browser>,
+    url: String,
+    toward: Option<Toward>,
+    cx: &mut AsyncApp,
+) -> Result<String> {
+    let (Some(remote), Some(toward)) = (loopback_port(&url), toward) else { return Ok(url) };
     let since = Instant::now();
     loop {
-        match this.update(cx, |b, cx| b.passage_to(remote, cx))? {
+        match this.update(cx, |b, cx| b.passage_to(&toward, remote, cx))? {
             Passage::Through(local) => return Ok(rewrite(&url, local)),
-            Passage::Not => bail!("{}", not_tunnelled(remote)),
+            Passage::Not => bail!("{}", not_tunnelled(remote, &toward)),
             Passage::Waiting => {}
+            Passage::Closed(why) => bail!("{}: not shown", why.trim_end_matches('.')),
         }
         if since.elapsed() > TUNNEL {
             bail!("No tunnel reached port {remote} on that machine.");
@@ -161,8 +168,11 @@ async fn reachable(this: &WeakEntity<Browser>, url: String, cx: &mut AsyncApp) -
     }
 }
 
-fn not_tunnelled(remote: u16) -> String {
-    let host = cli::host().unwrap_or_default();
+pub(crate) fn not_tunnelled(remote: u16, toward: &Toward) -> String {
+    let host = match toward {
+        Toward::Machine(name) => name.clone(),
+        Toward::Server => cli::host().unwrap_or_default(),
+    };
     format!("Port {remote} on {host} is not tunnelled to this {}: open it to tunnel it.", desktop::here())
 }
 
@@ -230,12 +240,17 @@ async fn capture(job: Job, cx: &AsyncApp) -> Result<Preview> {
 }
 
 impl Browser {
-    pub(crate) fn preview(&mut self, url: String, cx: &mut Context<Self>) -> Task<Result<Preview>> {
+    pub(crate) fn preview(
+        &mut self,
+        url: String,
+        toward: Option<Toward>,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<Preview>> {
         let agent = self.user_agent.clone();
         cx.spawn(async move |this, cx| {
             let cdp = engine(&this, cx).await?;
             let context = context(&this, &cdp, cx).await?;
-            let url = reachable(&this, url, cx).await?;
+            let url = reachable(&this, url, toward, cx).await?;
             capture(Job { cdp, context, url, agent }, cx).await
         })
     }

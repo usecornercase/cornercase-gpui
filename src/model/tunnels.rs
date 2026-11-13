@@ -5,6 +5,7 @@ use crate::desktop;
 
 pub(crate) const TUNNEL_HOLD_SINCE: Version = Version::new(0, 13, 50);
 pub(crate) const ASKS_ISSUE: &str = "usecornercase/cornercase-terminal#776";
+pub(crate) const REVERSE_ISSUE: &str = "usecornercase/cornercase-terminal#794";
 pub(crate) const ELSEWHERE_ISSUE: &str = "usecornercase/cornercase-terminal#787";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -100,6 +101,21 @@ pub(crate) fn machine_gate(here: Release, server: Option<Version>) -> Gate {
         Gate::Older(Older::Server(server))
     } else {
         Gate::Open
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum MachineOpen {
+    Open,
+    Waiting,
+    Closed(String),
+}
+
+pub(crate) fn open_gate(gate: Gate, can_tunnel: bool, refusal: impl FnOnce() -> String) -> MachineOpen {
+    match gate {
+        Gate::Open if can_tunnel => MachineOpen::Open,
+        Gate::Waiting => MachineOpen::Waiting,
+        Gate::Open | Gate::Older(_) => MachineOpen::Closed(refusal()),
     }
 }
 

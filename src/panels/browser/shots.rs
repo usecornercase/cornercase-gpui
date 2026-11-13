@@ -8,7 +8,7 @@ use gpui::{AppContext as _, Context};
 use serde_json::{Value, json};
 
 use super::Browser;
-use super::agent::toast;
+use super::agent::{Agent, Hand, toast};
 use crate::store::{Busy, Store, ToastKind};
 
 const KEEP: Duration = Duration::from_hours(24);
@@ -40,7 +40,7 @@ struct Order {
     shot: Shot,
     session: String,
     url: String,
-    pane: u64,
+    agent: Agent,
 }
 
 pub(crate) fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
@@ -129,13 +129,13 @@ impl Browser {
     pub(super) fn shoot(&mut self, shot: Shot, cx: &mut Context<Self>) {
         self.agents.menu = None;
         let (Some(session), Some(url)) = (self.active_session(), self.active_url()) else { return };
-        let Some(pane) = self.target_agent(cx) else {
-            toast("No agent in this workspace to give the screenshot to", ToastKind::Info, cx);
+        let Some(agent) = self.target_agent(cx) else {
+            toast(format!("{} to give the screenshot to", self.no_agent_words()), ToastKind::Info, cx);
             return;
         };
         let busy = Busy::new("browser-shot", "Taking a screenshot…");
         self.agents.shooting = Some(Store::get(cx).update(cx, |s, cx| s.start_job(busy, cx)));
-        let order = Order { shot, session, url, pane };
+        let order = Order { shot, session, url, agent };
         match shot {
             Shot::Visible => self.take(order, json!({ "format": "png" }), cx),
             Shot::Full => self.measure_page(order, cx),
@@ -166,10 +166,8 @@ impl Browser {
         match saved {
             Ok(saved) => {
                 let text = caption(order.shot, &order.url, saved.size);
-                if Self::give_to_agent(order.pane, &text, &[saved.path.as_path()], cx) {
-                    let name = Self::agent_name(order.pane, cx);
-                    toast(format!("Screenshot handed to {name}"), ToastKind::Info, cx);
-                }
+                let said = format!("Screenshot handed to {}", Self::agent_name_on(&order.agent, cx));
+                Self::hand(&order.agent, Hand { text, files: vec![saved.path], submit: false }, said, cx);
             }
             Err(e) => toast(format!("Could not take the screenshot: {e:#}"), ToastKind::Error, cx),
         }

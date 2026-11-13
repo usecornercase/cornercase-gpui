@@ -144,7 +144,7 @@ export const SHEETS: { name: string; file: string; keys: string[]; line: string 
   { name: 'Flows', file: 'flows', keys: ['shift', 'cmd', 'G'], line: 'Teams of agents, their plans and runs.' },
   { name: 'Usage', file: 'usage', keys: ['cmd', 'U'], line: 'Plan limits and the numbers of your agents, on each machine.' },
   { name: 'Accounts', file: 'accounts', keys: ['shift', 'cmd', 'A'], line: 'Agent logins, and the account each agent starts and runs on.' },
-  { name: 'Machines', file: 'machines', keys: ['shift', 'cmd', 'N'], line: 'Other computers your agents run on: start work there, see it in your sidebar, Changes, Files and Ports, tunnel its dev servers here, and draw its tabs here, live.' },
+  { name: 'Machines', file: 'machines', keys: ['shift', 'cmd', 'N'], line: 'Other computers your agents run on: start work there, see it in your sidebar, Changes, Files and Ports, tunnel its dev servers here and open them in the Browser, and draw its tabs here, live.' },
   { name: 'Processes', file: 'processes', keys: ['shift', 'cmd', 'M'], line: 'What every pane runs, its CPU and memory.' },
   { name: 'Ports', file: 'ports', keys: ['shift', 'cmd', 'O'], line: 'What listens, to open it or stop it.' },
   { name: 'Worktrees', file: 'worktrees', keys: ['shift', 'cmd', 'T'], line: 'Every worktree on disk, and what is safe to remove.' },

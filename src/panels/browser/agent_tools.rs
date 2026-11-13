@@ -7,9 +7,11 @@ use gpui::{
 };
 
 use super::Browser;
-use super::agent::{Menu, driving_note, toast};
+use super::agent::Hand;
+use super::agent::{Agent, Menu, driving_note, no_agent_there, toast};
 use super::shots::Shot;
 use crate::dialogs;
+use crate::model::tunnels::REVERSE_ISSUE;
 use crate::notify::tip;
 use crate::store::ToastKind;
 use crate::theme::{colours, radius};
@@ -103,42 +105,44 @@ impl Browser {
     }
 
     fn agents_menu(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let endpoint = self.agent_endpoint();
+        let there = self.place.machine().map(str::to_string);
+        let endpoint = there.is_none().then(|| self.agent_endpoint()).flatten();
+        let drives = there.as_deref().map(machine_agents_notes);
         menu_card("browser-agents-menu", 320., cx)
             .child(ui::section("Agents and this browser").px(px(10.)).pt(px(6.)))
-            .child(
-                div()
-                    .px(px(10.))
-                    .text_size(px(12.))
-                    .text_color(colours::muted())
-                    .child("Agents can drive this Chrome over the DevTools protocol, and you see their tabs here."),
-            )
-            .child(endpoint_row(endpoint.clone(), cx))
+            .child(div().px(px(10.)).text_size(px(12.)).text_color(colours::muted()).child(match drives.as_ref() {
+                Some([said, _]) => said.clone(),
+                None => {
+                    "Agents can drive this Chrome over the DevTools protocol, and you see their tabs here.".to_string()
+                }
+            }))
+            .children(drives.map(|[_, needs]| div().px(px(10.)).pt(px(2.)).text_size(px(12.)).child(ui::dim(needs))))
+            .children(there.is_none().then(|| endpoint_row(endpoint.clone(), cx).into_any_element()))
             .child(self.tell_row(endpoint.is_some(), cx))
             .children(self.agent_rows(cx))
             .child(div().mx(px(6.)).my(px(4.)).h(px(1.)).bg(colours::border()))
             .child(self.toggles(cx))
     }
 
+    fn no_agent_row(&self, cx: &mut Context<Self>) -> AnyElement {
+        let row = div().flex().items_center().gap(px(8.)).p(px(6.));
+        if let Some(name) = self.place.machine() {
+            return row.child(div().flex_1().child(ui::note(no_agent_there(name)))).into_any_element();
+        }
+        row.child(div().flex_1().child(ui::note("No agent in this workspace")))
+            .child(ui::icon_text_button("browser-agents-start", Icon::Plus, "Start an agent", Tone::Plain).on_click(
+                cx.listener(|this, _: &ClickEvent, window, cx| {
+                    this.agents.menu = None;
+                    dialogs::start_agent(window, cx);
+                }),
+            ))
+            .into_any_element()
+    }
+
     fn tell_row(&self, ready: bool, cx: &mut Context<Self>) -> AnyElement {
-        let Some(pane) = self.target_agent(cx) else {
-            return div()
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .p(px(6.))
-                .child(div().flex_1().child(ui::note("No agent in this workspace")))
-                .child(
-                    ui::icon_text_button("browser-agents-start", Icon::Plus, "Start an agent", Tone::Plain).on_click(
-                        cx.listener(|this, _: &ClickEvent, window, cx| {
-                            this.agents.menu = None;
-                            dialogs::start_agent(window, cx);
-                        }),
-                    ),
-                )
-                .into_any_element();
-        };
-        let label = format!("Tell {} about it", Self::agent_name(pane, cx));
+        let Some(agent) = self.target_agent(cx) else { return self.no_agent_row(cx) };
+        let Agent::Here(_) = agent else { return div().into_any_element() };
+        let label = format!("Tell {} about it", Self::agent_name_on(&agent, cx));
         entry("browser-agents-tell", Icon::Send, label)
             .when(!ready, |e| e.opacity(0.35))
             .tooltip(tip("Pastes a note into its prompt: where this Chrome runs and how to connect to it"))
@@ -153,9 +157,9 @@ impl Browser {
         }
         let target = self.target_agent(cx);
         let rows = choices.into_iter().map(|choice| {
-            let chosen = Some(choice.pane) == target;
+            let chosen = target.as_ref().map(Agent::key) == Some(choice.pane);
             let glyph = if chosen { Icon::Check } else { Icon::Agent };
-            entry(("browser-agent", choice.pane), glyph, choice.label)
+            entry(SharedString::from(format!("browser-agent-{}", choice.pane.element())), glyph, choice.label)
                 .when(chosen, |e| e.text_color(colours::accent()))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.choose_agent(choice.pane, cx)))
                 .into_any_element()
@@ -184,11 +188,11 @@ impl Browser {
     }
 
     fn tell_agent(&mut self, cx: &mut Context<Self>) {
-        let (Some(url), Some(pane)) = (self.agent_endpoint(), self.target_agent(cx)) else { return };
+        let Some(agent @ Agent::Here(_)) = self.target_agent(cx) else { return };
+        let Some(url) = self.agent_endpoint() else { return };
         self.agents.menu = None;
-        if Self::give_to_agent(pane, &driving_note(&url), &[], cx) {
-            toast(format!("Told {} where this Chrome runs", Self::agent_name(pane, cx)), ToastKind::Info, cx);
-        }
+        let said = format!("Told {} where this Chrome runs", Self::agent_name_on(&agent, cx));
+        Self::hand(&agent, Hand { text: driving_note(&url), files: Vec::new(), submit: false }, said, cx);
         cx.notify();
     }
 }
@@ -229,6 +233,13 @@ fn endpoint_row(endpoint: Option<String>, cx: &mut Context<Browser>) -> impl Int
                 toast("Copied the browser's DevTools address", ToastKind::Info, cx);
             }),
         ))
+}
+
+pub(crate) fn machine_agents_notes(machine: &str) -> [String; 2] {
+    [
+        format!("Agents on {machine} cannot drive this Chrome: it runs on this {}.", crate::desktop::here()),
+        format!("needs {REVERSE_ISSUE}"),
+    ]
 }
 
 pub(super) fn reloaded(label: String) -> impl IntoElement {

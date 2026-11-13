@@ -7,7 +7,8 @@ use gpui::{
 };
 
 use super::Browser;
-use super::agent::{Menu, toast};
+use super::agent::Hand;
+use super::agent::{Agent, Menu, toast};
 use super::agent_tools::reloaded;
 use super::picker::{Crop, Pick, Picked};
 use crate::dialogs;
@@ -66,8 +67,8 @@ impl Browser {
         if matches!(picked.crop, Crop::Capturing) {
             return;
         }
-        let Some(pane) = self.target_agent(cx) else {
-            toast("No agent in this workspace", ToastKind::Info, cx);
+        let Some(agent) = self.target_agent(cx) else {
+            toast(self.no_agent_words(), ToastKind::Info, cx);
             return;
         };
         let crop: Vec<PathBuf> = match &picked.crop {
@@ -76,14 +77,10 @@ impl Browser {
         };
         let brief = picked.element.brief(!crop.is_empty());
         let instruction = self.instruction(cx);
-        let sent = if instruction.is_empty() {
-            let files: Vec<&std::path::Path> = crop.iter().map(PathBuf::as_path).collect();
-            Self::give_to_agent(pane, &format!("{brief}\n"), &files, cx)
-        } else {
-            Self::submit_to_agent(pane, format!("{brief}\n\n{instruction}"), &crop, cx)
-        };
-        if sent {
-            toast(format!("Handed to {}", Self::agent_name(pane, cx)), ToastKind::Info, cx);
+        let submit = !instruction.is_empty();
+        let text = if submit { format!("{brief}\n\n{instruction}") } else { format!("{brief}\n") };
+        let said = format!("Handed to {}", Self::agent_name_on(&agent, cx));
+        if Self::hand(&agent, Hand { text, files: crop, submit }, said, cx) {
             self.agents.pick = None;
             cx.notify();
         }
@@ -123,8 +120,13 @@ impl Browser {
 
     fn picked_footer(&self, picked: &Picked, cx: &mut Context<Self>) -> Div {
         let row = div().flex().items_center().gap(px(8.));
-        let Some(pane) = self.target_agent(cx) else {
-            return row.child(div().flex_1().child(ui::note("No agent in this workspace"))).child(start_button(cx));
+        let Some(agent) = self.target_agent(cx) else {
+            let note = div().flex_1().child(ui::note(self.no_agent_words()));
+            return if self.place.machine().is_some() {
+                row.child(note)
+            } else {
+                row.child(note).child(start_button(cx))
+            };
         };
         let send = match picked.crop {
             Crop::Capturing => ui::busy_button("browser-pick-send", "Capturing…", Tone::Primary),
@@ -133,11 +135,11 @@ impl Browser {
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.send_pick(cx)))
             }
         };
-        row.child(div().flex_1().min_w_0().child(self.chooser(pane, cx))).child(send)
+        row.child(div().flex_1().min_w_0().child(self.chooser(&agent, cx))).child(send)
     }
 
-    fn chooser(&self, pane: u64, cx: &mut Context<Self>) -> Div {
-        let name = Self::agent_name(pane, cx);
+    fn chooser(&self, agent: &Agent, cx: &mut Context<Self>) -> Div {
+        let name = Self::agent_name(agent, cx);
         let many = self.agent_choices(cx).len() > 1;
         let label = div().min_w_0().flex().text_size(px(12.)).text_color(colours::soft()).child(ui::one_line(name));
         let open = self.agents.menu == Some(Menu::Chooser);

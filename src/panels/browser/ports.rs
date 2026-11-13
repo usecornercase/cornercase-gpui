@@ -1,41 +1,56 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use gpui::{App, Context, Entity};
+use gpui::{Context, Entity};
 use serde_json::Value;
 
 use super::Browser;
-use super::held::HeldOpen;
+use super::held::{HeldOpen, Route, route};
+use super::tabs::{Restore, Tab, Through};
 use super::tunnels::Tunnels;
 use crate::cli;
-use crate::model::link::loopback_port;
+use crate::model::Owner;
+use crate::model::link::{loopback_port, rewrite};
+use crate::model::tunnels::MachineOpen;
 use crate::model::tunnels::Way;
 use crate::panels::PanelKind;
+use crate::panels::on_machine::Retry;
 use crate::panels::poll::{Polled, Watch, parse};
+use crate::panels::ports::Listed;
 use crate::panels::ports::data::{List, Port, list_command};
 use crate::store::{self, Store};
 
 pub(crate) struct DevServers {
-    pub(crate) ports: Option<Vec<Port>>,
+    pub(crate) listed: Listed,
     pub(crate) error: Option<String>,
+    pub(crate) retry: Retry,
     pub(crate) tunnels: Tunnels,
     pub(super) held_opens: Vec<HeldOpen>,
-    workspace: Option<u64>,
-    generation: u64,
-    seen: HashSet<(u64, u16)>,
+    pub(super) scope: Option<(Owner, String)>,
+    pub(super) generation: u64,
+    pub(super) seen: HashSet<(Owner, u16)>,
     watch: Watch,
 }
 
 impl DevServers {
+    pub(super) fn watch_begin(&mut self) -> bool {
+        self.watch.begin()
+    }
+
+    pub(super) fn watch_end(&mut self) {
+        self.watch.end();
+    }
+
     pub(crate) fn new(cx: &mut Context<Browser>) -> Self {
         let tunnels = Tunnels::new(cx);
         let watch = Watch::start(cx);
         Self {
-            ports: None,
+            listed: Listed::None,
             error: None,
+            retry: Retry::default(),
             tunnels,
             held_opens: Vec::new(),
-            workspace: None,
+            scope: None,
             generation: 0,
             seen: HashSet::new(),
             watch,
@@ -43,35 +58,77 @@ impl DevServers {
     }
 
     pub(super) fn forget_server(&mut self) {
-        (self.workspace, self.ports, self.error) = (None, None, None);
+        self.reset(None);
         self.seen.clear();
+    }
+
+    fn reset(&mut self, scope: Option<(Owner, String)>) {
+        self.scope = scope;
+        (self.listed, self.error, self.retry) = (Listed::None, None, Retry::default());
         self.generation += 1;
     }
 
-    fn follow(&mut self, workspace: Option<u64>) -> bool {
-        let moved = workspace != self.workspace;
+    pub(super) fn follow(&mut self, place: &Owner) -> bool {
+        let scope = scope_of(place);
+        let moved = scope != self.scope;
         if moved {
-            (self.workspace, self.ports, self.error) = (workspace, None, None);
+            self.reset(scope);
         }
         moved
     }
+
+    pub(crate) fn own_numbers(&self) -> Vec<u16> {
+        here_numbers(&self.listed)
+    }
+
+    pub(crate) fn listed_numbers(&self) -> Vec<u16> {
+        match &self.listed {
+            Listed::None => Vec::new(),
+            Listed::Here(ports) => ports.iter().map(|p| p.number).collect(),
+            Listed::There(ports) => ports.iter().map(|p| p.number).collect(),
+        }
+    }
 }
 
-pub(crate) fn still_asked(sample: (u64, u64), now: (Option<u64>, u64)) -> bool {
-    now.0 == Some(sample.0) && now.1 == sample.1
+pub(crate) fn here_numbers(listed: &Listed) -> Vec<u16> {
+    match listed {
+        Listed::Here(ports) => ports.iter().map(|p| p.number).collect(),
+        Listed::None | Listed::There(_) => Vec::new(),
+    }
 }
 
-pub(crate) fn web_ports(ports: Vec<Port>) -> Vec<Port> {
-    let mut web: Vec<Port> = ports.into_iter().filter(|p| p.url.is_some()).collect();
+pub(crate) fn scope_of(place: &Owner) -> Option<(Owner, String)> {
+    match place {
+        Owner::Nobody => None,
+        Owner::Here(_) => Some((place.clone(), String::new())),
+        Owner::There(ws) => Some((place.clone(), ws.destination().to_string())),
+    }
+}
+
+pub(crate) fn web_ports<Id>(ports: Vec<Port<Id>>) -> Vec<Port<Id>> {
+    let mut web: Vec<Port<Id>> = ports.into_iter().filter(|p| p.url.is_some()).collect();
     web.sort_by_key(|p| p.number);
     web.dedup_by_key(|p| p.number);
     web
 }
 
-pub(crate) fn appeared(ports: &[Port], seen: &mut HashSet<(u64, u16)>, workspace: u64) -> Option<String> {
-    let first = ports.iter().find(|p| !seen.contains(&(workspace, p.number))).and_then(|p| p.url.clone());
-    seen.extend(ports.iter().map(|p| (workspace, p.number)));
+pub(crate) fn appeared<Id>(ports: &[Port<Id>], seen: &mut HashSet<(Owner, u16)>, owner: &Owner) -> Option<String> {
+    let first = ports.iter().find(|p| !seen.contains(&(owner.clone(), p.number))).and_then(|p| p.url.clone());
+    seen.extend(ports.iter().map(|p| (owner.clone(), p.number)));
     first
+}
+
+pub(crate) fn reused_tab(tabs: &[Tab], owner: &Owner, url: &str, through: Option<Through>) -> Option<(String, bool)> {
+    let mine = || tabs.iter().filter(|t| t.owner == *owner);
+    if let Some(tab) = mine().find(|t| same_page(&t.url, url)) {
+        return Some((tab.target.clone(), true));
+    }
+    let new = through?;
+    let old_hold = |t: &&Tab| {
+        let held = t.through.filter(|h| h.remote == new.remote && loopback_port(&t.url) == Some(h.local));
+        held.is_some_and(|h| h.local != new.local && same_page(&rewrite(&t.url, new.local), url))
+    };
+    mine().find(old_hold).map(|tab| (tab.target.clone(), false))
 }
 
 pub(crate) fn origin(url: &str) -> &str {
@@ -87,11 +144,6 @@ pub(crate) fn same_page(shown: &str, asked: &str) -> bool {
     }
 }
 
-fn on_screen(cx: &App) -> (bool, Option<u64>) {
-    let store = Store::get(cx).read(cx);
-    (store.dock == Some(PanelKind::Browser), store.session.as_ref().and_then(|s| s.shown().workspace))
-}
-
 impl Polled for Browser {
     const KIND: PanelKind = PanelKind::Browser;
     const EVERY: Duration = Duration::from_secs(2);
@@ -101,77 +153,100 @@ impl Polled for Browser {
     }
 
     fn measure(&mut self, cx: &mut Context<Self>) {
-        let (shown, workspace) = on_screen(cx);
-        self.dev.follow(workspace);
-        let Some(workspace) = workspace.filter(|_| shown) else { return };
+        let (shown, place) = super::there::on_screen(cx);
+        self.dev.follow(&place);
+        if !shown {
+            return;
+        }
+        match place {
+            Owner::Here(workspace) => self.measure_here(workspace, cx),
+            Owner::There(_) => self.measure_there(cx),
+            Owner::Nobody => {}
+        }
+    }
+}
+
+impl Browser {
+    fn measure_here(&mut self, workspace: u64, cx: &mut Context<Self>) {
         if !self.dev.watch.begin() {
             return;
         }
         let command = list_command(false, Some(workspace));
         let generation = self.dev.generation;
-        store::run_json(cx, command, move |this, result, cx| this.sampled((workspace, generation), result, cx));
+        store::run_json(cx, command, move |this, result, cx| this.sampled(generation, result, cx));
     }
-}
 
-impl Browser {
     pub(super) fn dev_changed(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
-        if self.dev.follow(on_screen(cx).1) {
+        if self.dev.follow(&self.place) {
             self.measure(cx);
         }
         let asked = store.read(cx).browse.is_some();
-        if let Some((url, workspace)) = asked.then(|| store.update(cx, |s, _| s.browse.take())).flatten() {
-            self.browse(url, workspace.or(self.workspace), cx);
+        if let Some((url, owner)) = asked.then(|| store.update(cx, |s, _| s.browse.take())).flatten() {
+            self.browse(url, owner, cx);
         }
     }
 
-    fn sampled(&mut self, (workspace, generation): (u64, u64), result: anyhow::Result<Value>, cx: &mut Context<Self>) {
+    fn sampled(&mut self, generation: u64, result: anyhow::Result<Value>, cx: &mut Context<Self>) {
         self.dev.watch.end();
-        if !still_asked((workspace, generation), (self.dev.workspace, self.dev.generation)) {
+        if generation != self.dev.generation {
             self.measure(cx);
             return;
         }
         match parse::<List>(result) {
-            Ok(list) => (self.dev.ports, self.dev.error) = (Some(web_ports(list.ports)), None),
+            Ok(list) => (self.dev.listed, self.dev.error) = (Listed::Here(web_ports(list.ports)), None),
             Err(e) => self.dev.error = Some(e),
         }
         let own = matches!(Store::get(cx).read(cx).tunnel_way(), Way::Own(_));
         self.keep_tunnels(own, cx);
-        self.auto_open(workspace, cx);
+        self.auto_open(cx);
         cx.notify();
     }
 
-    fn auto_open(&mut self, workspace: u64, cx: &mut Context<Self>) {
-        let Some(ports) = &self.dev.ports else { return };
-        let url = appeared(ports, &mut self.dev.seen, workspace);
-        let opening = self.dev.tunnels.pending_in(Some(workspace))
-            || self.dev.held_opens.iter().any(|open| open.in_workspace(Some(workspace)))
-            || self.restore.iter().any(|r| r.1 == Some(workspace));
-        let busy = opening || self.tabs.active(Some(workspace)).is_some();
-        if let Some(url) = url.filter(|_| !busy) {
-            self.browse(url, Some(workspace), cx);
+    pub(super) fn auto_open(&mut self, cx: &mut Context<Self>) {
+        let owner = self.place.clone();
+        if let Owner::There(ws) = &owner
+            && Store::get(cx).read(cx).machine_open(ws.machine()) != MachineOpen::Open
+        {
+            return;
         }
-    }
-
-    pub(super) fn browse(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
-        let Some(remote) = loopback_port(&url).filter(|_| cli::host().is_some()) else {
-            return self.open_now(url, workspace, cx);
+        let url = match &self.dev.listed {
+            Listed::None => return,
+            Listed::Here(ports) => appeared(ports, &mut self.dev.seen, &owner),
+            Listed::There(ports) => appeared(ports, &mut self.dev.seen, &owner),
         };
-        match Store::get(cx).read(cx).tunnel_way() {
-            Way::Own(_) => self.browse_through(remote, url, workspace, cx),
-            Way::Cornercase | Way::Waiting => self.browse_held((remote, url), (workspace, false), cx),
-            Way::Here => self.open_now(url, workspace, cx),
+        let opening = self.dev.tunnels.pending_in(&owner)
+            || self.dev.held_opens.iter().any(|open| open.owned_by(&owner))
+            || self.restore.iter().any(|r| r.owner == owner);
+        let busy = opening || self.tabs.active(&owner).is_some();
+        if let Some(url) = url.filter(|_| !busy) {
+            self.browse(url, owner, cx);
         }
     }
 
-    pub(super) fn open_now(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
-        let shown = self.tabs.list.iter().find(|t| t.workspace == workspace && same_page(&t.url, &url));
-        if let Some(target) = shown.map(|t| t.target.clone()) {
-            self.tabs.activate(workspace, &target);
+    pub(super) fn browse(&mut self, url: String, owner: Owner, cx: &mut Context<Self>) {
+        let toward = owner.toward(cli::host().as_deref());
+        let store = Store::get(cx).read(cx);
+        let open = owner.machine().map(|name| store.machine_open(name));
+        match route(&url, toward.as_ref(), store.tunnel_way(), open.as_ref()) {
+            Route::Direct => self.open_now(url, owner, None, cx),
+            Route::Own(remote) => self.browse_through(remote, url, owner, cx),
+            Route::Held(_, remote) => self.browse_held((remote, url), (owner, false), cx),
+            Route::Refused(why) => Store::get(cx).update(cx, |s, cx| s.not_opened(&why, cx)),
+        }
+    }
+
+    pub(super) fn open_now(&mut self, url: String, owner: Owner, through: Option<Through>, cx: &mut Context<Self>) {
+        let shown = reused_tab(&self.tabs.list, &owner, &url, through);
+        if let Some((target, direct)) = shown {
+            if let Some(tab) = self.tabs.get_mut(&target).filter(|_| direct) {
+                tab.through = through.or(tab.through);
+            }
+            self.tabs.activate(owner, &target);
             self.recast(cx);
         } else if self.cdp().is_some() {
-            self.open_tab(&url, workspace, cx);
+            self.open_tab(&url, owner, through, cx);
         } else {
-            self.restore.push((url, workspace));
+            self.restore.push(Restore { url, owner, through });
         }
     }
 }

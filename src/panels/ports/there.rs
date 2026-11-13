@@ -4,9 +4,10 @@ use gpui::Context;
 
 use super::PortsPanel;
 use super::data::{List, Port};
+use super::rows::cornercase_note;
 use super::source::{Listed, Scope};
 use super::view::there_key;
-use crate::desktop;
+use crate::cli::Target;
 use crate::model::ThereId;
 use crate::model::machines::hide_destination;
 use crate::model::tunnels::{Gate, gate_note};
@@ -16,14 +17,22 @@ use crate::store::{self, MachineRead};
 pub(super) fn machine_notes(gate: &Gate, machine: &str, refused: bool) -> Vec<String> {
     match gate {
         _ if refused => Vec::new(),
-        Gate::Open => vec![format!(
-            "Tunnel forwards a port to this {} through cornercase, which lists it; once it is up, Copy and the system \
-             browser use it here. The Browser panel does not open a machine's ports yet.",
-            desktop::here()
-        )],
+        Gate::Open => vec![cornercase_note(machine)],
         Gate::Older(older) => vec![gate_note(older, machine)],
         Gate::Waiting => Vec::new(),
     }
+}
+
+pub(crate) fn sample_there<T: 'static>(
+    cx: &mut Context<T>,
+    (read, target, all): (&MachineRead, Target, bool),
+    then: impl FnOnce(&mut T, Result<Vec<Port<ThereId>>, String>, &mut Context<T>) + 'static,
+) {
+    let (machine, destination) = (read.aim.machine.clone(), read.destination.clone());
+    store::run_on(cx, target, read.aim.ports_args(all), move |this, result, cx| {
+        let list = parse_text::<List<ThereId>>(result).map(|list| list.ports);
+        then(this, list.map_err(|why| hide_destination(&why, &machine, &destination)), cx);
+    });
 }
 
 impl PortsPanel {
@@ -35,16 +44,16 @@ impl PortsPanel {
         if !self.retry.due(Instant::now()) || !self.watch.begin() {
             return;
         }
-        let (scope, read) = (self.scope.clone(), read.clone());
-        let args = read.aim.ports_args(self.all);
-        store::run_on(cx, target, args, move |this, result, cx| this.heard_there(scope.as_ref(), &read, result, cx));
+        let scope = self.scope.clone();
+        sample_there(cx, (read, target, self.all), move |this, answer, cx| {
+            this.heard_there(scope.as_ref(), answer, cx);
+        });
     }
 
     fn heard_there(
         &mut self,
         scope: Option<&Scope>,
-        read: &MachineRead,
-        result: anyhow::Result<String>,
+        answer: Result<Vec<Port<ThereId>>, String>,
         cx: &mut Context<Self>,
     ) {
         self.watch.end();
@@ -52,14 +61,12 @@ impl PortsPanel {
             self.measure(cx);
             return;
         }
-        let answer = parse_text::<List<ThereId>>(result);
         match answer {
-            Ok(list) => {
+            Ok(ports) => {
                 self.retry.heard();
-                self.listed_there(list.ports);
+                self.listed_there(ports);
             }
-            Err(why) => {
-                let said = hide_destination(&why, &read.aim.machine, &read.destination);
+            Err(said) => {
                 self.retry.failed(said, Instant::now());
             }
         }

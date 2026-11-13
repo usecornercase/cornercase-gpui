@@ -4,6 +4,7 @@ use super::selection::{class, column, word_at};
 use crate::app::{Drag, Root};
 use crate::cli;
 use crate::model::link::{Hovered, Span, Target, is_loopback, row_cells, text_between, url_in, web_hyperlink};
+use crate::model::tunnels::Toward;
 use crate::model::{Link, MouseMode, PaneGrid, Session};
 use crate::panels::PanelKind;
 use crate::panels::files::{self, Anchor, Peek, WebPage};
@@ -42,6 +43,14 @@ impl Links {
     pub(super) fn hovered(&self) -> Option<&Hovered> {
         self.answer.as_ref().filter(|_| self.on)
     }
+}
+
+pub(super) fn spot_kept(on_machine: bool, web: bool) -> bool {
+    web || !on_machine
+}
+
+pub(super) fn outside(loopback: bool, elsewhere: bool) -> bool {
+    !(loopback && elsewhere)
 }
 
 pub(super) fn link_args(pane: u64, (x, y): (u16, u16)) -> Vec<String> {
@@ -95,13 +104,11 @@ fn plain_click(event: &MouseDownEvent) -> bool {
 
 impl Root {
     fn spot_under(&self, at: Point<Pixels>) -> Option<(Spot, (u16, u16))> {
-        if self.machine.is_some() {
-            return None;
-        }
         let Some(Hit::Pane(id, raw)) = self.hit(at) else { return None };
-        let pane = self.own.grid.pane(id)?;
+        let pane = self.shown().grid.pane(id)?;
         let cell = inside(pane, raw)?;
-        Some((spot_at(pane, cell, self.pointer.links.style)?, cell))
+        let spot = spot_at(pane, cell, self.pointer.links.style)?;
+        spot_kept(self.machine.is_some(), web_under(pane, &spot).is_some()).then_some((spot, cell))
     }
 
     pub(super) fn path_style(&self, cx: &App) -> Style {
@@ -126,7 +133,7 @@ impl Root {
     fn enter_spot(&mut self, spot: Spot, cell: (u16, u16), window: &mut Window, cx: &mut Context<Self>) {
         self.pointer.links.spot = Some(spot.clone());
         self.pointer.links.answer = None;
-        let Some(pane) = self.own.grid.pane(spot.pane) else { return };
+        let Some(pane) = self.shown().grid.pane(spot.pane) else { return };
         match web_under(pane, &spot) {
             Some((span, url)) => {
                 let hovered = Hovered::new(pane, span, Target::Web(url));
@@ -190,7 +197,8 @@ impl Root {
 
     fn settle_link(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let cell = self.pointer.links.cell;
-        let on = self.pointer.links.answer.as_ref().is_some_and(|h| h.span.covers(cell) && h.shown_in(&self.own.grid));
+        let on =
+            self.pointer.links.answer.as_ref().is_some_and(|h| h.span.covers(cell) && h.shown_in(&self.shown().grid));
         if on == self.pointer.links.on {
             return;
         }
@@ -224,13 +232,26 @@ impl Root {
         if load {
             self.panel(PanelKind::Browser, window, cx);
         }
-        WebPage { outside: !(local && self.host.is_some()), load, url }
+        let toward = self.web_toward(local, cx);
+        WebPage { outside: outside(local, self.elsewhere()), load, url, toward }
+    }
+
+    fn elsewhere(&self) -> bool {
+        self.host.is_some() || self.machine.is_some()
+    }
+
+    fn web_toward(&self, loopback: bool, cx: &Context<Self>) -> Option<Toward> {
+        let owner = self.store.read(cx).shown_owner();
+        loopback.then(|| owner.toward(self.host.as_deref())).flatten()
     }
 
     fn open_web(&mut self, url: String, cx: &mut Context<Self>) {
-        let outside = !(is_loopback(&url) && self.host.is_some());
+        let outside = outside(is_loopback(&url), self.elsewhere());
         if self.store.read(cx).prefs.opens_in_panel(outside) {
-            self.store.update(cx, |s, cx| s.open_in_browser(url, None, cx));
+            self.store.update(cx, |s, cx| {
+                let owner = s.shown_owner();
+                s.open_in_browser(url, owner, cx);
+            });
         } else {
             cx.open_url(&url);
         }
@@ -243,10 +264,10 @@ impl Root {
     }
 
     pub(super) fn link_under(&self, pane: u64, cell: (u16, u16)) -> Option<Target> {
-        let hovered = self.pointer.links.hovered().filter(|h| h.at(pane, cell) && h.shown_in(&self.own.grid))?;
+        let hovered = self.pointer.links.hovered().filter(|h| h.at(pane, cell) && h.shown_in(&self.shown().grid))?;
         match &hovered.target {
             Target::Web(url)
-                if web_at(self.own.grid.pane(pane)?, cell, self.pointer.links.style).as_ref() != Some(url) =>
+                if web_at(self.shown().grid.pane(pane)?, cell, self.pointer.links.style).as_ref() != Some(url) =>
             {
                 None
             }
@@ -263,7 +284,7 @@ impl Root {
     }
 
     pub(super) fn drag_from_link(&mut self, pane: u64, from: (u16, u16), to: (u16, u16)) {
-        let Some(shown) = self.own.grid.pane(pane).cloned().filter(|_| to != from) else { return };
+        let Some(shown) = self.shown().grid.pane(pane).cloned().filter(|_| to != from) else { return };
         self.drag = None;
         if shown.modes.mouse == MouseMode::None {
             self.drag = Some(Drag::Select { pane, from, to: from });

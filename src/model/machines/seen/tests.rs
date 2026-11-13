@@ -466,3 +466,72 @@ fn a_panes_tab_is_found_among_the_machines_workspaces() {
     assert!(seen.tab_of_pane(ThereId::heard(999)).is_none());
     assert_eq!(ThereId::heard(15).pane_words(), "pane 15");
 }
+
+fn owner_of(seen: &MachineSeen, name: &str) -> WorkspaceThere {
+    WorkspaceThere::at(seen, named(seen, name), "vps.invalid")
+}
+
+fn restarted(session: &Session) -> Vec<MachineSeen> {
+    let mut seen = vps(session).clone();
+    seen.boot = "another-boot".into();
+    for project in &mut seen.projects {
+        for (at, ws) in project.workspaces.iter_mut().enumerate() {
+            ws.id = ThereId(900 + at as u64);
+        }
+    }
+    vec![seen]
+}
+
+#[test]
+fn a_machine_owner_follows_its_id_within_a_run() {
+    let session = session();
+    let owner = owner_of(vps(&session), "main");
+    let followed = owner.followed(&session.machines).expect("the workspace is still there");
+    assert_eq!(followed.aim(), owner.aim());
+}
+
+#[test]
+fn a_machine_owner_follows_its_path_and_name_after_a_restart() {
+    let session = session();
+    let owner = owner_of(vps(&session), "main");
+    let machines = restarted(&session);
+    let followed = owner.followed(&machines).expect("found by its path and name");
+    assert_ne!(followed.aim(), owner.aim());
+    assert_eq!(followed.aim().boot, "another-boot");
+    assert_eq!(followed.destination(), "vps.invalid");
+}
+
+#[test]
+fn a_machine_owner_stays_while_its_machine_is_down() {
+    let session = session();
+    let owner = owner_of(vps(&session), "main");
+    let mut gone = down(Some(SEEN));
+    gone.boot = vps(&session).boot.clone();
+    assert_eq!(owner.followed(&[gone]).as_ref(), Some(&owner));
+}
+
+#[test]
+fn a_machine_owner_is_gone_when_its_workspace_closed_there() {
+    let session = session();
+    let owner = owner_of(vps(&session), "main");
+    let mut seen = vps(&session).clone();
+    seen.projects.iter_mut().for_each(|p| p.workspaces.retain(|ws| ws.name != "main"));
+    assert_eq!(owner.followed(&[seen]), None);
+    assert_eq!(owner.followed(&[]), None);
+}
+
+#[test]
+fn owners_of_one_workspace_are_equal_whatever_their_path_or_destination() {
+    let session = session();
+    let seen = vps(&session);
+    let a = owner_of(seen, "main");
+    let b = WorkspaceThere::at(seen, named(seen, "main"), "elsewhere.invalid");
+    assert_eq!(a, b);
+    let hash = |owner: &WorkspaceThere| {
+        use std::hash::{Hash as _, Hasher as _};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        owner.hash(&mut hasher);
+        hasher.finish()
+    };
+    assert_eq!(hash(&a), hash(&b));
+}

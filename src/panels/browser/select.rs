@@ -150,7 +150,7 @@ impl Browser {
 
     pub(super) fn choice_menu(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
         let choice = self.input.choice.as_ref().filter(|c| c.session == self.active_session())?;
-        let meta = self.tabs.active(self.workspace)?.shot.as_ref()?.meta;
+        let meta = self.tabs.active(&self.place)?.shot.as_ref()?.meta;
         let at = from_page(choice.rect, self.input.bounds.get(), &meta);
         let rows: Vec<AnyElement> = choice.rows().into_iter().map(|row| choice_row(choice, &row, cx)).collect();
         let list = glass::card(radius::card())

@@ -6,6 +6,7 @@ use gpui::Context;
 use super::Browser;
 use super::cdp::Event;
 use super::tabs::Tabs;
+use crate::model::Owner;
 
 const GRACE: Duration = Duration::from_secs(2);
 
@@ -28,12 +29,12 @@ impl Follow {
     }
 }
 
-pub(crate) fn foreign(claimed: bool, workspace: Option<u64>) -> bool {
-    !claimed && workspace.is_none()
+pub(crate) fn foreign(claimed: bool, owner: &Owner) -> bool {
+    !claimed && *owner == Owner::Nobody
 }
 
 pub(crate) fn agents_tab(foreign: &HashSet<String>, tabs: &Tabs, target: &str) -> bool {
-    let unclaimed = tabs.get(target).is_some_and(|t| t.workspace.is_none());
+    let unclaimed = tabs.get(target).is_some_and(|t| t.owner == Owner::Nobody);
     unclaimed && foreign.contains(target)
 }
 
@@ -52,7 +53,7 @@ impl Browser {
         }
         self.agents.follow.foreign.insert(target.to_string());
         if self.agents.follow.follows(Instant::now(), self.agents.pick.is_some()) {
-            self.tabs.activate(self.workspace, target);
+            self.tabs.activate(self.place.clone(), target);
             self.recast(cx);
         }
     }
@@ -78,7 +79,7 @@ impl Browser {
         let tab =
             event.session.as_deref().and_then(|s| self.tabs.by_session(s)).filter(|_| frame.get("parentId").is_none());
         let Some(tab) = tab.filter(|t| self.agent_tab(&t.target)) else { return };
-        let shown = self.tabs.active_target(self.workspace).as_deref() == Some(tab.target.as_str());
+        let shown = self.tabs.active_target(&self.place).as_deref() == Some(tab.target.as_str());
         let now = Instant::now();
         if !shown
             && moved(&tab.url, frame["url"].as_str().unwrap_or_default())

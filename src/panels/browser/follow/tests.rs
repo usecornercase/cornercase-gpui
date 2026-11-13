@@ -10,14 +10,14 @@ fn ready_long_ago() -> (Follow, Instant) {
 
 #[test]
 fn a_tab_nobody_here_opened_belongs_to_an_agent() {
-    assert!(foreign(false, None));
+    assert!(foreign(false, &Owner::Nobody));
 }
 
 #[test]
 fn a_tab_the_panel_opened_or_a_page_of_a_workspace_opened_is_not_an_agents() {
-    assert!(!foreign(true, Some(10)));
-    assert!(!foreign(true, None));
-    assert!(!foreign(false, Some(10)));
+    assert!(!foreign(true, &Owner::Here(10)));
+    assert!(!foreign(true, &Owner::Nobody));
+    assert!(!foreign(false, &Owner::Here(10)));
 }
 
 #[test]
@@ -61,8 +61,8 @@ fn a_new_address_is_a_move_but_a_reload_or_an_anchor_is_not() {
 #[test]
 fn a_tab_claimed_after_chrome_announced_it_is_not_an_agents() {
     let mut tabs = Tabs::default();
-    tabs.add(Tab::new("mine", "http://localhost:5173/", Some(10)));
-    tabs.add(Tab::new("theirs", "http://localhost:5173/", None));
+    tabs.add(Tab::new("mine", "http://localhost:5173/", Owner::Here(10)));
+    tabs.add(Tab::new("theirs", "http://localhost:5173/", Owner::Nobody));
     let foreign = HashSet::from(["mine".to_string(), "theirs".to_string()]);
     assert!(!agents_tab(&foreign, &tabs, "mine"));
     assert!(agents_tab(&foreign, &tabs, "theirs"));

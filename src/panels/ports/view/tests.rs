@@ -154,23 +154,30 @@ fn stopping_on_a_machine_names_it() {
 #[test]
 fn a_local_port_has_open_and_both_links_and_a_remote_one_only_once_tunnelled() {
     let url = Some("http://localhost:8765");
-    let here = row_links(url, false, false, None);
+    let here = row_links(url, (false, false), false, None);
     assert_eq!((here.open.as_deref(), here.system.as_deref(), here.copy.as_deref()), (url, url, url));
-    let remote = row_links(url, false, true, None);
+    let remote = row_links(url, (false, false), true, None);
     assert_eq!((remote.open.as_deref(), remote.system, remote.copy.as_deref()), (url, None, url));
-    let held = row_links(url, false, true, Some(63235));
+    let held = row_links(url, (false, false), true, Some(63235));
     assert_eq!(held.system.as_deref(), Some("http://localhost:63235"));
 }
 
 #[test]
-fn a_machines_port_has_no_open_and_its_links_only_once_tunnelled() {
+fn a_machine_row_offers_no_open_with_an_older_side_and_its_links_only_once_tunnelled() {
     let url = Some("http://localhost:8765");
-    assert_eq!(row_links(url, true, false, None), RowLinks { open: None, system: None, copy: None });
-    let held = row_links(url, true, false, Some(63235));
+    assert_eq!(row_links(url, (true, false), false, None), RowLinks { open: None, system: None, copy: None });
+    let held = row_links(url, (true, false), false, Some(63235));
     assert_eq!(held.open, None);
     assert_eq!(held.system.as_deref(), Some("http://localhost:63235"));
     assert_eq!(held.copy.as_deref(), Some("http://localhost:63235"));
-    assert_eq!(row_links(None, false, false, None).copy, None);
+    assert_eq!(row_links(None, (false, false), false, None).copy, None);
+}
+
+#[test]
+fn a_machine_row_offers_open_once_it_can_tunnel() {
+    let url = Some("http://localhost:8765");
+    let open = row_links(url, (true, true), false, None);
+    assert_eq!((open.open.as_deref(), open.system, open.copy), (url, None, None));
 }
 
 #[test]

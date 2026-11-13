@@ -82,10 +82,10 @@ impl Face {
 
 impl Browser {
     pub(super) fn tab_bar(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
-        let active = self.tabs.active_target(self.workspace);
+        let active = self.tabs.active_target(&self.place);
         let faces: Vec<Face> = self
             .tabs
-            .shown(self.workspace)
+            .shown(&self.place)
             .map(|t| Face {
                 notice: self.tab_mark(&t.target),
                 ..Face::of(t, active.as_deref(), self.agent_tab(&t.target))

@@ -10,7 +10,8 @@ use super::follow::Follow;
 use super::picker::Pick;
 use super::watch::Watch;
 use crate::cli;
-use crate::model::{PaneInfo, Session, Tab};
+use crate::model::machines::seen::sighted;
+use crate::model::{MachineSeen, Owner, PaneInfo, PaneThere, Session, Tab, ThereId, ThereWorkspace};
 use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::ui::TextField;
 
@@ -23,7 +24,7 @@ pub(crate) enum Menu {
 
 #[derive(Default)]
 pub(crate) struct Agents {
-    pub(crate) chosen: HashMap<u64, u64>,
+    pub(crate) chosen: HashMap<Owner, AgentKey>,
     pub(crate) pick: Option<Pick>,
     pub(crate) ask: Option<Entity<TextField>>,
     pub(crate) focus_ask: bool,
@@ -36,8 +37,38 @@ pub(crate) struct Agents {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Choice {
-    pub(crate) pane: u64,
+    pub(crate) pane: AgentKey,
     pub(crate) label: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum AgentKey {
+    Here(u64),
+    There(ThereId),
+}
+
+impl AgentKey {
+    pub(crate) fn element(self) -> String {
+        match self {
+            Self::Here(pane) => format!("here-{pane}"),
+            Self::There(pane) => pane.key(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Agent {
+    Here(u64),
+    There(PaneThere),
+}
+
+impl Agent {
+    pub(crate) fn key(&self) -> AgentKey {
+        match self {
+            Self::Here(pane) => AgentKey::Here(*pane),
+            Self::There(there) => AgentKey::There(there.pane),
+        }
+    }
 }
 
 pub(crate) fn agent_pane(session: &Session) -> Option<u64> {
@@ -51,12 +82,12 @@ pub(crate) fn endpoint(port: u16) -> String {
     format!("http://127.0.0.1:{port}")
 }
 
-fn tab_name(tab: &Tab) -> Option<String> {
+fn tab_name<Id>(tab: &Tab<Id>) -> Option<String> {
     let name = tab.custom_name.clone().unwrap_or_else(|| tab.name.clone());
     (!name.trim().is_empty()).then_some(name)
 }
 
-pub(crate) fn agent_label(pane: &PaneInfo, tab: Option<&Tab>) -> String {
+pub(crate) fn agent_label<Id>(pane: &PaneInfo<Id>, tab: Option<&Tab<Id>>) -> String {
     let name = pane.agent.clone().unwrap_or_else(|| "agent".to_string());
     match pane.agent_title().or_else(|| tab.and_then(tab_name)) {
         Some(title) if !title.eq_ignore_ascii_case(&name) => format!("{name} · {title}"),
@@ -67,16 +98,40 @@ pub(crate) fn agent_label(pane: &PaneInfo, tab: Option<&Tab>) -> String {
 pub(crate) fn workspace_agents(session: &Session, workspace: u64) -> Vec<Choice> {
     let Some((_, ws)) = session.workspace(workspace) else { return Vec::new() };
     let label = |pane: &PaneInfo, tab: u64| agent_label(pane, session.tab(tab));
-    ws.agent_rows().iter().map(|row| Choice { pane: row.pane.id, label: label(row.pane, row.tab) }).collect()
+    ws.agent_rows()
+        .iter()
+        .map(|row| Choice { pane: AgentKey::Here(row.pane.id), label: label(row.pane, row.tab) })
+        .collect()
 }
 
 pub(crate) fn pick_agent(session: &Session, remembered: Option<u64>) -> Option<u64> {
     let agents = workspace_agents(session, session.shown().workspace?);
-    remembered.filter(|pane| agents.iter().any(|a| a.pane == *pane)).or_else(|| agent_pane(session))
+    let listed = |pane: &u64| agents.iter().any(|a| a.pane == AgentKey::Here(*pane));
+    remembered.filter(listed).or_else(|| agent_pane(session))
+}
+
+pub(crate) fn there_choices(ws: &ThereWorkspace) -> Vec<Choice> {
+    let panes = ws.tabs.iter().flat_map(|tab| tab.panes.iter().map(move |pane| (tab, pane)));
+    let agents = panes.filter(|(_, pane)| pane.agent.is_some());
+    agents.map(|(tab, pane)| Choice { pane: AgentKey::There(pane.id), label: agent_label(pane, Some(tab)) }).collect()
+}
+
+pub(crate) fn pick_there(
+    choices: &[Choice],
+    remembered: Option<AgentKey>,
+    tab: Option<&Tab<ThereId>>,
+) -> Option<AgentKey> {
+    let listed = |key: &AgentKey| choices.iter().any(|c| c.pane == *key);
+    let shown = tab.and_then(|t| t.agent_pane()).map(|p| AgentKey::There(p.id));
+    remembered.filter(listed).or(shown.filter(listed)).or_else(|| choices.first().map(|c| c.pane))
 }
 
 pub(crate) fn unready(session: &Session, pane: u64) -> Option<String> {
-    let Some(info) = session.pane(pane) else { return Some("That agent is gone".to_string()) };
+    unready_pane(session.pane(pane))
+}
+
+pub(crate) fn unready_pane<Id>(pane: Option<&PaneInfo<Id>>) -> Option<String> {
+    let Some(info) = pane else { return Some("That agent is gone".to_string()) };
     let name = info.agent.as_deref().unwrap_or("The agent");
     if info.status.as_deref() == Some("waiting") {
         return Some(format!("{name} is waiting for an answer: answer it first"));
@@ -133,28 +188,67 @@ impl Browser {
         }
     }
 
-    pub(crate) fn target_agent(&self, cx: &App) -> Option<u64> {
-        let store = Store::get(cx);
-        let session = store.read(cx).session.as_ref()?;
-        pick_agent(session, self.workspace.and_then(|w| self.agents.chosen.get(&w).copied()))
+    fn machine_view<'a>(&self, session: &'a Session) -> Option<(&'a MachineSeen, &'a ThereWorkspace)> {
+        sighted(&session.machines, self.place.there()?.aim()).ok()
+    }
+
+    pub(crate) fn target_agent(&self, cx: &App) -> Option<Agent> {
+        let store = Store::get(cx).read(cx);
+        let session = store.session.as_ref()?;
+        let remembered = self.agents.chosen.get(&self.place).copied();
+        match &self.place {
+            Owner::Here(_) => {
+                let chosen = remembered.and_then(|key| match key {
+                    AgentKey::Here(pane) => Some(pane),
+                    AgentKey::There(_) => None,
+                });
+                pick_agent(session, chosen).map(Agent::Here)
+            }
+            Owner::There(_) => {
+                let (seen, ws) = self.machine_view(session)?;
+                let tab = store.machine_place.as_ref().and_then(|place| ws.tab(place.tab));
+                let key = pick_there(&there_choices(ws), remembered, tab)?;
+                let AgentKey::There(pane) = key else { return None };
+                Some(Agent::There(PaneThere { machine: seen.name.clone(), boot: seen.boot.clone(), pane }))
+            }
+            Owner::Nobody => None,
+        }
     }
 
     pub(super) fn agent_choices(&self, cx: &App) -> Vec<Choice> {
-        let store = Store::get(cx);
-        let session = store.read(cx).session.as_ref();
-        session.zip(self.workspace).map(|(s, w)| workspace_agents(s, w)).unwrap_or_default()
+        let store = Store::get(cx).read(cx);
+        let Some(session) = store.session.as_ref() else { return Vec::new() };
+        match &self.place {
+            Owner::Here(w) => workspace_agents(session, *w),
+            Owner::There(_) => self.machine_view(session).map(|(_, ws)| there_choices(ws)).unwrap_or_default(),
+            Owner::Nobody => Vec::new(),
+        }
     }
 
-    pub(super) fn agent_name(pane: u64, cx: &App) -> String {
-        let store = Store::get(cx);
-        let session = store.read(cx).session.as_ref();
-        let info = session.and_then(|s| s.pane(pane).map(|p| (p, s.tab_of_pane(pane))));
-        info.map_or_else(|| "the agent".to_string(), |(p, tab)| agent_label(p, tab))
+    pub(super) fn agent_name(agent: &Agent, cx: &App) -> String {
+        let store = Store::get(cx).read(cx);
+        let session = store.session.as_ref();
+        let gone = || "the agent".to_string();
+        match agent {
+            Agent::Here(pane) => {
+                let info = session.and_then(|s| s.pane(*pane).map(|p| (p, s.tab_of_pane(*pane))));
+                info.map_or_else(gone, |(p, tab)| agent_label(p, tab))
+            }
+            Agent::There(there) => {
+                let seen = session.and_then(|s| s.machine(&there.machine));
+                let info = seen.and_then(|seen| seen.pane(there.pane).map(|p| (p, seen.tab_of_pane(there.pane))));
+                info.map_or_else(gone, |(p, tab)| agent_label(p, tab))
+            }
+        }
     }
 
-    pub(super) fn choose_agent(&mut self, pane: u64, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.workspace {
-            self.agents.chosen.insert(workspace, pane);
+    pub(super) fn no_agent_words(&self) -> String {
+        self.place.machine().map_or_else(|| "No agent in this workspace".to_string(), no_agent_there)
+    }
+
+    pub(super) fn choose_agent(&mut self, key: AgentKey, cx: &mut Context<Self>) {
+        if self.place.has_place() {
+            self.agents.chosen.insert(self.place.clone(), key);
         }
         if self.agents.menu == Some(Menu::Chooser) {
             self.agents.menu = None;
@@ -169,7 +263,7 @@ impl Browser {
         true
     }
 
-    pub(super) fn give_to_agent(pane: u64, text: &str, files: &[&Path], cx: &mut App) -> bool {
+    fn give_to_agent(pane: u64, text: &str, files: &[&Path], cx: &mut App) -> bool {
         if Self::refused(pane, cx) {
             return false;
         }
@@ -177,7 +271,7 @@ impl Browser {
         true
     }
 
-    pub(super) fn submit_to_agent(pane: u64, text: String, files: &[PathBuf], cx: &mut App) -> bool {
+    fn submit_to_agent(pane: u64, text: String, files: &[PathBuf], cx: &mut App) -> bool {
         if Self::refused(pane, cx) {
             return false;
         }
@@ -196,6 +290,48 @@ impl Browser {
         true
     }
 }
+
+pub(crate) struct Hand {
+    pub(crate) text: String,
+    pub(crate) files: Vec<PathBuf>,
+    pub(crate) submit: bool,
+}
+
+pub(crate) fn no_agent_there(machine: &str) -> String {
+    format!("No agent in this workspace on {machine}")
+}
+
+impl Browser {
+    pub(super) fn agent_name_on(agent: &Agent, cx: &App) -> String {
+        let name = Self::agent_name(agent, cx);
+        match agent {
+            Agent::Here(_) => name,
+            Agent::There(there) => format!("{name} on {}", there.machine),
+        }
+    }
+
+    pub(super) fn hand(agent: &Agent, hand: Hand, said: String, cx: &mut App) -> bool {
+        match agent {
+            Agent::Here(pane) => Self::hand_here(*pane, hand, said, cx),
+            Agent::There(there) => Self::hand_there(there, &hand, said, cx),
+        }
+    }
+
+    fn hand_here(pane: u64, hand: Hand, said: String, cx: &mut App) -> bool {
+        let sent = if hand.submit {
+            Self::submit_to_agent(pane, hand.text, &hand.files, cx)
+        } else {
+            let files: Vec<&Path> = hand.files.iter().map(PathBuf::as_path).collect();
+            Self::give_to_agent(pane, &hand.text, &files, cx)
+        };
+        if sent {
+            toast(said, ToastKind::Info, cx);
+        }
+        sent
+    }
+}
+
+mod there;
 
 #[cfg(test)]
 mod tests;
