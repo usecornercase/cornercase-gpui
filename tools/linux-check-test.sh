@@ -33,6 +33,7 @@ printf '%s\n' "$*" >> "$t/calls"
 case ${1-} in
   version)
     if [ -e "$t/control/no-daemon" ]; then
+      echo
       echo 'Cannot connect to the Docker daemon at unix:///x/docker.sock. Is the docker daemon running?' >&2
       exit 1
     fi
@@ -114,7 +115,7 @@ a_daemon_that_does_not_answer_exits_3_and_asks_nothing_more() {
   : > "$t/control/no-daemon"
   PATH=$t/bin:$t/sys runl
   check "status $rc" [ "$rc" = 3 ] &&
-    check "no quote" has "$t/err" 'Cannot connect to the Docker daemon' &&
+    check "no quote" has "$t/err" "'docker version' said: Cannot connect to the Docker daemon" &&
     check "image asked" nohas "$t/calls" 'image' &&
     check "run called" nohas "$t/calls" 'run '
 }
@@ -174,6 +175,8 @@ a_wrong_word_exits_2_and_runs_nothing() {
     check "'$words' printed no usage" has "$t/err" 'usage: tools/linux-check.sh' || return 1
     check "'$words' ran something" [ ! -s "$t/calls" ] || return 1
   done
+  PATH=$t/bin:$t/sys runl -j 4 stray
+  check "stray word not named" has "$t/err" "unknown word 'stray'"
 }
 
 help_prints_the_usage_and_exits_0() {

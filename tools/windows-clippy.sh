@@ -36,10 +36,11 @@ case ${1-} in
     ;;
   '') ;;
   -j)
-    [ $# -eq 2 ] || refuse "-j takes one whole number"
+    [ $# -ge 2 ] || refuse "-j takes one whole number"
     case $2 in
       '' | *[!0-9]* | 0 | 0[0-9]*) refuse "-j takes a whole number of at least 1, not '$2'" ;;
     esac
+    [ $# -le 2 ] || refuse "unknown word '$3'"
     jobs=$2
     ;;
   *) refuse "unknown word '$1'" ;;
@@ -139,8 +140,13 @@ search() {
 
 search
 
+add_problem() {
+  problems="${problems:+$problems
+}$1"
+}
+
 if [ -z "$found" ]; then
-  problems="  LLVM's clang-cl, llvm-lib and llvm-rc in one folder, looked for in:$report"
+  add_problem "  LLVM's clang-cl, llvm-lib and llvm-rc in one folder, looked for in:$report"
 fi
 
 xwin_problem=
@@ -150,8 +156,7 @@ elif ! cargo xwin --version > /dev/null 2>&1; then
   xwin_problem="cargo has no xwin command"
 fi
 if [ -n "$xwin_problem" ]; then
-  problems="$problems
-  cargo xwin: $xwin_problem"
+  add_problem "  cargo xwin: $xwin_problem"
 fi
 
 target_problem=
@@ -159,13 +164,14 @@ if ! command -v rustc > /dev/null 2>&1; then
   target_problem="rustc is not on the PATH"
 else
   libdir=$(rustc --print target-libdir --target "$target" 2> /dev/null) || libdir=
-  if [ -z "$libdir" ] || [ ! -d "$libdir" ]; then
-    target_problem="not installed for this checkout's toolchain"
+  if [ -z "$libdir" ]; then
+    target_problem="rustc gave no folder for it"
+  elif [ ! -d "$libdir" ]; then
+    target_problem="not installed for this checkout's toolchain (no $libdir)"
   fi
 fi
 if [ -n "$target_problem" ]; then
-  problems="$problems
-  the rust target $target: $target_problem"
+  add_problem "  the rust target $target: $target_problem"
 fi
 
 if [ -n "$problems" ]; then
@@ -182,8 +188,9 @@ else
   export PATH
 fi
 
+set --
 if [ -n "$jobs" ]; then
-  exec cargo xwin clippy --target "$target" --all-targets --all-features --locked --target-dir target/win \
-    -j "$jobs" -- -D warnings
+  set -- -j "$jobs"
 fi
-exec cargo xwin clippy --target "$target" --all-targets --all-features --locked --target-dir target/win -- -D warnings
+exec cargo xwin clippy --target "$target" --all-targets --all-features --locked --target-dir target/win "$@" \
+  -- -D warnings

@@ -37,10 +37,11 @@ case ${1-} in
     ;;
   '') ;;
   -j)
-    [ $# -eq 2 ] || refuse "-j takes one whole number"
+    [ $# -ge 2 ] || refuse "-j takes one whole number"
     case $2 in
       '' | *[!0-9]* | 0 | 0[0-9]*) refuse "-j takes a whole number of at least 1, not '$2'" ;;
     esac
+    [ $# -le 2 ] || refuse "unknown word '$3'"
     jobs=" -j $2"
     ;;
   *) refuse "unknown word '$1'" ;;

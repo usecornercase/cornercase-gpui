@@ -96,7 +96,7 @@ func isPassedOver(_ window: Shown, on screen: Screen) -> Bool {
     window.alpha == 0 || (window.owner == "Dock" && screen.displays.contains(window.frame))
 }
 
-func covers(at point: CGPoint, of pid: pid_t, in list: [Shown], on screen: Screen) -> [Shown]? {
+func inTheWay(at point: CGPoint, of pid: pid_t, in list: [Shown], on screen: Screen) -> [Shown]? {
     var found: [Shown] = []
     for window in list where window.frame.contains(point) && !isPassedOver(window, on: screen) {
         if window.pid == pid { return found }
@@ -218,7 +218,7 @@ func wholeNumber(_ text: String, _ what: String) throws -> Int32 {
 
 func clear(_ pid: pid_t, at point: CGPoint, _ x: String, _ y: String) throws {
     guard isFront(pid) else { throw Failure(message: "process \(pid) is not in front: nothing was posted", status: 3) }
-    guard let found = covers(at: point, of: pid, in: onScreen(), on: screen()) else {
+    guard let found = inTheWay(at: point, of: pid, in: onScreen(), on: screen()) else {
         throw Failure(message: "no window of process \(pid) is at \(x),\(y): nothing was posted", status: 3)
     }
     guard found.isEmpty else {
@@ -415,7 +415,7 @@ func describe(_ pid: pid_t) throws {
     print(found.id, Int(frame.minX), Int(frame.minY), Int(frame.width), Int(frame.height), Int(scale(of: frame)))
 }
 
-func reportCovers(_ pid: pid_t) throws {
+func covers(_ pid: pid_t) throws {
     let frame = try window(of: pid).frame
     let found = coversBeforeFront(of: pid, frame: frame, in: onScreen(), on: screen())
     guard found.isEmpty else {
@@ -445,139 +445,147 @@ func dragOptions(_ words: [String]) throws -> (right: Bool, hold: Int) {
     return (right, ms)
 }
 
-let testDebug: pid_t = 4242
-let testDisplay = CGRect(x: 0, y: 0, width: 1512, height: 982)
-let testVisible = CGRect(x: 0, y: 34, width: 1512, height: 912)
-let testScreen = Screen(displays: [testDisplay], visible: [testVisible])
+enum SelfTest {
+    static let testDebug: pid_t = 4242
+    static let testDisplay = CGRect(x: 0, y: 0, width: 1512, height: 982)
+    static let testVisible = CGRect(x: 0, y: 34, width: 1512, height: 912)
+    static let testScreen = Screen(displays: [testDisplay], visible: [testVisible])
 
-func made(_ id: Int, _ pid: pid_t, _ owner: String, _ layer: Int, _ frame: CGRect, alpha: Double = 1) -> Shown {
-    Shown(id: id, pid: pid, owner: owner, layer: layer, alpha: alpha, frame: frame)
-}
-
-func debugWindow(at y: CGFloat = 34) -> Shown {
-    made(100, testDebug, "cornercase-gpui", 0, CGRect(x: 0, y: y, width: 1512, height: 912))
-}
-
-func ids(_ found: [Shown]?) -> String {
-    found.map { "\($0.map { String($0.id) }.joined(separator: ","))" } ?? "nil"
-}
-
-func expect<T: Equatable>(_ got: T, _ want: T) -> String? {
-    got == want ? nil : "got \(got), wanted \(want)"
-}
-
-func atPoint(_ list: [Shown]) -> String {
-    ids(covers(at: CGPoint(x: 200, y: 200), of: testDebug, in: list, on: testScreen))
-}
-
-func before(_ list: [Shown], at y: CGFloat = 34) -> [String] {
-    coversBeforeFront(of: testDebug, frame: debugWindow(at: y).frame, in: list, on: testScreen)
-        .map { "\($0.window.id) \($0.part)" }
-}
-
-let wide = CGRect(x: 0, y: 0, width: 1512, height: 982)
-let bar = CGRect(x: 0, y: 0, width: 1512, height: 33)
-let small = CGRect(x: 100, y: 134, width: 300, height: 200)
-let near = CGRect(x: 100, y: 100, width: 300, height: 200)
-
-func dictionaryTests() -> [(String, () -> String?)] {
-    let info: [String: Any] = [
-        kCGWindowOwnerPID as String: Int32(7), kCGWindowOwnerName as String: "Dock", kCGWindowLayer as String: 20,
-        kCGWindowAlpha as String: 0.5, kCGWindowNumber as String: 9,
-        kCGWindowBounds as String: wide.dictionaryRepresentation as NSDictionary,
-    ]
-    return [
-        ("a_window_dictionary_is_read", {
-            guard let read = shown(info) else { return "not read" }
-            return expect("\(read.id) \(read.pid) \(read.owner) \(read.layer) \(read.alpha) \(read.frame)", "9 7 Dock 20 0.5 \(wide)")
-        }),
-        ("a_window_dictionary_without_bounds_is_not_read", { expect(shown([kCGWindowOwnerPID as String: Int32(7)]) == nil, true) }),
-    ]
-}
-
-func coverTests() -> [(String, () -> String?)] {
-    let a = made(1, 10, "A", 25, wide)
-    let b = made(2, 11, "B", 0, wide)
-    let d = debugWindow()
-    return [
-        ("a_window_in_front_at_the_point_covers_it", { expect(atPoint([b, d]), "2") }),
-        ("two_windows_in_front_cover_it_front_to_back", { expect(atPoint([a, b, d]), "1,2") }),
-        ("the_docks_full_screen_backdrop_is_passed_over", { expect(atPoint([made(3, 12, "Dock", 20, testDisplay), d]), "") }),
-        ("a_dock_window_smaller_than_the_display_covers_it", {
-            expect(atPoint([made(3, 12, "Dock", 20, CGRect(x: 0, y: 150, width: 1512, height: 80)), d]), "3")
-        }),
-        ("a_window_of_alpha_0_is_passed_over", { expect(atPoint([made(3, 12, "X", 24, wide, alpha: 0), d]), "") }),
-        ("nothing_covers_the_debug_window_on_top", { expect(atPoint([d, b]), "") }),
-        ("a_window_beside_the_point_is_no_cover", { expect(atPoint([made(3, 12, "X", 3, CGRect(x: 600, y: 600, width: 50, height: 50)), d]), "") }),
-        ("a_window_of_the_debug_process_is_no_cover", { expect(atPoint([made(3, testDebug, "cornercase-gpui", 101, wide), d]), "") }),
-        ("no_window_of_the_process_at_the_point_gives_nil", { expect(atPoint([b]), "nil") }),
-    ]
-}
-
-func beforeTests() -> [(String, () -> String?)] {
-    let d = debugWindow()
-    let mac = (1...10).map { made($0, 20, "Control Center", 25, CGRect(x: 1200, y: 0, width: 40, height: 33)) }
-        + [made(11, 69680, "Screenshot", 24, wide), made(12, 21, "Window Server", 24, bar),
-            made(13, 22, "Dock", 20, testDisplay), d, made(15, 23, "Google Chrome", 0, CGRect(x: 244, y: 57, width: 1024, height: 822))]
-    return [
-        ("before_the_front_a_higher_layer_over_the_window_covers_it", { expect(before([made(1, 10, "A", 3, small), d]).count, 1) }),
-        ("before_the_front_a_window_of_layer_0_is_no_cover_yet", { expect(before([made(1, 10, "A", 0, wide), d]), []) }),
-        ("before_the_front_the_menu_bar_and_its_items_are_no_cover", {
-            expect(before([made(1, 10, "A", 25, bar), made(2, 21, "Window Server", 24, bar)], at: 25), [])
-        }),
-        ("before_the_front_the_docks_backdrop_and_alpha_0_are_no_cover", {
-            expect(before([made(1, 22, "Dock", 20, testDisplay), made(2, 10, "A", 24, wide, alpha: 0)]), [])
-        }),
-        ("before_the_front_a_higher_layer_beside_the_window_is_no_cover", {
-            expect(before([made(1, 10, "A", 3, CGRect(x: 2000, y: 100, width: 50, height: 50))]), [])
-        }),
-        ("before_the_front_the_covered_part_is_in_the_windows_points", { expect(before([made(1, 10, "A", 3, small)]), ["1 \(near)"]) }),
-        ("this_macs_windows_report_only_the_screenshot_window", { expect(before(mac), ["11 \(CGRect(x: 0, y: 0, width: 1512, height: 912))"]) }),
-        ("this_macs_windows_without_the_screenshot_window_report_nothing", { expect(before(mac.filter { $0.id != 11 }), []) }),
-    ]
-}
-
-func wordTests() -> [(String, () -> String?)] {
-    let w = made(11, 69680, "Screenshot", 24, wide)
-    let name = "Screenshot (pid 69680, screencaptureui, layer 24)"
-    let second = "Notes (pid 5, layer 3)"
-    return [
-        ("the_name_has_owner_pid_process_and_layer", { expect(named(w, "screencaptureui"), name) }),
-        ("the_name_leaves_out_a_process_it_could_not_read", { expect(named(made(1, 5, "Notes", 3, wide), nil), second) }),
-        ("the_refusal_names_one_cover", { expect(coverRefusal("200", "100", [name]), "another window covers 200,100: \(name): nothing was posted") }),
-        ("the_refusal_names_two_covers_front_to_back", {
-            expect(coverRefusal("200", "100", [name, second]), "other windows cover 200,100, front to back: \(name); \(second): nothing was posted")
-        }),
-        ("the_lines_say_where_each_window_covers_the_window", {
-            expect(coverLines([(name, wide), (second, near)]),
-                "\(name) covers 0,0 1512×982 of the window: a press or a scroll there is refused\n"
-                + "\(second) covers 100,100 300×200 of the window: a press or a scroll there is refused")
-        }),
-    ]
-}
-
-func selfTest() throws {
-    let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests()
-    var failed = 0
-    for (name, body) in cases {
-        if let why = body() {
-            failed += 1
-            print("not ok - \(name): \(why)")
-        } else {
-            print("ok - \(name)")
-        }
+    static func made(_ id: Int, _ pid: pid_t, _ owner: String, _ layer: Int, _ frame: CGRect, alpha: Double = 1) -> Shown {
+        Shown(id: id, pid: pid, owner: owner, layer: layer, alpha: alpha, frame: frame)
     }
-    print("\(cases.count) tests, \(failed) failed")
-    guard failed == 0 else { throw Failure(message: "self-test failed", status: 1) }
+
+    static func debugWindow(at y: CGFloat = 34) -> Shown {
+        made(100, testDebug, "cornercase-gpui", 0, CGRect(x: 0, y: y, width: 1512, height: 912))
+    }
+
+    static func ids(_ found: [Shown]?) -> String {
+        found.map { "\($0.map { String($0.id) }.joined(separator: ","))" } ?? "nil"
+    }
+
+    static func expect<T: Equatable>(_ got: T, _ want: T) -> String? {
+        got == want ? nil : "got \(got), wanted \(want)"
+    }
+
+    static func atPoint(_ list: [Shown]) -> String {
+        ids(inTheWay(at: CGPoint(x: 200, y: 200), of: testDebug, in: list, on: testScreen))
+    }
+
+    static func before(_ list: [Shown], at y: CGFloat = 34) -> [String] {
+        coversBeforeFront(of: testDebug, frame: debugWindow(at: y).frame, in: list, on: testScreen)
+            .map { "\($0.window.id) \($0.part)" }
+    }
+
+    static let wide = CGRect(x: 0, y: 0, width: 1512, height: 982)
+    static let bar = CGRect(x: 0, y: 0, width: 1512, height: 33)
+    static let small = CGRect(x: 100, y: 134, width: 300, height: 200)
+    static let near = CGRect(x: 100, y: 100, width: 300, height: 200)
+
+    static func dictionaryTests() -> [(String, () -> String?)] {
+        let info: [String: Any] = [
+            kCGWindowOwnerPID as String: Int32(7), kCGWindowOwnerName as String: "Dock", kCGWindowLayer as String: 20,
+            kCGWindowAlpha as String: 0.5, kCGWindowNumber as String: 9,
+            kCGWindowBounds as String: wide.dictionaryRepresentation as NSDictionary,
+        ]
+        return [
+            ("a_window_dictionary_is_read", {
+                guard let read = shown(info) else { return "not read" }
+                return expect("\(read.id) \(read.pid) \(read.owner) \(read.layer) \(read.alpha) \(read.frame)", "9 7 Dock 20 0.5 \(wide)")
+            }),
+            ("a_window_dictionary_without_bounds_is_not_read", { expect(shown([kCGWindowOwnerPID as String: Int32(7)]) == nil, true) }),
+        ]
+    }
+
+    static func coverTests() -> [(String, () -> String?)] {
+        let a = made(1, 10, "A", 25, wide)
+        let b = made(2, 11, "B", 0, wide)
+        let d = debugWindow()
+        return [
+            ("a_window_in_front_at_the_point_covers_it", { expect(atPoint([b, d]), "2") }),
+            ("two_windows_in_front_cover_it_front_to_back", { expect(atPoint([a, b, d]), "1,2") }),
+            ("the_docks_full_screen_backdrop_is_passed_over", { expect(atPoint([made(3, 12, "Dock", 20, testDisplay), d]), "") }),
+            ("a_dock_window_smaller_than_the_display_covers_it", {
+                expect(atPoint([made(3, 12, "Dock", 20, CGRect(x: 0, y: 150, width: 1512, height: 80)), d]), "3")
+            }),
+            ("a_window_of_alpha_0_is_passed_over", { expect(atPoint([made(3, 12, "X", 24, wide, alpha: 0), d]), "") }),
+            ("nothing_covers_the_debug_window_on_top", { expect(atPoint([d, b]), "") }),
+            ("a_window_beside_the_point_is_no_cover", { expect(atPoint([made(3, 12, "X", 3, CGRect(x: 600, y: 600, width: 50, height: 50)), d]), "") }),
+            ("a_window_of_the_debug_process_is_no_cover", { expect(atPoint([made(3, testDebug, "cornercase-gpui", 101, wide), d]), "") }),
+            ("no_window_of_the_process_at_the_point_gives_nil", { expect(atPoint([b]), "nil") }),
+        ]
+    }
+
+    static func beforeTests() -> [(String, () -> String?)] {
+        let d = debugWindow()
+        let mac = (1...10).map { made($0, 20, "Control Center", 25, CGRect(x: 1200, y: 0, width: 40, height: 33)) }
+            + [made(11, 69680, "Screenshot", 24, wide), made(12, 21, "Window Server", 24, bar),
+                made(13, 22, "Dock", 20, testDisplay), d, made(15, 23, "Google Chrome", 0, CGRect(x: 244, y: 57, width: 1024, height: 822))]
+        return [
+            ("before_the_front_a_higher_layer_over_the_window_covers_it", { expect(before([made(1, 10, "A", 3, small), d]).count, 1) }),
+            ("before_the_front_a_window_of_the_debug_process_is_no_cover", {
+                expect(before([made(1, testDebug, "cornercase-gpui", 101, wide), d]), [])
+            }),
+            ("before_the_front_a_bar_touching_the_visible_area_is_no_cover", {
+                expect(before([made(1, 10, "A", 24, CGRect(x: 0, y: 0, width: 1512, height: 34)), d], at: 25), [])
+            }),
+            ("before_the_front_a_window_of_layer_0_is_no_cover_yet", { expect(before([made(1, 10, "A", 0, wide), d]), []) }),
+            ("before_the_front_the_menu_bar_and_its_items_are_no_cover", {
+                expect(before([made(1, 10, "A", 25, bar), made(2, 21, "Window Server", 24, bar)], at: 25), [])
+            }),
+            ("before_the_front_the_docks_backdrop_and_alpha_0_are_no_cover", {
+                expect(before([made(1, 22, "Dock", 20, testDisplay), made(2, 10, "A", 24, wide, alpha: 0)]), [])
+            }),
+            ("before_the_front_a_higher_layer_beside_the_window_is_no_cover", {
+                expect(before([made(1, 10, "A", 3, CGRect(x: 2000, y: 100, width: 50, height: 50))]), [])
+            }),
+            ("before_the_front_the_covered_part_is_in_the_windows_points", { expect(before([made(1, 10, "A", 3, small)]), ["1 \(near)"]) }),
+            ("this_macs_windows_report_only_the_screenshot_window", { expect(before(mac), ["11 \(CGRect(x: 0, y: 0, width: 1512, height: 912))"]) }),
+            ("this_macs_windows_without_the_screenshot_window_report_nothing", { expect(before(mac.filter { $0.id != 11 }), []) }),
+        ]
+    }
+
+    static func wordTests() -> [(String, () -> String?)] {
+        let w = made(11, 69680, "Screenshot", 24, wide)
+        let name = "Screenshot (pid 69680, screencaptureui, layer 24)"
+        let second = "Notes (pid 5, layer 3)"
+        return [
+            ("the_name_has_owner_pid_process_and_layer", { expect(named(w, "screencaptureui"), name) }),
+            ("the_name_leaves_out_a_process_it_could_not_read", { expect(named(made(1, 5, "Notes", 3, wide), nil), second) }),
+            ("the_refusal_names_one_cover", { expect(coverRefusal("200", "100", [name]), "another window covers 200,100: \(name): nothing was posted") }),
+            ("the_refusal_names_two_covers_front_to_back", {
+                expect(coverRefusal("200", "100", [name, second]), "other windows cover 200,100, front to back: \(name); \(second): nothing was posted")
+            }),
+            ("the_lines_say_where_each_window_covers_the_window", {
+                expect(coverLines([(name, wide), (second, near)]),
+                    "\(name) covers 0,0 1512×982 of the window: a press or a scroll there is refused\n"
+                    + "\(second) covers 100,100 300×200 of the window: a press or a scroll there is refused")
+            }),
+        ]
+    }
+
+    static func run() throws {
+        let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests()
+        var failed = 0
+        for (name, body) in cases {
+            if let why = body() {
+                failed += 1
+                print("not ok - \(name): \(why)")
+            } else {
+                print("ok - \(name)")
+            }
+        }
+        print("\(cases.count) tests, \(failed) failed")
+        guard failed == 0 else { throw Failure(message: "self-test failed", status: 1) }
+    }
 }
 
 func run(_ args: [String]) throws {
-    if args == ["self-test"] { return try selfTest() }
+    if args == ["self-test"] { return try SelfTest.run() }
     guard args.count >= 2, let pid = pid_t(args[1]) else { throw Failure(message: usage, status: 2) }
     if ["front", "size", "key", "hold", "text", "paste", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
     switch (args[0], args.count) {
     case ("window", 2): try describe(pid)
-    case ("covers", 2): try reportCovers(pid)
+    case ("covers", 2): try covers(pid)
     case ("front", 2): try front(pid)
     case ("size", 4): try size(pid, args[2], args[3])
     case ("key", 3...): try key(pid, args[2], Array(args.dropFirst(3)))

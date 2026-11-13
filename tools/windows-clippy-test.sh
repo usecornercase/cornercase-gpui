@@ -136,6 +136,10 @@ nohasline() {
   ! hasline "$1" "$2"
 }
 
+no_blank_line() {
+  ! grep -x '' "$t/err" > /dev/null
+}
+
 clippy_calls() {
   grep -c 'args=xwin clippy' "$t/calls"
 }
@@ -275,6 +279,7 @@ a_missing_cargo_xwin_is_3_not_cargos_101() {
   runw
   check "status $rc" [ "$rc" = 3 ] &&
     check "no xwin line" has "$t/err" 'cargo xwin: cargo has no xwin command' &&
+    check "blank line" no_blank_line &&
     check "clippy ran" [ "$(clippy_calls)" = 0 ]
 }
 
@@ -284,7 +289,8 @@ a_missing_target_is_3() {
   runw
   mkdir -p "$t/rustlib/x86_64-pc-windows-msvc/lib"
   check "status $rc" [ "$rc" = 3 ] &&
-    check "no target line" has "$t/err" 'the rust target x86_64-pc-windows-msvc: not installed' &&
+    check "no target line" has "$t/err" 'the rust target x86_64-pc-windows-msvc: not installed for this checkout'"'"'s toolchain (no '"$t"'/rustlib/x86_64-pc-windows-msvc/lib)' &&
+    check "blank line" no_blank_line &&
     check "clippy ran" [ "$(clippy_calls)" = 0 ]
 }
 
@@ -331,6 +337,8 @@ a_wrong_word_or_job_count_exits_2_and_runs_nothing() {
     check "'$words' printed no usage" has "$t/err" 'usage: tools/windows-clippy.sh' || return 1
     check "'$words' ran something" [ ! -s "$t/calls" ] || return 1
   done
+  runw -j 4 stray
+  check "stray word not named" has "$t/err" "unknown word 'stray'"
 }
 
 help_prints_the_usage_and_exits_0() {
