@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.82
+
+- **Typing a token in Settings stays private on macOS.** While a token's field has the focus and the window is in front, macOS's secure input is on, as in the system's own password fields, so other apps cannot read the keys you type there. Apps that react to keys, such as text expanders, pause meanwhile and work again once you leave the field, close Settings or switch apps.
+- **The input method is no longer handed a token.** Dead keys (´ then a letter), ⌥ characters and paste work in a token's field as before. Holding a letter there repeats it instead of opening the accent menu, which would have shown on screen which letter you were typing.
+
 ## 0.1.81
 
 - **Shortcuts keep answering while the Browser waits for a linked machine's page.** After you typed an address for a linked machine's workspace and pressed Return, ⇧⌘K, ⌘F and every other shortcut did nothing until the tunnel was up and its page showed (for good if the tunnel failed). They now reach the window all the time: the address keeps the keys while the page is on its way, the page takes them when it shows, and a page that goes away hands them back to the address.

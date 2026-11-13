@@ -92,6 +92,8 @@ target/manual-check window <pid>                  # <window id> <x> <y> <width> 
 target/manual-check front <pid>                   # brings that process to the front
 target/manual-check size <pid> <width> <height>   # the window's size, in points
 target/manual-check key <pid> <key> [cmd] [shift] [alt] [ctrl]
+target/manual-check hold <pid> <key> [ms]         # a held key (below, Secure event input)
+target/manual-check paste <pid> <text>            # ⌘V of made-up text, the clipboard given back
 target/manual-check text <pid> <text>             # made-up text, a key down and up per grapheme carrying it
 target/manual-check press <pid> <x> <y> [right]   # a point from the window's top-left, in points
 target/manual-check drag <pid> <x0> <y0> <x1> <y1> [right] [hold <ms>]   # press at the start, move to the end, release
@@ -116,6 +118,17 @@ target/manual-check scroll <pid> <x> <y> <dy> [dx]
 - **Crop** in pixels: `sips -c <height> <width> --cropOffset <y> <x> in.png --out out.png`.
 - **Before and after side by side** (2026-11-13): `ffmpeg -i before.png -i after.png -filter_complex vstack pair.png`.
 - A user, host or home folder can still be in another pane's prompt, a tab's title or the sidebar. A capture with the glass's blur needs `-R` of the window's rectangle (`design/website.md`).
+
+## Secure event input
+
+A masked field turns macOS's secure event input on while it has the focus (`design/widgets.md`, #188). It is process-wide and the user is working on the same Mac, so turn it on only in your own debug window, for the seconds a check needs, and look after every run.
+
+- **Who holds it**: `ioreg -l -w 0 | grep -o '"kCGSSessionSecureInputPID"=[0-9]*'` prints the holder's pid, twice, and nothing when nobody does (seen on 2026-11-13, macOS 26.6.2). A pid that is not yours may be the user's own app: look for yours only.
+- **A key posted with `postToPid` still reaches a window that holds it** (2026-11-13): `text` and `key` typed into the masked field with secure input on.
+- **The window losing the front without a press**: `key <pid> h cmd`, then `front <pid>` (it refused for a moment after ⌘H and then worked). `front` is also flaky while the user works in another app: chain it with the call that needs it (`front <pid> && press …`).
+- **A crash**: `kill -KILL <pid>` stands in for it (no crash dialog, unlike `kill -ABRT`); `ioreg` then names nobody.
+- **`hold <pid> <key> [ms]`** posts a key down, auto-repeats (800 ms by default) and a key up. It opened the press-and-hold accent popup only in a masked field with secure input on, before that field turned press-and-hold off (2026-11-13); in a plain field, ⌘G's prompt, the terminal and every field of 0.1.80 it inserts one letter and opens nothing, so "no popup" is not a regression, and a real held key may differ. A masked field now repeats the letter. A popup is another process's window: capture it with `screencapture -x -R<x,y,w,h>`; Escape closes it. **`paste <pid> <text>`** is ⌘V with made-up text: it reads every item of the clipboard into memory (and exits 1 with nothing done if a type cannot be read back), puts the text on it marked transient (clipboard-history apps skip it), posts ⌘V, waits 300 ms, writes the items back and prints only the counts; if it cannot give them back it exits 1 and says so, and the person running it tells whoever owns the clipboard at once.
+- A capture shows the frame before the last key: take it a second after, and twice.
 
 ## Cleaning up
 

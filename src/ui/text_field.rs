@@ -10,12 +10,15 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use self::element::{Layout, TextElement};
 use self::rows::{clamp_scroll, line_breaks, one_line, previous_grapheme};
+use self::secure::Secure;
 use self::shown::Shown;
 use crate::desktop;
 use crate::platform::Os;
 
 mod element;
+mod handler;
 mod rows;
+mod secure;
 mod shown;
 
 actions!(
@@ -66,6 +69,7 @@ pub(crate) struct TextField {
     options: Options,
     saved: Option<SharedString>,
     view: View,
+    secure: Secure,
 }
 
 const LINES_CONTEXT: &str = "TextField Multiline";
@@ -268,31 +272,16 @@ impl TextField {
         cx.notify();
     }
 
-    fn offset_from_utf16(&self, offset: usize) -> usize {
-        utf8_offset(&self.content, offset)
-    }
-
     fn offset_to_utf16(&self, offset: usize) -> usize {
-        let mut utf16_offset = 0;
-        let mut utf8_count = 0;
-
-        for ch in self.content.chars() {
-            if utf8_count >= offset {
-                break;
-            }
-            utf8_count += ch.len_utf8();
-            utf16_offset += ch.len_utf16();
-        }
-
-        utf16_offset
+        utf16_offset(&self.content, offset)
     }
 
     fn range_to_utf16(&self, range: &Range<usize>) -> Range<usize> {
-        self.offset_to_utf16(range.start)..self.offset_to_utf16(range.end)
+        utf16_range(&self.content, range)
     }
 
     fn range_from_utf16(&self, range_utf16: &Range<usize>) -> Range<usize> {
-        self.offset_from_utf16(range_utf16.start)..self.offset_from_utf16(range_utf16.end)
+        utf8_range(&self.content, range_utf16)
     }
 
     fn splice(&mut self, range_utf16: Option<&Range<usize>>, new_text: &str) -> Range<usize> {
@@ -324,9 +313,9 @@ impl EntityInputHandler for TextField {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<String> {
-        let range = self.range_from_utf16(&range_utf16);
-        actual_range.replace(self.range_to_utf16(&range));
-        Some(self.content[range].to_string())
+        let (text, actual) = handed(&self.content, &range_utf16, self.options.masked)?;
+        actual_range.replace(actual);
+        Some(text)
     }
 
     fn selected_text_range(
@@ -421,7 +410,8 @@ impl TextField {
 }
 
 impl Render for TextField {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.watch_keys(window, cx);
         let root = if self.options.rows.is_some() {
             Self::line_keys(div().key_context(LINES_CONTEXT), cx)
         } else {
@@ -585,6 +575,38 @@ fn utf8_offset(text: &str, utf16: usize) -> usize {
         .map_or(text.len(), |(index, _)| index)
 }
 
+fn utf16_offset(text: &str, offset: usize) -> usize {
+    let mut units = 0;
+    let mut bytes = 0;
+
+    for ch in text.chars() {
+        if bytes >= offset {
+            break;
+        }
+        bytes += ch.len_utf8();
+        units += ch.len_utf16();
+    }
+
+    units
+}
+
+fn utf8_range(text: &str, range_utf16: &Range<usize>) -> Range<usize> {
+    utf8_offset(text, range_utf16.start)..utf8_offset(text, range_utf16.end)
+}
+
+fn utf16_range(text: &str, range: &Range<usize>) -> Range<usize> {
+    utf16_offset(text, range.start)..utf16_offset(text, range.end)
+}
+
+fn handed(content: &str, range_utf16: &Range<usize>, masked: bool) -> Option<(String, Range<usize>)> {
+    if masked {
+        return None;
+    }
+    let range = utf8_range(content, range_utf16);
+    let actual = utf16_range(content, &range);
+    Some((content[range].to_string(), actual))
+}
+
 fn composed_selection(new_text: &str, selected_utf16: Option<&Range<usize>>, start: usize) -> Range<usize> {
     let Some(selected) = selected_utf16 else { return start + new_text.len()..start + new_text.len() };
     start + utf8_offset(new_text, selected.start)..start + utf8_offset(new_text, selected.end)
@@ -621,6 +643,7 @@ impl TextField {
             options: Options::default(),
             saved: None,
             view: View::default(),
+            secure: Secure::default(),
         }
     }
 
