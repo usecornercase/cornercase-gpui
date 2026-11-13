@@ -65,7 +65,7 @@ impl Browser {
     }
 
     pub(super) fn active_log(&self) -> Option<&Log> {
-        self.tabs.active_target(self.workspace).and_then(|t| self.notices.logs.get(&t))
+        self.tabs.active_target(&self.place).and_then(|t| self.notices.logs.get(&t))
     }
 
     fn log(&mut self, event: &Event) {
@@ -80,8 +80,8 @@ impl Browser {
     fn remember_opener(&mut self, p: &Value) {
         let info = &p["targetInfo"];
         let (Some(target), Some(opener)) = (info["targetId"].as_str(), info["openerId"].as_str()) else { return };
-        if self.tabs.active_target(self.workspace).as_deref() == Some(opener) {
-            self.tabs.activate(self.workspace, target);
+        if self.tabs.active_target(&self.place).as_deref() == Some(opener) {
+            self.tabs.activate(self.place.clone(), target);
         }
         self.notices.openers.insert(target.to_string(), opener.to_string());
     }
@@ -98,13 +98,13 @@ impl Browser {
 
     fn back_to_opener(&mut self, target: &str) {
         let Some(opener) = self.notices.openers.get(target).cloned() else { return };
-        let Some(own) = self.tabs.get(target).map(|t| t.workspace) else { return };
+        let Some(own) = self.tabs.get(target).map(|t| t.owner.clone()) else { return };
         if self.tabs.get(&opener).is_none() {
             return;
         }
-        for workspace in [self.workspace, own] {
-            if self.tabs.active_target(workspace).as_deref() == Some(target) {
-                self.tabs.activate(workspace, &opener);
+        for owner in [self.place.clone(), own] {
+            if self.tabs.active_target(&owner).as_deref() == Some(target) {
+                self.tabs.activate(owner, &opener);
             }
         }
     }
@@ -140,14 +140,14 @@ impl Browser {
     }
 
     fn reload_crashed(&mut self, cx: &mut Context<Self>) {
-        let Some(target) = self.tabs.active_target(self.workspace) else { return };
+        let Some(target) = self.tabs.active_target(&self.place) else { return };
         self.notices.crashed.remove(&target);
         self.reload(cx);
         cx.notify();
     }
 
     pub(super) fn page_cover(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let target = self.tabs.active_target(self.workspace)?;
+        let target = self.tabs.active_target(&self.place)?;
         if self.notices.crashed.contains(&target) {
             return Some(crash_cover(cx));
         }

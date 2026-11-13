@@ -142,16 +142,54 @@ impl PaneAim {
 }
 
 pub(crate) fn sighted_pane<'a>(machines: &'a [MachineSeen], aim: &PaneAim) -> Result<&'a MachineSeen, String> {
-    let name = &aim.machine;
-    let seen = machines.iter().find(|m| m.name == *name).ok_or_else(|| format!("{name} is no longer listed"))?;
+    sighted_at(machines, (&aim.machine, &aim.boot), aim.pane)
+}
+
+fn sighted_at<'a>(
+    machines: &'a [MachineSeen],
+    (name, boot): (&str, &str),
+    pane: ThereId,
+) -> Result<&'a MachineSeen, String> {
+    let seen = machines.iter().find(|m| m.name == name).ok_or_else(|| format!("{name} is no longer listed"))?;
     if !seen.linked() {
         return Err(seen.link_note());
     }
-    if seen.boot != aim.boot {
+    if seen.boot != boot {
         return Err(format!("{name} restarted"));
     }
-    let mut panes = seen.workspaces().flat_map(|ws| &ws.tabs).flat_map(|tab| &tab.panes);
-    if panes.any(|pane| pane.id == aim.pane) { Ok(seen) } else { Err(format!("that agent is no longer on {name}")) }
+    if seen.pane(pane).is_some() { Ok(seen) } else { Err(format!("that agent is no longer on {name}")) }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct PaneThere {
+    pub machine: String,
+    pub boot: String,
+    pub pane: ThereId,
+}
+
+impl PaneThere {
+    pub(crate) fn sighted<'a>(&self, machines: &'a [MachineSeen]) -> Result<&'a MachineSeen, String> {
+        sighted_at(machines, (&self.machine, &self.boot), self.pane)
+    }
+
+    pub(crate) fn key(&self) -> String {
+        format!("{}:{}:{}", self.machine, self.boot, self.pane.key())
+    }
+
+    pub(crate) fn paste_file_args(&self, file: &std::path::Path) -> Vec<String> {
+        vec!["paste-file".into(), "--pane".into(), self.pane.0.to_string(), file.display().to_string()]
+    }
+
+    pub(crate) fn paste_args(&self, text: &str) -> Vec<String> {
+        let paste = serde_json::json!({ "paste": text }).to_string();
+        vec!["input".into(), "--pane".into(), self.pane.0.to_string(), paste]
+    }
+
+    pub(crate) fn send_args(&self, text: String) -> Vec<String> {
+        let mut send = args(&["send", "--pane", &self.pane.0.to_string(), "--enter", "--"]);
+        send.push(text);
+        send
+    }
 }
 
 fn agents_in<'a>(

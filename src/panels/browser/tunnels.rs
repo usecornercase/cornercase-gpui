@@ -8,6 +8,7 @@ use futures::channel::mpsc::{UnboundedSender, unbounded};
 use gpui::Context;
 
 use super::{Browser, say};
+use crate::model::Owner;
 use crate::model::link::{loopback_port, rewrite};
 use crate::store::{Busy, Store};
 use crate::{cli, desktop};
@@ -49,7 +50,7 @@ impl Tunnel {
 struct Pending {
     remote: u16,
     url: String,
-    workspace: Option<u64>,
+    owner: Owner,
 }
 
 pub(crate) struct Tunnels {
@@ -88,8 +89,8 @@ impl Tunnels {
         self.list.iter_mut().find(|t| t.process == Some(id))
     }
 
-    pub(crate) fn pending_in(&self, workspace: Option<u64>) -> bool {
-        self.pending.iter().any(|p| p.workspace == workspace)
+    pub(crate) fn pending_in(&self, owner: &Owner) -> bool {
+        self.pending.iter().any(|p| p.owner == *owner)
     }
 
     fn take_pending(&mut self, remote: u16) -> Vec<Pending> {
@@ -173,11 +174,12 @@ impl Browser {
     }
 
     fn wanted_ports(&self) -> BTreeSet<u16> {
-        let listed: Vec<u16> = self.dev.ports.iter().flatten().map(|p| p.number).collect();
+        let listed: Vec<u16> = self.dev.own_numbers();
         let pending: Vec<u16> = self.dev.tunnels.pending.iter().map(|p| p.remote).collect();
         let tunnels: Vec<(u16, u16)> = self.dev.tunnels.list.iter().map(|t| (t.remote, t.local)).collect();
-        let tabs = self.tabs.list.iter().map(|t| t.url.as_str());
-        let urls: Vec<&str> = tabs.chain(self.restore.iter().map(|(url, _)| url.as_str())).collect();
+        let tabs = self.tabs.list.iter().filter(|t| t.owner.machine().is_none()).map(|t| t.url.as_str());
+        let restore = self.restore.iter().filter(|r| r.owner.machine().is_none()).map(|r| r.url.as_str());
+        let urls: Vec<&str> = tabs.chain(restore).collect();
         wanted(&listed, &pending, &tunnels, &urls)
     }
 
@@ -209,7 +211,7 @@ impl Browser {
         let (remote, local, job) = (tunnel.remote, tunnel.local, tunnel.job.take());
         end_job(job, cx);
         for open in self.dev.tunnels.take_pending(remote) {
-            self.open_now(rewrite(&open.url, local), open.workspace, cx);
+            self.open_now(rewrite(&open.url, local), open.owner, None, cx);
         }
     }
 
@@ -256,13 +258,13 @@ impl Browser {
         end_job(tunnel.job, cx);
     }
 
-    pub(super) fn browse_through(&mut self, remote: u16, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
+    pub(super) fn browse_through(&mut self, remote: u16, url: String, owner: Owner, cx: &mut Context<Self>) {
         if self.dev.tunnels.get(remote).is_none_or(|t| t.process.is_none()) {
             self.start_tunnel(remote, cx);
         }
         match self.dev.tunnels.get(remote) {
-            Some(t) if t.state == State::Ready => self.open_now(rewrite(&url, t.local), workspace, cx),
-            Some(_) => self.dev.tunnels.pending.push(Pending { remote, url, workspace }),
+            Some(t) if t.state == State::Ready => self.open_now(rewrite(&url, t.local), owner, None, cx),
+            Some(_) => self.dev.tunnels.pending.push(Pending { remote, url, owner }),
             None => {}
         }
         cx.notify();

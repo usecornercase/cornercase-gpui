@@ -12,7 +12,7 @@ use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, ListMoves, Selection, Switch, switching_key};
 use crate::model::machines::{self, Machine};
-use crate::model::{MachinePlace, Session};
+use crate::model::{MachinePlace, Owner, Session};
 use crate::notify::Posted;
 use crate::notify::update::Updating;
 use crate::panels::PanelKind;
@@ -21,6 +21,7 @@ use crate::panels::plugins::Offers;
 use crate::panels::settings::FoundSetting;
 use crate::prefs::{self, Prefs};
 
+mod browse;
 mod jobs;
 mod machine_read;
 mod machines_there;
@@ -66,7 +67,7 @@ pub(crate) struct Store {
     pub posted: Posted,
     pub switch_to: Option<Target>,
     pub asks: Asks,
-    pub browse: Option<(String, Option<u64>)>,
+    pub browse: Option<(String, Owner)>,
     pub landing: Option<FoundSetting>,
     pub prefs: Prefs,
     pub started_run_in: Option<u64>,
@@ -109,7 +110,7 @@ pub(crate) enum ToastGo {
     Machine(NoticeThere),
     Update(Updating),
     Browse(String),
-    Visit(String),
+    Tunnelled(String, u16),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -383,8 +384,11 @@ impl Store {
         match action {
             ToastGo::Run(args) => self.act(args.clone()),
             ToastGo::Machine(there) => self.go_there(there, cx),
-            ToastGo::Browse(url) => self.open_in_browser(url.clone(), None, cx),
-            ToastGo::Visit(url) => cx.open_url(url),
+            ToastGo::Browse(url) => {
+                let owner = self.local_owner();
+                self.open_in_browser(url.clone(), owner, cx);
+            }
+            ToastGo::Tunnelled(machine, port) => self.open_tunnel(machine, *port, cx),
             ToastGo::Update(updating) => {
                 self.asks.open_update = Some(*updating);
                 cx.notify();
@@ -565,11 +569,6 @@ impl Store {
         self.leave_machine_place(cx);
         self.run_file = Some(path);
         self.open(PanelKind::Files, cx);
-    }
-
-    pub(crate) fn open_in_browser(&mut self, url: String, workspace: Option<u64>, cx: &mut Context<Self>) {
-        self.browse = Some((url, workspace));
-        self.open(PanelKind::Browser, cx);
     }
 
     pub(crate) fn set_pref(&mut self, key: &str, value: &str, cx: &mut Context<Self>) -> anyhow::Result<()> {

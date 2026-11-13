@@ -1,11 +1,12 @@
 use std::collections::BTreeMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
 use futures::channel::mpsc::unbounded;
 use gpui::Context;
 
-use super::{Busy, Store, ToastGo, ToastKind};
+use super::browse::toast_go;
+use super::{Busy, Store, ToastKind};
 use crate::cli::{self, Ended};
 use crate::model::tunnels::{Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, machine_gate, way};
 
@@ -37,6 +38,7 @@ struct Settling {
     port: u16,
     boot: String,
     destination: String,
+    since: Instant,
 }
 
 enum Heard {
@@ -106,7 +108,7 @@ impl Store {
         }
     }
 
-    fn tunnel_refusal(&self, toward: &Toward) -> String {
+    pub(crate) fn tunnel_refusal(&self, toward: &Toward) -> String {
         let Toward::Machine(name) = toward else { return String::new() };
         match self.machine_tunnel_gate(name) {
             Gate::Older(older) => gate_note(&older, name),
@@ -250,10 +252,7 @@ impl Store {
             self.end_job(job, cx);
         }
         if let Some((text, open)) = up_toast(asked, port, local, &label) {
-            let go = match toward {
-                Toward::Server => ToastGo::Browse(remote_url(port)),
-                Toward::Machine(_) => ToastGo::Visit(format!("http://localhost:{local}")),
-            };
+            let go = toast_go(&toward, port);
             let action = open.then(|| ("Open".to_string(), go));
             self.toast_with(text, ToastKind::Info, action, cx);
         }
@@ -276,7 +275,8 @@ impl Store {
             Fate::Settle => {
                 self.tunnels.holds.remove(at);
                 let (toward, port, boot, destination) = (hold.toward, hold.port, hold.boot, hold.destination);
-                self.tunnels.settling.push(Settling { toward, port, boot, destination });
+                let since = Instant::now();
+                self.tunnels.settling.push(Settling { toward, port, boot, destination, since });
                 later(SETTLE_AFTER, Self::settle_later, cx);
             }
         }
@@ -345,11 +345,12 @@ impl Store {
     }
 
     pub(super) fn settle_tunnels(&mut self, cx: &mut Context<Self>) {
-        for Settling { toward, port, boot: started, destination } in std::mem::take(&mut self.tunnels.settling) {
+        for Settling { toward, port, boot: started, destination, since } in std::mem::take(&mut self.tunnels.settling) {
             let now = self.boot_of(&toward);
             let live = live(&self.tunnels.holds, &toward, port).is_some_and(|hold| hold.state != Held::Ending);
-            match settle_now(self.linked(&toward), live, &started, now.as_deref()) {
-                None => self.tunnels.settling.push(Settling { toward, port, boot: started, destination }),
+            let waited = since.elapsed() >= SETTLE_AFTER;
+            match settle_now((self.linked(&toward), live, waited), &started, now.as_deref()) {
+                None => self.tunnels.settling.push(Settling { toward, port, boot: started, destination, since }),
                 Some(Settled::Superseded) => {}
                 Some(Settled::Closed) => self.remember_tunnel(&destination, port, false, cx),
                 Some(Settled::Back) => self.hold_tunnel(&toward, port, Asked::Back, cx),

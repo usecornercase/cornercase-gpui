@@ -25,9 +25,12 @@ use crate::ui;
 use crate::ui::counting::Counting;
 use data::{List, Port, list_command};
 use rows::Side;
-use source::{Listed, Scope, Source, scope_of, source_of, views};
+pub(crate) use source::{Listed, views};
+use source::{Scope, Source, scope_of, source_of};
 use there::machine_notes;
-use view::{PortView, here_key, stop_label, to_stop};
+pub(crate) use there::sample_there;
+pub(crate) use view::PortView;
+use view::{here_key, stop_label, to_stop};
 
 const NO_PORTS: &str = "Nothing in this workspace listens on a TCP port.";
 const NO_WORKSPACE: &str = "No workspace on screen. Show one, or list every port.";
@@ -275,11 +278,7 @@ impl Render for PortsPanel {
     }
 }
 
-pub(crate) fn command_line(port: &Port) -> Div {
-    command_text(port.command_line())
-}
-
-fn command_text(text: String) -> Div {
+pub(crate) fn command_text(text: String) -> Div {
     div().font_family(FONT_FAMILY).text_size(px(12.)).text_color(colours::soft()).child(ui::one_line(text))
 }
 

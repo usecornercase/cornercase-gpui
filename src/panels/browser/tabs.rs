@@ -4,11 +4,19 @@ use serde_json::Value;
 
 use super::cdp::Event;
 use super::frame::Shot;
+use crate::model::Owner;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Through {
+    pub(crate) remote: u16,
+    pub(crate) local: u16,
+}
 
 pub(crate) struct Tab {
     pub(crate) target: String,
     pub(crate) session: Option<String>,
-    pub(crate) workspace: Option<u64>,
+    pub(crate) owner: Owner,
+    pub(crate) through: Option<Through>,
     pub(crate) url: String,
     pub(crate) title: String,
     pub(crate) loading: bool,
@@ -19,11 +27,12 @@ pub(crate) struct Tab {
 }
 
 impl Tab {
-    pub(crate) fn new(target: &str, url: &str, workspace: Option<u64>) -> Self {
+    pub(crate) fn new(target: &str, url: &str, owner: Owner) -> Self {
         Self {
             target: target.to_string(),
             session: None,
-            workspace,
+            owner,
+            through: None,
             url: url.to_string(),
             title: String::new(),
             loading: true,
@@ -34,12 +43,35 @@ impl Tab {
         }
     }
 
+    pub(crate) fn holds_local(&self, port: u16) -> bool {
+        self.through.is_some_and(|through| through.local == port)
+    }
+
     pub(crate) fn label(&self) -> &str {
         if self.title.trim().is_empty() { &self.url } else { &self.title }
     }
 
     fn is_main(&self, frame: Option<&str>) -> bool {
         frame.is_some() && self.main_frame.as_deref() == frame
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Claim {
+    pub(crate) owner: Owner,
+    pub(crate) through: Option<Through>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Restore {
+    pub(crate) url: String,
+    pub(crate) owner: Owner,
+    pub(crate) through: Option<Through>,
+}
+
+impl Restore {
+    pub(crate) fn of(tab: &Tab) -> Self {
+        Self { url: tab.url.clone(), owner: tab.owner.clone(), through: tab.through }
     }
 }
 
@@ -53,7 +85,7 @@ pub(crate) enum Followup {
 #[derive(Default)]
 pub(crate) struct Tabs {
     pub(crate) list: Vec<Tab>,
-    active: HashMap<Option<u64>, String>,
+    active: HashMap<Owner, String>,
 }
 
 fn text<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
@@ -61,21 +93,31 @@ fn text<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
 }
 
 impl Tabs {
-    pub(crate) fn shown(&self, workspace: Option<u64>) -> impl Iterator<Item = &Tab> {
-        self.list.iter().filter(move |t| t.workspace.is_none() || t.workspace == workspace)
+    pub(crate) fn shown(&self, owner: &Owner) -> impl Iterator<Item = &Tab> {
+        let owner = owner.clone();
+        self.list.iter().filter(move |t| t.owner == Owner::Nobody || t.owner == owner)
     }
 
-    pub(crate) fn active(&self, workspace: Option<u64>) -> Option<&Tab> {
-        let chosen = self.active.get(&workspace);
-        self.shown(workspace).find(|t| Some(&t.target) == chosen).or_else(|| self.shown(workspace).last())
+    pub(crate) fn active(&self, owner: &Owner) -> Option<&Tab> {
+        let chosen = self.active.get(owner);
+        self.shown(owner).find(|t| Some(&t.target) == chosen).or_else(|| self.shown(owner).last())
     }
 
-    pub(crate) fn active_target(&self, workspace: Option<u64>) -> Option<String> {
-        self.active(workspace).map(|t| t.target.clone())
+    pub(crate) fn active_target(&self, owner: &Owner) -> Option<String> {
+        self.active(owner).map(|t| t.target.clone())
     }
 
-    pub(crate) fn activate(&mut self, workspace: Option<u64>, target: &str) {
-        self.active.insert(workspace, target.to_string());
+    pub(crate) fn activate(&mut self, owner: Owner, target: &str) {
+        self.active.insert(owner, target.to_string());
+    }
+
+    pub(crate) fn rekey(&mut self, from: &Owner, to: &Owner) {
+        for tab in self.list.iter_mut().filter(|t| t.owner == *from) {
+            tab.owner = to.clone();
+        }
+        if let Some(chosen) = self.active.remove(from) {
+            self.active.insert(to.clone(), chosen);
+        }
     }
 
     pub(crate) fn get(&self, target: &str) -> Option<&Tab> {
@@ -90,7 +132,7 @@ impl Tabs {
         self.list.iter().find(|t| t.session.as_deref() == Some(session))
     }
 
-    fn by_session_mut(&mut self, session: Option<&str>) -> Option<&mut Tab> {
+    pub(super) fn by_session_mut(&mut self, session: Option<&str>) -> Option<&mut Tab> {
         let session = session?;
         self.list.iter_mut().find(|t| t.session.as_deref() == Some(session))
     }

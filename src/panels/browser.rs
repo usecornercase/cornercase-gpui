@@ -31,6 +31,7 @@ mod start_page;
 mod states;
 mod tab_bar;
 mod tabs;
+mod there;
 mod toolbar;
 mod tunnels;
 mod typing;
@@ -53,9 +54,11 @@ use gpui::{
     Subscription, Window, div, px,
 };
 
+use crate::model::Owner;
 use crate::panels::PanelKind;
 use crate::store::Store;
 use crate::theme::colours;
+use crate::ui::counting::Counting;
 use crate::ui::text_field::TextField;
 use crate::ui::{self, Icon};
 use engine::{Engine, Incoming};
@@ -65,7 +68,7 @@ use notices::Notices;
 use ports::DevServers;
 pub(crate) use preview::Preview;
 use preview::Previews;
-use tabs::Tabs;
+use tabs::{Claim, Restore, Tabs};
 pub(crate) use viewport::View;
 
 pub(crate) fn quit() {
@@ -84,17 +87,17 @@ pub(crate) struct Browser {
     status: Status,
     tx: UnboundedSender<Incoming>,
     tabs: Tabs,
-    claims: HashMap<String, Option<u64>>,
+    claims: HashMap<String, Claim>,
     stale: Rc<RefCell<Vec<Arc<RenderImage>>>>,
     view: View,
     resizing: u64,
     casting: Option<String>,
-    workspace: Option<u64>,
+    place: Owner,
     shown: bool,
     watching: Subscription,
     address: Entity<TextField>,
     address_url: String,
-    restore: Vec<(String, Option<u64>)>,
+    restore: Vec<Restore>,
     attempts: u32,
     cursor: CursorStyle,
     user_agent: Option<String>,
@@ -106,6 +109,8 @@ pub(crate) struct Browser {
     input: Input,
     notices: Notices,
     previews: Previews,
+    counting: Counting,
+    server_generation: u64,
 }
 
 struct Shared(Entity<Browser>);
@@ -163,7 +168,7 @@ impl Browser {
             view: View::default(),
             resizing: 0,
             casting: None,
-            workspace: None,
+            place: Owner::Nobody,
             shown: false,
             watching,
             address,
@@ -180,6 +185,8 @@ impl Browser {
             input: Input::default(),
             notices: Notices::default(),
             previews: Previews::default(),
+            counting: Counting::default(),
+            server_generation: 0,
         }
     }
 
@@ -196,22 +203,24 @@ impl Browser {
 
     fn store_changed(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
         self.agents_changed(store, cx);
+        self.follow_owners(store, cx);
         let s = store.read(cx);
         let shown = s.dock == Some(PanelKind::Browser);
-        let workspace = s.session.as_ref().and_then(|s| s.shown().workspace);
-        if shown != self.shown || workspace != self.workspace {
-            self.shown = shown;
-            self.workspace = workspace;
+        let place = s.shown_owner();
+        let changed = shown != self.shown || place != self.place;
+        (self.shown, self.place) = (shown, place);
+        if changed {
             self.recast(cx);
             cx.notify();
         }
         self.dev_changed(store, cx);
         self.held_changed(cx);
+        self.repoint_tabs(store, cx);
     }
 
     fn ended(&mut self, why: String, cx: &mut Context<Self>) {
         let tabs = std::mem::take(&mut self.tabs);
-        self.restore = tabs.list.iter().map(|t| (t.url.clone(), t.workspace)).collect();
+        self.restore = tabs.list.iter().map(Restore::of).collect();
         self.stale.borrow_mut().extend(tabs.list.into_iter().filter_map(|t| t.shot.map(|s| s.image)));
         self.casting = None;
         self.forget_previews();
@@ -234,7 +243,7 @@ impl Browser {
     }
 
     fn active_url(&self) -> Option<String> {
-        self.tabs.active(self.workspace).map(|t| t.url.clone())
+        self.tabs.active(&self.place).map(|t| t.url.clone())
     }
 
     pub(crate) fn focus_address(&self, window: &mut Window, cx: &App) {
@@ -254,7 +263,7 @@ impl Browser {
         let content = match &self.status {
             Status::Starting => Self::starting().into_any_element(),
             Status::Failed(why) => Self::failed(why, cx).into_any_element(),
-            Status::Ready(_) if self.tabs.active(self.workspace).is_none() => self.start_page(cx).into_any_element(),
+            Status::Ready(_) if self.tabs.active(&self.place).is_none() => self.start_page(cx).into_any_element(),
             Status::Ready(_) => self.viewport(window, cx).into_any_element(),
         };
         let overlay = self.agent_overlay(window, cx);
@@ -291,15 +300,21 @@ fn shown_address(url: &str) -> SharedString {
     if url == "about:blank" { SharedString::default() } else { SharedString::from(url.to_string()) }
 }
 
+fn counting_of(browser: &mut Browser) -> &mut Counting {
+    &mut browser.counting
+}
+
 impl Render for Browser {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_address(window, cx);
         self.sync_agents(window, cx);
-        div()
+        let strip = self.machine_strip(cx);
+        let panel = div()
             .size_full()
             .relative()
             .flex()
             .flex_col()
+            .children(strip)
             .children(self.tab_bar(cx))
             .child(self.toolbar(window, cx))
             .children(self.device_bar(cx))
@@ -307,6 +322,8 @@ impl Render for Browser {
             .children(self.console_drawer(window, cx))
             .children(self.device_backdrop(cx))
             .on_drag_move(console_view::follow_drawer(cx))
-            .track_focus(&self.panel_focus(cx))
+            .track_focus(&self.panel_focus(cx));
+        self.counting.keep(counting_of, cx);
+        panel
     }
 }

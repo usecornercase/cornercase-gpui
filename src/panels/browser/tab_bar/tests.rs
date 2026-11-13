@@ -1,4 +1,5 @@
 use super::*;
+use crate::model::Owner;
 
 #[test]
 fn a_blank_tab_is_a_new_tab() {
@@ -32,7 +33,7 @@ fn the_tooltip_of_an_untitled_page_is_its_address() {
 
 #[test]
 fn the_active_tab_alone_is_lit() {
-    let tab = Tab::new("A", "http://a.test/", None);
+    let tab = Tab::new("A", "http://a.test/", Owner::Nobody);
     assert!(Face::of(&tab, Some("A"), false).active);
     assert!(!Face::of(&tab, Some("B"), false).active);
 }

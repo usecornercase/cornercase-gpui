@@ -9,6 +9,7 @@ use serde_json::json;
 
 use super::{Browser, Status, shown_address};
 use crate::notify::tip;
+use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::text_field::{End, SelectAll, TextField, TextFieldEvent};
 use crate::ui::{self, Icon, glass};
@@ -60,7 +61,7 @@ impl Browser {
     }
 
     fn navigation(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let tab = self.tabs.active(self.workspace);
+        let tab = self.tabs.active(&self.place);
         let (back, forward) = tab.map_or((false, false), |t| (t.back.is_some(), t.forward.is_some()));
         let reload = if self.loading() { &STOP } else { &RELOAD };
         div()
@@ -109,7 +110,7 @@ impl Browser {
     }
 
     pub(super) fn loading(&self) -> bool {
-        self.tabs.active(self.workspace).is_some_and(|t| t.loading)
+        self.tabs.active(&self.place).is_some_and(|t| t.loading)
     }
 
     pub(super) fn check_loading(&mut self, session: &str, cx: &mut Context<Self>) {
@@ -136,7 +137,11 @@ impl Browser {
     }
 
     fn new_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_tab("about:blank", self.workspace, cx);
+        if let Some(why) = self.refused_place(cx) {
+            Store::get(cx).update(cx, |s, cx| s.not_opened(&why, cx));
+            return;
+        }
+        self.open_tab("about:blank", self.place.clone(), None, cx);
         self.address_url = "about:blank".to_string();
         self.address.update(cx, TextField::clear);
         window.focus(&self.address.read(cx).focus_handle(cx));

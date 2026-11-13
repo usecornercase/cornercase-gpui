@@ -1,4 +1,5 @@
 use super::*;
+use crate::model::Owner;
 use crate::panels::browser::tabs::Tab;
 use crate::test_util::fixture;
 
@@ -15,12 +16,18 @@ fn with_status(pane: u64, status: Option<&str>) -> Session {
 }
 
 fn finishes(before: &Session, after: &Session) -> Vec<(u64, u64)> {
-    finished(&working_agents(before), &working_agents(after), after)
+    let done = finished(&working_agents(before, &[]), &working_agents(after, &[]), after);
+    done.into_iter()
+        .filter_map(|(working, owner)| match (working, owner) {
+            (Working::Here(pane), Owner::Here(workspace)) => Some((workspace, pane)),
+            _ => None,
+        })
+        .collect()
 }
 
 #[test]
 fn only_working_agents_are_watched() {
-    assert_eq!(working_agents(&session()), HashMap::from([(1000, 10)]));
+    assert_eq!(working_agents(&session(), &[]), HashMap::from([(Working::Here(1000), Owner::Here(10))]));
 }
 
 #[test]
@@ -59,15 +66,74 @@ fn a_finish_is_seen_once() {
 #[test]
 fn only_the_workspaces_web_pages_reload() {
     let mut tabs = Tabs::default();
-    let mut add = |target: &str, url: &str, workspace: Option<u64>| {
-        let mut tab = Tab::new(target, url, workspace);
+    let mut add = |target: &str, url: &str, owner: Owner| {
+        let mut tab = Tab::new(target, url, owner);
         tab.session = Some(format!("s-{target}"));
         tabs.add(tab);
     };
-    add("A", "http://localhost:5173/", Some(10));
-    add("B", "https://example.com/", Some(10));
-    add("C", "about:blank", Some(10));
-    add("D", "http://localhost:3000/", Some(11));
-    add("E", "http://localhost:4000/", None);
-    assert_eq!(reloadable(&tabs, 10), ["s-A", "s-B"]);
+    add("A", "http://localhost:5173/", Owner::Here(10));
+    add("B", "https://example.com/", Owner::Here(10));
+    add("C", "about:blank", Owner::Here(10));
+    add("D", "http://localhost:3000/", Owner::Here(11));
+    add("E", "http://localhost:4000/", Owner::Nobody);
+    assert_eq!(reloadable(&tabs, &Owner::Here(10)), ["s-A", "s-B"]);
+}
+
+fn machine_session(status: &str) -> Session {
+    let mut session: Session = serde_json::from_str(fixture!("machines/view.json")).expect("a view line");
+    for seen in &mut session.machines {
+        seen.state = crate::model::machines::LinkState::Linked;
+        let panes = seen.projects.iter_mut().flat_map(|p| &mut p.workspaces).flat_map(|w| &mut w.tabs);
+        for pane in panes.flat_map(|t| &mut t.panes).filter(|p| p.agent.is_some()) {
+            pane.status = Some(status.to_string());
+        }
+    }
+    session
+}
+
+#[test]
+fn a_machine_agent_finishing_reloads_only_its_workspaces_tabs() {
+    let (before, after) = (machine_session("working"), machine_session("done"));
+    let now = working_agents(&after, &[]);
+    let was = working_agents(&before, &[]);
+    assert!(!was.is_empty() && now.is_empty());
+    let done = finished(&was, &now, &after);
+    assert_eq!(done.len(), was.len());
+    let (working, owner) = done.first().expect("one finished");
+    assert!(matches!(working, Working::There(_)) && owner.machine() == Some("vps"));
+    let mut tabs = Tabs::default();
+    let mut tab = Tab::new("M", "http://localhost:5173/", owner.clone());
+    tab.session = Some("s-M".into());
+    tabs.add(tab);
+    let mut ours = Tab::new("H", "http://localhost:5173/", Owner::Here(1));
+    ours.session = Some("s-H".into());
+    tabs.add(ours);
+    assert_eq!(reloadable(&tabs, owner), ["s-M"]);
+}
+
+#[test]
+fn a_machine_restart_is_no_finish() {
+    let before = machine_session("working");
+    let mut after = machine_session("working");
+    after.machines[0].boot = "another".into();
+    let was = working_agents(&before, &[]);
+    let now: HashMap<Working, Owner> = HashMap::new();
+    assert_eq!(finished(&was, &now, &after), []);
+}
+
+#[test]
+fn an_agent_on_a_machine_that_drops_the_link_is_still_watched() {
+    let before = machine_session("working");
+    let was = working_agents(&before, &[]);
+    let mut away = machine_session("working");
+    away.machines[0].state = crate::model::machines::LinkState::Unreachable;
+    let mut now = working_agents(&away, &[]);
+    assert!(now.is_empty());
+    carry_unlinked(&was, &mut now, &away);
+    assert_eq!(now.len(), was.len());
+    let mut restarted = away.clone();
+    restarted.machines[0].boot = "other".into();
+    let mut after = HashMap::new();
+    carry_unlinked(&was, &mut after, &restarted);
+    assert!(after.is_empty());
 }

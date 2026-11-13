@@ -8,6 +8,7 @@ use gpui::{
 };
 
 use super::Browser;
+use super::agent::{Agent, Hand};
 use super::console::{Filter, Level, Log, Logged, hand_off};
 use crate::store::{Store, ToastKind};
 use crate::theme::{FONT_FAMILY, colours, radius};
@@ -86,7 +87,7 @@ fn shown_ids(log: Option<&Log>, filter: Filter) -> Vec<u64> {
 
 impl Browser {
     fn sync_console(&mut self) {
-        let target = self.tabs.active_target(self.workspace).unwrap_or_default();
+        let target = self.tabs.active_target(&self.place).unwrap_or_default();
         let filter = self.notices.drawer.filter;
         let ids = shown_ids(self.notices.logs.get(&target), filter);
         let drawer = &mut self.notices.drawer;
@@ -198,7 +199,7 @@ impl Browser {
     }
 
     fn clear_console(&mut self, cx: &mut Context<Self>) {
-        let target = self.tabs.active_target(self.workspace).unwrap_or_default();
+        let target = self.tabs.active_target(&self.place).unwrap_or_default();
         if let Some(log) = self.notices.logs.get_mut(&target) {
             log.clear();
         }
@@ -229,20 +230,18 @@ impl Browser {
         let url = self.active_url().unwrap_or_default();
         let text = hand_off(&url, &picked);
         let what = if only.is_some() { "the entry".to_string() } else { format!("{} errors", picked.len()) };
-        hand_to_agent(self.target_agent(cx), &text, &what, cx);
+        hand_to_agent(self.target_agent(cx), (text, self.no_agent_words()), &what, cx);
     }
 }
 
-fn hand_to_agent(pane: Option<u64>, text: &str, what: &str, cx: &mut Context<Browser>) {
-    let Some(pane) = pane else {
-        let text = "There is no agent in this workspace to send the console to";
+fn hand_to_agent(agent: Option<Agent>, (text, none): (String, String), what: &str, cx: &mut Context<Browser>) {
+    let Some(agent) = agent else {
+        let text = format!("{none} to send the console to");
         Store::get(cx).update(cx, |s, cx| s.toast(text, ToastKind::Error, cx));
         return;
     };
-    if Browser::give_to_agent(pane, text, &[], cx) {
-        let text = format!("Sent {what} to {}", Browser::agent_name(pane, cx));
-        Store::get(cx).update(cx, |s, cx| s.toast(text, ToastKind::Info, cx));
-    }
+    let said = format!("Sent {what} to {}", Browser::agent_name_on(&agent, cx));
+    Browser::hand(&agent, Hand { text, files: Vec::new(), submit: false }, said, cx);
 }
 
 fn empty_text(filter: Filter) -> &'static str {

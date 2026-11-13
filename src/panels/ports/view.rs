@@ -85,7 +85,12 @@ pub(crate) struct RowLinks {
     pub(crate) copy: Option<String>,
 }
 
-pub(crate) fn row_links(url: Option<&str>, machine: bool, host: bool, local: Option<u16>) -> RowLinks {
+pub(crate) fn row_links(
+    url: Option<&str>,
+    (machine, can_open): (bool, bool),
+    host: bool,
+    local: Option<u16>,
+) -> RowLinks {
     let reached = match (url, local) {
         (Some(url), Some(local)) => Some(rewrite(url, local)),
         (Some(url), None) if !machine => Some(url.to_string()),
@@ -93,7 +98,7 @@ pub(crate) fn row_links(url: Option<&str>, machine: bool, host: bool, local: Opt
     };
     let direct = !machine && !host;
     RowLinks {
-        open: url.filter(|_| !machine).map(str::to_string),
+        open: url.filter(|_| !machine || can_open).map(str::to_string),
         system: reached.clone().filter(|_| direct || local.is_some()),
         copy: reached,
     }

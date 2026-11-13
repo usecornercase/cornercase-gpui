@@ -154,12 +154,20 @@ pub(crate) fn forgets_after_close(live_hold: bool) -> bool {
     !live_hold
 }
 
-pub(crate) fn settle_now(linked: bool, live: bool, started_on: &str, now: Option<&str>) -> Option<Settled> {
+pub(crate) fn settle_now(
+    (linked, live, waited): (bool, bool, bool),
+    started_on: &str,
+    now: Option<&str>,
+) -> Option<Settled> {
     let now = now?;
     if !linked {
         return None;
     }
-    Some(if live { Settled::Superseded } else { settled(started_on, now) })
+    if live {
+        return Some(Settled::Superseded);
+    }
+    let decided = settled(started_on, now);
+    (decided == Settled::Back || waited).then_some(decided)
 }
 
 pub(crate) fn bring_back(remembered: &[u16], held: &[u16]) -> Vec<u16> {

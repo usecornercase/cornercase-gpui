@@ -7,7 +7,7 @@ use crate::store::args;
 mod agents;
 mod spot;
 
-pub(crate) use agents::{PaneAim, SectionRow, ThereAgent, ThereRow, sighted_pane};
+pub(crate) use agents::{PaneAim, PaneThere, SectionRow, ThereAgent, ThereRow, sighted_pane};
 pub(crate) use spot::{LoginTab, Spot};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize)]
@@ -151,6 +151,10 @@ impl MachineSeen {
         self.workspaces().find_map(|ws| ws.tabs.iter().find(|tab| tab.panes.iter().any(|p| p.id == pane)))
     }
 
+    pub(crate) fn pane(&self, id: ThereId) -> Option<&PaneInfo<ThereId>> {
+        self.workspaces().flat_map(|ws| &ws.tabs).flat_map(|tab| &tab.panes).find(|pane| pane.id == id)
+    }
+
     pub(crate) fn workspace(&self, id: ThereId) -> Option<&ThereWorkspace> {
         self.workspaces().find(|ws| ws.id == id)
     }
@@ -246,16 +250,10 @@ impl MachinePlace {
     pub(crate) fn followed(&self, machines: &[MachineSeen]) -> Option<Self> {
         let seen = machines.iter().find(|m| m.name == self.machine)?;
         let same_run = seen.boot == self.boot;
-        let found = if same_run { seen.workspace(self.workspace) } else { self.by_path(seen) };
-        match found {
+        match found(seen, (&self.boot, self.workspace), (&self.path, &self.name)) {
             Some(ws) => Some(Self::at(seen, ws, self.tab.filter(|_| same_run))),
             None => (!seen.linked()).then(|| self.clone()),
         }
-    }
-
-    fn by_path<'a>(&self, seen: &'a MachineSeen) -> Option<&'a ThereWorkspace> {
-        let at_path = seen.workspaces().filter(|ws| ws.path == self.path);
-        at_path.clone().find(|ws| ws.name == self.name).or_else(|| at_path.clone().next())
     }
 
     fn shown_flags(&self) -> Vec<String> {
@@ -305,6 +303,81 @@ impl MachinePlace {
 
     pub(crate) fn name(&self) -> &str {
         &self.name
+    }
+}
+
+fn found<'a>(
+    seen: &'a MachineSeen,
+    (boot, id): (&str, ThereId),
+    (path, name): (&str, &str),
+) -> Option<&'a ThereWorkspace> {
+    if seen.boot == boot {
+        return seen.workspace(id);
+    }
+    let at_path = seen.workspaces().filter(|ws| ws.path == path);
+    at_path.clone().find(|ws| ws.name == name).or_else(|| at_path.clone().next())
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct WorkspaceThere {
+    aim: Aim,
+    destination: String,
+    path: String,
+    name: String,
+}
+
+impl PartialEq for WorkspaceThere {
+    fn eq(&self, other: &Self) -> bool {
+        self.aim == other.aim
+    }
+}
+
+impl Eq for WorkspaceThere {}
+
+impl std::hash::Hash for WorkspaceThere {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.aim.hash(state);
+    }
+}
+
+impl WorkspaceThere {
+    pub(crate) fn at(seen: &MachineSeen, ws: &ThereWorkspace, destination: &str) -> Self {
+        Self {
+            aim: seen.aim_at(ws),
+            destination: destination.to_string(),
+            path: ws.path.clone(),
+            name: ws.name.clone(),
+        }
+    }
+
+    pub(crate) fn of(place: &MachinePlace, destination: &str) -> Self {
+        Self {
+            aim: place.aim(),
+            destination: destination.to_string(),
+            path: place.path.clone(),
+            name: place.name.clone(),
+        }
+    }
+
+    pub(crate) fn aim(&self) -> &Aim {
+        &self.aim
+    }
+
+    pub(crate) fn machine(&self) -> &str {
+        &self.aim.machine
+    }
+
+    pub(crate) fn destination(&self) -> &str {
+        &self.destination
+    }
+
+    pub(crate) fn followed(&self, machines: &[MachineSeen]) -> Option<Self> {
+        let seen = machines.iter().find(|m| m.name == self.aim.machine)?;
+        let at = (&self.aim.boot[..], self.aim.workspace);
+        match found(seen, at, (&self.path, &self.name)) {
+            Some(ws) => Some(Self::at(seen, ws, &self.destination)),
+            None => (!seen.linked()).then(|| self.clone()),
+        }
     }
 }
 

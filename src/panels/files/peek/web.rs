@@ -8,6 +8,7 @@ use super::body::{Body, Picture, note, picture};
 use super::card::{header_row, picture_body};
 use super::place::{NARROW, Place};
 use super::{Anchor, Peek, Subject};
+use crate::model::tunnels::Toward;
 use crate::notify::tip;
 use crate::panels::browser::{self, Browser, Preview};
 use crate::store::Store;
@@ -19,6 +20,7 @@ pub(crate) struct WebPage {
     pub url: String,
     pub load: bool,
     pub outside: bool,
+    pub toward: Option<Toward>,
 }
 
 fn without_scheme(url: &str) -> &str {
@@ -54,7 +56,7 @@ impl Peek {
 
     pub(super) fn open_page(&mut self, page: &WebPage, cx: &mut Context<Self>) {
         match browser::running(cx).filter(|_| page.load) {
-            Some(browser) => self.capture(&browser, page.url.clone(), cx),
+            Some(browser) => self.capture(&browser, (page.url.clone(), page.toward.clone()), cx),
             None => self.body = Some(Body::Ask),
         }
     }
@@ -62,14 +64,15 @@ impl Peek {
     fn load_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(url) = self.page().map(|page| page.url.clone()) else { return };
         let browser = browser::shared(window, cx);
-        self.capture(&browser, url, cx);
+        let toward = self.page().and_then(|page| page.toward.clone());
+        self.capture(&browser, (url, toward), cx);
         cx.notify();
     }
 
-    fn capture(&mut self, browser: &Entity<Browser>, url: String, cx: &mut Context<Self>) {
+    fn capture(&mut self, browser: &Entity<Browser>, (url, toward): (String, Option<Toward>), cx: &mut Context<Self>) {
         self.body = Some(Body::Loading);
         let generation = self.generation;
-        let task = browser.update(cx, |browser, cx| browser.preview(url, cx));
+        let task = browser.update(cx, |browser, cx| browser.preview(url, toward, cx));
         self.capturing = Some(cx.spawn(async move |this, cx| {
             let shot = task.await;
             let _ = this.update(cx, |this, cx| this.captured(generation, shot, cx));
@@ -96,7 +99,10 @@ impl Peek {
         let Some(url) = self.page().map(|page| page.url.clone()) else { return };
         self.close(cx);
         if in_panel {
-            Store::get(cx).update(cx, |s, cx| s.open_in_browser(url, None, cx));
+            Store::get(cx).update(cx, |s, cx| {
+                let owner = s.shown_owner();
+                s.open_in_browser(url, owner, cx);
+            });
         } else {
             cx.open_url(&url);
         }

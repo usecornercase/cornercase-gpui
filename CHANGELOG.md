@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.75
+
+- With a linked machine's workspace picked, the Browser panel follows it: its tabs, its start page with that workspace's dev servers, and its address. Open on the Ports sheet's row, the card on the start page, the status bar's tunnels menu and its notice open the machine's port in the Browser through a tunnel, never this computer's port of the same number. The first new web port of that workspace opens by itself, as on another server. Leaving the machine's workspace brings your own workspace's tabs back.
+- A web address in a machine's terminal tab is underlined, previewed and opened; a `localhost` address there is that machine's and opens in the Browser through its tunnel. An address typed in the panel goes through the tunnel when the workspace lists that port, and otherwise opens this computer's and says so.
+- A page opened through a tunnel follows it to another local port when the tunnel comes back on one, and a tunnel comes back after its server restarts instead of being forgotten, and a machine's tabs close when it is removed, pointed elsewhere, refused or its workspace closes.
+- With an older cornercase on either side the start page says which one needs 0.13.50, and offers nothing that would half-work. A picked element, a screenshot or the console's errors can be handed to the agents of the machine's workspace, and its pages reload when they finish, as for your own workspace. Agents on a machine cannot drive this browser yet; the agents menu says so.
+
 ## 0.1.74
 
 - In the Files viewer, the Changes diff and a queued run's Text view, a selection that runs onto a later line now shows the line breaks it holds: a short mark after the line's last character, as text fields draw it. A selection from the end of a line to the start of the next no longer looks empty, and an empty line shows the same mark.

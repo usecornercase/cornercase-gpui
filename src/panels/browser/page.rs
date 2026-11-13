@@ -7,8 +7,14 @@ use serde_json::{Value, json};
 use super::cdp::{Cdp, Event};
 use super::engine::Engine;
 use super::frame::Shot;
-use super::tabs::{Followup, Tab, history_steps};
+use super::held::{Typed, said_here, typed_route};
+use super::tabs::{Claim, Followup, Restore, Tab, Through, history_steps};
 use super::{Browser, Status, address, follow, viewport};
+use crate::cli;
+use crate::model::Owner;
+use crate::model::link::{loopback_port, rewrite};
+use crate::model::tunnels::{Toward, Way};
+use crate::store::{Store, ToastKind};
 
 pub(crate) const BRIDGE: &str = "cornercaseBridge";
 const PAGE_SCRIPT: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/browser/page.js"));
@@ -22,6 +28,15 @@ pub(crate) fn bridged(params: &Value) -> Option<Value> {
         return None;
     }
     params["payload"].as_str().and_then(|p| serde_json::from_str::<Value>(p).ok())
+}
+
+pub(crate) fn late_claim(now: u64, asked: u64, owner: &Owner) -> bool {
+    now != asked && owner.has_place()
+}
+
+pub(crate) fn restore_hold(restore: &Restore) -> Option<(u16, String)> {
+    let held = restore.through.filter(|t| loopback_port(&restore.url) == Some(t.local))?;
+    Some((held.remote, rewrite(&restore.url, held.remote)))
 }
 
 impl Browser {
@@ -61,7 +76,7 @@ impl Browser {
     }
 
     pub(super) fn active_session(&self) -> Option<String> {
-        self.tabs.active(self.workspace).and_then(|t| t.session.clone())
+        self.tabs.active(&self.place).and_then(|t| t.session.clone())
     }
 
     pub(super) fn ready(&mut self, engine: Engine, cx: &mut Context<Self>) {
@@ -72,26 +87,32 @@ impl Browser {
         self.call((None, "Browser.getVersion", json!({})), cx, |this, result, cx| {
             this.user_agent = result.ok().and_then(|v| v["userAgent"].as_str().map(plain_agent));
             this.send(None, "Target.setDiscoverTargets", json!({ "discover": true }));
-            for (url, workspace) in std::mem::take(&mut this.restore) {
-                this.open_tab(&url, workspace, cx);
+            for restore in std::mem::take(&mut this.restore) {
+                this.reopen(restore, cx);
             }
         });
     }
 
-    pub(super) fn open_tab(&mut self, url: &str, workspace: Option<u64>, cx: &mut Context<Self>) {
+    pub(super) fn open_tab(&mut self, url: &str, owner: Owner, through: Option<Through>, cx: &mut Context<Self>) {
+        let server_generation = self.server_generation;
         self.call((None, "Target.createTarget", json!({ "url": url })), cx, move |this, result, cx| {
             let Some(target) = result.ok().and_then(|r| r["targetId"].as_str().map(str::to_string)) else { return };
-            this.claim(&target, workspace, cx);
+            if late_claim(this.server_generation, server_generation, &owner) {
+                this.close_tab(&target);
+                return;
+            }
+            this.claim(&target, Claim { owner, through }, cx);
         });
     }
 
-    fn claim(&mut self, target: &str, workspace: Option<u64>, cx: &mut Context<Self>) {
+    fn claim(&mut self, target: &str, claim: Claim, cx: &mut Context<Self>) {
         let Some(tab) = self.tabs.get_mut(target) else {
-            self.claims.insert(target.to_string(), workspace);
+            self.claims.insert(target.to_string(), claim);
             return;
         };
-        tab.workspace = workspace;
-        self.tabs.activate(workspace, target);
+        tab.owner = claim.owner.clone();
+        tab.through = claim.through;
+        self.tabs.activate(claim.owner, target);
         self.recast(cx);
     }
 
@@ -117,16 +138,21 @@ impl Browser {
         if self.tabs.get(target).is_some() || self.previews.owns(info) {
             return;
         }
-        let opener = info["openerId"].as_str().and_then(|o| self.tabs.get(o)).map(|o| o.workspace);
+        let opener_tab = info["openerId"].as_str().and_then(|o| self.tabs.get(o));
+        let opener = opener_tab.map(|o| o.owner.clone());
         let claimed = self.claims.remove(target);
-        let workspace = claimed.or(opener).flatten();
-        let mut tab = Tab::new(target, info["url"].as_str().unwrap_or_default(), workspace);
+        let url = info["url"].as_str().unwrap_or_default();
+        let inherited = opener_tab.and_then(|t| t.through).filter(|t| loopback_port(url) == Some(t.local));
+        let through = claimed.as_ref().and_then(|c| c.through).or(inherited);
+        let owner = claimed.as_ref().map(|c| c.owner.clone()).or(opener.clone()).unwrap_or(Owner::Nobody);
+        let mut tab = Tab::new(target, url, owner.clone());
+        tab.through = through;
         tab.title = info["title"].as_str().unwrap_or_default().to_string();
         self.tabs.add(tab);
         if claimed.is_some() || opener.is_some() {
-            self.tabs.activate(workspace, target);
+            self.tabs.activate(owner.clone(), target);
         }
-        self.adopt(target, follow::foreign(claimed.is_some(), workspace), cx);
+        self.adopt(target, follow::foreign(claimed.is_some(), &owner), cx);
         self.attach(target, cx);
     }
 
@@ -142,6 +168,8 @@ impl Browser {
                 this.check_loading(&session, cx);
                 this.recast(cx);
             }
+            let store = Store::get(cx);
+            this.repoint_tabs(&store, cx);
         });
     }
 
@@ -193,14 +221,53 @@ impl Browser {
 
     pub(super) fn go_to(&mut self, text: &str, cx: &mut Context<Self>) {
         let Some(typed) = address::normalize(text) else { return };
-        if let Some(remote) = self.through_cornercase(&typed, cx) {
-            return self.browse_held((remote, typed), (self.workspace, true), cx);
+        if let Some(why) = self.refused_place(cx) {
+            Store::get(cx).update(cx, |s, cx| s.not_opened(&why, cx));
+            return;
         }
         self.supersede_waiting();
-        let url = self.tunnelled(typed);
+        if self.typed_through(&typed, cx) {
+            return;
+        }
+        let url = if self.place.machine().is_some() { typed } else { self.tunnelled(typed) };
         match self.active_session() {
             Some(session) => self.send(Some(&session), "Page.navigate", json!({ "url": url })),
-            None => self.open_tab(&url, self.workspace, cx),
+            None => self.open_tab(&url, self.place.clone(), None, cx),
+        }
+    }
+
+    fn typed_through(&mut self, typed: &str, cx: &mut Context<Self>) -> bool {
+        let store = Store::get(cx).read(cx);
+        let toward = self.place.toward(cli::host().as_deref());
+        let held_way = self.place.machine().is_some() || matches!(store.tunnel_way(), Way::Cornercase | Way::Waiting);
+        let port = loopback_port(typed);
+        let known = |toward: &Toward, port: u16| {
+            self.dev.listed_numbers().contains(&port) || store.held_tunnel(toward, port).is_some()
+        };
+        let asked = toward.as_ref().filter(|_| held_way);
+        let known = asked.zip(port).is_some_and(|(toward, port)| known(toward, port));
+        let own_local = port.is_some_and(|port| self.tabs.active(&self.place).is_some_and(|t| t.holds_local(port)));
+        match typed_route(port, asked, (known, own_local)) {
+            Typed::Through(remote) => {
+                self.browse_held((remote, typed.to_string()), (self.place.clone(), true), cx);
+                true
+            }
+            Typed::HereSaid(port) => {
+                let whose = match self.place.machine() {
+                    Some(name) => format!("the workspace on {name}"),
+                    None => format!("the workspace on {}", cli::host().unwrap_or_default()),
+                };
+                Store::get(cx).update(cx, |s, cx| s.toast(said_here(port, &whose), ToastKind::Info, cx));
+                false
+            }
+            Typed::Here => false,
+        }
+    }
+
+    pub(super) fn reopen(&mut self, restore: Restore, cx: &mut Context<Self>) {
+        match restore_hold(&restore) {
+            Some((remote, url)) => self.browse_held((remote, url), (restore.owner, false), cx),
+            None => self.open_tab(&restore.url, restore.owner, restore.through, cx),
         }
     }
 
@@ -212,11 +279,11 @@ impl Browser {
     }
 
     pub(super) fn back(&mut self, _cx: &mut Context<Self>) {
-        self.step(self.tabs.active(self.workspace).and_then(|t| t.back));
+        self.step(self.tabs.active(&self.place).and_then(|t| t.back));
     }
 
     pub(super) fn forward(&mut self, _cx: &mut Context<Self>) {
-        self.step(self.tabs.active(self.workspace).and_then(|t| t.forward));
+        self.step(self.tabs.active(&self.place).and_then(|t| t.forward));
     }
 
     pub(super) fn reload(&mut self, _cx: &mut Context<Self>) {
@@ -230,13 +297,13 @@ impl Browser {
     }
 
     pub(super) fn show_tab(&mut self, target: &str, cx: &mut Context<Self>) {
-        self.tabs.activate(self.workspace, target);
+        self.tabs.activate(self.place.clone(), target);
         self.recast(cx);
         cx.notify();
     }
 
     pub(super) fn recast(&mut self, cx: &mut Context<Self>) {
-        let wanted = if self.shown { self.tabs.active_target(self.workspace) } else { None };
+        let wanted = if self.shown { self.tabs.active_target(&self.place) } else { None };
         let session = |this: &Self, target: &Option<String>| {
             target.as_deref().and_then(|t| this.tabs.get(t)).and_then(|t| t.session.clone())
         };

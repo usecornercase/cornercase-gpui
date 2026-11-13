@@ -34,7 +34,7 @@ pub(super) fn scope_of(source: &Source, all: bool) -> Scope {
     }
 }
 
-pub(super) fn views(listed: &Listed, session: Option<&Session>, aim: Option<&Aim>, all: bool) -> Vec<PortView> {
+pub(crate) fn views(listed: &Listed, session: Option<&Session>, aim: Option<&Aim>, all: bool) -> Vec<PortView> {
     match listed {
         Listed::None => Vec::new(),
         Listed::Here(ports) => ports.iter().map(|port| view_here(port, session, all)).collect(),

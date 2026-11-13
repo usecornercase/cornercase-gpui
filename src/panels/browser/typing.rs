@@ -130,7 +130,7 @@ impl Browser {
     }
 
     fn caret_bounds(&self, element: Bounds<Pixels>) -> Bounds<Pixels> {
-        let meta = self.tabs.active(self.workspace).and_then(|t| t.shot.as_ref()).map(|s| s.meta);
+        let meta = self.tabs.active(&self.place).and_then(|t| t.shot.as_ref()).map(|s| s.meta);
         match (self.input.typing.caret, meta) {
             (Some(caret), Some(meta)) => from_page(caret, element, &meta),
             _ => Bounds::new(element.origin, size(px(1.), px(18.))),

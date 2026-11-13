@@ -117,7 +117,7 @@ impl Browser {
     }
 
     fn answer(&mut self, accept: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(target) = self.tabs.active_target(self.workspace) else { return };
+        let Some(target) = self.tabs.active_target(&self.place) else { return };
         let Some(dialog) = self.notices.dialogs.remove(&target) else { return };
         let Some(session) = self.tabs.get(&target).and_then(|t| t.session.clone()) else { return };
         let mut params = json!({ "accept": accept });

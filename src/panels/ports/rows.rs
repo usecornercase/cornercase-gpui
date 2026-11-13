@@ -23,16 +23,21 @@ use crate::{cli, desktop};
 
 const TICK: f32 = 15.;
 
+pub(super) fn cornercase_note(place: &str) -> String {
+    format!(
+        "These ports are on {place}: Tunnel forwards one to this {} through cornercase, which lists it, and Open \
+         shows it in the Browser panel.",
+        desktop::here()
+    )
+}
+
 pub(super) fn remote_notes(host: &str, way: &Way) -> Vec<String> {
     let here = desktop::here();
     let own = format!(
         "These ports are on {host}: Open shows one in the Browser panel, through an ssh tunnel to this {here}."
     );
     match way {
-        Way::Cornercase => vec![format!(
-            "These ports are on {host}: Tunnel forwards one to this {here} through cornercase, which lists it, and Open \
-             shows it in the Browser panel."
-        )],
+        Way::Cornercase => vec![cornercase_note(host)],
         Way::Own(older) => vec![own, older_note(older, host)],
         Way::Here | Way::Waiting => vec![own],
     }
@@ -105,10 +110,10 @@ fn stop_button(view: &PortView, side: &Side, stop: Stop<PortsPanel>) -> Option<S
 }
 
 fn browse(url: String, cx: &mut App) {
-    let workspace = super::shown_workspace(cx);
     Store::get(cx).update(cx, |s, cx| {
+        let owner = s.shown_owner();
         s.close_sheet(cx);
-        s.open_in_browser(url, workspace, cx);
+        s.open_in_browser(url, owner, cx);
     });
 }
 
@@ -151,7 +156,8 @@ fn buttons(view: &PortView, side: &Side, stop: Stop<PortsPanel>, store: &Store) 
     let key = view.key.clone();
     let id = |what: &str| SharedString::from(format!("{what}-{key}"));
     let local = store.tunnel_local(&side.toward, view.number);
-    let links = row_links(view.url.as_deref(), side.machine().is_some(), cli::host().is_some(), local);
+    let can_open = side.machine().is_some() && store.can_tunnel(&side.toward);
+    let links = row_links(view.url.as_deref(), (side.machine().is_some(), can_open), cli::host().is_some(), local);
     let system = links.system.map(|url| system_browser(id("system"), url));
     div()
         .flex()

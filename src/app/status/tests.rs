@@ -74,3 +74,14 @@ fn the_tip_leads_with_the_tunnels_only_on_another_server() {
     );
     assert!(super::connection_tip(Some("boom".into()), Some("devbox")).starts_with("boom"));
 }
+
+#[test]
+fn a_machine_tunnels_open_entry_says_where_it_opens() {
+    use super::tunnels::open_label;
+    use crate::model::Owner;
+    use crate::model::tunnels::Toward;
+    let machine = Toward::Machine("vps".into());
+    assert_eq!(open_label(&machine, None), "Open in the system browser");
+    assert_eq!(open_label(&machine, Some(&Owner::Nobody)), "Open in the Browser");
+    assert_eq!(open_label(&Toward::Server, None), "Open in the Browser");
+}
