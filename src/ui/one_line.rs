@@ -25,7 +25,7 @@ struct Cut {
 
 pub(crate) struct LaidOut {
     pub(crate) bounds: Bounds<Pixels>,
-    pub(crate) line: ShapedLine,
+    line: ShapedLine,
     cut: Option<Cut>,
 }
 
@@ -34,6 +34,18 @@ impl LaidOut {
         let local = x - self.bounds.left();
         caret_in(self.cut, self.line.len(), local, self.line.closest_index_for_x(local))
     }
+
+    pub(crate) fn end_x(&self) -> Pixels {
+        end_in(self.cut.is_some(), self.bounds, self.line.width)
+    }
+}
+
+fn fits(width: Pixels, room: Pixels) -> bool {
+    width <= room.ceil()
+}
+
+fn end_in(cut: bool, bounds: Bounds<Pixels>, width: Pixels) -> Pixels {
+    if cut { bounds.right() } else { bounds.left() + width }
 }
 
 fn caret_in(cut: Option<Cut>, len: usize, x: Pixels, closest: usize) -> usize {
@@ -130,7 +142,7 @@ impl Element for OneLine {
         window: &mut Window,
         _cx: &mut App,
     ) -> Self::PrepaintState {
-        let (shown, cut) = if measured.line.width <= bounds.size.width.ceil() {
+        let (shown, cut) = if fits(measured.line.width, bounds.size.width) {
             (measured.line.clone(), None)
         } else {
             let (shown, cut) = self.cut(measured, bounds.size.width, window);

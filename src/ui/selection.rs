@@ -5,7 +5,7 @@ mod pointer;
 use std::fmt::Display;
 use std::ops::Range;
 
-use gpui::{Bounds, HighlightStyle, Hsla, Pixels, Point, Size, point, px};
+use gpui::{Bounds, HighlightStyle, Pixels, Point, Size, point, px};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::theme::colours;
@@ -348,12 +348,8 @@ pub(crate) fn bar_origin(host: Bounds<Pixels>, bar: Size<Pixels>, room: Bounds<P
     point(x, y.max(room.top() + px(BAR_MARGIN)))
 }
 
-fn selection_colour() -> Hsla {
-    colours::selection().into()
-}
-
 fn selected_chars() -> HighlightStyle {
-    HighlightStyle { background_color: Some(selection_colour()), ..HighlightStyle::default() }
+    HighlightStyle { background_color: Some(colours::selection().into()), ..HighlightStyle::default() }
 }
 
 fn covers(range: &Range<usize>, piece: &Range<usize>) -> bool {

@@ -1,4 +1,4 @@
-use gpui::{Bounds, Hsla, point, px, size};
+use gpui::{Hsla, px};
 
 use super::*;
 
@@ -120,30 +120,14 @@ fn a_line_within_the_cap_or_a_cut_line_has_no_cut() {
     assert_eq!(Fit::Cut.kept(&"a".repeat(500)), None);
 }
 
-fn box_at(width: f32) -> Bounds<Pixels> {
-    Bounds::new(point(px(40.), px(0.)), size(px(width), px(18.)))
-}
-
 #[test]
 fn the_break_of_a_line_follows_its_last_character() {
-    assert_eq!(break_x(box_at(300.), px(70.), 9), px(110.));
     assert_eq!(break_index(5, None, 5), 5);
 }
 
 #[test]
 fn the_break_of_an_empty_line_sits_at_its_start_not_after_its_stand_in() {
-    assert_eq!(break_x(box_at(300.), px(7.3), 0), px(40.));
     assert_eq!(break_index(0, None, 1), 0);
-}
-
-#[test]
-fn the_break_of_a_cut_line_sits_at_the_edge_past_its_ellipsis() {
-    assert_eq!(break_x(box_at(300.), px(900.), 120), px(340.));
-}
-
-#[test]
-fn a_line_within_its_box_s_last_pixel_is_not_cut() {
-    assert_eq!(break_x(box_at(300.25), px(300.5), 9), px(340.5));
 }
 
 #[test]

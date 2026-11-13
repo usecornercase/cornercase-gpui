@@ -1,9 +1,10 @@
 use gpui::{
-    AnyElement, Bounds, CursorStyle, Div, ElementId, HighlightStyle, IntoElement, ParentElement as _, Pixels, Stateful,
+    AnyElement, CursorStyle, Div, ElementId, HighlightStyle, IntoElement, ParentElement as _, Pixels, Stateful,
     StatefulInteractiveElement as _, Styled as _, StyledText, div, px,
 };
 
 use crate::notify::tip;
+use crate::ui::one_line::LaidOut;
 use crate::ui::{self, Icon};
 
 use super::pointer::{Laid, break_mark, row_probe};
@@ -105,14 +106,8 @@ pub(super) fn break_index(len: usize, kept: Option<usize>, shown: usize) -> usiz
     if kept.is_some() { shown } else { len }
 }
 
-pub(super) fn break_x(bounds: Bounds<Pixels>, width: Pixels, len: usize) -> Pixels {
-    if width > bounds.size.width.ceil() {
-        bounds.right()
-    } else if len == 0 {
-        bounds.left()
-    } else {
-        bounds.left() + width
-    }
+pub(super) fn break_x(line: &LaidOut, len: usize) -> Pixels {
+    if len == 0 { line.bounds.left() } else { line.end_x() }
 }
 
 pub(crate) fn code_cell<S: Copy + Ord + 'static>(
