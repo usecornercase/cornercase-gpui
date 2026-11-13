@@ -8,7 +8,7 @@ use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::platform::Os;
 use crate::sidebar::tip;
-use crate::store::Busy;
+use crate::store::{Busy, release_clause};
 use crate::ui::{self, Icon, Tone};
 
 const UPDATE: &str = "Update";
@@ -20,14 +20,7 @@ fn older_heading(older: &Older) -> String {
 }
 
 pub(crate) fn older_lead(older: &Older, os: Os) -> String {
-    let (name, here) = (&older.destination, desktop::machine(os));
-    let mine = &older.here;
-    match &older.there {
-        Some(there) => format!("{name} runs cornercase {there} and this {here} runs {mine}. {NEEDS}"),
-        None => {
-            format!("{name} runs a cornercase too old to say which release it is, and this {here} runs {mine}. {NEEDS}")
-        }
-    }
+    format!("{}. {NEEDS}", release_clause(&older.destination, older, os))
 }
 
 fn behind_heading(behind: &Behind) -> String {

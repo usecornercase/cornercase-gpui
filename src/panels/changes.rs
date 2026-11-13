@@ -204,7 +204,7 @@ impl ChangesPanel {
     }
 
     fn reads_machine(&self) -> bool {
-        matches!(self.follow, Some(Follow { workspace: Some(Whose::There(..)), .. }))
+        self.machine_followed().is_some()
     }
 
     fn machine_shown(&self) -> Option<&MachineRead> {

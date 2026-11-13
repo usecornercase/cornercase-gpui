@@ -277,7 +277,7 @@ impl FilesPanel {
         spans: Option<Spans>,
         cx: &mut Context<Self>,
     ) {
-        self.machine_read_answered(reading.id, content.as_ref());
+        self.machine_read_answered(reading.id, content.as_ref(), cx);
         let Some(viewer) = self.places.get_mut(&reading.id).and_then(|p| p.viewer.as_mut()) else { return };
         if viewer.path != reading.path {
             return;

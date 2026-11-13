@@ -27,7 +27,7 @@ pub(crate) use locate::parse_version;
 pub(crate) use locate::{Binary, INSTALL_GUIDE, MINIMUM, Missing, Origin, Problem, Version};
 #[cfg(test)]
 pub(crate) use older::Started;
-pub(crate) use older::{Behind, Older, Start, Step, start_server, step, update_args};
+pub(crate) use older::{Behind, Older, Start, Step, older_refusal, refused_older, start_server, step, update_args};
 pub(crate) use partial::{Answer, Said, answer_at, answer_on, run_partial, run_partial_on, run_printed, said_of};
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
@@ -205,11 +205,15 @@ pub(crate) fn run_on<S: AsRef<str>>(target: &Target, args: &[S], stdin: Option<&
 }
 
 fn answer_of<S: AsRef<str>>(out: &Output, args: &[S]) -> Result<String> {
-    if !out.status.success() {
-        let name = args.first().map(AsRef::as_ref).unwrap_or_default();
-        return Err(failure(name, out.status.code(), &out.stderr));
+    let name = args.first().map(AsRef::as_ref).unwrap_or_default();
+    answered(name, out.status.code(), &out.stdout, &out.stderr)
+}
+
+fn answered(name: &str, code: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Result<String> {
+    if code == Some(0) {
+        return Ok(String::from_utf8_lossy(stdout).into_owned());
     }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    Err(refused_older(name, code, stdout, stderr).unwrap_or_else(|| failure(name, code, stderr)))
 }
 
 pub(crate) fn run_on_within<S: AsRef<str>>(target: &Target, args: &[S], cap: Duration) -> Result<String> {

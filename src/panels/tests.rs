@@ -37,3 +37,9 @@ fn the_flow_panel_is_docked_beside_the_terminal() {
 fn every_cached_panel_is_docked() {
     assert!(PanelKind::ALL.into_iter().filter(|kind| kind.cached()).all(PanelKind::docked));
 }
+
+#[test]
+fn only_the_four_panels_that_read_a_machine_ask_it_again_when_shown() {
+    let reading: Vec<PanelKind> = PanelKind::ALL.into_iter().filter(|kind| kind.reads_machine()).collect();
+    assert_eq!(reading, [PanelKind::Changes, PanelKind::Files, PanelKind::Browser, PanelKind::Ports]);
+}

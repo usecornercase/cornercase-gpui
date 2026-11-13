@@ -16,7 +16,7 @@ use crate::model::machines::run_on::checks::Asked;
 use crate::model::{Frame, Grid, MachinePlace, MachineSeen, Session, ThereId};
 use crate::notify::{Event, Notifier, parse_event};
 use crate::sidebar::{self, AgentCloseThere, CloseAgent};
-use crate::store::{self, Busy, Store, TabThere, ToastKind, args, failed_there};
+use crate::store::{self, Busy, OlderNote, Reach, Store, TabThere, ToastKind, args, failed_there};
 use crate::terminal::cleaned;
 use crate::theme;
 
@@ -30,6 +30,8 @@ enum Lost {
     Link,
     Stream { next: Instant, try_number: u32, why: Option<String> },
     NoWay(String),
+    Waiting(String),
+    Older(OlderNote),
     Elsewhere(String),
 }
 
@@ -42,6 +44,8 @@ pub(crate) enum Standing {
     RetryIn(u64, Option<String>),
     NoTab,
     NoWay(String),
+    Waiting(String),
+    Older(OlderNote),
     Elsewhere(String),
 }
 
@@ -65,6 +69,7 @@ enum LinkStep {
     Stay,
     Fall,
     Reopen,
+    Older(OlderNote),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -128,11 +133,26 @@ fn plan(tab: Option<&MachineTab>, place: Option<&MachinePlace>) -> Plan {
     }
 }
 
-fn link_step(state: &TabState, linked: bool) -> LinkStep {
+fn link_step(state: &TabState, linked: bool, older: Option<&OlderNote>) -> LinkStep {
     match (state, linked) {
+        (TabState::Down(Lost::Stream { .. }), true) if older.is_some() => {
+            older.map_or(LinkStep::Stay, |note| LinkStep::Older(note.clone()))
+        }
         (TabState::Opening | TabState::Live | TabState::Down(Lost::Stream { .. }), false) => LinkStep::Fall,
-        (TabState::Down(Lost::Link | Lost::NoWay(_)), true) => LinkStep::Reopen,
+        (TabState::Down(Lost::Link | Lost::NoWay(_) | Lost::Waiting(_) | Lost::Older(_)), true) => LinkStep::Reopen,
         _ => LinkStep::Stay,
+    }
+}
+
+fn lost_of(reach: Option<Reach>, host: bool, linked: bool) -> Result<Target, Lost> {
+    match reach {
+        None | Some(Reach::Down(_)) => Err(Lost::Link),
+        Some(Reach::Up(target)) => Ok(target),
+        Some(Reach::Waiting(why)) => Err(Lost::Waiting(why)),
+        Some(Reach::Older(note)) => Err(Lost::Older(note)),
+        Some(Reach::Refused(why)) if host => Err(Lost::Elsewhere(why)),
+        Some(Reach::Refused(_)) if !linked => Err(Lost::Link),
+        Some(Reach::Refused(why)) => Err(Lost::NoWay(why)),
     }
 }
 
@@ -223,7 +243,8 @@ fn refusal(tab: &MachineTab, seen: Option<&MachineSeen>) -> String {
     match &tab.state {
         TabState::Opening | TabState::Live if tab.shows_no_tab() => format!("No tab is open on {name}"),
         TabState::Opening | TabState::Live => format!("The tab on {name} is still opening"),
-        TabState::Down(Lost::NoWay(why)) => why.clone(),
+        TabState::Down(Lost::NoWay(why) | Lost::Waiting(why)) => why.clone(),
+        TabState::Down(Lost::Older(note)) => note.line.clone(),
         TabState::Down(Lost::Elsewhere(_)) => {
             format!("The tab on {name} needs this window on this {}", desktop::here())
         }
@@ -297,6 +318,8 @@ impl MachineTab {
                 Standing::RetryIn(left.as_secs() + u64::from(left.subsec_nanos() > 0), why.clone())
             }
             TabState::Down(Lost::NoWay(why)) => Standing::NoWay(why.clone()),
+            TabState::Down(Lost::Waiting(why)) => Standing::Waiting(why.clone()),
+            TabState::Down(Lost::Older(note)) => Standing::Older(note.clone()),
             TabState::Down(Lost::Elsewhere(why)) => Standing::Elsewhere(why.clone()),
             _ if self.shows_no_tab() => Standing::NoTab,
             TabState::Live => Standing::Shown,
@@ -332,6 +355,9 @@ impl MachineTab {
     fn fall(&mut self, lost: Lost) -> bool {
         self.conn.go_nowhere();
         self.host_events = None;
+        if matches!(lost, Lost::Older(_) | Lost::Waiting(_)) {
+            self.attempts = 0;
+        }
         self.state = TabState::Down(lost);
         self.drop_held()
     }
@@ -489,14 +515,8 @@ impl Root {
     }
 
     fn machine_reach(&self, place: &MachinePlace, cx: &Context<Self>) -> Result<Target, Lost> {
-        let Some(seen) = self.session.as_ref().and_then(|session| session.machine(&place.machine)) else {
-            return Err(Lost::Link);
-        };
-        self.store.read(cx).machine_target(seen).map_err(|why| match (&self.host, seen.linked()) {
-            (Some(_), _) => Lost::Elsewhere(why),
-            (None, false) => Lost::Link,
-            (None, true) => Lost::NoWay(why),
-        })
+        let linked = self.machine_linked(&place.machine);
+        lost_of(self.store.read(cx).reach_of(&place.machine), self.host.is_some(), linked)
     }
 
     fn open_machine(&mut self, cx: &mut Context<Self>) {
@@ -622,6 +642,7 @@ impl Root {
             self.machine_down(Lost::Link, cx);
             return;
         }
+        self.store.update(cx, |s, cx| s.there_failed(&machine, cx));
         let lost = Lost::Stream { next: Instant::now() + wait, try_number, why: reason_of(err) };
         self.machine_down(lost, cx);
         cx.spawn(async move |this, cx| {
@@ -683,8 +704,13 @@ impl Root {
 
     pub(super) fn follow_link(&mut self, cx: &mut Context<Self>) {
         let Some(tab) = self.machine.as_ref() else { return };
-        match link_step(&tab.state, self.machine_linked(&tab.machine)) {
+        let older = match self.store.read(cx).reach_of(&tab.machine) {
+            Some(Reach::Older(note)) => Some(note),
+            _ => None,
+        };
+        match link_step(&tab.state, self.machine_linked(&tab.machine), older.as_ref()) {
             LinkStep::Stay => {}
+            LinkStep::Older(note) => self.machine_down(Lost::Older(note), cx),
             LinkStep::Fall => self.machine_down(Lost::Link, cx),
             LinkStep::Reopen => self.open_machine(cx),
         }

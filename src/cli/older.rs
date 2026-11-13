@@ -63,6 +63,30 @@ fn refusal(code: Option<i32>, stdout: &str) -> Option<Older> {
     (fact.code == "older").then_some(fact.older)
 }
 
+#[derive(Debug, Clone)]
+struct OlderAnswer {
+    older: Older,
+    said: String,
+}
+
+impl std::fmt::Display for OlderAnswer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.said)
+    }
+}
+
+impl std::error::Error for OlderAnswer {}
+
+pub(crate) fn refused_older(name: &str, code: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Option<anyhow::Error> {
+    let older = refusal(code, &String::from_utf8_lossy(stdout))?;
+    let said = super::failure(name, code, stderr).to_string();
+    Some(OlderAnswer { older, said }.into())
+}
+
+pub(crate) fn older_refusal(error: &anyhow::Error) -> Option<&Older> {
+    error.downcast_ref::<OlderAnswer>().map(|answer| &answer.older)
+}
+
 fn start(code: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Start {
     if code == Some(0) {
         return Start::Up(serde_json::from_slice(stdout).unwrap_or_default());

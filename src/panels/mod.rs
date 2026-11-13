@@ -117,6 +117,10 @@ impl PanelKind {
         matches!(self, Self::Changes | Self::Files | Self::Todo | Self::Recap | Self::Browser | Self::Flow)
     }
 
+    pub(crate) fn reads_machine(self) -> bool {
+        matches!(self, Self::Changes | Self::Files | Self::Browser | Self::Ports)
+    }
+
     pub(crate) fn cached(self) -> bool {
         matches!(self, Self::Changes | Self::Files | Self::Todo | Self::Recap | Self::Flow)
     }

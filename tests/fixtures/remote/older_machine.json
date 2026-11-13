@@ -1,0 +1,1 @@
+{"error":{"code":"older","message":"`vps.invalid` runs cornercase 0.13.39 and this machine 0.13.57. Update it from here with `cornercase --remote vps.invalid update`","destination":"vps.invalid","there":"0.13.39","here":"0.13.57","update":["cornercase","--remote","vps.invalid","update"]}}

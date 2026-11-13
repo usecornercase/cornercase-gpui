@@ -8,7 +8,7 @@ use std::sync::atomic::Ordering;
 use super::super::tree;
 use super::super::{Place, Search};
 use super::*;
-use crate::store::Reach;
+use crate::store::{OlderNote, Reach};
 use crate::test_util::{fixture, vps_aim as aim, vps_read, vps_target as target};
 
 fn there() -> There {
@@ -297,4 +297,18 @@ fn a_margin_is_not_asked_of_a_server_that_restarted_since_its_answer_could_not_s
     let machine = Machine::answering(r#"{"boot":"99-1","folders":[]}"#);
     assert!(there().gutter_with(&|t, a| Ok(machine.ask(t, a)), Path::new("a.txt")).is_none());
     assert_eq!(machine.only_request().1[1], "list");
+}
+
+#[test]
+fn a_tree_never_read_says_so_only_while_waiting_or_older_and_keeps_what_it_read() {
+    let said = |reach, listed| unread_root(&vps_read(reach), listed);
+    assert_eq!(said(Reach::Waiting("w".into()), false).as_deref(), Some("Nothing read from vps"));
+    assert_eq!(
+        said(Reach::Older(OlderNote { line: "l".into(), tip: "t".into() }), false).as_deref(),
+        Some("Nothing read from vps")
+    );
+    assert_eq!(said(Reach::Older(OlderNote { line: "l".into(), tip: "t".into() }), true), None);
+    assert_eq!(said(Reach::Down("d".into()), false), None);
+    assert_eq!(said(Reach::Refused("r".into()), false), None);
+    assert_eq!(said(Reach::Up(target()), false), None);
 }

@@ -149,3 +149,50 @@ fn hearing_from_the_machine_starts_the_waits_over() {
 fn hearing_when_nothing_failed_changes_nothing() {
     assert!(!Retry::default().heard());
 }
+
+fn older_note() -> OlderNote {
+    OlderNote {
+        line: "vps runs cornercase 0.13.39 and this Mac 0.13.57: update it".into(),
+        tip: "Update it from this Mac with cornercase --remote vps.invalid update".into(),
+    }
+}
+
+#[test]
+fn a_place_waiting_for_the_machines_list_says_so_and_asks_nothing() {
+    let waiting = read(Reach::Waiting("waiting for the machines list".into()));
+    assert_eq!(says(&waiting, &Retry::default(), NOW).as_deref(), Some("waiting for the machines list…"));
+    assert!(!counts(&waiting, &Retry::default(), NOW));
+    assert_eq!(may_ask(&waiting, &Retry::default()), Err("waiting for the machines list".into()));
+}
+
+#[test]
+fn an_older_machine_says_both_releases_and_asks_nothing() {
+    let older = read(Reach::Older(older_note()));
+    assert_eq!(says(&older, &Retry::default(), NOW), Some(older_note().line));
+    assert!(!counts(&older, &Retry::default(), NOW));
+    assert_eq!(may_ask(&older, &Retry::default()), Err(older_note().line));
+}
+
+#[test]
+fn an_older_note_wins_over_a_failed_ask() {
+    let said = says(&read(Reach::Older(older_note())), &waiting(), NOW);
+    assert_eq!(said, Some(older_note().line));
+}
+
+#[test]
+fn the_older_note_tips_how_to_update() {
+    let note = note_at(&read(Reach::Older(older_note())), &Retry::default(), NOW);
+    assert_eq!(note, Some(Note::Older(older_note())));
+}
+
+#[test]
+fn an_older_machine_forgets_the_wait_so_the_next_ask_goes_at_once() {
+    let mut retry = waiting();
+    retry.forget_while_older(&read(up()).reach);
+    assert!(retry.waiting());
+    retry.forget_while_older(&Reach::Down("d".into()));
+    assert!(retry.waiting());
+    retry.forget_while_older(&Reach::Older(older_note()));
+    assert!(!retry.waiting());
+    assert!(retry.due(Instant::now()));
+}

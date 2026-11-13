@@ -1,51 +1,18 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use gpui::{AppContext as _, Context};
-use serde_json::Value;
 
 use super::jobs::{folding_key, renaming_key};
-use super::{Busy, Store, ToastKind, args, run_job_on, run_on, run_with};
-use crate::cli::{self, Remote, Target, Version};
-use crate::desktop;
+use super::machine_read::{Listing, Reach, reach};
+use super::{Busy, Store, ToastKind, run_job_on, run_with};
+use crate::cli::{self, Target, Version};
+use crate::model::machines::hide_destination;
 use crate::model::machines::seen::{sighted, sighted_pane};
-use crate::model::machines::{Machine, hide_destination};
 use crate::model::tunnels::Release;
 use crate::model::{Aim, MachinePlace, MachineSeen, PaneAim, ThereId};
 
 const NOTHING_SENT: &str = "nothing was sent";
 const FOLD_CAP: Duration = Duration::from_secs(15);
-
-#[derive(Default)]
-pub(super) struct Homes {
-    known: HashMap<String, (String, String)>,
-    asked: HashMap<String, String>,
-}
-
-impl Homes {
-    fn ask(&mut self, machine: &str, boot: &str) -> bool {
-        let known = self.known.get(machine).is_some_and(|(held, _)| held == boot);
-        if known || self.asked.get(machine).is_some_and(|asked| asked == boot) {
-            return false;
-        }
-        self.asked.insert(machine.to_owned(), boot.to_owned());
-        true
-    }
-
-    fn answered(&mut self, machine: &str, boot: &str, home: Option<String>) {
-        if self.asked.get(machine).is_none_or(|asked| asked != boot) {
-            return;
-        }
-        self.asked.remove(machine);
-        if let Some(home) = home {
-            self.known.insert(machine.to_owned(), (boot.to_owned(), home));
-        }
-    }
-
-    fn home(&self, machine: &str, boot: &str) -> Option<&str> {
-        self.known.get(machine).filter(|(held, _)| held == boot).map(|(_, home)| home.as_str())
-    }
-}
 
 #[derive(Default)]
 pub(super) struct CliRelease {
@@ -119,18 +86,11 @@ struct Acting {
     name: String,
 }
 
-pub(crate) fn machine_target(window: &Target, list: &[Machine], seen: &MachineSeen) -> Result<Target, String> {
-    let name = &seen.name;
-    if let Some(host) = window.host() {
-        return Err(format!("{name} is linked from {host}: its address means nothing from this {}", desktop::here()));
+pub(crate) fn machine_target(window: &Target, listing: Listing<'_>, seen: &MachineSeen) -> Result<Target, String> {
+    match reach(window, listing, seen) {
+        Reach::Up(target) => Ok(target),
+        other => Err(other.why_not().unwrap_or_default().to_string()),
     }
-    if !seen.linked() {
-        return Err(seen.link_note());
-    }
-    let listed =
-        list.iter().find(|machine| machine.name == *name).ok_or_else(|| format!("{name} is no longer listed"))?;
-    let remote = Remote::new(&listed.destination, "");
-    remote.map(Target::Remote).ok_or_else(|| format!("{name}'s ssh destination cannot be used"))
 }
 
 fn sent_or_not(why: &str) -> String {
@@ -150,11 +110,6 @@ fn fold_refusal(aim: &PaneAim, destination: &str, error: &anyhow::Error) -> Stri
         .unwrap_or_else(|| aim.failed(&hide_destination(&cli::reason(error), &aim.machine, destination)))
 }
 
-fn home_in(status: &str) -> Option<String> {
-    let status: Value = serde_json::from_str(status).ok()?;
-    status.get("home").and_then(Value::as_str).map(str::to_string)
-}
-
 impl Store {
     pub(crate) fn pick_machine_place(&mut self, place: MachinePlace, cx: &mut Context<Self>) {
         self.placing.awaited = None;
@@ -162,8 +117,10 @@ impl Store {
     }
 
     pub(super) fn select_there(&mut self, place: MachinePlace, cx: &mut Context<Self>) {
-        self.ask_machine_home(&place.machine, cx);
+        let machine = place.machine.clone();
+        self.recheck_there(&machine, cx);
         self.machine_place = Some(place);
+        self.ask_machine_home(&machine, cx);
         self.file_full_screen = false;
         self.give_keys_back(cx);
     }
@@ -210,7 +167,7 @@ impl Store {
     }
 
     pub(crate) fn machine_target(&self, seen: &MachineSeen) -> Result<Target, String> {
-        machine_target(&cli::target(), &self.machines, seen)
+        machine_target(&cli::target(), self.listing(), seen)
     }
 
     pub(crate) fn reach_machine(&self, aim: &Aim) -> Result<Target, String> {
@@ -319,24 +276,6 @@ impl Store {
             }
             cx.notify();
         }
-    }
-
-    pub(crate) fn machine_home(&self, machine: &str, boot: &str) -> Option<&str> {
-        self.there.homes.home(machine, boot)
-    }
-
-    pub(crate) fn ask_machine_home(&mut self, machine: &str, cx: &mut Context<Self>) {
-        let Some(seen) = self.session.as_ref().and_then(|session| session.machine(machine)) else { return };
-        let (machine, boot) = (seen.name.clone(), seen.boot.clone());
-        let Ok(target) = self.machine_target(seen) else { return };
-        if !self.there.homes.ask(&machine, &boot) {
-            return;
-        }
-        run_on(cx, target, args(&["status", "--json"]), move |this: &mut Self, result, cx| {
-            let home = result.ok().as_deref().and_then(home_in);
-            this.there.homes.answered(&machine, &boot, home);
-            cx.notify();
-        });
     }
 }
 

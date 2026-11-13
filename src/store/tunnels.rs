@@ -5,7 +5,7 @@ use futures::StreamExt as _;
 use futures::channel::mpsc::unbounded;
 use gpui::Context;
 
-use super::browse::toast_go;
+use super::browse::{listed_gate, toast_go};
 use super::{Busy, Store, ToastKind};
 use crate::cli::{self, Ended};
 use crate::model::tunnels::{Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, machine_gate, way};
@@ -87,7 +87,7 @@ impl Store {
 
     pub(crate) fn machine_tunnel_gate(&self, name: &str) -> Gate {
         let server = crate::model::machines::run_on::server_release(Some(name), self.session.as_ref(), &self.machines);
-        machine_gate(self.heard_release(), server)
+        listed_gate(self.machines_known(), machine_gate(self.heard_release(), server))
     }
 
     fn reached(&self, toward: &Toward) -> Result<Reached, String> {

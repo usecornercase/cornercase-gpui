@@ -9,7 +9,7 @@ use crate::cli::{self, Target};
 use crate::model::machines::NextTry;
 use crate::notify::tip;
 use crate::panels::queue;
-use crate::store::{MachineRead, Reach};
+use crate::store::{MachineRead, OlderNote, Reach};
 use crate::theme::colours;
 use crate::ui;
 use crate::ui::counting::Counting;
@@ -39,6 +39,12 @@ impl Retry {
         failed
     }
 
+    pub(crate) fn forget_while_older(&mut self, reach: &Reach) {
+        if matches!(reach, Reach::Older(_)) {
+            *self = Self::default();
+        }
+    }
+
     pub(crate) fn due(&self, now: Instant) -> bool {
         self.next.is_none_or(|next| now >= next)
     }
@@ -51,6 +57,8 @@ impl Retry {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Note {
     Reconnecting { why: String, next: NextTry },
+    Waiting(String),
+    Older(OlderNote),
     Refused(String),
 }
 
@@ -58,6 +66,8 @@ impl Note {
     fn text(&self) -> String {
         match self {
             Self::Reconnecting { why, next } => format!("{why} · {}", next.words()),
+            Self::Waiting(why) => format!("{why}…"),
+            Self::Older(note) => note.line.clone(),
             Self::Refused(why) => why.clone(),
         }
     }
@@ -79,6 +89,8 @@ fn note_at(read: &MachineRead, retry: &Retry, now: i64) -> Option<Note> {
         Reach::Down(why) => {
             Some(Note::Reconnecting { why: why.clone(), next: read.next_try(now).unwrap_or(NextTry::UnderWay) })
         }
+        Reach::Waiting(why) => Some(Note::Waiting(why.clone())),
+        Reach::Older(note) => Some(Note::Older(note.clone())),
         Reach::Refused(why) => Some(Note::Refused(why.clone())),
     }
 }
@@ -91,7 +103,8 @@ pub(crate) fn may_ask(read: &MachineRead, retry: &Retry) -> Result<Target, Strin
     match &read.reach {
         Reach::Up(_) if retry.waiting() => Err(did_not_answer(read)),
         Reach::Up(target) => Ok(target.clone()),
-        Reach::Down(why) | Reach::Refused(why) => Err(why.clone()),
+        Reach::Older(note) => Err(note.line.clone()),
+        Reach::Waiting(why) | Reach::Down(why) | Reach::Refused(why) => Err(why.clone()),
     }
 }
 
@@ -115,11 +128,14 @@ fn where_line(read: &MachineRead, read_only: bool) -> impl IntoElement + use<> {
 fn note_line(note: &Note, why: Option<&str>) -> AnyElement {
     let text = note.text();
     let line = match note {
-        Note::Refused(_) => div().text_color(colours::working()).child(ui::one_line(text)),
+        Note::Refused(_) | Note::Older(_) => div().text_color(colours::working()).child(ui::one_line(text)),
         _ if note.counts() => div().text_color(colours::muted()).child(ui::one_line(text)),
-        Note::Reconnecting { .. } => ui::busy("on-machine-reconnecting", text).text_size(px(11.)),
+        Note::Reconnecting { .. } | Note::Waiting(_) => ui::busy("on-machine-reconnecting", text).text_size(px(11.)),
     };
-    let why = why.map(str::to_string);
+    let why = match note {
+        Note::Older(older) => Some(older.tip.clone()),
+        _ => why.map(str::to_string),
+    };
     div().id("on-machine-note").when_some(why, |d, why| d.tooltip(tip(why))).child(line).into_any_element()
 }
 

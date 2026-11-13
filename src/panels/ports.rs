@@ -19,7 +19,7 @@ use crate::model::tunnels::Toward;
 use crate::panels::PanelKind;
 use crate::panels::on_machine::{self, Retry};
 use crate::panels::poll::{Polled, Watch, parse};
-use crate::store::{self, Reach, Store};
+use crate::store::{self, Store};
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
 use crate::ui::counting::Counting;
@@ -201,8 +201,7 @@ impl PortsPanel {
         let store = Store::get(cx).read(cx);
         match source {
             Source::There(read) => {
-                let refused = matches!(read.reach, Reach::Refused(_));
-                machine_notes(&store.machine_tunnel_gate(&read.aim.machine), &read.aim.machine, refused)
+                machine_notes(&store.machine_tunnel_gate(&read.aim.machine), &read.aim.machine, &read.reach)
             }
             Source::Here(_) => {
                 cli::host().map(|host| rows::remote_notes(&host, &store.tunnel_way())).unwrap_or_default()

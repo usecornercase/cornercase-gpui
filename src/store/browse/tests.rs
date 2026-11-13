@@ -1,4 +1,4 @@
-use super::{MachineOpen, open_gate, owner_on_machine, toast_go};
+use super::{MachineOpen, listed_gate, open_gate, owner_on_machine, toast_go};
 use crate::cli::Version;
 use crate::model::Owner;
 use crate::model::machines::seen::{MachineSeen, ThereId, ThereProject, ThereWorkspace, WorkspaceThere};
@@ -34,4 +34,13 @@ fn a_machine_open_says_why_it_cannot_go() {
 fn a_machines_tunnel_toast_opens_where_its_place_is() {
     assert_eq!(toast_go(&Toward::Machine("vps".into()), 8765), ToastGo::Tunnelled("vps".into(), 8765));
     assert_eq!(toast_go(&Toward::Server, 8765), ToastGo::Browse("http://localhost:8765/".into()));
+}
+
+#[test]
+fn the_tunnel_gate_waits_while_the_machines_list_is_not_read() {
+    let older = Gate::Older(Older::Server(None));
+    assert_eq!(listed_gate(false, older), Gate::Waiting);
+    assert_eq!(listed_gate(false, Gate::Open), Gate::Waiting);
+    assert_eq!(listed_gate(true, older), older);
+    assert_eq!(listed_gate(true, Gate::Open), Gate::Open);
 }
