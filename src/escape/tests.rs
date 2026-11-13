@@ -163,7 +163,7 @@ fn every_press_takes_exactly_one_step() {
 }
 
 #[test]
-fn the_keys_go_back_at_most_once_and_no_press_closes_a_panel() {
+fn the_keys_go_back_at_most_once() {
     for scene in every_scene() {
         let steps = presses(scene);
         assert!(steps.iter().filter(|step| **step == Step::KeysBack).count() <= 1);
