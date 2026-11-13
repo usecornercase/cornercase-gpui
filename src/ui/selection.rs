@@ -116,7 +116,7 @@ impl<S: Copy + Ord> Selection<S> {
         }
     }
 
-    pub(crate) fn parts<'a>(self, lines: impl Iterator<Item = (S, &'a str)>) -> Vec<(S, Range<usize>)> {
+    fn parts<'a>(self, lines: impl Iterator<Item = (S, &'a str)>) -> Vec<(S, Range<usize>)> {
         lines
             .filter_map(|(spot, line)| match self.lit(spot, line) {
                 Lit::Line => Some((spot, 0..line.len())),
@@ -124,6 +124,18 @@ impl<S: Copy + Ord> Selection<S> {
                 _ => None,
             })
             .collect()
+    }
+
+    pub(crate) fn text<'a, 'b>(
+        self,
+        lines: impl Iterator<Item = (S, &'a str)>,
+        own: impl Fn(S, Range<usize>) -> &'b str,
+    ) -> String {
+        let parts = self.parts(lines);
+        let ends_on_a_break =
+            matches!(self, Self::Chars { .. }) && parts.last().is_some_and(|(spot, _)| *spot < self.ends().1);
+        let text = parts.into_iter().map(|(spot, range)| own(spot, range)).collect::<Vec<_>>().join("\n");
+        if ends_on_a_break { text + "\n" } else { text }
     }
 
     pub(crate) fn one_line_chars(self) -> Option<(S, Range<usize>)> {

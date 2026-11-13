@@ -50,6 +50,13 @@ fn opened(patch: Patch, gap: Gap) -> DiffData {
     DiffData { selected, patch, looks: Vec::new(), gaps, rows }
 }
 
+fn closed() -> DiffData {
+    let mut data = data();
+    data.gaps = HashMap::new();
+    data.rows = diff::rows(&data.patch.hunks, &HashMap::new());
+    data
+}
+
 fn makefile() -> DiffData {
     let patch = serde_json::from_str(fixture!("changes/file_tabs.json")).expect("the patch parses");
     let gap = serde_json::from_str(fixture!("changes/gap_tabs.json")).expect("the gap parses");
@@ -312,4 +319,22 @@ fn with_nothing_measured_above_it_a_line_goes_to_the_top() {
 #[test]
 fn the_first_row_goes_to_the_top() {
     assert_eq!(top_under(0, Some(px(30.))), (0, px(0.)));
+}
+
+#[test]
+fn characters_ending_at_a_line_s_start_copy_the_line_break_before_it() {
+    let copied = data().copied(chars((patch(0, 0), 1), (patch(0, 3), 0)));
+    assert_eq!(copied, Some(("lpha\nbeta\nBETA\n".to_string(), "lines 3-4".to_string())));
+}
+
+#[test]
+fn from_the_end_of_a_line_to_the_next_line_s_start_copies_its_line_break() {
+    let copied = data().copied(chars((patch(0, 3), 5), (gap(1, 0), 0)));
+    assert_eq!(copied, Some(("\n".to_string(), "line 5".to_string())));
+}
+
+#[test]
+fn a_selection_ending_on_a_line_not_shown_keeps_the_last_shown_line_s_break() {
+    let copied = closed().copied(chars((patch(0, 3), 2), (patch(1, 0), 0)));
+    assert_eq!(copied, Some(("mma\n".to_string(), "line 5".to_string())));
 }

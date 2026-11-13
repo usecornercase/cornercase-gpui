@@ -29,3 +29,11 @@ fn a_selection_that_ends_at_the_start_of_the_next_line_keeps_the_line_break() {
     let inside = Selection::Chars { anchor: Caret { spot: 0, at: 1 }, head: Caret { spot: 1, at: 2 } };
     assert_eq!(selected_text(&lines, inside), "bc\nde");
 }
+
+#[test]
+fn the_count_leaves_out_the_line_the_copy_ends_before() {
+    let lines: Vec<String> = ["alpha", "beta", "gamma"].map(str::to_string).into();
+    let across = Selection::Chars { anchor: Caret { spot: 0, at: 2 }, head: Caret { spot: 2, at: 0 } };
+    assert_eq!(selected_text(&lines, across), "pha\nbeta\n");
+    assert_eq!(picked(across), "2 lines");
+}

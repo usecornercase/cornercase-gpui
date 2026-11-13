@@ -1,4 +1,4 @@
-use crate::ui::selection::{Caret, Selection};
+use crate::ui::selection::{self, Caret, Selection};
 
 use super::super::disk::text;
 use super::{covered_by, one_based, selected_text};
@@ -20,9 +20,19 @@ fn selected_characters_copy_with_their_tabs() {
 }
 
 #[test]
-fn characters_ending_at_a_line_s_start_do_not_copy_it() {
+fn characters_ending_at_a_line_s_start_copy_its_line_break() {
     let source = text("one\ntwo\n");
-    assert_eq!(selected_text(&source, chars((0, 1), (1, 0))), "ne");
+    assert_eq!(selected_text(&source, chars((0, 1), (1, 0))), "ne\n");
+    assert_eq!(selected_text(&source, chars((0, 3), (1, 0))), "\n");
+}
+
+#[test]
+fn the_copy_and_its_label_agree_on_a_selection_ending_at_a_line_s_start() {
+    let source = text("a\nb\nc\nd\ne\n");
+    let picked = chars((2, 0), (4, 0));
+    assert_eq!(selected_text(&source, picked), "c\nd\n");
+    let label = selection::lines_label(one_based(covered_by(Some(picked)).expect("lines")));
+    assert_eq!(label, "lines 3-4");
 }
 
 #[test]

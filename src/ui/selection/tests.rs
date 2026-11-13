@@ -443,3 +443,67 @@ fn a_span_shorter_than_a_row_counts_as_one_row() {
 fn a_head_on_the_last_row_of_a_line_keeps_the_whole_line_and_a_row_above_it() {
     assert_eq!(off_edge((px(-36.), px(0.), px(18.)), row(0., 400.), px(0.)), Some(px(-54.)));
 }
+
+fn copied(selection: Selection<usize>, shown: &[(usize, &str)]) -> String {
+    let own = |spot: usize, range: Range<usize>| {
+        shown.iter().find(|(ix, _)| *ix == spot).and_then(|(_, line)| line.get(range)).unwrap_or_default()
+    };
+    selection.text(shown.iter().copied(), own)
+}
+
+#[test]
+fn characters_inside_one_line_copy_only_them() {
+    assert_eq!(copied(chars((0, 1), (0, 3)), &[(0, "abcd")]), "bc");
+}
+
+#[test]
+fn characters_across_lines_copy_the_breaks_between_them() {
+    let shown = [(0, "abc"), (1, "de"), (2, "fgh")];
+    assert_eq!(copied(chars((0, 2), (2, 1)), &shown), "c\nde\nf");
+}
+
+#[test]
+fn characters_ending_at_a_line_s_start_copy_the_break_before_it() {
+    let shown = [(0, "abc"), (1, "de")];
+    assert_eq!(copied(chars((0, 1), (1, 0)), &shown), "bc\n");
+    assert_eq!(copied(chars((1, 0), (0, 1)), &shown), "bc\n");
+}
+
+#[test]
+fn from_a_line_s_end_to_the_next_line_s_start_copies_only_its_break() {
+    assert_eq!(copied(chars((0, 3), (1, 0)), &[(0, "abc"), (1, "de")]), "\n");
+}
+
+#[test]
+fn an_empty_line_inside_the_selection_copies_its_break_too() {
+    assert_eq!(copied(chars((0, 1), (2, 0)), &[(0, "abc"), (1, ""), (2, "x")]), "bc\n\n");
+}
+
+#[test]
+fn whole_lines_copy_no_break_after_the_last() {
+    let shown = [(0, "abc"), (1, "de"), (2, "fgh")];
+    assert_eq!(copied(lines(0, 1), &shown), "abc\nde");
+    assert_eq!(copied(lines(0, 9), &shown), "abc\nde\nfgh");
+}
+
+#[test]
+fn lines_not_shown_are_not_copied_and_the_last_shown_keeps_its_break() {
+    let shown = [(0, "abc"), (1, "de"), (3, "fgh")];
+    assert_eq!(copied(chars((1, 1), (3, 0)), &shown), "e\n");
+    assert_eq!(copied(chars((1, 1), (2, 1)), &shown), "e\n");
+    assert_eq!(copied(lines(1, 2), &shown), "de");
+}
+
+#[test]
+fn each_part_comes_from_the_line_s_own_text() {
+    let shown = [(0, "abc"), (1, "de")];
+    let own = ["ABC", "DE"];
+    let text =
+        chars((0, 1), (1, 0)).text(shown.iter().copied(), |spot, range| own[spot].get(range).unwrap_or_default());
+    assert_eq!(text, "BC\n");
+}
+
+#[test]
+fn a_selection_of_nothing_copies_nothing() {
+    assert_eq!(copied(chars((0, 2), (0, 2)), &[(0, "abc")]), "");
+}
