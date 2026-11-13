@@ -181,7 +181,7 @@ fn machine_tab(
         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_on_machine(place.clone(), cx)))
 }
 
-pub(crate) fn tabs_in_row(tabs_in_sidebar: bool, sidebar_aside: bool) -> bool {
+fn tabs_in_row(tabs_in_sidebar: bool, sidebar_aside: bool) -> bool {
     !tabs_in_sidebar || sidebar_aside
 }
 

@@ -708,7 +708,7 @@ impl Root {
         let fitted = self.fit(shown, window);
         if self.side.aside == fitted.sidebar {
             self.side.aside = !fitted.sidebar;
-            cx.notify();
+            cx.on_next_frame(window, |_, _, cx| cx.notify());
         }
         let main = div().flex_1().min_w_0().h_full().relative().flex().flex_row();
         if !fitted.sidebar {
