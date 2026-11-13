@@ -99,6 +99,20 @@ pub(crate) fn row_links(url: Option<&str>, machine: bool, host: bool, local: Opt
     }
 }
 
+pub(crate) fn address_text(
+    url: Option<&str>,
+    number: u16,
+    machine: Option<&str>,
+    local: Option<u16>,
+) -> (String, bool) {
+    let Some(url) = url else { return (format!("port {number}"), true) };
+    match (machine, local) {
+        (Some(_), Some(local)) => (rewrite(url, local), true),
+        (Some(name), None) => (format!("{url} on {name}"), false),
+        (None, _) => (url.to_string(), true),
+    }
+}
+
 pub(crate) fn stop_warning(view: &PortView, on: Option<&str>) -> String {
     let there = on.map(|machine| format!(" on {machine}")).unwrap_or_default();
     let mut text = format!(

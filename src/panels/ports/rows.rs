@@ -7,7 +7,9 @@ use gpui::{
 
 use super::PortsPanel;
 use super::tunnel::{tunnel_button, tunnel_mark};
-use super::view::{Go, PortView, row_links, stop_many_title, stop_many_warning, stop_title, stop_warning};
+use super::view::{
+    Go, PortView, address_text, row_links, stop_many_title, stop_many_warning, stop_title, stop_warning,
+};
 use crate::cli::Target;
 use crate::dialogs::Question;
 use crate::model::tunnels::{Toward, Way, older_note};
@@ -123,12 +125,14 @@ fn copy(url: &str, cx: &mut App) {
 }
 
 fn address_line(view: &PortView, side: &Side, store: &Store) -> Div {
-    let url = view.url.clone().unwrap_or_else(|| format!("port {}", view.number));
+    let local = store.tunnel_local(&side.toward, view.number);
+    let (url, reachable) = address_text(view.url.as_deref(), view.number, side.machine(), local);
+    let colour = if reachable { colours::accent() } else { colours::soft() };
     div()
         .flex()
         .items_center()
         .gap(px(8.))
-        .child(div().font_weight(FontWeight::SEMIBOLD).text_color(colours::accent()).child(url))
+        .child(div().font_weight(FontWeight::SEMIBOLD).text_color(colour).child(url))
         .child(ui::dim(view.addresses.join(", ")))
         .children(tunnel_mark(view, &side.toward, store))
         .when(view.by_agent, |d| d.child(div().text_size(px(11.)).text_color(colours::waiting()).child("agent")))
