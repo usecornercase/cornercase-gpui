@@ -1,6 +1,6 @@
 use super::{
-    Asked, Fate, Held, Hold, Settled, bring_back, fate, forgets_after_close, live, settle_now, settled, test_hold,
-    up_toast, window_failure,
+    Asked, Fate, Held, Hold, Settled, bring_back, fate, forgets_after_close, live, remembers, settle_now, settled,
+    test_hold, up_toast, window_failure,
 };
 use crate::model::tunnels::Toward;
 
@@ -159,4 +159,19 @@ fn an_exit_0_waits_while_the_boot_to_compare_is_not_known() {
 fn a_same_boot_is_no_close_until_the_wait_has_passed_but_a_new_boot_is_a_restart_at_once() {
     assert_eq!(settle_now((true, false, false), "boot-a", Some("boot-a")), None);
     assert_eq!(settle_now((true, false, false), "boot-a", Some("boot-b")), Some(Settled::Back));
+}
+
+#[test]
+fn a_programs_open_says_who_asked_and_where_the_port_is() {
+    let (text, open) = up_toast(Asked::Program, 8765, 8765, "vps").expect("a toast");
+    assert_eq!((text.as_str(), open), ("A program on vps tunnelled port 8765 to localhost:8765", true));
+    let (moved, _) = up_toast(Asked::Program, 8765, 61011, "vps").expect("a toast");
+    assert!(moved.starts_with("A program on vps tunnelled port 8765 to localhost:61011 (8765 is taken on this "));
+    assert!(moved.ends_with(')'), "{moved}");
+}
+
+#[test]
+fn an_asked_open_is_remembered_as_a_click_is() {
+    assert!([Asked::Click, Asked::Open, Asked::Program].into_iter().all(remembers));
+    assert!(![Asked::Back, Asked::Retry].into_iter().any(remembers));
 }

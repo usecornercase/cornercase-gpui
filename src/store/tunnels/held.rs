@@ -6,6 +6,7 @@ use crate::model::tunnels::Toward;
 pub(crate) enum Asked {
     Click,
     Open,
+    Program,
     Back,
     Retry,
 }
@@ -174,18 +175,30 @@ pub(crate) fn bring_back(remembered: &[u16], held: &[u16]) -> Vec<u16> {
     remembered.iter().copied().filter(|port| !held.contains(port)).collect()
 }
 
+pub(crate) fn remembers(asked: Asked) -> bool {
+    matches!(asked, Asked::Click | Asked::Open | Asked::Program)
+}
+
 pub(crate) fn up_toast(asked: Asked, port: u16, local: u16, host: &str) -> Option<(String, bool)> {
     let moved = local != port;
     match asked {
         Asked::Click => Some((tunnelled(port, local, host, moved), true)),
+        Asked::Program => Some((program_tunnelled(port, local, host, moved), true)),
         Asked::Open if moved => Some((tunnelled(port, local, host, true), false)),
         Asked::Open | Asked::Back | Asked::Retry => None,
     }
 }
 
+fn taken_on_this(port: u16, moved: bool) -> String {
+    if moved { format!(" ({port} is taken on this {})", crate::desktop::here()) } else { String::new() }
+}
+
 fn tunnelled(port: u16, local: u16, host: &str, moved: bool) -> String {
-    let taken = if moved { format!(" ({port} is taken on this {})", crate::desktop::here()) } else { String::new() };
-    format!("Port {port} on {host} is tunnelled to localhost:{local}{taken}")
+    format!("Port {port} on {host} is tunnelled to localhost:{local}{}", taken_on_this(port, moved))
+}
+
+fn program_tunnelled(port: u16, local: u16, host: &str, moved: bool) -> String {
+    format!("A program on {host} tunnelled port {port} to localhost:{local}{}", taken_on_this(port, moved))
 }
 
 #[cfg(test)]

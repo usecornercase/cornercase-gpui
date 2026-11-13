@@ -3,8 +3,12 @@ use serde::Deserialize;
 use crate::cli::Version;
 use crate::desktop;
 
+mod orders;
+
+pub(crate) use orders::{Order, OrdersLine, failed_args, orders_args, orders_line};
+
 pub(crate) const TUNNEL_HOLD_SINCE: Version = Version::new(0, 13, 50);
-pub(crate) const ASKS_ISSUE: &str = "usecornercase/cornercase-terminal#776";
+pub(crate) const TUNNEL_ORDERS_SINCE: Version = Version::new(0, 13, 57);
 pub(crate) const REVERSE_ISSUE: &str = "usecornercase/cornercase-terminal#794";
 pub(crate) const ELSEWHERE_ISSUE: &str = "usecornercase/cornercase-terminal#787";
 
@@ -93,15 +97,23 @@ pub(crate) enum Gate {
     Open,
 }
 
-pub(crate) fn machine_gate(here: Release, server: Option<Version>) -> Gate {
+fn gate(since: Version, here: Release, server: Option<Version>) -> Gate {
     let Release::Read(here) = here else { return Gate::Waiting };
-    if !TUNNEL_HOLD_SINCE.reached_by(here) {
+    if !since.reached_by(here) {
         Gate::Older(Older::ThisComputer(here))
-    } else if !TUNNEL_HOLD_SINCE.reached_by(server) {
+    } else if !since.reached_by(server) {
         Gate::Older(Older::Server(server))
     } else {
         Gate::Open
     }
+}
+
+pub(crate) fn machine_gate(here: Release, server: Option<Version>) -> Gate {
+    gate(TUNNEL_HOLD_SINCE, here, server)
+}
+
+pub(crate) fn orders_gate(here: Release, server: Option<Version>) -> Gate {
+    gate(TUNNEL_ORDERS_SINCE, here, server)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,6 +147,13 @@ fn older_words(older: &Older, machine: &str) -> (String, String) {
 pub(crate) fn gate_note(older: &Older, machine: &str) -> String {
     let (place, has) = older_words(older, machine);
     format!("Tunnel needs cornercase {TUNNEL_HOLD_SINCE} or newer on {place}{has}.")
+}
+
+pub(crate) fn orders_note(older: &Older, host: &str) -> String {
+    let (place, has) = older_words(older, host);
+    format!(
+        "A program on {host} cannot ask this window for a tunnel: it needs cornercase {TUNNEL_ORDERS_SINCE} or newer on {place}{has}."
+    )
 }
 
 pub(crate) fn older_note(older: &Older, host: &str) -> String {

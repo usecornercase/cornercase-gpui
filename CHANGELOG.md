@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.77
+
+- A script or an agent on another machine can now open a tunnel to this computer with `cornercase tunnel open PORT`, on the window's `--remote` server and on a linked machine, with cornercase 0.13.57 or newer on both. The window holds it as if you had pressed Tunnel: a notice says a program on that machine asked and offers Open, the port is in the status bar's tunnels menu and in Ports, and it comes back next time.
+- `cornercase tunnel close PORT` and `tunnel forget PORT` run there close the tunnel here too, without a notice.
+- When the window cannot hold a port (it is closing that tunnel, the machine is not linked, or 32 tunnels already go there), the program is told why at once instead of waiting 45 seconds.
+- With an older cornercase on either side tunnels work as before, and the tunnels menu says which computer needs 0.13.57 for a program to ask.
+
 ## 0.1.76
 
 - **The Flows sheet fits a narrow window.** When the window is too narrow for the list of runs and flows beside a page wide enough for its plan (under about 1,050 px), the sheet shows the page alone, with **‹ Runs and flows** above it to go back to the list; in a wider window the list narrows first. A plan still wider than its place now scrolls sideways instead of being cut off, in the Flows sheet, the Flow panel and the flow editor: swipe sideways, hold Shift while you scroll, or use the ‹ › beside its title, and scrolling up and down still moves the page. Role names such as `orchestrator` no longer break in the middle in the Roles card.

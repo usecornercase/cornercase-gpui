@@ -12,7 +12,7 @@ use crate::platform::Os;
 use crate::store::ToastKind;
 use crate::store::remote_url;
 use crate::store::{Asked, Store};
-use crate::store::{TunnelRow, Whose, asks_note, heading, none_note, others_note};
+use crate::store::{TunnelRow, Whose, heading, none_note, others_note};
 
 fn closing(toward: &Toward, port: u16) -> Vec<Entry> {
     let (close, forget) = (toward.clone(), toward.clone());
@@ -96,13 +96,13 @@ fn actions(row: &TunnelRow, shown: Option<Owner>) -> Vec<Entry> {
     }
 }
 
-fn server_entries(host: &str, tunnels: &[TunnelRow]) -> Vec<Entry> {
+fn server_entries(host: &str, tunnels: &[TunnelRow], notes: Vec<String>) -> Vec<Entry> {
     let mut entries = vec![Entry::Heading(heading(host).into())];
     if tunnels.is_empty() {
         entries.push(context_menu::note(none_note(keys_of(Command::Panel(PanelKind::Ports), Os::CURRENT).as_deref())));
     }
     entries.extend(tunnels.iter().map(|row| context_menu::submenu(row.text(), actions(row, None))));
-    entries.push(context_menu::note(asks_note(host)));
+    entries.extend(notes.into_iter().map(context_menu::note));
     entries
 }
 
@@ -114,7 +114,8 @@ fn machine_entries(sections: &[(String, Vec<TunnelRow>)], store: &Store) -> Vec<
         entries.extend(rows.iter().map(|row| context_menu::submenu(row.text(), actions(row, shown.clone()))));
     }
     let names: Vec<String> = sections.iter().map(|(name, _)| name.clone()).collect();
-    entries.push(context_menu::note(asks_note(&listed(&names))));
+    let towards: Vec<Toward> = names.iter().cloned().map(Toward::Machine).collect();
+    entries.extend(store.orders_notes(&towards).into_iter().map(context_menu::note));
     entries.push(context_menu::note(others_note(&listed(&names))));
     entries
 }
@@ -123,7 +124,7 @@ impl Root {
     pub(crate) fn open_machine_menu(&mut self, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
         let store = self.store.read(cx);
         let mut entries = match &self.host {
-            Some(host) => server_entries(host, &store.tunnel_rows()),
+            Some(host) => server_entries(host, &store.tunnel_rows(), store.orders_notes(&[Toward::Server])),
             None => machine_entries(&store.machine_tunnel_sections(), store),
         };
         entries.push(Entry::Separator);

@@ -1,5 +1,6 @@
 use super::{
-    Gate, Older, Release, TUNNEL_HOLD_SINCE, Toward, Way, gate_note, held_line, machine_gate, older_note, way,
+    Gate, Older, Release, TUNNEL_HOLD_SINCE, TUNNEL_ORDERS_SINCE, Toward, Way, gate_note, held_line, machine_gate,
+    older_note, orders_gate, orders_note, way,
 };
 use crate::cli::Version;
 use crate::model::Session;
@@ -114,4 +115,51 @@ fn a_toward_has_a_key_and_a_machine_only_for_a_machine() {
     assert_eq!(Toward::Server.key(), "server");
     assert_eq!(Toward::Machine("vps".into()).key(), "machine:vps");
     assert_eq!((Toward::Server.machine(), Toward::Machine("vps".into()).machine()), (None, Some("vps")));
+}
+
+fn older_this(text: &str) -> Gate {
+    Gate::Older(Older::ThisComputer(Version::parse(text)))
+}
+
+fn older_server(text: &str) -> Gate {
+    Gate::Older(Older::Server(Version::parse(text)))
+}
+
+#[test]
+fn orders_need_0_13_57_here_and_on_the_server() {
+    let gate = |here: Release, server: &str| orders_gate(here, Version::parse(server));
+    assert_eq!(gate(release("0.13.57"), "0.13.57"), Gate::Open);
+    assert_eq!(gate(release("0.14.0"), "0.13.58"), Gate::Open);
+    assert_eq!(gate(release("0.13.56"), "0.13.57"), older_this("0.13.56"));
+    assert_eq!(gate(release("0.13.39"), "0.13.57"), older_this("0.13.39"));
+    assert_eq!(gate(release("0.13.57"), "0.13.56"), older_server("0.13.56"));
+    assert_eq!(orders_gate(release("0.13.57"), None), Gate::Older(Older::Server(None)));
+    assert_eq!(orders_gate(Release::Read(None), Version::parse("0.13.57")), Gate::Older(Older::ThisComputer(None)));
+}
+
+#[test]
+fn orders_wait_for_this_computers_release() {
+    assert_eq!(orders_gate(Release::Unread, Version::parse("0.13.57")), Gate::Waiting);
+}
+
+#[test]
+fn holds_open_below_orders_from_0_13_50() {
+    for minor in 50..=56 {
+        let text = format!("0.13.{minor}");
+        assert_eq!(machine_gate(release(&text), Version::parse(&text)), Gate::Open, "{text}");
+        assert!(matches!(orders_gate(release(&text), Version::parse(&text)), Gate::Older(_)), "{text}");
+    }
+}
+
+#[test]
+fn the_orders_note_names_the_side_that_needs_0_13_57() {
+    let here = orders_note(&Older::ThisComputer(Version::parse("0.13.56")), "vps");
+    let prefix = "A program on vps cannot ask this window for a tunnel: it needs cornercase 0.13.57 or newer on this ";
+    assert!(here.starts_with(prefix) && here.ends_with(" (it has 0.13.56)."), "{here}");
+    let server = orders_note(&Older::Server(Version::parse("0.13.56")), "vps");
+    let words = "A program on vps cannot ask this window for a tunnel: it needs cornercase 0.13.57 or newer on vps";
+    assert_eq!(server, format!("{words} (its server runs 0.13.56)."));
+    assert_eq!(orders_note(&Older::Server(None), "vps"), format!("{words}."));
+    assert!(!here.contains('#') && !server.contains('#'));
+    assert_eq!(TUNNEL_ORDERS_SINCE, Version::new(0, 13, 57));
 }
