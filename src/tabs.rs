@@ -3,7 +3,7 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, ClickEvent, Context, Div, ElementId, FocusHandle, InteractiveElement, IntoElement, MouseButton,
     MouseDownEvent, ParentElement, SharedString, Stateful, StatefulInteractiveElement, StyleRefinement, Styled, Window,
-    div, prelude::FluentBuilder as _, px, relative,
+    div, prelude::FluentBuilder as _, px,
 };
 
 use crate::app::frame::{self, Frame};
@@ -143,7 +143,6 @@ fn tab_pill(group: SharedString, selected: bool) -> Stateful<Div> {
         .group(group)
         .flex()
         .flex_none()
-        .max_w(relative(1.))
         .items_center()
         .gap(px(6.))
         .h(px(TAB_HEIGHT))
@@ -289,7 +288,9 @@ impl Root {
 
     fn tab_name(&self, tab: &Tab) -> AnyElement {
         match self.side.rename.as_ref().filter(|r| r.what == Renaming::Here(Target::Tab(tab.id))) {
-            Some(r) => div().w(px(140.)).child(ui::input_box(r.field.clone(), true).py(px(0.))).into_any_element(),
+            Some(r) => {
+                div().w(px(140.)).flex_none().child(ui::input_box(r.field.clone(), true).py(px(0.))).into_any_element()
+            }
             None => tab_label(("tab-name", tab.id), &tab.name).into_any_element(),
         }
     }

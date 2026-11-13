@@ -59,7 +59,7 @@ fn run_summary(run: &Run) -> Div {
             div().min_w_0().flex().items_center().child(" · ").child(loop_words(
                 ("run-loop", stage),
                 back,
-                Some(back.count(Some(rounds), true)),
+                Some((Some(rounds), true)),
             ))
         }))
 }

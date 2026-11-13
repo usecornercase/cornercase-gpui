@@ -340,7 +340,7 @@ fn marker(plan: Plan, at: Spot, stage: usize) -> Div {
 
 fn loop_label(plan: Plan, label: Label, short: bool) -> Option<Div> {
     let back = plan.flow.stages.get(label.stage)?.back.as_ref()?;
-    let count = back.count(plan.run.and_then(|r| r.rounds.get(label.stage).copied()), short);
+    let rounds = plan.run.and_then(|r| r.rounds.get(label.stage).copied());
     let colour = loop_colour(plan, label.stage);
     Some(
         div()
@@ -360,7 +360,7 @@ fn loop_label(plan: Plan, label: Label, short: bool) -> Option<Div> {
             .text_size(px(11.))
             .text_color(colour)
             .child(ui::icon(Icon::Repeat, 12.).text_color(colour))
-            .child(loop_words(("loop-label", label.stage), back, Some(count))),
+            .child(loop_words(("loop-label", label.stage), back, Some((rounds, short)))),
     )
 }
 

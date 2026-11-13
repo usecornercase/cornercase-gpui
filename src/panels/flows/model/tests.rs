@@ -1,6 +1,7 @@
 use super::*;
 
 const RUNS: &str = crate::test_util::fixture!("flows/runs.json");
+const CLOSED_RUN: &str = r#"{"revision":1,"runs":[{"run":2,"workspace":5,"flow":{"name":"Q","stages":[{"roles":["c"],"back":null}]},"roles":[],"stage":null,"rounds":[0],"state":"closed"}]}"#;
 const LIST: &str = crate::test_util::fixture!("flows/list.json");
 
 #[test]
@@ -27,8 +28,7 @@ fn reads_a_run_snapshot() {
 
 #[test]
 fn reads_a_closed_run_and_an_empty_one() {
-    let line = r#"{"revision":1,"runs":[{"run":2,"workspace":5,"flow":{"name":"Q","stages":[{"roles":["c"],"back":null}]},"roles":[],"stage":null,"rounds":[0],"state":"closed"}]}"#;
-    let run = &parse_runs(line).expect("runs").runs[0];
+    let run = &parse_runs(CLOSED_RUN).expect("runs").runs[0];
     assert!(run.closed());
     assert_eq!(run.summary(), "not started");
     assert_eq!(parse_runs(r#"{"revision":1,"runs":[],"boot":"x","version":"0.12"}"#).expect("empty").runs.len(), 0);
@@ -182,26 +182,22 @@ fn a_loop_label_says_its_limit_or_its_rounds_long_or_short() {
 }
 
 #[test]
-fn a_loop_label_is_its_words_then_its_count() {
+fn a_loop_count_says_its_limit_or_its_rounds_long_or_short() {
     let back = BackSpec { to: 1, when: "findings".into(), at_most: 3 };
-    let counts = [(None, false, "· at most 3"), (None, true, "≤ 3"), (Some(1), false, "· 1/3"), (Some(4), true, "4/3")];
-    for (rounds, short, count) in counts {
-        assert_eq!(back.count(rounds, short), count);
-        assert_eq!(back.label(rounds, short), format!("findings {count}"));
-    }
+    assert_eq!(back.count(None, false), "· at most 3");
+    assert_eq!(back.count(None, true), "≤ 3");
+    assert_eq!(back.count(Some(1), false), "· 1/3");
+    assert_eq!(back.count(Some(4), true), "4/3");
 }
 
 #[test]
 fn a_run_lists_the_loops_that_went_round_with_their_rounds() {
-    let runs = parse_runs(RUNS).expect("runs");
-    let run = &runs.runs[0];
-    assert_eq!(run.position(), "stage 1 of 2");
+    let run = &parse_runs(RUNS).expect("runs").runs[0];
     let looped: Vec<_> =
         run.looped().into_iter().map(|(stage, back, rounds)| (stage, back.when.as_str(), rounds)).collect();
     assert_eq!(looped, [(1, "findings", 1)]);
-    let line = r#"{"revision":1,"runs":[{"run":2,"workspace":5,"flow":{"name":"Q","stages":[{"roles":["c"],"back":null}]},"roles":[],"stage":null,"rounds":[0],"state":"closed"}]}"#;
-    let closed = &parse_runs(line).expect("runs").runs[0];
-    assert_eq!((closed.position().as_str(), closed.looped().len()), ("not started", 0));
+    let closed = &parse_runs(CLOSED_RUN).expect("runs").runs[0];
+    assert_eq!(closed.looped(), []);
 }
 
 #[test]

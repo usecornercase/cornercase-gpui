@@ -61,9 +61,13 @@ pub(super) fn typed_chip(id: &'static str, text: String, colour: Rgba) -> Statef
         .child(div().min_w_0().flex().child(ui::one_line(text)))
 }
 
-pub(super) fn loop_words(id: impl Into<ElementId>, back: &BackSpec, count: Option<String>) -> Stateful<Div> {
-    let whole = match &count {
-        Some(count) => format!("{} {count}", back.when),
+pub(super) fn loop_words(
+    id: impl Into<ElementId>,
+    back: &BackSpec,
+    count: Option<(Option<u32>, bool)>,
+) -> Stateful<Div> {
+    let whole = match count {
+        Some((rounds, short)) => back.label(rounds, short),
         None => back.when.clone(),
     };
     div()
@@ -73,7 +77,7 @@ pub(super) fn loop_words(id: impl Into<ElementId>, back: &BackSpec, count: Optio
         .items_center()
         .tooltip(tip(whole))
         .child(div().min_w_0().max_w(px(LOOP_LABEL_MAX)).flex().child(ui::one_line(back.when.clone())))
-        .children(count.map(|count| div().flex_none().child(format!(" {count}"))))
+        .children(count.map(|(rounds, short)| div().flex_none().child(format!(" {}", back.count(rounds, short)))))
 }
 
 pub(super) fn loop_chip(id: &'static str, back: &BackSpec) -> Div {

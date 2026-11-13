@@ -6,8 +6,6 @@ mod offers;
 mod status;
 mod window_processes;
 
-const ID_ROOM: f32 = 96.;
-
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::time::{Duration, Instant};
@@ -46,6 +44,7 @@ const NO_PLUGINS: &str = "No plugins yet. Install one from GitHub or a git addre
                           yours while you write one.";
 const NO_STATUS: &str = "What its services are doing needs the server, which did not answer";
 const COUNTS_EVERY: Duration = Duration::from_secs(1);
+const ID_ROOM: f32 = 96.;
 
 pub(crate) struct PluginsPanel {
     plugins: Option<Vec<Plugin>>,
