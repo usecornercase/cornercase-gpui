@@ -3,13 +3,14 @@ use std::ops::Range;
 use gpui::{
     App, AvailableSpace, Bounds, ContentMask, DispatchPhase, Element, ElementInputHandler, Entity, GlobalElementId,
     IntoElement, LayoutId, MouseMoveEvent, PaintQuad, Pixels, Point, ScrollHandle, SharedString, Size, Style,
-    TextAlign, TextRun, UnderlineStyle, Window, WrappedLine, fill, point, px, relative, size,
+    TextAlign, TextRun, Window, WrappedLine, fill, point, px, relative, size,
 };
 
 use super::TextField;
 use super::rows::{
     CARET_WIDTH, Row, Rows, clamp_scroll, rows_shown, scroll_to_show, scroll_to_show_with_margins, sideways, thumb,
 };
+use super::shown::Shown;
 use crate::theme::colours;
 use crate::ui::selection::BREAK_WIDTH;
 
@@ -20,7 +21,8 @@ const PROMPT_MARGIN: Pixels = px(32.);
 
 pub(super) struct Layout {
     lines: Vec<WrappedLine>,
-    pub(super) rows: Rows,
+    rows: Rows,
+    shown: Shown,
     pub(super) line_height: Pixels,
     pub(super) bounds: Bounds<Pixels>,
     pub(super) scroll_top: Pixels,
@@ -28,21 +30,37 @@ pub(super) struct Layout {
 }
 
 impl Layout {
+    fn row_at(&self, offset: usize) -> usize {
+        self.rows.row_of(self.shown.to_shown(offset))
+    }
+
     pub(super) fn position(&self, offset: usize) -> Point<Pixels> {
-        let at = self.rows.row_of(offset);
+        let at = self.row_at(offset);
         let Some(row) = self.rows.get(at) else { return Point::default() };
-        point(self.x_in_row(row, offset), self.line_height * at)
+        point(self.x_in_row(row, self.shown.to_shown(offset)), self.line_height * at)
     }
 
-    fn x_in_row(&self, row: Row, offset: usize) -> Pixels {
+    fn x_in_row(&self, row: Row, index: usize) -> Pixels {
         let layout = &self.lines[row.line].unwrapped_layout;
-        layout.x_for_index(offset - row.line_start) - layout.x_for_index(row.start - row.line_start)
+        layout.x_for_index(index - row.line_start) - layout.x_for_index(row.start - row.line_start)
     }
 
-    pub(super) fn index_in_row(&self, row: Row, x: Pixels, text: &str) -> usize {
+    fn index_in_row(&self, row: Row, x: Pixels, text: &str) -> usize {
         let layout = &self.lines[row.line].unwrapped_layout;
         let index = layout.closest_index_for_x(x + layout.x_for_index(row.start - row.line_start));
-        (row.line_start + index).clamp(row.start, row.last_caret(text))
+        let (start, last) = self.shown.row_ends(row, text);
+        self.shown.to_content(row.line_start + index).clamp(start, last)
+    }
+
+    pub(super) fn row_ends(&self, offset: usize, text: &str) -> Option<(usize, usize)> {
+        let row = self.rows.get(self.row_at(offset))?;
+        Some(self.shown.row_ends(row, text))
+    }
+
+    pub(super) fn index_beside(&self, offset: usize, up: bool, x: Pixels, text: &str) -> Option<usize> {
+        let here = self.row_at(offset);
+        let row = if up { here.checked_sub(1).and_then(|row| self.rows.get(row)) } else { self.rows.get(here + 1) };
+        Some(self.index_in_row(row?, x, text))
     }
 
     #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a row's number from its height")]
@@ -73,7 +91,7 @@ impl Layout {
 
     fn selection(&self, selected: &Range<usize>) -> Vec<PaintQuad> {
         self.rows
-            .selected(selected)
+            .selected(&self.shown.range_to_shown(selected))
             .into_iter()
             .filter_map(|span| {
                 let row = self.rows.get(span.row)?;
@@ -165,7 +183,7 @@ impl Element for TextElement {
             return (window.request_layout(style, [], cx), ());
         }
         let limits = options.rows.clone();
-        let (text, runs, font_size) = self.shaping(window, cx);
+        let (text, runs, font_size, _) = self.shaping(window, cx);
         let layout = window.request_measured_layout(style, move |known, available, window, _| {
             let width = known.width.or(match available.width {
                 AvailableSpace::Definite(width) => Some(width),
@@ -244,7 +262,7 @@ impl TextElement {
     }
 
     fn layout(&self, bounds: Bounds<Pixels>, window: &Window, cx: &App) -> Option<Layout> {
-        let (text, runs, font_size) = self.shaping(window, cx);
+        let (text, runs, font_size, shown) = self.shaping(window, cx);
         let input = self.input.read(cx);
         let wraps = input.options.wraps;
         let wrap_width = wraps.then_some(bounds.size.width);
@@ -254,7 +272,7 @@ impl TextElement {
         }
         let rows = Rows::new(lines.iter().map(|line| (line.len(), row_starts(line))));
         let line_height = window.line_height();
-        Some(Layout { lines, rows, line_height, bounds, scroll_top: input.view.scroll_top, scroll_left: px(0.) })
+        Some(Layout { lines, rows, shown, line_height, bounds, scroll_top: input.view.scroll_top, scroll_left: px(0.) })
     }
 
     fn settled(&self, mut layout: Layout, window: &Window, cx: &mut App) -> Layout {
@@ -288,10 +306,10 @@ impl TextElement {
         layout
     }
 
-    fn shaping(&self, window: &Window, cx: &App) -> (SharedString, Vec<TextRun>, Pixels) {
+    fn shaping(&self, window: &Window, cx: &App) -> (SharedString, Vec<TextRun>, Pixels, Shown) {
         let input = self.input.read(cx);
         let style = window.text_style();
-        let (display_text, text_color) = input.display_text(style.color);
+        let (display_text, text_color, shown) = input.display_text(style.color);
         let run = TextRun {
             len: display_text.len(),
             font: style.font(),
@@ -300,8 +318,8 @@ impl TextElement {
             underline: None,
             strikethrough: None,
         };
-        let runs = text_runs(run, input.marked_range.as_ref());
-        (display_text, runs, style.font_size.to_pixels(window.rem_size()))
+        let runs = shown.runs(run, input.marked_range.as_ref());
+        (display_text, runs, style.font_size.to_pixels(window.rem_size()), shown)
     }
 }
 
@@ -316,23 +334,6 @@ fn show_in_scroller(scroller: &ScrollHandle, (caret, line_height, below): (Pixel
         scroller.set_offset(point(offset.x, -next));
         window.request_animation_frame();
     }
-}
-
-fn text_runs(run: TextRun, marked: Option<&Range<usize>>) -> Vec<TextRun> {
-    let Some(marked) = marked else { return vec![run] };
-    let total = run.len;
-    vec![
-        TextRun { len: marked.start, ..run.clone() },
-        TextRun {
-            len: marked.end - marked.start,
-            underline: Some(UnderlineStyle { color: Some(run.color), thickness: px(1.0), wavy: false }),
-            ..run.clone()
-        },
-        TextRun { len: total - marked.end, ..run },
-    ]
-    .into_iter()
-    .filter(|run| run.len > 0)
-    .collect()
 }
 
 fn row_starts(line: &WrappedLine) -> Vec<usize> {

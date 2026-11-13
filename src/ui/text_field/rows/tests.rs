@@ -2,7 +2,7 @@ use gpui::px;
 
 use super::{
     Rows, Span, clamp_scroll, line_breaks, one_line, previous_grapheme, rows_shown, scroll_to_show,
-    scroll_to_show_with_margins, shown_without_controls, sideways, thumb,
+    scroll_to_show_with_margins, sideways, thumb,
 };
 
 fn wrapped() -> Rows {
@@ -119,16 +119,6 @@ fn pasted_line_breaks_of_any_kind_become_one_space_each() {
     assert_eq!(one_line("first\nsecond"), "first second");
     assert_eq!(one_line("first\r\nsecond\rthird"), "first second third");
     assert_eq!(one_line("a\n\nb"), "a  b");
-}
-
-#[test]
-fn tabs_and_carriage_returns_show_as_spaces_of_the_same_length() {
-    assert_eq!(shown_without_controls("a\tb\r\nc").as_deref(), Some("a b \nc"));
-}
-
-#[test]
-fn text_without_controls_is_shown_as_it_is() {
-    assert_eq!(shown_without_controls("a b\nc"), None);
 }
 
 #[test]

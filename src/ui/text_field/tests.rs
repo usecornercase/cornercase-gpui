@@ -24,25 +24,31 @@ fn escape_cancels_a_plain_field() {
 
 #[test]
 fn a_word_starts_after_the_blank_before_it() {
-    assert_eq!(word_start("cargo test -q", 13), 11);
-    assert_eq!(word_start("cargo test  ", 12), 6);
-    assert_eq!(word_start("word", 4), 0);
-    assert_eq!(word_start("año\u{3000}más", "año\u{3000}más".len()), "año\u{3000}".len());
+    assert_eq!(word_start("cargo test -q", 13, false), 11);
+    assert_eq!(word_start("cargo test  ", 12, false), 6);
+    assert_eq!(word_start("word", 4, false), 0);
+    assert_eq!(word_start("año\u{3000}más", "año\u{3000}más".len(), false), "año\u{3000}".len());
 }
 
 #[test]
 fn a_word_ends_at_the_blank_after_it() {
-    assert_eq!(word_end("cargo test", 0), 5);
-    assert_eq!(word_end("cargo test", 5), 10);
-    assert_eq!(word_end("cargo  test -q", 5), 11);
-    assert_eq!(word_end("word", 4), 4);
+    assert_eq!(word_end("cargo test", 0, false), 5);
+    assert_eq!(word_end("cargo test", 5, false), 10);
+    assert_eq!(word_end("cargo  test -q", 5, false), 11);
+    assert_eq!(word_end("word", 4, false), 4);
 }
 
 #[test]
-fn a_selection_goes_to_the_primary_selection_unless_it_is_empty_or_masked() {
+fn a_selection_leaves_the_field_unless_it_is_empty_or_masked() {
     assert_eq!(shared("hello world", &(6..11), false), Some("world"));
     assert_eq!(shared("hello", &(2..2), false), None);
     assert_eq!(shared("secret", &(0..6), true), None);
+}
+
+#[test]
+fn a_masked_field_is_one_word() {
+    assert_eq!(word_start("made up words", 13, true), 0);
+    assert_eq!(word_end("made up words", 0, true), 13);
 }
 
 #[test]
