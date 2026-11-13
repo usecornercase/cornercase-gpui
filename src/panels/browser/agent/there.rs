@@ -53,8 +53,12 @@ impl Browser {
             }
         };
         let name = Self::agent_name(&Agent::There(there.clone()), cx);
-        let busy =
-            Busy::new(format!("browser-hand:{}", there.key()), format!("Handing to {name} on {}…", there.machine));
+        let key = format!("browser-hand:{}", there.key());
+        if store.read(cx).hand_busy(&key) {
+            toast(format!("Still handing to {name} on {}: wait for it", there.machine), ToastKind::Info, cx);
+            return false;
+        }
+        let busy = Busy::new(key, format!("Handing to {name} on {}…", there.machine));
         let (machine, commands) = (there.machine.clone(), hand_commands(there, hand));
         let destination = target.host().unwrap_or_default().to_string();
         store.update(cx, |s, cx| {

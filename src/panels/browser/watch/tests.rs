@@ -120,3 +120,20 @@ fn a_machine_restart_is_no_finish() {
     let now: HashMap<Working, Owner> = HashMap::new();
     assert_eq!(finished(&was, &now, &after), []);
 }
+
+#[test]
+fn an_agent_on_a_machine_that_drops_the_link_is_still_watched() {
+    let before = machine_session("working");
+    let was = working_agents(&before, &[]);
+    let mut away = machine_session("working");
+    away.machines[0].state = crate::model::machines::LinkState::Unreachable;
+    let mut now = working_agents(&away, &[]);
+    assert!(now.is_empty());
+    carry_unlinked(&was, &mut now, &away);
+    assert_eq!(now.len(), was.len());
+    let mut restarted = away.clone();
+    restarted.machines[0].boot = "other".into();
+    let mut after = HashMap::new();
+    carry_unlinked(&was, &mut after, &restarted);
+    assert!(after.is_empty());
+}

@@ -104,6 +104,10 @@ pub(crate) fn superseded(opens: &mut Vec<HeldOpen>, session: &str) {
     opens.retain(|open| open.session.as_deref() != Some(session));
 }
 
+pub(crate) fn superseded_typed(opens: &mut Vec<HeldOpen>, owner: &Owner) {
+    opens.retain(|open| !(open.navigate && open.session.is_none() && open.owner == *owner));
+}
+
 pub(crate) fn step(held: Option<&Held>, asked: bool) -> Step {
     match held {
         Some(Held::Up { local }) => Step::Open(*local),
@@ -278,8 +282,9 @@ impl Browser {
     }
 
     pub(super) fn supersede_waiting(&mut self) {
-        if let Some(session) = self.active_session() {
-            superseded(&mut self.dev.held_opens, &session);
+        match self.active_session() {
+            Some(session) => superseded(&mut self.dev.held_opens, &session),
+            None => superseded_typed(&mut self.dev.held_opens, &self.place),
         }
     }
 
@@ -288,6 +293,8 @@ impl Browser {
             self.close_tab(&target);
         }
         self.restore.retain(|r| !r.owner.has_place());
+        self.claims.retain(|_, claim| !claim.owner.has_place());
+        self.epoch += 1;
         self.agents.chosen.retain(|owner, _| !owner.has_place());
         super::tunnels::quit();
         self.dev.tunnels.clear(cx);

@@ -30,6 +30,10 @@ pub(crate) fn bridged(params: &Value) -> Option<Value> {
     params["payload"].as_str().and_then(|p| serde_json::from_str::<Value>(p).ok())
 }
 
+pub(crate) fn late_claim(now: u64, asked: u64, owner: &Owner) -> bool {
+    now != asked && owner.has_place()
+}
+
 pub(crate) fn restore_hold(restore: &Restore) -> Option<(u16, String)> {
     let held = restore.through.filter(|t| loopback_port(&restore.url) == Some(t.local))?;
     Some((held.remote, rewrite(&restore.url, held.remote)))
@@ -90,8 +94,13 @@ impl Browser {
     }
 
     pub(super) fn open_tab(&mut self, url: &str, owner: Owner, through: Option<Through>, cx: &mut Context<Self>) {
+        let epoch = self.epoch;
         self.call((None, "Target.createTarget", json!({ "url": url })), cx, move |this, result, cx| {
             let Some(target) = result.ok().and_then(|r| r["targetId"].as_str().map(str::to_string)) else { return };
+            if late_claim(this.epoch, epoch, &owner) {
+                this.close_tab(&target);
+                return;
+            }
             this.claim(&target, Claim { owner, through }, cx);
         });
     }
@@ -129,9 +138,12 @@ impl Browser {
         if self.tabs.get(target).is_some() || self.previews.owns(info) {
             return;
         }
-        let opener = info["openerId"].as_str().and_then(|o| self.tabs.get(o)).map(|o| o.owner.clone());
+        let opener_tab = info["openerId"].as_str().and_then(|o| self.tabs.get(o));
+        let opener = opener_tab.map(|o| o.owner.clone());
         let claimed = self.claims.remove(target);
-        let through = claimed.as_ref().and_then(|c| c.through);
+        let url = info["url"].as_str().unwrap_or_default();
+        let inherited = opener_tab.and_then(|t| t.through).filter(|t| loopback_port(url) == Some(t.local));
+        let through = claimed.as_ref().and_then(|c| c.through).or(inherited);
         let owner = claimed.as_ref().map(|c| c.owner.clone()).or(opener.clone()).unwrap_or(Owner::Nobody);
         let mut tab = Tab::new(target, info["url"].as_str().unwrap_or_default(), owner.clone());
         tab.through = through;
@@ -156,6 +168,8 @@ impl Browser {
                 this.check_loading(&session, cx);
                 this.recast(cx);
             }
+            let store = Store::get(cx);
+            this.repoint_tabs(&store, cx);
         });
     }
 

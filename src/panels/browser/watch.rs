@@ -65,6 +65,16 @@ pub(crate) fn working_agents(session: &Session, machines: &[Machine]) -> HashMap
     working_here(session).chain(working_there(session, machines)).collect()
 }
 
+pub(crate) fn carry_unlinked(before: &HashMap<Working, Owner>, now: &mut HashMap<Working, Owner>, session: &Session) {
+    for (working, owner) in before {
+        let Working::There(there) = working else { continue };
+        let away = session.machine(&there.machine).is_some_and(|seen| !seen.linked() && seen.boot == there.boot);
+        if away {
+            now.entry(working.clone()).or_insert_with(|| owner.clone());
+        }
+    }
+}
+
 fn still_listed(session: &Session, working: &Working) -> bool {
     match working {
         Working::Here(pane) => session.pane(*pane).is_some(),
@@ -103,7 +113,8 @@ impl Browser {
     pub(super) fn agents_changed(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
         let s = store.read(cx);
         let Some(session) = s.session.as_ref() else { return };
-        let now = working_agents(session, &s.machines);
+        let mut now = working_agents(session, &s.machines);
+        carry_unlinked(&self.agents.watch.working, &mut now, session);
         let done = finished(&self.agents.watch.working, &now, session);
         self.agents.watch.working = now;
         if self.agents.watch.off {

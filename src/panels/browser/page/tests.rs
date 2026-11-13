@@ -34,3 +34,11 @@ fn a_restored_tab_reopens_through_its_hold() {
     let plain = Restore { through: None, ..held };
     assert_eq!(restore_hold(&plain), None);
 }
+
+#[test]
+fn a_claim_that_arrives_after_leaving_a_server_is_dropped() {
+    use crate::model::Owner;
+    assert!(late_claim(2, 1, &Owner::Here(3)));
+    assert!(!late_claim(1, 1, &Owner::Here(3)));
+    assert!(!late_claim(2, 1, &Owner::Nobody));
+}

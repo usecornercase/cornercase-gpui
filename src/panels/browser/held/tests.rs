@@ -178,3 +178,11 @@ fn a_typed_hold_local_port_stays_without_a_toast() {
     let toward = Toward::Machine("vps".into());
     assert_eq!(typed_route(Some(61000), Some(&toward), (false, true)), Typed::Here);
 }
+
+#[test]
+fn a_newer_typed_address_cancels_a_queued_one_without_a_session() {
+    use super::{HeldOpen, superseded_typed};
+    let mut opens = vec![HeldOpen::waiting(8765, None), HeldOpen::waiting(9000, Some("s"))];
+    superseded_typed(&mut opens, &Owner::Nobody);
+    assert_eq!(opens.len(), 1);
+}
