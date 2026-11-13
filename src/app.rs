@@ -706,6 +706,10 @@ impl Root {
     ) -> impl IntoElement + use<> {
         let shown = self.store.read(cx).shown_dock();
         let fitted = self.fit(shown, window);
+        if self.side.aside == fitted.sidebar {
+            self.side.aside = !fitted.sidebar;
+            cx.notify();
+        }
         let main = div().flex_1().min_w_0().h_full().relative().flex().flex_row();
         if !fitted.sidebar {
             let corner = sidebar::corner(Os::CURRENT, window_frame);

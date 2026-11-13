@@ -140,6 +140,7 @@ pub(crate) struct SideState {
     pub hovered: Option<SharedString>,
     pub strip: crate::tabs::TabStrip,
     pub machine_place: Option<MachinePlace>,
+    pub aside: bool,
 }
 
 impl Root {

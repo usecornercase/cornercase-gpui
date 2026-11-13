@@ -12,6 +12,7 @@ struct Inputs {
     renaming: Option<Renaming>,
     place: Option<MachinePlace>,
     machine: bool,
+    aside: bool,
 }
 
 impl Inputs {
@@ -23,6 +24,7 @@ impl Inputs {
             renaming: self.renaming.as_ref(),
             place: self.place.as_ref(),
             machine: self.machine,
+            aside: self.aside,
         })
     }
 }
@@ -37,6 +39,7 @@ const CHANGES: &[Change<Inputs>] = &[
         i.place = Some(MachinePlace::at(&seen, &ThereWorkspace::default(), None));
     }),
     ("a machine's tab shown", |i| i.machine = true),
+    ("the sidebar stepping aside", |i| i.aside = true),
 ];
 
 #[test]

@@ -303,7 +303,7 @@ const DRAWINGS: &[Drawing] = &[
         what: "the tab bar",
         files: &["src/tabs.rs", "src/tabs/key.rs"],
         root: &["session", "side", "store", "machine", "focus", "parts"],
-        side: &["look", "strip", "rename", "machine_place"],
+        side: &["look", "strip", "rename", "machine_place", "aside"],
         parts: &["tabs", "tab_orbits", "tab_spots", "store_seen"],
     },
     Drawing {
