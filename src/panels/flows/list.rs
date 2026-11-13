@@ -6,7 +6,7 @@ use gpui::{
 
 use super::cards::badge;
 use super::model::{Broken, FlowInfo, Listing, Run, Standing};
-use super::widgets::{error_small, file_name, flow_summary, glyph, name_line};
+use super::widgets::{error_small, file_name, flow_summary, glyph, name_line, standing_colour};
 use super::{FlowsPanel, PAGE_LEAST, Selected};
 use crate::model::Session;
 use crate::store::Store;
@@ -227,13 +227,7 @@ fn back_bar(cx: &Context<FlowsPanel>) -> Div {
 
 fn run_state(run: &Run) -> (&'static str, Rgba) {
     let standing = run.standing();
-    let colour = match standing {
-        Standing::Closed => colours::faint(),
-        Standing::Ended => colours::accent(),
-        Standing::Stopped(_) => colours::waiting(),
-        Standing::Running => colours::working(),
-    };
-    (row_word(standing), colour)
+    (row_word(standing), standing_colour(standing))
 }
 
 fn row_word(standing: Standing) -> &'static str {

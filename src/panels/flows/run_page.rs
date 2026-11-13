@@ -1,5 +1,5 @@
 use gpui::{
-    App, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, ParentElement as _, Rgba, Stateful,
+    App, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, ParentElement as _, Stateful,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
@@ -11,7 +11,7 @@ use super::flow_page::block;
 use super::hero::{facts, hero, stages_bar, task, title};
 use super::merged_view;
 use super::model::{Member, RoleSpec, Run, Standing, plural, stopped_line};
-use super::widgets::{loop_words, panel_box, pill, show_pane};
+use super::widgets::{loop_words, panel_box, pill, show_pane, standing_colour};
 use crate::store::{Store, args};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone, glass::tint};
@@ -36,7 +36,7 @@ impl FlowsPanel {
 fn run_hero(run: &Run, cx: &Context<FlowsPanel>) -> Div {
     let standing = run.standing();
     let (state, colour) = (hero_word(standing), standing_colour(standing));
-    let live = matches!(standing, Standing::Running);
+    let live = glows(standing);
     let heading = title(&run.flow, Some(run), run.flow.name.clone().into(), facts(run_facts(run, cx)));
     hero(&run.flow)
         .child(heading.child(pill(state, colour, live)))
@@ -75,13 +75,8 @@ fn hero_word(standing: Standing) -> &'static str {
     }
 }
 
-fn standing_colour(standing: Standing) -> Rgba {
-    match standing {
-        Standing::Closed => colours::faint(),
-        Standing::Ended => colours::accent(),
-        Standing::Stopped(_) => colours::waiting(),
-        Standing::Running => colours::working(),
-    }
+fn glows(standing: Standing) -> bool {
+    matches!(standing, Standing::Running)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

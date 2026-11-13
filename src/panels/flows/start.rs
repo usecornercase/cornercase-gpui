@@ -267,7 +267,7 @@ impl StartFlow {
             workspace: text(&fields.workspace),
             focus: self.ticks.focus,
             close_when_merged: close,
-            free_builds: close && self.ticks.free_builds && matches!(self.free_switch(cx), Switch::Offered(_)),
+            free_builds: close && self.ticks.free_builds && matches!(self.free_rests(cx), Switch::Offered(_)),
             accounts: self.accounts.picks(&self.team(), cx),
         }
     }
@@ -410,7 +410,7 @@ impl StartFlow {
         self.with_releases(cx, |releases| merged::rests(self.selected(), releases))
     }
 
-    fn free_switch(&self, cx: &App) -> Switch {
+    fn free_rests(&self, cx: &App) -> Switch {
         let ticks = self.ticks;
         self.with_releases(cx, |releases| {
             merged::free_box(self.selected(), releases, ticks.close_when_merged, ticks.free_builds)
@@ -418,7 +418,7 @@ impl StartFlow {
     }
 
     fn merged_box(&self, cx: &Context<Self>) -> Div {
-        let free = self.free_switch(cx);
+        let free = self.free_rests(cx);
         if let Some(line) = self.merged_rests(cx) {
             return merged_view::with_line(ui::resting_checkbox(self.ticks.close_when_merged, merged::LABEL), line);
         }
@@ -431,16 +431,13 @@ impl StartFlow {
             },
         ));
         let first = merged_view::with_line(the_box, merged::how(self.run_on.read(cx).machine(), freed));
-        div().flex().flex_col().gap(px(8.)).child(first).children(Self::free_box(free, cx))
+        merged_view::pair(first, Self::free_row(free, cx))
     }
 
-    fn free_box(free: Switch, cx: &Context<Self>) -> Option<Div> {
-        let nested = |body: Div| body.ml(px(ui::TICK_BOX + 8.));
+    fn free_row(free: Switch, cx: &Context<Self>) -> Option<Div> {
         match free {
             Switch::Hidden => None,
-            Switch::Rests(line) => {
-                Some(nested(merged_view::with_line(ui::resting_checkbox(false, merged::FREE_LABEL), line)))
-            }
+            Switch::Rests(line) => Some(merged_view::free_resting(line)),
             Switch::Offered(on) => {
                 let the_box = ui::checkbox("start-free", on, merged::FREE_LABEL).on_click(cx.listener(
                     |this, _: &ClickEvent, _, cx| {
@@ -448,7 +445,7 @@ impl StartFlow {
                         cx.notify();
                     },
                 ));
-                Some(nested(merged_view::with_line(the_box, merged::FREE_HOW)))
+                Some(merged_view::free_offered(the_box))
             }
         }
     }

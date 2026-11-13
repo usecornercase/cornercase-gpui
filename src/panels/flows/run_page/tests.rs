@@ -27,3 +27,9 @@ fn a_stopped_run_with_stages_owed_shows_the_stop_then_the_stages() {
     assert_eq!(notes[1].0, "stage 2 and 3 not run since the last change");
     assert_eq!(run_notes(&Run::default(), Standing::Running).len(), 0);
 }
+
+#[test]
+fn only_a_run_that_moves_has_a_glowing_pill() {
+    let glowing = [Standing::Closed, Standing::Ended, Standing::Stopped(90), Standing::Running].map(glows);
+    assert_eq!(glowing, [false, false, false, true]);
+}

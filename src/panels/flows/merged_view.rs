@@ -53,12 +53,24 @@ pub(super) fn run_switch(run: &Run, cx: &Context<FlowsPanel>) -> Option<Div> {
 
 fn offered_pair(run: &Run, choice: Choice, free: Switch, cx: &Context<FlowsPanel>) -> Div {
     let first = Row { run, press: Press::Close, choice, line: how(None, choice.free) };
-    let pair = div().flex().flex_col().gap(px(8.)).child(row(&first, cx));
-    pair.children(match free {
+    let second = match free {
         Switch::Hidden => None,
-        Switch::Rests(line) => Some(nested(with_line(ui::resting_checkbox(false, FREE_LABEL), line))),
+        Switch::Rests(line) => Some(free_resting(line)),
         Switch::Offered(_) => Some(nested(row(&Row { press: Press::Free, line: FREE_HOW.into(), ..first }, cx))),
-    })
+    };
+    pair(row(&first, cx), second)
+}
+
+pub(super) fn pair(first: Div, second: Option<Div>) -> Div {
+    div().flex().flex_col().gap(px(8.)).child(first).children(second)
+}
+
+pub(super) fn free_resting(line: String) -> Div {
+    nested(with_line(ui::resting_checkbox(false, FREE_LABEL), line))
+}
+
+pub(super) fn free_offered(the_box: impl IntoElement) -> Div {
+    nested(with_line(the_box, FREE_HOW))
 }
 
 fn nested(body: Div) -> Div {

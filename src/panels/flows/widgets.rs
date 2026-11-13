@@ -8,7 +8,7 @@ use gpui::{
 
 use super::diagram::role_colour;
 use super::graph::{LOOP_LABEL_MAX, float};
-use super::model::{BackSpec, FlowInfo, FlowSpec, Progress, Run};
+use super::model::{BackSpec, FlowInfo, FlowSpec, Progress, Run, Standing};
 use crate::notify::tip;
 use crate::platform::paths::Style;
 use crate::store::{self, Busy, Store};
@@ -104,6 +104,15 @@ pub(super) fn heading(glyph: Icon, text: &str) -> Div {
 
 pub(super) fn eyebrow(text: &str) -> Div {
     div().text_size(px(10.)).font_weight(FontWeight::SEMIBOLD).text_color(colours::faint()).child(text.to_uppercase())
+}
+
+pub(super) fn standing_colour(standing: Standing) -> Rgba {
+    match standing {
+        Standing::Closed => colours::faint(),
+        Standing::Ended => colours::accent(),
+        Standing::Stopped(_) => colours::waiting(),
+        Standing::Running => colours::working(),
+    }
 }
 
 pub(super) fn pill(text: impl Into<SharedString>, colour: Rgba, glowing: bool) -> Div {

@@ -409,10 +409,14 @@ pub(super) fn stage_ring(stage: usize) -> Div {
         .child((stage + 1).to_string())
 }
 
+fn owed_ring(owes: bool, progress: Option<Progress>) -> bool {
+    owes && progress != Some(Progress::Active)
+}
+
 fn marker(plan: Plan, at: Spot, stage: usize) -> Div {
     let base = stage_ring(stage).absolute().left(px(at.x - MARK / 2.)).top(px(at.y - MARK / 2.));
     let progress = plan.progress(stage);
-    if plan.run.is_some_and(|run| run.owes(stage)) && progress != Some(Progress::Active) {
+    if owed_ring(plan.run.is_some_and(|run| run.owes(stage)), progress) {
         return base.bg(ground()).border_color(colours::waiting()).text_color(colours::waiting());
     }
     match progress {
