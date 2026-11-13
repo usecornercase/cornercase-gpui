@@ -59,6 +59,14 @@ pub(crate) fn agents_menu_on_top(agents: &Agents, many: bool) -> bool {
     agents.menu.is_some_and(|menu| menu != Menu::Chooser || card)
 }
 
+pub(crate) fn close_menu_on_top(agents: &mut Agents, devices: &mut bool, many: bool) {
+    let on_top = agents_menu_on_top(agents, many);
+    agents.menu = None;
+    if !on_top {
+        *devices = false;
+    }
+}
+
 pub(crate) fn escape_tops(choice: bool, agents: &Agents, devices: bool, many: bool) -> Vec<Top> {
     let menu = agents_menu_on_top(agents, many) || devices;
     escape::tops_of(&[(Top::Choice, choice), (Top::Menu, menu), (Top::Pick, agents.pick.is_some())])
@@ -131,11 +139,8 @@ impl Browser {
         match top {
             Top::Choice => self.close_choice(cx),
             Top::Menu => {
-                let on_top = agents_menu_on_top(&self.agents, self.many_agents(cx));
-                self.agents.menu = None;
-                if !on_top {
-                    self.close_devices(cx);
-                }
+                let many = self.many_agents(cx);
+                close_menu_on_top(&mut self.agents, &mut self.devices_open, many);
                 cx.notify();
             }
             Top::Pick => {

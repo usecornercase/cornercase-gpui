@@ -127,10 +127,36 @@ fn a_chooser_with_one_agent_left_is_nothing_on_top() {
 }
 
 #[test]
-fn a_hidden_chooser_does_not_keep_the_device_menu_open() {
-    let hidden = agents(Some(Menu::Chooser), Some(picked()));
-    assert!(!agents_menu_on_top(&hidden, false));
-    assert!(agents_menu_on_top(&hidden, true));
+fn only_a_drawn_chooser_is_the_agents_menu_on_top() {
+    let chooser = agents(Some(Menu::Chooser), Some(picked()));
+    assert!(!agents_menu_on_top(&chooser, false));
+    assert!(agents_menu_on_top(&chooser, true));
     assert!(agents_menu_on_top(&agents(Some(Menu::Agents), None), false));
     assert!(!agents_menu_on_top(&Agents::default(), true));
+}
+
+#[test]
+fn a_hidden_chooser_does_not_keep_the_device_menu_open() {
+    let mut hidden = agents(Some(Menu::Chooser), Some(picked()));
+    let mut devices = true;
+    close_menu_on_top(&mut hidden, &mut devices, false);
+    assert_eq!(hidden.menu, None);
+    assert!(!devices);
+}
+
+#[test]
+fn a_drawn_agents_menu_closes_alone_and_leaves_the_device_menu() {
+    let mut drawn = agents(Some(Menu::Agents), None);
+    let mut devices = true;
+    close_menu_on_top(&mut drawn, &mut devices, true);
+    assert_eq!(drawn.menu, None);
+    assert!(devices);
+}
+
+#[test]
+fn the_device_menu_closes_when_no_agents_menu_is_open() {
+    let mut none = Agents::default();
+    let mut devices = true;
+    close_menu_on_top(&mut none, &mut devices, true);
+    assert!(!devices);
 }
