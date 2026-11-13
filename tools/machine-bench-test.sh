@@ -56,7 +56,9 @@ case $cmd in
     needs_up
     held=no
     [ -e "$(dirname "$sock")/../ssh/vps.invalid.held" ] && held=yes
-    printf '%s held=%s\n' "$sock" "$held" >> "$t/killed"
+    held_there=no
+    [ -e "$(dirname "$sock")/../ssh/there.invalid.held" ] && held_there=yes
+    printf '%s held=%s\n' "$sock" "$held,$held_there" >> "$t/killed"
     rm -f "$sock" "$state"-agent "$state"-child ;;
   status)
     needs_up
@@ -439,11 +441,11 @@ stand_in() {
   rc=$?
 }
 
-the_stand_in_runs_a_link_against_there() {
+runs_a_link_against_there_as() {
   snap
   lines=$(wc -l < "$b/ssh/calls.log")
   stand_in -T -o ServerAliveInterval=5 -o ServerAliveCountMax=3 -o ConnectTimeout=10 -o BatchMode=yes -a -x \
-    -o ClearAllForwardings=yes -- vps.invalid "sh -c 'exec cornercase status'"
+    -o ClearAllForwardings=yes -- "$1" "sh -c 'exec cornercase status'"
   check "exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
   calls
   line=$(grep -F 'args=status' "$t/calls.norm" | tail -1)
@@ -452,6 +454,31 @@ the_stand_in_runs_a_link_against_there() {
     *) check "the stub saw: $line" false; return 1 ;;
   esac
   check "the stand-in logged nothing" [ "$(wc -l < "$b/ssh/calls.log")" -gt "$lines" ]
+}
+
+the_stand_in_runs_a_link_against_there() {
+  runs_a_link_against_there_as vps.invalid
+}
+
+the_stand_in_runs_a_command_on_there_by_its_second_name() {
+  runs_a_link_against_there_as there.invalid
+}
+
+each_name_of_there_is_held_on_its_own() {
+  snap
+  : > "$b/ssh/vps.invalid.held"
+  stand_in -- there.invalid "sh -c 'exec cornercase status'"
+  check "there.invalid while only vps.invalid is held: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || { rm -f "$b/ssh/vps.invalid.held"; return 1; }
+  stand_in -- vps.invalid "sh -c 'exec cornercase status'"
+  rm -f "$b/ssh/vps.invalid.held"
+  check "vps.invalid held: exit $rc" [ "$rc" = 255 ] || return 1
+  : > "$b/ssh/there.invalid.held"
+  stand_in -- vps.invalid "sh -c 'exec cornercase status'"
+  check "vps.invalid while only there.invalid is held: exit $rc" [ "$rc" = 0 ] || { rm -f "$b/ssh/there.invalid.held"; return 1; }
+  stand_in -- there.invalid "sh -c 'exec cornercase status'"
+  rm -f "$b/ssh/there.invalid.held"
+  check "there.invalid held: exit $rc" [ "$rc" = 255 ] || return 1
+  check "there.invalid held: no Connection refused" contains "$t/err" "Connection refused"
 }
 
 the_stand_in_refuses_while_held() {
@@ -801,8 +828,8 @@ down_stops_here_then_there_and_removes_the_folder() {
   check "exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
   first=$(sed -n 1p "$t/killed")
   second=$(sed -n 2p "$t/killed")
-  check "here was not first: $first" test "$first" = "$b/here/server.sock held=yes" || return 1
-  check "there was not second: $second" test "$second" = "$b/there/server.sock held=yes" || return 1
+  check "here was not first: $first" test "$first" = "$b/here/server.sock held=yes,yes" || return 1
+  check "there was not second: $second" test "$second" = "$b/there/server.sock held=yes,yes" || return 1
   check "the folder is still there" [ ! -e "$b" ] || return 1
   grep -F 'args=kill-server --yes' "$t/calls" | grep -q 'socket=unset' && { check "a kill-server had no socket" false; return 1; }
   check "the home folder changed" home_same
@@ -856,6 +883,20 @@ down_lists_a_forward_left_running() {
   sleep 1
   runb down "$t/b6"
   check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+status_names_the_files_of_both_names() {
+  : > "$b/ssh/there.invalid.slow"
+  : > "$b/ssh/vps.invalid.held"
+  runb status "$b"
+  rm -f "$b/ssh/there.invalid.slow" "$b/ssh/vps.invalid.held"
+  check "there.invalid.slow is not named: $(cat "$t/out")" contains "$t/out" "ssh/there.invalid.slow is there" || return 1
+  check "vps.invalid.held is not named" contains "$t/out" "ssh/vps.invalid.held is there"
+}
+
+up_says_how_to_send_the_window_there() {
+  contains "$t/b.out" "there.invalid" || return 1
+  contains "$t/b.out" "machines edit vps --destination there.invalid"
 }
 
 status_names_both_remembered_lists() {
@@ -912,6 +953,8 @@ run_test the_env_aims_the_shell_at_here
 run_test there_cannot_reach_here
 run_test the_stand_in_runs_a_link_against_there
 run_test the_stand_in_refuses_while_held
+run_test the_stand_in_runs_a_command_on_there_by_its_second_name
+run_test each_name_of_there_is_held_on_its_own
 run_test the_stand_in_runs_the_command_while_slow_is_zero
 run_test the_stand_in_answers_127_while_missing
 run_test the_stand_in_refuses_other_hosts_masters_and_shells
@@ -925,6 +968,8 @@ run_test the_stand_in_says_a_refused_connection_and_keeps_running
 run_test the_stand_in_answers_a_host_lookup_without_any_config
 run_test the_log_keeps_each_command_line_quoted
 run_test the_fake_agent_reports_states_and_spawns_a_child
+run_test status_names_the_files_of_both_names
+run_test up_says_how_to_send_the_window_there
 run_test status_names_both_remembered_lists
 run_test status_and_down_refuse_a_folder_up_did_not_make
 run_test down_refuses_from_inside_the_bench
