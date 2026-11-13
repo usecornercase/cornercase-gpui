@@ -173,6 +173,27 @@ fn home_in(status: &str) -> Option<String> {
     status.get("home").and_then(Value::as_str).map(str::to_string)
 }
 
+impl ThereState {
+    fn keep(&mut self, machine: &str, asked: Option<Facts>, current: Option<&Facts>, older: Older) -> bool {
+        let Some(facts) = still_current(asked, current) else { return false };
+        let kept = KeptOlder { facts, older };
+        self.older.insert(machine.to_owned(), kept.clone()) != Some(kept)
+    }
+
+    fn probe_answered(&mut self, machine: &str, answer: (Facts, Option<Older>), current: Option<&Facts>) {
+        let (facts, older) = answer;
+        self.checks.insert(machine.to_owned(), Check::Answered { facts: facts.clone(), at: Instant::now() });
+        match older {
+            Some(older) => {
+                self.keep(machine, Some(facts), current, older);
+            }
+            None => {
+                self.older.remove(machine);
+            }
+        }
+    }
+}
+
 #[derive(Default)]
 pub(super) struct ThereState {
     pub(super) homes: Homes,
@@ -352,11 +373,8 @@ impl Store {
     }
 
     fn keep_older(&mut self, machine: &str, asked: Option<Facts>, older: Older, cx: &mut Context<Self>) {
-        let Some(facts) = still_current(asked, self.there_facts(machine).as_ref()) else { return };
-        let kept = KeptOlder { facts: facts.clone(), older };
-        let changed = self.there.older.insert(machine.to_owned(), kept.clone()) != Some(kept);
-        self.there.checks.insert(machine.to_owned(), Check::Answered { facts, at: Instant::now() });
-        if changed {
+        let current = self.there_facts(machine);
+        if self.there.keep(machine, asked, current.as_ref(), older) {
             cx.notify();
         }
     }
@@ -392,12 +410,9 @@ impl Store {
     ) {
         let home = result.as_ref().ok().map(String::as_str).and_then(home_in);
         self.there.homes.answered(machine, boot, home);
-        if let Some(older) = result.as_ref().err().and_then(cli::older_refusal) {
-            self.keep_older(machine, Some(facts), older.clone(), cx);
-        } else {
-            self.there.older.remove(machine);
-            self.there.checks.insert(machine.to_owned(), Check::Answered { facts, at: Instant::now() });
-        }
+        let older = result.as_ref().err().and_then(cli::older_refusal).cloned();
+        let current = self.there_facts(machine);
+        self.there.probe_answered(machine, (facts, older), current.as_ref());
         cx.notify();
     }
 

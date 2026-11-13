@@ -394,3 +394,25 @@ fn a_refusal_is_kept_only_for_the_facts_the_request_started_under() {
     assert_eq!(still_current(Some(asked), None), None);
     assert_eq!(still_current(None, Some(&facts_of(&seen(LinkState::Linked)))), None);
 }
+
+#[test]
+fn a_probe_refused_as_older_after_the_facts_moved_ends_its_wait_and_keeps_nothing() {
+    let asked = facts_of(&seen(LinkState::Linked));
+    let now = Facts { boot: "b2".into(), ..asked.clone() };
+    let mut state = ThereState::default();
+    state.checks.insert("vps".into(), Check::InFlight);
+    state.probe_answered("vps", (asked.clone(), Some(refusal_of(Some("0.13.39"), &[]))), Some(&now));
+    assert!(state.older.is_empty());
+    assert!(may_check(&up(), state.checks.get("vps"), &now, Instant::now()));
+    assert!(!may_check(&up(), Some(&Check::InFlight), &now, Instant::now()));
+}
+
+#[test]
+fn a_probe_refused_as_older_under_the_current_facts_keeps_the_refusal() {
+    let facts = facts_of(&seen(LinkState::Linked));
+    let mut state = ThereState::default();
+    state.probe_answered("vps", (facts.clone(), Some(refusal_of(Some("0.13.39"), &[]))), Some(&facts));
+    assert_eq!(state.older.get("vps").map(|kept| &kept.facts), Some(&facts));
+    state.probe_answered("vps", (facts.clone(), None), Some(&facts));
+    assert!(state.older.is_empty());
+}
