@@ -165,7 +165,7 @@ if ! command -v rustc > /dev/null 2>&1; then
 else
   libdir=$(rustc --print target-libdir --target "$target" 2> /dev/null) || libdir=
   if [ -z "$libdir" ]; then
-    target_problem="rustc gave no folder for it"
+    target_problem="rustc --print target-libdir gave no folder"
   elif [ ! -d "$libdir" ]; then
     target_problem="not installed for this checkout's toolchain (no $libdir)"
   fi
