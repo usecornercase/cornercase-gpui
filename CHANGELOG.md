@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.79
+
+- A linked machine's Browser tabs and its tunnels now close by one rule. The one case that changes: if the machine's link comes back before the window has read your list of machines, which happens only when cornercase is slow to send that list, a tab of the machine's workspace now stays open, as its tunnels do, instead of closing. Nothing else changes in the window.
+
 ## 0.1.78
 
 - **A token's field in Settings puts its caret where you type.** The caret, a click, a drag, ⇧← and ⌘A now land on the dots you see, and a token longer than its field scrolls to keep the caret in view. Composing an accented letter with a dead key (´ then a) in it no longer closes the window. Each dot stands for one character as you see it, so an emoji, a flag or an accented letter is one dot.

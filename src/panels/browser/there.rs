@@ -4,12 +4,11 @@ use gpui::{App, Context, Entity, IntoElement as _};
 
 use super::Browser;
 use super::ports::web_ports;
-use crate::model::machines::Machine;
 use crate::model::{MachineSeen, Owner, WorkspaceThere};
 use crate::panels::PanelKind;
 use crate::panels::on_machine;
 use crate::panels::ports::{Listed, sample_there};
-use crate::store::{Reach, Store};
+use crate::store::{MachineLink, Reach, Store};
 
 pub(super) fn on_screen(cx: &App) -> (bool, Owner) {
     let store = Store::get(cx).read(cx);
@@ -23,17 +22,8 @@ pub(crate) enum Fate {
     Ends,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct Listing<'a> {
-    pub(crate) known: bool,
-    pub(crate) listed: Option<&'a Machine>,
-}
-
-pub(crate) fn fate(owner: &WorkspaceThere, seen: &[MachineSeen], listing: Listing<'_>, reach: Option<&Reach>) -> Fate {
-    let removed = listing.known && listing.listed.is_none();
-    let pointed =
-        listing.listed.is_some_and(|m| !owner.destination().is_empty() && m.destination != owner.destination());
-    if removed || pointed || matches!(reach, Some(Reach::Refused(_))) {
+pub(crate) fn fate(owner: &WorkspaceThere, seen: &[MachineSeen], link: &MachineLink) -> Fate {
+    if !link.stays_for(owner.destination()) {
         return Fate::Ends;
     }
     match owner.followed(seen) {
@@ -112,12 +102,9 @@ impl Browser {
         let owners = self.machine_owners();
         let s = store.read(cx);
         let Some(session) = s.session.as_ref().filter(|_| !owners.is_empty()) else { return };
-        let known = s.machines_known();
         let mut changes = Vec::new();
         for owner in owners {
-            let listed = s.machines.iter().find(|m| m.name == owner.machine());
-            let reach = s.reach_of(owner.machine());
-            match fate(&owner, &session.machines, Listing { known, listed }, reach.as_ref()) {
+            match fate(&owner, &session.machines, &s.machine_link(owner.machine())) {
                 Fate::Stays => {}
                 other => changes.push((owner, other)),
             }

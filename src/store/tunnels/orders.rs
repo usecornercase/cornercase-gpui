@@ -3,7 +3,6 @@ use std::time::Instant;
 use gpui::Context;
 
 use super::held::{Asked, Held};
-use super::links::hold_stays;
 use super::taker::{
     Answer, Cause, Next, Taker, after_end, answer, keeps, may_take, next, orders_stay, refusal_words, split_closed,
     tells, unheard, untold, wait_after,
@@ -57,8 +56,8 @@ impl Store {
                     others.into_iter().any(|(_, other)| other.destination == machine.destination)
                 });
                 let linked = self.tunnels.machines.contains_key(name);
-                let link = self.link_of_machine(name);
-                let stays = taker.is_none_or(|taker| orders_stay(hold_stays(&taker.destination, &link), gate));
+                let link = self.tunnel_link(name);
+                let stays = taker.is_none_or(|taker| orders_stay(link.stays_for(&taker.destination), gate));
                 (may_take(gate, linked, shared), stays)
             }
         }

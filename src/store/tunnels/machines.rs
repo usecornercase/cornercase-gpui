@@ -3,10 +3,8 @@ use std::collections::BTreeSet;
 use gpui::Context;
 
 use super::Store;
-use super::links::{Link, followed, machine_link, split_stale};
-use crate::cli;
+use super::links::{MachineLink, followed, split_stale};
 use crate::model::tunnels::Toward;
-use crate::store::machine_read::reach;
 
 impl Store {
     pub(super) fn machines_followed(&self) -> BTreeSet<String> {
@@ -19,12 +17,14 @@ impl Store {
         followed(listed.chain(seen).chain(linked), held.chain(settling).chain(taking))
     }
 
-    pub(super) fn link_of_machine(&self, name: &str) -> Link {
+    pub(crate) fn machine_link(&self, name: &str) -> MachineLink {
         let listed = self.machines.iter().find(|machine| machine.name == name);
         let seen = self.session.as_ref().and_then(|session| session.machine(name));
-        let reached = seen.map(|seen| reach(&cli::target(), &self.machines, seen));
-        let known = self.machines_known();
-        machine_link(listed, known, seen, reached.as_ref(), &self.machine_tunnel_gate(name))
+        MachineLink::of(listed, self.machines_known(), seen, self.reach_of(name).as_ref())
+    }
+
+    pub(super) fn tunnel_link(&self, name: &str) -> MachineLink {
+        self.machine_link(name).gated(self.machine_tunnel_gate(name))
     }
 
     pub(crate) fn follow_machine_tunnels(&mut self, cx: &mut Context<Self>) {
@@ -37,16 +37,16 @@ impl Store {
 
     fn follow_machine(&mut self, name: &str, cx: &mut Context<Self>) {
         let toward = Toward::Machine(name.to_string());
-        let link = self.link_of_machine(name);
+        let link = self.tunnel_link(name);
         match &link {
-            Link::Up { boot, destination } => {
+            MachineLink::Up { boot, destination } => {
                 if self.tunnels.machines.get(name) != Some(boot) {
                     self.tunnels.machines.insert(name.to_string(), boot.clone());
                     self.link_tunnels(&toward, destination, cx);
                 }
             }
-            Link::Waiting(_) => drop(self.tunnels.machines.remove(name)),
-            Link::Lost => {
+            MachineLink::Waiting(_) => drop(self.tunnels.machines.remove(name)),
+            MachineLink::Lost => {
                 self.tunnels.machines.remove(name);
                 self.tunnels.settling.retain(|settling| settling.toward != toward);
             }

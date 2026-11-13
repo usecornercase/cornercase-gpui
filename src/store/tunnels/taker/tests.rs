@@ -6,7 +6,7 @@ use super::{
 };
 use crate::model::tunnels::{Gate, Older, Order, Toward};
 use crate::store::tunnels::held::{Held, test_hold};
-use crate::store::tunnels::links::{Link, hold_stays};
+use crate::store::tunnels::links::MachineLink;
 
 const G: u64 = 7;
 const RUNNING: Option<Phase> = Some(Phase::Running);
@@ -51,17 +51,17 @@ fn a_taker_ends_where_its_holds_end() {
     }
 }
 
-fn up(destination: &str) -> Link {
-    Link::Up { boot: "b".to_string(), destination: destination.to_string() }
+fn up(destination: &str) -> MachineLink {
+    MachineLink::Up { boot: "b".to_string(), destination: destination.to_string() }
 }
 
 #[test]
 fn a_taker_stays_with_its_link() {
-    let stays = |link: &Link| orders_stay(hold_stays("vps.invalid", link), Gate::Open);
-    assert!(!stays(&Link::Lost));
+    let stays = |link: &MachineLink| orders_stay(link.stays_for("vps.invalid"), Gate::Open);
+    assert!(!stays(&MachineLink::Lost));
     assert!(!stays(&up("other.invalid")));
-    assert!(!stays(&Link::Waiting(Some("other.invalid".to_string()))));
-    assert!(stays(&Link::Waiting(None)));
+    assert!(!stays(&MachineLink::Waiting(Some("other.invalid".to_string()))));
+    assert!(stays(&MachineLink::Waiting(None)));
     assert!(stays(&up("vps.invalid")));
 }
 

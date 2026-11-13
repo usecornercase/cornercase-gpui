@@ -163,3 +163,14 @@ fn the_orders_note_names_the_side_that_needs_0_13_57() {
     assert!(!here.contains('#') && !server.contains('#'));
     assert_eq!(TUNNEL_ORDERS_SINCE, Version::new(0, 13, 57));
 }
+
+#[test]
+fn a_side_is_known_older_only_once_its_release_is_read() {
+    let old = Version::parse("0.13.45");
+    assert!(Gate::Older(Older::ThisComputer(None)).known_older());
+    assert!(Gate::Older(Older::ThisComputer(old)).known_older());
+    assert!(Gate::Older(Older::Server(old)).known_older());
+    assert!(!Gate::Older(Older::Server(None)).known_older());
+    assert!(!Gate::Waiting.known_older());
+    assert!(!Gate::Open.known_older());
+}
