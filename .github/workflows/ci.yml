@@ -41,6 +41,12 @@ jobs:
       - name: tests
         run: cargo test --locked
 
+      - name: manual-check helper
+        if: ${{ !cancelled() }}
+        run: |
+          swiftc -O -warnings-as-errors -o "$RUNNER_TEMP/manual-check" tools/manual-check.swift
+          "$RUNNER_TEMP/manual-check" self-test
+
   linux:
     name: clippy + tests (Linux)
     runs-on: ubuntu-24.04
@@ -78,15 +84,24 @@ jobs:
         if: ${{ !cancelled() }}
         run: shellcheck tools/*.sh
 
-      - name: bench tests (dash)
+      - name: script tests (dash)
         if: ${{ !cancelled() }}
-        run: SH=dash dash tools/machine-bench-test.sh
+        run: |
+          failed=0
+          for test in tools/*-test.sh; do
+            SH=dash dash "$test" || failed=1
+          done
+          exit "$failed"
 
-      - name: bench tests (bash as sh)
+      - name: script tests (bash as sh)
         if: ${{ !cancelled() }}
         run: |
           ln -sf "$(command -v bash)" "$RUNNER_TEMP/sh"
-          SH="$RUNNER_TEMP/sh" "$RUNNER_TEMP/sh" tools/machine-bench-test.sh
+          failed=0
+          for test in tools/*-test.sh; do
+            SH="$RUNNER_TEMP/sh" "$RUNNER_TEMP/sh" "$test" || failed=1
+          done
+          exit "$failed"
 
   windows:
     name: clippy + tests (Windows)
