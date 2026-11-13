@@ -7,26 +7,56 @@ use gpui::{
 use super::cards::badge;
 use super::model::{Broken, FlowInfo, Listing, Run};
 use super::widgets::{error_small, file_name, flow_summary, glyph, name_line};
-use super::{FlowsPanel, Selected};
+use super::{FlowsPanel, PAGE_LEAST, Selected};
 use crate::model::Session;
 use crate::store::Store;
 use crate::theme::colours;
+use crate::ui::split::Split;
 use crate::ui::{self, Icon, Tone};
 
 const GLYPH: f32 = 36.;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum Columns {
+    Two { list: f32 },
+    One,
+}
+
+pub(super) fn columns(sheet: f32, list: &Split) -> Columns {
+    if sheet < list.min() + PAGE_LEAST {
+        return Columns::One;
+    }
+    Columns::Two { list: list.fitted(list.size(), sheet - PAGE_LEAST) }
+}
+
 impl FlowsPanel {
-    pub(super) fn sidebar(&self, width: f32, cx: &Context<Self>) -> impl IntoElement + use<> {
-        div()
-            .w(px(width))
-            .h_full()
-            .flex_none()
-            .flex()
-            .flex_col()
-            .border_r_1()
-            .border_color(colours::border())
+    pub(super) fn sidebar(&self, width: Option<f32>, cx: &Context<Self>) -> impl IntoElement + use<> {
+        let column = div().h_full().flex().flex_col();
+        let column = match width {
+            Some(width) => column.w(px(width)).flex_none().border_r_1().border_color(colours::border()),
+            None => column.flex_1().min_w_0(),
+        };
+        column
             .child(toolbar(cx))
             .child(div().id("flows-list").flex_1().overflow_y_scroll().px(px(8.)).pb(px(12.)).child(self.list(cx)))
+    }
+
+    pub(super) fn one_column(&self, cx: &Context<Self>) -> Div {
+        if self.list_open {
+            return div().size_full().flex().child(self.sidebar(None, cx));
+        }
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .child(back_bar(cx))
+            .child(div().flex_1().min_h_0().flex().child(self.detail_pane(cx)))
+    }
+
+    fn open_page(&mut self, selection: Selected, cx: &mut Context<Self>) {
+        self.list_open = false;
+        self.select(selection, cx);
+        cx.notify();
     }
 
     fn list(&self, cx: &Context<Self>) -> Div {
@@ -49,7 +79,7 @@ impl FlowsPanel {
         let selected = self.selected.as_ref() == Some(&selection);
         ui::row(id, selected)
             .gap(px(10.))
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.select(selection.clone(), cx)))
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_page(selection.clone(), cx)))
     }
 
     fn run_row(&self, run: &Run, session: Option<&Session>, cx: &Context<Self>) -> Stateful<Div> {
@@ -160,6 +190,7 @@ fn group(title: &str, count: usize) -> Div {
 fn toolbar(cx: &Context<FlowsPanel>) -> impl IntoElement + use<> {
     div()
         .flex()
+        .flex_wrap()
         .gap(px(8.))
         .p(px(12.))
         .border_b_1()
@@ -180,6 +211,15 @@ fn toolbar(cx: &Context<FlowsPanel>) -> impl IntoElement + use<> {
         )
 }
 
+fn back_bar(cx: &Context<FlowsPanel>) -> Div {
+    div().flex().p(px(12.)).border_b_1().border_color(colours::border()).child(
+        ui::button("flows-back", "‹ Runs and flows").on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+            this.list_open = true;
+            cx.notify();
+        })),
+    )
+}
+
 fn run_state(run: &Run) -> (&'static str, Rgba) {
     if run.closed() {
         ("closed", colours::faint())
@@ -196,3 +236,6 @@ fn run_place(run: &Run, session: Option<&Session>) -> String {
         |(p, w)| format!("{} › {}", p.name, w.branch.clone().unwrap_or_else(|| w.name.clone())),
     )
 }
+
+#[cfg(test)]
+mod tests;

@@ -20,8 +20,8 @@ pub(crate) mod track;
 
 use gpui::{
     AnimationElement, AnyElement, App, Div, ElementId, Entity, Focusable as _, FontWeight, Hsla,
-    InteractiveElement as _, IntoElement, ParentElement as _, Rgba, SharedString, Stateful, Styled as _, Svg, Window,
-    div, prelude::FluentBuilder as _, px, relative,
+    InteractiveElement as _, IntoElement, ParentElement as _, Rgba, SharedString, Stateful,
+    StatefulInteractiveElement as _, Styled as _, Svg, Window, div, prelude::FluentBuilder as _, px, relative,
 };
 
 pub(crate) use icons::{Icon, icon};
@@ -124,9 +124,30 @@ pub(crate) fn spinner(id: impl Into<ElementId>, size: f32, colour: Rgba) -> Anim
     motion::spin(icon(Icon::Loader, size).text_color(colour), id)
 }
 
+fn busy_frame(el: Stateful<Div>, tone: Tone) -> Stateful<Div> {
+    filled(el.flex().items_center().gap(px(6.)).text_color(ink(tone)).cursor_default(), tone).child(spinner(
+        "spinner",
+        12.,
+        ink(tone),
+    ))
+}
+
 pub(crate) fn busy_button(id: impl Into<ElementId>, label: impl Into<SharedString>, tone: Tone) -> Stateful<Div> {
-    let el = button_base(id).flex().items_center().gap(px(6.)).text_color(ink(tone)).cursor_default();
-    filled(el, tone).child(spinner("spinner", 12., ink(tone))).child(label.into())
+    busy_frame(button_base(id), tone).child(label.into())
+}
+
+fn cut_label(el: Stateful<Div>, label: SharedString) -> Stateful<Div> {
+    let shrinking = el.flex_shrink().min_w_0().tooltip(crate::notify::tip(label.clone()));
+    shrinking.child(div().min_w_0().flex().child(one_line(label)))
+}
+
+pub(crate) fn cut_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<Div> {
+    let el = button_base(id).flex().items_center().gap(px(6.)).text_color(ink(Tone::Plain));
+    cut_label(pressable(el, Tone::Plain), label.into())
+}
+
+pub(crate) fn busy_cut_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<Div> {
+    cut_label(busy_frame(button_base(id), Tone::Plain), label.into())
 }
 
 pub(crate) fn resting_button(id: impl Into<ElementId>, label: impl Into<SharedString>, tone: Tone) -> Stateful<Div> {
@@ -144,7 +165,7 @@ pub(crate) fn busy(id: impl Into<ElementId>, text: impl Into<SharedString>) -> D
         .child(one_line(text))
 }
 
-pub(crate) fn icon_button(id: impl Into<ElementId>, icon: impl Into<SharedString>) -> Stateful<Div> {
+fn icon_frame(id: impl Into<ElementId>, icon: impl Into<SharedString>) -> Stateful<Div> {
     div()
         .id(id)
         .flex_none()
@@ -152,9 +173,15 @@ pub(crate) fn icon_button(id: impl Into<ElementId>, icon: impl Into<SharedString
         .py(px(1.))
         .rounded(px(radius::chip()))
         .text_color(colours::faint())
-        .cursor_pointer()
-        .hover(|s| s.bg(colours::selected()).text_color(colours::text()))
         .child(icon.into())
+}
+
+pub(crate) fn icon_button(id: impl Into<ElementId>, icon: impl Into<SharedString>) -> Stateful<Div> {
+    icon_frame(id, icon).cursor_pointer().hover(|s| s.bg(colours::selected()).text_color(colours::text()))
+}
+
+pub(crate) fn resting_icon_button(id: impl Into<ElementId>, icon: impl Into<SharedString>) -> Stateful<Div> {
+    icon_frame(id, icon).opacity(0.4)
 }
 
 fn tool_frame(id: impl Into<ElementId>, size: f32) -> (Stateful<Div>, SharedString) {

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, ElementId, FontWeight, InteractiveElement as _, IntoElement as _,
+    AnyElement, ClickEvent, Context, Div, ElementId, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
     px,
 };
@@ -31,7 +31,7 @@ impl FlowsPanel {
             .flex_col()
             .gap(px(22.))
             .child(flow_hero(flow, hidden, cx))
-            .child(block(Icon::Flows, "Plan").child(self.diagram(plan)))
+            .child(self.diagram(plan, cx))
             .child(block(Icon::Accounts, "Roles").child(self.roles(spec, cx)))
             .when(!spec.notes.is_empty(), |d| d.child(block(Icon::File, "Notes").child(notes(&spec.notes))))
     }
@@ -106,8 +106,12 @@ pub(super) fn role_box(id: impl Into<ElementId>, colour: Rgba, open: bool) -> St
         .when(!open, |d| d.hover(|s| s.border_color(colours::edge()).bg(colours::hover())))
 }
 
+pub(super) fn block_with(head: impl IntoElement) -> Div {
+    div().flex().flex_col().gap(px(10.)).child(head)
+}
+
 pub(super) fn block(glyph: Icon, label: &str) -> Div {
-    div().flex().flex_col().gap(px(10.)).child(heading(glyph, label))
+    block_with(heading(glyph, label))
 }
 
 fn flow_hero(flow: &FlowInfo, hidden: bool, cx: &Context<FlowsPanel>) -> Div {

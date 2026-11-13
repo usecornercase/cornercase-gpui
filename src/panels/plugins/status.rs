@@ -50,12 +50,15 @@ impl Status {
 
 impl Service {
     pub(super) fn describe(&self) -> String {
+        format!("{} {}", self.id, self.words())
+    }
+
+    pub(super) fn words(&self) -> String {
         match (self.state.as_str(), self.pid, self.restart_in) {
-            ("running", Some(pid), _) => format!("{} running, pid {pid}", self.id),
-            ("stopped", _, Some(0)) => format!("{} stopped, restarting now", self.id),
-            ("stopped", _, Some(s)) => format!("{} stopped, restarting in {s} s", self.id),
-            ("starting", _, _) => format!("{} starting", self.id),
-            (state, _, _) => format!("{} {state}", self.id),
+            ("running", Some(pid), _) => format!("running, pid {pid}"),
+            ("stopped", _, Some(0)) => "stopped, restarting now".to_string(),
+            ("stopped", _, Some(s)) => format!("stopped, restarting in {s} s"),
+            (state, _, _) => state.to_string(),
         }
     }
 

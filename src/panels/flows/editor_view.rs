@@ -6,7 +6,7 @@ use gpui::{
 
 use super::draft::saves_line;
 use super::editor::{FlowEditor, Layout, Mode, PLAN_PAD, Pill, View, layout};
-use super::widgets::{alert, glyph, pill, pill_with};
+use super::widgets::{alert, glyph, own_axis, pill, pill_with};
 use super::wires;
 use crate::theme::colours;
 use crate::ui::{self, Icon, TextField, Tone, boxed};
@@ -189,8 +189,7 @@ impl FlowEditor {
     }
 
     fn plan_box(&self, cx: &Context<Self>) -> impl IntoElement + use<> {
-        div()
-            .id("flow-editor-plan")
+        own_axis(div().id("flow-editor-plan"))
             .h_full()
             .overflow_y_scroll()
             .px(px(PLAN_PAD))

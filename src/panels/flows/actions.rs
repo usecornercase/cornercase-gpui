@@ -217,6 +217,7 @@ impl FlowsPanel {
             ..FlowInfo::default()
         }
         .key();
+        self.list_open = false;
         self.selected = Some(Selected::Flow(key));
     }
 

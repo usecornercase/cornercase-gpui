@@ -1,13 +1,11 @@
 use std::rc::Rc;
 
-use gpui::{Context, Div, ParentElement as _, Window};
+use gpui::{Context, Div, Window};
 
-use super::super::diagram::{OnRole, Plan, board_width, draw};
-use super::super::flow_page::block;
+use super::super::diagram::{OnRole, Plan, board_width, plan_block};
 use super::super::graph;
 use super::super::model::FlowSpec;
 use super::{FlowEditor, Open, View};
-use crate::ui::Icon;
 
 const TWO_COLUMNS: f32 = 1_000.;
 const PLAN_MIN: f32 = 0.42;
@@ -57,7 +55,7 @@ impl FlowEditor {
         let focus = self.focus_name(cx);
         let plan =
             Plan { flow: &self.plan, run: None, focus: focus.as_deref(), key: "flow-draft", on_role: Some(&on_role) };
-        block(Icon::Flows, "Plan").child(draw(plan, &self.board, &self.played))
+        plan_block(plan, &self.board, &self.played, cx.entity_id())
     }
 
     fn focus_name(&self, cx: &Context<Self>) -> Option<String> {

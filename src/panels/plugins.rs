@@ -45,6 +45,7 @@ const NO_PLUGINS: &str = "No plugins yet. Install one from GitHub or a git addre
 const NO_STATUS: &str = "What its services are doing needs the server, which did not answer";
 const COUNTS_EVERY: Duration = Duration::from_secs(1);
 const ID_ROOM: f32 = 96.;
+const VERSION_MOST: f32 = 120.;
 
 pub(crate) struct PluginsPanel {
     plugins: Option<Vec<Plugin>>,
@@ -78,9 +79,32 @@ fn say(result: anyhow::Result<String>, cx: &mut App) {
     }
 }
 
+fn chip_frame(colour: Rgba) -> Div {
+    div().px(px(7.)).rounded(px(radius::chip())).bg(colours::inset()).text_size(px(11.)).text_color(colour)
+}
+
 fn chip(text: impl Into<SharedString>, colour: Rgba) -> Div {
     let text: SharedString = text.into();
-    div().px(px(7.)).rounded(px(radius::chip())).bg(colours::inset()).text_size(px(11.)).text_color(colour).child(text)
+    chip_frame(colour).child(text)
+}
+
+fn service_chip(row: &str, plugin: &str, service: &Service) -> Stateful<Div> {
+    chip_frame(health_colour(service.health()))
+        .id(SharedString::from(format!("{row}-{plugin}-{}", service.id)))
+        .min_w_0()
+        .flex()
+        .tooltip(tip(service.describe()))
+        .child(div().min_w_0().flex().child(ui::one_line(service.id.clone())))
+        .child(div().flex_none().child(format!(" {}", service.words())))
+}
+
+fn plugin_version(plugin: &Plugin, version: &str) -> Stateful<Div> {
+    ui::dim(ui::one_line(version.to_string()))
+        .id(SharedString::from(format!("plugin-version-{}", plugin.id)))
+        .flex_none()
+        .max_w(px(VERSION_MOST))
+        .flex()
+        .tooltip(tip(version.to_string()))
 }
 
 fn plugin_name(plugin: &Plugin) -> Stateful<Div> {
@@ -111,11 +135,33 @@ fn health_colour(health: Health) -> Rgba {
     }
 }
 
-fn service_chips(services: &[Service]) -> Vec<Div> {
-    services.iter().map(|s| chip(s.describe(), health_colour(s.health()))).collect()
+fn service_chips(row: &str, plugin: &str, services: &[Service]) -> Vec<AnyElement> {
+    services.iter().map(|s| service_chip(row, plugin, s).into_any_element()).collect()
 }
 
-fn chips_row(label: &'static str, chips: Vec<Div>) -> Div {
+fn reason_line(plugin: &str, why: &str) -> Stateful<Div> {
+    let shown = window_processes::shortened(why);
+    div()
+        .id(SharedString::from(format!("window-reason-{plugin}")))
+        .text_size(px(12.))
+        .text_color(colours::failed())
+        .when(shown.is_some(), |d| d.tooltip(tip(why.to_string())))
+        .child(shown.unwrap_or_else(|| why.to_string()))
+}
+
+fn not_running(plugin: &str, why: &str) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(4.))
+        .child(chips_row(
+            "Window processes",
+            vec![chip("not running, trying again", colours::failed()).into_any_element()],
+        ))
+        .child(reason_line(plugin, why))
+}
+
+fn chips_row(label: &'static str, chips: Vec<AnyElement>) -> Div {
     div().flex().flex_wrap().items_center().gap(px(6.)).child(ui::dim(label)).children(chips)
 }
 
@@ -336,7 +382,7 @@ impl PluginsPanel {
                     .when(!switchable, |d| d.opacity(0.4).cursor_default()),
             )
             .child(plugin_name(plugin))
-            .children(plugin.manifest.as_ref().map(|m| ui::dim(m.version.clone())))
+            .children(plugin.manifest.as_ref().map(|m| plugin_version(plugin, &m.version)))
             .child(plugin_id(plugin))
             .child(chip)
     }
@@ -347,7 +393,7 @@ impl PluginsPanel {
         }
         let store = Store::get(cx);
         let Some(status) = &store.read(cx).plugins.status else { return Some(ui::dim(NO_STATUS)) };
-        Some(chips_row("Services", service_chips(status.services(&plugin.id))))
+        Some(chips_row("Services", service_chips("service", &plugin.id, status.services(&plugin.id))))
     }
 
     fn window_processes_row(&self, plugin: &Plugin, cx: &App) -> Option<Div> {
@@ -355,9 +401,9 @@ impl PluginsPanel {
             return None;
         }
         let chips = match self.windows.read(cx).seen.card(&plugin.id, Instant::now()) {
-            Card::Starting => vec![chip("starting", colours::waiting())],
-            Card::NotRunning(why) => vec![chip(format!("not running, trying again: {why}"), colours::failed())],
-            Card::Processes(services) => service_chips(&services),
+            Card::Starting => vec![chip("starting", colours::waiting()).into_any_element()],
+            Card::NotRunning(why) => return Some(not_running(&plugin.id, &why)),
+            Card::Processes(services) => service_chips("window", &plugin.id, &services),
         };
         Some(chips_row("Window processes", chips))
     }
@@ -366,10 +412,10 @@ impl PluginsPanel {
         let key = action.key();
         let id = SharedString::from(format!("action-{key}"));
         if busy(&key, cx) {
-            return ui::busy_button(id, action.title, ui::Tone::Plain).into_any_element();
+            return ui::busy_cut_button(id, action.title).into_any_element();
         }
         let runnable = target(&action.contexts, shown).is_some();
-        ui::button(id, format!("▶ {}", action.title))
+        ui::cut_button(id, format!("▶ {}", action.title))
             .when(!runnable, |b| b.opacity(0.45).cursor_default())
             .when(runnable, |b| {
                 b.on_click(cx.listener(move |_, _: &ClickEvent, _, cx| Self::run_shown(action.clone(), cx)))

@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::FlowsPanel;
 use super::actions::{Imported, announce, note, run_stdin};
-use super::diagram::Played;
+use super::diagram::{Board, Played};
 use super::draft::{
     self, Back, BackDraft, Draft, Place, RoleDraft, Saved, Stage, fresh_role_name, gone_note, has_breaks, neighbour,
     parse_saved, place_of, save_args, seat, swapped,
@@ -25,7 +25,6 @@ pub(super) use self::check::{Check, Pill, Verdict};
 pub(super) use self::plan::{Layout, PLAN_PAD, layout};
 
 const CHECK_DELAY: Duration = Duration::from_millis(400);
-const SHEET_AT_1280: f32 = 1_050.;
 
 pub(super) struct RoleFields {
     pub id: u64,
@@ -130,7 +129,7 @@ pub(super) struct FlowEditor {
     pub roles: Vec<RoleFields>,
     pub stages: Vec<StageFields>,
     pub plan: FlowSpec,
-    pub board: Rc<Cell<f32>>,
+    pub board: Board,
     pub played: Played,
     pub check: Check,
     next_id: u64,
@@ -276,14 +275,14 @@ impl FlowEditor {
             roles,
             stages,
             plan: draft.plan().unwrap_or_default(),
-            board: Rc::new(Cell::new(super::BOARD)),
+            board: Board::new(super::BOARD),
             played: Played::default(),
             inputs,
             check: Check::default(),
             open: None,
             notes_open: !draft.notes.is_empty(),
             view: View::Form,
-            width: Rc::new(Cell::new(SHEET_AT_1280)),
+            width: Rc::new(Cell::new(super::SHEET_AT_1280)),
             opened,
             mode: Mode::Editing,
             error: None,

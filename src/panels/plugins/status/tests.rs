@@ -38,3 +38,10 @@ fn a_service_restarting_now_or_in_an_unknown_state_still_reads() {
     assert_eq!(odd.describe(), "b paused");
     assert_eq!(odd.health(), Health::Waiting);
 }
+
+#[test]
+fn a_services_words_leave_its_id_to_the_chip() {
+    let status = status();
+    let said: Vec<String> = status.services("acme.notes").iter().map(Service::words).collect();
+    assert_eq!(said, ["running, pid 4242", "stopped, restarting in 3 s", "starting"]);
+}
