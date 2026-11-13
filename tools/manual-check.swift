@@ -7,7 +7,7 @@ struct Failure: Error {
     let status: Int32
 }
 
-let usage = "usage: manual-check window|front|size|key|press|drag|scroll PID …"
+let usage = "usage: manual-check window|front|size|key|press|drag|scroll PID … (drag: x0 y0 x1 y1 [right] [hold MS])"
 
 let keys: [String: Int] = [
     "a": kVK_ANSI_A, "b": kVK_ANSI_B, "c": kVK_ANSI_C, "d": kVK_ANSI_D, "e": kVK_ANSI_E, "f": kVK_ANSI_F,
@@ -189,7 +189,7 @@ func press(_ pid: pid_t, _ x: String, _ y: String, right: Bool) throws {
     }
 }
 
-func drag(_ pid: pid_t, from start: (String, String), to end: (String, String), right: Bool) throws {
+func drag(_ pid: pid_t, from start: (String, String), to end: (String, String), right: Bool, hold: Int) throws {
     let origin = try target(pid, start.0, start.1)
     let goal = try target(pid, end.0, end.1)
     let button: CGMouseButton = right ? .right : .left
@@ -207,7 +207,7 @@ func drag(_ pid: pid_t, from start: (String, String), to end: (String, String), 
             post(moved, at: point, button: button)
             usleep(21_000)
         }
-        usleep(250_000)
+        usleep(250_000 + UInt32(hold) * 1_000)
         post(up, at: goal, button: button)
         print(String(format: "%.3f", Date().timeIntervalSince1970))
         usleep(100_000)
@@ -267,9 +267,22 @@ func describe(_ pid: pid_t) throws {
 func button(_ args: [String], after count: Int) throws -> Bool {
     guard args.count == count + 1 else { return false }
     guard args[count] == "right" else {
-        throw Failure(message: "\(args[0]) takes only 'right' after the point\(count > 4 ? "s" : "")", status: 2)
+        throw Failure(message: "\(args[0]) takes only 'right' after the point", status: 2)
     }
     return true
+}
+
+func dragOptions(_ words: [String]) throws -> (right: Bool, hold: Int) {
+    var rest = words[...]
+    let right = rest.first == "right"
+    if right { rest = rest.dropFirst() }
+    guard !rest.isEmpty else { return (right, 0) }
+    guard rest.count == 2, rest.first == "hold", let last = rest.last else {
+        throw Failure(message: "drag takes only 'right' and 'hold MS' after the points", status: 2)
+    }
+    let ms = Int(try wholeNumber(last, "hold"))
+    guard (0...10_000).contains(ms) else { throw Failure(message: "hold must be 0 to 10000 ms", status: 2) }
+    return (right, ms)
 }
 
 func run(_ args: [String]) throws {
@@ -281,8 +294,9 @@ func run(_ args: [String]) throws {
     case ("size", 4): try size(pid, args[2], args[3])
     case ("key", 3...): try key(pid, args[2], Array(args.dropFirst(3)))
     case ("press", 4...5): try press(pid, args[2], args[3], right: try button(args, after: 4))
-    case ("drag", 6...7):
-        try drag(pid, from: (args[2], args[3]), to: (args[4], args[5]), right: try button(args, after: 6))
+    case ("drag", 6...9):
+        let (right, hold) = try dragOptions(Array(args.dropFirst(6)))
+        try drag(pid, from: (args[2], args[3]), to: (args[4], args[5]), right: right, hold: hold)
     case ("scroll", 5...6):
         let sideways = args.count == 6 ? try wholeNumber(args[5], "dx") : 0
         try scroll(pid, args[2], args[3], dy: try wholeNumber(args[4], "dy"), dx: sideways)

@@ -4,6 +4,7 @@ use gpui::{Pixels, px};
 use unicode_segmentation::UnicodeSegmentation;
 
 const SHORTEST_THUMB: Pixels = px(16.);
+pub(super) const CARET_WIDTH: Pixels = px(2.);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Row {
@@ -117,6 +118,10 @@ pub(super) fn scroll_to_show_with_margins(
 
 pub(super) fn clamp_scroll(scroll: Pixels, content: Pixels, height: Pixels) -> Pixels {
     scroll.min(content - height).max(px(0.))
+}
+
+pub(super) fn sideways(scroll: Pixels, (caret, text): (Pixels, Pixels), width: Pixels) -> Pixels {
+    clamp_scroll(scroll_to_show(scroll, caret, caret + CARET_WIDTH, width), text + CARET_WIDTH, width)
 }
 
 pub(super) fn thumb(scroll: Pixels, content: Pixels, height: Pixels) -> Option<(Pixels, Pixels)> {

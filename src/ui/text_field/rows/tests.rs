@@ -2,7 +2,7 @@ use gpui::px;
 
 use super::{
     Rows, Span, clamp_scroll, line_breaks, one_line, previous_grapheme, rows_shown, scroll_to_show,
-    scroll_to_show_with_margins, shown_without_controls, thumb,
+    scroll_to_show_with_margins, shown_without_controls, sideways, thumb,
 };
 
 fn wrapped() -> Rows {
@@ -203,4 +203,34 @@ fn a_view_too_short_for_the_margins_still_shows_the_caret() {
 fn a_view_shorter_than_a_row_follows_the_caret_row() {
     let margins = (px(12.), px(32.));
     assert_eq!(scroll_to_show_with_margins(px(0.), (px(300.), px(16.)), margins, px(10.)), px(306.));
+}
+
+#[test]
+fn a_text_narrower_than_the_field_never_scrolls_sideways() {
+    assert_eq!(sideways(px(0.), (px(50.), px(80.)), px(118.)), px(0.));
+}
+
+#[test]
+fn a_caret_past_the_right_edge_scrolls_the_text_until_it_shows() {
+    assert_eq!(sideways(px(0.), (px(5000.), px(5000.)), px(118.)), px(5000. + 2. - 118.));
+}
+
+#[test]
+fn going_home_brings_the_start_of_the_text_back() {
+    assert_eq!(sideways(px(4884.), (px(0.), px(5000.)), px(118.)), px(0.));
+}
+
+#[test]
+fn a_shorter_text_gives_back_the_scroll_it_no_longer_needs() {
+    assert_eq!(sideways(px(4884.), (px(300.), px(300.)), px(118.)), px(184.));
+}
+
+#[test]
+fn a_narrower_field_scrolls_until_the_caret_shows() {
+    assert_eq!(sideways(px(0.), (px(200.), px(400.)), px(80.)), px(200. + 2. - 80.));
+}
+
+#[test]
+fn a_scroll_within_what_the_caret_allows_stays_where_it_was() {
+    assert_eq!(sideways(px(100.), (px(150.), px(5000.)), px(118.)), px(100.));
 }

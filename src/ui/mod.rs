@@ -237,8 +237,10 @@ pub(crate) fn status_badge(status: Option<&str>) -> Option<(Icon, Rgba)> {
     }
 }
 
+pub(crate) const BADGE_SLOT: f32 = 14.;
+
 pub(crate) fn badge_slot() -> Div {
-    div().w(px(14.)).flex_none().flex().items_center().justify_center()
+    div().w(px(BADGE_SLOT)).flex_none().flex().items_center().justify_center()
 }
 
 fn badge_glyph(status: Option<&str>) -> Option<Svg> {

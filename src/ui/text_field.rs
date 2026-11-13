@@ -83,6 +83,7 @@ struct Options {
 #[derive(Default)]
 struct View {
     scroll_top: Pixels,
+    scroll_left: Pixels,
     reveal: bool,
     was_focused: bool,
     goal_x: Option<Pixels>,
@@ -405,8 +406,8 @@ impl EntityInputHandler for TextField {
         let end = Some(layout.position(range.end)).filter(|end| end.y == start.y);
         let top = bounds.top() + start.y - layout.scroll_top;
         Some(Bounds::from_corners(
-            point(bounds.left() + start.x, top),
-            point(bounds.left() + end.unwrap_or(start).x, top + layout.line_height),
+            point(bounds.left() + start.x - layout.scroll_left, top),
+            point(bounds.left() + end.unwrap_or(start).x - layout.scroll_left, top + layout.line_height),
         ))
     }
 
@@ -719,6 +720,7 @@ impl TextField {
         self.selected_range = caret..caret;
         self.marked_range = None;
         self.view.scroll_top = px(0.);
+        self.view.scroll_left = px(0.);
         cx.emit(TextFieldEvent::Changed);
         cx.notify();
     }
