@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.80
+
+- **Settings' search field shows what you type again.** Since 0.1.73 it showed an empty box: no "Search settings", no letters and no caret, although the search worked.
+
 ## 0.1.79
 
 - A linked machine's Browser tabs and its tunnels now close by one rule. The one case that changes: if the machine's link comes back before the window has read your list of machines, which happens only when cornercase is slow to send that list, a tab of the machine's workspace now stays open, as its tunnels do, instead of closing. Nothing else changes in the window.

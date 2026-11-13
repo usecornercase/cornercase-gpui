@@ -377,6 +377,10 @@ pub(crate) fn prompt_box(field: &Entity<TextField>, verb: &str, window: &Window,
         .child(div().text_size(px(11.)).text_color(colours::muted()).child(text_field::prompt_keys(Os::CURRENT, verb)))
 }
 
+fn field_slot(field: impl IntoElement) -> Div {
+    div().flex_1().min_w_0().flex().child(field)
+}
+
 pub(crate) fn search_field(field: Entity<TextField>, focused: bool, clear: Option<Stateful<Div>>) -> Div {
     input_box(
         div()
@@ -384,7 +388,7 @@ pub(crate) fn search_field(field: Entity<TextField>, focused: bool, clear: Optio
             .items_center()
             .gap(px(8.))
             .child(icon(Icon::Search, 13.).text_color(if focused { colours::accent() } else { colours::muted() }))
-            .child(div().flex_1().min_w_0().child(field))
+            .child(field_slot(field))
             .children(clear),
         focused,
     )
@@ -575,3 +579,6 @@ pub(crate) fn swatch(colour: Rgba, size: f32) -> Div {
         .child(checker(size, size, (size / 2.).max(3.)))
         .child(div().absolute().inset_0().bg(colour))
 }
+
+#[cfg(test)]
+mod tests;
