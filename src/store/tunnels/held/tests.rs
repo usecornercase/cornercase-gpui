@@ -1,6 +1,7 @@
 use super::{
     Again, Asked, Fate, Held, Hold, Settled, again_of, bring_back, came_back, fate, forgets_after_close,
-    forgets_failed, live, local_before, remembers, settle_now, settled, test_hold, up_toast, window_failure,
+    forgets_failed, live, local_before, ports_kept, remembers, settle_now, settled, test_hold, up_toast,
+    window_failure,
 };
 use crate::model::tunnels::Toward;
 
@@ -250,4 +251,16 @@ fn a_quiet_hold_that_was_on_its_own_port_says_where_it_landed_when_that_is_taken
     let words =
         format!("Port 8765 on vps is back on localhost:61023 (localhost:8765, where it was, is taken on this {here})");
     assert_eq!(said.as_deref(), Some(words.as_str()));
+}
+
+#[test]
+fn a_port_pending_settlement_is_not_brought_back_with_the_link() {
+    let toward = Toward::Server;
+    let holds = vec![
+        test_hold(Toward::Server, 5173, Held::Up { local: 1 }),
+        test_hold(Toward::Machine("vps".into()), 9000, Held::Opening),
+    ];
+    let kept = ports_kept(&holds, &toward, [3000].into_iter());
+    assert_eq!(kept, vec![5173, 3000]);
+    assert_eq!(bring_back(&[3000, 5173, 8080], &kept), vec![8080]);
 }

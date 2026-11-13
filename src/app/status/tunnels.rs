@@ -7,12 +7,12 @@ use crate::keymap::{Command, keys_of};
 use crate::model::Owner;
 use crate::model::machines::listed;
 use crate::model::tunnels::Toward;
-use crate::panels::PanelKind;
+use crate::panels::{PanelKind, on_machine};
 use crate::platform::Os;
 use crate::store::ToastKind;
 use crate::store::remote_url;
-use crate::store::{Asked, Store, address_there, copied_words};
-use crate::store::{TunnelRow, Whose, heading, none_note, others_note};
+use crate::store::{Reach, Tail, TunnelRow, Whose, heading, none_note, others_note, section_tail};
+use crate::store::{Store, address_there, copied_words};
 
 fn closing(toward: &Toward, port: u16) -> Vec<Entry> {
     let (close, forget) = (toward.clone(), toward.clone());
@@ -64,10 +64,7 @@ fn open_item(toward: &Toward, port: u16, local: u16, shown: Option<Owner>) -> En
 fn try_again(toward: &Toward, port: u16) -> Entry {
     let toward = toward.clone();
     context_menu::item("Try again", move |this, _, cx| {
-        this.store.update(cx, |s, cx| {
-            s.drop_down_tunnel(&toward, port);
-            s.hold_tunnel(&toward, port, Asked::Click, cx);
-        });
+        this.store.update(cx, |s, cx| s.try_tunnel_again(&toward, port, cx));
     })
 }
 
@@ -125,13 +122,28 @@ fn server_entries(host: &str, tunnels: &[TunnelRow], notes: Vec<String>) -> Vec<
     entries
 }
 
-fn machine_entries(sections: &[(String, Vec<TunnelRow>)], store: &Store) -> Vec<Entry> {
-    let mut entries = Vec::new();
-    for (name, rows) in sections {
-        entries.push(Entry::Heading(heading(name).into()));
-        let shown = store.owner_on(name);
-        entries.extend(rows.iter().map(|row| context_menu::submenu(row.text(), actions(row, shown.clone(), name))));
+fn tail_entry(tail: Tail) -> Entry {
+    match tail {
+        Tail::Note(text) => context_menu::note(text),
+        Tail::Update(update) => context_menu::item(update.label(), move |_, window, cx| {
+            on_machine::ask_update_there(&update, window, cx);
+        }),
+        Tail::Updating(label) => context_menu::resting(label),
     }
+}
+
+fn machine_section(name: &str, rows: &[TunnelRow], store: &Store) -> Vec<Entry> {
+    let mut entries = vec![Entry::Heading(heading(name).into())];
+    let shown = store.owner_on(name);
+    entries.extend(rows.iter().map(|row| context_menu::submenu(row.text(), actions(row, shown.clone(), name))));
+    let reach = store.reach_of(name);
+    let note = reach.as_ref().and_then(Reach::older);
+    entries.extend(section_tail(note, &store.update_offer(note)).into_iter().map(tail_entry));
+    entries
+}
+
+fn machine_entries(sections: &[(String, Vec<TunnelRow>)], store: &Store) -> Vec<Entry> {
+    let mut entries: Vec<Entry> = sections.iter().flat_map(|(name, rows)| machine_section(name, rows, store)).collect();
     let names: Vec<String> = sections.iter().map(|(name, _)| name.clone()).collect();
     let towards: Vec<Toward> = names.iter().cloned().map(Toward::Machine).collect();
     entries.extend(store.orders_notes(&towards).into_iter().map(context_menu::note));

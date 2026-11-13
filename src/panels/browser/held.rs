@@ -249,7 +249,7 @@ impl Browser {
 
     fn machine_gate(open: &HeldOpen, store: &Entity<Store>, cx: &mut Context<Self>) -> Option<Step> {
         let Toward::Machine(name) = &open.toward else { return None };
-        match store.read(cx).machine_open(name) {
+        match store.read(cx).machine_open_at(name, Some(open.remote)) {
             MachineOpen::Open => None,
             MachineOpen::Waiting => Some(Step::Wait),
             MachineOpen::Closed(why) => {
@@ -277,7 +277,7 @@ impl Browser {
     pub(super) fn passage_to(&mut self, toward: &Toward, remote: u16, cx: &mut Context<Self>) -> Passage {
         let store = Store::get(cx).read(cx);
         if let Toward::Machine(name) = toward {
-            return machine_passage(&store.machine_open(name), store.held_tunnel(toward, remote));
+            return machine_passage(&store.machine_open_at(name, Some(remote)), store.held_tunnel(toward, remote));
         }
         let way = store.tunnel_way();
         if matches!(way, Way::Own(_)) {

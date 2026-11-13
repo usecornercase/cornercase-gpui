@@ -226,7 +226,8 @@ impl Browser {
     pub(super) fn browse(&mut self, url: String, owner: Owner, cx: &mut Context<Self>) {
         let toward = owner.toward(cli::host().as_deref());
         let store = Store::get(cx).read(cx);
-        let open = owner.machine().map(|name| store.machine_open(name));
+        let port = loopback_port(&url);
+        let open = owner.machine().map(|name| store.machine_open_at(name, port));
         match route(&url, toward.as_ref(), store.tunnel_way(), open.as_ref()) {
             Route::Direct => self.open_now(url, owner, None, cx),
             Route::Own(remote) => self.browse_through(remote, url, owner, cx),

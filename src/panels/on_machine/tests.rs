@@ -154,6 +154,7 @@ fn older_note() -> OlderNote {
     OlderNote {
         line: "vps runs cornercase 0.13.39 and this Mac 0.13.57: update it".into(),
         tip: "Update it from this Mac with cornercase --remote vps.invalid update".into(),
+        ..OlderNote::default()
     }
 }
 

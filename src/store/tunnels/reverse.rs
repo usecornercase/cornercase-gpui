@@ -205,6 +205,9 @@ impl Store {
         let why = reverse_reason(&ended.said, toward, &hold.label, &hold.destination);
         let (text, kind) = ending_toast(hold.state, ended.code, &why, &hold.label);
         self.toast(text, kind, cx);
+        if let (Toward::Machine(name), true) = (toward, ended.code != Some(0)) {
+            self.there_failed(name, cx);
+        }
         cx.notify();
     }
 

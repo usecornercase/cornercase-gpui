@@ -47,7 +47,7 @@ impl Store {
                 });
                 let linked = self.tunnels.machines.contains_key(name);
                 let link = self.tunnel_link(name);
-                let stays = taker.is_none_or(|taker| orders_stay(link.stays_for(&taker.destination), gate));
+                let stays = taker.is_none_or(|taker| orders_stay(link.keeps_taker(&taker.destination), gate));
                 (may_take(gate, linked, shared), stays)
             }
         }
@@ -125,6 +125,9 @@ impl Store {
             self.toast(text, ToastKind::Error, cx);
         }
         let toward = toward.clone();
+        if let Toward::Machine(name) = &toward {
+            self.there_failed(name, cx);
+        }
         later(wait, move |this, cx| this.step_taker(&toward, Cause::Due { generation }, cx), cx);
     }
 

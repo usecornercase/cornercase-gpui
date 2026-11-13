@@ -1,7 +1,7 @@
 use super::*;
 use crate::model::machines::LinkState;
 use crate::model::{PaneInfo, ThereProject, ThereWorkspace};
-use crate::store::OlderNote;
+use crate::store::{OlderNote, UpdateOffer, UpdateThere};
 
 fn agent(id: u64, status: Option<&str>, active: bool) -> PaneInfo<ThereId> {
     PaneInfo {
@@ -29,7 +29,7 @@ fn machine(state: LinkState, panes: Vec<PaneInfo<ThereId>>) -> MachineSeen {
 const NOW: i64 = 1_000;
 
 fn told(home: Option<&str>) -> Told<'_> {
-    Told { home, error: None, now: NOW }
+    Told { home, error: None, now: NOW, update: UpdateOffer::Hidden }
 }
 
 fn text_of(seen: &MachineSeen, home: Option<&str>) -> CardText {
@@ -202,9 +202,34 @@ fn the_card_waits_for_the_machines_list_with_a_spinner() {
 
 #[test]
 fn the_card_of_a_machine_refused_as_older_says_both_releases_and_how_to_update() {
-    let note =
-        OlderNote { line: "vps runs cornercase 0.13.39 and this Mac 0.13.57: update it".into(), tip: "do it".into() };
+    let note = OlderNote {
+        line: "vps runs cornercase 0.13.39 and this Mac 0.13.57: update it".into(),
+        tip: "do it".into(),
+        ..OlderNote::default()
+    };
     let text = card_in(&Standing::Older(note.clone()));
     assert_eq!(text.state, Some(CardState::Said(note.line)));
     assert_eq!(text.why.as_deref(), Some("do it"));
+}
+
+fn ask() -> UpdateOffer {
+    UpdateOffer::Ask(UpdateThere { machine: "vps".into(), destination: "vps.invalid".into(), args: Vec::new() })
+}
+
+#[test]
+fn the_card_of_a_refused_machine_carries_its_update() {
+    let told = Told { update: ask(), ..told(None) };
+    let seen = machine(LinkState::Linked, Vec::new());
+    let ws = seen.workspace(ThereId::heard(1)).expect("the workspace");
+    let text = card_text(&MachinePlace::at(&seen, ws, None), &seen, &told, &Standing::Older(OlderNote::default()));
+    assert_eq!(text.update, ask());
+}
+
+#[test]
+fn no_other_card_offers_an_update() {
+    let told = Told { update: ask(), ..told(None) };
+    let seen = machine(LinkState::Linked, Vec::new());
+    let ws = seen.workspace(ThereId::heard(1)).expect("the workspace");
+    let text = card_text(&MachinePlace::at(&seen, ws, None), &seen, &told, &Standing::LinkDown);
+    assert_eq!(text.update, UpdateOffer::Hidden);
 }

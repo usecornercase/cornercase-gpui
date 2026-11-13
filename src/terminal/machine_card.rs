@@ -11,8 +11,10 @@ use crate::app::machine::Standing;
 use crate::desktop;
 use crate::model::machines::{LinkState, NextTry};
 use crate::model::{MachinePlace, MachineSeen, Tab, ThereId};
+use crate::panels::on_machine::update_button;
 use crate::panels::{PanelKind, queue};
 use crate::platform::paths;
+use crate::store::UpdateOffer;
 use crate::theme::{colours, radius};
 use crate::ui;
 use crate::ui::counting::Counting;
@@ -28,6 +30,7 @@ pub(super) struct CardText {
     pub(super) folder: String,
     pub(super) state: Option<CardState>,
     pub(super) why: Option<String>,
+    pub(super) update: UpdateOffer,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -40,6 +43,7 @@ pub(super) struct Told<'a> {
     pub(super) home: Option<&'a str>,
     pub(super) error: Option<&'a str>,
     pub(super) now: i64,
+    pub(super) update: UpdateOffer,
 }
 
 fn link_state(seen: &MachineSeen, told: &Told<'_>) -> Option<CardState> {
@@ -106,7 +110,8 @@ pub(super) fn card_text(place: &MachinePlace, seen: &MachineSeen, told: &Told<'_
         _ => None,
     };
     let state = state_of(standing, seen, told).filter(|_| seen.state != LinkState::Older);
-    CardText { title, line: line_of(seen, agent, standing), folder, state, why }
+    let update = if matches!(standing, Standing::Older(_)) { told.update.clone() } else { UpdateOffer::Hidden };
+    CardText { title, line: line_of(seen, agent, standing), folder, state, why, update }
 }
 
 fn card_counts(standing: &Standing, seen: &MachineSeen, now: i64) -> bool {
@@ -134,7 +139,8 @@ fn machine_card(text: &CardText, seen: &MachineSeen) -> Stateful<Div> {
         .child(lead_text(text.line.clone()))
         .child(faint(12., text.folder.clone()))
         .when_some(text.state.as_ref(), |d, state| d.child(card_state(state)))
-        .when_some(text.why.clone(), |d, why| d.child(faint(11., why)));
+        .when_some(text.why.clone(), |d, why| d.child(faint(11., why)))
+        .children(update_button(&text.update).map(|button| div().flex().justify_center().min_w_0().child(button)));
     scrolled("machine-card", div().flex().justify_center().p(px(24.)).child(card))
 }
 
@@ -158,7 +164,11 @@ impl Root {
         let seen = self.session.as_ref()?.machine(&place.machine)?;
         let store = self.store.read(cx);
         let error = store.machines.iter().find(|machine| machine.name == seen.name).and_then(|m| m.error.as_deref());
-        let told = Told { home: store.machine_home(&place.machine, &place.boot), error, now: queue::now() };
+        let update = match &standing {
+            Standing::Older(note) => store.update_offer(Some(note)),
+            _ => UpdateOffer::Hidden,
+        };
+        let told = Told { home: store.machine_home(&place.machine, &place.boot), error, now: queue::now(), update };
         let text = card_text(place, seen, &told, &standing);
         if card_counts(&standing, seen, told.now) {
             self.counting.drawn();

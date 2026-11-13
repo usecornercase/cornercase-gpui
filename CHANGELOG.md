@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.87
+
+- **Update a linked machine's cornercase from where the window says it is older.** Changes, Files, Ports, the Browser and the machine's tab now offer **Update cornercase on vps…** under the line that says the machine runs an older cornercase. It asks first, shows that it runs, and reads the machine again by itself once it is done; a failure says why in cornercase's own words. There is nothing to press when cornercase gives no way to update.
+- **A machine that refuses this computer's commands is no longer asked for tunnels every 15 seconds.** Tunnels that are up keep working and can be closed. One that fell waits, nothing new is tunnelled and no program on the machine can ask for one until it is updated, and then they come back by themselves. The status bar's tunnels menu says so under the machine, with the same Update…, and so does the Browser's agents menu.
+- **Showing the machine's panels again asks it once.** Picking such a machine's workspace again, or showing one of those panels again, now asks the machine once instead of once per panel.
+- **An up tunnel opens in the Browser** even when the machine refuses the commands.
+- **The Machines sheet's Update… says it installs the latest release.**
+
 ## 0.1.86
 
 - **A docked panel stays inside a narrow window.** When the window is too narrow for the sidebar, the terminal and an open panel side by side, the panel takes the sidebar's place until you close it or widen the window, and the terminal keeps room beside it. Before, the Browser and Flow panels ran past the window's right edge with their ✕ out of sight, and the other panels left the terminal no room. The widths you dragged come back when the window is wide enough again.

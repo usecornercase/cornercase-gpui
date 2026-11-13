@@ -8,7 +8,7 @@ fn up() -> Reach {
 }
 
 fn older_reach() -> Reach {
-    Reach::Older(OlderNote { line: "l".into(), tip: "t".into() })
+    Reach::Older(OlderNote { line: "l".into(), tip: "t".into(), ..OlderNote::default() })
 }
 
 #[test]

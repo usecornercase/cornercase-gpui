@@ -12,15 +12,17 @@ use crate::panels::PanelKind;
 use crate::platform::{Os, paths};
 
 use super::machines_there::CliRelease;
-use super::{Store, args, run_on};
+use super::{Busy, Store, UpdateThere, args, run_with, update_job, update_key};
 
 const WAITING: &str = "waiting for the machines list";
 const CHECK_EVERY: Duration = Duration::from_secs(15);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct OlderNote {
     pub line: String,
     pub tip: String,
+    pub tunnels: String,
+    pub update: Option<Box<UpdateThere>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +39,13 @@ impl Reach {
         match self {
             Self::Up(target) => Some(target),
             Self::Waiting(_) | Self::Older(_) | Self::Down(_) | Self::Refused(_) => None,
+        }
+    }
+
+    pub(crate) fn older(&self) -> Option<&OlderNote> {
+        match self {
+            Self::Older(note) => Some(note),
+            Self::Up(_) | Self::Waiting(_) | Self::Down(_) | Self::Refused(_) => None,
         }
     }
 
@@ -75,7 +84,16 @@ pub(crate) fn older_note(machine: &str, older: &Older, os: Os) -> OlderNote {
         Some(rest) => format!("Update it from this {here} with cornercase {}", rest.join(" ")),
         None => format!("Update cornercase on {machine} from this {here}"),
     };
-    OlderNote { line: format!("{}: update it", release_clause(machine, older, os)), tip }
+    let clause = release_clause(machine, older, os);
+    let update = cli::update_args(older).map(|args| {
+        Box::new(UpdateThere { machine: machine.to_string(), destination: older.destination.clone(), args })
+    });
+    OlderNote {
+        line: format!("{clause}: update it"),
+        tip,
+        tunnels: format!("{clause}: nothing new is tunnelled to {machine} until it is updated"),
+        update,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,6 +123,27 @@ impl Facts {
 pub(super) struct KeptOlder {
     pub(super) facts: Facts,
     pub(super) older: Older,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Probe {
+    Older(Older),
+    Fine,
+    Failed,
+}
+
+fn probe_of(result: &anyhow::Result<String>) -> Probe {
+    match result {
+        Ok(_) => Probe::Fine,
+        Err(error) => cli::older_refusal(error).cloned().map_or(Probe::Failed, Probe::Older),
+    }
+}
+
+pub(super) fn sharing_destination(kept: &HashMap<String, KeptOlder>, first: &str, destination: &str) -> Vec<String> {
+    let mut sharing: Vec<String> =
+        kept.iter().filter(|(_, kept)| kept.older.destination == destination).map(|(name, _)| name.clone()).collect();
+    sharing.sort_by_key(|name| (name != first, name.clone()));
+    sharing
 }
 
 pub(super) fn still_current(asked: Option<Facts>, now: Option<&Facts>) -> Option<Facts> {
@@ -180,17 +219,22 @@ impl ThereState {
         self.older.insert(machine.to_owned(), kept.clone()) != Some(kept)
     }
 
-    fn probe_answered(&mut self, machine: &str, answer: (Facts, Option<Older>), current: Option<&Facts>) {
-        let (facts, older) = answer;
+    fn probe_answered(&mut self, machine: &str, answer: (Facts, Probe), current: Option<&Facts>) -> bool {
+        let (facts, probe) = answer;
         self.checks.insert(machine.to_owned(), Check::Answered { facts: facts.clone(), at: Instant::now() });
-        match older {
-            Some(older) => {
-                self.keep(machine, Some(facts), current, older);
-            }
-            None => {
-                self.older.remove(machine);
-            }
+        match probe {
+            Probe::Older(older) => self.keep(machine, Some(facts), current, older),
+            Probe::Fine => self.older.remove(machine).is_some(),
+            Probe::Failed => false,
         }
+    }
+
+    pub(super) fn recheck(&mut self, machine: &str) -> bool {
+        if self.checks.get(machine) == Some(&Check::InFlight) {
+            return false;
+        }
+        self.checks.remove(machine);
+        self.older.contains_key(machine)
     }
 }
 
@@ -334,7 +378,7 @@ impl Store {
         if !self.may_probe(seen) || !self.there.homes.ask(&machine, &boot) {
             return;
         }
-        self.probe_there(&machine, cx);
+        self.probe_there(&machine, None, cx);
     }
 
     pub(crate) fn listing(&self) -> Listing<'_> {
@@ -375,14 +419,14 @@ impl Store {
     fn keep_older(&mut self, machine: &str, asked: Option<Facts>, older: Older, cx: &mut Context<Self>) {
         let current = self.there_facts(machine);
         if self.there.keep(machine, asked, current.as_ref(), older) {
-            cx.notify();
+            self.older_changed(cx);
         }
     }
 
     fn check_there(&mut self, machine: &str, cx: &mut Context<Self>) {
         let Some(seen) = self.session.as_ref().and_then(|session| session.machine(machine)) else { return };
         if self.may_probe(seen) {
-            self.probe_there(machine, cx);
+            self.probe_there(machine, None, cx);
         }
     }
 
@@ -391,14 +435,23 @@ impl Store {
         may_check(&self.reach_seen(seen), last, &self.facts_of(seen), Instant::now())
     }
 
-    pub(super) fn probe_there(&mut self, machine: &str, cx: &mut Context<Self>) {
+    pub(super) fn probe_there(&mut self, machine: &str, busy: Option<Busy>, cx: &mut Context<Self>) {
         let Some(seen) = self.session.as_ref().and_then(|session| session.machine(machine)) else { return };
         let Ok(target) = self.machine_target(seen) else { return };
         let (machine, boot, facts) = (seen.name.clone(), seen.boot.clone(), self.facts_of(seen));
         self.there.checks.insert(machine.clone(), Check::InFlight);
-        run_on(cx, target, args(&["status", "--json"]), move |this: &mut Self, result, cx| {
-            this.probed((&machine, &boot), facts, &result, cx);
-        });
+        self.there.homes.ask(&machine, &boot);
+        let id = busy.map(|busy| self.start_job(busy, cx));
+        let args = args(&["status", "--json"]);
+        let job = id.map(|id| (cx.entity(), id));
+        run_with(
+            cx,
+            job,
+            move || cli::run_on(&target, &args, None),
+            move |this: &mut Self, result, cx| {
+                this.probed((&machine, &boot), facts, &result, cx);
+            },
+        );
     }
 
     fn probed(
@@ -410,17 +463,32 @@ impl Store {
     ) {
         let home = result.as_ref().ok().map(String::as_str).and_then(home_in);
         self.there.homes.answered(machine, boot, home);
-        let older = result.as_ref().err().and_then(cli::older_refusal).cloned();
         let current = self.there_facts(machine);
-        self.there.probe_answered(machine, (facts, older), current.as_ref());
+        if self.there.probe_answered(machine, (facts, probe_of(result)), current.as_ref()) {
+            self.older_changed(cx);
+        }
         cx.notify();
     }
 
+    fn older_changed(&mut self, cx: &mut Context<Self>) {
+        cx.notify();
+        self.follow_machine_tunnels(cx);
+    }
+
     pub(crate) fn recheck_there(&mut self, machine: &str, cx: &mut Context<Self>) {
-        let dropped = self.there.older.remove(machine).is_some();
-        self.there.checks.remove(machine);
-        if dropped {
-            cx.notify();
+        let updating =
+            self.there.older.get(machine).is_some_and(|kept| self.busy(&update_key(&kept.older.destination)));
+        if !updating && self.there.recheck(machine) {
+            self.probe_there(machine, None, cx);
+        }
+    }
+
+    pub(super) fn probe_after_update(&mut self, update: &UpdateThere, cx: &mut Context<Self>) {
+        let sharing = sharing_destination(&self.there.older, &update.machine, &update.destination);
+        for (at, machine) in sharing.into_iter().enumerate() {
+            self.there.checks.remove(&machine);
+            let busy = (at == 0).then(|| update_job(&update.destination, &update.machine));
+            self.probe_there(&machine, busy, cx);
         }
     }
 

@@ -1,15 +1,17 @@
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, Div, InteractiveElement as _, IntoElement, ParentElement as _, StatefulInteractiveElement as _,
-    Styled as _, div, prelude::FluentBuilder as _, px,
+    AnyElement, App, Div, InteractiveElement as _, IntoElement, ParentElement as _, Stateful,
+    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use crate::cli::{self, Target};
+use crate::dialogs::{self, Question};
 use crate::model::machines::NextTry;
 use crate::notify::tip;
 use crate::panels::queue;
-use crate::store::{MachineRead, OlderNote, Reach};
+use crate::platform::Os;
+use crate::store::{AfterUpdate, MachineRead, OlderNote, Reach, Store, UpdateOffer, UpdateThere, update_question};
 use crate::theme::colours;
 use crate::ui;
 use crate::ui::counting::Counting;
@@ -139,7 +141,34 @@ fn note_line(note: &Note, why: Option<&str>) -> AnyElement {
     div().id("on-machine-note").when_some(why, |d, why| d.tooltip(tip(why))).child(line).into_any_element()
 }
 
-pub(crate) fn strip(read: &MachineRead, retry: &Retry, counting: &Counting, read_only: bool) -> Div {
+pub(crate) fn ask_update_there(update: &UpdateThere, window: &mut Window, cx: &mut App) {
+    let (title, message, button) = update_question(&update.machine, AfterUpdate::Reads, Os::CURRENT);
+    let update = update.clone();
+    let question = Question::new(title, message, button, Vec::new())
+        .on_yes(move |cx| Store::get(cx).update(cx, |store, cx| store.update_on_machine(update.clone(), cx)));
+    dialogs::confirm(question, window, cx);
+}
+
+pub(crate) fn update_button(offer: &UpdateOffer) -> Option<Stateful<Div>> {
+    match offer {
+        UpdateOffer::Hidden => None,
+        UpdateOffer::Running(label) => Some(ui::busy_cut_button("update-there", label.clone())),
+        UpdateOffer::Ask(update) => {
+            let update = update.clone();
+            Some(
+                ui::cut_button("update-there", update.label())
+                    .on_click(move |_, window, cx| ask_update_there(&update, window, cx)),
+            )
+        }
+    }
+}
+
+pub(crate) fn strip(
+    read: &MachineRead,
+    retry: &Retry,
+    counting: &Counting,
+    (read_only, update): (bool, &UpdateOffer),
+) -> Div {
     let note = note(read, retry);
     if note.as_ref().is_some_and(Note::counts) {
         counting.drawn();
@@ -156,6 +185,7 @@ pub(crate) fn strip(read: &MachineRead, retry: &Retry, counting: &Counting, read
         .text_size(px(11.))
         .child(where_line(read, read_only))
         .children(note.map(|note| note_line(&note, retry.why.as_deref())))
+        .children(update_button(update).map(|button| div().flex().min_w_0().child(button)))
 }
 
 #[cfg(test)]

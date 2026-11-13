@@ -262,9 +262,10 @@ impl Render for ChangesPanel {
             .flex()
             .flex_col()
             .text_size(px(12.))
-            .children(
-                self.machine_shown().map(|read| on_machine::strip(read, &self.hearing.retry, &self.counting, true)),
-            )
+            .children(self.machine_shown().map(|read| {
+                let offer = Store::get(cx).read(cx).update_offer(read.reach.older());
+                on_machine::strip(read, &self.hearing.retry, &self.counting, (true, &offer))
+            }))
             .child(self.render_header(session, window, cx))
             .child(self.render_body(session, cx))
             .child(self.render_footer());

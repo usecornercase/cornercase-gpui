@@ -1,6 +1,7 @@
 use gpui::Context;
 
 use super::machine_read::Reach;
+use super::tunnels::Held;
 use super::{Store, ToastGo, ToastKind, remote_url};
 use crate::model::tunnels::{Gate, MachineOpen, Toward, open_gate};
 use crate::model::{Owner, WorkspaceThere};
@@ -19,6 +20,13 @@ pub(super) fn toast_go(toward: &Toward, port: u16) -> ToastGo {
 
 pub(crate) fn owner_on_machine(shown: Owner, machine: &str) -> Option<Owner> {
     (shown.machine() == Some(machine)).then_some(shown)
+}
+
+pub(crate) fn port_open(open: MachineOpen, held: Option<&Held>) -> MachineOpen {
+    match held {
+        Some(Held::Up { .. }) => MachineOpen::Open,
+        _ => open,
+    }
 }
 
 impl Store {
@@ -57,6 +65,12 @@ impl Store {
         let toward = Toward::Machine(name.to_string());
         let gate = self.machine_tunnel_gate(name);
         open_gate(gate, self.can_tunnel(&toward), || self.tunnel_refusal(&toward))
+    }
+
+    pub(crate) fn machine_open_at(&self, name: &str, port: Option<u16>) -> MachineOpen {
+        let toward = Toward::Machine(name.to_string());
+        let held = port.and_then(|port| self.held_tunnel(&toward, port));
+        port_open(self.machine_open(name), held)
     }
 
     pub(crate) fn machines_known(&self) -> bool {
