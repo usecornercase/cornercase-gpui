@@ -18,3 +18,14 @@ fn the_label_counts_lines_since_none_are_numbered() {
     let three = Selection::Chars { anchor: Caret { spot: 4, at: 1 }, head: Caret { spot: 6, at: 3 } };
     assert_eq!(picked(three), "3 lines");
 }
+
+#[test]
+fn a_selection_that_ends_at_the_start_of_the_next_line_keeps_the_line_break() {
+    let lines: Vec<String> = ["abc", "def"].map(str::to_string).into();
+    let to_end = Selection::Chars { anchor: Caret { spot: 0, at: 3 }, head: Caret { spot: 1, at: 0 } };
+    assert_eq!(selected_text(&lines, to_end), "\n");
+    let from_middle = Selection::Chars { anchor: Caret { spot: 0, at: 1 }, head: Caret { spot: 1, at: 0 } };
+    assert_eq!(selected_text(&lines, from_middle), "bc\n");
+    let inside = Selection::Chars { anchor: Caret { spot: 0, at: 1 }, head: Caret { spot: 1, at: 2 } };
+    assert_eq!(selected_text(&lines, inside), "bc\nde");
+}

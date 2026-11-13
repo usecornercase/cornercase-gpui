@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.1.69
 
-- **See what a queued agent did.** In the Queue, click a started entry whose pane is gone, a routine's run whose workspace was removed, or a run that failed or was missed, or press the message icon on a run that kept a result: a page beside the list shows when it was scheduled, started and finished, its agent, branch and pull request, and the agent's last message. Conversation loads the whole conversation, prompts and replies. Text shows it as plain text, so you can select any part and copy it with ⌘C; Copy takes all of it. The page updates by itself when the agent finishes another turn.
+- **See what a queued agent did.** In the Queue, click a started entry whose pane is gone, a routine's run whose workspace was removed, or a run that failed or was missed, or press the message icon on a run that kept a result: a page beside the list shows when it was scheduled, started and finished, its agent, branch and pull request, and the agent's last message. Conversation loads the newest 1,000 messages, prompts and replies, and says when earlier ones are left out. Text shows it as plain text, so you can select any part and copy it with ⌘C; Copy takes all of it. The page updates by itself when the agent finishes another turn.
 - It needs cornercase 0.13.51 or newer; with an older one the Queue works as before.
 
 ## 0.1.68

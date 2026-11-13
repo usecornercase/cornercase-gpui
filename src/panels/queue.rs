@@ -251,7 +251,7 @@ impl Render for QueuePanel {
         self.sync_flows(cx);
         self.sync_accounts(cx);
         let snapshot = Snapshot::new(app.as_ref(), session);
-        self.sync_detail(&entries, snapshot.results, cx);
+        self.sync_detail(&entries, snapshot.results, window, cx);
         let main = self.main(&entries, &snapshot, window, cx);
         let at = (Edge::Left, self.side_width.size());
         let side = self.form_view(window, cx).or_else(|| self.detail_view(&entries, &snapshot, cx));

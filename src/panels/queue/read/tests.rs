@@ -19,7 +19,7 @@ fn the_same_result_at_asks_nothing_and_a_new_one_asks_again() {
 fn once_the_conversation_was_wanted_every_later_ask_carries_it() {
     let (mut reads, first) = Reads::new(0, None);
     assert!(!first.talk);
-    assert!(reads.wants_talk().is_some_and(|ask| ask.talk));
+    assert!(reads.wants_talk(false).is_some_and(|ask| ask.talk));
     assert!(reads.moved(Some(1)).is_some_and(|ask| ask.talk));
     assert!(reads.again().talk);
 }
@@ -27,8 +27,8 @@ fn once_the_conversation_was_wanted_every_later_ask_carries_it() {
 #[test]
 fn choosing_the_conversation_again_asks_nothing_more() {
     let (mut reads, _) = Reads::new(0, None);
-    assert!(reads.wants_talk().is_some());
-    assert_eq!(reads.wants_talk(), None);
+    assert!(reads.wants_talk(false).is_some());
+    assert_eq!(reads.wants_talk(false), None);
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn an_older_answer_never_replaces_a_newer_one() {
 #[test]
 fn a_plain_answer_keeps_the_conversation_shown() {
     let (mut reads, _) = Reads::new(0, None);
-    let talk = reads.wants_talk().expect("the conversation is wanted");
+    let talk = reads.wants_talk(false).expect("the conversation is wanted");
     let plain = Ask { seq: talk.seq + 1, talk: false };
     assert_eq!(reads.answered(talk), Keep { facts: true, talk: true });
     assert_eq!(reads.answered(plain), Keep { facts: true, talk: false });
@@ -85,4 +85,12 @@ fn the_counter_hands_the_next_opening_a_base_above_every_ask_seen() {
 fn the_busy_mark_counts_the_conversation_job_only_over_a_conversation_shown() {
     assert_eq!(refreshing_keys(7, false), ["queue-show:7"]);
     assert_eq!(refreshing_keys(7, true), ["queue-show:7", "queue-show:7:talk"]);
+}
+
+#[test]
+fn the_conversation_can_be_asked_again_when_the_server_could_not_read_it() {
+    let (mut reads, _) = Reads::new(0, None);
+    assert!(reads.wants_talk(false).is_some());
+    assert_eq!(reads.wants_talk(false), None);
+    assert!(reads.wants_talk(true).is_some_and(|ask| ask.talk));
 }

@@ -44,8 +44,8 @@ impl Reads {
         self.ask()
     }
 
-    pub(super) fn wants_talk(&mut self) -> Option<Ask> {
-        if self.talk {
+    pub(super) fn wants_talk(&mut self, retry: bool) -> Option<Ask> {
+        if self.talk && !retry {
             return None;
         }
         self.talk = true;

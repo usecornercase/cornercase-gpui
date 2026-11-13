@@ -1,9 +1,9 @@
-use gpui::{ClipboardItem, Context, ListAlignment, ListOffset, ListState, Window, px};
+use gpui::{ClipboardItem, Context, Focusable as _, ListAlignment, ListOffset, ListState, Window, px};
 
 use super::QueuePanel;
 use super::data::Entry;
 use super::read::{Ask, Keep, Reads, failed, job_key, job_words, show_args};
-use super::result::{Answer, Page, Talk, copied, merged, page_after, shown_lines, with_talk};
+use super::result::{Answer, Page, Talk, can_retry_talk, copied, merged, page_after, shown_lines, survives, with_talk};
 use crate::cli;
 use crate::store::{self, Busy, Store, ToastKind};
 use crate::ui::selection::Selecting;
@@ -174,7 +174,9 @@ impl QueuePanel {
         let Some(detail) = self.detail.as_mut() else { return };
         detail.page = page;
         detail.selecting.clear();
-        let (id, ask) = (detail.id, (page == Page::Conversation).then(|| detail.reads.wants_talk()).flatten());
+        let retry = detail.answer.as_ref().is_some_and(can_retry_talk);
+        let wants = (page == Page::Conversation).then(|| detail.reads.wants_talk(retry)).flatten();
+        let (id, ask) = (detail.id, wants);
         if let Some(ask) = ask {
             self.ask(id, ask, cx);
         }
@@ -198,24 +200,35 @@ impl QueuePanel {
     }
 
     pub(super) fn copy_shown(&mut self, cx: &mut Context<Self>) {
-        let Some((answer, page)) = self.detail.as_ref().and_then(|d| Some((d.answer.as_ref()?, d.page))) else {
+        let Some((answer, page, plain)) =
+            self.detail.as_ref().and_then(|d| Some((d.answer.as_ref()?, d.page, d.view == View::Text)))
+        else {
             return;
         };
-        let Some(text) = copied(answer, page) else { return };
+        let Some(text) = copied(answer, page, plain) else { return };
         let what = if page == Page::Message { "the last message" } else { "the conversation" };
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         toast(format!("Copied {what}"), cx);
     }
 
-    pub(super) fn sync_detail(&mut self, entries: &[Entry], results: bool, cx: &mut Context<Self>) {
+    pub(super) fn sync_detail(
+        &mut self,
+        entries: &[Entry],
+        results: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(id) = self.detail.as_ref().map(|detail| detail.id) else { return };
-        let entry = entries.iter().find(|e| e.id == id).filter(|_| results);
-        let Some(entry) = entry else {
+        let Some(entry) = entries.iter().find(|e| e.id == id).filter(|_| survives(entries, id, results)) else {
             self.detail = None;
+            if self.focus.is_focused(window) {
+                window.focus(&self.filter.read(cx).focus_handle(cx));
+            }
             return;
         };
         let ask = self.detail.as_mut().and_then(|detail| detail.moved(entry));
         if let Some(ask) = ask {
+            self.seqs.seen(ask);
             cx.spawn(async move |this, cx| {
                 let _ = this.update(cx, |this, cx| this.ask(id, ask, cx));
             })

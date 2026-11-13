@@ -1,8 +1,8 @@
 use serde_json::json;
 
 use super::{
-    Answer, Fact, Kept, Page, Said, Talk, can_copy, copied, facts, merged, message_lines, notes, page_after,
-    results_offered, role_word, said_heading, talk_lines, time_words, with_talk,
+    Answer, Fact, Kept, Page, Said, Talk, can_copy, can_retry_talk, copied, facts, merged, message_lines, notes,
+    page_after, results_offered, role_word, said_heading, survives, talk_lines, time_words, with_talk,
 };
 use crate::cli::Version;
 use crate::panels::queue::data::Entry;
@@ -158,9 +158,9 @@ fn the_text_view_reads_as_the_command_line_prints_it() {
 fn copy_takes_what_is_shown() {
     let answer = Answer::read(fixture!("queue/show-conversation.json"), true).expect("the fixture");
     let message = answer.result.as_ref().map(|r| r.text.clone()).expect("a result");
-    assert_eq!(copied(&answer, Page::Message), Some(message));
+    assert_eq!(copied(&answer, Page::Message, false), Some(message));
     let Some(Talk::Said(talk)) = &answer.talk else { panic!("a conversation") };
-    assert_eq!(copied(&answer, Page::Conversation), Some(talk.lines.join("\n")));
+    assert_eq!(copied(&answer, Page::Conversation, false), Some(talk.lines.join("\n")));
 }
 
 #[test]
@@ -171,9 +171,9 @@ fn times_read_as_a_day_and_how_long_ago() {
 #[test]
 fn nothing_to_copy_is_none_and_never_the_message_for_the_conversation() {
     let custom = Answer::read(fixture!("queue/show-custom.json"), false).expect("the fixture");
-    assert_eq!(copied(&custom, Page::Message), None);
+    assert_eq!(copied(&custom, Page::Message, false), None);
     let plain = Answer::read(fixture!("queue/show-result.json"), false).expect("the fixture");
-    assert_eq!(copied(&plain, Page::Conversation), None);
+    assert_eq!(copied(&plain, Page::Conversation, false), None);
 }
 
 fn plain() -> Answer {
@@ -238,7 +238,7 @@ fn copy_is_offered_exactly_when_there_is_text_to_copy() {
     let custom = Answer::read(fixture!("queue/show-custom.json"), false).expect("the fixture");
     for answer in [plain(), talking(), custom] {
         for page in [Page::Message, Page::Conversation] {
-            assert_eq!(can_copy(&answer, page), copied(&answer, page).is_some());
+            assert_eq!(can_copy(&answer, page), copied(&answer, page, false).is_some());
         }
     }
 }
@@ -254,4 +254,30 @@ fn the_pull_request_comes_after_the_agent_and_before_the_branch() {
     assert_eq!(labels, ["Scheduled", "Result", "Agent", "Pull request", "Branch"]);
     assert_eq!(list[3].pull, Some(pr));
     assert!(facts(&run, None, TODAY, run.at).iter().all(|f| f.pull.is_none()));
+}
+
+#[test]
+fn a_tab_is_copied_as_the_spaces_the_text_view_shows() {
+    let text = json!({ "id": 1, "result": { "text": "a\tb", "conversation": true } }).to_string();
+    let answer = Answer::read(&text, false).expect("it reads");
+    assert_eq!(copied(&answer, Page::Message, false), Some("a\tb".to_string()));
+    assert_eq!(copied(&answer, Page::Message, true), Some("a    b".to_string()));
+}
+
+#[test]
+fn a_gone_record_can_be_asked_again_only_while_the_result_says_it_has_one() {
+    let text = json!({ "id": 1, "result": { "text": "x", "conversation": true }, "messages": null }).to_string();
+    let answer = Answer::read(&text, true).expect("it reads");
+    assert!(can_retry_talk(&answer));
+    let gone = Answer::read(fixture!("queue/show-gone.json"), true).expect("the fixture");
+    assert!(!can_retry_talk(&gone));
+    assert!(!can_retry_talk(&plain()));
+}
+
+#[test]
+fn the_detail_goes_when_its_entry_leaves_the_feed_or_the_release_stops_offering_it() {
+    let list = [entry()];
+    assert!(survives(&list, 3, true));
+    assert!(!survives(&list, 4, true));
+    assert!(!survives(&list, 3, false));
 }

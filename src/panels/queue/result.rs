@@ -200,13 +200,22 @@ pub(super) fn can_copy(answer: &Answer, page: Page) -> bool {
     }
 }
 
-pub(super) fn copied(answer: &Answer, page: Page) -> Option<String> {
+pub(super) fn copied(answer: &Answer, page: Page, plain: bool) -> Option<String> {
     let text = match (page, &answer.talk) {
         (Page::Conversation, Some(Talk::Said(said))) => said.lines.join("\n"),
         (Page::Conversation, _) => String::new(),
+        _ if plain => answer.lines.join("\n"),
         _ => answer.result.as_ref().map(|r| r.text.clone()).unwrap_or_default(),
     };
     (!text.trim().is_empty()).then_some(text)
+}
+
+pub(super) fn can_retry_talk(answer: &Answer) -> bool {
+    matches!(answer.talk, Some(Talk::Gone)) && answer.can_talk()
+}
+
+pub(super) fn survives(entries: &[Entry], id: u64, results: bool) -> bool {
+    results && entries.iter().any(|entry| entry.id == id)
 }
 
 pub(super) fn merged(before: Option<Answer>, mut answer: Answer, keep: Keep) -> (Answer, bool) {
