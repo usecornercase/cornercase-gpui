@@ -29,8 +29,8 @@ mod run_on;
 mod tunnels;
 mod update_there;
 
-pub(crate) use jobs::Busy;
 use jobs::Jobs;
+pub(crate) use jobs::{Busy, setup_key};
 use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, OlderNote, Reach, TabThere, release_clause};
 pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there, stale_note};
@@ -116,6 +116,8 @@ pub(crate) enum ToastGo {
     Update(Updating),
     Browse(String),
     Tunnelled(String, u16),
+    Job(Busy, Vec<String>),
+    Open(PanelKind),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -396,6 +398,8 @@ impl Store {
                 self.open_in_browser(url.clone(), owner, cx);
             }
             ToastGo::Tunnelled(machine, port) => self.open_tunnel(machine, *port, cx),
+            ToastGo::Job(busy, args) => self.run_aside(busy.clone(), args.clone(), cx),
+            ToastGo::Open(kind) => self.open(*kind, cx),
             ToastGo::Update(updating) => {
                 self.asks.open_update = Some(*updating);
                 cx.notify();

@@ -6,6 +6,8 @@ fn fixture(name: &str) -> Event {
         "notice-sound" => crate::test_util::fixture!("events/notice-sound.json"),
         "notice-machine" => crate::test_util::fixture!("events/notice-machine.json"),
         "clipboard" => crate::test_util::fixture!("events/clipboard.json"),
+        "message" => crate::test_util::fixture!("events/message.json"),
+        "message-workspace" => crate::test_util::fixture!("events/message-workspace.json"),
         "bell" => crate::test_util::fixture!("events/bell.json"),
         "status" => crate::test_util::fixture!("events/status.json"),
         "dropped" => crate::test_util::fixture!("events/dropped.json"),
@@ -79,6 +81,42 @@ fn other_events_are_skipped() {
     assert_eq!(fixture("opened"), Event::Other);
     assert_eq!(parse_event(r#"{"event":"something-new","x":1}"#), Some(Event::Other));
     assert_eq!(parse_event("pane 5  claude  working → waiting"), None);
+}
+
+#[test]
+fn reads_a_message_from_outside_any_pane() {
+    let Event::Message(m) = fixture("message") else { panic!("not a message") };
+    assert_eq!(m.kind, "notify");
+    assert_eq!(m.text, "the release build is ready");
+    assert_eq!(m.panes, Vec::<u64>::new());
+    assert_eq!(m.workspace, None);
+}
+
+#[test]
+fn reads_a_message_about_a_workspace() {
+    let Event::Message(m) = fixture("message-workspace") else { panic!("not a message") };
+    assert_eq!(m.kind, "flow-merged");
+    assert_eq!(m.text, "pull request merged in fix-login: 2 agents closed · ▶ on the workspace reopens them");
+    assert_eq!(m.panes, [4, 5]);
+    assert_eq!(m.workspace, Some(2));
+}
+
+#[test]
+fn a_message_of_a_kind_this_window_does_not_know_is_read() {
+    let line = r#"{"event":"message","kind":"tunnel-something","message":"x","panes":[]}"#;
+    assert!(matches!(parse_event(line), Some(Event::Message(m)) if m.kind == "tunnel-something"));
+}
+
+#[test]
+fn a_message_with_fields_of_a_newer_server_is_read() {
+    let line = r#"{"event":"message","kind":"notify","message":"x","entry":4,"severity":"high","project":1}"#;
+    assert!(matches!(parse_event(line), Some(Event::Message(_))));
+}
+
+#[test]
+fn a_message_without_text_is_skipped_and_the_next_line_still_reads() {
+    assert_eq!(parse_event(r#"{"event":"message","kind":"notify"}"#), None);
+    assert!(matches!(fixture("message"), Event::Message(_)));
 }
 
 fn snapshot() -> AppState {
