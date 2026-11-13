@@ -308,6 +308,7 @@ impl Render for Browser {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_address(window, cx);
         self.sync_agents(window, cx);
+        self.keep_the_keys(window, cx);
         let strip = self.machine_strip(cx);
         let panel = div()
             .size_full()

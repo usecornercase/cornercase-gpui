@@ -18,6 +18,29 @@ pub(crate) struct Input {
     pub(crate) typing: Typing,
     pub(crate) choice: Option<Choice>,
     pub(crate) bounds: Rc<Cell<Bounds<Pixels>>>,
+    pub(crate) page_waits: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum KeysGo {
+    Stay,
+    Page,
+    Address,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Held {
+    Viewport,
+    Address,
+    Elsewhere,
+}
+
+pub(crate) fn keys_go(held: Held, page_shown: bool, page_waits: bool) -> KeysGo {
+    match held {
+        Held::Viewport if !page_shown => KeysGo::Address,
+        Held::Address if page_waits && page_shown => KeysGo::Page,
+        _ => KeysGo::Stay,
+    }
 }
 
 pub(crate) fn selection_script(cut: bool) -> Value {
@@ -46,6 +69,27 @@ impl Browser {
 
     pub(crate) fn has_focus(&self, window: &Window, cx: &App) -> bool {
         self.page_focused(window) || (self.shown && self.address.read(cx).focus_handle(cx).is_focused(window))
+    }
+
+    pub(super) fn keep_the_keys(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let address = self.address.read(cx).focus_handle(cx);
+        let page_shown = matches!(self.status, super::Status::Ready(_)) && self.tabs.active(&self.place).is_some();
+        let held = if self.focus.is_focused(window) {
+            Held::Viewport
+        } else if address.is_focused(window) {
+            Held::Address
+        } else {
+            Held::Elsewhere
+        };
+        let go = keys_go(held, page_shown, self.input.page_waits);
+        if held != Held::Address || go == KeysGo::Page {
+            self.input.page_waits = false;
+        }
+        match go {
+            KeysGo::Stay => {}
+            KeysGo::Page => cx.defer_in(window, |this, window, _| window.focus(&this.focus)),
+            KeysGo::Address => cx.defer_in(window, move |_, window, _| window.focus(&address)),
+        }
     }
 
     pub(crate) fn escape(&mut self, cx: &mut Context<Self>) {
