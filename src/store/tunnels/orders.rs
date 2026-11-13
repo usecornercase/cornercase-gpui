@@ -14,17 +14,7 @@ use crate::store;
 
 impl Store {
     pub(crate) fn orders_gate_of(&self, toward: &Toward) -> Gate {
-        match toward {
-            Toward::Server => {
-                let server = self.session.as_ref().map(crate::model::Session::release);
-                server.map_or(Gate::Waiting, |server| orders_gate(self.heard_release(), server))
-            }
-            Toward::Machine(name) => {
-                let server =
-                    crate::model::machines::run_on::server_release(Some(name), self.session.as_ref(), &self.machines);
-                orders_gate(self.heard_release(), server)
-            }
-        }
+        self.release_gate(toward, orders_gate)
     }
 
     pub(crate) fn orders_notes(&self, towards: &[Toward]) -> Vec<String> {

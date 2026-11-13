@@ -9,7 +9,8 @@ pub(crate) use orders::{Order, OrdersLine, failed_args, orders_args, orders_line
 
 pub(crate) const TUNNEL_HOLD_SINCE: Version = Version::new(0, 13, 50);
 pub(crate) const TUNNEL_ORDERS_SINCE: Version = Version::new(0, 13, 57);
-pub(crate) const REVERSE_ISSUE: &str = "usecornercase/cornercase-terminal#794";
+pub(crate) const TUNNEL_LOCAL_SINCE: Version = Version::new(0, 13, 61);
+pub(crate) const TUNNEL_REVERSE_SINCE: Version = Version::new(0, 13, 61);
 pub(crate) const ELSEWHERE_ISSUE: &str = "usecornercase/cornercase-terminal#787";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -21,12 +22,34 @@ pub(crate) struct TunnelSeen {
     pub error: Option<String>,
     pub holder: u64,
     pub kind: String,
+    pub direction: Option<String>,
+}
+
+impl TunnelSeen {
+    pub(crate) fn forward(&self) -> bool {
+        matches!(self.direction.as_deref(), None | Some("forward"))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(from = "RawHeldLine")]
 pub(crate) struct HeldLine {
     pub port: u16,
     pub local: u16,
+    pub reverse: bool,
+}
+
+#[derive(Deserialize)]
+struct RawHeldLine {
+    port: u16,
+    local: u16,
+    direction: Option<String>,
+}
+
+impl From<RawHeldLine> for HeldLine {
+    fn from(raw: RawHeldLine) -> Self {
+        Self { port: raw.port, local: raw.local, reverse: raw.direction.as_deref() == Some("reverse") }
+    }
 }
 
 pub(crate) fn held_line(line: &str) -> Option<HeldLine> {
@@ -118,6 +141,15 @@ pub(crate) fn machine_gate(here: Release, server: Option<Version>) -> Gate {
     gate(TUNNEL_HOLD_SINCE, here, server)
 }
 
+pub(crate) fn reverse_gate(here: Release, server: Option<Version>) -> Gate {
+    gate(TUNNEL_REVERSE_SINCE, here, server)
+}
+
+pub(crate) fn local_to_ask(here: Release, port: u16, before: Option<u16>) -> Option<u16> {
+    let Release::Read(Some(version)) = here else { return None };
+    (version >= TUNNEL_LOCAL_SINCE).then_some(before).flatten().filter(|local| *local != port)
+}
+
 pub(crate) fn orders_gate(here: Release, server: Option<Version>) -> Gate {
     gate(TUNNEL_ORDERS_SINCE, here, server)
 }
@@ -153,6 +185,11 @@ fn older_words(older: &Older, machine: &str) -> (String, String) {
 pub(crate) fn gate_note(older: &Older, machine: &str) -> String {
     let (place, has) = older_words(older, machine);
     format!("Tunnel needs cornercase {TUNNEL_HOLD_SINCE} or newer on {place}{has}.")
+}
+
+pub(crate) fn reverse_note(older: &Older, name: &str) -> String {
+    let (place, has) = older_words(older, name);
+    format!("needs cornercase {TUNNEL_REVERSE_SINCE} or newer on {place}{has}")
 }
 
 pub(crate) fn orders_note(older: &Older, host: &str) -> String {

@@ -1,6 +1,7 @@
 use super::{
-    Gate, Older, Release, TUNNEL_HOLD_SINCE, TUNNEL_ORDERS_SINCE, Toward, Way, gate_note, held_line, machine_gate,
-    older_note, orders_gate, orders_note, way,
+    Gate, Older, Release, TUNNEL_HOLD_SINCE, TUNNEL_LOCAL_SINCE, TUNNEL_ORDERS_SINCE, Toward, TunnelSeen, Way,
+    gate_note, held_line, local_to_ask, machine_gate, older_note, orders_gate, orders_note, reverse_gate, reverse_note,
+    way,
 };
 use crate::cli::Version;
 use crate::model::Session;
@@ -8,6 +9,8 @@ use crate::test_util::fixture;
 
 const VIEW_LINE: &str = fixture!("tunnels/view_line.json");
 const HELD_LINE: &str = fixture!("tunnels/held_line.txt");
+const VIEW_LINE_REVERSE: &str = fixture!("tunnels/view_line_reverse.json");
+const HELD_REVERSE: &str = fixture!("tunnels/held_reverse.txt");
 const SESSION: &str = fixture!("session/held.json");
 
 fn release(text: &str) -> Release {
@@ -173,4 +176,72 @@ fn a_side_is_known_older_only_once_its_release_is_read() {
     assert!(!Gate::Older(Older::Server(None)).known_older());
     assert!(!Gate::Waiting.known_older());
     assert!(!Gate::Open.known_older());
+}
+
+#[test]
+fn a_view_line_reads_a_reverse_holds_direction() {
+    let session: Session = serde_json::from_str(VIEW_LINE_REVERSE).expect("a view line");
+    let [tunnel] = session.tunnels.as_slice() else { panic!("one tunnel") };
+    assert_eq!(tunnel.direction.as_deref(), Some("reverse"));
+    assert!(!tunnel.forward());
+    let old: Session = serde_json::from_str(VIEW_LINE).expect("a view line");
+    assert!(old.tunnels[0].forward());
+}
+
+#[test]
+fn an_unknown_direction_is_not_forward() {
+    let seen: TunnelSeen = serde_json::from_str(r#"{"port":1,"direction":"sideways"}"#).expect("it parses");
+    assert!(!seen.forward());
+    let plain: TunnelSeen = serde_json::from_str(r#"{"port":1,"direction":"forward"}"#).expect("it parses");
+    assert!(plain.forward());
+}
+
+#[test]
+fn a_reverse_holds_line_is_no_forward_held_line() {
+    let reverse = held_line(HELD_REVERSE).expect("a held line");
+    assert!(reverse.reverse);
+    assert_eq!((reverse.port, reverse.local), (53816, 8111));
+    assert!(!held_line(HELD_LINE).expect("a held line").reverse);
+}
+
+#[test]
+fn the_local_port_is_asked_from_0_13_61_on_this_computer() {
+    assert_eq!(local_to_ask(release("0.13.61"), 8765, Some(61011)), Some(61011));
+    assert_eq!(local_to_ask(release("0.13.70"), 8765, Some(61011)), Some(61011));
+    assert_eq!(local_to_ask(release("0.13.60"), 8765, Some(61011)), None);
+    assert_eq!(local_to_ask(Release::Read(None), 8765, Some(61011)), None);
+    assert_eq!(local_to_ask(Release::Unread, 8765, Some(61011)), None);
+}
+
+#[test]
+fn the_local_port_is_not_asked_when_it_is_the_port_or_unknown() {
+    assert_eq!(local_to_ask(release("0.13.61"), 8765, Some(8765)), None);
+    assert_eq!(local_to_ask(release("0.13.61"), 8765, None), None);
+}
+
+#[test]
+fn the_server_plays_no_part_in_the_local_port() {
+    assert_eq!(TUNNEL_LOCAL_SINCE, Version::new(0, 13, 61));
+}
+
+#[test]
+fn reverse_holds_need_0_13_61_here_and_on_the_server() {
+    let new = Version::parse("0.13.61");
+    let old = Version::parse("0.13.60");
+    assert_eq!(reverse_gate(release("0.13.61"), new), Gate::Open);
+    assert_eq!(reverse_gate(release("0.13.60"), new), Gate::Older(Older::ThisComputer(old)));
+    assert_eq!(reverse_gate(release("0.13.61"), old), Gate::Older(Older::Server(old)));
+    assert_eq!(reverse_gate(Release::Unread, new), Gate::Waiting);
+}
+
+#[test]
+fn the_reverse_note_names_the_side_and_its_release() {
+    let old = Version::parse("0.13.60");
+    let here = reverse_note(&Older::ThisComputer(old), "vps");
+    assert_eq!(here, format!("needs cornercase 0.13.61 or newer on this {} (it has 0.13.60)", crate::desktop::here()));
+    assert_eq!(
+        reverse_note(&Older::Server(old), "vps"),
+        "needs cornercase 0.13.61 or newer on vps (its server runs 0.13.60)"
+    );
+    assert_eq!(reverse_note(&Older::Server(None), "vps"), "needs cornercase 0.13.61 or newer on vps");
 }

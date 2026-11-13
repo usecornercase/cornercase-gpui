@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::held::{Held, Hold};
+use super::reverse::{ReverseHold, ReverseState};
 use crate::model::machines::listed;
 use crate::model::tunnels::{ELSEWHERE_ISSUE, Gate, Older, Toward, TunnelSeen, orders_note};
 
@@ -18,6 +19,7 @@ pub(crate) enum Whose {
     Up { local: u16 },
     Opening,
     Down { why: String },
+    Reverse { there: Option<u16> },
     Window,
     Program,
     ClosedElsewhere,
@@ -32,7 +34,7 @@ pub(crate) struct TunnelRow {
 
 impl TunnelRow {
     pub(crate) fn ours(&self) -> bool {
-        matches!(self.whose, Whose::Up { .. } | Whose::Opening | Whose::Down { .. })
+        matches!(self.whose, Whose::Up { .. } | Whose::Opening | Whose::Down { .. } | Whose::Reverse { .. })
     }
 
     pub(crate) fn text(&self) -> String {
@@ -41,6 +43,8 @@ impl TunnelRow {
             Whose::Up { local } => format!("⇄ {port} → localhost:{local} · up"),
             Whose::Opening => format!("⇄ {port} · opening"),
             Whose::Down { .. } => format!("⇄ {port} · down"),
+            Whose::Reverse { there: Some(there) } => format!("⇄ {there} ← this Chrome · open"),
+            Whose::Reverse { there: None } => "⇄ this Chrome · opening".to_string(),
             Whose::Window => format!("⇄ {port} · in another window"),
             Whose::Program => format!("⇄ {port} · in another program"),
             Whose::ClosedElsewhere => format!("⇄ {port} · closed in another window"),
@@ -48,8 +52,16 @@ impl TunnelRow {
     }
 }
 
-pub(crate) fn count(ours: &[Hold]) -> usize {
-    ours.iter().filter(|hold| hold.state != Held::Ending).count()
+pub(crate) fn count(ours: &[Hold], reverses: usize) -> usize {
+    ours.iter().filter(|hold| hold.state != Held::Ending).count() + reverses
+}
+
+fn reverse_row(toward: &Toward, hold: &ReverseHold) -> TunnelRow {
+    let there = match hold.state {
+        ReverseState::Opening => None,
+        ReverseState::Open { there } => Some(there),
+    };
+    TunnelRow { toward: toward.clone(), port: there.unwrap_or(0), whose: Whose::Reverse { there } }
 }
 
 fn ours_row(hold: &Hold) -> Option<TunnelRow> {
@@ -63,7 +75,8 @@ fn ours_row(hold: &Hold) -> Option<TunnelRow> {
 }
 
 fn is_ours(seen: &TunnelSeen, ours: &[&Hold]) -> bool {
-    seen.kind == "hold"
+    seen.forward()
+        && seen.kind == "hold"
         && ours.iter().any(|hold| hold.port == seen.port && hold.local().is_none_or(|local| Some(local) == seen.local))
 }
 
@@ -82,33 +95,40 @@ fn on_server(held: &[Hold]) -> Vec<&Hold> {
     held.iter().filter(|hold| hold.toward == Toward::Server).collect()
 }
 
-pub(crate) fn menu_rows(listed: &[TunnelSeen], held: &[Hold]) -> Vec<TunnelRow> {
+pub(crate) fn menu_rows(listed: &[TunnelSeen], held: &[Hold], reverse: Option<&ReverseHold>) -> Vec<TunnelRow> {
     let ours = on_server(held);
     let mine = ours.iter().copied().filter_map(ours_row);
-    let others = listed.iter().filter(|seen| !is_ours(seen, &ours)).map(others_row);
+    let others = listed.iter().filter(|seen| seen.forward() && !is_ours(seen, &ours)).map(others_row);
     let mut rows: Vec<TunnelRow> = mine.chain(others).collect();
     rows.sort_by_key(|row| (row.port, !row.ours()));
+    rows.extend(reverse.map(|hold| reverse_row(&Toward::Server, hold)));
     rows
 }
 
-pub(crate) fn machine_sections(holds: &[Hold]) -> Vec<(String, Vec<TunnelRow>)> {
+pub(crate) fn machine_sections(
+    holds: &[Hold],
+    reverses: &BTreeMap<Toward, ReverseHold>,
+) -> Vec<(String, Vec<TunnelRow>)> {
     let mut by_machine: BTreeMap<String, Vec<TunnelRow>> = BTreeMap::new();
     for row in holds.iter().filter_map(ours_row) {
         if let Toward::Machine(name) = &row.toward {
             by_machine.entry(name.clone()).or_default().push(row);
         }
     }
-    by_machine.into_iter().map(|(name, rows)| (name, sorted(rows))).collect()
-}
-
-fn sorted(mut rows: Vec<TunnelRow>) -> Vec<TunnelRow> {
-    rows.sort_by_key(|row| row.port);
-    rows
+    for rows in by_machine.values_mut() {
+        rows.sort_by_key(|row| row.port);
+    }
+    for (toward, hold) in reverses {
+        if let Toward::Machine(name) = toward {
+            by_machine.entry(name.clone()).or_default().push(reverse_row(toward, hold));
+        }
+    }
+    by_machine.into_iter().collect()
 }
 
 pub(crate) fn elsewhere(port: u16, listed: &[TunnelSeen], held: &[Hold]) -> bool {
     let ours = on_server(held);
-    listed.iter().any(|seen| seen.port == port && seen.state != "closed" && !is_ours(seen, &ours))
+    listed.iter().any(|seen| seen.forward() && seen.port == port && seen.state != "closed" && !is_ours(seen, &ours))
 }
 
 pub(crate) fn row_control(can_tunnel: bool, held: Option<&Held>) -> Control {

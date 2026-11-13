@@ -1,9 +1,12 @@
+use std::collections::BTreeMap;
+
 use super::{
     Control, Whose, count, elsewhere, machine_sections, mark, menu_rows, orders_notes, others_note, row_control,
 };
 use crate::cli::Version;
 use crate::model::tunnels::{Gate, Older, Toward, TunnelSeen};
 use crate::store::tunnels::held::{Held, Hold, test_hold};
+use crate::store::tunnels::reverse::{ReverseHold, ReverseState};
 
 fn ours(port: u16, state: Held) -> Hold {
     test_hold(Toward::Server, port, state)
@@ -14,7 +17,15 @@ fn there(name: &str, port: u16, state: Held) -> Hold {
 }
 
 fn seen(port: u16, local: Option<u16>, state: &str, kind: &str) -> TunnelSeen {
-    TunnelSeen { port, local, state: state.to_string(), error: None, holder: 3, kind: kind.to_string() }
+    TunnelSeen {
+        port,
+        local,
+        state: state.to_string(),
+        error: None,
+        holder: 3,
+        kind: kind.to_string(),
+        direction: None,
+    }
 }
 
 #[test]
@@ -25,8 +36,8 @@ fn the_count_is_what_this_window_holds() {
         ours(3, Held::Down { why: "x".to_string() }),
         ours(4, Held::Ending),
     ];
-    assert_eq!(count(&holds), 3);
-    assert_eq!(count(&[]), 0);
+    assert_eq!(count(&holds, 0), 3);
+    assert_eq!(count(&[], 0), 0);
 }
 
 #[test]
@@ -38,7 +49,7 @@ fn the_menu_says_whose_each_tunnel_is() {
         seen(8080, Some(8080), "up", "hold"),
         seen(9000, None, "closed", "window"),
     ];
-    let texts: Vec<String> = menu_rows(&listed, &holds).iter().map(super::TunnelRow::text).collect();
+    let texts: Vec<String> = menu_rows(&listed, &holds, None).iter().map(super::TunnelRow::text).collect();
     assert_eq!(
         texts,
         [
@@ -53,16 +64,16 @@ fn the_menu_says_whose_each_tunnel_is() {
 #[test]
 fn this_windows_hold_is_told_by_its_port_and_local_port() {
     let holds = [ours(5173, Held::Up { local: 5174 })];
-    let rows = menu_rows(&[seen(5173, Some(6000), "up", "hold")], &holds);
+    let rows = menu_rows(&[seen(5173, Some(6000), "up", "hold")], &holds, None);
     assert_eq!(rows.len(), 2);
     assert!(rows.iter().any(|row| row.whose == Whose::Program));
 }
 
 #[test]
 fn a_hold_not_listed_yet_still_shows_as_opening() {
-    let rows = menu_rows(&[], &[ours(5173, Held::Opening)]);
+    let rows = menu_rows(&[], &[ours(5173, Held::Opening)], None);
     assert_eq!(rows.iter().map(super::TunnelRow::text).collect::<Vec<_>>(), ["⇄ 5173 · opening"]);
-    let down = menu_rows(&[], &[ours(5173, Held::Down { why: "ssh stopped".to_string() })]);
+    let down = menu_rows(&[], &[ours(5173, Held::Down { why: "ssh stopped".to_string() })], None);
     assert_eq!(down[0].text(), "⇄ 5173 · down");
 }
 
@@ -96,7 +107,7 @@ fn the_machines_tunnels_are_listed_by_machine_then_port() {
         there("vps", 3000, Held::Opening),
         there("vps", 4000, Held::Ending),
     ];
-    let sections = machine_sections(&holds);
+    let sections = machine_sections(&holds, &BTreeMap::new());
     let names: Vec<&str> = sections.iter().map(|(name, _)| name.as_str()).collect();
     assert_eq!(names, ["cap", "vps"]);
     let vps: Vec<String> = sections[1].1.iter().map(super::TunnelRow::text).collect();
@@ -106,8 +117,8 @@ fn the_machines_tunnels_are_listed_by_machine_then_port() {
 #[test]
 fn the_count_takes_both_kinds_and_the_server_menu_only_its_own() {
     let holds = [ours(1, Held::Opening), there("vps", 1, Held::Opening)];
-    assert_eq!(count(&holds), 2);
-    let rows = menu_rows(&[], &holds);
+    assert_eq!(count(&holds, 0), 2);
+    let rows = menu_rows(&[], &holds, None);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].toward, Toward::Server);
 }
@@ -171,4 +182,64 @@ fn a_machines_older_server_is_its_own_line() {
     let lines = orders_notes(&[gate_of("vps", older), gate_of("lab", Gate::Open)]);
     let [line] = lines.as_slice() else { panic!("one line") };
     assert!(line.starts_with("A program on vps cannot ask") && line.ends_with("on vps (its server runs 0.13.56)."));
+}
+
+fn reverse_seen(port: u16) -> TunnelSeen {
+    let line: serde_json::Value =
+        serde_json::from_str(crate::test_util::fixture!("tunnels/view_line_reverse.json")).expect("the line parses");
+    let mut found: TunnelSeen = serde_json::from_value(line["tunnels"][0].clone()).expect("a tunnel entry");
+    found.port = port;
+    found
+}
+
+fn reversing(state: ReverseState) -> ReverseHold {
+    ReverseHold { destination: "vps.invalid".to_string(), label: "vps".to_string(), process: 9, state, job: None }
+}
+
+#[test]
+fn a_reverse_hold_another_program_holds_is_no_row() {
+    let rows = menu_rows(&[reverse_seen(41234)], &[], None);
+    assert_eq!(rows.len(), 0, "{rows:?}");
+}
+
+#[test]
+fn a_reverse_hold_is_never_seen_as_elsewhere() {
+    assert!(!elsewhere(41234, &[reverse_seen(41234)], &[]));
+}
+
+#[test]
+fn a_reverse_hold_on_the_port_of_this_windows_hold_is_not_taken_for_it() {
+    let holds = [ours(41234, Held::Opening)];
+    let rows = menu_rows(&[reverse_seen(41234)], &holds, None);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].whose, Whose::Opening);
+    let mut mixed = reverse_seen(41234);
+    mixed.direction = None;
+    mixed.kind = "hold".to_string();
+    mixed.local = Some(41234);
+    let own = [ours(41234, Held::Up { local: 41234 })];
+    assert_eq!(menu_rows(&[mixed], &own, None).len(), 1);
+}
+
+#[test]
+fn this_windows_reverse_hold_is_its_own_row_and_counts() {
+    let open = reversing(ReverseState::Open { there: 41234 });
+    let rows = menu_rows(&[], &[], Some(&open));
+    assert_eq!(rows[0].text(), "⇄ 41234 ← this Chrome · open");
+    assert!(rows[0].ours());
+    let opening = reversing(ReverseState::Opening);
+    assert_eq!(menu_rows(&[], &[], Some(&opening))[0].text(), "⇄ this Chrome · opening");
+    assert_eq!(count(&[ours(1, Held::Opening)], 1), 2);
+}
+
+#[test]
+fn a_machine_with_only_a_reverse_hold_has_its_section() {
+    let reverses =
+        BTreeMap::from([(Toward::Machine("vps".to_string()), reversing(ReverseState::Open { there: 41234 }))]);
+    let only = machine_sections(&[], &reverses);
+    assert_eq!(only.len(), 1);
+    let holds = [there("vps", 8765, Held::Up { local: 63235 })];
+    let both = machine_sections(&holds, &reverses);
+    let texts: Vec<String> = both[0].1.iter().map(super::TunnelRow::text).collect();
+    assert_eq!(texts, ["⇄ 8765 → localhost:63235 · up", "⇄ 41234 ← this Chrome · open"]);
 }

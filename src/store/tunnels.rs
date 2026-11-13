@@ -7,8 +7,10 @@ use gpui::Context;
 
 use super::browse::{listed_gate, toast_go};
 use super::{Busy, Store, ToastKind};
-use crate::cli::{self, Ended};
-use crate::model::tunnels::{Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, machine_gate, way};
+use crate::cli::{self, Ended, Holding, Version};
+use crate::model::tunnels::{
+    Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, local_to_ask, machine_gate, way,
+};
 
 mod closing;
 mod held;
@@ -16,17 +18,19 @@ mod links;
 mod machines;
 mod memory;
 mod orders;
+mod reverse;
 mod rows;
 mod taker;
 
 pub(crate) use held::{Asked, Held};
 pub(crate) use links::MachineLink;
+pub(crate) use reverse::{ReverseHold, ReverseState, address_there};
 use rows::Mark;
 pub(crate) use rows::{Control, TunnelRow, Whose, heading, none_note, others_note};
 
 use held::{
-    Fate, Hold, Reached, Settled, bring_back, fate, forgets_failed, live, remembers, settle_now, up_toast,
-    window_failure,
+    Again, Fate, Hold, Reached, Settled, again_of, bring_back, came_back, fate, forgets_failed, live, local_before,
+    remembers, settle_now, up_toast, window_failure,
 };
 
 const SETTLE_AFTER: Duration = Duration::from_secs(3);
@@ -34,6 +38,7 @@ const SETTLE_AFTER: Duration = Duration::from_secs(3);
 #[derive(Default)]
 pub(crate) struct Tunnels {
     holds: Vec<Hold>,
+    reverses: BTreeMap<Toward, ReverseHold>,
     link: Option<String>,
     machines: BTreeMap<String, String>,
     settling: Vec<Settling>,
@@ -70,10 +75,17 @@ pub(crate) fn remote_url(port: u16) -> String {
     format!("http://localhost:{port}/")
 }
 
-fn listen_to_hold(process: u64, mut rx: futures::channel::mpsc::UnboundedReceiver<Heard>, cx: &mut Context<Store>) {
+type HeardBy = fn(&mut Store, u64, Heard, &mut Context<Store>);
+
+fn listen_to_hold(
+    process: u64,
+    mut rx: futures::channel::mpsc::UnboundedReceiver<Heard>,
+    on: HeardBy,
+    cx: &mut Context<Store>,
+) {
     cx.spawn(async move |this, cx| {
         while let Some(heard) = rx.next().await
-            && this.update(cx, |this, cx| this.hold_heard(process, heard, cx)).is_ok()
+            && this.update(cx, |this, cx| on(this, process, heard, cx)).is_ok()
         {}
     })
     .detach();
@@ -134,7 +146,20 @@ impl Store {
     }
 
     pub(crate) fn tunnel_count(&self) -> usize {
-        rows::count(&self.tunnels.holds)
+        rows::count(&self.tunnels.holds, self.tunnels.reverses.len())
+    }
+
+    fn release_gate(&self, toward: &Toward, make: fn(Release, Option<Version>) -> Gate) -> Gate {
+        match toward {
+            Toward::Server => {
+                self.session.as_ref().map_or(Gate::Waiting, |session| make(self.heard_release(), session.release()))
+            }
+            Toward::Machine(name) => {
+                let server =
+                    crate::model::machines::run_on::server_release(Some(name), self.session.as_ref(), &self.machines);
+                make(self.heard_release(), server)
+            }
+        }
     }
 
     fn listed_tunnels(&self) -> &[TunnelSeen] {
@@ -142,11 +167,11 @@ impl Store {
     }
 
     pub(crate) fn tunnel_rows(&self) -> Vec<TunnelRow> {
-        rows::menu_rows(self.listed_tunnels(), &self.tunnels.holds)
+        rows::menu_rows(self.listed_tunnels(), &self.tunnels.holds, self.tunnels.reverses.get(&Toward::Server))
     }
 
     pub(crate) fn machine_tunnel_sections(&self) -> Vec<(String, Vec<TunnelRow>)> {
-        rows::machine_sections(&self.tunnels.holds)
+        rows::machine_sections(&self.tunnels.holds, &self.tunnels.reverses)
     }
 
     pub(crate) fn tunnel_control(&self, toward: &Toward, port: u16) -> Control {
@@ -176,15 +201,21 @@ impl Store {
         &mut self,
         toward: &Toward,
         port: u16,
-        (asked, attempts): (Asked, Option<u32>),
+        (asked, again): (Asked, Option<Again>),
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         let reached = self.reached(toward)?;
-        let (process, rx) = self.spawn_hold(&reached, port, cx)?;
+        let remembered = memory::remembered_local(&reached.destination, port);
+        let local = local_to_ask(self.heard_release(), port, local_before(again, remembered));
+        let spawned = Self::spawn_hold(&reached, Holding::Forward { port, local });
+        let (process, rx) = spawned.inspect_err(|why| {
+            self.toast(window_failure(&reached.toward, port, why), ToastKind::Error, cx);
+        })?;
         let mut hold = Hold::opening(&reached, port, process, asked);
+        hold.asked_local = local;
         let busy = Busy::new(job_key(toward, port), format!("Opening a tunnel to port {port} on {}…", reached.label));
         hold.job = Some(self.start_job(busy, cx));
-        if let Some(attempts) = attempts {
+        if let Some(Again { attempts, .. }) = again {
             hold.attempts = attempts;
             hold.was_up = true;
         }
@@ -193,22 +224,20 @@ impl Store {
         if remembers(asked) {
             self.remember_tunnel(&reached.destination, port, true, cx);
         }
-        listen_to_hold(process, rx, cx);
+        listen_to_hold(process, rx, Self::hold_heard, cx);
         cx.notify();
         Ok(())
     }
 
     fn spawn_hold(
-        &mut self,
         reached: &Reached,
-        port: u16,
-        cx: &mut Context<Self>,
+        holding: Holding,
     ) -> Result<(u64, futures::channel::mpsc::UnboundedReceiver<Heard>), String> {
         let (lines, rx) = unbounded::<Heard>();
         let ends = lines.clone();
         let started = cli::hold(
             &reached.target,
-            port,
+            holding,
             move |line| {
                 let _ = lines.unbounded_send(Heard::Line(line));
             },
@@ -224,7 +253,6 @@ impl Store {
             }
             Err(e) => cli::reason(&e),
         };
-        self.toast(window_failure(&reached.toward, port, &why), ToastKind::Error, cx);
         Err(why)
     }
 
@@ -240,7 +268,7 @@ impl Store {
     fn hold_heard(&mut self, process: u64, heard: Heard, cx: &mut Context<Self>) {
         match heard {
             Heard::Line(line) => {
-                if let Some(held) = held_line(&line) {
+                if let Some(held) = held_line(&line).filter(|held| !held.reverse) {
                     self.hold_up(process, held.local, cx);
                 }
             }
@@ -258,15 +286,26 @@ impl Store {
         hold.last_local = Some(local);
         let (port, asked, job) = (hold.port, hold.asked, hold.job.take());
         let (toward, label) = (hold.toward.clone(), hold.label().to_string());
+        let (destination, wanted) = (hold.destination.clone(), hold.asked_local);
         if let Some(job) = job {
             self.end_job(job, cx);
         }
-        if let Some((text, open)) = up_toast(asked, port, local, &label) {
+        self.note_local(&destination, port, local, cx);
+        let said = up_toast(asked, port, local, &label)
+            .or_else(|| came_back(asked, (port, local), wanted, &label).map(|text| (text, true)));
+        if let Some((text, open)) = said {
             let go = toast_go(&toward, port);
             let action = open.then(|| ("Open".to_string(), go));
             self.toast_with(text, ToastKind::Info, action, cx);
         }
         cx.notify();
+    }
+
+    fn note_local(&mut self, destination: &str, port: u16, local: u16, cx: &mut Context<Self>) {
+        let saved = memory::save_noted(|text| memory::note_local(text, destination, port, local));
+        if let Err(e) = saved {
+            self.toast(format!("Could not save the tunnels to bring back: {e:#}"), ToastKind::Error, cx);
+        }
     }
 
     fn hold_ended(&mut self, process: u64, ended: &Ended, cx: &mut Context<Self>) {
@@ -321,8 +360,9 @@ impl Store {
         if !self.can_tunnel(toward) || !self.linked(toward) {
             return;
         }
+        let again = again_of(&self.tunnels.holds[at]);
         self.tunnels.holds.remove(at);
-        let _ = self.start_hold(toward, port, (Asked::Retry, Some(attempts)), cx);
+        let _ = self.start_hold(toward, port, (Asked::Retry, Some(again)), cx);
     }
 
     pub(crate) fn follow_tunnels(&mut self, cx: &mut Context<Self>) {
@@ -333,6 +373,8 @@ impl Store {
 
     fn follow_own_tunnels(&mut self, cx: &mut Context<Self>) {
         let way = self.tunnel_way();
+        let reverse_ends = way != Way::Cornercase || self.reverse_gate_of(&Toward::Server).known_older();
+        self.follow_own_reverse(reverse_ends, cx);
         if way != Way::Cornercase {
             self.end_own_holds(&way, cx);
             self.tunnels.link = None;

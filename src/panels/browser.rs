@@ -54,7 +54,13 @@ use gpui::{
     Subscription, Window, div, px,
 };
 
+use agent::Menu;
+use agent::far::own_reverse_stays;
+use tunnels::Tunnels;
+
+use crate::cli;
 use crate::model::Owner;
+use crate::model::tunnels::Toward;
 use crate::panels::PanelKind;
 use crate::store::Store;
 use crate::theme::colours;
@@ -214,11 +220,23 @@ impl Browser {
             cx.notify();
         }
         self.dev_changed(store, cx);
+        self.reverse_changed(store, cx);
         self.held_changed(cx);
         self.repoint_tabs(store, cx);
     }
 
+    fn reverse_changed(&mut self, store: &Entity<Store>, cx: &mut Context<Self>) {
+        let gate = store.read(cx).reverse_gate_of(&Toward::Server);
+        if cli::host().is_some() && !own_reverse_stays(gate) {
+            Tunnels::drop_own_reverse();
+        }
+        if self.agents.menu == Some(Menu::Agents) {
+            cx.notify();
+        }
+    }
+
     fn ended(&mut self, why: String, cx: &mut Context<Self>) {
+        Store::get(cx).update(cx, Store::chrome_stopped);
         let tabs = std::mem::take(&mut self.tabs);
         self.restore = tabs.list.iter().map(Restore::of).collect();
         self.stale.borrow_mut().extend(tabs.list.into_iter().filter_map(|t| t.shot.map(|s| s.image)));

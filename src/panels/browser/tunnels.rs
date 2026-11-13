@@ -106,6 +106,10 @@ impl Tunnels {
         self.pending.clear();
     }
 
+    pub(crate) fn drop_own_reverse() {
+        ssh::drop_reverse_unless(None);
+    }
+
     pub(crate) fn reverse(&self, host: &str, browser: u16) -> Option<u16> {
         ssh::reverse(host, browser, &self.events)
     }

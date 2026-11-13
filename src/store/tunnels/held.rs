@@ -41,6 +41,7 @@ pub(crate) struct Hold {
     pub(crate) attempts: u32,
     pub(crate) job: Option<u64>,
     pub(crate) last_local: Option<u16>,
+    pub(crate) asked_local: Option<u16>,
     pub(crate) added: bool,
 }
 
@@ -58,6 +59,7 @@ impl Hold {
             attempts: 0,
             job: None,
             last_local: None,
+            asked_local: None,
             added: false,
         }
     }
@@ -75,6 +77,20 @@ impl Hold {
             _ => None,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Again {
+    pub(crate) attempts: u32,
+    pub(crate) local: Option<u16>,
+}
+
+pub(crate) fn again_of(hold: &Hold) -> Again {
+    Again { attempts: hold.attempts, local: hold.last_local.or(hold.asked_local) }
+}
+
+pub(crate) fn local_before(again: Option<Again>, remembered: Option<u16>) -> Option<u16> {
+    again.and_then(|again| again.local).or(remembered)
 }
 
 pub(crate) fn live<'a>(holds: &'a [Hold], toward: &Toward, port: u16) -> Option<&'a Hold> {
@@ -193,6 +209,21 @@ pub(crate) fn up_toast(asked: Asked, port: u16, local: u16, host: &str) -> Optio
         Asked::Open if moved => Some((tunnelled(port, local, host, true), false)),
         Asked::Open | Asked::Back | Asked::Retry => None,
     }
+}
+
+pub(crate) fn came_back(asked: Asked, (port, local): (u16, u16), wanted: Option<u16>, host: &str) -> Option<String> {
+    let wanted = wanted.filter(|wanted| *wanted != local)?;
+    if !matches!(asked, Asked::Back | Asked::Retry) {
+        return None;
+    }
+    Some(if local == port {
+        format!("Port {port} on {host} is back on localhost:{local} (it was on localhost:{wanted})")
+    } else {
+        format!(
+            "Port {port} on {host} is back on localhost:{local} (localhost:{wanted}, where it was, is taken on this {})",
+            crate::desktop::here()
+        )
+    })
 }
 
 fn taken_on_this(port: u16, moved: bool) -> String {

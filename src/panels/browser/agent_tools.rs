@@ -1,19 +1,22 @@
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, ClickEvent, ClipboardItem, Context, Corner, Div, InteractiveElement as _, IntoElement, MouseButton,
-    MouseDownEvent, ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, anchored,
-    deferred, div, point, prelude::FluentBuilder as _, px,
+    AnyElement, App, ClickEvent, ClipboardItem, Context, Corner, Div, InteractiveElement as _, IntoElement,
+    MouseButton, MouseDownEvent, ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _,
+    Styled as _, Window, anchored, deferred, div, point, prelude::FluentBuilder as _, px,
 };
 
 use super::Browser;
 use super::agent::Hand;
+use super::agent::far::{self, Drive};
 use super::agent::{Agent, Menu, driving_note, no_agent_there, toast};
 use super::shots::Shot;
+use crate::cli;
 use crate::dialogs;
-use crate::model::tunnels::REVERSE_ISSUE;
+use crate::dialogs::Question;
+use crate::model::tunnels::Toward;
 use crate::notify::tip;
-use crate::store::ToastKind;
+use crate::store::{Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, Tone, glass};
 
@@ -110,24 +113,76 @@ impl Browser {
         div().relative().flex_none().child(button).children(menu)
     }
 
+    fn far_name(&self) -> String {
+        self.place.machine().map(str::to_string).or_else(cli::host).unwrap_or_default()
+    }
+
     fn agents_menu(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let there = self.place.machine().map(str::to_string);
-        let endpoint = there.is_none().then(|| self.agent_endpoint()).flatten();
-        let drives = there.as_deref().map(machine_agents_notes);
+        let drive = self.drive(cx);
+        let name = self.far_name();
+        let endpoint = self.agent_endpoint(&drive);
+        let shows_endpoint = matches!(drive, Drive::Here | Drive::Own | Drive::Open(_));
+        let copied = matches!(drive, Drive::Open(_)).then(|| far::copied_words(&name));
         menu_card("browser-agents-menu", 320., cx)
             .child(ui::section("Agents and this browser").px(px(10.)).pt(px(6.)))
-            .child(div().px(px(10.)).text_size(px(12.)).text_color(colours::muted()).child(match drives.as_ref() {
-                Some([said, _]) => said.clone(),
-                None => {
-                    "Agents can drive this Chrome over the DevTools protocol, and you see their tabs here.".to_string()
-                }
-            }))
-            .children(drives.map(|[_, needs]| div().px(px(10.)).pt(px(2.)).text_size(px(12.)).child(ui::dim(needs))))
-            .children(there.is_none().then(|| endpoint_row(endpoint.clone(), cx).into_any_element()))
+            .child(div().px(px(10.)).text_size(px(12.)).text_color(colours::muted()).child(far::says(&drive, &name)))
+            .children(drive_note(&drive, &name))
+            .children(self.open_control(&drive, &name, cx))
+            .children(shows_endpoint.then(|| endpoint_row(endpoint.clone(), copied, cx).into_any_element()))
             .child(self.tell_row(endpoint.is_some(), cx))
+            .children(self.close_control(&drive, &name, cx))
             .children(self.agent_rows(cx))
             .child(div().mx(px(6.)).my(px(4.)).h(px(1.)).bg(colours::border()))
             .child(self.toggles(cx))
+    }
+
+    fn open_control(&self, drive: &Drive, name: &str, cx: &mut Context<Self>) -> Option<AnyElement> {
+        match drive {
+            Drive::Opening => Some(far_busy(far::opening_words(name))),
+            Drive::Closed if self.port().is_none() => Some(far_busy("Starting the browser…".to_string())),
+            Drive::Closed => {
+                let toward = self.place.toward(cli::host().as_deref())?;
+                let name = name.to_string();
+                let tip_text = format!("Asks first: every user and program on {name} could then drive it");
+                let label = far::open_label(&name);
+                let row = entry("browser-agents-open-far", Icon::Share, label).tooltip(tip(tip_text));
+                Some(
+                    row.on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                        this.agents.menu = None;
+                        Self::ask_to_open(toward.clone(), &name, window, cx);
+                        cx.notify();
+                    }))
+                    .into_any_element(),
+                )
+            }
+            _ => None,
+        }
+    }
+
+    fn close_control(&self, drive: &Drive, name: &str, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let Drive::Open(_) = drive else { return None };
+        let toward = self.place.toward(cli::host().as_deref())?;
+        let row = entry("browser-agents-close-far", Icon::Close, far::close_label(name));
+        Some(
+            row.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                this.agents.menu = None;
+                Store::get(cx).update(cx, |s, cx| s.close_reverse(&toward, cx));
+                cx.notify();
+            }))
+            .into_any_element(),
+        )
+    }
+
+    fn ask_to_open(toward: Toward, name: &str, window: &mut Window, cx: &mut App) {
+        let (title, message, button) = far::confirm_words(name);
+        let question = Question::new(title, message, button, Vec::new()).on_yes(move |cx| {
+            let chrome = super::running(cx).and_then(|browser| browser.read(cx).port());
+            Store::get(cx).update(cx, |s, cx| match chrome {
+                Some(chrome) => s.open_reverse(&toward, chrome, cx),
+                None => s.not_opened("This Chrome is not running", cx),
+            });
+        });
+        dialogs::confirm(question, window, cx);
     }
 
     fn no_agent_row(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -147,7 +202,6 @@ impl Browser {
 
     fn tell_row(&self, ready: bool, cx: &mut Context<Self>) -> AnyElement {
         let Some(agent) = self.target_agent(cx) else { return self.no_agent_row(cx) };
-        let Agent::Here(_) = agent else { return div().into_any_element() };
         let label = format!("Tell {} about it", Self::agent_name_on(&agent, cx));
         entry("browser-agents-tell", Icon::Send, label)
             .when(!ready, |e| e.opacity(0.35))
@@ -194,8 +248,8 @@ impl Browser {
     }
 
     fn tell_agent(&mut self, cx: &mut Context<Self>) {
-        let Some(agent @ Agent::Here(_)) = self.target_agent(cx) else { return };
-        let Some(url) = self.agent_endpoint() else { return };
+        let Some(agent) = self.target_agent(cx) else { return };
+        let Some(url) = self.agent_endpoint(&self.drive(cx)) else { return };
         self.agents.menu = None;
         let said = format!("Told {} where this Chrome runs", Self::agent_name_on(&agent, cx));
         Self::hand(&agent, Hand { text: driving_note(&url), files: Vec::new(), submit: false }, said, cx);
@@ -216,7 +270,26 @@ fn shots_menu(cx: &mut Context<Browser>) -> impl IntoElement + use<> {
         )
 }
 
-fn endpoint_row(endpoint: Option<String>, cx: &mut Context<Browser>) -> impl IntoElement + use<> {
+fn drive_note(drive: &Drive, name: &str) -> Option<AnyElement> {
+    match drive {
+        Drive::Needs(why) => {
+            Some(div().px(px(10.)).pt(px(2.)).text_size(px(12.)).child(ui::dim(why.clone())).into_any_element())
+        }
+        Drive::Own => Some(ui::warning_line(far::own_exposure(name)).mx(px(10.)).mt(px(4.)).into_any_element()),
+        Drive::Open(_) => Some(ui::warning_line(far::exposure(name)).mx(px(10.)).mt(px(4.)).into_any_element()),
+        Drive::Here | Drive::Closed | Drive::Opening => None,
+    }
+}
+
+fn far_busy(text: String) -> AnyElement {
+    div().px(px(10.)).py(px(6.)).child(ui::busy("browser-agents-far", text)).into_any_element()
+}
+
+fn endpoint_row(
+    endpoint: Option<String>,
+    copied_words: Option<String>,
+    cx: &mut Context<Browser>,
+) -> impl IntoElement + use<> {
     let Some(url) = endpoint else {
         return div().px(px(10.)).py(px(6.)).child(ui::busy("browser-agents-endpoint", "Starting the browser…"));
     };
@@ -236,16 +309,10 @@ fn endpoint_row(endpoint: Option<String>, cx: &mut Context<Browser>) -> impl Int
         .child(ui::tool_button("browser-agents-copy", Icon::Copy, 22., false).tooltip(tip("Copy")).on_click(
             cx.listener(move |_, _: &ClickEvent, _, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(copied.clone()));
-                toast("Copied the browser's DevTools address", ToastKind::Info, cx);
+                let words = copied_words.clone().unwrap_or_else(|| "Copied the browser's DevTools address".to_string());
+                toast(words, ToastKind::Info, cx);
             }),
         ))
-}
-
-pub(crate) fn machine_agents_notes(machine: &str) -> [String; 2] {
-    [
-        format!("Agents on {machine} cannot drive this Chrome: it runs on this {}.", crate::desktop::here()),
-        format!("needs {REVERSE_ISSUE}"),
-    ]
 }
 
 pub(super) fn reloaded(label: String) -> impl IntoElement {

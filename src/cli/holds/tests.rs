@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use super::{Ended, args, end_hold, hold_with};
+use super::{Ended, Holding, end_hold, hold_with};
 use crate::cli::{Remote, Target};
 
 const WAIT: Duration = Duration::from_secs(20);
@@ -11,10 +11,27 @@ const WAIT: Duration = Duration::from_secs(20);
 #[test]
 fn a_hold_runs_tunnel_hold_with_the_windows_remote_flags() {
     let target = Target::Remote(Remote::new("devbox", "~/bin/cornercase").expect("a destination"));
-    let command = target.command(&args(5173));
+    let command = target.command(&Holding::Forward { port: 5173, local: None }.args());
     let all: Vec<&OsStr> = command.get_args().collect();
     assert_eq!(all, ["--remote", "devbox", "--remote-command", "~/bin/cornercase", "tunnel", "hold", "5173"]);
     assert!(command.get_envs().any(|(name, value)| name == "CORNERCASE_REMOTE" && value.is_none()));
+}
+
+#[test]
+fn a_hold_started_again_asks_for_its_local_port() {
+    let target = Target::Remote(Remote::new("devbox", "~/bin/cornercase").expect("a destination"));
+    let command = target.command(&Holding::Forward { port: 5173, local: Some(54012) }.args());
+    let all: Vec<&OsStr> = command.get_args().collect();
+    assert_eq!(all[4..], ["tunnel", "hold", "5173", "--local", "54012"].map(OsStr::new));
+}
+
+#[test]
+fn a_reverse_hold_names_the_local_port_and_no_port_there() {
+    let target = Target::Remote(Remote::new("devbox", "~/bin/cornercase").expect("a destination"));
+    let command = target.command(&Holding::Reverse { local: 9222 }.args());
+    let all: Vec<&OsStr> = command.get_args().collect();
+    assert_eq!(all[4..], ["tunnel", "hold", "--reverse", "9222"].map(OsStr::new));
+    assert!(all.iter().all(|arg| *arg != "--there"));
 }
 
 enum Heard {

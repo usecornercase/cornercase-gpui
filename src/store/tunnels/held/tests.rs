@@ -1,6 +1,6 @@
 use super::{
-    Asked, Fate, Held, Hold, Settled, bring_back, fate, forgets_after_close, forgets_failed, live, remembers,
-    settle_now, settled, test_hold, up_toast, window_failure,
+    Again, Asked, Fate, Held, Hold, Settled, again_of, bring_back, came_back, fate, forgets_after_close,
+    forgets_failed, live, local_before, remembers, settle_now, settled, test_hold, up_toast, window_failure,
 };
 use crate::model::tunnels::Toward;
 
@@ -183,4 +183,52 @@ fn a_failed_hold_forgets_only_the_port_it_added() {
     assert!(!forgets_failed(&failed, false));
     assert!(!forgets_failed(&Fate::Gone, true));
     assert!(!forgets_failed(&Fate::Retry("x".to_string()), true));
+}
+
+#[test]
+fn a_restarted_hold_asks_for_the_local_port_it_had() {
+    let mut up = hold(Held::Up { local: 61011 }, true);
+    up.last_local = Some(61011);
+    assert_eq!(again_of(&up).local, Some(61011));
+    let mut failed = hold(Held::Opening, true);
+    failed.asked_local = Some(61011);
+    assert_eq!(again_of(&failed).local, Some(61011));
+    failed.attempts = 2;
+    assert_eq!(again_of(&failed).attempts, 2);
+}
+
+#[test]
+fn a_hold_brought_back_asks_for_the_remembered_local_port() {
+    assert_eq!(local_before(None, Some(61011)), Some(61011));
+    let again = Again { attempts: 1, local: Some(1) };
+    assert_eq!(local_before(Some(again), Some(2)), Some(1));
+    assert_eq!(local_before(Some(Again { attempts: 1, local: None }), Some(2)), Some(2));
+}
+
+#[test]
+fn a_quiet_hold_that_came_back_elsewhere_says_where_and_why() {
+    let here = crate::desktop::here();
+    for asked in [Asked::Back, Asked::Retry] {
+        assert_eq!(
+            came_back(asked, (8765, 61023), Some(61011), "vps").as_deref(),
+            Some(format!("Port 8765 on vps is back on localhost:61023 (localhost:61011, where it was, is taken on this {here})").as_str())
+        );
+        assert_eq!(
+            came_back(asked, (8765, 8765), Some(61011), "vps").as_deref(),
+            Some("Port 8765 on vps is back on localhost:8765 (it was on localhost:61011)")
+        );
+    }
+}
+
+#[test]
+fn a_quiet_hold_back_where_it_was_says_nothing() {
+    assert_eq!(came_back(Asked::Back, (8765, 61011), Some(61011), "vps"), None);
+    assert_eq!(came_back(Asked::Retry, (8765, 61023), None, "vps"), None);
+}
+
+#[test]
+fn a_click_keeps_its_own_words_when_it_moved() {
+    assert_eq!(came_back(Asked::Click, (8765, 61023), Some(61011), "vps"), None);
+    assert_eq!(came_back(Asked::Program, (8765, 61023), Some(61011), "vps"), None);
+    assert_eq!(came_back(Asked::Open, (8765, 61023), Some(61011), "vps"), None);
 }

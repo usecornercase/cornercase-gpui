@@ -14,7 +14,8 @@ impl Store {
         let held = self.tunnels.holds.iter().map(|hold| &hold.toward);
         let settling = self.tunnels.settling.iter().map(|settling| &settling.toward);
         let taking = self.tunnels.takers.keys();
-        followed(listed.chain(seen).chain(linked), held.chain(settling).chain(taking))
+        let reversing = self.tunnels.reverses.keys();
+        followed(listed.chain(seen).chain(linked), held.chain(settling).chain(taking).chain(reversing))
     }
 
     pub(crate) fn machine_link(&self, name: &str) -> MachineLink {
@@ -54,5 +55,6 @@ impl Store {
         let (ended, kept) = split_stale(std::mem::take(&mut self.tunnels.holds), &toward, &link);
         self.tunnels.holds = kept;
         self.end_holds_now(ended, cx);
+        self.follow_machine_reverse(name, cx);
     }
 }

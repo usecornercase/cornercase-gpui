@@ -6,6 +6,7 @@ use crate::test_util::fixture;
 
 const TAKING: &str = fixture!("tunnels/orders_taking.json");
 const TAKING_HELD: &str = fixture!("tunnels/orders_taking_held.json");
+const TAKING_REVERSE: &str = fixture!("tunnels/orders_taking_reverse.json");
 const OPEN: &str = fixture!("tunnels/order_open.txt");
 const CLOSE: &str = fixture!("tunnels/order_close.txt");
 const FORGET: &str = fixture!("tunnels/order_forget.txt");
@@ -77,4 +78,11 @@ fn a_machines_orders_run_with_its_destination_only() {
 #[test]
 fn a_refusal_is_one_line_after_a_separator() {
     assert_eq!(failed_args(8765, "-x\n  second"), ["tunnel", "failed", "--", "8765", "-x second"]);
+}
+
+#[test]
+fn a_taking_line_that_lists_a_reverse_hold_still_reads() {
+    let Some(OrdersLine::Taking(list)) = orders_line(TAKING_REVERSE) else { panic!("a taking line") };
+    assert_eq!(list.tunnels.len(), 1);
+    assert!(!list.tunnels[0].forward());
 }
