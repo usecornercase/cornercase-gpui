@@ -366,6 +366,11 @@ up_starts_an_agent_on_there_with_a_child() {
   contains "$t/b.out" "pane 3, its child pane 4"
 }
 
+up_says_how_to_send_the_window_there() {
+  contains "$t/b.out" "there.invalid" || return 1
+  contains "$t/b.out" "machines edit vps --destination there.invalid"
+}
+
 up_accepts_an_older_there() {
   printf older > "$t/control/state"
   runb up "$t/b4" --here "$t/new/cornercase" --there "$t/old/cornercase"
@@ -464,7 +469,7 @@ the_stand_in_runs_a_command_on_there_by_its_second_name() {
   runs_a_link_against_there_as there.invalid
 }
 
-each_name_of_there_is_held_on_its_own() {
+the_stand_in_holds_each_name_on_its_own() {
   snap
   : > "$b/ssh/vps.invalid.held"
   stand_in -- there.invalid "sh -c 'exec cornercase status'"
@@ -894,11 +899,6 @@ status_names_the_files_of_both_names() {
   check "vps.invalid.held is not named" contains "$t/out" "ssh/vps.invalid.held is there"
 }
 
-up_says_how_to_send_the_window_there() {
-  contains "$t/b.out" "there.invalid" || return 1
-  contains "$t/b.out" "machines edit vps --destination there.invalid"
-}
-
 status_names_both_remembered_lists() {
   runb status "$b"
   check "status: exit $rc" [ "$rc" = 0 ] || return 1
@@ -945,6 +945,7 @@ run_test up_refuses_an_empty_release
 run_test up_refuses_a_folder_whose_parent_is_a_link_out_of_tmp
 run_test up_links_there_as_vps
 run_test up_starts_an_agent_on_there_with_a_child
+run_test up_says_how_to_send_the_window_there
 run_test up_accepts_an_older_there
 run_test up_stops_its_servers_when_it_fails_and_keeps_its_folder
 run_test up_says_why_an_unreachable_machine_failed
@@ -954,7 +955,7 @@ run_test there_cannot_reach_here
 run_test the_stand_in_runs_a_link_against_there
 run_test the_stand_in_refuses_while_held
 run_test the_stand_in_runs_a_command_on_there_by_its_second_name
-run_test each_name_of_there_is_held_on_its_own
+run_test the_stand_in_holds_each_name_on_its_own
 run_test the_stand_in_runs_the_command_while_slow_is_zero
 run_test the_stand_in_answers_127_while_missing
 run_test the_stand_in_refuses_other_hosts_masters_and_shells
@@ -969,7 +970,6 @@ run_test the_stand_in_answers_a_host_lookup_without_any_config
 run_test the_log_keeps_each_command_line_quoted
 run_test the_fake_agent_reports_states_and_spawns_a_child
 run_test status_names_the_files_of_both_names
-run_test up_says_how_to_send_the_window_there
 run_test status_names_both_remembered_lists
 run_test status_and_down_refuse_a_folder_up_did_not_make
 run_test down_refuses_from_inside_the_bench

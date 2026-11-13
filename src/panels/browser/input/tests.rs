@@ -28,25 +28,37 @@ fn an_empty_selection_leaves_the_clipboard_alone() {
 
 #[test]
 fn a_typed_address_keeps_the_keys_in_the_address_until_its_page_shows() {
-    assert_eq!(keys_go(Held::Address, false, true), KeysGo::Stay);
+    assert_eq!(keys_go(KeysAt::Address, false, Waiting::Same), (KeysGo::Stay, true));
 }
 
 #[test]
 fn the_page_takes_the_keys_once_the_typed_page_shows() {
-    assert_eq!(keys_go(Held::Address, true, true), KeysGo::Page);
+    assert_eq!(keys_go(KeysAt::Address, true, Waiting::Same), (KeysGo::Page, false));
 }
 
 #[test]
 fn a_page_that_went_away_hands_its_keys_to_the_address() {
-    assert_eq!(keys_go(Held::Viewport, false, false), KeysGo::Address);
+    assert_eq!(keys_go(KeysAt::Viewport, false, Waiting::No), (KeysGo::Address, false));
 }
 
 #[test]
 fn a_page_with_the_keys_keeps_them() {
-    assert_eq!(keys_go(Held::Viewport, true, false), KeysGo::Stay);
+    assert_eq!(keys_go(KeysAt::Viewport, true, Waiting::No), (KeysGo::Stay, false));
 }
 
 #[test]
 fn an_address_nobody_waits_on_keeps_the_keys_when_its_page_shows() {
-    assert_eq!(keys_go(Held::Address, true, false), KeysGo::Stay);
+    assert_eq!(keys_go(KeysAt::Address, true, Waiting::No), (KeysGo::Stay, false));
+}
+
+#[test]
+fn an_address_edited_while_its_page_waits_keeps_the_keys_and_drops_the_wait() {
+    assert_eq!(keys_go(KeysAt::Address, true, Waiting::Edited), (KeysGo::Stay, false));
+    assert_eq!(keys_go(KeysAt::Address, false, Waiting::Edited), (KeysGo::Stay, false));
+}
+
+#[test]
+fn a_click_elsewhere_drops_the_wait_for_the_page() {
+    assert_eq!(keys_go(KeysAt::Elsewhere, false, Waiting::Same), (KeysGo::Stay, false));
+    assert_eq!(keys_go(KeysAt::Elsewhere, true, Waiting::Same), (KeysGo::Stay, false));
 }

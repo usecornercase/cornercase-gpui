@@ -159,10 +159,8 @@ impl Browser {
             TextFieldEvent::Submit => {
                 let text = field.read(cx).text();
                 self.go_to(&text, cx);
-                self.input.page_waits = self.tabs.active(&self.place).is_none();
-                if !self.input.page_waits {
-                    window.focus(&self.focus);
-                }
+                self.input.page_waits = Some(text);
+                cx.notify();
             }
             TextFieldEvent::Cancel => {
                 let url = self.active_url().unwrap_or_default();

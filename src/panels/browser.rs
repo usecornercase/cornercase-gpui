@@ -242,6 +242,10 @@ impl Browser {
         }
     }
 
+    pub(super) fn page_shown(&self) -> bool {
+        matches!(self.status, Status::Ready(_)) && self.tabs.active(&self.place).is_some()
+    }
+
     fn active_url(&self) -> Option<String> {
         self.tabs.active(&self.place).map(|t| t.url.clone())
     }
@@ -263,7 +267,7 @@ impl Browser {
         let content = match &self.status {
             Status::Starting => Self::starting().into_any_element(),
             Status::Failed(why) => Self::failed(why, cx).into_any_element(),
-            Status::Ready(_) if self.tabs.active(&self.place).is_none() => self.start_page(cx).into_any_element(),
+            Status::Ready(_) if !self.page_shown() => self.start_page(cx).into_any_element(),
             Status::Ready(_) => self.viewport(window, cx).into_any_element(),
         };
         let overlay = self.agent_overlay(window, cx);

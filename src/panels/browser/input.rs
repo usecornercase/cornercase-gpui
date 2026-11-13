@@ -18,7 +18,7 @@ pub(crate) struct Input {
     pub(crate) typing: Typing,
     pub(crate) choice: Option<Choice>,
     pub(crate) bounds: Rc<Cell<Bounds<Pixels>>>,
-    pub(crate) page_waits: bool,
+    pub(crate) page_waits: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -29,17 +29,25 @@ pub(crate) enum KeysGo {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Held {
+pub(crate) enum KeysAt {
     Viewport,
     Address,
     Elsewhere,
 }
 
-pub(crate) fn keys_go(held: Held, page_shown: bool, page_waits: bool) -> KeysGo {
-    match held {
-        Held::Viewport if !page_shown => KeysGo::Address,
-        Held::Address if page_waits && page_shown => KeysGo::Page,
-        _ => KeysGo::Stay,
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Waiting {
+    No,
+    Same,
+    Edited,
+}
+
+pub(crate) fn keys_go(at: KeysAt, page_shown: bool, waiting: Waiting) -> (KeysGo, bool) {
+    match (at, waiting) {
+        (KeysAt::Viewport, _) if !page_shown => (KeysGo::Address, false),
+        (KeysAt::Address, Waiting::Same) if page_shown => (KeysGo::Page, false),
+        (KeysAt::Address, Waiting::Same) => (KeysGo::Stay, true),
+        _ => (KeysGo::Stay, false),
     }
 }
 
@@ -73,17 +81,22 @@ impl Browser {
 
     pub(super) fn keep_the_keys(&mut self, window: &Window, cx: &mut Context<Self>) {
         let address = self.address.read(cx).focus_handle(cx);
-        let page_shown = matches!(self.status, super::Status::Ready(_)) && self.tabs.active(&self.place).is_some();
-        let held = if self.focus.is_focused(window) {
-            Held::Viewport
+        let at = if self.focus.is_focused(window) {
+            KeysAt::Viewport
         } else if address.is_focused(window) {
-            Held::Address
+            KeysAt::Address
         } else {
-            Held::Elsewhere
+            KeysAt::Elsewhere
         };
-        let go = keys_go(held, page_shown, self.input.page_waits);
-        if held != Held::Address || go == KeysGo::Page {
-            self.input.page_waits = false;
+        let typed = self.address.read(cx).text();
+        let waiting = match &self.input.page_waits {
+            None => Waiting::No,
+            Some(text) if *text == typed => Waiting::Same,
+            Some(_) => Waiting::Edited,
+        };
+        let (go, waits) = keys_go(at, self.page_shown(), waiting);
+        if !waits {
+            self.input.page_waits = None;
         }
         match go {
             KeysGo::Stay => {}
