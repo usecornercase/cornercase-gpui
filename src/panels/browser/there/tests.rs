@@ -1,4 +1,4 @@
-use super::{Fate, fate};
+use super::{Fate, fate, refused_why};
 use crate::cli::Version;
 use crate::model::machines::seen::{MachineSeen, ThereId, ThereProject, ThereWorkspace, WorkspaceThere};
 use crate::model::machines::{LinkState, Machine};
@@ -52,6 +52,10 @@ fn down() -> Reach {
 
 fn unlisted() -> Reach {
     Reach::Refused("vps is no longer listed".into())
+}
+
+fn waiting_for_the_list() -> Reach {
+    Reach::Waiting("waiting for the machines list".into())
 }
 
 fn old() -> Option<Version> {
@@ -126,7 +130,8 @@ fn a_listed_machine_missing_from_the_snapshot_ends_its_holds_and_its_tabs() {
 #[test]
 fn a_machine_that_links_before_the_list_is_read_keeps_its_holds_and_its_tabs() {
     let s = linked();
-    let facts = Facts { listed: None, known: false, machines: std::slice::from_ref(&s), reach: Some(unlisted()) };
+    let facts =
+        Facts { listed: None, known: false, machines: std::slice::from_ref(&s), reach: Some(waiting_for_the_list()) };
     for gate in gates() {
         assert_eq!(answers(&owner(&s), &facts, gate), (true, Fate::Stays), "{gate:?}");
     }
@@ -190,4 +195,24 @@ fn a_tab_opened_before_the_list_named_a_destination_is_never_pointed_elsewhere()
     assert_eq!(answers(&blank, &linked_up, Gate::Open).1, Fate::Stays);
     let waiting = Facts { listed: Some(&same), known: true, machines: &[unreachable()], reach: Some(down()) };
     assert_eq!(answers(&blank, &waiting, Gate::Open).1, Fate::Stays);
+}
+
+#[test]
+fn a_machine_refused_as_older_keeps_its_tabs() {
+    let (s, same) = (linked(), listed("vps.invalid"));
+    let note = crate::store::OlderNote { line: "vps runs cornercase 0.13.39".into(), tip: String::new() };
+    let facts =
+        Facts { listed: Some(&same), known: true, machines: std::slice::from_ref(&s), reach: Some(Reach::Older(note)) };
+    assert_eq!(answers(&owner(&s), &facts, Gate::Open), (true, Fate::Stays));
+    assert_eq!(answers(&owner(&s), &facts, Gate::Older(Older::Server(old()))), (false, Fate::Stays));
+}
+
+#[test]
+fn typing_and_new_tabs_are_refused_only_for_a_refused_or_waiting_place() {
+    assert_eq!(refused_why(Reach::Refused("r".into())), Some("r".into()));
+    assert_eq!(refused_why(waiting_for_the_list()), Some("waiting for the machines list".into()));
+    let note = crate::store::OlderNote { line: "l".into(), tip: "t".into() };
+    for reach in [up(), down(), Reach::Older(note)] {
+        assert_eq!(refused_why(reach.clone()), None, "{reach:?}");
+    }
 }

@@ -143,3 +143,19 @@ fn a_destination_not_known_when_made_is_never_another() {
     assert!(MachineLink::Waiting(None).stays_for(""));
     assert!(!MachineLink::Lost.stays_for(""));
 }
+
+#[test]
+fn an_older_refusal_keeps_the_link_up() {
+    let machine = listed();
+    let note = crate::store::OlderNote { line: "vps runs an older cornercase".into(), tip: String::new() };
+    let expected = MachineLink::Up { boot: "boot-a".into(), destination: "vps.invalid".into() };
+    assert_eq!(link(Some(&machine), true, &Reach::Older(note), Gate::Open), expected);
+}
+
+#[test]
+fn a_waiting_reach_waits() {
+    let machine = listed();
+    let waiting = Reach::Waiting("waiting for the machines list".into());
+    let expected = MachineLink::Waiting(Some("vps.invalid".into()));
+    assert_eq!(link(Some(&machine), true, &waiting, Gate::Open), expected);
+}

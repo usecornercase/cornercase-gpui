@@ -9,6 +9,7 @@ use gpui::{
 
 use crate::notify::tip;
 use crate::panels::changes::{FileStatus, status_letter};
+use crate::panels::on_machine;
 use crate::platform::paths::Style;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, glass};
@@ -87,7 +88,9 @@ impl FilesPanel {
             return ui::note(format!("Cannot read {}: {error}", place.root.display())).into_any_element();
         }
         let rows = tree::rows(&place.listings, &place.expanded, self.show_hidden);
-        let loading = !place.listings.contains_key(Path::new(""));
+        let listed = place.listings.contains_key(Path::new(""));
+        let unread = self.machine.as_ref().and_then(|read| on_machine::unread_root(read, listed));
+        let loading = unread.is_none() && !listed;
         let truncated = place.listings.values().any(|l| l.truncated);
         let any_open = !place.expanded.is_empty();
         let root = place.root.clone();
@@ -100,7 +103,8 @@ impl FilesPanel {
             .flex_col()
             .child(self.tree_header(&root, any_open, cx))
             .when(loading, |d| d.child(ui::loading("Reading…")))
-            .when(!loading && count == 0, |d| d.child(ui::note("Empty folder")))
+            .when_some(unread.clone().filter(|_| count == 0), |d, note| d.child(ui::note(note)))
+            .when(!loading && count == 0 && unread.is_none(), |d| d.child(ui::note("Empty folder")))
             .when(truncated, |d| d.child(truncated_note()))
             .child(self.tree_list(count, cx))
             .into_any_element()

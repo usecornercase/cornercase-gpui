@@ -6,8 +6,8 @@ use std::sync::{Arc, mpsc};
 use serde_json::json;
 
 use super::{
-    BINARY, Binary, CALLER, Job, Queue, QueueTap, Remote, Target, Worker, failure, gather_input, gather_scroll,
-    moves_view, spawn_failure, stale_boot, use_binary,
+    BINARY, Binary, CALLER, Job, Queue, QueueTap, Remote, Target, Worker, answered, failure, gather_input,
+    gather_scroll, moves_view, older_refusal, spawn_failure, stale_boot, use_binary,
 };
 
 fn args(cmd: &Command) -> Vec<&str> {
@@ -212,4 +212,20 @@ fn a_command_failing_any_other_way_was_not_refused_for_its_boot() {
 fn a_reason_reads_the_same_from_a_text() {
     assert_eq!(super::reason_of("cornercase start-server: Error: x"), "x");
     assert_eq!(super::reason_of("error: y"), "y");
+}
+
+#[test]
+fn a_one_shot_answers_with_its_stdout_when_it_exits_0() {
+    assert_eq!(answered("status", Some(0), b"{}", b"").expect("answered"), "{}");
+}
+
+#[test]
+fn a_one_shot_refused_as_older_fails_with_the_refusal_and_any_other_failure_without() {
+    let line = crate::test_util::fixture!("remote/older_machine.json").as_bytes();
+    let older = answered("status", Some(5), line, b"error: older").expect_err("refused");
+    assert!(older_refusal(&older).is_some());
+    let other = answered("status", Some(1), line, b"error: other").expect_err("failed");
+    assert!(older_refusal(&other).is_none());
+    assert_eq!(other.to_string(), "cornercase status: error: other");
+    assert!(older_refusal(&answered("status", None, b"", b"").expect_err("killed")).is_none());
 }

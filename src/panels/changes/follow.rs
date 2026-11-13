@@ -165,12 +165,18 @@ impl ChangesPanel {
         }
     }
 
+    pub(super) fn machine_followed(&self) -> Option<String> {
+        let Some(Follow { workspace: Some(Whose::There(aim, _)), .. }) = &self.follow else { return None };
+        Some(aim.machine.clone())
+    }
+
     fn on_end(&mut self, generation: u64, err: &str, cx: &mut Context<Self>) {
         if self.stream_generation != generation {
             return;
         }
         self.stream = None;
-        if self.reads_machine() {
+        if let Some(machine) = self.machine_followed() {
+            Store::get(cx).update(cx, |s, cx| s.there_failed(&machine, None, cx));
             self.try_again_later(ended_reason(err), cx);
         } else {
             self.ended = Some(ended_reason(err));

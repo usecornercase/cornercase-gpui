@@ -1,6 +1,7 @@
 use super::*;
 use crate::model::machines::LinkState;
 use crate::model::{PaneInfo, ThereProject, ThereWorkspace};
+use crate::store::OlderNote;
 
 fn agent(id: u64, status: Option<&str>, active: bool) -> PaneInfo<ThereId> {
     PaneInfo {
@@ -184,4 +185,26 @@ fn the_card_of_an_older_machine_waits_on_a_person_and_promises_nothing() {
     let text = standing_on(LinkState::Older, &Standing::LinkDown);
     assert_eq!(text.title, "vps runs an older cornercase");
     assert_eq!(text.state, None);
+}
+
+fn card_in(standing: &Standing) -> CardText {
+    let seen = machine(LinkState::Linked, Vec::new());
+    let ws = seen.workspace(ThereId::heard(1)).expect("the workspace");
+    card_text(&MachinePlace::at(&seen, ws, None), &seen, &told(None), standing)
+}
+
+#[test]
+fn the_card_waits_for_the_machines_list_with_a_spinner() {
+    let text = card_in(&Standing::Waiting("waiting for the machines list".into()));
+    assert_eq!(text.state, Some(CardState::Running("waiting for the machines list…".into())));
+    assert_eq!(text.why, None);
+}
+
+#[test]
+fn the_card_of_a_machine_refused_as_older_says_both_releases_and_how_to_update() {
+    let note =
+        OlderNote { line: "vps runs cornercase 0.13.39 and this Mac 0.13.57: update it".into(), tip: "do it".into() };
+    let text = card_in(&Standing::Older(note.clone()));
+    assert_eq!(text.state, Some(CardState::Said(note.line)));
+    assert_eq!(text.why.as_deref(), Some("do it"));
 }

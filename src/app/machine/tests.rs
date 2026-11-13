@@ -124,31 +124,31 @@ fn a_restart_there_opens_a_new_connection() {
 #[test]
 fn a_link_that_falls_takes_the_tab_down() {
     for state in [TabState::Opening, TabState::Live, TabState::Down(lost_stream(Instant::now()))] {
-        assert_eq!(link_step(&state, false), LinkStep::Fall, "{state:?}");
+        assert_eq!(link_step(&state, false, None), LinkStep::Fall, "{state:?}");
     }
 }
 
 #[test]
 fn a_link_that_comes_back_opens_the_tab_again() {
-    assert_eq!(link_step(&TabState::Down(Lost::Link), true), LinkStep::Reopen);
-    assert_eq!(link_step(&TabState::Down(Lost::NoWay("why".into())), true), LinkStep::Reopen);
+    assert_eq!(link_step(&TabState::Down(Lost::Link), true, None), LinkStep::Reopen);
+    assert_eq!(link_step(&TabState::Down(Lost::NoWay("why".into())), true, None), LinkStep::Reopen);
 }
 
 #[test]
 fn a_stream_that_fell_with_the_link_up_waits_for_its_own_retry() {
-    assert_eq!(link_step(&TabState::Down(lost_stream(Instant::now())), true), LinkStep::Stay);
+    assert_eq!(link_step(&TabState::Down(lost_stream(Instant::now())), true, None), LinkStep::Stay);
 }
 
 #[test]
 fn a_live_tab_on_a_live_link_stays() {
-    assert_eq!(link_step(&TabState::Live, true), LinkStep::Stay);
-    assert_eq!(link_step(&TabState::Opening, true), LinkStep::Stay);
+    assert_eq!(link_step(&TabState::Live, true, None), LinkStep::Stay);
+    assert_eq!(link_step(&TabState::Opening, true, None), LinkStep::Stay);
 }
 
 #[test]
 fn a_window_on_another_server_never_opens_the_tab() {
-    assert_eq!(link_step(&TabState::Down(Lost::Elsewhere("why".into())), true), LinkStep::Stay);
-    assert_eq!(link_step(&TabState::Down(Lost::Elsewhere("why".into())), false), LinkStep::Stay);
+    assert_eq!(link_step(&TabState::Down(Lost::Elsewhere("why".into())), true, None), LinkStep::Stay);
+    assert_eq!(link_step(&TabState::Down(Lost::Elsewhere("why".into())), false, None), LinkStep::Stay);
 }
 
 #[test]
@@ -602,4 +602,71 @@ fn a_tab_that_fell_or_still_opens_publishes_why_it_is_down() {
     tab.fall(Lost::Link);
     assert_eq!(tab.there(None).down.as_deref(), Some("vps unreachable"));
     assert_eq!(opening().there(None).down.as_deref(), Some("The tab on vps is still opening"));
+}
+
+fn older() -> OlderNote {
+    OlderNote { line: "vps runs an older cornercase".into(), tip: "tip".into() }
+}
+
+#[test]
+fn what_the_store_says_of_a_machine_becomes_what_its_tab_lost() {
+    let up = lost_of(Some(Reach::Up(Target::Local)), false, true);
+    assert_eq!(up, Ok(Target::Local));
+    let waiting = Reach::Waiting("w".into());
+    assert_eq!(lost_of(Some(waiting), false, true), Err(Lost::Waiting("w".into())));
+    assert_eq!(lost_of(Some(Reach::Older(older())), false, true), Err(Lost::Older(older())));
+    assert_eq!(lost_of(Some(Reach::Down("d".into())), false, false), Err(Lost::Link));
+    assert_eq!(lost_of(None, false, true), Err(Lost::Link));
+    assert_eq!(lost_of(Some(Reach::Refused("r".into())), false, true), Err(Lost::NoWay("r".into())));
+}
+
+#[test]
+fn an_older_link_is_still_a_fallen_link() {
+    assert_eq!(lost_of(Some(Reach::Refused("older".into())), false, false), Err(Lost::Link));
+}
+
+#[test]
+fn a_window_elsewhere_is_still_elsewhere() {
+    assert_eq!(lost_of(Some(Reach::Refused("r".into())), true, true), Err(Lost::Elsewhere("r".into())));
+}
+
+#[test]
+fn a_tab_waiting_for_the_list_or_refused_as_older_reopens_when_linked() {
+    for lost in [Lost::Waiting("w".into()), Lost::Older(older())] {
+        assert_eq!(link_step(&TabState::Down(lost.clone()), true, None), LinkStep::Reopen, "{lost:?}");
+        assert_eq!(link_step(&TabState::Down(lost), false, None), LinkStep::Stay);
+    }
+}
+
+#[test]
+fn keys_typed_on_a_waiting_or_older_tab_say_why() {
+    let (mut tab, _tap) = live(20, 5);
+    tab.fall(Lost::Waiting("waiting for the machines list".into()));
+    assert_eq!(refusal(&tab, None), "waiting for the machines list");
+    tab.fall(Lost::Older(older()));
+    assert_eq!(refusal(&tab, None), "vps runs an older cornercase");
+}
+
+#[test]
+fn a_stream_that_fell_is_moved_to_the_older_card_as_soon_as_the_refusal_is_kept() {
+    let state = TabState::Down(lost_stream(Instant::now()));
+    assert_eq!(link_step(&state, true, Some(&older())), LinkStep::Older(older()));
+    assert_eq!(link_step(&state, true, None), LinkStep::Stay);
+    assert_eq!(link_step(&TabState::Live, true, Some(&older())), LinkStep::Stay);
+}
+
+#[test]
+fn falling_to_the_older_or_waiting_card_starts_the_retry_wait_over() {
+    let (mut tab, _tap) = live(20, 5);
+    tab.next_wait();
+    tab.next_wait();
+    assert_eq!(tab.attempts, 2);
+    tab.fall(Lost::Older(older()));
+    assert_eq!(tab.attempts, 0);
+    tab.next_wait();
+    tab.fall(Lost::Waiting("w".into()));
+    assert_eq!(tab.attempts, 0);
+    tab.next_wait();
+    tab.fall(Lost::Link);
+    assert_eq!(tab.attempts, 1);
 }

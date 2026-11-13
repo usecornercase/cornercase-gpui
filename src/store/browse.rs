@@ -1,11 +1,14 @@
 use gpui::Context;
 
-use super::machine_read::{self, Reach};
+use super::machine_read::Reach;
 use super::{Store, ToastGo, ToastKind, remote_url};
-use crate::cli;
-use crate::model::tunnels::{MachineOpen, Toward, open_gate};
+use crate::model::tunnels::{Gate, MachineOpen, Toward, open_gate};
 use crate::model::{Owner, WorkspaceThere};
 use crate::panels::PanelKind;
+
+pub(crate) fn listed_gate(known: bool, gate: Gate) -> Gate {
+    if known { gate } else { Gate::Waiting }
+}
 
 pub(super) fn toast_go(toward: &Toward, port: u16) -> ToastGo {
     match toward {
@@ -62,7 +65,7 @@ impl Store {
 
     pub(crate) fn reach_of(&self, name: &str) -> Option<Reach> {
         let seen = self.session.as_ref()?.machine(name)?;
-        Some(machine_read::reach(&cli::target(), &self.machines, seen))
+        Some(self.reach_seen(seen))
     }
 
     pub(crate) fn not_opened(&mut self, why: &str, cx: &mut Context<Self>) {

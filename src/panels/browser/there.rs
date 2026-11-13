@@ -33,10 +33,18 @@ pub(crate) fn fate(owner: &WorkspaceThere, seen: &[MachineSeen], link: &MachineL
     }
 }
 
+pub(crate) fn refused_why(reach: Reach) -> Option<String> {
+    match reach {
+        Reach::Refused(why) | Reach::Waiting(why) => Some(why),
+        Reach::Up(_) | Reach::Down(_) | Reach::Older(_) => None,
+    }
+}
+
 impl Browser {
     pub(super) fn measure_there(&mut self, cx: &mut Context<Self>) {
         let Some(read) = Store::get(cx).read(cx).machine_read() else { return };
         let Some(target) = read.reach.target().cloned() else {
+            self.dev.retry.forget_while_older(&read.reach);
             cx.notify();
             return;
         };
@@ -78,10 +86,7 @@ impl Browser {
 
     pub(super) fn refused_place(&self, cx: &Context<Self>) -> Option<String> {
         let name = self.place.machine()?;
-        match Store::get(cx).read(cx).reach_of(name)? {
-            Reach::Refused(why) => Some(why),
-            Reach::Up(_) | Reach::Down(_) => None,
-        }
+        refused_why(Store::get(cx).read(cx).reach_of(name)?)
     }
 
     fn machine_owners(&self) -> Vec<WorkspaceThere> {

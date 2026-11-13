@@ -19,8 +19,10 @@ impl MachineLink {
         let (Some(seen), Some(reach)) = (seen, reach) else { return Self::Lost };
         match reach {
             Reach::Refused(_) => Self::Lost,
-            Reach::Down(_) => Self::Waiting(Some(listed.destination.clone())),
-            Reach::Up(_) => Self::Up { boot: seen.boot.clone(), destination: listed.destination.clone() },
+            Reach::Down(_) | Reach::Waiting(_) => Self::Waiting(Some(listed.destination.clone())),
+            Reach::Up(_) | Reach::Older(_) => {
+                Self::Up { boot: seen.boot.clone(), destination: listed.destination.clone() }
+            }
         }
     }
 

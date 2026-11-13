@@ -174,3 +174,15 @@ fn a_stamp_is_asked_of_the_folder_by_the_servers_rules() {
     assert_eq!(folder_and_name(Path::new(r"C:\Users\me\main.rs")), pair(r"C:\Users\me", "main.rs"));
     assert_eq!(folder_and_name(Path::new(r"C:\main.rs")), pair(r"C:\", "main.rs"));
 }
+
+#[test]
+fn an_older_refusal_is_not_read_as_an_answer() {
+    let line = crate::test_util::fixture!("remote/older_machine.json");
+    let error = answered(Some(5), line.as_bytes(), b"Error: older").expect_err("refused");
+    assert!(cli::older_refusal(&error).is_some());
+}
+
+#[test]
+fn a_json_answer_is_still_an_answer() {
+    assert_eq!(answered(Some(0), b"{\"folders\":[]}", b"").expect("answered"), "{\"folders\":[]}");
+}

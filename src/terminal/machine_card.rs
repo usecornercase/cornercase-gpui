@@ -1,10 +1,11 @@
 use std::time::Instant;
 
 use gpui::{
-    AnyElement, Context, Div, IntoElement as _, ParentElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
+    AnyElement, Context, Div, IntoElement as _, ParentElement as _, Stateful, Styled as _, div,
+    prelude::FluentBuilder as _, px,
 };
 
-use super::no_tab::{heading, lead_text};
+use super::no_tab::{heading, lead_text, scrolled};
 use crate::app::Root;
 use crate::app::machine::Standing;
 use crate::desktop;
@@ -57,6 +58,8 @@ fn state_of(standing: &Standing, seen: &MachineSeen, told: &Told<'_>) -> Option<
         Standing::LinkDown => link_state(seen, told),
         Standing::RetryIn(seconds, _) => Some(CardState::Said(format!("reconnecting in {seconds} s"))),
         Standing::Elsewhere(why) | Standing::NoWay(why) => Some(CardState::Said(why.clone())),
+        Standing::Waiting(why) => Some(CardState::Running(format!("{why}…"))),
+        Standing::Older(note) => Some(CardState::Said(note.line.clone())),
         Standing::NoTab | Standing::Shown => None,
     }
 }
@@ -97,7 +100,11 @@ pub(super) fn card_text(place: &MachinePlace, seen: &MachineSeen, told: &Told<'_
     let agent = tab.and_then(agent_of);
     let folder = told.home.map_or_else(|| place.path().to_string(), |home| paths::home_relative(place.path(), home));
     let title = if seen.linked() { format!("runs on {}", seen.name) } else { seen.link_note() };
-    let why = if let Standing::RetryIn(_, why) = standing { why.clone() } else { None };
+    let why = match standing {
+        Standing::RetryIn(_, why) => why.clone(),
+        Standing::Older(note) => Some(note.tip.clone()),
+        _ => None,
+    };
     let state = state_of(standing, seen, told).filter(|_| seen.state != LinkState::Older);
     CardText { title, line: line_of(seen, agent, standing), folder, state, why }
 }
@@ -110,30 +117,33 @@ fn card_counts(standing: &Standing, seen: &MachineSeen, now: i64) -> bool {
     }
 }
 
-fn machine_card(text: &CardText, seen: &MachineSeen) -> Div {
+fn machine_card(text: &CardText, seen: &MachineSeen) -> Stateful<Div> {
+    let faint =
+        |size: f32, text: String| div().text_center().text_size(px(size)).text_color(colours::faint()).child(text);
     let card = ui::glass::card(radius::sheet())
+        .w_full()
         .max_w(px(460.))
+        .min_w_0()
         .flex()
         .flex_col()
-        .items_center()
         .gap(px(8.))
         .px(px(28.))
         .py(px(24.))
-        .child(ui::emblem(seen.icon.icon()).flex_none())
+        .child(div().flex().justify_center().child(ui::emblem(seen.icon.icon()).flex_none()))
         .child(heading(&text.title))
         .child(lead_text(text.line.clone()))
-        .child(div().text_center().text_size(px(12.)).text_color(colours::faint()).child(text.folder.clone()))
+        .child(faint(12., text.folder.clone()))
         .when_some(text.state.as_ref(), |d, state| d.child(card_state(state)))
-        .when_some(text.why.clone(), |d, why| {
-            d.child(div().text_center().text_size(px(11.)).text_color(colours::faint()).child(why))
-        });
-    div().absolute().inset_0().flex().items_center().justify_center().p(px(24.)).child(card)
+        .when_some(text.why.clone(), |d, why| d.child(faint(11., why)));
+    scrolled("machine-card", div().flex().justify_center().p(px(24.)).child(card))
 }
 
 fn card_state(state: &CardState) -> Div {
     let line = div().text_center().text_size(px(12.)).text_color(colours::muted());
     match state {
-        CardState::Running(text) => line.child(ui::busy("machine-opening", text.clone())),
+        CardState::Running(text) => {
+            line.flex().justify_center().child(ui::busy("machine-opening", text.clone()).min_w_0())
+        }
         CardState::Said(text) => line.child(text.clone()),
     }
 }

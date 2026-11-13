@@ -1,5 +1,7 @@
 use super::*;
-use crate::model::machines::LinkState;
+use crate::cli::Remote;
+use crate::desktop;
+use crate::model::machines::{LinkState, Machine};
 use crate::test_util::fixture;
 
 fn linked() -> MachineSeen {
@@ -10,6 +12,10 @@ fn listed(destination: &str) -> Vec<Machine> {
     vec![Machine { name: "vps".into(), destination: destination.into(), ..Machine::default() }]
 }
 
+fn known(machines: &[Machine]) -> Listing<'_> {
+    Listing { machines, known: true }
+}
+
 fn aim() -> Aim {
     let seen = MachineSeen { boot: "b".into(), ..linked() };
     seen.aim_at(&crate::model::ThereWorkspace::default())
@@ -17,14 +23,14 @@ fn aim() -> Aim {
 
 #[test]
 fn from_this_computer_a_linked_machine_is_reached_at_its_destination() {
-    let target = machine_target(&Target::Local, &listed("ana@vps.example.com"), &linked()).expect("reached");
+    let target = machine_target(&Target::Local, known(&listed("ana@vps.example.com")), &linked()).expect("reached");
     assert_eq!(target.flags(), ["--remote", "ana@vps.example.com"]);
 }
 
 #[test]
 fn a_window_on_another_server_says_the_destinations_mean_nothing_from_here() {
     let window = Target::Remote(Remote::new("devbox", "").expect("a destination"));
-    let why = machine_target(&window, &listed("ana@vps.example.com"), &linked()).expect_err("refused");
+    let why = machine_target(&window, known(&listed("ana@vps.example.com")), &linked()).expect_err("refused");
     assert_eq!(why, format!("vps is linked from devbox: its address means nothing from this {}", desktop::here()));
 }
 
@@ -32,26 +38,33 @@ fn a_window_on_another_server_says_the_destinations_mean_nothing_from_here() {
 fn a_window_on_another_server_says_so_even_for_a_machine_that_is_down() {
     let window = Target::Remote(Remote::new("devbox", "").expect("a destination"));
     let down = MachineSeen { state: LinkState::Unreachable, ..linked() };
-    let why = machine_target(&window, &listed("vps-host"), &down).expect_err("refused");
+    let why = machine_target(&window, known(&listed("vps-host")), &down).expect_err("refused");
     assert!(why.starts_with("vps is linked from devbox"), "{why}");
 }
 
 #[test]
 fn a_machine_that_is_not_linked_is_not_reached() {
     let down = MachineSeen { state: LinkState::Unreachable, ..linked() };
-    let why = machine_target(&Target::Local, &listed("vps-host"), &down).expect_err("refused");
+    let why = machine_target(&Target::Local, known(&listed("vps-host")), &down).expect_err("refused");
     assert_eq!(why, "vps unreachable");
 }
 
 #[test]
 fn a_machine_gone_from_the_list_is_not_reached() {
-    let why = machine_target(&Target::Local, &[], &linked()).expect_err("refused");
+    let why = machine_target(&Target::Local, known(&[]), &linked()).expect_err("refused");
     assert_eq!(why, "vps is no longer listed");
 }
 
 #[test]
+fn a_machine_is_waited_for_while_the_machines_list_is_not_read_yet() {
+    let unread = Listing { machines: &[], known: false };
+    let why = machine_target(&Target::Local, unread, &linked()).expect_err("waiting");
+    assert_eq!(why, "waiting for the machines list");
+}
+
+#[test]
 fn a_destination_ssh_would_read_as_a_flag_is_refused() {
-    let why = machine_target(&Target::Local, &listed("-oProxyCommand=x"), &linked()).expect_err("refused");
+    let why = machine_target(&Target::Local, known(&listed("-oProxyCommand=x")), &linked()).expect_err("refused");
     assert_eq!(why, "vps's ssh destination cannot be used");
 }
 
@@ -102,13 +115,6 @@ fn what_an_act_did_names_the_machine() {
 }
 
 #[test]
-fn the_home_is_read_from_what_status_says_there() {
-    assert_eq!(home_in(r#"{"home": "/home/ana"}"#).as_deref(), Some("/home/ana"));
-    assert_eq!(home_in(r#"{"boot": "b"}"#), None);
-    assert_eq!(home_in("not json"), None);
-}
-
-#[test]
 fn a_failure_there_names_the_machine() {
     let error = anyhow::anyhow!("cornercase close: there is no pane 9");
     assert_eq!(failed_there("vps", &error), "vps: there is no pane 9");
@@ -118,58 +124,6 @@ fn a_failure_there_names_the_machine() {
 fn a_stale_boot_there_reads_as_a_restart() {
     let error = cli::failure("close", Some(4), b"error: this request is for the cornercase server started as 1-2");
     assert_eq!(failed_there("vps", &error), "vps restarted: nothing was sent");
-}
-
-fn answer(homes: &mut Homes, machine: &str, boot: &str, home: &str) {
-    assert!(homes.ask(machine, boot));
-    homes.answered(machine, boot, Some(home.into()));
-}
-
-#[test]
-fn a_machine_keeps_one_home_however_often_its_server_restarts() {
-    let mut homes = Homes::default();
-    for boot in ["b1", "b2", "b3"] {
-        answer(&mut homes, "vps", boot, "/home/ana");
-    }
-    assert_eq!(homes.home("vps", "b3"), Some("/home/ana"));
-    assert_eq!((homes.home("vps", "b1"), homes.home("vps", "b2")), (None, None));
-    assert_eq!(homes.known.len(), 1);
-    assert!(!homes.ask("vps", "b3"));
-}
-
-#[test]
-fn a_run_is_asked_once_until_it_answers() {
-    let mut homes = Homes::default();
-    assert!(homes.ask("vps", "b1"));
-    assert!(!homes.ask("vps", "b1"));
-    homes.answered("vps", "b1", None);
-    assert!(homes.ask("vps", "b1"));
-}
-
-#[test]
-fn an_answer_for_a_run_already_left_is_dropped() {
-    let mut homes = Homes::default();
-    assert!(homes.ask("vps", "b1"));
-    assert!(homes.ask("vps", "b2"));
-    homes.answered("vps", "b1", Some("/home/ana".into()));
-    assert_eq!((homes.home("vps", "b1"), homes.home("vps", "b2")), (None, None));
-    assert!(!homes.ask("vps", "b2"));
-}
-
-#[test]
-fn each_machine_keeps_its_own_home() {
-    let mut homes = Homes::default();
-    answer(&mut homes, "vps", "b1", "/home/ana");
-    answer(&mut homes, "lab", "c1", "/home/bo");
-    assert_eq!((homes.home("vps", "b1"), homes.home("lab", "c1")), (Some("/home/ana"), Some("/home/bo")));
-}
-
-#[test]
-fn a_home_is_never_read_for_another_machine_with_the_same_boot() {
-    let mut homes = Homes::default();
-    answer(&mut homes, "vps", "b1", "/home/ana");
-    assert_eq!(homes.home("lab", "b1"), None);
-    assert_eq!(homes.home("vps", "b1"), Some("/home/ana"));
 }
 
 fn pane_aim() -> PaneAim {

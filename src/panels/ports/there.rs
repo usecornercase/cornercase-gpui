@@ -12,14 +12,14 @@ use crate::model::ThereId;
 use crate::model::machines::hide_destination;
 use crate::model::tunnels::{Gate, gate_note};
 use crate::panels::poll::{Polled as _, parse_text};
-use crate::store::{self, MachineRead};
+use crate::store::{self, MachineRead, Reach, Store};
 
-pub(super) fn machine_notes(gate: &Gate, machine: &str, refused: bool) -> Vec<String> {
-    match gate {
-        _ if refused => Vec::new(),
-        Gate::Open => vec![cornercase_note(machine)],
-        Gate::Older(older) => vec![gate_note(older, machine)],
-        Gate::Waiting => Vec::new(),
+pub(super) fn machine_notes(gate: &Gate, machine: &str, reach: &Reach) -> Vec<String> {
+    match (gate, reach) {
+        (_, Reach::Refused(_)) => Vec::new(),
+        (Gate::Older(older), _) => vec![gate_note(older, machine)],
+        (_, Reach::Older(_)) | (Gate::Waiting, _) => Vec::new(),
+        (Gate::Open, _) => vec![cornercase_note(machine)],
     }
 }
 
@@ -30,6 +30,9 @@ pub(crate) fn sample_there<T: 'static>(
 ) {
     let (machine, destination) = (read.aim.machine.clone(), read.destination.clone());
     store::run_on(cx, target, read.aim.ports_args(all), move |this, result, cx| {
+        if let Err(e) = &result {
+            Store::get(cx).update(cx, |s, cx| s.there_failed(&machine, Some(e), cx));
+        }
         let list = parse_text::<List<ThereId>>(result).map(|list| list.ports);
         then(this, list.map_err(|why| hide_destination(&why, &machine, &destination)), cx);
     });
@@ -38,6 +41,7 @@ pub(crate) fn sample_there<T: 'static>(
 impl PortsPanel {
     pub(super) fn measure_there(&mut self, read: &MachineRead, cx: &mut Context<Self>) {
         let Some(target) = read.reach.target().cloned() else {
+            self.retry.forget_while_older(&read.reach);
             cx.notify();
             return;
         };

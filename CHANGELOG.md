@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.83
+
+- **A linked machine's workspace says it waits for the machines list, instead of "no longer listed".** For a moment after the window starts, Changes, Files, Ports, the Browser and the machine's tab said the machine was "no longer listed". They now say they wait for the machines list, ask nothing, and read by themselves as soon as it arrives. Typing an address or opening a tab in the Browser is still refused until then, now saying why.
+- **A machine whose cornercase is older than this Mac's says so, and stops being asked.** Changes, Files, Ports and the Browser said the machine "did not answer" (Files showed a parse error) and asked again every 2 seconds for good. They now say which release the machine runs and which this Mac runs, how to update it, and ask again only when something changes there or when you pick its workspace or open the panel again.
+- **The card over a machine's tab keeps its text inside it.** A long error line ran past both edges of a narrow pane; every line now wraps inside the card, and a card taller than the pane scrolls.
+
 ## 0.1.82
 
 - **Typing a token in Settings stays private on macOS.** While a token's field has the focus and the window is in front, macOS's secure input is on, as in the system's own password fields, so other apps cannot read the keys you type there. Apps that react to keys, such as text expanders, pause meanwhile and work again once you leave the field, close Settings or switch apps.

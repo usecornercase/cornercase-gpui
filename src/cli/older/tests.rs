@@ -1,4 +1,4 @@
-use super::{Older, Start, Started, Step, refusal, start, step, update_args};
+use super::{Older, Start, Started, Step, older_refusal, refusal, refused_older, start, step, update_args};
 use crate::test_util::fixture;
 
 fn older() -> Older {
@@ -132,4 +132,29 @@ fn an_unreachable_host_is_a_failure_even_with_status_5() {
 #[test]
 fn a_fresh_server_says_its_release_too() {
     assert_eq!(start(Some(0), fixture!("remote/started.json").as_bytes(), b""), up("0.13.21"));
+}
+
+#[test]
+fn a_machines_refusal_is_read_from_a_real_answer() {
+    let older = refusal(Some(5), fixture!("remote/older_machine.json")).expect("a refusal");
+    assert_eq!(older.there.as_deref(), Some("0.13.39"));
+    assert_eq!(older.here, "0.13.57");
+    assert_eq!(older.update, ["cornercase", "--remote", "vps.invalid", "update"]);
+}
+
+#[test]
+fn a_one_shot_refused_as_older_carries_the_refusal_and_says_what_it_said() {
+    let stderr = b"Error: vps.invalid runs cornercase 0.13.39";
+    let line = fixture!("remote/older_machine.json").as_bytes();
+    let error = refused_older("status", Some(5), line, stderr).expect("refused");
+    assert_eq!(older_refusal(&error).map(|older| older.here.as_str()), Some("0.13.57"));
+    assert_eq!(error.to_string(), crate::cli::failure("status", Some(5), stderr).to_string());
+}
+
+#[test]
+fn status_5_without_the_line_or_the_line_without_5_carries_nothing() {
+    let line = fixture!("remote/older_machine.json").as_bytes();
+    assert!(refused_older("status", Some(5), b"", b"Error: x").is_none());
+    assert!(refused_older("status", Some(1), line, b"Error: x").is_none());
+    assert!(older_refusal(&anyhow::anyhow!("plain")).is_none());
 }

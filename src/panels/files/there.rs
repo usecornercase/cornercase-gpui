@@ -200,6 +200,7 @@ impl FilesPanel {
         match lost_in(listed) {
             Some(why) => {
                 self.retry.failed(why, Instant::now());
+                self.there_failed(cx);
                 cx.notify();
             }
             None => {
@@ -210,13 +211,19 @@ impl FilesPanel {
         }
     }
 
-    pub(super) fn machine_read_answered(&mut self, id: u64, content: Option<&Content>) {
+    fn there_failed(&mut self, cx: &mut Context<Self>) {
+        let Some(machine) = self.machine.as_ref().map(|read| read.aim.machine.clone()) else { return };
+        self.store.update(cx, |s, cx| s.there_failed(&machine, None, cx));
+    }
+
+    pub(super) fn machine_read_answered(&mut self, id: u64, content: Option<&Content>, cx: &mut Context<Self>) {
         if self.current != Some(id) {
             return;
         }
         match content {
             Some(Content::Lost(why)) => {
                 self.retry.failed(why.clone(), Instant::now());
+                self.there_failed(cx);
             }
             Some(_) => {
                 self.retry.heard();

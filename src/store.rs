@@ -31,7 +31,7 @@ mod tunnels;
 pub(crate) use jobs::Busy;
 use jobs::Jobs;
 use machine_read::ThereState;
-pub(crate) use machine_read::{AgentReach, MachineRead, Reach, TabThere};
+pub(crate) use machine_read::{AgentReach, MachineRead, OlderNote, Reach, TabThere, release_clause};
 pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there, stale_note};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 pub(crate) use tunnels::{
@@ -220,12 +220,14 @@ impl Store {
         }
         self.app = Some(value);
         self.follow_machine_tunnels(cx);
+        self.ask_picked_home(cx);
         cx.notify();
     }
 
     pub(crate) fn take_machines(&mut self, machines: Vec<Machine>, cx: &mut Context<Self>) {
         self.machines = machines;
         self.follow_machine_tunnels(cx);
+        self.ask_picked_home(cx);
         cx.notify();
     }
 
@@ -478,7 +480,9 @@ impl Store {
             self.toast(NO_FLOW, ToastKind::Info, cx);
             return;
         }
-        self.dock = if self.dock == Some(kind) { None } else { Some(kind) };
+        let was_shown = self.dock == Some(kind);
+        self.dock = if was_shown { None } else { Some(kind) };
+        self.shown_again(kind, was_shown, cx);
         cx.notify();
     }
 
@@ -538,7 +542,9 @@ impl Store {
     }
 
     pub(crate) fn open_sheet(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
+        let was_shown = self.sheet == Some(kind);
         self.sheet = Some(kind);
+        self.shown_again(kind, was_shown, cx);
         cx.notify();
     }
 
@@ -553,7 +559,9 @@ impl Store {
 
     pub(crate) fn open(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
         if kind.docked() {
+            let was_shown = self.dock == Some(kind);
             self.dock = Some(kind);
+            self.shown_again(kind, was_shown, cx);
             cx.notify();
         } else {
             self.open_sheet(kind, cx);
