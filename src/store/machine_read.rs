@@ -125,6 +125,13 @@ pub(super) struct KeptOlder {
     pub(super) older: Older,
 }
 
+pub(super) fn sharing_destination(kept: &HashMap<String, KeptOlder>, first: &str, destination: &str) -> Vec<String> {
+    let mut sharing: Vec<String> =
+        kept.iter().filter(|(_, kept)| kept.older.destination == destination).map(|(name, _)| name.clone()).collect();
+    sharing.sort_by_key(|name| (name != first, name.clone()));
+    sharing
+}
+
 pub(super) fn still_current(asked: Option<Facts>, now: Option<&Facts>) -> Option<Facts> {
     asked.filter(|asked| now == Some(asked))
 }
@@ -418,6 +425,7 @@ impl Store {
         let Ok(target) = self.machine_target(seen) else { return };
         let (machine, boot, facts) = (seen.name.clone(), seen.boot.clone(), self.facts_of(seen));
         self.there.checks.insert(machine.clone(), Check::InFlight);
+        self.there.homes.ask(&machine, &boot);
         let id = busy.map(|busy| self.start_job(busy, cx));
         let args = args(&["status", "--json"]);
         let job = id.map(|id| (cx.entity(), id));
@@ -462,11 +470,12 @@ impl Store {
     }
 
     pub(super) fn probe_after_update(&mut self, update: &UpdateThere, cx: &mut Context<Self>) {
-        if !self.there.older.contains_key(&update.machine) {
-            return;
+        let sharing = sharing_destination(&self.there.older, &update.machine, &update.destination);
+        for (at, machine) in sharing.into_iter().enumerate() {
+            self.there.checks.remove(&machine);
+            let busy = (at == 0).then(|| update_job(&update.destination, &update.machine));
+            self.probe_there(&machine, busy, cx);
         }
-        self.there.checks.remove(&update.machine);
-        self.probe_there(&update.machine, Some(update_job(&update.destination, &update.machine)), cx);
     }
 
     fn picked_machine(&self) -> Option<String> {

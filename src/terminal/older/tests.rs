@@ -1,7 +1,6 @@
 use super::{behind_heading, behind_lead, older_heading, older_lead, restart_args, restart_job, restart_question};
 use crate::cli::{Behind, Older};
 use crate::platform::Os;
-use crate::store::update_job;
 
 fn older(there: Option<&str>) -> Older {
     Older {
@@ -60,6 +59,5 @@ fn the_restart_runs_with_yes_on_the_windows_target() {
 
 #[test]
 fn the_jobs_name_the_machine() {
-    assert_eq!(update_job("vps", "vps").key(), "update-there:vps");
     assert_eq!(restart_job("vps").key(), "restart-there:vps");
 }

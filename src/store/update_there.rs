@@ -36,8 +36,12 @@ pub(crate) fn update_key(destination: &str) -> String {
     format!("update-there:{destination}")
 }
 
+fn updating(name: &str) -> String {
+    format!("Updating cornercase on {name}…")
+}
+
 pub(crate) fn update_job(destination: &str, name: &str) -> Busy {
-    Busy::new(update_key(destination), format!("Updating cornercase on {name}…"))
+    Busy::new(update_key(destination), updating(name))
 }
 
 pub(crate) fn update_question(name: &str, after: AfterUpdate, os: Os) -> (String, String, &'static str) {
@@ -60,7 +64,7 @@ pub(crate) fn run_update(args: &[String]) -> anyhow::Result<cli::Answer> {
 pub(crate) fn offer_of(update: Option<&UpdateThere>, listed: Option<&Machine>, running: bool) -> UpdateOffer {
     let Some(update) = update else { return UpdateOffer::Hidden };
     if running {
-        return UpdateOffer::Running(format!("Updating cornercase on {}…", update.machine));
+        return UpdateOffer::Running(updating(&update.machine));
     }
     match listed {
         Some(machine) if machine.can_update() || machine.updating => UpdateOffer::Hidden,

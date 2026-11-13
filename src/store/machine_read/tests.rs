@@ -474,3 +474,12 @@ fn a_probe_says_whether_the_refusal_changed() {
     assert!(!state.probe_answered("vps", (facts.clone(), refused()), Some(&facts)));
     assert!(state.probe_answered("vps", (facts.clone(), None), Some(&facts)));
 }
+
+#[test]
+fn an_update_reads_every_machine_that_shares_its_destination() {
+    let other = KeptOlder { older: Older { destination: "other.invalid".into(), ..kept().older }, ..kept() };
+    let kept_for: HashMap<String, KeptOlder> =
+        [("vps", kept()), ("twin", kept()), ("far", other)].map(|(name, kept)| (name.to_string(), kept)).into();
+    assert_eq!(sharing_destination(&kept_for, "vps", "vps.invalid"), ["vps", "twin"]);
+    assert_eq!(sharing_destination(&kept_for, "twin", "vps.invalid"), ["twin", "vps"]);
+}
