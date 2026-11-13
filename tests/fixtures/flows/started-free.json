@@ -1,11 +1,41 @@
 {
-  "branch": "check-the-free",
+  "branch": "w",
   "close_when_merged": true,
   "free_builds": true,
   "members": [
-    { "agent": "claude", "pane": 12, "role": "orchestrator", "tab": 15 }
+    {
+      "agent": "claude",
+      "pane": 47,
+      "role": "orchestrator",
+      "tab": 52
+    },
+    {
+      "agent": "claude",
+      "pane": 48,
+      "role": "coder",
+      "tab": 53
+    },
+    {
+      "agent": "claude",
+      "pane": 49,
+      "role": "reviewer",
+      "tab": 54
+    },
+    {
+      "agent": "claude",
+      "pane": 50,
+      "role": "security",
+      "tab": 55
+    },
+    {
+      "agent": "claude",
+      "pane": 51,
+      "role": "tester",
+      "tab": 56
+    }
   ],
-  "project": 8,
-  "run": 11,
-  "workspace": 10
+  "project": 4,
+  "run": 46,
+  "run_dir": "/tmp/ccg-fs/server.runs/2026-11-13-w",
+  "workspace": 45
 }

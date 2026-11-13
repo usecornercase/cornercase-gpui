@@ -154,13 +154,14 @@ fn the_second_box_shows_whether_the_run_frees_its_builds() {
 #[test]
 fn the_answer_sets_both_choices_of_the_run_it_names() {
     let set = parse_set(crate::test_util::fixture!("flows/close-when-merged-free.json")).expect("set");
-    let mut runs = vec![run(false, false, false), Run { id: 3, ..run(false, false, false) }];
+    let mut runs = vec![Run { id: 46, ..run(false, false, false) }, Run { id: 3, ..run(false, false, false) }];
     take(&mut runs, &set);
     assert_eq!(
         runs.iter().map(|r| (r.close_when_merged, r.free_builds)).collect::<Vec<_>>(),
         [(true, true), (false, false)]
     );
     let old = parse_set(crate::test_util::fixture!("flows/close-when-merged.json")).expect("set");
+    runs[0].id = 9;
     take(&mut runs, &old);
     assert_eq!((runs[0].close_when_merged, runs[0].free_builds), (true, false));
 }

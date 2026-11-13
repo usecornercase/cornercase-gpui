@@ -1,8 +1,8 @@
 {
-  "run": 9,
-  "project": 2,
-  "workspace": 7,
+  "changed": true,
   "close_when_merged": true,
   "free_builds": true,
-  "changed": true
+  "project": 4,
+  "run": 46,
+  "workspace": 45
 }

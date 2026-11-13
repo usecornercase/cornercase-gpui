@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.88
+
+- **A flow's run says which stages it has not been through since the work went back.** With cornercase 0.13.59 or newer, once a loop or a step back sends the work to an earlier stage, a run's page, in the Flows sheet and the Flow panel, says in orange which stages have not run since, and its plan rings their numbers in orange until they run. A run that ends without them says so on its page and in its row of the Flows sheet.
+- **A run that stopped moving says so.** With cornercase 0.13.62 or newer, a run whose orchestrator has finished its turn while nobody in its team works reads `stopped moving` instead of `running`, on its page and in the Flows sheet's list, once it has stood still for a minute, with how long ago it stopped on its page. It reads `running` again as soon as anyone works.
+- **Free a merged run's build folders.** With cornercase 0.13.64 or newer, the start dialog and a run's page have a second box under "Close the agents once the pull request merges", which also deletes the git-ignored build folders of the run's worktrees, such as `target` and `node_modules`, once its agents have closed. The worktrees, their branches and the run's files stay. With an older cornercase the box rests and says which release it needs.
+- **A run's page keeps the whole choice.** A run started from a terminal with `--free-builds` showed only its close, and turning the close off and on again dropped the freeing without a word. Each box now changes only itself; turning the close off turns the freeing off too, as cornercase does, and the line under the box says so.
+
 ## 0.1.87
 
 - **Update a linked machine's cornercase from where the window says it is older.** Changes, Files, Ports, the Browser and the machine's tab now offer **Update cornercase on vps…** under the line that says the machine runs an older cornercase. It asks first, shows that it runs, and reads the machine again by itself once it is done; a failure says why in cornercase's own words. There is nothing to press when cornercase gives no way to update.
