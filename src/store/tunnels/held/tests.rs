@@ -138,3 +138,13 @@ fn a_machines_tunnel_is_labelled_by_its_name() {
     assert!(text.starts_with("Port 8765 on vps is tunnelled to localhost:63235 (8765 is taken on this "), "{text}");
     assert_eq!(test_hold(Toward::Machine("vps".to_string()), 1, Held::Opening).label(), "vps");
 }
+
+#[test]
+fn a_machines_dropped_tunnel_reason_hides_its_destination() {
+    let machine = Toward::Machine("vps".to_string());
+    let mut held = test_hold(machine, 8765, Held::Up { local: 8765 });
+    held.was_up = true;
+    let said = "Error: the tunnel of port 8765 ended: ssh: connect to host vps.invalid port 22: Connection refused\n";
+    let Fate::Retry(why) = fate(&held, Some(1), said) else { panic!("a retry") };
+    assert!(why.contains("connect to host vps port 22") && !why.contains("vps.invalid"), "{why}");
+}
