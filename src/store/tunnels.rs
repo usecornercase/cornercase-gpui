@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
@@ -7,7 +7,7 @@ use gpui::Context;
 
 use super::browse::{listed_gate, toast_go};
 use super::{Busy, Store, ToastKind};
-use crate::cli::{self, Ended, Feature, Has, Holding, Version};
+use crate::cli::{self, Ended, Holding, Version};
 use crate::model::tunnels::{
     Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, local_kept, local_to_ask, machine_gate, way,
 };
@@ -42,6 +42,7 @@ pub(crate) struct Tunnels {
     link: Option<String>,
     machines: BTreeMap<String, String>,
     settling: Vec<Settling>,
+    ended_unsent: BTreeSet<(String, u16)>,
     takers: BTreeMap<Toward, taker::Taker>,
     next_taker: u64,
 }
@@ -177,11 +178,7 @@ impl Store {
 
     pub(crate) fn machine_tunnel_sections(&self) -> Vec<TunnelSection> {
         let machines = self.session.as_ref().map_or(&[][..], |session| session.machines.as_slice());
-        rows::machine_sections(&self.tunnels.holds, &self.tunnels.reverses, machines)
-    }
-
-    pub(crate) fn server_has(&self, feature: Feature) -> Has {
-        self.session.as_ref().map_or(Has::Unread, |session| feature.on(session.release()))
+        rows::machine_sections(&self.tunnels.holds, &self.tunnels.reverses, machines, &self.tunnels.ended_unsent)
     }
 
     pub(crate) fn tunnel_control(&self, toward: &Toward, port: u16) -> Control {

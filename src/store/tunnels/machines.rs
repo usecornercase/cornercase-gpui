@@ -42,6 +42,7 @@ impl Store {
         match linking(&link, self.tunnels.machines.get(name).map(String::as_str)) {
             Linking::Link { boot, destination } => {
                 self.tunnels.machines.insert(name.to_string(), boot.to_string());
+                self.tunnels.ended_unsent.retain(|(machine, _)| machine != name);
                 self.link_tunnels(&toward, destination, cx);
             }
             Linking::Pause => drop(self.tunnels.machines.remove(name)),

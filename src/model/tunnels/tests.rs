@@ -249,13 +249,13 @@ fn a_previous_local_port_equal_to_the_port_is_kept_for_the_toast_but_not_asked()
     assert_eq!(local_kept(Release::Unread, Some(8765)), None);
 }
 
-fn last_line_of(text: &str) -> &str {
-    text.lines().last().unwrap_or_default()
+fn last_line_of(text: &str) -> String {
+    crate::cli::ended_after(text, None).last_line
 }
 
 #[test]
 fn a_holds_last_line_says_why_it_ended() {
-    let said = |text| ended_line(last_line_of(text));
+    let said = |text| ended_line(&last_line_of(text));
     assert_eq!(said(fixture!("tunnels/hold_closed.txt")), Some(HoldEnd::Closed));
     assert_eq!(said(fixture!("tunnels/hold_forgotten.txt")), Some(HoldEnd::Forgotten));
     assert_eq!(said(fixture!("tunnels/hold_server_stopped.txt")), Some(HoldEnd::ServerStopped));
@@ -264,8 +264,8 @@ fn a_holds_last_line_says_why_it_ended() {
 
 #[test]
 fn a_line_the_window_does_not_know_says_nothing() {
-    assert_eq!(ended_line(last_line_of(fixture!("tunnels/hold_end_unknown.txt"))), None);
-    assert_eq!(ended_line(last_line_of(HELD_LINE)), None);
+    assert_eq!(ended_line(&last_line_of(fixture!("tunnels/hold_end_unknown.txt"))), None);
+    assert_eq!(ended_line(&last_line_of(HELD_LINE)), None);
     assert_eq!(ended_line(r#"{"ended":"clo"#), None);
     assert_eq!(ended_line(""), None);
 }

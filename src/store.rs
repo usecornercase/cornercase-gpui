@@ -6,7 +6,7 @@ use futures::channel::{mpsc, oneshot};
 use gpui::{AnyView, App, AppContext as _, AsyncApp, ClipboardItem, Context, Entity, FocusHandle, Global, WeakEntity};
 use serde_json::Value;
 
-use crate::cli::{self, Queue, Stream, Target};
+use crate::cli::{self, Feature, Has, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, ListMoves, Selection, Switch, switching_key};
@@ -380,6 +380,10 @@ impl Store {
     pub(crate) fn end_job(&mut self, id: u64, cx: &mut Context<Self>) {
         self.jobs.end(id);
         cx.notify();
+    }
+
+    pub(crate) fn server_has(&self, feature: Feature) -> Has {
+        self.session.as_ref().map_or(Has::Unread, |session| feature.on(session.release()))
     }
 
     pub(crate) fn busy(&self, key: &str) -> bool {

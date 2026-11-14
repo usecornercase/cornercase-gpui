@@ -129,15 +129,22 @@ pub(crate) fn last_sent_note(seen: &MachineSeen) -> String {
     format!("{}: the tunnels other windows or programs hold to it are as it last sent them", seen.link_note())
 }
 
+fn last_sent(seen: Option<&MachineSeen>, name: &str, ended: &BTreeSet<(String, u16)>) -> Vec<TunnelSeen> {
+    let Some(seen) = seen else { return Vec::new() };
+    let gone = |tunnel: &TunnelSeen| {
+        !seen.linked() && tunnel.forward() && tunnel.kind == "hold" && ended.contains(&(name.to_string(), tunnel.port))
+    };
+    seen.tunnels.iter().filter(|tunnel| !gone(tunnel)).cloned().collect()
+}
+
 fn section(
     name: &str,
-    holds: &[Hold],
-    reverses: &BTreeMap<Toward, ReverseHold>,
-    seen: Option<&MachineSeen>,
+    (holds, reverses): (&[Hold], &BTreeMap<Toward, ReverseHold>),
+    (seen, ended): (Option<&MachineSeen>, &BTreeSet<(String, u16)>),
 ) -> Option<TunnelSection> {
     let toward = Toward::Machine(name.to_string());
-    let listed = seen.map_or(&[][..], |seen| seen.tunnels.as_slice());
-    let rows = place_rows(&toward, listed, holds, reverses.get(&toward));
+    let listed = last_sent(seen, name, ended);
+    let rows = place_rows(&toward, &listed, holds, reverses.get(&toward));
     if rows.is_empty() {
         return None;
     }
@@ -150,12 +157,13 @@ pub(crate) fn machine_sections(
     holds: &[Hold],
     reverses: &BTreeMap<Toward, ReverseHold>,
     machines: &[MachineSeen],
+    ended: &BTreeSet<(String, u16)>,
 ) -> Vec<TunnelSection> {
     let towards = holds.iter().map(|hold| &hold.toward).chain(reverses.keys());
     let held = towards.filter_map(|toward| toward.machine().map(str::to_string));
     let names: BTreeSet<String> = held.chain(machines.iter().map(|seen| seen.name.clone())).collect();
     let seen = |name: &str| machines.iter().find(|seen| seen.name == name);
-    names.iter().filter_map(|name| section(name, holds, reverses, seen(name))).collect()
+    names.iter().filter_map(|name| section(name, (holds, reverses), (seen(name), ended))).collect()
 }
 
 pub(crate) fn elsewhere(toward: &Toward, port: u16, listed: &[TunnelSeen], held: &[Hold]) -> bool {

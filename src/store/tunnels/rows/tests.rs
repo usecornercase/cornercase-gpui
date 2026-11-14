@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
     Control, Tail, TunnelRow, Whose, count, elsewhere, machine_sections, mark, orders_notes, place_rows, row_control,
@@ -114,7 +114,7 @@ fn the_machines_tunnels_are_listed_by_machine_then_port() {
         there("vps", 3000, Held::Opening),
         there("vps", 4000, Held::Ending),
     ];
-    let sections = machine_sections(&holds, &BTreeMap::new(), &[]);
+    let sections = machine_sections(&holds, &BTreeMap::new(), &[], &BTreeSet::new());
     let names: Vec<&str> = sections.iter().map(|section| section.name.as_str()).collect();
     assert_eq!(names, ["cap", "vps"]);
     let vps: Vec<String> = sections[1].rows.iter().map(TunnelRow::text).collect();
@@ -237,10 +237,10 @@ fn this_windows_reverse_hold_is_its_own_row_and_counts() {
 fn a_machine_with_only_a_reverse_hold_has_its_section() {
     let reverses =
         BTreeMap::from([(Toward::Machine("vps".to_string()), reversing(ReverseState::Open { there: 41234 }))]);
-    let only = machine_sections(&[], &reverses, &[]);
+    let only = machine_sections(&[], &reverses, &[], &BTreeSet::new());
     assert_eq!(only.len(), 1);
     let holds = [there("vps", 8765, Held::Up { local: 63235 })];
-    let both = machine_sections(&holds, &reverses, &[]);
+    let both = machine_sections(&holds, &reverses, &[], &BTreeSet::new());
     let texts: Vec<String> = both[0].rows.iter().map(TunnelRow::text).collect();
     assert_eq!(texts, ["⇄ 8765 → localhost:63235 · up", "⇄ 41234 ← this Chrome · open"]);
 }
@@ -304,7 +304,7 @@ fn texts(rows: &[TunnelRow]) -> Vec<String> {
 }
 
 fn sections_of(holds: &[Hold], seen: &MachineSeen) -> Vec<super::TunnelSection> {
-    machine_sections(holds, &BTreeMap::new(), std::slice::from_ref(seen))
+    machine_sections(holds, &BTreeMap::new(), std::slice::from_ref(seen), &BTreeSet::new())
 }
 
 #[test]
@@ -347,14 +347,6 @@ fn a_machine_listing_only_others_tunnels_has_its_section() {
     let sections = sections_of(&[], &seen);
     assert_eq!(sections.iter().map(|section| section.name.as_str()).collect::<Vec<_>>(), ["vps"]);
     assert_eq!(sections_of(&[], &MachineSeen { name: "cap".into(), ..MachineSeen::default() }).len(), 0);
-}
-
-#[test]
-fn others_tunnels_on_a_machine_are_not_counted() {
-    let holds = [there("vps", 8765, Held::Up { local: 60950 })];
-    let rows = sections_of(&holds, &vps_entry());
-    assert!(rows[0].rows.len() > 1);
-    assert_eq!(count(&holds, 0), 1);
 }
 
 #[test]
@@ -402,4 +394,23 @@ fn a_hold_to_the_server_is_not_a_machines_own_hold() {
     let listed = [seen(5173, Some(5173), "up", "hold")];
     let holds = [ours(5173, Held::Up { local: 5173 })];
     assert!(elsewhere(&toward, 5173, &listed, &holds));
+}
+
+#[test]
+fn a_tunnel_closed_here_while_its_machine_was_down_is_not_listed_as_anothers() {
+    let ended = BTreeSet::from([("vps".to_string(), 8765)]);
+    let seen = down_entry();
+    let rows = |ended: &BTreeSet<(String, u16)>| {
+        machine_sections(&[], &BTreeMap::new(), std::slice::from_ref(&seen), ended)[0].rows.clone()
+    };
+    assert!(rows(&BTreeSet::new()).iter().any(|row| row.port == 8765));
+    assert!(rows(&ended).iter().all(|row| row.port != 8765));
+}
+
+#[test]
+fn a_linked_machine_lists_what_it_says_whatever_was_closed_here() {
+    let ended = BTreeSet::from([("vps".to_string(), 8765)]);
+    let seen = vps_entry();
+    let sections = machine_sections(&[], &BTreeMap::new(), std::slice::from_ref(&seen), &ended);
+    assert!(sections[0].rows.iter().any(|row| row.port == 8765));
 }
