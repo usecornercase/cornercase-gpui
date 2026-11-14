@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.98
+
+- **The Worktrees sheet adds up the builds of merged worktrees and frees them in one go.** With cornercase 0.13.70 or newer, its footer says how much the build folders of merged worktrees take (`· 6.2 GB of builds in 4 merged worktrees`), and **Free merged…** beside it first lists each worktree with the folders that go and their sizes, and each one that keeps its builds with why (a program runs in it, or a build folder holds a git checkout), then frees them and says in one toast what went and what stayed. It frees every merged worktree of the sheet, whatever the filter shows. A worktree where a program runs keeps its builds; Free builds… on its own row still frees it, after asking. The button needs cornercase 0.13.70 or newer on this computer too, which matters when the window is on another machine: below it, the footer says so in its place. On a narrow window the footer's figures wrap onto more lines, each one whole.
+- **Free builds… on a worktree's row names a folder it could not delete or had to keep**, where its toast said only `cornercase worktrees: failed`.
+
 ## 0.1.97
 
 - **A flow's run says when a role's agent exited, and brings it back.** With cornercase 0.13.71 or newer, a role whose agent exited by itself (a crash, a stray signal, `/exit`) while its run goes on reads `exited` in orange on the run's page, in its plan and in the Flow panel, and its box has a dashed edge. The page and the runs list say whose agent exited, and the workspace's row says how many. Next to Stop on the run's page, and in the workspace's menu, `Reopen 1 exited agent` starts it again in its own pane. When the workspace also keeps closed agents, cornercase brings those back first and the button says so (`Reopen 2 closed agents`, then `Reopen 1 exited agent`); only one reopen of a workspace runs at a time. Stop no longer fails when the orchestrator's agent is the one that exited. With an older cornercase nothing changes.

@@ -1,7 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gpui::{AnyElement, Bounds, Div, ParentElement as _, Pixels, Styled as _, canvas, div, fill, point, px, size};
+use gpui::{
+    AnyElement, Bounds, Div, IntoElement as _, ParentElement as _, Pixels, Styled as _, canvas, div, fill, point, px,
+    size,
+};
 
 use crate::theme::colours;
 
@@ -74,6 +77,17 @@ fn marks(separators: &[Option<Separator>], bounds: &[Bounds<Pixels>]) -> Vec<(Se
         marks.push((*separator, Bounds::new(origin, size(px(separator.width()), px(separator.height())))));
     }
     marks
+}
+
+pub(crate) fn facts(parts: Vec<String>, extra: Vec<AnyElement>) -> Div {
+    let separators = fact_separators(parts.len(), extra.len());
+    let elements = parts.into_iter().map(|part| super::one_line(part).into_any_element()).chain(extra);
+    separated(6., separators.into_iter().zip(elements).collect())
+}
+
+fn fact_separators(facts: usize, extra: usize) -> Vec<Option<Separator>> {
+    let dots = (0..facts).map(|i| (i > 0).then_some(Separator::Dot));
+    dots.chain(std::iter::repeat_n(None, extra)).collect()
 }
 
 pub(crate) fn separated(gap: f32, pieces: Vec<Piece>) -> Div {

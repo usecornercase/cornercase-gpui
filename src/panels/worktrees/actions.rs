@@ -1,12 +1,15 @@
-use gpui::{App, Context};
+use gpui::{App, Context, Entity};
 
 use super::WorktreesPanel;
-use super::data::{Freed, Worktree, free_command, free_message};
+use super::data::Worktree;
+use super::frees::{
+    Asked, CHECKING_MERGED, Freed, Merged, ask_merged, checking, free_command, free_merged_command, free_message,
+    free_title, freeing, freeing_label, merged_toast, row_toast,
+};
 use super::removal::{Answer, Folder, branch_label, button, cannot_go, check_command, said, summary, title};
 use super::rows::said_lines;
 use crate::dialogs::{self, Question, Tick};
 use crate::panels::PanelKind;
-use crate::panels::files::disk::human_size;
 use crate::panels::poll::parse_text;
 use crate::store::{self, Busy, Store, ToastKind};
 
@@ -24,14 +27,6 @@ pub(super) fn ask(question: Question, unasked: &str, cx: &mut App) {
     if !asked {
         toast(unasked.to_string(), ToastKind::Error, cx);
     }
-}
-
-pub(super) fn checking(path: &str) -> String {
-    format!("check-builds:{path}")
-}
-
-pub(super) fn freeing(path: &str) -> String {
-    format!("free-builds:{path}")
 }
 
 pub(super) fn removing(path: &str) -> String {
@@ -65,12 +60,45 @@ pub(super) fn removal_question(
     }
 }
 
-fn after_free(this: &mut WorktreesPanel, result: anyhow::Result<String>, cx: &mut Context<WorktreesPanel>) {
-    let (text, kind) = match parse_text::<Freed>(result) {
-        Ok(freed) if freed.failed.is_empty() => (format!("Freed {}", human_size(freed.bytes)), ToastKind::Info),
-        Ok(freed) => (format!("{} folders could not be deleted", freed.failed.len()), ToastKind::Error),
-        Err(e) => (e, ToastKind::Error),
-    };
+fn after_free(name: &str, this: &mut WorktreesPanel, result: anyhow::Result<String>, cx: &mut Context<WorktreesPanel>) {
+    let (text, kind) =
+        parse_text::<Freed>(result).map_or_else(|e| (e, ToastKind::Error), |freed| row_toast(&freed, name));
+    toast(text, kind, cx);
+    this.reload(cx);
+}
+
+fn start_row_free(this: &Entity<WorktreesPanel>, busy: &Busy, command: &[String], name: &str, cx: &mut App) {
+    let name = name.to_string();
+    this.update(cx, |_, cx| {
+        store::run_partial_busy(cx, busy.clone(), command.to_vec(), move |this, result, cx| {
+            after_free(&name, this, result, cx);
+        });
+    });
+}
+
+fn start_merged_free(
+    this: &Entity<WorktreesPanel>,
+    job: &Busy,
+    command: &[String],
+    confirmed: Vec<String>,
+    cx: &mut App,
+) {
+    this.update(cx, |_, cx| {
+        store::run_partial_busy(cx, job.clone(), command.to_vec(), move |this, result, cx| {
+            after_free_merged(&confirmed, this, result, cx);
+        });
+    });
+}
+
+fn after_free_merged(
+    confirmed: &[String],
+    this: &mut WorktreesPanel,
+    result: anyhow::Result<String>,
+    cx: &mut Context<WorktreesPanel>,
+) {
+    let rows = this.list.as_ref().map(|list| list.worktrees.as_slice()).unwrap_or_default();
+    let (text, kind) = parse_text::<Merged>(result)
+        .map_or_else(|e| (e, ToastKind::Error), |answer| merged_toast(&answer, rows, confirmed));
     toast(text, kind, cx);
     this.reload(cx);
 }
@@ -135,8 +163,8 @@ impl WorktreesPanel {
 
     fn removal_answered(&mut self, folder: Folder, cx: &mut Context<Self>) {
         if folder.removed() {
-            if let Some(worktrees) = &mut self.worktrees {
-                worktrees.retain(|w| w.path != folder.path);
+            if let Some(list) = &mut self.list {
+                list.drop_row(&folder.path);
             }
             if let Some(workspace) = folder.workspace() {
                 Store::get(cx).update(cx, |s, cx| s.worktree_went(workspace, cx));
@@ -165,13 +193,46 @@ impl WorktreesPanel {
     fn ask_free(worktree: &Worktree, freed: &Freed, cx: &mut Context<Self>) {
         let force = !freed.running.is_empty();
         let command = free_command(&worktree.path, false, force);
-        let title = format!("Free the build folders of {}?", worktree.title());
+        let name = worktree.title();
         let button = if force { "Free anyway" } else { "Free" };
-        let busy = Busy::new(freeing(&worktree.path), format!("Freeing the builds of {}…", worktree.title()));
+        let busy = Busy::new(freeing(&worktree.path), freeing_label(&name));
         let this = cx.entity();
-        let question = Question::new(title, free_message(freed), button, Vec::new()).on_yes(move |cx| {
-            this.update(cx, |_, cx| store::run_busy(cx, busy.clone(), command.clone(), after_free));
-        });
+        let question = Question::new(free_title(&name), free_message(freed), button, Vec::new())
+            .on_yes(move |cx| start_row_free(&this, &busy, &command, &name, cx));
         ask(question, NOT_FREED, cx);
+    }
+
+    pub(super) fn check_free_merged(&mut self, cx: &mut Context<Self>) {
+        let project = self.project;
+        let busy = Busy::new(CHECKING_MERGED, "Measuring the builds of merged worktrees…");
+        store::run_partial_busy(
+            cx,
+            busy,
+            free_merged_command(true, project),
+            move |this, result, cx| match parse_text::<Merged>(result) {
+                Ok(answer) => this.ask_free_merged(&answer, project, cx),
+                Err(e) => toast(e, ToastKind::Error, cx),
+            },
+        );
+    }
+
+    fn ask_free_merged(&mut self, answer: &Merged, project: Option<u64>, cx: &mut Context<Self>) {
+        let filtering = !self.filter.read(cx).text().trim().is_empty();
+        let rows = self.list.as_ref().map(|list| list.worktrees.as_slice()).unwrap_or_default();
+        match ask_merged(answer, rows, filtering) {
+            Asked::Nothing(text) => {
+                toast(text, ToastKind::Info, cx);
+                self.reload(cx);
+            }
+            Asked::Cannot(text) => toast(text, ToastKind::Error, cx),
+            Asked::Question { title, lines, job, confirmed } => {
+                let this = cx.entity();
+                let command = free_merged_command(false, project);
+                let question = Question::new(title, "", "Free", Vec::new())
+                    .body(move |_| said_lines(&lines))
+                    .on_yes(move |cx| start_merged_free(&this, &job, &command, confirmed.clone(), cx));
+                ask(question, NOT_FREED, cx);
+            }
+        }
     }
 }

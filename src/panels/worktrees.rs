@@ -1,5 +1,6 @@
 mod actions;
 mod data;
+mod frees;
 mod removal;
 mod row_removal;
 mod rows;
@@ -8,8 +9,7 @@ use std::collections::HashSet;
 
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, ClickEvent, Context, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, px,
+    IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 use crate::panels::PanelKind;
@@ -18,7 +18,8 @@ use crate::panels::queue::now;
 use crate::store::{self, Store, ToastKind};
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent};
-use data::{List, Order, Worktree, list_command, scope_note, shown, total};
+use data::{List, Order, Worktree, list_command, scope_note, shown, totals};
+use frees::{FreeMerged, free_merged, merged_job};
 use removal::Folder;
 pub(crate) use row_removal::{Whose, WorktreeRow, remove_worktree};
 
@@ -33,7 +34,7 @@ struct Removals {
 
 pub(crate) struct WorktreesPanel {
     project: Option<u64>,
-    worktrees: Option<Vec<Worktree>>,
+    list: Option<List>,
     error: Option<String>,
     measuring: bool,
     generation: u64,
@@ -62,7 +63,7 @@ impl WorktreesPanel {
         let project = store.update(cx, |s, _| s.take_project_sheet(PanelKind::Worktrees));
         let mut this = Self {
             project,
-            worktrees: None,
+            list: None,
             error: None,
             measuring: false,
             generation: 0,
@@ -80,7 +81,7 @@ impl WorktreesPanel {
     fn show_project(&mut self, project: Option<u64>, cx: &mut Context<Self>) {
         if self.project != project {
             self.project = project;
-            self.worktrees = None;
+            self.list = None;
             self.error = None;
             self.ticked.clear();
         }
@@ -90,6 +91,9 @@ impl WorktreesPanel {
     fn reload(&mut self, cx: &mut Context<Self>) {
         self.generation += 1;
         self.measuring = true;
+        if let Some(list) = &mut self.list {
+            list.forget_merged();
+        }
         self.load(false, cx);
         self.load(true, cx);
         cx.notify();
@@ -103,8 +107,8 @@ impl WorktreesPanel {
             }
             this.measuring &= !sizes;
             match parse_text::<List>(result) {
-                Ok(list) => this.loaded(list.worktrees),
-                Err(e) if sizes && this.worktrees.is_some() => {
+                Ok(list) => this.loaded(list),
+                Err(e) if sizes && this.list.is_some() => {
                     Store::get(cx).update(cx, |s, cx| s.toast(e, ToastKind::Error, cx));
                 }
                 Err(e) => this.error = Some(e),
@@ -113,10 +117,10 @@ impl WorktreesPanel {
         });
     }
 
-    fn loaded(&mut self, worktrees: Vec<Worktree>) {
-        let paths: HashSet<&str> = worktrees.iter().map(|w| w.path.as_str()).collect();
+    fn loaded(&mut self, list: List) {
+        let paths: HashSet<&str> = list.worktrees.iter().map(|w| w.path.as_str()).collect();
         self.ticked.retain(|p| paths.contains(p.as_str()));
-        self.worktrees = Some(worktrees);
+        self.list = Some(list);
         self.error = None;
     }
 
@@ -185,15 +189,52 @@ impl WorktreesPanel {
         })
     }
 
-    fn footer(&self, worktrees: &[Worktree], cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn totals_row(&self, list: &List) -> impl IntoElement + use<> {
+        let measuring =
+            self.measuring.then(|| ui::busy("measuring", "measuring").text_size(px(11.)).into_any_element());
+        let facts = ui::facts(totals(list, self.measuring, now()), measuring.into_iter().collect());
+        div().flex_1().min_w_0().child(facts.text_size(px(11.)).text_color(colours::faint()))
+    }
+
+    fn free_merged_state(&self, list: &List, cx: &mut Context<Self>) -> FreeMerged {
+        let store = Store::get(cx).read(cx);
+        let rows_busy = list.worktrees.iter().any(|w| self.activity(w, store).is_some());
+        let job = merged_job(|key| store.busy(key));
+        free_merged(list.merged(self.measuring), job, rows_busy, store.cli_release())
+    }
+
+    fn free_merged_button(state: &FreeMerged, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let plain = ui::Tone::Plain;
+        match state {
+            FreeMerged::Offered => Some(
+                ui::button("free-merged", "Free merged…")
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.check_free_merged(cx)))
+                    .into_any_element(),
+            ),
+            FreeMerged::Rests => Some(ui::resting_button("free-merged", "Free merged…", plain).into_any_element()),
+            FreeMerged::Checking => Some(ui::busy_button("free-merged", "Measuring…", plain).into_any_element()),
+            FreeMerged::Freeing => Some(ui::busy_button("free-merged", "Freeing…", plain).into_any_element()),
+            FreeMerged::Hidden | FreeMerged::Needs(_) => None,
+        }
+    }
+
+    fn footer(&self, list: &List, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let state = self.free_merged_state(list, cx);
+        let note = if let FreeMerged::Needs(note) = &state { Some(ui::dim(note.clone()).min_w_0()) } else { None };
         div()
             .flex()
-            .items_center()
-            .gap(px(10.))
-            .child(ui::dim(total(worktrees, now())))
-            .when(self.measuring, |d| d.child(ui::busy("measuring", "measuring").text_size(px(11.))))
-            .child(div().flex_1())
-            .children(self.remove_ticked(worktrees, cx))
+            .flex_col()
+            .gap(px(4.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(self.totals_row(list))
+                    .children(Self::free_merged_button(&state, cx))
+                    .children(self.remove_ticked(&list.worktrees, cx)),
+            )
+            .children(note)
     }
 
     fn list(&self, worktrees: &[Worktree], cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -208,12 +249,12 @@ impl WorktreesPanel {
     }
 
     fn body(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        match (&self.worktrees, &self.error) {
+        match (&self.list, &self.error) {
             (_, Some(e)) => vec![ui::note(e.clone()).text_color(colours::failed()).into_any_element()],
             (None, None) => vec![ui::loading("Looking for worktrees…").into_any_element()],
-            (Some(worktrees), None) => {
-                let mut body = self.list(worktrees, cx);
-                body.push(self.footer(worktrees, cx).into_any_element());
+            (Some(list), None) => {
+                let mut body = self.list(&list.worktrees, cx);
+                body.push(self.footer(list, cx).into_any_element());
                 body
             }
         }
