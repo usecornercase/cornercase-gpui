@@ -10,14 +10,14 @@ These rules apply to every contributor and coding agent, in `src/` and `tests/`,
 cargo run --release                         # opens on what cornercase's window shows
 cargo run --release -- --tab 6              # or on a tab, workspace or project id (`cornercase status`)
 cargo run --release -- --remote devbox      # or on the server of another machine, over ssh (design/remote.md)
-cargo test --locked                         # unit tests + tests/layers.rs
+cargo test --locked                         # unit tests + tests/layers.rs and tests/website.rs
 cargo clippy --all-targets --all-features --locked -- -D warnings
 cargo fmt
 cargo-machete                               # unused dependencies
 npx -y jscpd@4.3.0                          # copy-paste detector, reads .jscpd.json
 ```
 
-- **The website** is in `site/`, its decisions in `design/website.md`: `cd site && npm ci && npm run dev`, and `npm run check` (types and its tests) before calling a change to it done. It deploys by itself from `main` (`.github/workflows/pages.yml`). A change to a feature, a key or a download updates what the page says of it in the same change.
+- **The website** is in `site/`, its decisions in `design/website.md`: `cd site && npm ci && npm run dev`, and `npm run check` (types and its tests) before calling a change to it done, with `cargo test --locked --test website` when it changes the drawn window (the rail, a docked page's head: `design/website.md`). It deploys by itself from `main` (`.github/workflows/pages.yml`). A change to a feature, a key or a download updates what the page says of it in the same change.
 - **Running needs `cornercase` where the window finds it** (`design/connection.md`: the `PATH`, the login shell's, the installers' folders, or `CORNERCASE_BIN`); the app starts its server if none runs. `docs/cornercase-cli.txt` holds every command's help as the release on its first line prints it; `cornercase <cmd> --help` is the source of truth. A change that needs a newer cornercase than the file's makes it again with `tools/cornercase-cli.sh` (`CORNERCASE_BIN` names that release's binary; `design/manual-check.md` says how to get one without installing it).
 - **The cornercase sources** are in a clone of `usecornercase/cornercase-terminal` beside the main checkout, found from it or from any of its worktrees with this command (`design/upstream-gaps.md` says why):
 

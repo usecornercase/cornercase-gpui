@@ -1,6 +1,6 @@
 # Website
 
-Code: `site/`, `.github/workflows/pages.yml`
+Code: `site/`, `.github/workflows/pages.yml`, `tests/website.rs`
 
 The landing page for this window, asked for on 2026-11-05 ("ultra mega impactante, full motion, only a landing", as cornercase has at `usecornercase.dev`). One page, in English, no docs: the docs stay on `usecornercase.dev`.
 
@@ -26,11 +26,23 @@ The landing page for this window, asked for on 2026-11-05 ("ultra mega impactant
 
 ## The window
 
-- **Drawn in HTML at the app's real size** (`components/stage/`, 1280×800, the app's default), from `src/theme.rs`'s colours, `assets/icons/` and the measures of a real capture, then moved as one object by a camera. Vector text stays sharp at any zoom, and glass shows the live field through it, which a picture could not do. It is an illustration, not a simulation: the terminal's own site simulates its app, at the cost of a rule to keep them in step, and this page shows one scripted story. The cast is the README screenshot's and cornercase's site's (web-shop, dark mode, gift cards, the empty address), so all the pictures tell one session.
+- **Drawn in HTML at the app's real size** (`components/stage/`, 1280×800, the app's default), from `src/theme.rs`'s colours, `assets/icons/` and the measures of a real capture, then moved as one object by a camera. Vector text stays sharp at any zoom, and glass shows the live field through it, which a picture could not do. It is an illustration, not a simulation: the terminal's own site simulates its app, at the cost of a rule to keep them in step, and this page shows one scripted story; what of it a test keeps in step with the app is under Kept in step with the app. The cast is the README screenshot's and cornercase's site's (web-shop, dark mode, gift cards, the empty address), so all the pictures tell one session.
 - **A camera, not a layout, makes it responsive** (`lib/track.ts`): each shot names a rectangle of the window and the side left free for the caption, and the pose is worked out for the viewport. On a phone the same window is framed tighter above a caption sheet, so the text in it stays readable instead of a 390 px wide miniature.
 - **Very large screens** scale the captions (`zoom`, from 1900 px wide) and let the camera use the room; a phone on its side (under 480 px tall) drops what does not fit, not the headings.
 - **Everything is a function of the scroll**, smoothed once (`client/scroll.ts`), and writes are cached (`client/paint.ts`), so scrolling back, a jump to an anchor and a reload midway need no special code. Native scrolling stays: the page does not hijack the wheel. Short state changes (a toast, a dock page) are CSS transitions set by a class, at the app's own 180 ms in, 120 ms out.
-- **What stays true to the app**: labels, keys, statuses, the Browser's picked card and its "Reloaded: claude finished", the Flow panel's plan, and the panel widths. **What is simplified**: panes that do not fit beside the dock stack instead of shrinking; the conversation's look follows Claude Code as cornercase's simulated agent does.
+- **What is simplified**: panes that do not fit beside the dock stack instead of shrinking; the conversation's look follows Claude Code as cornercase's simulated agent does.
+
+## Kept in step with the app
+
+- **The rail and the docked pages' heads are compared with the app's by a test** (`tests/website.rs`, #240, 2026-11-14). The page's rail went eight days without Machines (#40): the change that put it in the app added its sheet to the page's ring but not to its rail (`Rail.astro`), and nothing compared the two rails.
+  - It reads as text the app's rail (`src/sidebar/rail.rs`: its two lists, the order `column` draws them in, where its rule sits and what `render_rail` puts after it; Help's icon, `tours_button`, and the gear's, `rail/gear.rs`), each panel's icon (`src/panels/mod.rs`) and each icon's file (`src/ui/icons.rs`), and the page's (`components/stage/Rail.astro`: its three lists, its rule and its gap). Order counts, not only membership; it holds no list of icons of its own.
+  - It fails when an icon is added, removed, swapped or changed on either side, and when a `Dock*.astro` heads its page with another icon or title than its panel's (`PanelKind::icon` and `title`, as `src/app.rs`'s `panel_title` draws them). The message names the icon, the side and the file to change.
+  - It fails rather than passes when it meets a shape it cannot read (a function it cannot find, a call in `column` or a `.children(` in `render_rail` it does not know, an icon with no file, an `<Icon` on the page it cannot place), and the message says to teach the test the new shape; the test file holds the full list. A change to the rail's code that keeps what it draws can fail it too. A constant renamed, or an array written on other lines, passes.
+- **It compares a flow's workspace with no plugin's button.** The page's markup holds Flow's icon after the Browser, which `stage.css` shows only in the story's Flow chapter, so the markup is a flow's workspace's rail and contains the other. A plugin's button is the person's, not the app's, and the story has none.
+- **It is in Rust under `tests/`, reading both sides as text as `tests/layers.rs` does**, so it is one of the required checks of every pull request, on the three systems, and runs on the change that starts a drift, from either side. Rejected: a test beside the rail in `src/`, which could call `column` instead of reading it, but a change under `src/` is a change to the app, so a version and a release that tells users nothing; a test in `site/tests/` like `copy.test.ts`, which runs only when `pages.yml`'s paths match, is not a check `main` requires, and does not run on a change to the app; a parser crate for the Rust side, which is a change to `Cargo.toml`, so a release too. The page's lists stay in `Rail.astro`: moving them to a data file would change the page for nothing a Rust test needs.
+- **`site/tests/copy.test.ts` checks** the sheets' keys against `src/keymap.rs`, their names against `src/panels/mod.rs`, the cornercase version the page asks for against `src/cli/locate.rs` and the downloads against the README; `pages.yml` runs it when one of those files changes. A sheet the app adds and the ring lacks fails nothing: its picture is a capture retaken by hand (#71), and a check would hold every pull request until one is taken.
+- **Kept true by hand**, under `AGENTS.md`'s rule that a change to a feature or a key updates the page: the labels, the captions' keys (`src/keymap.rs`'s own tests pin every panel's key), statuses, the Browser's picked card and its "Reloaded: claude finished", and the Flow panel's plan. They are words and numbers placed one by one in markup, so a test would need a third list saying what each is; the rail is a list on both sides. The Browser's pick banner never followed the app's words (#271).
+- **An illustration on purpose, not compared**: the sidebar's rows and marks and the panes' text (the story's cast), which docked pages the story opens (no Recap) and their bodies, the status bar, the colours (the default dark theme's, written as CSS tokens, in the field's shader and in gradients, so a check of one form would claim more than it holds) and the measures, the panel widths among them (a real capture's, framed by a camera).
 
 ## Real captures
 
@@ -48,7 +60,6 @@ The landing page for this window, asked for on 2026-11-05 ("ultra mega impactant
 - Keep claims to what the README and these notes back: GPUI, the platforms and their requirements, signing, updates. The download's size and version come from GitHub's API at load, and the page says nothing of them if that fails. Nothing is compared with another app, and no frame rate is promised: the counter in the corner measures the visitor's own page.
 - A visitor on Linux or Windows reads the keys as they are there (`lib/os.ts`, the README's rules).
 - The landing is in English only (`AGENTS.md`), unlike cornercase's, which also has Spanish and Brazilian Portuguese.
-- `tests/copy.test.ts` checks the sheets' keys against `src/keymap.rs`, their names against `src/panels/mod.rs` and the downloads against the README.
 
 ## Checked
 
