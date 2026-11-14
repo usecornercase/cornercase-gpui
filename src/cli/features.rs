@@ -34,6 +34,42 @@ pub(crate) enum Has {
     No(Option<Version>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Release {
+    Unread,
+    Read(Option<Version>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Releases<'a> {
+    pub server: Option<Version>,
+    pub here: Release,
+    pub machine: Option<(&'a str, Option<Version>)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Lacks<'a> {
+    Server(Option<Version>),
+    ThisComputer(Option<Version>),
+    Machine(&'a str, Option<Version>),
+}
+
+impl<'a> Releases<'a> {
+    pub(crate) fn lacks(&self, feature: Feature) -> Option<Lacks<'a>> {
+        if feature.on(self.server) != Has::Yes {
+            return Some(Lacks::Server(self.server));
+        }
+        if let Release::Read(here) = self.here
+            && !feature.since().reached_by(here)
+        {
+            return Some(Lacks::ThisComputer(here));
+        }
+        self.machine
+            .filter(|(_, release)| feature.on(*release) != Has::Yes)
+            .map(|(machine, release)| Lacks::Machine(machine, release))
+    }
+}
+
 pub(crate) fn it_has(release: Option<Version>) -> String {
     release.map(|release| format!(" (it has {release})")).unwrap_or_default()
 }

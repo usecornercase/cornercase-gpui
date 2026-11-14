@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.104
+
+- **Close once merged, Free the build folders and a queue run's result say beforehand when this computer's cornercase is too old.** With the window on another computer's newer cornercase, when the cornercase on this computer is older than the one thing each needs (0.13.33 to close the agents once the pull request merges, 0.13.64 to free the build folders too, 0.13.51 to show what a queue run did), the box in Start a flow… or on a run's page now rests and says `Needs cornercase 0.13.33 or newer on this Mac (it has 0.13.27).`, and the Queue sheet says above its list that showing what a run did needs it, instead of ending in an error after the press. On a run's page a resting box now shows what the run does. With the window and cornercase on one computer nothing changes.
+
 ## 0.1.103
 
 - **In a short or narrow Issues sheet, an issue's description no longer disappears under its header, and its buttons can be scrolled to.** When the header (its state, title, people, labels, Start…, Schedule…, Start a flow…, open and copy) would leave the description less than its heading and a line, the header scrolls on its own, with a small arrow at its bottom edge while there is more below: scroll over it to reach the buttons, while the description keeps its heading and first line in view. An issue with many labels or people shows this in a taller sheet too. In a usual window nothing changes.

@@ -399,11 +399,12 @@ impl StartFlow {
         ))
     }
 
-    fn with_releases<T>(&self, cx: &App, then: impl FnOnce(&merged::Releases<'_>) -> T) -> T {
-        let here = Store::get(cx).read(cx).session.as_ref().and_then(Session::release);
+    fn with_releases<T>(&self, cx: &App, then: impl FnOnce(&cli::Releases<'_>) -> T) -> T {
+        let store = Store::get(cx).read(cx);
         let run_on = self.run_on.read(cx);
         let machine = run_on.machine().map(|name| (name, run_on.release(cx)));
-        then(&merged::Releases { here, machine })
+        let server = store.session.as_ref().and_then(Session::release);
+        then(&cli::Releases { server, here: store.heard_release(), machine })
     }
 
     fn sent(&self, cx: &App) -> merged::Choice {
@@ -442,7 +443,7 @@ impl StartFlow {
     fn free_row(free: Switch, cx: &Context<Self>) -> Option<Div> {
         match free {
             Switch::Hidden => None,
-            Switch::Rests(line) => Some(merged_view::free_resting(line)),
+            Switch::Rests(line) => Some(merged_view::free_resting(false, line)),
             Switch::Offered(on) => {
                 let the_box = ui::checkbox("start-free", on, merged::FREE_LABEL).on_click(cx.listener(
                     |this, _: &ClickEvent, _, cx| {

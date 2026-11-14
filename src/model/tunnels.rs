@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::cli::{self, Feature, Has, Version};
+use crate::cli::{self, Feature, Has, Release, Version};
 use crate::desktop;
 
 mod orders;
@@ -102,12 +102,6 @@ pub(crate) enum Way {
     Waiting,
     Own(Older),
     Cornercase,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Release {
-    Unread,
-    Read(Option<Version>),
 }
 
 pub(crate) fn way(host: Option<&str>, here: Release, server: Release) -> Way {

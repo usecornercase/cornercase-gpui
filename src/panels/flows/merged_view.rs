@@ -12,7 +12,7 @@ use super::merged::{
     switch_args, take,
 };
 use super::model::Run;
-use crate::cli;
+use crate::cli::{self, Releases};
 use crate::model::Session;
 use crate::store::{self, Busy, Store, ToastKind};
 use crate::ui;
@@ -43,19 +43,24 @@ impl FlowsPanel {
 }
 
 pub(super) fn run_switch(run: &Run, cx: &Context<FlowsPanel>) -> Option<Div> {
-    let here = Store::get(cx).read(cx).session.as_ref().and_then(Session::release);
-    match switch(run, here) {
+    let store = Store::get(cx).read(cx);
+    let releases = Releases {
+        server: store.session.as_ref().and_then(Session::release),
+        here: store.heard_release(),
+        machine: None,
+    };
+    match switch(run, &releases) {
         Switch::Hidden => None,
-        Switch::Rests(line) => Some(with_line(ui::resting_checkbox(false, LABEL), line)),
-        Switch::Offered(_) => Some(offered_pair(run, Choice::of(run, here), free_switch(run, here), cx)),
+        Switch::Rests(line) => Some(with_line(ui::resting_checkbox(run.close_when_merged, LABEL), line)),
+        Switch::Offered(_) => Some(offered_pair(run, Choice::of(run, &releases), free_switch(run, &releases), cx)),
     }
 }
 
 fn offered_pair(run: &Run, choice: Choice, free: Switch, cx: &Context<FlowsPanel>) -> Div {
-    let first = Row { run, press: Press::Close, choice, line: how(None, choice.free) };
+    let first = Row { run, press: Press::Close, choice, line: how(None, run.free_builds) };
     let second = match free {
         Switch::Hidden => None,
-        Switch::Rests(line) => Some(free_resting(line)),
+        Switch::Rests(line) => Some(free_resting(run.free_builds, line)),
         Switch::Offered(_) => Some(nested(row(&Row { press: Press::Free, line: FREE_HOW.into(), ..first }, cx))),
     };
     pair(row(&first, cx), second)
@@ -65,8 +70,8 @@ pub(super) fn pair(first: Div, second: Option<Div>) -> Div {
     div().flex().flex_col().gap(px(8.)).child(first).children(second)
 }
 
-pub(super) fn free_resting(line: String) -> Div {
-    nested(with_line(ui::resting_checkbox(false, FREE_LABEL), line))
+pub(super) fn free_resting(ticked: bool, line: String) -> Div {
+    nested(with_line(ui::resting_checkbox(ticked, FREE_LABEL), line))
 }
 
 pub(super) fn free_offered(the_box: impl IntoElement) -> Div {

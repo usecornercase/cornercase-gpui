@@ -6,11 +6,13 @@ use gpui::{
 use serde_json::Value;
 
 use super::data::{Click, Entry, Row, State, live_pane, notice, offers_result, remove_tip, status_label};
-use super::result::results_offered;
+use super::result::{results_note, results_offered};
 use super::time::{Civil, local, now, relative, when_label};
 use super::{QueuePanel, open_pane, pausing, starting};
+use crate::cli::{Release, Releases};
 use crate::model::Session;
 use crate::notify::tip;
+use crate::platform::Os;
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone};
@@ -30,12 +32,15 @@ pub(super) struct Snapshot {
     pub(super) today: Civil,
     pub(super) now: i64,
     pub(super) results: bool,
+    pub(super) note: Option<String>,
 }
 
 impl Snapshot {
-    pub(super) fn new(app: Option<&Value>, session: Option<Session>) -> Self {
+    pub(super) fn new(app: Option<&Value>, session: Option<Session>, here: Release) -> Self {
         let now = now();
-        let results = results_offered(session.as_ref().and_then(Session::release));
+        let releases = Releases { server: session.as_ref().and_then(Session::release), here, machine: None };
+        let results = results_offered(&releases);
+        let note = results_note(&releases, Os::CURRENT);
         Self {
             loaded: app.is_some(),
             session,
@@ -43,6 +48,7 @@ impl Snapshot {
             today: local(now).unwrap_or(Civil::EPOCH),
             now,
             results,
+            note,
         }
     }
 }

@@ -1,4 +1,6 @@
 use super::*;
+use crate::cli::{Release, Version};
+use crate::platform::Os;
 
 const LIST: &str = crate::test_util::fixture!("flows/list.json");
 
@@ -28,6 +30,10 @@ fn release(text: &str) -> Option<Version> {
     Version::parse(text)
 }
 
+fn on(server: Option<Version>) -> Releases<'static> {
+    Releases { server, here: Release::Unread, machine: None }
+}
+
 fn run(closed: bool, commits: bool, close_when_merged: bool) -> Run {
     let mut run = Run { id: 9, workspace: 7, close_when_merged, ..Run::default() };
     run.state = closed.then(|| "closed".to_string());
@@ -38,34 +44,34 @@ fn run(closed: bool, commits: bool, close_when_merged: bool) -> Run {
 #[test]
 fn a_flow_that_leaves_the_commits_rests_the_choice() {
     let quick = ends_in_commits("Quick");
-    let line = rests(Some(&quick), &Releases { here: new(), machine: None }).expect("rests");
+    let line = rests(Some(&quick), &Releases { server: new(), here: Release::Unread, machine: None }).expect("rests");
     assert_eq!(line, "Quick leaves the commits, so there is no pull request to wait for.");
 }
 
 #[test]
 fn an_older_server_rests_the_choice_and_names_its_release() {
-    let line = rests(Some(&flow("Arena")), &Releases { here: old(), machine: None });
+    let line = rests(Some(&flow("Arena")), &Releases { server: old(), here: Release::Unread, machine: None });
     assert_eq!(line.as_deref(), Some("Needs cornercase 0.13.33 or newer: the server runs 0.13.21."));
 }
 
 #[test]
 fn a_server_whose_release_is_unknown_rests_the_choice() {
-    let line = rests(Some(&flow("Arena")), &Releases { here: None, machine: None });
+    let line = rests(Some(&flow("Arena")), &Releases { server: None, here: Release::Unread, machine: None });
     assert_eq!(line.as_deref(), Some("Needs cornercase 0.13.33 or newer."));
 }
 
 #[test]
 fn an_older_machine_rests_the_choice_and_names_the_machine() {
-    let releases = Releases { here: new(), machine: Some(("vps", old())) };
+    let releases = Releases { server: new(), here: Release::Unread, machine: Some(("vps", old())) };
     let line = rests(Some(&flow("Arena")), &releases);
     assert_eq!(line.as_deref(), Some("Needs cornercase 0.13.33 or newer on vps: it runs 0.13.21."));
-    let unknown = Releases { here: new(), machine: Some(("vps", None)) };
+    let unknown = Releases { server: new(), here: Release::Unread, machine: Some(("vps", None)) };
     assert_eq!(rests(Some(&flow("Arena")), &unknown).as_deref(), Some("Needs cornercase 0.13.33 or newer on vps."));
 }
 
 #[test]
 fn a_machine_start_rests_while_this_server_is_older() {
-    let releases = Releases { here: old(), machine: Some(("vps", new())) };
+    let releases = Releases { server: old(), here: Release::Unread, machine: Some(("vps", new())) };
     let line = rests(Some(&flow("Arena")), &releases);
     assert_eq!(line.as_deref(), Some("Needs cornercase 0.13.33 or newer: the server runs 0.13.21."));
 }
@@ -73,26 +79,29 @@ fn a_machine_start_rests_while_this_server_is_older() {
 #[test]
 fn a_new_server_offers_the_choice_for_a_flow_that_opens_a_pull_request() {
     let arena = flow("Arena");
-    assert_eq!(rests(Some(&arena), &Releases { here: new(), machine: None }), None);
-    assert_eq!(rests(Some(&arena), &Releases { here: new(), machine: Some(("vps", new())) }), None);
+    assert_eq!(rests(Some(&arena), &Releases { server: new(), here: Release::Unread, machine: None }), None);
+    assert_eq!(
+        rests(Some(&arena), &Releases { server: new(), here: Release::Unread, machine: Some(("vps", new())) }),
+        None
+    );
 }
 
 #[test]
 fn a_live_run_shows_whether_it_closes_once_merged() {
-    assert_eq!(switch(&run(false, false, true), new()), Switch::Offered(true));
-    assert_eq!(switch(&run(false, false, false), new()), Switch::Offered(false));
+    assert_eq!(switch(&run(false, false, true), &on(new())), Switch::Offered(true));
+    assert_eq!(switch(&run(false, false, false), &on(new())), Switch::Offered(false));
 }
 
 #[test]
 fn a_closed_run_and_one_that_leaves_the_commits_have_no_switch() {
-    assert_eq!(switch(&run(true, false, false), new()), Switch::Hidden);
-    assert_eq!(switch(&run(false, true, false), new()), Switch::Hidden);
+    assert_eq!(switch(&run(true, false, false), &on(new())), Switch::Hidden);
+    assert_eq!(switch(&run(false, true, false), &on(new())), Switch::Hidden);
 }
 
 #[test]
 fn an_older_server_rests_a_runs_switch() {
     let line = "Needs cornercase 0.13.33 or newer: the server runs 0.13.21.".to_string();
-    assert_eq!(switch(&run(false, false, false), old()), Switch::Rests(line));
+    assert_eq!(switch(&run(false, false, false), &on(old())), Switch::Rests(line));
 }
 
 #[test]
@@ -120,39 +129,39 @@ fn a_press_changes_only_its_box_but_the_close_off_turns_both_off() {
 fn the_free_flag_is_never_sent_below_its_release() {
     let freed = Run { free_builds: true, ..run(false, false, true) };
     let old = Some(Version::new(0, 13, 62));
-    let choice = Choice::of(&freed, old);
+    let choice = Choice::of(&freed, &on(old));
     assert_eq!(choice, Choice { close: true, free: false });
     assert!(!switch_args(7, choice).contains(&"--free-builds".to_string()));
-    assert!(Choice::of(&freed, Some(Feature::FlowFreeBuilds.since())).free);
+    assert!(Choice::of(&freed, &on(Some(Feature::FlowFreeBuilds.since()))).free);
 }
 
 #[test]
 fn the_second_box_is_hidden_wherever_the_first_is_hidden_or_rests() {
     let here = Some(Feature::FlowFreeBuilds.since());
-    assert_eq!(free_switch(&run(true, false, true), here), Switch::Hidden);
-    assert_eq!(free_switch(&run(false, true, true), here), Switch::Hidden);
-    assert_eq!(free_switch(&run(false, false, true), old()), Switch::Hidden);
+    assert_eq!(free_switch(&run(true, false, true), &on(here)), Switch::Hidden);
+    assert_eq!(free_switch(&run(false, true, true), &on(here)), Switch::Hidden);
+    assert_eq!(free_switch(&run(false, false, true), &on(old())), Switch::Hidden);
 }
 
 #[test]
 fn a_server_older_than_0_13_64_rests_the_second_box_and_names_its_release() {
     let line = "Needs cornercase 0.13.64 or newer: the server runs 0.13.62.".to_string();
-    assert_eq!(free_switch(&run(false, false, true), Some(Version::new(0, 13, 62))), Switch::Rests(line));
-    assert_eq!(free_switch(&run(false, false, true), None), Switch::Hidden);
+    assert_eq!(free_switch(&run(false, false, true), &on(Some(Version::new(0, 13, 62)))), Switch::Rests(line));
+    assert_eq!(free_switch(&run(false, false, true), &on(None)), Switch::Hidden);
 }
 
 #[test]
 fn the_second_box_rests_while_the_close_is_off() {
     let here = Some(Feature::FlowFreeBuilds.since());
-    assert_eq!(free_switch(&run(false, false, false), here), Switch::Rests(FREE_HOW.into()));
+    assert_eq!(free_switch(&run(false, false, false), &on(here)), Switch::Rests(FREE_HOW.into()));
 }
 
 #[test]
 fn the_second_box_shows_whether_the_run_frees_its_builds() {
     let here = Some(Feature::FlowFreeBuilds.since());
     let freed = Run { free_builds: true, ..run(false, false, true) };
-    assert_eq!(free_switch(&freed, here), Switch::Offered(true));
-    assert_eq!(free_switch(&run(false, false, true), here), Switch::Offered(false));
+    assert_eq!(free_switch(&freed, &on(here)), Switch::Offered(true));
+    assert_eq!(free_switch(&run(false, false, true), &on(here)), Switch::Offered(false));
 }
 
 #[test]
@@ -191,7 +200,9 @@ fn the_close_line_says_nothing_is_removed_only_while_the_builds_stay() {
 #[test]
 fn the_dialogs_second_box_follows_the_machine_chosen() {
     let arena = flow("Arena");
-    let box_for = |here, machine, close| free_box(Some(&arena), &Releases { here, machine }, close, false);
+    let box_for = |here, machine, close| {
+        free_box(Some(&arena), &Releases { server: here, here: Release::Unread, machine }, close, false)
+    };
     let new = Some(Feature::FlowFreeBuilds.since());
     let vps = Some(("vps", Some(Version::new(0, 13, 57))));
     assert_eq!(
@@ -205,7 +216,10 @@ fn the_dialogs_second_box_follows_the_machine_chosen() {
     assert_eq!(box_for(new, None, false), Switch::Rests(FREE_HOW.into()));
     assert_eq!(box_for(new, None, true), Switch::Offered(false));
     let quick = ends_in_commits("Quick");
-    assert_eq!(free_box(Some(&quick), &Releases { here: new, machine: None }, true, false), Switch::Hidden);
+    assert_eq!(
+        free_box(Some(&quick), &Releases { server: new, here: Release::Unread, machine: None }, true, false),
+        Switch::Hidden
+    );
 }
 
 #[test]
@@ -227,46 +241,51 @@ const FREE_NEEDS: &str = "Needs cornercase 0.13.64 or newer";
 #[test]
 fn a_runs_switch_rests_without_naming_a_release_while_none_is_read() {
     let line = "Needs cornercase 0.13.33 or newer.".to_string();
-    assert_eq!(switch(&run(false, false, false), None), Switch::Rests(line));
+    assert_eq!(switch(&run(false, false, false), &on(None)), Switch::Rests(line));
 }
 
 #[test]
 fn a_runs_switch_rests_one_release_below_and_is_offered_from_a_later_one() {
     let line = format!("{CLOSE_NEEDS}: the server runs 0.13.32.");
-    assert_eq!(switch(&run(false, false, false), release("0.13.32")), Switch::Rests(line));
-    assert_eq!(switch(&run(false, false, false), release("0.13.33")), Switch::Offered(false));
-    assert_eq!(switch(&run(false, false, true), release("0.14.0")), Switch::Offered(true));
+    assert_eq!(switch(&run(false, false, false), &on(release("0.13.32"))), Switch::Rests(line));
+    assert_eq!(switch(&run(false, false, false), &on(release("0.13.33"))), Switch::Offered(false));
+    assert_eq!(switch(&run(false, false, true), &on(release("0.14.0"))), Switch::Offered(true));
 }
 
 #[test]
 fn the_dialog_rests_the_choice_one_release_below_here_and_on_the_machine() {
     let arena = flow("Arena");
-    let here = Releases { here: release("0.13.32"), machine: None };
+    let here = Releases { server: release("0.13.32"), here: Release::Unread, machine: None };
     assert_eq!(rests(Some(&arena), &here), Some(format!("{CLOSE_NEEDS}: the server runs 0.13.32.")));
-    let there = Releases { here: release("0.13.33"), machine: Some(("vps", release("0.13.32"))) };
+    let there =
+        Releases { server: release("0.13.33"), here: Release::Unread, machine: Some(("vps", release("0.13.32"))) };
     assert_eq!(rests(Some(&arena), &there), Some(format!("{CLOSE_NEEDS} on vps: it runs 0.13.32.")));
 }
 
 #[test]
 fn the_dialog_offers_the_choice_from_a_later_release_here_and_on_the_machine() {
     let arena = flow("Arena");
-    assert_eq!(rests(Some(&arena), &Releases { here: release("0.14.0"), machine: None }), None);
-    let there = Releases { here: release("0.14.0"), machine: Some(("vps", release("0.14.0"))) };
+    assert_eq!(
+        rests(Some(&arena), &Releases { server: release("0.14.0"), here: Release::Unread, machine: None }),
+        None
+    );
+    let there =
+        Releases { server: release("0.14.0"), here: Release::Unread, machine: Some(("vps", release("0.14.0"))) };
     assert_eq!(rests(Some(&arena), &there), None);
 }
 
 #[test]
 fn a_machines_start_rests_while_this_servers_release_is_not_read() {
-    let there = Releases { here: None, machine: Some(("vps", release("0.13.33"))) };
+    let there = Releases { server: None, here: Release::Unread, machine: Some(("vps", release("0.13.33"))) };
     assert_eq!(rests(Some(&flow("Arena")), &there), Some("Needs cornercase 0.13.33 or newer.".to_string()));
 }
 
 #[test]
 fn the_second_box_of_a_page_rests_one_release_below_and_is_offered_from_a_later_one() {
     let line = format!("{FREE_NEEDS}: the server runs 0.13.63.");
-    assert_eq!(free_switch(&run(false, false, true), release("0.13.63")), Switch::Rests(line));
+    assert_eq!(free_switch(&run(false, false, true), &on(release("0.13.63"))), Switch::Rests(line));
     let freed = Run { free_builds: true, ..run(false, false, true) };
-    assert_eq!(free_switch(&freed, release("0.14.0")), Switch::Offered(true));
+    assert_eq!(free_switch(&freed, &on(release("0.14.0"))), Switch::Offered(true));
 }
 
 #[test]
@@ -275,15 +294,18 @@ fn the_free_flag_is_sent_from_its_release_and_not_below_it_or_while_none_is_read
     for (here, free) in
         [(None, false), (release("0.13.63"), false), (release("0.13.64"), true), (release("0.14.0"), true)]
     {
-        assert_eq!(Choice::of(&freed, here), Choice { close: true, free });
+        assert_eq!(Choice::of(&freed, &on(here)), Choice { close: true, free });
     }
 }
 
 #[test]
 fn the_dialogs_second_box_hides_while_the_close_rests_for_want_of_a_release() {
     let arena = flow("Arena");
-    assert_eq!(free_box(Some(&arena), &Releases { here: None, machine: None }, true, false), Switch::Hidden);
-    let there = Releases { here: release("0.13.64"), machine: Some(("vps", None)) };
+    assert_eq!(
+        free_box(Some(&arena), &Releases { server: None, here: Release::Unread, machine: None }, true, false),
+        Switch::Hidden
+    );
+    let there = Releases { server: release("0.13.64"), here: Release::Unread, machine: Some(("vps", None)) };
     assert_eq!(free_box(Some(&arena), &there, true, false), Switch::Hidden);
 }
 
@@ -291,7 +313,8 @@ fn the_dialogs_second_box_hides_while_the_close_rests_for_want_of_a_release() {
 fn the_dialogs_second_box_asks_this_server_and_the_machine_chosen() {
     let arena = flow("Arena");
     let box_for = |here, there| {
-        let releases = Releases { here: release(here), machine: Some(("vps", release(there))) };
+        let releases =
+            Releases { server: release(here), here: Release::Unread, machine: Some(("vps", release(there))) };
         free_box(Some(&arena), &releases, true, false)
     };
     let on_vps = Switch::Rests(format!("{FREE_NEEDS} on vps: it runs 0.13.63."));
@@ -307,7 +330,7 @@ fn both() -> Choice {
 }
 
 fn sent_with(here: Option<Version>, machine: Option<(&str, Option<Version>)>) -> Choice {
-    sent(Some(&flow("Arena")), &Releases { here, machine }, both())
+    sent(Some(&flow("Arena")), &Releases { server: here, here: Release::Unread, machine }, both())
 }
 
 #[test]
@@ -342,14 +365,133 @@ fn the_dialog_sends_no_flag_to_a_machine_below_the_close_release() {
 #[test]
 fn the_dialog_sends_no_flag_for_a_flow_that_leaves_the_commits() {
     let quick = ends_in_commits("Quick");
-    let releases = Releases { here: release("0.14.0"), machine: None };
+    let releases = Releases { server: release("0.14.0"), here: Release::Unread, machine: None };
     assert_eq!(sent(Some(&quick), &releases, both()), Choice { close: false, free: false });
 }
 
 #[test]
 fn the_dialog_sends_the_free_flag_only_with_the_close_ticked() {
-    let releases = Releases { here: release("0.14.0"), machine: None };
+    let releases = Releases { server: release("0.14.0"), here: Release::Unread, machine: None };
     let sent = |close, free| sent(Some(&flow("Arena")), &releases, Choice { close, free });
     assert_eq!(sent(false, true), Choice { close: false, free: false });
     assert_eq!(sent(true, false), Choice { close: true, free: false });
+}
+
+fn here_on(server: &str, here: &str) -> Releases<'static> {
+    Releases { server: release(server), here: Release::Read(release(here)), machine: None }
+}
+
+fn unreadable(server: &str) -> Releases<'static> {
+    Releases { server: release(server), here: Release::Read(None), machine: None }
+}
+
+#[test]
+fn a_command_line_below_0_13_33_rests_the_dialog_and_the_page_and_names_what_it_has() {
+    let line = format!("{CLOSE_NEEDS} on this Mac (it has 0.13.27).");
+    let releases = here_on("0.13.76", "0.13.27");
+    assert_eq!(rests(Some(&flow("Arena")), &releases), Some(line.clone()));
+    assert_eq!(switch(&run(false, false, true), &releases), Switch::Rests(line));
+}
+
+#[test]
+fn a_command_line_at_0_13_33_offers_the_close_and_one_below_does_not() {
+    assert_eq!(switch(&run(false, false, false), &here_on("0.13.76", "0.13.33")), Switch::Offered(false));
+    let line = format!("{CLOSE_NEEDS} on this Mac (it has 0.13.32).");
+    assert_eq!(switch(&run(false, false, false), &here_on("0.13.76", "0.13.32")), Switch::Rests(line));
+}
+
+#[test]
+fn a_command_line_whose_release_cannot_be_read_rests_the_close_without_a_release() {
+    let line = format!("{CLOSE_NEEDS} on this Mac.");
+    assert_eq!(switch(&run(false, false, false), &unreadable("0.13.76")), Switch::Rests(line));
+}
+
+#[test]
+fn a_release_not_read_yet_leaves_the_servers_answer_as_it_was() {
+    let unread = |server| Releases { server: release(server), here: Release::Unread, machine: None };
+    assert_eq!(switch(&run(false, false, false), &unread("0.13.76")), Switch::Offered(false));
+    let line = format!("{CLOSE_NEEDS}: the server runs 0.13.32.");
+    assert_eq!(switch(&run(false, false, false), &unread("0.13.32")), Switch::Rests(line));
+}
+
+#[test]
+fn the_server_is_named_before_this_computer_when_both_are_too_old() {
+    let line = format!("{CLOSE_NEEDS}: the server runs 0.13.21.");
+    assert_eq!(switch(&run(false, false, false), &here_on("0.13.21", "0.13.21")), Switch::Rests(line));
+}
+
+#[test]
+fn a_command_line_below_0_13_64_rests_the_free_box_and_hides_it_below_0_13_33() {
+    let line = format!("{FREE_NEEDS} on this Mac (it has 0.13.63).");
+    let freed = Run { free_builds: true, ..run(false, false, true) };
+    assert_eq!(free_switch(&freed, &here_on("0.13.76", "0.13.63")), Switch::Rests(line));
+    assert_eq!(free_switch(&freed, &here_on("0.13.76", "0.13.64")), Switch::Offered(true));
+    assert_eq!(free_switch(&freed, &here_on("0.13.76", "0.13.32")), Switch::Hidden);
+    let line = format!("{FREE_NEEDS} on this Mac.");
+    assert_eq!(
+        free_switch(&run(false, false, true), &Releases { here: Release::Read(None), ..on(release("0.13.76")) }),
+        Switch::Hidden
+    );
+    assert_eq!(free_tail(&unreadable("0.13.76"), true, false), Switch::Rests(line));
+}
+
+#[test]
+fn a_command_line_below_the_free_release_never_sends_the_free_flag() {
+    let freed = Run { free_builds: true, ..run(false, false, true) };
+    let of = |here| Choice::of(&freed, &Releases { here, ..on(release("0.13.76")) });
+    assert!(!of(Release::Read(release("0.13.63"))).free);
+    assert!(!of(Release::Read(None)).free);
+    assert!(of(Release::Read(release("0.13.64"))).free);
+    assert!(of(Release::Unread).free);
+}
+
+#[test]
+fn a_command_line_below_a_release_sends_no_flag_from_the_dialog() {
+    let arena = flow("Arena");
+    let sent = |here| sent(Some(&arena), &Releases { here, ..on(release("0.13.76")) }, both());
+    let none = Choice { close: false, free: false };
+    assert_eq!(sent(Release::Read(release("0.13.27"))), none);
+    assert_eq!(sent(Release::Read(None)), none);
+    assert_eq!(sent(Release::Read(release("0.13.63"))), Choice { close: true, free: false });
+    assert_eq!(sent(Release::Read(release("0.13.64"))), both());
+}
+
+#[test]
+fn a_machines_run_asks_this_server_then_this_computer_then_the_machine() {
+    let arena = flow("Arena");
+    let three = |server, here, machine| {
+        rests(
+            Some(&arena),
+            &Releases {
+                server: release(server),
+                here: Release::Read(release(here)),
+                machine: Some(("vps", release(machine))),
+            },
+        )
+    };
+    let server = format!("{CLOSE_NEEDS}: the server runs 0.13.21.");
+    assert_eq!(three("0.13.21", "0.13.21", "0.13.21"), Some(server));
+    let here = format!("{CLOSE_NEEDS} on this Mac (it has 0.13.27).");
+    assert_eq!(three("0.13.76", "0.13.27", "0.13.21"), Some(here));
+    let vps = format!("{CLOSE_NEEDS} on vps: it runs 0.13.21.");
+    assert_eq!(three("0.13.76", "0.13.76", "0.13.21"), Some(vps));
+    assert_eq!(three("0.13.76", "0.13.76", "0.13.76"), None);
+}
+
+#[test]
+fn a_release_not_read_yet_leaves_a_machines_sentence_as_it_was() {
+    let arena = flow("Arena");
+    let unread =
+        Releases { server: release("0.13.76"), here: Release::Unread, machine: Some(("vps", release("0.13.21"))) };
+    assert_eq!(rests(Some(&arena), &unread), Some(format!("{CLOSE_NEEDS} on vps: it runs 0.13.21.")));
+}
+
+#[test]
+fn the_words_for_this_computer_follow_the_platform() {
+    let this = |os| needs(Feature::FlowFreeBuilds, Lacks::ThisComputer(release("0.13.63")), os);
+    assert_eq!(this(Os::Mac), "Needs cornercase 0.13.64 or newer on this Mac (it has 0.13.63).");
+    assert_eq!(this(Os::Linux), "Needs cornercase 0.13.64 or newer on this computer (it has 0.13.63).");
+    assert_eq!(this(Os::Windows), "Needs cornercase 0.13.64 or newer on this PC (it has 0.13.63).");
+    let unread = needs(Feature::FlowCloseWhenMerged, Lacks::ThisComputer(None), Os::Linux);
+    assert_eq!(unread, "Needs cornercase 0.13.33 or newer on this computer.");
 }

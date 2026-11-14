@@ -5,9 +5,10 @@ use serde_json::Value;
 use super::data::Entry;
 use super::read::Keep;
 use super::time::{Civil, local, relative, when_label};
-use crate::cli::{Feature, Has, Version};
+use crate::cli::{self, Feature, Lacks, Releases};
 use crate::model::PullRequest;
 use crate::panels::flows::model::epoch;
+use crate::platform::Os;
 use crate::ui::markdown::{self, Block};
 use crate::ui::selection;
 
@@ -18,8 +19,13 @@ const EARLIER_LINE: &str = "(earlier messages are left out)";
 const MESSAGE_CUT_LINE: &str = "… cut at 32 KiB";
 pub(super) const MESSAGE_CUT: &str = "Cut at 32 KiB.";
 
-pub(super) fn results_offered(server: Option<Version>) -> bool {
-    Feature::QueueResults.on(server) == Has::Yes
+pub(super) fn results_offered(releases: &Releases<'_>) -> bool {
+    releases.lacks(Feature::QueueResults).is_none()
+}
+
+pub(super) fn results_note(releases: &Releases<'_>, os: Os) -> Option<String> {
+    let Some(Lacks::ThisComputer(has)) = releases.lacks(Feature::QueueResults) else { return None };
+    Some(format!("Showing what a run did needs {}.", cli::newer_here(Feature::QueueResults.since(), has, os)))
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]

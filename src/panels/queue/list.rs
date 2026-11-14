@@ -4,7 +4,7 @@ use gpui::{
 };
 
 use super::QueuePanel;
-use super::data::{Entry, Group, ROUTINES_NOTE, Row, Section, clear_goes_in, sections};
+use super::data::{Entry, Group, ROUTINES_NOTE, Row, Section, clear_goes_in, sections, shows_note};
 use super::rows::Snapshot;
 use crate::notify::tip;
 use crate::theme::colours;
@@ -112,9 +112,13 @@ impl QueuePanel {
     pub(super) fn list(&self, entries: &[Entry], filter: &str, snapshot: &Snapshot, cx: &mut Context<Self>) -> Div {
         let sections = sections(entries, filter, snapshot.session.as_ref());
         let clear = clear_goes_in(&sections);
-        let parts: Vec<AnyElement> = sections
-            .iter()
-            .flat_map(|section| self.section(section, clear == Some(section.group), snapshot, cx))
+        let note = snapshot.note.as_deref().filter(|_| shows_note(&sections));
+        let parts: Vec<AnyElement> = note
+            .map(|note| ui::dim(note.to_string()).px(px(12.)).pt(px(8.)).into_any_element())
+            .into_iter()
+            .chain(
+                sections.iter().flat_map(|section| self.section(section, clear == Some(section.group), snapshot, cx)),
+            )
             .collect();
         div().flex().flex_col().gap(px(2.)).px(px(10.)).pb(px(16.)).children(parts)
     }

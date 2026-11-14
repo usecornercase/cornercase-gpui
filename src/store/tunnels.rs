@@ -7,9 +7,9 @@ use gpui::Context;
 
 use super::browse::{listed_gate, toast_go};
 use super::{Busy, Store, ToastKind};
-use crate::cli::{self, Ended, Holding, Version};
+use crate::cli::{self, Ended, Holding, Release, Version};
 use crate::model::tunnels::{
-    Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, local_kept, local_to_ask, machine_gate, way,
+    Gate, Toward, TunnelSeen, Way, gate_note, held_line, local_kept, local_to_ask, machine_gate, way,
 };
 
 mod closing;

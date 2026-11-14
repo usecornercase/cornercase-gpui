@@ -5,11 +5,10 @@ use gpui::{AppContext as _, Context};
 use super::jobs::{folding_key, renaming_key};
 use super::machine_read::{Listing, Reach, reach};
 use super::{Busy, Store, ToastKind, run_job_on, run_with};
-use crate::cli::{self, Target, Version};
+use crate::cli::{self, Release, Target, Version};
 use crate::model::machines::hide_destination;
 use crate::model::machines::run_on::server_release;
 use crate::model::machines::seen::{ReadReleases, sighted, sighted_pane};
-use crate::model::tunnels::Release;
 use crate::model::{Aim, MachinePlace, MachineSeen, PaneAim, ThereId};
 
 const NOTHING_SENT: &str = "nothing was sent";

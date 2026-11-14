@@ -148,6 +148,13 @@ pub(super) fn offers_detail(entry: &Entry) -> bool {
     }
 }
 
+pub(super) fn shows_note(sections: &[Section<'_>]) -> bool {
+    sections
+        .iter()
+        .flat_map(|section| &section.rows)
+        .any(|row| offers_detail(row.entry) || row.runs.iter().any(|run| offers_detail(run)))
+}
+
 pub(super) fn shown_entry(entries: &[Entry], id: u64, results: bool) -> Option<&Entry> {
     entries.iter().find(|entry| entry.id == id).filter(|_| results)
 }

@@ -8,7 +8,7 @@ use super::data::{
 use super::draft::{Draft, Target, When, cleanup_flag};
 use super::form::{Times, starting_agent};
 use super::time::{Civil, days, local, relative, when_label};
-use crate::cli::Version;
+use crate::cli::{Release, Version};
 use crate::model::accounts::pick::AccountPick;
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::panels::flows::model::FlowInfo;
@@ -821,11 +821,32 @@ fn reads_when_an_entry_started_and_kept_a_result() {
 fn the_snapshot_offers_results_from_the_servers_release() {
     use super::rows::Snapshot;
     let session = |version: &str| Session { version: version.into(), ..Session::default() };
-    assert!(!Snapshot::new(None, Some(session("0.13.39"))).results);
-    assert!(!Snapshot::new(None, Some(session("0.13.50"))).results);
-    assert!(Snapshot::new(None, Some(session("0.13.51"))).results);
-    assert!(Snapshot::new(None, Some(session("0.13.53"))).results);
-    assert!(!Snapshot::new(None, None).results);
+    assert!(!Snapshot::new(None, Some(session("0.13.39")), Release::Unread).results);
+    assert!(!Snapshot::new(None, Some(session("0.13.50")), Release::Unread).results);
+    assert!(Snapshot::new(None, Some(session("0.13.51")), Release::Unread).results);
+    assert!(Snapshot::new(None, Some(session("0.13.53")), Release::Unread).results);
+    assert!(!Snapshot::new(None, None, Release::Unread).results);
+}
+
+#[test]
+fn the_snapshot_holds_the_results_back_and_says_why_when_this_computers_command_line_is_older() {
+    use super::rows::Snapshot;
+    let session = Some(Session { version: "0.13.53".into(), ..Session::default() });
+    let here = Release::Read(Version::parse("0.13.50"));
+    let snapshot = Snapshot::new(None, session.clone(), here);
+    assert!(!snapshot.results);
+    assert!(snapshot.note.as_deref().is_some_and(|note| note.contains("it has 0.13.50")));
+    let same = Snapshot::new(None, session, Release::Read(Version::parse("0.13.53")));
+    assert!(same.results && same.note.is_none());
+}
+
+#[test]
+fn the_line_about_the_command_line_shows_only_above_a_row_that_would_open_a_detail() {
+    use super::data::shows_note;
+    let routine_started = vec![entry(1, "started")];
+    let pending = vec![entry(2, "pending"), entry(3, "pending")];
+    assert!(shows_note(&sections(&routine_started, "", None)));
+    assert!(!shows_note(&sections(&pending, "", None)));
 }
 
 #[test]
