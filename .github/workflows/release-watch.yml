@@ -1,0 +1,33 @@
+name: Release watch
+
+on:
+  schedule:
+    - cron: '2-59/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: release-watch
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  watch:
+    name: watch the newest tag's release
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: watch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: tools/release-watch.sh

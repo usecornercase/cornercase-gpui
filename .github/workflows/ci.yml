@@ -82,7 +82,11 @@ jobs:
 
       - name: shellcheck
         if: ${{ !cancelled() }}
-        run: shellcheck tools/*.sh
+        run: shellcheck tools/*.sh tools/macos/*.sh .github/release/*.sh
+
+      - name: actionlint
+        if: ${{ !cancelled() }}
+        run: bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12 "$RUNNER_TEMP" && "$RUNNER_TEMP/actionlint"
 
       - name: script tests (dash)
         if: ${{ !cancelled() }}
