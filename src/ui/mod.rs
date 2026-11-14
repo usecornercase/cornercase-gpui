@@ -27,6 +27,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Svg, Window, div, prelude::FluentBuilder as _, px, relative,
 };
 
+pub(crate) use cued::{Cued, Seat, cued};
 pub(crate) use icons::{Icon, icon};
 pub(crate) use one_line::{OneLine, one_line};
 pub(crate) use separated::{Separator, dotted, facts, separated, wrapped_fact};

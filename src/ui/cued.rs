@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{
-    Bounds, Div, InteractiveElement as _, ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _,
-    Styled as _, TransformationMatrix, Window, canvas, div, fill, point, px, size,
+    Bounds, Canvas, Div, InteractiveElement as _, ParentElement as _, Pixels, SharedString,
+    StatefulInteractiveElement as _, Styled as _, TransformationMatrix, Window, canvas, div, fill, point, px, size,
 };
 
 use super::{Icon, glass};
@@ -35,26 +35,45 @@ impl Seat {
     }
 }
 
-pub(crate) fn cued(id: SharedString, content: Div, seat: Seat) -> Div {
-    let seen: Rc<RefCell<Vec<Bounds<Pixels>>>> = Rc::default();
-    let laid = seen.clone();
-    let scroller = div()
-        .id(id)
-        .flex_1()
-        .min_h_0()
-        .overflow_y_scroll()
-        .child(div().on_children_prepainted(move |bounds, _, _| *seen.borrow_mut() = bounds).child(content));
+#[derive(Default)]
+struct Seen {
+    content: Option<Bounds<Pixels>>,
+    frame: Option<Bounds<Pixels>>,
+}
+
+impl Seen {
+    fn hidden_frame(&self) -> Option<Bounds<Pixels>> {
+        let (content, frame) = self.content.zip(self.frame)?;
+        hidden_below(frame.bottom(), content.bottom()).then_some(frame)
+    }
+}
+
+pub(crate) struct Cued {
+    pub(crate) body: Div,
+    pub(crate) cue: Canvas<()>,
+}
+
+pub(crate) fn cued(id: SharedString, content: Div, seat: Seat) -> Cued {
+    let seen: Rc<RefCell<Seen>> = Rc::default();
+    let (on_content, on_frame) = (seen.clone(), seen.clone());
+    let scroller = div().id(id).flex_1().min_h_0().overflow_y_scroll().child(
+        div()
+            .on_children_prepainted(move |bounds, _, _| on_content.borrow_mut().content = bounds.first().copied())
+            .child(content),
+    );
+    let frame =
+        canvas(|_, _, _| {}, move |bounds, (), _, _| on_frame.borrow_mut().frame = Some(bounds)).absolute().size_full();
     let cue = canvas(
         |_, _, _| {},
-        move |bounds, (), window, cx| {
-            if laid.borrow().first().is_some_and(|c| hidden_below(bounds.bottom(), c.bottom())) {
-                paint(bounds, seat, window, cx);
+        move |_, (), window, cx| {
+            if let Some(frame) = seen.borrow().hidden_frame() {
+                paint(frame, seat, window, cx);
             }
         },
     )
     .absolute()
     .size_full();
-    div().relative().flex().flex_col().min_h_0().child(scroller).child(cue)
+    Cued { body: div().relative().flex().flex_col().min_h_0().child(scroller).child(frame), cue }
 }
 
 fn paint(bounds: Bounds<Pixels>, seat: Seat, window: &mut Window, cx: &mut gpui::App) {

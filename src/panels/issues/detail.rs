@@ -10,7 +10,6 @@ use super::page::{Item, Page, Read};
 use super::{BodyView, IssuesPanel, blank, card, copy_text, error_note, label_chip, state_icon};
 use crate::notify::tip;
 use crate::theme::{FONT_FAMILY, colours};
-use crate::ui::cued::Seat;
 use crate::ui::markdown::text;
 use crate::ui::{self, Icon, Tone, glass};
 
@@ -34,16 +33,18 @@ impl IssuesPanel {
         };
         let read = self.reads.get(&issue.id());
         let info = issue.info(read.and_then(|r| r.as_ref().ok()).map(|page| &page.read));
+        let head = self.detail_header(&issue, &info, cx);
         div()
             .size_full()
             .flex()
             .flex_col()
-            .child(self.detail_header(&issue, &info, cx))
+            .child(head.body)
             .child(text_area(self.detail_text(&issue, read, cx)))
+            .child(head.cue)
             .into_any_element()
     }
 
-    fn detail_header(&self, issue: &Issue, info: &[String], cx: &mut Context<Self>) -> Div {
+    fn detail_header(&self, issue: &Issue, info: &[String], cx: &mut Context<Self>) -> ui::Cued {
         let column = div()
             .flex()
             .flex_col()
@@ -62,10 +63,8 @@ impl IssuesPanel {
             )
             .children(info_line(issue, info))
             .child(detail_actions(&issue.url, cx));
-        ui::cued::cued(scroller_id(issue, "issue-head"), column, Seat::OnBorder)
-            .flex_initial()
-            .border_b_1()
-            .border_color(colours::border())
+        let head = ui::cued(scroller_id(issue, "issue-head"), column, ui::Seat::OnBorder);
+        ui::Cued { body: head.body.flex_initial().border_b_1().border_color(colours::border()), ..head }
     }
 
     fn detail_heading(&self, issue: &Issue) -> Div {
@@ -161,7 +160,8 @@ fn unread(issue: &Issue, view: BodyView, panel: &WeakEntity<IssuesPanel>, note: 
         .pt(px(HEADING_TOP))
         .child(body_heading(view, panel))
         .child(note);
-    ui::cued::cued(scroller_id(issue, "issue-unread"), column, Seat::Inside).flex_1().into_any_element()
+    let area = ui::cued(scroller_id(issue, "issue-unread"), column, ui::Seat::Inside);
+    area.body.flex_1().child(area.cue).into_any_element()
 }
 
 fn body_heading(view: BodyView, panel: &WeakEntity<IssuesPanel>) -> Div {
