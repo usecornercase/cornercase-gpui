@@ -655,3 +655,21 @@ fn search_for_pair_finds_the_paired_apps() {
         assert!(items.contains(&&Item::Connection(i)));
     }
 }
+
+#[test]
+fn an_app_whose_name_is_blank_says_it_is_connected_like_one_with_none() {
+    let cs = [app(Some(""), DAY), app(Some("  "), DAY)];
+    assert_eq!((app_status(&cs, 0), app_status(&cs, 1)), (None, None));
+    assert_eq!((cs[0].app_name(), cs[1].app_name()), (None, None));
+    assert_eq!(row_status(&cs, 0).text, "connected");
+}
+
+#[test]
+fn search_finds_the_number_a_row_of_two_alike_apps_shows() {
+    let d = phone_paired();
+    let found = search(&d, "1 of 2");
+    let items: Vec<&Item> = found.iter().flat_map(|f| f.section.items.iter()).collect();
+    let at = apps(&d);
+    assert!(items.contains(&&Item::Connection(at[0])));
+    assert!(!items.contains(&&Item::Connection(at[1])));
+}
