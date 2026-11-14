@@ -52,7 +52,7 @@ objc2-user-notifications = { version = "0.3.2", default-features = false, featur
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6.2"
-windows = { version = "0.61.3", features = [
+windows = { version = "0.62.2", features = [
     "Data_Xml_Dom",
     "UI_Notifications",
     "Win32_Foundation",
