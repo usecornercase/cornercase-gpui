@@ -5,6 +5,8 @@ fn message(name: &str) -> Message {
     let text = match name {
         "message" => crate::test_util::fixture!("events/message.json"),
         "message-workspace" => crate::test_util::fixture!("events/message-workspace.json"),
+        "message-failed" => crate::test_util::fixture!("events/message-failed.json"),
+        "message-freed" => crate::test_util::fixture!("events/message-freed.json"),
         _ => unreachable!(),
     };
     let Some(Event::Message(message)) = parse_event(text) else { panic!("not a message") };
@@ -12,7 +14,13 @@ fn message(name: &str) -> Message {
 }
 
 fn of_kind(kind: &str, panes: &[u64], workspace: Option<u64>) -> Message {
-    Message { kind: kind.into(), text: "a sentence from cornercase".into(), panes: panes.to_vec(), workspace }
+    Message {
+        kind: kind.into(),
+        text: "a sentence from cornercase".into(),
+        panes: panes.to_vec(),
+        workspace,
+        failed: false,
+    }
 }
 
 fn telling(kind: &str) -> Telling {
@@ -138,14 +146,14 @@ fn a_queue_message_that_names_nothing_opens_the_queue() {
 #[test]
 fn a_merged_run_offers_to_reopen_its_agents_as_a_job() {
     let telling = Telling::of_message(&message("message-workspace"), Some(&session()));
-    let (busy, reopen) = crate::sidebar::reopening(2, "fix-login");
+    let (busy, reopen) = crate::store::reopening(2, "fix-login");
     assert_eq!(telling.button, Some(("Reopen agents".to_string(), ToastGo::Job(busy, reopen))));
 }
 
 #[test]
 fn the_reopen_job_names_the_workspace_even_when_the_session_does_not_know_it() {
     let telling = Telling::of_message(&message("message-workspace"), None);
-    let (busy, reopen) = crate::sidebar::reopening(2, "workspace 2");
+    let (busy, reopen) = crate::store::reopening(2, "workspace 2");
     assert_eq!(telling.button, Some(("Reopen agents".to_string(), ToastGo::Job(busy, reopen))));
 }
 
@@ -272,4 +280,44 @@ fn a_desktop_notification_is_posted_only_behind_with_the_setting_on_and_a_headli
     assert!(!notify.posts(false, true));
     assert!(!notify.posts(true, false));
     assert!(!telling("flow-merged").posts(true, true));
+}
+
+#[test]
+fn a_merged_run_whose_free_failed_is_told_as_needing_you() {
+    let message = message("message-failed");
+    let telling = Telling::of_message(&message, None);
+    assert_eq!(telling.kind, ToastKind::NeedsYou);
+    assert_eq!(telling.text, message.text);
+    let (busy, reopen) = crate::store::reopening(2, "workspace 2");
+    assert_eq!(telling.button, Some(("Reopen agents".to_string(), ToastGo::Job(busy, reopen))));
+}
+
+#[test]
+fn an_older_servers_merged_run_is_still_a_green_toast_with_its_pointer() {
+    let telling = Telling::of_message(&message("message-workspace"), None);
+    assert_eq!(telling.kind, ToastKind::Done);
+    assert!(telling.text.ends_with("▶ on the workspace reopens them"));
+}
+
+#[test]
+fn a_failed_free_waits_behind_and_posts_no_notification() {
+    let telling = Telling::of_message(&message("message-failed"), None);
+    assert!(telling.waits(false) && !telling.waits(true));
+    assert!(!telling.posts(true, true));
+}
+
+#[test]
+fn a_failed_ending_of_a_kind_this_window_does_not_know_needs_you() {
+    let mut message = of_kind("something-new", &[], None);
+    message.failed = true;
+    assert_eq!(Telling::of_message(&message, None).kind, ToastKind::NeedsYou);
+}
+
+#[test]
+fn a_merged_run_that_freed_is_told_as_done_with_its_sentence_as_it_comes() {
+    let message = message("message-freed");
+    let telling = Telling::of_message(&message, None);
+    assert_eq!(telling.kind, ToastKind::Done);
+    assert_eq!(telling.text, "pull request merged in fa258: 5 agents closed, 100 KB of builds freed");
+    assert!(!message.failed);
 }

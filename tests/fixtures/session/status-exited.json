@@ -1,0 +1,223 @@
+{
+ "projects": [
+  {
+   "active": true,
+   "collapsed": false,
+   "custom_name": null,
+   "group": null,
+   "id": 1,
+   "name": "proj",
+   "path": "/private/tmp/cc258/proj",
+   "remotes": [
+    {
+     "name": "origin",
+     "url": "https://example.invalid/cc258.git"
+    }
+   ],
+   "repo": "example.invalid/cc258",
+   "workspaces": [
+    {
+     "active": true,
+     "behind": 0,
+     "branch": "main",
+     "changes": {
+      "added": 0,
+      "files": 0,
+      "mode": "uncommitted",
+      "removed": 0
+     },
+     "collapsed": false,
+     "custom_name": null,
+     "id": 2,
+     "name": "main",
+     "path": "/private/tmp/cc258/proj",
+     "pull_request": null,
+     "run_dir": null,
+     "setup": null,
+     "tabs": [
+      {
+       "active": true,
+       "custom_name": null,
+       "id": 4,
+       "layout": {
+        "leaf": 3
+       },
+       "name": "zsh",
+       "panes": [
+        {
+         "active": true,
+         "agent": null,
+         "at_prompt": true,
+         "background_shell": false,
+         "caller": false,
+         "context": null,
+         "conversation": null,
+         "dialog": false,
+         "draft": false,
+         "held_from": null,
+         "held_queued": false,
+         "held_sends": 0,
+         "id": 3,
+         "model": null,
+         "parent": null,
+         "path": "/private/tmp/cc258/proj",
+         "pid": 25327,
+         "program": "zsh",
+         "resumes": false,
+         "resuming": false,
+         "role": null,
+         "status": null,
+         "subagents": 0,
+         "survey": false,
+         "title": null
+        }
+       ],
+       "status": null
+      }
+     ],
+     "worktree": false
+    },
+    {
+     "active": false,
+     "behind": 0,
+     "branch": "b258",
+     "collapsed": false,
+     "custom_name": null,
+     "id": 5,
+     "name": "b258",
+     "path": "/private/tmp/cc258/worktrees/proj/b258",
+     "pull_request": null,
+     "run": {
+      "end": "commits",
+      "exited": [
+       "coder"
+      ],
+      "reached": false
+     },
+     "run_dir": "/tmp/cc258/s.runs/2026-11-14-b258",
+     "setup": null,
+     "tabs": [
+      {
+       "active": true,
+       "custom_name": "orchestrator",
+       "id": 10,
+       "layout": {
+        "leaf": 7
+       },
+       "name": "orchestrator",
+       "panes": [
+        {
+         "active": true,
+         "agent": "claude",
+         "at_prompt": false,
+         "background_shell": false,
+         "caller": false,
+         "context": null,
+         "conversation": null,
+         "dialog": false,
+         "draft": false,
+         "held_from": null,
+         "held_queued": false,
+         "held_sends": 0,
+         "id": 7,
+         "model": null,
+         "parent": null,
+         "path": "/private/tmp/cc258/worktrees/proj/b258",
+         "pid": 25401,
+         "program": "bash",
+         "resumes": false,
+         "resuming": false,
+         "role": "orchestrator",
+         "status": "idle",
+         "subagents": 0,
+         "survey": false,
+         "title": null
+        }
+       ],
+       "status": "idle"
+      },
+      {
+       "active": false,
+       "custom_name": "coder",
+       "id": 11,
+       "layout": {
+        "leaf": 8
+       },
+       "name": "coder",
+       "panes": [
+        {
+         "active": true,
+         "agent": null,
+         "at_prompt": true,
+         "background_shell": false,
+         "caller": false,
+         "context": null,
+         "conversation": null,
+         "dialog": false,
+         "draft": false,
+         "held_from": null,
+         "held_queued": false,
+         "held_sends": 0,
+         "id": 8,
+         "model": null,
+         "parent": 7,
+         "path": "/private/tmp/cc258/worktrees/proj/b258",
+         "pid": 25402,
+         "program": "zsh",
+         "resumes": false,
+         "resuming": false,
+         "role": "coder",
+         "status": null,
+         "subagents": 0,
+         "survey": false,
+         "title": null
+        }
+       ],
+       "status": null
+      },
+      {
+       "active": false,
+       "custom_name": "reviewer",
+       "id": 12,
+       "layout": {
+        "leaf": 9
+       },
+       "name": "reviewer",
+       "panes": [
+        {
+         "active": true,
+         "agent": "copilot",
+         "at_prompt": false,
+         "background_shell": false,
+         "caller": false,
+         "context": null,
+         "conversation": null,
+         "dialog": false,
+         "draft": false,
+         "held_from": null,
+         "held_queued": false,
+         "held_sends": 0,
+         "id": 9,
+         "model": null,
+         "parent": 7,
+         "path": "/private/tmp/cc258/worktrees/proj/b258",
+         "pid": 25403,
+         "program": "bash",
+         "resumes": false,
+         "resuming": false,
+         "role": "reviewer",
+         "status": "idle",
+         "subagents": 0,
+         "survey": false,
+         "title": null
+        }
+       ],
+       "status": "idle"
+      }
+     ],
+     "worktree": true
+    }
+   ]
+  }
+ ]
+}

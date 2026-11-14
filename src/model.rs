@@ -14,6 +14,7 @@ pub(crate) mod link;
 pub(crate) mod machines;
 mod owner;
 mod pull_request;
+mod reopen;
 mod shared;
 mod surface;
 mod tree;
@@ -31,6 +32,7 @@ pub(crate) use machines::seen::{
 };
 pub(crate) use owner::Owner;
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};
+pub(crate) use reopen::Reopen;
 pub(crate) use shared::Shared;
 #[cfg(test)]
 pub(crate) use surface::Share;
@@ -108,7 +110,14 @@ pub(crate) struct Workspace {
     pub setup: Option<String>,
     pub changes: Option<Changes>,
     pub closed_agents: Option<usize>,
+    pub run: Option<WorkspaceRun>,
     pub shared: Vec<Shared>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub(crate) struct WorkspaceRun {
+    pub exited: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

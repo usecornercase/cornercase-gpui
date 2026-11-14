@@ -62,6 +62,8 @@ pub(crate) struct Message {
     pub panes: Vec<u64>,
     #[serde(default)]
     pub workspace: Option<u64>,
+    #[serde(default)]
+    pub failed: bool,
 }
 
 impl Notice {

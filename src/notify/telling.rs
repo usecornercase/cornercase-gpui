@@ -40,7 +40,10 @@ impl Kind {
         matches!(self, Kind::QueueStarted | Kind::QueueFailed | Kind::QueueMissed | Kind::QueueKept)
     }
 
-    fn toast(self) -> ToastKind {
+    fn toast(self, failed: bool) -> ToastKind {
+        if failed {
+            return ToastKind::NeedsYou;
+        }
         match self {
             Kind::QueueFailed | Kind::QueueMissed | Kind::QueueKept | Kind::SetupFailed | Kind::FlowConsent => {
                 ToastKind::NeedsYou
@@ -86,7 +89,7 @@ impl Telling {
         let kind = Kind::of(&message.kind);
         Telling {
             text: message.text.clone(),
-            kind: kind.toast(),
+            kind: kind.toast(message.failed),
             button: button(message, kind, session),
             headline: kind.headline().map(str::to_string),
             sound: None,
@@ -150,7 +153,7 @@ fn reopen(workspace: u64, session: Option<&Session>) -> ToastGo {
     let name = session
         .and_then(|session| session.workspace(workspace))
         .map_or_else(|| format!("workspace {workspace}"), |(_, ws)| ws.name.clone());
-    let (busy, args): (Busy, Vec<String>) = crate::sidebar::reopening(workspace, &name);
+    let (busy, args): (Busy, Vec<String>) = crate::store::reopening(workspace, &name);
     ToastGo::Job(busy, args)
 }
 

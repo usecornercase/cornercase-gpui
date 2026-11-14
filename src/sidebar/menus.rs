@@ -8,7 +8,7 @@ use crate::app::Root;
 use crate::cli;
 use crate::context_menu::{Entry, act, act_busy, danger, item, submenu};
 use crate::dialogs;
-use crate::model::{PaneInfo, Project, PullRequest, Session, Workspace};
+use crate::model::{PaneInfo, Project, PullRequest, Reopen, Session, Workspace};
 use crate::panels::PanelKind;
 use crate::panels::files::open::{self, Found, Opening};
 use crate::panels::flows::{FlowStart, start_flow};
@@ -219,11 +219,6 @@ fn ask_item(label: String, question: impl Fn() -> dialogs::Question + 'static) -
     danger(label, move |_, window, cx| dialogs::confirm(question(), window, cx))
 }
 
-pub(crate) fn reopening(workspace: u64, name: &str) -> (Busy, Vec<String>) {
-    let busy = Busy::new(format!("reopen:{workspace}"), format!("Reopening the agents of {name}…"));
-    (busy, cmd(&["agents", "reopen", "--workspace", &workspace.to_string()]))
-}
-
 fn context_item(pane: &PaneInfo) -> Option<Entry> {
     let id = pane.id;
     let offered = pane.agent.is_some();
@@ -231,29 +226,33 @@ fn context_item(pane: &PaneInfo) -> Option<Entry> {
 }
 
 fn agent_items(ws: &Workspace) -> Vec<Entry> {
-    let (ids, name) = (ws.id.to_string(), ws.name.clone());
     let mut entries = Vec::new();
     if !ws.agent_rows().is_empty() {
-        let (ws_id, name) = (ws.id, name.clone());
+        let (ws_id, name) = (ws.id, ws.name.clone());
         entries.push(danger("Close its agents…", move |_, _, cx| forms::close_agents(ws_id, name.clone(), cx)));
     }
-    if let Some(n) = ws.closed_agents.filter(|n| *n > 0) {
-        let (reopening, reopen) = reopening(ws.id, &name);
-        entries.push(item(format!("Reopen {}", plural(n, "closed agent")), move |this, _, cx| {
-            let (busy, args) = (reopening.clone(), reopen.clone());
-            this.store.update(cx, |s, cx| s.run_aside(busy, args, cx));
-        }));
-        entries.push(ask_item(format!("Forget {}…", plural(n, "closed agent")), move || {
-            dialogs::Question::new(
-                format!("Forget the closed agents of {name}?"),
-                "They can no longer be reopened from here; their conversations stay with each agent.",
-                "Forget",
-                cmd(&["agents", "forget", "--workspace", &ids, "--yes"]),
-            )
-            .busy(Busy::new(format!("forget:{ids}"), format!("Forgetting the closed agents of {name}…")))
-        }));
-    }
+    entries.extend(ws.reopen().map(|reopen| reopen_item(ws, reopen)));
+    entries.extend(forget_item(ws));
     entries
+}
+
+fn reopen_item(ws: &Workspace, reopen: Reopen) -> Entry {
+    let (id, name) = (ws.id, ws.name.clone());
+    item(reopen.label(), move |this, _, cx| this.store.update(cx, |s, cx| s.reopen_agents(id, &name, cx)))
+}
+
+fn forget_item(ws: &Workspace) -> Option<Entry> {
+    let n = ws.closed_agents.filter(|n| *n > 0)?;
+    let (ids, name) = (ws.id.to_string(), ws.name.clone());
+    Some(ask_item(format!("Forget {}…", plural(n, "closed agent")), move || {
+        dialogs::Question::new(
+            format!("Forget the closed agents of {name}?"),
+            "They can no longer be reopened from here; their conversations stay with each agent.",
+            "Forget",
+            cmd(&["agents", "forget", "--workspace", &ids, "--yes"]),
+        )
+        .busy(Busy::new(format!("forget:{ids}"), format!("Forgetting the closed agents of {name}…")))
+    }))
 }
 
 fn setup_args(workspace: u64) -> Vec<String> {

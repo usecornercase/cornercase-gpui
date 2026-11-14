@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.97
+
+- **A flow's run says when a role's agent exited, and brings it back.** With cornercase 0.13.71 or newer, a role whose agent exited by itself (a crash, a stray signal, `/exit`) while its run goes on reads `exited` in orange on the run's page, in its plan and in the Flow panel, and its box has a dashed edge. The page and the runs list say whose agent exited, and the workspace's row says how many. Next to Stop on the run's page, and in the workspace's menu, `Reopen 1 exited agent` starts it again in its own pane. When the workspace also keeps closed agents, cornercase brings those back first and the button says so (`Reopen 2 closed agents`, then `Reopen 1 exited agent`); only one reopen of a workspace runs at a time. Stop no longer fails when the orchestrator's agent is the one that exited. With an older cornercase nothing changes.
+- **A merged run whose build folders could not be freed is told as a failure.** With cornercase 0.13.72 or newer its toast is orange instead of green, and cornercase's sentence no longer ends with its own `▶ on the workspace reopens them`. Reopen agents stays on it, since the agents closed all the same. With an older cornercase the toast stays green, as before.
+
 ## 0.1.96
 
 - **The tunnels menu and Ports now show the tunnels other windows and programs hold to a linked machine**, as they already did for a server you are connected to: each one is a row in the machine's section (`⇄ 3000 · in another program`) with Close and Forget, and Ports marks that port `⇄ elsewhere`. This needs cornercase 0.13.67 or newer running on this computer; with an older one the menu says so. A machine that is down keeps the tunnels it last sent, shown as such, with nothing to act on. The count in the status bar is still the tunnels this window holds.

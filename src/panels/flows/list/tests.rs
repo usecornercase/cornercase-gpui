@@ -38,3 +38,11 @@ fn only_an_ended_run_names_in_its_row_the_stages_it_ended_without() {
     assert_eq!(ended_without(&ended).as_deref(), Some("ended with stage 3 not run on the last change"));
     assert_eq!(ended_without(&Run { owed: vec![], ..ended }), None);
 }
+
+#[test]
+fn a_rows_notes_name_the_stages_an_ended_run_skipped_then_the_agents_that_exited() {
+    let coder =
+        crate::panels::flows::model::Member { role: "coder".into(), pane: Some(8), exited: true, ..Default::default() };
+    let run = Run { ended: true, owed: vec![1], roles: vec![coder], ..Run::default() };
+    assert_eq!(row_notes(&run), ["ended with stage 2 not run on the last change", "the agent of coder exited"]);
+}

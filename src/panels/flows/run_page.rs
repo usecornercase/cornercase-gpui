@@ -1,5 +1,5 @@
 use gpui::{
-    App, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, ParentElement as _, Stateful,
+    App, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, ParentElement as _, Rgba, Stateful,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
 };
 
@@ -10,9 +10,10 @@ use super::diagram::{Plan, role_colour};
 use super::flow_page::block;
 use super::hero::{facts, hero, stages_bar, task, title};
 use super::merged_view;
-use super::model::{Member, RoleSpec, Run, Standing, plural, stopped_line};
+use super::model::{Member, RoleSpec, Run, Standing, plural};
 use super::widgets::{loop_words, panel_box, pill, show_pane, standing_colour};
-use crate::store::{Store, args};
+use crate::model::Reopen;
+use crate::store::{Store, args, reopen_key};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone, glass::tint};
 
@@ -37,14 +38,16 @@ fn run_hero(run: &Run, cx: &Context<FlowsPanel>) -> Div {
     let standing = run.standing();
     let (state, colour) = (hero_word(standing), standing_colour(standing));
     let live = glows(standing);
+    let offer = offer(run, cx);
+    let closed_first = offer.as_ref().map_or(0, |(reopen, _)| reopen.closed_first());
     let heading = title(&run.flow, Some(run), run.flow.name.clone().into(), facts(run_facts(run, cx)));
     hero(&run.flow)
         .child(heading.child(pill(state, colour, live)))
         .child(
             div().relative().flex().items_center().gap(px(12.)).child(stages_bar(run).flex_1()).child(run_summary(run)),
         )
-        .children(run_notes(run, standing).into_iter().map(note))
-        .child(run_buttons(run, cx))
+        .children(run_notes(run, standing, closed_first).into_iter().map(note))
+        .child(run_buttons(run, offer, cx))
         .children(merged_view::run_switch(run, cx))
 }
 
@@ -83,19 +86,30 @@ fn glows(standing: Standing) -> bool {
 enum Note {
     Stopped,
     Owed,
+    Exited,
 }
 
-fn run_notes(run: &Run, standing: Standing) -> Vec<(String, Note)> {
+fn run_notes(run: &Run, standing: Standing, closed_first: usize) -> Vec<(String, Note)> {
     let stopped = match standing {
-        Standing::Stopped(secs) => Some((stopped_line(secs), Note::Stopped)),
+        Standing::Stopped(secs) => Some((run.stopped_line(secs), Note::Stopped)),
         _ => None,
     };
-    stopped.into_iter().chain(run.not_run_line().map(|line| (line, Note::Owed))).collect()
+    stopped
+        .into_iter()
+        .chain(run.not_run_line().map(|line| (line, Note::Owed)))
+        .chain(run.exited_line(closed_first).map(|line| (line, Note::Exited)))
+        .collect()
+}
+
+fn note_colour(kind: Note) -> Rgba {
+    match kind {
+        Note::Stopped => colours::muted(),
+        Note::Owed | Note::Exited => colours::waiting(),
+    }
 }
 
 fn note((text, kind): (String, Note)) -> Div {
-    let colour = if kind == Note::Owed { colours::waiting() } else { colours::muted() };
-    div().relative().text_size(px(12.)).text_color(colour).child(text)
+    div().relative().text_size(px(12.)).text_color(note_colour(kind)).child(text)
 }
 
 fn run_facts(run: &Run, cx: &App) -> Vec<String> {
@@ -111,57 +125,77 @@ fn run_facts(run: &Run, cx: &App) -> Vec<String> {
     ]
 }
 
-fn run_buttons(run: &Run, cx: &Context<FlowsPanel>) -> Div {
-    let buttons = div().relative().flex().items_center().gap(px(8.));
-    if run.closed() {
-        return closed_run_buttons(buttons, run.workspace, cx);
-    }
-    let Some(pane) = run.lead_pane() else { return buttons };
-    let command = args(&["close", "--agent", "--pane", &pane.to_string()]);
-    let stop = if running(&command, cx) {
-        ui::busy_button("run-stop", "Stopping…", Tone::Danger)
-    } else {
-        let question = Question::new(
-            "Stop this run?",
-            "The orchestrator and its whole team close, and the run ends. Nothing is removed from disk: the worktree and its branch stay.",
-            "Stop",
-            command,
-        )
-        .doing("Stopping the run…");
-        ui::icon_text_button("run-stop", Icon::Stop, "Stop", Tone::Danger).on_click(ask_on_click(question, cx))
-    };
-    buttons
-        .child(
-            ui::icon_text_button("run-show", Icon::Terminal, "Show orchestrator", Tone::Plain)
-                .on_click(move |_: &ClickEvent, _, cx| show_pane(pane, cx)),
-        )
-        .child(stop)
+fn offer(run: &Run, cx: &App) -> Option<(Reopen, String)> {
+    let store = Store::get(cx).read(cx);
+    let (_, workspace) = store.session.as_ref()?.workspace(run.workspace)?;
+    Some((workspace.reopen_for_run(run.closed())?, workspace.name.clone()))
 }
 
-fn reopen_button(workspace: &str, cx: &Context<FlowsPanel>) -> Stateful<Div> {
-    let reopen = args(&["agents", "reopen", "--workspace", workspace]);
-    if running(&reopen, cx) {
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Action {
+    Show(u64),
+    Reopen(String),
+    Stop(u64),
+    Forget,
+}
+
+fn actions(run: &Run, reopen: Option<Reopen>) -> Vec<Action> {
+    let reopen = reopen.map(|reopen| Action::Reopen(reopen.label()));
+    if run.closed() {
+        return reopen.into_iter().chain([Action::Forget]).collect();
+    }
+    run.lead_pane().map(Action::Show).into_iter().chain(reopen).chain(run.stop_pane().map(Action::Stop)).collect()
+}
+
+fn run_buttons(run: &Run, offer: Option<(Reopen, String)>, cx: &Context<FlowsPanel>) -> Div {
+    let name = offer.as_ref().map(|(_, name)| name.clone()).unwrap_or_default();
+    let buttons = div().relative().flex().flex_wrap().items_center().gap(px(8.));
+    buttons.children(actions(run, offer.map(|(reopen, _)| reopen)).into_iter().map(|action| match action {
+        Action::Show(pane) => show_button(pane),
+        Action::Reopen(label) => reopen_button(run.workspace, label, name.clone(), cx),
+        Action::Stop(pane) => stop_button(pane, cx),
+        Action::Forget => forget_button(run.workspace, cx),
+    }))
+}
+
+fn show_button(pane: u64) -> Stateful<Div> {
+    ui::icon_text_button("run-show", Icon::Terminal, "Show orchestrator", Tone::Plain)
+        .on_click(move |_: &ClickEvent, _, cx| show_pane(pane, cx))
+}
+
+fn stop_button(pane: u64, cx: &Context<FlowsPanel>) -> Stateful<Div> {
+    let command = args(&["close", "--agent", "--pane", &pane.to_string()]);
+    if running(&command, cx) {
+        return ui::busy_button("run-stop", "Stopping…", Tone::Danger);
+    }
+    let question = Question::new(
+        "Stop this run?",
+        "The orchestrator and its whole team close, and the run ends. Nothing is removed from disk: the worktree and its branch stay.",
+        "Stop",
+        command,
+    )
+    .doing("Stopping the run…");
+    ui::icon_text_button("run-stop", Icon::Stop, "Stop", Tone::Danger).on_click(ask_on_click(question, cx))
+}
+
+fn reopen_button(workspace: u64, label: String, name: String, cx: &Context<FlowsPanel>) -> Stateful<Div> {
+    if Store::get(cx).read(cx).busy(&reopen_key(workspace)) {
         return ui::busy_button("run-reopen", "Reopening…", Tone::Primary);
     }
-    ui::icon_text_button("run-reopen", Icon::Undo, "Reopen agents", Tone::Primary).on_click(cx.listener(
-        move |_, _: &ClickEvent, _, cx| {
-            FlowsPanel::run_cmd(reopen.clone(), "Reopening the team…", "Reopened the team", cx);
-        },
-    ))
+    ui::icon_text_button("run-reopen", Icon::Undo, label, Tone::Primary).on_click(move |_: &ClickEvent, _, cx| {
+        Store::get(cx).update(cx, |store, cx| store.reopen_agents(workspace, &name, cx));
+    })
 }
 
-fn closed_run_buttons(buttons: Div, workspace: u64, cx: &Context<FlowsPanel>) -> Div {
-    let workspace = workspace.to_string();
+fn forget_button(workspace: u64, cx: &Context<FlowsPanel>) -> Stateful<Div> {
     let forget = Question::new(
         "Forget this run?",
         "Its closed agents are dropped for good and the run ends. The worktree and its branch stay.",
         "Forget",
-        args(&["agents", "forget", "--workspace", &workspace, "--yes"]),
+        args(&["agents", "forget", "--workspace", &workspace.to_string(), "--yes"]),
     )
     .doing("Forgetting the run…");
-    buttons.child(reopen_button(&workspace, cx)).child(
-        ui::icon_text_button("run-forget", Icon::Trash, "Forget", Tone::Danger).on_click(ask_on_click(forget, cx)),
-    )
+    ui::icon_text_button("run-forget", Icon::Trash, "Forget", Tone::Danger).on_click(ask_on_click(forget, cx))
 }
 
 fn team_columns(width: f32) -> u16 {
@@ -186,6 +220,7 @@ fn member_card(run: &Run, i: usize, member: &Member) -> Stateful<Div> {
         .gap(px(12.))
         .p(px(12.))
         .when(member.closed, |d| d.opacity(0.5))
+        .when(member.agent_exited(), |d| d.border_dashed().border_color(tint(colours::waiting(), 0.6)))
         .child(with_status(face, Some(member)))
         .child(member_text(run, member))
         .child(member_side(member));

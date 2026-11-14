@@ -24,6 +24,7 @@ enum Look {
     Focused,
     Holder,
     Working,
+    Exited,
     Closed,
 }
 
@@ -32,6 +33,8 @@ impl Look {
         let member = plan.member(role);
         if member.is_some_and(|m| m.closed) {
             Self::Closed
+        } else if member.is_some_and(Member::agent_exited) {
+            Self::Exited
         } else if member.and_then(|m| m.status.as_deref()) == Some("working") {
             Self::Working
         } else if plan.holder(role) {
@@ -47,7 +50,7 @@ impl Look {
         match self {
             Self::Working | Self::Holder => 0.26,
             Self::Focused => 0.2,
-            Self::Plain | Self::Closed => 0.11,
+            Self::Plain | Self::Closed | Self::Exited => 0.11,
         }
     }
 
@@ -55,6 +58,7 @@ impl Look {
         match self {
             Self::Working | Self::Focused => colour,
             Self::Holder => tint(colour, 0.75),
+            Self::Exited => colours::waiting(),
             Self::Plain | Self::Closed => tint(colour, 0.28),
         }
     }
@@ -66,7 +70,7 @@ impl Look {
         match self {
             Self::Working => shadows.extend(glass::glow(colour, 0.5, 20.)),
             Self::Focused => shadows.extend(glass::ring(colour)),
-            Self::Plain | Self::Holder | Self::Closed => {}
+            Self::Plain | Self::Holder | Self::Exited | Self::Closed => {}
         }
         shadows
     }
@@ -119,6 +123,7 @@ fn shell(id: impl Into<ElementId>, rect: Rect, colour: Rgba, look: Look) -> Stat
         .border_color(look.edge(colour))
         .shadow(look.shadows(colour))
         .when(look == Look::Closed, |d| d.opacity(0.45))
+        .when(look == Look::Exited, gpui::Styled::border_dashed)
         .child(div().absolute().top_0().left_0().size_full().rounded(px(radius::card())).bg(linear_gradient(
             180.,
             linear_color_stop(tint(colour, look.sheen()), 0.),
@@ -143,6 +148,9 @@ pub(super) fn status_word(member: Option<&Member>) -> Option<(String, Rgba)> {
     let member = member?;
     if member.closed {
         return Some(("closed".into(), colours::faint()));
+    }
+    if member.agent_exited() {
+        return Some(("exited".into(), colours::waiting()));
     }
     let status = member.status.as_deref()?;
     Some((status.to_string(), status_badge(Some(status)).map_or(colours::muted(), |(_, colour)| colour)))
@@ -232,3 +240,6 @@ fn clickable(card: Stateful<Div>, plan: Plan, role: &str, colour: Rgba) -> State
         None => card,
     }
 }
+
+#[cfg(test)]
+mod tests;

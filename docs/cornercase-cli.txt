@@ -1,4 +1,4 @@
-cornercase 0.13.69: the help of every command and subcommand, in the order of `cornercase --help`.
+cornercase 0.13.72: the help of every command and subcommand, in the order of `cornercase --help`.
 Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
 
 ================================================================ cornercase status
@@ -1480,10 +1480,12 @@ The server's other notices come with --notices too, as the window's toast says t
 no token: notify (`cornercase notify`, naming the pane it ran in), queue-started, queue-failed,
 queue-missed and queue-kept (a queued agent or routine run; a one-off entry that missed its time sends
 none), setup-failed (only while nobody looks at its tab), flow-consent (a flow's member waits for your
-consent) and flow-merged (a run's agents closed once its pull request merged). With --json they have
-kind, message, panes and the workspace's ids, which queue-failed and queue-missed leave out:
+consent) and flow-merged (a run's agents closed once its pull request merged, worded like the toast
+without its ▶: cornercase agents reopen --workspace ID brings them back). With --json they have kind,
+message, panes and the workspace's ids, which queue-failed and queue-missed leave out, and failed: true on
+a flow-merged whose free of the builds (--free-builds) failed:
   notify  the release build is ready
-  workspace 2  flow-merged  pull request merged in fix-login: 3 agents closed · ▶ on the workspace reopens them
+  workspace 2  flow-merged  pull request merged in fix-login: 3 agents closed
 With --host, a program's own requests to the terminal are told too, for programs that draw the panes:
   pane 7  clipboard  11 bytes         it wrote to the clipboard (OSC 52); the text itself only with --json
   pane 7  bell  3 times               it rang the bell: one line a second per pane, with how many rang
@@ -1847,9 +1849,14 @@ and a restart forgets what was not run.
 
 A run that closes its agents once its pull request merges says so (close_when_merged with --json), and one that frees its builds then too (free_builds).
 
-A run that has stopped moving (its orchestrator's turn is over, no agent of the team works, it has not
-ended and no wake is being sent) says `stopped moving 50 min ago: …` (stopped with --json, the UTC time it
-stopped, left out while the run moves).
+A run that has stopped moving (its orchestrator's turn is over or its agent exited, no agent of the team works,
+it has not ended and no wake is being sent) says `stopped moving 50 min ago: …` (stopped with --json, the UTC
+time it stopped, left out while the run moves).
+
+A role whose agent exited by itself while its tab is still open says `exited` (exited: true with --json) where a
+role not started yet says `-`, and the run adds `exited: coder; cornercase agents reopen --workspace 7 brings it
+back`. A run whose orchestrator's agent exited has stopped moving too: `stopped moving 5 min ago: the
+orchestrator's agent exited`.
 
 Examples:
   cornercase flow runs
@@ -3948,7 +3955,7 @@ Usage: cornercase worktrees [OPTIONS] <COMMAND>
 Commands:
   list         List every worktree on disk with what makes it safe to remove and its size
   size         Measure the disk a worktree takes and its build folders
-  free-builds  Delete the git-ignored build folders of a worktree and keep the worktree
+  free-builds  Delete the git-ignored build folders of a worktree, or of every merged one, and keep the worktrees
   remove       Remove worktrees as the Worktrees dialog does, open or not, and their branches when asked
   help         Print this message or the help of the given subcommand(s)
 
@@ -3966,6 +3973,7 @@ Examples:
   cornercase worktrees list
   cornercase worktrees size --worktree feat/login
   cornercase worktrees free-builds --worktree feat/login --check
+  cornercase worktrees free-builds --merged --check
   cornercase worktrees remove --path ~/.cornercase/worktrees/shop/feat-login --check
 
 ================================================================ cornercase worktrees list
@@ -3996,6 +4004,11 @@ command exits 3 after printing the rest. With --json it prints {"worktrees": [..
 "last_changed", "changed", "unpushed", "merged", "no_commits", "upstream_gone", "lock",
 "running", "outside", "other_tabs", "removing", "run_role", "safe" (removing it loses no
 uncommitted file and stops no program), "risks", "error", "size" and "size_error".
+
+With sizes, the last line adds up the build folders of the merged worktrees the Worktrees dialog
+lets you free, with the command that frees them: `cornercase worktrees free-builds --merged`
+(with --project ID when the list had one, and --remote when it came from another machine). The
+JSON has the same total as "merged_builds": {"bytes", "count"}, left out with --no-sizes.
 
 Examples:
   cornercase worktrees list
@@ -4032,7 +4045,7 @@ Examples:
   cornercase worktrees size --path ~/.cornercase/worktrees/shop/feat-login
 
 ================================================================ cornercase worktrees free-builds
-Delete the git-ignored build folders of a worktree and keep the worktree
+Delete the git-ignored build folders of a worktree, or of every merged one, and keep the worktrees
 
 Usage: cornercase worktrees free-builds [OPTIONS]
 
@@ -4045,6 +4058,8 @@ Options:
       --json                      Print JSON instead of text
       --check                     Print what would be freed and what runs there, and delete nothing
       --force                     Go on while a program runs in the worktree or a build folder holds a git checkout
+      --merged                    Free the build folders of every merged worktree, as `worktrees list` adds them up; one where a program runs or a build folder holds a git checkout keeps them
+      --project <ID>              With --merged, only the worktrees of this project's repository [default: every worktree on disk]
       --boot <BOOT>               Go on only if the server is still this run of it, the `boot` of `status --json`; else nothing is done or printed and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
@@ -4058,9 +4073,23 @@ ignoring since the measure, are named and the command exits 3. With --json it pr
 "check", "bytes", "folders": [{"path", "bytes"}], "kept", "failed": [{"path", "error"}],
 "running"}.
 
+--merged frees the build folders of every merged worktree, the ones `worktrees list` adds up on its
+last line (a worktree the dialog lets you free: linked, not being removed or freed, not a live
+flow run's role; the unmerged ones and those with `no commits` are left alone), one after another.
+It never forces: a worktree where a program runs, or whose build folder holds a git checkout, keeps
+its builds and is named with why, and the command exits 3 after printing the rest, with --check
+too. --project ID takes one project's repository's worktrees; --check deletes nothing. It cannot be
+combined with --workspace, --worktree, --path or --force: free one worktree by itself with --path
+and --force. One line per worktree that had builds, then a summary; a merged worktree with nothing
+to free is left out, so a routine can run it every hour. With --json it prints {"check",
+"bytes", "worktrees": [...]}, each entry the `free-builds` answer above plus "outcome" (freed,
+freeable with --check, refused, failed) and "why".
+
 Examples:
   cornercase worktrees free-builds --worktree feat/login --check
   cornercase worktrees free-builds --worktree feat/login
+  cornercase worktrees free-builds --merged --check
+  cornercase worktrees free-builds --merged
   cornercase worktrees free-builds --path ~/.cornercase/worktrees/shop/feat-login --force
 
 ================================================================ cornercase worktrees remove
@@ -4401,7 +4430,7 @@ Usage: cornercase agents [OPTIONS] <COMMAND>
 
 Commands:
   close   Close the tabs of a workspace that run agents, to reopen them later
-  reopen  Reopen the closed agents of a workspace, each in its own conversation
+  reopen  Reopen the closed agents of a workspace, each in its own conversation, and start again a running flow's roles whose agent exited
   forget  Forget the closed agents of a workspace, after asking
   help    Print this message or the help of the given subcommand(s)
 
@@ -4410,7 +4439,7 @@ Options:
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
   -h, --help                      Print help
 
-`close` closes every tab of a workspace (the one you are in, or the one --workspace or --worktree names) that runs a coding agent, whole, and keeps what each agent needs to start again: its conversation, mode and account. Shells and the workspace stay. It refuses when closing would cut an agent's turn, when an agent cannot resume its conversation (opencode, custom agents, an agent with no conversation yet starts a new one) or when other panes share those tabs, unless you pass --force; --check says what would close and closes nothing. A flow's team closes with its orchestrator and the run is kept whole. `reopen` brings the tabs back after the others, each agent in its own conversation (even with resume_agents off), and a flow's orchestrator last with its team's new pane ids. `forget` drops what was closed for good, asks first on a terminal and needs --yes in a script, and ends a kept flow run. Closed agents survive a restart of the server and show as `closed_agents` in `status --json`; removing the workspace forgets them.
+`close` closes every tab of a workspace (the one you are in, or the one --workspace or --worktree names) that runs a coding agent, whole, and keeps what each agent needs to start again: its conversation, mode and account. Shells and the workspace stay. It refuses when closing would cut an agent's turn, when an agent cannot resume its conversation (opencode, custom agents, an agent with no conversation yet starts a new one) or when other panes share those tabs, unless you pass --force; --check says what would close and closes nothing. A flow's team closes with its orchestrator and the run is kept whole. `reopen` brings the tabs back after the others, each agent in its own conversation (even with resume_agents off), and a flow's orchestrator last with its team's new pane ids. It also starts again, in the panes they were in, a running flow's roles whose agent exited by itself: each in its own conversation when cornercase saw one, else from its role's prompt, and the orchestrator last; that needs no window. `forget` drops what was closed for good, asks first on a terminal and needs --yes in a script, and ends a kept flow run. Closed agents survive a restart of the server and show as `closed_agents` in `status --json`; removing the workspace forgets them.
 
 Examples:
   cornercase agents close
@@ -4436,7 +4465,7 @@ Options:
   -h, --help                      Print help
 
 ================================================================ cornercase agents reopen
-Reopen the closed agents of a workspace, each in its own conversation
+Reopen the closed agents of a workspace, each in its own conversation, and start again a running flow's roles whose agent exited
 
 Usage: cornercase agents reopen [OPTIONS]
 
