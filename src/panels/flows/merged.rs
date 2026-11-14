@@ -94,7 +94,7 @@ pub(super) enum Free {
     Offered,
 }
 
-pub(super) fn page(run: &Run, releases: &Releases<'_>, os: Os) -> Page {
+pub(super) fn page(run: &Run, releases: &Releases<'_>) -> Page {
     match switch(run, releases) {
         Switch::Hidden => Page::Hidden,
         Switch::Rests(line) => Page::Rests {
@@ -110,19 +110,18 @@ pub(super) fn page(run: &Run, releases: &Releases<'_>, os: Os) -> Page {
             line: how(None, run.free_builds),
             free: match free_switch(run, releases) {
                 Switch::Offered(_) => Free::Offered,
-                Switch::Rests(line) => Free::Rests(Resting { ticked: run.free_builds, line: kept_line(run, line, os) }),
+                Switch::Rests(line) => {
+                    Free::Rests(Resting { ticked: run.free_builds, line: kept_line(run, releases, line) })
+                }
                 Switch::Hidden => Free::Hidden,
             },
         },
     }
 }
 
-fn kept_line(run: &Run, line: String, os: Os) -> String {
-    if run.free_builds && line != FREE_HOW {
-        format!(
-            "{line} Turning the close off turns this off, and this {} cannot turn it on again.",
-            desktop::machine(os)
-        )
+fn kept_line(run: &Run, releases: &Releases<'_>, line: String) -> String {
+    if run.free_builds && matches!(releases.lacks(Feature::FlowFreeBuilds), Some(Lacks::ThisComputer(_))) {
+        format!("{line} Turning the close off turns this off, and this {} cannot turn it on again.", desktop::here())
     } else {
         line
     }

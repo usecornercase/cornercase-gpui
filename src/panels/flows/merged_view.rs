@@ -12,7 +12,6 @@ use super::merged::{
 };
 use super::model::Run;
 use crate::cli;
-use crate::platform::Os;
 use crate::store::{self, Busy, Store, ToastKind};
 use crate::ui;
 
@@ -43,7 +42,7 @@ impl FlowsPanel {
 
 pub(super) fn run_switch(run: &Run, cx: &Context<FlowsPanel>) -> Option<Div> {
     let releases = Store::get(cx).read(cx).releases();
-    match page(run, &releases, Os::CURRENT) {
+    match page(run, &releases) {
         Page::Hidden => None,
         Page::Rests { close, free } => {
             let first = with_line(ui::resting_checkbox(close.ticked, LABEL), close.line);

@@ -502,7 +502,7 @@ fn freeing() -> Run {
 }
 
 fn page_of(run: &Run, here: &str) -> Page {
-    page(run, &here_on("0.13.76", here), Os::CURRENT)
+    page(run, &here_on("0.13.76", here))
 }
 
 #[test]
@@ -553,4 +553,12 @@ fn a_page_offers_both_boxes_and_hides_for_a_closed_run() {
     let Page::Offered { choice, free, .. } = page_of(&freeing(), "0.13.76") else { panic!("offered") };
     assert_eq!((choice, free), (both(), Free::Offered));
     assert_eq!(page_of(&run(true, false, false), "0.13.76"), Page::Hidden);
+}
+
+#[test]
+fn a_free_box_that_rests_for_the_server_does_not_blame_this_computer() {
+    let Page::Offered { free: Free::Rests(free), .. } = page(&freeing(), &on(release("0.13.63"))) else {
+        panic!("the close is offered and the free rests")
+    };
+    assert_eq!(free.line, format!("{FREE_NEEDS}: the server runs 0.13.63."));
 }
