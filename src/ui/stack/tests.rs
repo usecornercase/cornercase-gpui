@@ -75,5 +75,10 @@ fn an_item_cut_to_its_most_is_drawn_when_rounding_leaves_it_a_hair_over() {
 
 #[test]
 fn an_item_more_than_a_pixel_over_the_room_is_not_drawn() {
-    assert_eq!(fits(&[101.], 100.), Fitting { shown: 0, more: true });
+    assert_eq!(fits(&[102.], 100.), Fitting { shown: 0, more: true });
+}
+
+#[test]
+fn an_item_cut_to_its_most_is_drawn_when_two_roundings_leave_it_most_of_a_device_pixel_over() {
+    assert_eq!(fitting(&[241.818_18, 40.], GAP, 272.727_26, 23.636_364), Fitting { shown: 1, more: true });
 }

@@ -127,6 +127,7 @@ fn toast_view(store: &Entity<Store>, toast: Toast, (most, capped): (f32, bool)) 
 }
 
 fn toast_text(text: String, id: u64, most: f32, capped: bool) -> impl IntoElement {
+    let text = div().when(capped, |d| d.pb(px(FADE))).child(text);
     let body = div().id(("toast-text", id)).max_h(px(most)).overflow_y_scroll().text_size(px(12.)).child(text);
     div().relative().flex_1().min_w_0().child(body).when(capped, |d| d.child(ui::glass::bottom_fade(FADE)))
 }

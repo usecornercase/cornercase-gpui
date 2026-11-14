@@ -5,7 +5,7 @@ use gpui::{
     ParentElement as _, Pixels, Point, Size, Style, Window, div, point, px, size,
 };
 
-const SLACK: f32 = 0.5;
+const SLACK: f32 = 1.;
 
 type Build = Box<dyn Fn(Fit) -> AnyElement>;
 type Drawn = Box<dyn FnOnce(Range<usize>, &mut App)>;
