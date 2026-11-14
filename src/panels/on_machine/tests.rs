@@ -197,3 +197,63 @@ fn an_older_machine_forgets_the_wait_so_the_next_ask_goes_at_once() {
     assert!(!retry.waiting());
     assert!(retry.due(Instant::now()));
 }
+
+fn restarted() -> Retry {
+    let mut retry = Retry::default();
+    retry.restarted();
+    retry
+}
+
+#[test]
+fn a_read_refused_for_its_boot_says_the_machine_restarted() {
+    assert_eq!(says(&read(up()), &restarted(), NOW).as_deref(), Some("vps restarted"));
+}
+
+#[test]
+fn a_refused_read_is_never_due_again_however_long_it_waits() {
+    let retry = restarted();
+    let now = Instant::now();
+    assert!(!retry.due(now));
+    assert!(!retry.due(now + Duration::from_secs(60)));
+}
+
+#[test]
+fn nothing_new_is_asked_after_a_refused_read() {
+    assert_eq!(may_ask(&read(up()), &restarted()), Err("vps restarted".to_string()));
+}
+
+#[test]
+fn a_failure_after_a_refusal_keeps_the_refusal() {
+    let mut retry = restarted();
+    retry.failed("ssh: connection refused".into(), Instant::now());
+    assert_eq!(says(&read(up()), &retry, NOW).as_deref(), Some("vps restarted"));
+    assert!(!retry.due(Instant::now() + Duration::from_secs(60)));
+}
+
+#[test]
+fn an_answer_that_comes_after_a_refusal_does_not_end_it() {
+    let mut retry = restarted();
+    assert!(!retry.heard());
+    assert!(!retry.due(Instant::now()));
+    assert_eq!(may_ask(&read(up()), &retry), Err("vps restarted".to_string()));
+}
+
+#[test]
+fn the_links_own_note_comes_before_a_refusal() {
+    let said = says(&down(None), &restarted(), NOW);
+    assert_eq!(said.as_deref(), Some("vps unreachable · reconnecting…"));
+}
+
+#[test]
+fn a_refusal_is_drawn_plain_with_no_count() {
+    assert!(!counts(&read(up()), &restarted(), NOW));
+}
+
+#[test]
+fn a_missed_read_is_a_refusal_or_a_failure_by_what_missed() {
+    let mut retry = Retry::default();
+    retry.missed(Missed::Failed("no".into()), Instant::now());
+    assert_eq!(says(&read(up()), &retry, NOW).as_deref(), Some("vps did not answer · reconnecting…"));
+    retry.missed(Missed::Restarted, Instant::now());
+    assert_eq!(says(&read(up()), &retry, NOW).as_deref(), Some("vps restarted"));
+}

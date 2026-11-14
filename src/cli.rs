@@ -257,6 +257,10 @@ pub(crate) fn stale_boot(error: &anyhow::Error) -> bool {
     error.is::<StaleBoot>()
 }
 
+pub(crate) fn refused_boot(name: &str, code: Option<i32>, stderr: &[u8]) -> Option<anyhow::Error> {
+    (code == Some(STALE_BOOT)).then(|| failure(name, code, stderr))
+}
+
 pub(crate) fn quit() {
     kill_all();
     let target = target();
@@ -322,17 +326,41 @@ fn reap(id: u64) -> Option<i32> {
     child.wait().ok().and_then(|status| status.code())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StreamEnd {
+    said: String,
+    status: Option<i32>,
+}
+
+impl StreamEnd {
+    pub(crate) fn new(said: String, status: Option<i32>) -> Self {
+        Self { said, status }
+    }
+
+    pub(crate) fn said(&self) -> &str {
+        &self.said
+    }
+
+    pub(crate) fn stale_boot(&self) -> bool {
+        self.status == Some(STALE_BOOT)
+    }
+}
+
 pub(crate) fn stream_on<S: AsRef<str>>(
     target: &Target,
     args: &[S],
     on_line: impl FnMut(String) + Send + 'static,
-    on_end: impl FnOnce(String) + Send + 'static,
+    on_end: impl FnOnce(StreamEnd) + Send + 'static,
 ) -> Result<Stream> {
     let mut cmd = target.command(args);
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = spawn(&mut cmd)?;
-    read_output(&mut child, on_line, on_end)?;
-    Ok(keep(child))
+    let stdout = child.stdout.take().context("no stdout")?;
+    let stderr = child.stderr.take().context("no stderr")?;
+    let stream = keep(child);
+    let id = stream.id;
+    read_pipes(stdout, stderr, on_line, move |said| on_end(StreamEnd::new(said, reap(id))));
+    Ok(stream)
 }
 
 fn read_output(
@@ -342,12 +370,21 @@ fn read_output(
 ) -> Result<()> {
     let stdout = child.stdout.take().context("no stdout")?;
     let stderr = child.stderr.take().context("no stderr")?;
+    read_pipes(stdout, stderr, on_line, on_end);
+    Ok(())
+}
+
+fn read_pipes(
+    stdout: ChildStdout,
+    stderr: ChildStderr,
+    on_line: impl FnMut(String) + Send + 'static,
+    on_end: impl FnOnce(String) + Send + 'static,
+) {
     let err_reader = thread::spawn(move || read_all(stderr));
     thread::spawn(move || {
         read_lines(stdout, on_line);
         on_end(err_reader.join().unwrap_or_default());
     });
-    Ok(())
 }
 
 fn keep(child: Child) -> Stream {

@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.94
+
+- **What the window shows of another machine can no longer come from a different run of its cornercase.** A machine's workspace, tab and project numbers start again when its cornercase restarts, so what the window asked for in the moment before it noticed (a workspace's ports, changes or files, a tab's view, a project's flows) could be answered with whatever now has that number there. With cornercase 0.13.66 or newer on this computer the machine refuses those reads instead: Changes, Files, Ports, the Browser's start page and the machine's tab say that it restarted (`vps restarted`), and so do Run on's lines for its trackers, flows and issue; what was already shown stays, nothing more is asked of the run that ended, and the window moves to the machine's new run as soon as it has it. The protection needs the machine's cornercase server to be 0.12.212 or newer too, and a machine's tab that opens as the window starts goes without it until it reconnects. With an older cornercase on this computer, or in those cases, everything works as before and a read can still show data from a different run.
+
 ## 0.1.93
 
 - **Toasts stay inside the window, however small.** When more toasts come than the window has room for, the newest stay at the bottom, whole, and the older ones wait above them under a `+2 more`, instead of running past the top of the window where they could not be read or closed. A toast that waits shows as soon as there is room, and its seconds count only while it shows, so it does not run out before you see it. A toast too long for the window scrolls inside its card, with its button and ✕ in view.

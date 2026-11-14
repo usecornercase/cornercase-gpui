@@ -41,7 +41,7 @@ fn heard_lines<T: DeserializeOwned + 'static>(
     args: &[String],
     tx: &UnboundedSender<Msg>,
     what: &'static str,
-    (line, end): (impl Fn(Box<T>) -> Heard + Send + 'static, impl FnOnce(String) -> Heard + Send + 'static),
+    (line, end): (impl Fn(Box<T>) -> Heard + Send + 'static, impl FnOnce(cli::StreamEnd) -> Heard + Send + 'static),
 ) -> Result<(Stream, u64)> {
     let serial = next_serial();
     let (lines, ended) = (tx.clone(), tx.clone());
@@ -60,6 +60,14 @@ fn heard_lines<T: DeserializeOwned + 'static>(
         },
     )?;
     Ok((stream, serial))
+}
+
+pub(super) fn surface_args(view: u64, boot: Option<&str>) -> Vec<String> {
+    let args = ["surface".to_string(), "--view".into(), view.to_string(), "--patches".into()].to_vec();
+    match boot {
+        Some(boot) => cli::with_boot(args, boot),
+        None => args,
+    }
 }
 
 impl Connection {
@@ -114,8 +122,8 @@ impl Connection {
         Ok(())
     }
 
-    pub(super) fn open_surface(&mut self, view: u64, tx: &UnboundedSender<Msg>) -> Result<()> {
-        let args = ["surface".to_string(), "--view".into(), view.to_string(), "--patches".into()];
+    pub(super) fn open_surface(&mut self, view: u64, boot: Option<&str>, tx: &UnboundedSender<Msg>) -> Result<()> {
+        let args = surface_args(view, boot);
         self.feed = Feed::Off;
         self.surface_serial = 0;
         let (stream, serial) = heard_lines(&self.target, &args, tx, "surface", (Heard::Frame, Heard::SurfaceEnded))?;

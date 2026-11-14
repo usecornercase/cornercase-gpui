@@ -3,10 +3,14 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 
 use super::*;
-use crate::cli::QueueTap;
 use crate::cli::with_boot;
+use crate::cli::{QueueTap, Version};
 use crate::model::machines::LinkState;
 use crate::model::{Shown, Tab, ThereProject, ThereWorkspace, ViewInfo};
+
+fn releases(here: Option<Version>) -> ReadReleases {
+    ReadReleases { here, there: None }
+}
 
 fn id(number: u64) -> ThereId {
     ThereId::heard(number)
@@ -676,7 +680,7 @@ fn a_tab_opens_its_queue_for_its_machine_with_its_runs_boot_from_cornercase_0_13
     let (tx, _rx) = futures::channel::mpsc::unbounded();
     let mut tab = opening();
     let place = tab.aimed.clone();
-    tab.reopen(Target::Local, &place, Some(Version::new(0, 13, 63)), &tx);
+    tab.reopen(Target::Local, &place, releases(Some(Version::new(0, 13, 63))), &tx);
     assert_eq!(
         (tab.conn.queue.machine(), tab.conn.queue.boot()),
         (Some(tab.machine.as_str()), Some(tab.boot.as_str()))
@@ -689,7 +693,70 @@ fn a_tab_opens_its_queue_without_a_boot_below_0_13_63_or_with_the_release_unknow
     for release in [Some(Version::new(0, 13, 62)), None] {
         let mut tab = opening();
         let place = tab.aimed.clone();
-        tab.reopen(Target::Local, &place, release, &tx);
+        tab.reopen(Target::Local, &place, releases(release), &tx);
         assert_eq!((tab.conn.queue.machine(), tab.conn.queue.boot()), (Some(tab.machine.as_str()), None));
     }
+}
+
+fn ended(status: Option<i32>) -> StreamEnd {
+    StreamEnd::new("error: this request is for another run".into(), status)
+}
+
+#[test]
+fn a_stream_that_ended_with_status_4_is_a_restart_and_any_other_end_a_fall() {
+    assert_eq!(refused_lost(&ended(Some(4))), Some(Lost::Restarted));
+    for status in [Some(1), Some(0), None] {
+        assert_eq!(refused_lost(&ended(status)), None);
+    }
+}
+
+#[test]
+fn a_refused_tab_is_not_opened_again_while_the_machine_stays_linked() {
+    assert_eq!(link_step(&TabState::Down(Lost::Restarted), true, None), LinkStep::Stay);
+}
+
+#[test]
+fn a_refused_tab_falls_to_the_link_when_the_link_falls() {
+    assert_eq!(link_step(&TabState::Down(Lost::Restarted), false, None), LinkStep::Fall);
+}
+
+#[test]
+fn keys_typed_on_a_refused_tab_say_the_machine_restarted() {
+    let mut tab = opening();
+    tab.fall(Lost::Restarted);
+    assert_eq!(refusal(&tab, None), "vps restarted");
+}
+
+#[test]
+fn a_refused_tab_stands_as_restarted_and_starts_its_waits_over() {
+    let mut tab = opening();
+    tab.attempts = 3;
+    tab.fall(Lost::Restarted);
+    assert_eq!((tab.standing(Instant::now()), tab.attempts), (Standing::Restarted, 0));
+}
+
+#[test]
+fn the_tabs_events_carry_its_runs_boot_when_the_reads_do() {
+    assert_eq!(events_args(Some("b1")), ["events", "--host", "--json", "--boot", "b1"]);
+    assert_eq!(events_args(None), ["events", "--host", "--json"]);
+}
+
+#[test]
+fn a_tab_decides_once_per_connection_whether_its_streams_carry_its_boot() {
+    let (tx, _rx) = futures::channel::mpsc::unbounded();
+    let mut tab = opening();
+    let place = tab.aimed.clone();
+    let on = ReadReleases { here: Some(Version::new(0, 13, 66)), there: Some(Version::new(0, 12, 212)) };
+    tab.reopen(Target::Local, &place, on, &tx);
+    assert_eq!(tab.stream_boot.as_deref(), Some(tab.boot.as_str()));
+    tab.reopen(Target::Local, &place, releases(Some(Version::new(0, 13, 66))), &tx);
+    assert_eq!(tab.stream_boot, None);
+}
+
+#[test]
+fn a_surface_that_ended_with_no_tab_pauses_unless_it_was_refused_for_its_boot() {
+    assert!(surface_pauses(true, &ended(Some(1))));
+    assert!(surface_pauses(true, &ended(None)));
+    assert!(!surface_pauses(true, &ended(Some(4))));
+    assert!(!surface_pauses(false, &ended(Some(1))));
 }

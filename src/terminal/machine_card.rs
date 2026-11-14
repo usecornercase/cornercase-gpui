@@ -14,7 +14,7 @@ use crate::model::{MachinePlace, MachineSeen, Tab, ThereId};
 use crate::panels::on_machine::update_button;
 use crate::panels::{PanelKind, queue};
 use crate::platform::paths;
-use crate::store::UpdateOffer;
+use crate::store::{UpdateOffer, restart_note};
 use crate::theme::{colours, radius};
 use crate::ui;
 use crate::ui::counting::Counting;
@@ -64,6 +64,7 @@ fn state_of(standing: &Standing, seen: &MachineSeen, told: &Told<'_>) -> Option<
         Standing::Elsewhere(why) | Standing::NoWay(why) => Some(CardState::Said(why.clone())),
         Standing::Waiting(why) => Some(CardState::Running(format!("{why}…"))),
         Standing::Older(note) => Some(CardState::Said(note.line.clone())),
+        Standing::Restarted => Some(CardState::Said(restart_note(&seen.name))),
         Standing::NoTab | Standing::Shown => None,
     }
 }

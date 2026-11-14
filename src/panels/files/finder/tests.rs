@@ -1,7 +1,7 @@
 use gpui::{px, size};
 
 use super::*;
-use crate::model::Session;
+use crate::model::{ReadReleases, Session};
 use crate::store::Reach;
 use crate::test_util::{vps_read, vps_target};
 
@@ -32,7 +32,7 @@ fn session(shown: u64) -> Session {
 #[test]
 fn on_a_machine_it_searches_through_the_machine_and_names_it() {
     let read = vps_read(Reach::Up(vps_target()));
-    let spot = Spot::on_machine(&read).expect("a place to search");
+    let spot = Spot::on_machine(&read, ReadReleases::default()).expect("a place to search");
     assert!(spot.source.is_there());
     assert_eq!(spot.root, PathBuf::from("/home/ana/code/shop"));
     assert_eq!(spot.label, "shop on vps");
@@ -40,7 +40,7 @@ fn on_a_machine_it_searches_through_the_machine_and_names_it() {
 
 #[test]
 fn a_machine_down_leaves_nothing_to_search() {
-    assert!(Spot::on_machine(&vps_read(Reach::Down("vps unreachable".into()))).is_none());
+    assert!(Spot::on_machine(&vps_read(Reach::Down("vps unreachable".into())), ReadReleases::default()).is_none());
 }
 
 #[test]

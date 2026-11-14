@@ -189,3 +189,11 @@ fn only_a_failed_answer_of_a_machines_queue_is_worded() {
     assert_eq!(answer_words(&there, Some(Ok(String::new()))), None);
     assert_eq!(answer_words(&there, None), None);
 }
+
+#[test]
+fn a_read_refused_for_its_boot_says_the_machine_restarted_and_nothing_else_is_a_refusal() {
+    let refused = cli::failure("files", Some(4), b"error: another run");
+    assert_eq!(read_refusal("vps", &refused).as_deref(), Some("vps restarted"));
+    assert_eq!(stale_note("vps", &refused).as_deref(), Some("vps restarted: nothing was sent"));
+    assert_eq!(read_refusal("vps", &cli::failure("files", Some(1), b"no")), None);
+}

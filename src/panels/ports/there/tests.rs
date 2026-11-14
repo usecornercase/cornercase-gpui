@@ -18,12 +18,12 @@ fn a_machines_note_says_open_shows_it_in_the_browser_and_follows_the_gate() {
         open[0].starts_with("These ports are on vps: Tunnel forwards one to this ")
             && open[0].contains("Open shows it in the Browser panel")
     );
-    let here = machine_notes(&Gate::Older(Older::ThisComputer(crate::cli::Version::parse("0.13.39"))), "vps", &up());
+    let here = machine_notes(&Gate::Older(Older::ThisComputer(cli::Version::parse("0.13.39"))), "vps", &up());
     assert!(
         here[0].starts_with("Tunnel needs cornercase 0.13.50 or newer on this ")
             && here[0].contains("(it has 0.13.39)")
     );
-    let there = machine_notes(&Gate::Older(Older::Server(crate::cli::Version::parse("0.13.45"))), "vps", &up());
+    let there = machine_notes(&Gate::Older(Older::Server(cli::Version::parse("0.13.45"))), "vps", &up());
     assert_eq!(there, ["Tunnel needs cornercase 0.13.50 or newer on vps (its server runs 0.13.45)."]);
     assert_eq!(machine_notes(&Gate::Waiting, "vps", &up()), Vec::<String>::new());
 }
@@ -39,9 +39,23 @@ fn a_refused_machine_offers_no_tunnel_note() {
 fn a_machine_refused_as_older_offers_no_cornercase_note_but_the_gate_still_speaks() {
     assert_eq!(machine_notes(&Gate::Open, "vps", &older_reach()), Vec::<String>::new());
     assert_eq!(machine_notes(&Gate::Waiting, "vps", &older_reach()), Vec::<String>::new());
-    let older = Gate::Older(Older::Server(crate::cli::Version::parse("0.13.45")));
+    let older = Gate::Older(Older::Server(cli::Version::parse("0.13.45")));
     assert_eq!(
         machine_notes(&older, "vps", &older_reach()),
         ["Tunnel needs cornercase 0.13.50 or newer on vps (its server runs 0.13.45)."]
     );
+}
+
+#[test]
+fn a_sample_refused_for_its_boot_is_a_restart_not_a_failure() {
+    let refused = cli::failure("ports", Some(4), b"error: another run");
+    assert_eq!(missed_of("vps", "ana@vps.example.com", &refused), Missed::Restarted);
+}
+
+#[test]
+fn any_other_failed_sample_is_a_failure_with_the_address_hidden() {
+    let failed = cli::failure("ports", Some(1), b"could not reach cornercase on `ana@vps.example.com`");
+    let Missed::Failed(why) = missed_of("vps", "ana@vps.example.com", &failed) else { panic!("a failure") };
+    assert!(!why.contains("ana@vps.example.com"), "{why}");
+    assert!(why.contains("vps"), "{why}");
 }

@@ -82,6 +82,14 @@ pub(super) fn top_for(lines: &[String], (line, at): (usize, usize), fit: Fit, mu
     (0, 0)
 }
 
+fn keeps_what_shows(answer: Option<&Content>, shown: bool) -> bool {
+    match answer {
+        Some(Content::Lost(_)) => true,
+        Some(Content::Restarted(_)) => shown,
+        _ => false,
+    }
+}
+
 fn text_lines(content: &Content) -> Option<Arc<Vec<String>>> {
     match content {
         Content::Text(text) => Some(text.lines.clone()),
@@ -282,7 +290,7 @@ impl FilesPanel {
         if viewer.path != reading.path {
             return;
         }
-        if matches!(content, Some(Content::Lost(_))) {
+        if keeps_what_shows(content.as_ref(), viewer.content.is_some()) {
             viewer.checking = false;
             cx.notify();
             return;

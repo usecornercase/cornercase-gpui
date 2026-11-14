@@ -8,15 +8,15 @@ use serde_json::Value;
 
 use super::connection::Connection;
 use super::{Heard, Msg, Root};
-use crate::cli::{self, Stream, Target, Version};
+use crate::cli::{self, Stream, StreamEnd, Target};
 use crate::desktop;
 use crate::dialogs::{self, CloseWords, ContextThere, agent_doing, on_machine};
 use crate::model::accounts::{AccountsInfo, ListMoves};
 use crate::model::machines::run_on::checks::Asked;
-use crate::model::{Frame, Grid, MachinePlace, MachineSeen, Session, ThereId};
+use crate::model::{Frame, Grid, MachinePlace, MachineSeen, ReadReleases, Session, ThereId};
 use crate::notify::{Event, Notifier, parse_event};
 use crate::sidebar::{self, AgentCloseThere, CloseAgent};
-use crate::store::{self, Busy, OlderNote, Reach, Store, TabThere, ToastKind, args, failed_there};
+use crate::store::{self, Busy, OlderNote, Reach, Store, TabThere, ToastKind, args, failed_there, restart_note};
 use crate::terminal::cleaned;
 use crate::theme;
 
@@ -33,6 +33,7 @@ enum Lost {
     Waiting(String),
     Older(OlderNote),
     Elsewhere(String),
+    Restarted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +48,7 @@ pub(crate) enum Standing {
     Waiting(String),
     Older(OlderNote),
     Elsewhere(String),
+    Restarted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,6 +121,7 @@ pub(crate) struct MachineTab {
     told_visible: bool,
     opened_visible: bool,
     host_events: Option<Stream>,
+    stream_boot: Option<String>,
     accounts: Asked<AccountsInfo>,
     accounts_asks: u64,
     config_moves: ListMoves,
@@ -138,9 +141,27 @@ fn link_step(state: &TabState, linked: bool, older: Option<&OlderNote>) -> LinkS
         (TabState::Down(Lost::Stream { .. }), true) if older.is_some() => {
             older.map_or(LinkStep::Stay, |note| LinkStep::Older(note.clone()))
         }
-        (TabState::Opening | TabState::Live | TabState::Down(Lost::Stream { .. }), false) => LinkStep::Fall,
+        (TabState::Opening | TabState::Live | TabState::Down(Lost::Stream { .. } | Lost::Restarted), false) => {
+            LinkStep::Fall
+        }
         (TabState::Down(Lost::Link | Lost::NoWay(_) | Lost::Waiting(_) | Lost::Older(_)), true) => LinkStep::Reopen,
         _ => LinkStep::Stay,
+    }
+}
+
+fn surface_pauses(no_tab: bool, ended: &StreamEnd) -> bool {
+    no_tab && refused_lost(ended).is_none()
+}
+
+fn refused_lost(ended: &StreamEnd) -> Option<Lost> {
+    ended.stale_boot().then_some(Lost::Restarted)
+}
+
+fn events_args(boot: Option<&str>) -> Vec<String> {
+    let command = args(&["events", "--host", "--json"]);
+    match boot {
+        Some(boot) => cli::with_boot(command, boot),
+        None => command,
     }
 }
 
@@ -248,6 +269,7 @@ fn refusal(tab: &MachineTab, seen: Option<&MachineSeen>) -> String {
         TabState::Down(Lost::Elsewhere(_)) => {
             format!("The tab on {name} needs this window on this {}", desktop::here())
         }
+        TabState::Down(Lost::Restarted) => restart_note(name),
         TabState::Down(Lost::Link) => seen.map_or_else(|| format!("{name} unreachable"), MachineSeen::link_note),
         TabState::Down(Lost::Stream { .. }) => format!("{name} unreachable"),
     }
@@ -269,6 +291,7 @@ impl MachineTab {
             told_visible: true,
             opened_visible: true,
             host_events: None,
+            stream_boot: None,
             accounts: Asked::default(),
             accounts_asks: 0,
             config_moves: ListMoves::default(),
@@ -321,6 +344,7 @@ impl MachineTab {
             TabState::Down(Lost::Waiting(why)) => Standing::Waiting(why.clone()),
             TabState::Down(Lost::Older(note)) => Standing::Older(note.clone()),
             TabState::Down(Lost::Elsewhere(why)) => Standing::Elsewhere(why.clone()),
+            TabState::Down(Lost::Restarted) => Standing::Restarted,
             _ if self.shows_no_tab() => Standing::NoTab,
             TabState::Live => Standing::Shown,
             TabState::Opening if self.conn.has_frame || self.attempts > 0 => Standing::Reconnecting,
@@ -355,7 +379,7 @@ impl MachineTab {
     fn fall(&mut self, lost: Lost) -> bool {
         self.conn.go_nowhere();
         self.host_events = None;
-        if matches!(lost, Lost::Older(_) | Lost::Waiting(_)) {
+        if matches!(lost, Lost::Older(_) | Lost::Waiting(_) | Lost::Restarted) {
             self.attempts = 0;
         }
         self.state = TabState::Down(lost);
@@ -403,12 +427,13 @@ impl MachineTab {
                 let _ = tx.unbounded_send(Msg::Stream(serial, heard));
             }
         };
-        self.host_events =
-            cli::stream_on(self.conn.target(), &args(&["events", "--host", "--json"]), on_line, |_| {}).ok();
+        let command = events_args(self.stream_boot.as_deref());
+        self.host_events = cli::stream_on(self.conn.target(), &command, on_line, |_| {}).ok();
     }
 
-    fn reopen(&mut self, target: Target, place: &MachinePlace, release: Option<Version>, tx: &UnboundedSender<Msg>) {
-        let run = (self.machine.clone(), acts::carried_boot(&self.boot, release));
+    fn reopen(&mut self, target: Target, place: &MachinePlace, releases: ReadReleases, tx: &UnboundedSender<Msg>) {
+        let run = (self.machine.clone(), acts::carried_boot(&self.boot, releases.here));
+        self.stream_boot = acts::streamed_boot(&self.boot, releases);
         self.conn.open_queue(target, run, tx);
         self.state = TabState::Opening;
         self.session = None;
@@ -529,14 +554,14 @@ impl Root {
     }
 
     fn connect_machine(&mut self, target: Target, place: &MachinePlace, cx: &mut Context<Self>) {
-        let release = self.cli_release(cx);
+        let releases = self.store.read(cx).read_releases(&place.machine);
         let Some(tab) = self.machine.as_mut() else { return };
         let size = tab.conn.size.or(self.own.size).unwrap_or((120, 36));
         let seen = self.window_active && !self.had.full;
         tab.told_visible = seen;
         tab.opened_visible = seen;
-        tab.reopen(target, place, release, &self.tx);
-        let opened = tab.conn.open_view(&place.open_args(size, !seen), &self.tx);
+        tab.reopen(target, place, releases, &self.tx);
+        let opened = tab.conn.open_view(&place.open_args(size, !seen, releases), &self.tx);
         self.store.update(cx, Store::read_cli_release);
         if let Err(e) = opened {
             self.machine_fell(&e.to_string(), cx);
@@ -546,9 +571,9 @@ impl Root {
     pub(super) fn machine_heard(&mut self, heard: Heard, cx: &mut Context<Self>) {
         match heard {
             Heard::Line(session) => self.machine_line(*session, cx),
-            Heard::ViewEnded(err) => self.machine_fell(&err, cx),
+            Heard::ViewEnded(ended) => self.machine_ended(&ended, cx),
             Heard::Frame(frame) => self.machine_frame(*frame, cx),
-            Heard::SurfaceEnded(err) => self.machine_surface_ended(&err, cx),
+            Heard::SurfaceEnded(ended) => self.machine_surface_ended(&ended, cx),
             Heard::QueueError(why) => self.machine_error(&why, cx),
             Heard::FocusRefused(why) => self.machine_focus_refused(&why, cx),
             Heard::Copied(text, pane) => self.machine_copied(&text, pane, cx),
@@ -591,7 +616,7 @@ impl Root {
             tab.view_opened(&self.tx);
         }
         if let Some(view) = tab.conn.surface_due(shows_tab)
-            && let Err(e) = tab.conn.open_surface(view, &self.tx)
+            && let Err(e) = tab.conn.open_surface(view, tab.stream_boot.as_deref(), &self.tx)
         {
             self.machine_fell(&e.to_string(), cx);
             return;
@@ -611,13 +636,23 @@ impl Root {
         }
     }
 
-    fn machine_surface_ended(&mut self, err: &str, cx: &mut Context<Self>) {
+    fn machine_ended(&mut self, ended: &StreamEnd, cx: &mut Context<Self>) {
+        let linked = self.machine.as_ref().is_some_and(|tab| self.machine_linked(&tab.machine));
+        match refused_lost(ended) {
+            Some(lost) if linked => self.machine_down(lost, cx),
+            Some(_) => self.machine_down(Lost::Link, cx),
+            None => self.machine_fell(ended.said(), cx),
+        }
+    }
+
+    fn machine_surface_ended(&mut self, ended: &StreamEnd, cx: &mut Context<Self>) {
         let Some(tab) = self.machine.as_mut() else { return };
-        if tab.session.as_ref().is_some_and(|session| session.shown().tab.is_none()) {
+        let no_tab = tab.session.as_ref().is_some_and(|session| session.shown().tab.is_none());
+        if surface_pauses(no_tab, ended) {
             tab.conn.pause_surface();
             return;
         }
-        self.machine_fell(err, cx);
+        self.machine_ended(ended, cx);
     }
 
     fn machine_error(&mut self, why: &str, cx: &mut Context<Self>) {

@@ -1,7 +1,7 @@
 use super::*;
 use crate::cli::Version;
 use crate::model::Session;
-use crate::test_util::{fixture, shop_on_vps};
+use crate::test_util::{fixture, reads_with_boot, shop_on_vps};
 
 fn session() -> Session {
     serde_json::from_str(fixture!("machines/view.json")).expect("a view line")
@@ -9,7 +9,7 @@ fn session() -> Session {
 
 #[test]
 fn asking_a_machine_names_only_its_project() {
-    assert_eq!(shop_on_vps().asking_args(), ["--project", "8"]);
+    assert_eq!(shop_on_vps().asking_args(ReadReleases::default()), ["--project", "8"]);
 }
 
 #[test]
@@ -120,4 +120,22 @@ fn an_older_or_unknown_cornercase_here_opens_the_login_tab_without_the_run() {
         let args = shop_on_vps().login_tab_args(tab, release).expect("a place");
         assert_eq!(args, ["new-tab", "--workspace", "7", "--name", "aider login", "--json"]);
     }
+}
+
+#[test]
+fn asking_a_machine_from_0_13_66_says_which_run_its_project_is_from() {
+    let spot = shop_on_vps();
+    let asking = spot.asking_args(reads_with_boot());
+    assert_eq!(asking, ["--project", "8", "--boot", spot.boot.as_str()]);
+}
+
+#[test]
+fn asking_a_machine_with_a_release_below_a_gate_or_unknown_names_only_its_project() {
+    let spot = shop_on_vps();
+    let release = |here, there| ReadReleases { here, there };
+    let (here, there) = (Some(Version::new(0, 13, 66)), Some(Version::new(0, 12, 212)));
+    for on in [release(None, there), release(here, None), release(Some(Version::new(0, 13, 65)), there)] {
+        assert_eq!(spot.asking_args(on), ["--project", "8"]);
+    }
+    assert_eq!(spot.asking_args(release(here, Some(Version::new(0, 12, 211)))), ["--project", "8"]);
 }

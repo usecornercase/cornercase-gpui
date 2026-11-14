@@ -7,7 +7,8 @@ use super::machine_read::{Listing, Reach, reach};
 use super::{Busy, Store, ToastKind, run_job_on, run_with};
 use crate::cli::{self, Target, Version};
 use crate::model::machines::hide_destination;
-use crate::model::machines::seen::{sighted, sighted_pane};
+use crate::model::machines::run_on::server_release;
+use crate::model::machines::seen::{ReadReleases, sighted, sighted_pane};
 use crate::model::tunnels::Release;
 use crate::model::{Aim, MachinePlace, MachineSeen, PaneAim, ThereId};
 
@@ -97,8 +98,16 @@ fn sent_or_not(why: &str) -> String {
     format!("{why}: {NOTHING_SENT}")
 }
 
+pub(crate) fn restart_note(machine: &str) -> String {
+    format!("{machine} restarted")
+}
+
+pub(crate) fn read_refusal(machine: &str, error: &anyhow::Error) -> Option<String> {
+    cli::stale_boot(error).then(|| restart_note(machine))
+}
+
 pub(crate) fn stale_note(machine: &str, error: &anyhow::Error) -> Option<String> {
-    cli::stale_boot(error).then(|| sent_or_not(&format!("{machine} restarted")))
+    read_refusal(machine, error).map(|why| sent_or_not(&why))
 }
 
 pub(crate) fn part_sent_note(machine: &str) -> String {
@@ -265,6 +274,13 @@ impl Store {
 
     pub(crate) fn cli_release(&self) -> Option<Version> {
         self.there.release.known
+    }
+
+    pub(crate) fn read_releases(&self, machine: &str) -> ReadReleases {
+        ReadReleases {
+            here: self.cli_release(),
+            there: server_release(Some(machine), self.session.as_ref(), &self.machines),
+        }
     }
 
     pub(crate) fn heard_release(&self) -> Release {

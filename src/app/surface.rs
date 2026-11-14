@@ -7,7 +7,7 @@ use crate::model::Session;
 
 impl Root {
     fn open_own_surface(&mut self, view: u64, cx: &mut Context<Self>) {
-        if let Err(e) = self.own.open_surface(view, &self.tx) {
+        if let Err(e) = self.own.open_surface(view, None, &self.tx) {
             self.say(&e.to_string(), cx);
         }
     }

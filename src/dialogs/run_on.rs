@@ -11,7 +11,7 @@ use crate::model::ThereId;
 use crate::model::accounts::pick::{AccountPick, AgentChoices};
 use crate::model::agent_settings::Agents;
 use crate::model::machines::THIS_COMPUTER;
-use crate::model::machines::run_on::checks::{AgentNote, Check, Checks, Hold, Wanted};
+use crate::model::machines::run_on::checks::{AgentNote, Check, Checks, Hold, Wanted, check_failure};
 use crate::model::machines::run_on::issue::{IssueThere, follow};
 use crate::model::machines::run_on::{NO_REMOTE, Offer, Source, Starting, There, server_release};
 use crate::model::machines::seen::LoginTab;
@@ -163,15 +163,12 @@ impl RunOn {
         self.checks.asked(check);
         let asked = (self.checks.generation(), reach.spot.map(|spot| spot.project));
         let busy = Busy::new(format!("run-on:{}:{check:?}", cx.entity_id()), check.doing(reach.machine));
-        store::run_on_busy(
-            cx,
-            busy,
-            reach.target.clone(),
-            check.args(reach.spot, &self.wanted),
-            move |this, result, cx| {
-                this.heard(check, asked, result.map_err(|e| cli::reason(&e)), cx);
-            },
-        );
+        let releases = Store::get(cx).read(cx).read_releases(reach.machine);
+        let machine = reach.machine.to_string();
+        let command = check.args(reach.spot, &self.wanted, releases);
+        store::run_on_busy(cx, busy, reach.target.clone(), command, move |this, result, cx| {
+            this.heard(check, asked, result.map_err(|e| check_failure(&machine, &e)), cx);
+        });
     }
 
     fn heard(

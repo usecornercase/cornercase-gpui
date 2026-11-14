@@ -2,8 +2,8 @@ use std::time::{Duration, Instant};
 
 use gpui::Context;
 
-use crate::cli::{self, Stream, Target};
-use crate::model::Session;
+use crate::cli::{self, Stream, StreamEnd, Target};
+use crate::model::{ReadReleases, Session};
 use crate::panels::PanelKind;
 use crate::panels::on_machine::{self, Retry};
 use crate::store::{self, MachineRead, Store, args};
@@ -29,12 +29,25 @@ impl Hearing {
         self.boot_heard = false;
     }
 
+    pub(super) fn read_refused(&mut self, error: &anyhow::Error) -> bool {
+        let refused = cli::stale_boot(error);
+        if refused {
+            self.refused();
+        }
+        refused
+    }
+
+    fn refused(&mut self) {
+        self.boot_heard = false;
+        self.retry.restarted();
+    }
+
     fn ended(&mut self, why: String, now: Instant) -> Duration {
         self.boot_heard = false;
         self.retry.failed(why, now)
     }
 
-    fn believed(&mut self) -> bool {
+    pub(super) fn believed(&mut self) -> bool {
         self.boot_heard = true;
         self.retry.heard()
     }
@@ -45,15 +58,30 @@ impl Hearing {
     }
 }
 
-fn list_args(follow: &Follow) -> Vec<String> {
+fn list_args(follow: &Follow, releases: ReadReleases) -> Vec<String> {
     let mut a = args(&["changes", "list", "--follow"]);
-    match &follow.workspace {
-        Some(whose) => {
-            a.extend(["--workspace", &whose.arg(), "--mode", follow.scope.mode().name()].map(String::from));
-        }
-        None => a.push("--every".into()),
+    let Some(whose) = &follow.workspace else {
+        a.push("--every".into());
+        return a;
+    };
+    a.extend(["--workspace", &whose.arg(), "--mode", follow.scope.mode().name()].map(String::from));
+    whose.reading(a, releases)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum AfterEnd {
+    Refused,
+    TryAgain(String),
+    Ended(String),
+}
+
+fn after_end(machine: Option<&str>, ended: &StreamEnd) -> AfterEnd {
+    let why = ended_reason(ended.said());
+    match machine {
+        Some(_) if ended.stale_boot() => AfterEnd::Refused,
+        Some(_) => AfterEnd::TryAgain(why),
+        None => AfterEnd::Ended(why),
     }
-    a
 }
 
 fn ended_reason(err: &str) -> String {
@@ -150,12 +178,14 @@ impl ChangesPanel {
     fn follow_now(&self, cx: &mut Context<Self>) -> Option<Stream> {
         let (follow, target) = (self.follow.as_ref()?, self.hearing.on.as_ref()?);
         let generation = self.stream_generation;
+        let releases =
+            follow.workspace.as_ref().map(|whose| whose.releases(Store::get(cx).read(cx))).unwrap_or_default();
         store::follow_on(
             cx,
             target,
-            list_args(follow),
+            list_args(follow, releases),
             move |this, line, cx| this.on_line(generation, &line, cx),
-            move |this, err, cx| this.on_end(generation, &err, cx),
+            move |this, ended, cx| this.on_end(generation, &ended, cx),
         )
     }
 
@@ -170,16 +200,20 @@ impl ChangesPanel {
         Some(aim.machine.clone())
     }
 
-    fn on_end(&mut self, generation: u64, err: &str, cx: &mut Context<Self>) {
+    fn on_end(&mut self, generation: u64, ended: &StreamEnd, cx: &mut Context<Self>) {
         if self.stream_generation != generation {
             return;
         }
         self.stream = None;
-        if let Some(machine) = self.machine_followed() {
-            Store::get(cx).update(cx, |s, cx| s.there_failed(&machine, cx));
-            self.try_again_later(ended_reason(err), cx);
-        } else {
-            self.ended = Some(ended_reason(err));
+        let machine = self.machine_followed();
+        match after_end(machine.as_deref(), ended) {
+            AfterEnd::Refused => self.hearing.refused(),
+            AfterEnd::TryAgain(why) => {
+                let machine = machine.unwrap_or_default();
+                Store::get(cx).update(cx, |s, cx| s.there_failed(&machine, cx));
+                self.try_again_later(why, cx);
+            }
+            AfterEnd::Ended(why) => self.ended = Some(why),
         }
         cx.notify();
     }

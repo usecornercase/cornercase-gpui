@@ -1,10 +1,10 @@
 use serde::Deserialize;
 
-use super::super::seen::{Spot, ThereId};
+use super::super::seen::{ReadReleases, Spot, ThereId};
 use super::issue::IssueThere;
 use crate::model::accounts::{AccountsInfo, LoginState, Provider};
 use crate::model::agent_settings::Agents;
-use crate::store::args;
+use crate::store::{args, read_refusal};
 
 const UNREADABLE: &str = "its answer could not be read";
 const UNNAMED: &str = "the project";
@@ -81,6 +81,10 @@ impl Wanted {
     }
 }
 
+pub(crate) fn check_failure(machine: &str, error: &anyhow::Error) -> String {
+    read_refusal(machine, error).unwrap_or_else(|| crate::cli::reason(error))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Check {
     Accounts,
@@ -91,8 +95,8 @@ pub(crate) enum Check {
 }
 
 impl Check {
-    pub(crate) fn args(self, spot: Option<&Spot>, wanted: &Wanted) -> Vec<String> {
-        let project = spot.map(Spot::asking_args).unwrap_or_default();
+    pub(crate) fn args(self, spot: Option<&Spot>, wanted: &Wanted, releases: ReadReleases) -> Vec<String> {
+        let project = spot.map(|spot| spot.asking_args(releases)).unwrap_or_default();
         match self {
             Self::Accounts => args(&["account", "list", "--check", "--json"]),
             Self::Trackers => [args(&["issue", "sources", "--json"]), project].concat(),

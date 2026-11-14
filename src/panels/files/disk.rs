@@ -22,6 +22,7 @@ pub(super) enum Content {
     NotRegular,
     Gone(String),
     Lost(String),
+    Restarted(String),
 }
 
 #[derive(Debug, Clone, Default)]

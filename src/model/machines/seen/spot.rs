@@ -1,4 +1,4 @@
-use super::{ACTS_BOOT_SINCE, MachineSeen, ThereId, ThereProject};
+use super::{ACTS_BOOT_SINCE, MachineSeen, ReadReleases, ThereId, ThereProject};
 use crate::cli::{Version, with_boot};
 use crate::model::Project;
 use crate::store::args;
@@ -37,8 +37,9 @@ impl Spot {
         self.project.0.to_string()
     }
 
-    pub(crate) fn asking_args(&self) -> Vec<String> {
-        args(&["--project", &self.id()])
+    pub(crate) fn asking_args(&self, releases: ReadReleases) -> Vec<String> {
+        let command = args(&["--project", &self.id()]);
+        if releases.carry_boot() { with_boot(command, &self.boot) } else { command }
     }
 
     pub(crate) fn starting_args(&self) -> Vec<String> {

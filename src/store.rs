@@ -33,7 +33,9 @@ use jobs::Jobs;
 pub(crate) use jobs::{Busy, setup_key};
 use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, OlderNote, Reach, TabThere, release_clause};
-pub(crate) use machines_there::{MachineAct, NoticeThere, answer_words, failed_there, part_sent_note, stale_note};
+pub(crate) use machines_there::{
+    MachineAct, NoticeThere, answer_words, failed_there, part_sent_note, read_refusal, restart_note, stale_note,
+};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 pub(crate) use toasts::{Toast, ToastKind};
 pub(crate) use tunnels::{
@@ -825,7 +827,7 @@ pub(crate) fn follow<T: 'static>(
 
 enum Line {
     Text(String),
-    End(String),
+    End(cli::StreamEnd),
 }
 
 pub(crate) fn follow_until<T: 'static>(
@@ -834,7 +836,7 @@ pub(crate) fn follow_until<T: 'static>(
     on_line: impl Fn(&mut T, String, &mut Context<T>) + 'static,
     on_end: impl FnOnce(&mut T, String, &mut Context<T>) + 'static,
 ) -> Option<Stream> {
-    follow_on(cx, &cli::target(), args, on_line, on_end)
+    follow_on(cx, &cli::target(), args, on_line, move |this, ended, cx| on_end(this, ended.said().to_string(), cx))
 }
 
 pub(crate) fn follow_on<T: 'static>(
@@ -842,7 +844,7 @@ pub(crate) fn follow_on<T: 'static>(
     target: &Target,
     args: impl AsRef<[String]>,
     on_line: impl Fn(&mut T, String, &mut Context<T>) + 'static,
-    on_end: impl FnOnce(&mut T, String, &mut Context<T>) + 'static,
+    on_end: impl FnOnce(&mut T, cli::StreamEnd, &mut Context<T>) + 'static,
 ) -> Option<Stream> {
     let (tx, rx) = mpsc::unbounded::<Line>();
     let end = tx.clone();
@@ -862,9 +864,9 @@ pub(crate) fn follow_on<T: 'static>(
             Some(stream)
         }
         Err(e) => {
-            let text = e.to_string();
+            let ended = cli::StreamEnd::new(e.to_string(), None);
             cx.spawn(async move |this, cx| {
-                let _ = this.update(cx, |this, cx| on_end(this, text, cx));
+                let _ = this.update(cx, |this, cx| on_end(this, ended, cx));
             })
             .detach();
             None
@@ -876,7 +878,7 @@ async fn deliver<T: 'static>(
     this: WeakEntity<T>,
     mut rx: mpsc::UnboundedReceiver<Line>,
     on_line: impl Fn(&mut T, String, &mut Context<T>),
-    on_end: impl FnOnce(&mut T, String, &mut Context<T>),
+    on_end: impl FnOnce(&mut T, cli::StreamEnd, &mut Context<T>),
     cx: &mut AsyncApp,
 ) {
     while let Some(line) = rx.next().await {

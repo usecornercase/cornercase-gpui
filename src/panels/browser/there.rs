@@ -6,7 +6,7 @@ use super::Browser;
 use super::ports::web_ports;
 use crate::model::{MachineSeen, Owner, WorkspaceThere};
 use crate::panels::PanelKind;
-use crate::panels::on_machine;
+use crate::panels::on_machine::{self, Missed};
 use crate::panels::ports::{Listed, sample_there};
 use crate::store::{MachineLink, Reach, Store};
 
@@ -58,7 +58,7 @@ impl Browser {
     fn sampled_there(
         &mut self,
         generation: u64,
-        answer: Result<Vec<crate::panels::ports::data::Port<crate::model::ThereId>>, String>,
+        answer: Result<Vec<crate::panels::ports::data::Port<crate::model::ThereId>>, Missed>,
         cx: &mut Context<Self>,
     ) {
         self.dev.watch_end();
@@ -71,9 +71,7 @@ impl Browser {
                 self.dev.retry.heard();
                 (self.dev.listed, self.dev.error) = (Listed::There(web_ports(ports)), None);
             }
-            Err(said) => {
-                self.dev.retry.failed(said, Instant::now());
-            }
+            Err(missed) => self.dev.retry.missed(missed, Instant::now()),
         }
         self.auto_open(cx);
         cx.notify();

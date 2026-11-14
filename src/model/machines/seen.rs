@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use super::{LinkState, MachineIcon, NextTry, seen_ago};
-use crate::cli::Version;
+use crate::cli::{Version, with_boot};
 use crate::model::{PaneInfo, Project, Session, Tab, loudest_of, needs_you, status_rank, works};
 use crate::store::args;
 
@@ -15,6 +15,20 @@ pub(crate) const PANE_BOOT_SINCE: Version = Version::new(0, 13, 30);
 pub(crate) const FOLD_BOOT_SINCE: Version = Version::new(0, 13, 32);
 pub(crate) const HAND_OFF_BOOT_SINCE: Version = Version::new(0, 13, 60);
 pub(crate) const ACTS_BOOT_SINCE: Version = Version::new(0, 13, 63);
+pub(crate) const READS_BOOT_SINCE: Version = Version::new(0, 13, 66);
+pub(crate) const READS_BOOT_THERE_SINCE: Version = Version::new(0, 12, 212);
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct ReadReleases {
+    pub here: Option<Version>,
+    pub there: Option<Version>,
+}
+
+impl ReadReleases {
+    pub(crate) fn carry_boot(self) -> bool {
+        READS_BOOT_SINCE.reached_by(self.here) && READS_BOOT_THERE_SINCE.reached_by(self.there)
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize)]
 #[serde(transparent)]
@@ -206,8 +220,17 @@ impl Aim {
         args(&["close", "--workspace", &self.id(), "--boot", &self.boot])
     }
 
-    pub(crate) fn ports_args(&self, all: bool) -> Vec<String> {
-        if all { args(&["ports", "--json", "--all"]) } else { args(&["ports", "--json", "--workspace", &self.id()]) }
+    pub(crate) fn reading(&self, command: Vec<String>, releases: ReadReleases) -> Vec<String> {
+        if releases.carry_boot() { with_boot(command, &self.boot) } else { command }
+    }
+
+    pub(crate) fn ports_args(&self, all: bool, releases: ReadReleases) -> Vec<String> {
+        let command = if all {
+            args(&["ports", "--json", "--all"])
+        } else {
+            args(&["ports", "--json", "--workspace", &self.id()])
+        };
+        self.reading(command, releases)
     }
 }
 
@@ -263,11 +286,11 @@ impl MachinePlace {
         }
     }
 
-    pub(crate) fn open_args(&self, (cols, rows): (u16, u16), hidden: bool) -> Vec<String> {
+    pub(crate) fn open_args(&self, (cols, rows): (u16, u16), hidden: bool, releases: ReadReleases) -> Vec<String> {
         let mut command = args(&["view", "--cols", &cols.to_string(), "--rows", &rows.to_string()]);
         command.extend(self.shown_flags());
         command.extend(hidden.then(|| "--hidden".to_string()));
-        command
+        if releases.carry_boot() { with_boot(command, &self.boot) } else { command }
     }
 
     pub(crate) fn focus_args(&self, view: u64) -> Vec<String> {

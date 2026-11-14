@@ -21,7 +21,7 @@ use gpui::{
 };
 
 use crate::cli::Stream;
-use crate::model::{Aim, Session};
+use crate::model::{Aim, ReadReleases, Session};
 use crate::panels::on_machine;
 use crate::store::{MachineRead, Store};
 use crate::ui::counting::Counting;
@@ -66,6 +66,20 @@ impl Whose {
         match self {
             Self::Here(id) => id.to_string(),
             Self::There(aim, _) => aim.workspace_arg(),
+        }
+    }
+
+    fn releases(&self, store: &Store) -> ReadReleases {
+        match self {
+            Self::Here(_) => ReadReleases::default(),
+            Self::There(aim, _) => store.read_releases(&aim.machine),
+        }
+    }
+
+    fn reading(&self, command: Vec<String>, releases: ReadReleases) -> Vec<String> {
+        match self {
+            Self::Here(_) => command,
+            Self::There(aim, _) => aim.reading(command, releases),
         }
     }
 
