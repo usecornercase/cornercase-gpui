@@ -40,8 +40,14 @@ case ${1-} in
 esac
 case ${1-} in
   api)
-    path=$2
-    shift 2
+    shift
+    paginate=false
+    if [ "${1-}" = --paginate ]; then
+      paginate=true
+      shift
+    fi
+    path=$1
+    shift
     expr=
     [ "${1-}" = --jq ] && expr=$2
     key=$(printf '%s' "$path" | sed -e 's|^repos/[^/]*/[^/]*/||' -e 's|?.*||' | tr / -)
@@ -53,11 +59,22 @@ case ${1-} in
       echo 'gh: Not Found (HTTP 404)' >&2
       exit 1
     fi
-    if [ -n "$expr" ]; then
-      @JQ@ -r "$expr" "$t/api/$key.json"
-    else
-      cat "$t/api/$key.json"
-    fi
+    page=$t/api/$key.json
+    n=1
+    while [ -e "$page" ]; do
+      if [ -e "$t/control/fail-$key.page$n" ]; then
+        echo "gh: HTTP 502: Bad Gateway (https://api.github.com/$path&page=$n)" >&2
+        exit 1
+      fi
+      if [ -n "$expr" ]; then
+        @JQ@ -r "$expr" "$page"
+      else
+        cat "$page"
+      fi
+      $paginate || break
+      n=$((n + 1))
+      page=$t/api/$key.page$n.json
+    done
     exit 0 ;;
   run)
     if [ "${2-}" = rerun ]; then
@@ -165,7 +182,9 @@ tags() {
   printf '%s\n' "$@" > "$t/control/tags"
 }
 
-releases() {
+release_list() {
+  file=$1
+  shift
   list=
   for entry in "$@"; do
     draft=false
@@ -177,7 +196,11 @@ releases() {
     esac
     list="$list${list:+,}{\"tag_name\":\"$entry\",\"draft\":$draft}"
   done
-  put releases "[$list]"
+  put "$file" "[$list]"
+}
+
+releases() {
+  release_list releases "$@"
 }
 
 runs() {
@@ -362,13 +385,24 @@ only_the_newest_tag_is_looked_at() {
     check "asked about the older" nohas "$t/calls" 'v0.1.90'
 }
 
+an_older_tag_is_not_looked_at_while_the_newest_runs() {
+  dropped v0.1.90 123 1
+  tags v0.1.91 v0.1.90
+  runs '124 workflow_dispatch in_progress 1'
+  runw
+  check "line" has "$t/out" "v0.1.91's Release run has not ended (run 124, attempt 1, in_progress): nothing to do yet" &&
+    check "asked about the older" nohas "$t/calls" 'branch=v0.1.90&' &&
+    check "rerun" nohas "$t/calls" 'run rerun'
+}
+
 a_tag_is_left_alone_once_a_later_version_is_released() {
   dropped v0.1.90 123 1
   tags v0.1.91 v0.1.90
   releases v0.1.91
   GA=none
   runw --dry-run --tag v0.1.90
-  check "line" has "$t/out" 'v0.1.90 has no release, but the later v0.1.91 has: left alone' &&
+  check "line" has "$t/out" "v0.1.90 has no release, but the later v0.1.91 has: left alone, since the download links and the window's update check use only the newest release, whose CHANGELOG.md carries v0.1.90's notes" &&
+    check "Latest" nohas "$t/out" 'Latest' &&
     check "would re-run" nohas "$t/out" 'dry run: gh run rerun' &&
     check "runs asked" nohas "$t/calls" 'release.yml/runs'
 }
@@ -490,13 +524,31 @@ a_draft_is_not_a_release() {
     check "rerun" has "$t/calls" 'run rerun 123 --failed'
 }
 
+a_release_past_the_first_hundred_counts() {
+  set --
+  i=4
+  while [ "$i" -le 103 ]; do
+    set -- "v0.1.$i" "$@"
+    i=$((i + 1))
+  done
+  tags "$@" v0.1.3
+  releases "$@"
+  release_list releases.page2 v0.1.3
+  GA=none
+  runw --dry-run --tag v0.1.3
+  check "line" has "$t/out" 'v0.1.3 is released: nothing to do' &&
+    check "left alone" nohas "$t/out" 'has no release'
+}
+
 every_failing_read_stops_it_with_status_1() {
   real_failure v0.1.90 123 1
   issues '7|open|Release v0.1.90 failed'
   issue_text 7 'first'
+  release_list releases.page2 v0.1.0
   for pair in \
     'git|listing the v* tags' \
     'releases|listing the releases' \
+    'releases.page2|listing the releases' \
     'actions-workflows-release.yml-runs|listing the Release runs of v0.1.90' \
     'actions-runs-123-attempts-1|reading attempt 1 of run 123' \
     'actions-runs-123-attempts-1-jobs|reading the jobs of attempt 1 of run 123' \
@@ -588,7 +640,7 @@ pointed_at_attempt_1_of_the_real_case_it_decides_a_re_run() {
   GA=none
   runw --dry-run --tag v0.1.82 --attempt 1
   check "status $rc" [ "$rc" = 0 ] &&
-    check "taking" has "$t/out" 'dry run: taking v0.1.82 as the newest tag' &&
+    check "looking at" has "$t/out" 'dry run: looking at v0.1.82 in place of the newest tag' &&
     check "deciding" has "$t/out" "dry run: deciding on attempt 1 of v0.1.82's last Release run (43441808932) as if it had just ended" &&
     check "rerun line" has "$t/out" '(attempt 2 of 3): macOS (sign and notarize)' &&
     check "dry" has "$t/out" 'dry run: gh run rerun 43441808932 --failed' &&
@@ -681,6 +733,7 @@ run_test a_failure_with_no_job_listed_is_told_not_re_run
 run_test a_cancelled_run_is_told_not_re_run
 run_test a_run_that_has_not_ended_is_left_alone
 run_test only_the_newest_tag_is_looked_at
+run_test an_older_tag_is_not_looked_at_while_the_newest_runs
 run_test a_tag_is_left_alone_once_a_later_version_is_released
 run_test a_pull_requests_run_is_never_re_run
 run_test a_tag_pushed_by_hand_is_left_to_whoever_pushed_it
@@ -694,6 +747,7 @@ run_test a_closed_issue_without_the_attempt_leaves_a_new_one
 run_test the_issue_is_matched_by_its_exact_title_and_attempt
 run_test a_release_of_a_tag_that_only_starts_the_same_does_not_release_it
 run_test a_draft_is_not_a_release
+run_test a_release_past_the_first_hundred_counts
 run_test every_failing_read_stops_it_with_status_1
 run_test a_refused_re_run_is_an_error
 run_test no_tag_yet_is_nothing_to_do

@@ -21,8 +21,9 @@ it re-runs those jobs (gh run rerun --failed), up to attempt 3 of the run. When 
 other way but success, it opens or comments on the issue "Release <tag> failed", once per attempt.
 It acts only on a GitHub Actions runner (GITHUB_ACTIONS=true); anywhere else, add --dry-run.
   --dry-run     read and decide as usual, print what it would do, and change nothing
-  --tag TAG     with --dry-run: take TAG as the newest tag
-  --attempt N   with --tag: decide on attempt N of TAG's last Release run as if it had just ended
+  --tag TAG     with --dry-run: look at TAG in place of the newest tag; one with a later release is left alone
+  --attempt N   with --tag: skip that check and decide on attempt N of TAG's last Release run as if TAG were
+                the newest and the attempt had just ended
 It needs gh and git on the PATH, and GH_REPO (owner/name).
 Exit status: 0 it decided, whatever it did; 1 a gh or git call failed (the ::error:: line says which,
 and whether it had decided); 2 a wrong word, or acting outside a runner; 3 gh, git or GH_REPO is missing.
@@ -143,7 +144,7 @@ read_tags() {
 }
 
 read_releases() {
-  ask "listing the releases" gh api "repos/$GH_REPO/releases?per_page=100" \
+  ask "listing the releases" gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
     --jq '.[] | select(.draft | not) | .tag_name'
   releases=$answer
 }
@@ -400,7 +401,7 @@ present() {
   if in_list "$releases" "$tag"; then
     printf '%s\n' "$tag is released: nothing to do"
   elif later_released "$tag"; then
-    printf '%s\n' "$tag has no release, but the later $later has: left alone, so $tag cannot become the Latest release"
+    printf '%s\n' "$tag has no release, but the later $later has: left alone, since the download links and the window's update check use only the newest release, whose CHANGELOG.md carries $tag's notes"
   else
     present_run
   fi
@@ -432,7 +433,7 @@ if [ -n "$tag_arg" ]; then
     exit 2
   }
   tag=$tag_arg
-  printf '%s\n' "dry run: taking $tag as the newest tag"
+  printf '%s\n' "dry run: looking at $tag in place of the newest tag"
 fi
 if [ -z "$tag" ]; then
   printf '%s\n' "no v* tag yet: nothing to do"
