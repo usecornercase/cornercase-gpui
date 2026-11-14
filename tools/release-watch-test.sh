@@ -27,7 +27,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' INT TERM HUP
 
-for tool in sed awk grep cat tr rm mktemp; do
+for tool in sed awk grep cat tr rm mktemp cut; do
   ln -s "$(command -v "$tool")" "$t/sys/$tool"
 done
 
@@ -82,6 +82,15 @@ case ${1-} in
         echo 'failed to rerun: HTTP 403' >&2
         exit 1
       fi
+      exit 0
+    fi ;;
+  workflow)
+    if [ "${2-}" = run ]; then
+      if [ -e "$t/control/fail-dispatch" ]; then
+        echo 'could not create workflow dispatch event: HTTP 500: Internal Server Error' >&2
+        exit 1
+      fi
+      echo https://github.com/usecornercase/cornercase-gpui/actions/runs/777
       exit 0
     fi ;;
   issue)
@@ -172,6 +181,18 @@ has() {
 
 nohas() {
   ! has "$1" "$2"
+}
+
+dispatch_line='workflow run release-watch.yml --ref main -f wait=50'
+
+dispatches() {
+  grep -c -F -x -e "$dispatch_line" "$t/calls" || true
+}
+
+before() {
+  first=$(grep -n -F -e "$2" "$1" | sed -n 1p | cut -d: -f1)
+  second=$(grep -n -F -e "$3" "$1" | sed -n 1p | cut -d: -f1)
+  [ -n "$first" ] && [ -n "$second" ] && [ "$first" -lt "$second" ]
 }
 
 put() {
@@ -311,7 +332,8 @@ on_attempt_3_it_tells_which_jobs_no_runner_took() {
     check "title" [ "$(cat "$t/created-title" 2> /dev/null)" = 'Release v0.1.90 failed' ] &&
     check "attempts" has "$t/created-body" 'No runner took these jobs on attempt 3.' &&
     check "link" has "$t/created-body" "](${base}/actions/runs/123/attempts/3)" &&
-    check "line" has "$t/out" "and no runner took macOS (sign and notarize) on attempt 3 (Release watch re-runs only up to attempt 3): opened $base/issues/99"
+    check "line" has "$t/out" "and no runner took macOS (sign and notarize) on attempt 3 (Release watch re-runs only up to attempt 3): opened $base/issues/99" &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 a_job_no_runner_took_on_attempt_4_is_told_without_claiming_the_watch_ran_it() {
@@ -332,7 +354,8 @@ a_job_that_ran_a_step_and_failed_is_told_not_re_run() {
   check "rerun" nohas "$t/calls" 'run rerun' &&
     check "create" has "$t/calls" 'issue create' &&
     check "steps" has "$t/created-body" "\`macOS (sign and notarize)\` (failure, 1 step ran)" &&
-    check "line" has "$t/out" 'ended in failure on attempt 1, and a job ran and failed: opened'
+    check "line" has "$t/out" 'ended in failure on attempt 1, and a job ran and failed: opened' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 a_dropped_job_beside_a_real_failure_is_told_not_re_run() {
@@ -363,7 +386,8 @@ a_cancelled_run_is_told_not_re_run() {
   check "rerun" nohas "$t/calls" 'run rerun' &&
     check "create" has "$t/calls" 'issue create' &&
     check "body" has "$t/created-body" 'was cancelled, so v0.1.90 is tagged' &&
-    check "line" has "$t/out" 'was cancelled on attempt 1: opened'
+    check "line" has "$t/out" 'was cancelled on attempt 1: opened' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 a_run_that_has_not_ended_is_left_alone() {
@@ -373,7 +397,8 @@ a_run_that_has_not_ended_is_left_alone() {
   check "line" has "$t/out" "v0.1.90's Release run has not ended (run 124, attempt 1, in_progress): nothing to do yet" &&
     check "rerun" nohas "$t/calls" 'run rerun' &&
     check "issue" nohas "$t/calls" 'issue ' &&
-    check "attempts" nohas "$t/calls" 'attempts'
+    check "attempts" nohas "$t/calls" 'attempts' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 only_the_newest_tag_is_looked_at() {
@@ -422,7 +447,8 @@ a_tag_pushed_by_hand_is_left_to_whoever_pushed_it() {
   runw
   check "line" has "$t/out" 'left to whoever pushed it' &&
     check "rerun" nohas "$t/calls" 'run rerun' &&
-    check "issue" nohas "$t/calls" 'issue '
+    check "issue" nohas "$t/calls" 'issue ' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 a_pre_release_is_re_run_like_a_release() {
@@ -451,7 +477,8 @@ a_failure_it_leaves_opens_one_issue_with_commands() {
     check "link" has "$t/created-body" "](${base}/actions/runs/123/attempts/1)" &&
     check "steps" has "$t/created-body" '(failure, 6 steps ran)' &&
     check "rerun command" has "$t/created-body" "gh run rerun 123 --failed --repo $slug" &&
-    check "delete command" has "$t/created-body" "gh api -X DELETE repos/$slug/git/refs/tags/v0.1.90"
+    check "delete command" has "$t/created-body" "gh api -X DELETE repos/$slug/git/refs/tags/v0.1.90" &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 an_attempt_already_told_is_not_told_again() {
@@ -567,7 +594,8 @@ every_failing_read_stops_it_with_status_1() {
       check "error for $pair" has "$t/out" "::error::$lead: ${pair#*|} failed: " &&
       check "said nothing to do for $pair" nohas "$t/out" 'nothing to do' &&
       check "wrote for $pair" nohas "$t/calls" 'issue create' &&
-      check "rerun for $pair" nohas "$t/calls" 'run rerun' || return 1
+      check "rerun for $pair" nohas "$t/calls" 'run rerun' &&
+      check "dispatch for $pair" nohas "$t/calls" 'workflow run' || return 1
   done
 }
 
@@ -592,14 +620,16 @@ a_released_newest_tag_is_nothing_to_do() {
   releases v0.1.88 v0.1.87
   runw
   check "line" has "$t/out" 'v0.1.88 is released: nothing to do' &&
-    check "runs asked" nohas "$t/calls" 'release.yml/runs'
+    check "runs asked" nohas "$t/calls" 'release.yml/runs' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 a_success_without_a_release_is_left_alone() {
   scenario v0.1.90 123 1 success
   runw
   check "line" has "$t/out" "v0.1.90's last Release run (123) ended in success on attempt 1, yet v0.1.90 has no published release: left alone" &&
-    check "issue" nohas "$t/calls" 'issue '
+    check "issue" nohas "$t/calls" 'issue ' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 a_dry_run_re_runs_nothing_and_says_what_it_would() {
@@ -608,7 +638,10 @@ a_dry_run_re_runs_nothing_and_says_what_it_would() {
   runw --dry-run
   check "status $rc" [ "$rc" = 0 ] &&
     check "line" has "$t/out" 'dry run: gh run rerun 43441808932 --failed' &&
-    check "rerun" nohas "$t/calls" 'run rerun'
+    check "dry dispatch" has "$t/out" "dry run: gh $dispatch_line" &&
+    check "order" before "$t/out" 'dry run: gh run rerun' 'dry run: gh workflow run' &&
+    check "rerun" nohas "$t/calls" 'run rerun' &&
+    check "dispatch" nohas "$t/calls" 'workflow run'
 }
 
 a_dry_run_opens_no_issue_and_prints_it() {
@@ -644,6 +677,7 @@ pointed_at_attempt_1_of_the_real_case_it_decides_a_re_run() {
     check "deciding" has "$t/out" "dry run: deciding on attempt 1 of v0.1.82's last Release run (43441808932) as if it had just ended" &&
     check "rerun line" has "$t/out" '(attempt 2 of 3): macOS (sign and notarize)' &&
     check "dry" has "$t/out" 'dry run: gh run rerun 43441808932 --failed' &&
+    check "dry dispatch" has "$t/out" "dry run: gh $dispatch_line" &&
     check "attempt asked" has "$t/calls" 'attempts/1'
 }
 
@@ -667,6 +701,78 @@ acting_outside_a_runner_is_refused() {
     check "calls" [ ! -s "$t/calls" ]
 }
 
+after_a_re_run_it_starts_a_watch_that_looks_in_50_minutes() {
+  dropped v0.1.90 123 1
+  runw
+  check "status $rc" [ "$rc" = 0 ] &&
+    check "one dispatch" [ "$(dispatches)" = 1 ] &&
+    check "order of calls" before "$t/calls" 'run rerun 123 --failed' 'workflow run' &&
+    check "url" has "$t/out" "started a release watch that looks at the newest tag's release in 50 minutes: $base/actions/runs/777" &&
+    check "order of lines" before "$t/out" 're-running the jobs no runner took' 'started a release watch'
+}
+
+a_refused_re_run_starts_no_watch() {
+  dropped v0.1.90 123 1
+  : > "$t/control/fail-rerun"
+  runw
+  check "status $rc" [ "$rc" = 1 ] &&
+    check "error" has "$t/out" '::error::the release watch decided what to do and could not do it' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
+}
+
+the_chain_of_watches_ends_by_itself() {
+  issues
+  for n in 1 2 3 4; do
+    dropped v0.1.90 123 "$n"
+    runw
+  done
+  check "dispatches" [ "$(dispatches)" = 2 ] &&
+    check "re-runs" [ "$(grep -c 'run rerun 123 --failed' "$t/calls")" = 2 ] &&
+    check "issues" [ "$(grep -c 'issue create' "$t/calls")" = 2 ]
+}
+
+a_failed_dispatch_after_a_re_run_is_a_warning_after_the_re_run_line() {
+  dropped v0.1.90 123 1
+  : > "$t/control/fail-dispatch"
+  runw
+  check "status $rc" [ "$rc" = 0 ] &&
+    check "rerun" has "$t/calls" 'run rerun 123 --failed' &&
+    check "warning" has "$t/out" '::warning::the release watch that would look in 50 minutes was not started: dispatching release-watch.yml failed: could not create workflow dispatch event: HTTP 500' &&
+    check "order" before "$t/out" 're-running the jobs no runner took' '::warning::' &&
+    check "error" nohas "$t/out" '::error::'
+}
+
+later_starts_a_watch_and_reads_nothing() {
+  runw --later
+  check "status $rc" [ "$rc" = 0 ] &&
+    check "only the dispatch" [ "$(cat "$t/calls")" = "$dispatch_line" ] &&
+    check "line" has "$t/out" "started a release watch that looks at the newest tag's release in 50 minutes: $base/actions/runs/777"
+}
+
+a_dry_run_of_later_prints_the_dispatch_and_makes_none() {
+  GA=none
+  runw --dry-run --later
+  check "status $rc" [ "$rc" = 0 ] &&
+    check "line" [ "$(cat "$t/out")" = "dry run: gh $dispatch_line" ] &&
+    check "calls" [ ! -s "$t/calls" ]
+}
+
+later_outside_a_runner_is_refused() {
+  GA=none
+  runw --later
+  check "status $rc" [ "$rc" = 2 ] &&
+    check "line" has "$t/err" 'it acts only on a GitHub Actions runner' &&
+    check "calls" [ ! -s "$t/calls" ]
+}
+
+a_failed_later_is_a_warning_with_status_0() {
+  : > "$t/control/fail-dispatch"
+  runw --later
+  check "status $rc" [ "$rc" = 0 ] &&
+    check "warning" has "$t/out" '::warning::the release watch that would look in 50 minutes was not started: dispatching release-watch.yml failed: could not create workflow dispatch event: HTTP 500' &&
+    check "one call" [ "$(dispatches)" = 1 ]
+}
+
 refused() {
   runw "$@"
   check "status $rc for: $*" [ "$rc" = 2 ] &&
@@ -684,7 +790,9 @@ a_wrong_word_exits_2_and_asks_nothing() {
     refused --dry-run --tag v0.1.82 --attempt x &&
     refused --dry-run --tag v0.1.82 --attempt 01 &&
     refused --dry-run --tag nonsense &&
-    refused --dry-run --tag
+    refused --dry-run --tag &&
+    refused --dry-run --later --tag v0.1.82 &&
+    refused --dry-run --later --tag v0.1.82 --attempt 1
 }
 
 a_tag_that_does_not_exist_exits_2() {
@@ -709,6 +817,7 @@ help_prints_the_usage_and_exits_0() {
   check "status $rc" [ "$rc" = 0 ] &&
     check "usage" has "$t/out" 'usage: tools/release-watch.sh' &&
     check "statuses" has "$t/out" 'Exit status: 0 it decided' &&
+    check "later" has "$t/out" '--later' &&
     check "calls" [ ! -s "$t/calls" ]
 }
 
@@ -763,6 +872,14 @@ run_test a_wrong_word_exits_2_and_asks_nothing
 run_test a_tag_that_does_not_exist_exits_2
 run_test an_attempt_the_run_never_had_exits_2
 run_test help_prints_the_usage_and_exits_0
+run_test after_a_re_run_it_starts_a_watch_that_looks_in_50_minutes
+run_test a_refused_re_run_starts_no_watch
+run_test the_chain_of_watches_ends_by_itself
+run_test a_failed_dispatch_after_a_re_run_is_a_warning_after_the_re_run_line
+run_test later_starts_a_watch_and_reads_nothing
+run_test a_dry_run_of_later_prints_the_dispatch_and_makes_none
+run_test later_outside_a_runner_is_refused
+run_test a_failed_later_is_a_warning_with_status_0
 run_test missing_gh_git_or_gh_repo_exits_3_naming_each
 
 printf '%s tests, %s failed\n' "$total" "$failed"

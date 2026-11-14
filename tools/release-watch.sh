@@ -3,6 +3,7 @@ set -eu
 
 name=release-watch.sh
 attempts=3
+later_minutes=50
 tag_pattern='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
 tab=$(printf '\t')
 stance='the release watch stopped and decided nothing'
@@ -14,18 +15,23 @@ say() {
 usage_text() {
   cat <<'USAGE'
 usage: tools/release-watch.sh [--dry-run [--tag TAG [--attempt N]]]
+       tools/release-watch.sh [--dry-run] --later
 
 Looks at the newest v* tag of GH_REPO and its last Release run (.github/workflows/release.yml).
 When that run ended in failure and every job that did not pass ran no step (no runner took it),
 it re-runs those jobs (gh run rerun --failed), up to attempt 3 of the run. When the run ended any
 other way but success, it opens or comments on the issue "Release <tag> failed", once per attempt.
+After a re-run it starts a release watch that looks again in 50 minutes.
 It acts only on a GitHub Actions runner (GITHUB_ACTIONS=true); anywhere else, add --dry-run.
   --dry-run     read and decide as usual, print what it would do, and change nothing
   --tag TAG     with --dry-run: look at TAG in place of the newest tag; one with a later release is left alone
+  --later       start only a release watch that waits 50 minutes, then looks (gh workflow run
+                release-watch.yml --ref main -f wait=50); the Version workflow runs it after release.sh tag
   --attempt N   with --tag: skip that check and decide on attempt N of TAG's last Release run as if TAG were
                 the newest and the attempt had just ended
 It needs gh and git on the PATH, and GH_REPO (owner/name).
-Exit status: 0 it decided, whatever it did; 1 a gh or git call failed (the ::error:: line says which,
+Exit status: 0 it decided, whatever it did (also when it could not start a release watch: a ::warning::
+line says so), or with --later it started one or warned; 1 a gh or git call failed (the ::error:: line says which,
 and whether it had decided); 2 a wrong word, or acting outside a runner; 3 gh, git or GH_REPO is missing.
 See design/releases.md.
 USAGE
@@ -44,6 +50,7 @@ whole_number() {
 }
 
 dry=0
+later=0
 tag_arg=
 attempt_arg=
 while [ $# -gt 0 ]; do
@@ -53,6 +60,7 @@ while [ $# -gt 0 ]; do
       exit 0
       ;;
     --dry-run) dry=1 ;;
+    --later) later=1 ;;
     --tag)
       [ $# -ge 2 ] || refuse "--tag takes a tag, such as v0.1.82"
       tag_arg=$2
@@ -71,6 +79,7 @@ while [ $# -gt 0 ]; do
 done
 [ -z "$tag_arg" ] || [ "$dry" = 1 ] || refuse "--tag needs --dry-run"
 [ -z "$attempt_arg" ] || [ -n "$tag_arg" ] || refuse "--attempt needs --tag"
+[ "$later" = 0 ] || { [ -z "$tag_arg" ] && [ -z "$attempt_arg" ]; } || refuse "--later takes no --tag or --attempt"
 
 absent=0
 for tool in gh git; do
@@ -225,6 +234,18 @@ rerun() {
   ask_write "re-running the failed jobs of run $1" gh run rerun "$1" --failed
 }
 
+start_watch() {
+  if [ "$dry" = 1 ]; then
+    printf 'dry run: gh workflow run release-watch.yml --ref main -f wait=%s\n' "$later_minutes"
+    return
+  fi
+  if run_cmd gh workflow run release-watch.yml --ref main -f "wait=$later_minutes"; then
+    printf '%s\n' "started a release watch that looks at the newest tag's release in $later_minutes minutes${answer:+: $answer}"
+  else
+    printf '::warning::%s\n' "the release watch that would look in $later_minutes minutes was not started: dispatching release-watch.yml failed: $(first_line); the watch the next push to main starts, or the schedule, looks instead"
+  fi
+}
+
 open_step() {
   printf "Open the run (the link above) to see why it ended in failure. If the cause has passed, re-run it: \`gh run rerun %s --repo %s\`" \
     "$id" "$GH_REPO"
@@ -364,6 +385,7 @@ decide() {
   elif [ "$broken" -gt 0 ] && [ "$dropped" -eq "$broken" ] && [ "$n" -lt "$attempts" ]; then
     rerun "$id"
     printf '%s\n' "re-running the jobs no runner took in $tag's Release run $id (attempt $((n + 1)) of $attempts): $names"
+    start_watch
     return
   else
     explain_failure
@@ -424,6 +446,11 @@ EOF
     fi
   fi
 }
+
+if [ "$later" = 1 ]; then
+  start_watch
+  exit 0
+fi
 
 read_tags
 tag=$(printf '%s\n' "$tag_list" | sed -n 1p)
