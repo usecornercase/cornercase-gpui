@@ -113,9 +113,17 @@ pub(crate) fn sums_name(asset: &str) -> String {
     format!("{asset}.sha256")
 }
 
+fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .flat_map(|&byte| [byte >> 4, byte & 0x0f])
+        .filter_map(|nibble| char::from_digit(u32::from(nibble), 16))
+        .collect()
+}
+
 pub(crate) fn matches(bytes: &[u8], sums: &str) -> bool {
     let expected = sums.split_whitespace().next().unwrap_or_default().to_lowercase();
-    !expected.is_empty() && expected == format!("{:x}", Sha256::digest(bytes))
+    !expected.is_empty() && expected == sha256_hex(bytes)
 }
 
 pub(crate) fn version_line() -> String {

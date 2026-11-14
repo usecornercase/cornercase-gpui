@@ -1,13 +1,17 @@
 #!/bin/sh
 set -eu
 
-fail() { echo "::error::$*"; exit 1; }
+version_pattern='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+
+fail() { echo "::error::$*" >&2; exit 1; }
+
+note() { echo "$*" >&2; }
 
 cd "$(dirname "$0")/../.."
 
 version() {
   value=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
-  printf '%s\n' "$value" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
+  printf '%s\n' "$value" | grep -Eq "$version_pattern" \
     || fail "Cargo.toml's version is not a semantic version: $value"
   printf '%s\n' "$value"
 }
@@ -16,10 +20,43 @@ latest() {
   git -c versionsort.suffix=- tag --list 'v*' --sort=-v:refname | head -n 1 | sed 's/^v//'
 }
 
+highest() {
+  tr - '~' | sort -V | tail -n 1 | tr '~' -
+}
+
 newer() {
-  a=$(printf '%s' "$1" | tr - '~')
-  b=$(printf '%s' "$2" | tr - '~')
-  [ "$a" != "$b" ] && [ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -n 1)" = "$a" ]
+  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | highest)" = "$1" ]
+}
+
+latest_flag() {
+  wanted=$1
+  printf '%s\n' "$wanted" | grep -Eq "$version_pattern" \
+    || fail "latest-flag takes a version such as 0.1.91, not '$wanted'"
+  case $wanted in
+    *-*)
+      note "$wanted is a pre-release, which is never the Latest release: --latest=false"
+      echo --latest=false
+      return
+      ;;
+  esac
+  [ -n "${GH_REPO:-}" ] || fail "GH_REPO is not set: name the repository, such as usecornercase/cornercase-gpui"
+  tags=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+    --jq '.[] | select((.draft or .prerelease) | not) | .tag_name') \
+    || fail "nothing was published: listing the releases of $GH_REPO failed (gh's error is the line before this one in the release step's log); re-run the failed jobs once GitHub answers"
+  top=$(printf '%s\n' "$tags" | sed -n 's/^v//p' | grep -E "$version_pattern" | highest)
+  if [ -z "$top" ]; then
+    note "no release is published yet, so $wanted becomes the Latest release: --latest"
+    echo --latest
+  elif newer "$top" "$wanted"; then
+    note "$top is published and above $wanted, so $wanted does not become the Latest release: --latest=false"
+    echo --latest=false
+  elif [ "$top" = "$wanted" ]; then
+    note "$wanted is published already and nothing above it is, so it is the Latest release: --latest"
+    echo --latest
+  else
+    note "$wanted is above every published release (the highest is $top), so it becomes the Latest release: --latest"
+    echo --latest
+  fi
 }
 
 app_changed() {
@@ -137,6 +174,7 @@ case "$command" in
   notices) [ "$#" -eq 1 ] || fail "usage: release.sh notices OUT"; notices "$1" ;;
   sums) [ "$#" -eq 1 ] || fail "usage: release.sh sums DIR"; sums "$1" ;;
   pull-request) [ "$#" -eq 1 ] || fail "usage: release.sh pull-request BASE"; pull_request "$1" ;;
+  latest-flag) [ "$#" -eq 1 ] || fail "usage: release.sh latest-flag VERSION"; latest_flag "$1" ;;
   tag) tag ;;
-  *) fail "usage: release.sh version|check|notes|licences|notices|sums|pull-request|tag" ;;
+  *) fail "usage: release.sh version|check|notes|licences|notices|sums|pull-request|latest-flag|tag" ;;
 esac
