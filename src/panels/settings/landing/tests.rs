@@ -252,9 +252,16 @@ fn a_notice_about_a_row_in_cornercases_own_window_stays_when_the_settings_change
 }
 
 #[test]
-fn a_notice_is_kept_until_an_answer_read_after_the_landing_has_come() {
+fn a_notice_is_kept_while_no_revision_is_recorded() {
     let d = phone_paired();
     let found = found(fixture!("settings/search/phone-app.json"), "Remote › pair a phone app");
     let landed = spot(&d, &found);
     assert_eq!(settled(landed.clone(), &found, None, 8), landed);
+}
+
+#[test]
+fn the_landings_revision_comes_from_the_first_answer_read_after_it() {
+    assert_eq!(landed_at(None, true, 7), None);
+    assert_eq!(landed_at(None, false, 8), Some(8));
+    assert_eq!(landed_at(Some(8), false, 9), Some(8));
 }

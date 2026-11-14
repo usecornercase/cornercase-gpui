@@ -109,6 +109,10 @@ pub(super) fn spot(d: &Described, found: &FoundSetting) -> Spot {
     Spot { item: near, notice }
 }
 
+pub(super) fn landed_at(taken: Option<u64>, loading: bool, now: u64) -> Option<u64> {
+    taken.or((!loading).then_some(now))
+}
+
 pub(super) fn settled(mut spot: Spot, found: &FoundSetting, taken: Option<u64>, now: u64) -> Spot {
     if found.hidden && taken.is_some_and(|taken| now > taken) {
         spot.notice = None;
@@ -156,9 +160,7 @@ impl SettingsPanel {
 
     pub(super) fn settle_landing(&mut self) {
         if let Some((landed, d)) = self.landed.as_mut().zip(self.described.as_ref()) {
-            if !self.loading {
-                landed.revision.get_or_insert(d.revision);
-            }
+            landed.revision = landed_at(landed.revision, self.loading, d.revision);
             self.spot = settled(spot(d, &landed.found), &landed.found, landed.revision, d.revision);
         } else {
             self.spot = Spot::default();
