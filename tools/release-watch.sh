@@ -143,7 +143,7 @@ read_tags() {
 }
 
 read_releases() {
-  ask "listing the releases" gh api "repos/$GH_REPO/releases?per_page=100" \
+  ask "listing the releases" gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
     --jq '.[] | select(.draft | not) | .tag_name'
   releases=$answer
 }
@@ -400,7 +400,7 @@ present() {
   if in_list "$releases" "$tag"; then
     printf '%s\n' "$tag is released: nothing to do"
   elif later_released "$tag"; then
-    printf '%s\n' "$tag has no release, but the later $later has: left alone, so $tag cannot become the Latest release"
+    printf '%s\n' "$tag has no release, but the later $later has: left alone, since the download links and the window's update check use only the newest release, whose CHANGELOG.md carries $tag's notes"
   else
     present_run
   fi
