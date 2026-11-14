@@ -447,7 +447,7 @@ impl Connection {
         };
         match self.state {
             State::Connected => match &self.account {
-                Some(account) if !account.is_empty() => (format!("connected as {account}{source}"), Tone::Good),
+                Some(account) if !account.trim().is_empty() => (format!("connected as {account}{source}"), Tone::Good),
                 _ => (format!("connected{source}"), Tone::Good),
             },
             State::Refused => (format!("refused{source}"), Tone::Bad),

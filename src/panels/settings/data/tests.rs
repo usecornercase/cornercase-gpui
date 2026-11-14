@@ -661,7 +661,7 @@ fn an_app_whose_name_is_blank_says_it_is_connected_like_one_with_none() {
     let cs = [app(Some(""), DAY), app(Some("  "), DAY)];
     assert_eq!((app_status(&cs, 0), app_status(&cs, 1)), (None, None));
     assert_eq!((cs[0].app_name(), cs[1].app_name()), (None, None));
-    assert_eq!(row_status(&cs, 0).text, "connected");
+    assert_eq!((row_status(&cs, 0).text, row_status(&cs, 1).text), ("connected".to_string(), "connected".to_string()));
 }
 
 #[test]
