@@ -168,3 +168,24 @@ fn a_read_that_finds_no_release_leaves_it_unknown_and_an_equal_one_changes_nothi
     assert!(release.answered(ask, None));
     assert_eq!(release.known, None);
 }
+
+#[test]
+fn a_machines_queue_words_a_refusal_with_its_machine_and_the_windows_does_not() {
+    let stale = cli::failure("held", Some(4), b"error: another run\n");
+    let there = cli::Queue::on(Target::Local, ("vps".into(), Some("b1".into())), |_| {});
+    assert_eq!(queue_words(&there, &stale), "vps restarted: nothing was sent");
+    let here = cli::Queue::nowhere();
+    assert_eq!(queue_words(&here, &stale), "cornercase held: error: another run");
+    let other = cli::failure("held", Some(1), b"nothing is held");
+    assert_eq!(queue_words(&there, &other), "vps: nothing is held");
+    assert_eq!(queue_words(&here, &other), "cornercase held: nothing is held");
+}
+
+#[test]
+fn only_a_failed_answer_of_a_machines_queue_is_worded() {
+    let there = cli::Queue::on(Target::Local, ("vps".into(), None), |_| {});
+    let stale = cli::failure("held", Some(4), b"error: another run\n");
+    assert_eq!(answer_words(&there, Some(Err(stale))).as_deref(), Some("vps restarted: nothing was sent"));
+    assert_eq!(answer_words(&there, Some(Ok(String::new()))), None);
+    assert_eq!(answer_words(&there, None), None);
+}

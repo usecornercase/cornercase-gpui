@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use gpui::{AnyView, Context, FocusHandle};
 
-use super::{Busy, Store, ToastKind, run_job, run_job_on, run_with};
+use super::{Busy, Store, ToastKind, failed_there, run_job, run_job_on, run_with};
 use crate::cli::{self, Target};
 use crate::model::machines::run_on::clone::{Cloned, Unwritten, clone_args, cloned_note, parse_clone};
 use crate::model::machines::run_on::{self, Answer, Awaited, Look, Looking, Offer, Starting, There, parse_answer};
@@ -54,6 +54,11 @@ fn clone_key(machine: &str, project: u64) -> String {
     format!("clone-there:{machine}:{project}")
 }
 
+pub(crate) fn answer_there(machine: &str, result: anyhow::Result<String>) -> Result<Answer, String> {
+    let out = result.map_err(|e| failed_there(machine, &e))?;
+    parse_answer(&out).map_err(|why| format!("{machine}: {why}"))
+}
+
 impl Store {
     pub(crate) fn offers(&self) -> Vec<Offer> {
         let seen = self.session.as_ref().map_or(&[][..], |session| &session.machines);
@@ -100,7 +105,7 @@ impl Store {
         let id = self.start_job(busy, cx);
         let (target, command) = (start.target.clone(), start.command.clone());
         run_job_on(cx, id, target, command, move |this: &mut Self, result, cx| {
-            let answer = result.map_err(|e| cli::reason(&e)).and_then(|out| parse_answer(&out));
+            let answer = answer_there(&start.spot.machine, result);
             this.started_there(&start, dialog, answer, cx);
         });
     }
@@ -128,7 +133,7 @@ impl Store {
                     self.follow_awaited(cx);
                 }
             }
-            Err(why) => self.toast(format!("{machine}: {why}"), ToastKind::Error, cx),
+            Err(why) => self.toast(why, ToastKind::Error, cx),
         }
     }
 
@@ -223,3 +228,6 @@ impl Store {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

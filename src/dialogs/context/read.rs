@@ -2,8 +2,9 @@ use std::time::Instant;
 
 use super::ContextThere;
 use crate::cli;
+use crate::cli::with_boot;
 use crate::dialogs::on_machine;
-use crate::model::{ContextAnswer, with_boot};
+use crate::model::ContextAnswer;
 use crate::store::{AgentReach, args, stale_note};
 
 pub(super) const TOO_OLD: &str = "What fills an agent's context needs cornercase 0.12.243 or newer";

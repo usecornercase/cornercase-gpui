@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::Version;
 use crate::model::Session;
 use crate::test_util::{fixture, shop_on_vps};
 
@@ -20,7 +21,7 @@ fn starting_on_a_machine_names_it_and_its_project() {
 fn the_login_tab_opens_in_the_workspace_at_the_projects_root() {
     let tab = LoginTab { agent: "claude", account: Some("work"), command: Some("/home/ana/bin/claude") };
     assert_eq!(
-        shop_on_vps().login_tab_args(tab).expect("a place"),
+        shop_on_vps().login_tab_args(tab, None).expect("a place"),
         [
             "new-tab",
             "--workspace",
@@ -39,28 +40,28 @@ fn the_login_tab_opens_in_the_workspace_at_the_projects_root() {
 #[test]
 fn the_login_tab_of_the_own_login_names_an_empty_account() {
     let tab = LoginTab { agent: "claude", account: Some(""), command: None };
-    let args = shop_on_vps().login_tab_args(tab).expect("a place");
+    let args = shop_on_vps().login_tab_args(tab, None).expect("a place");
     assert!(args.windows(2).any(|pair| pair == ["--account", "claude="]), "{args:?}");
 }
 
 #[test]
 fn an_agent_that_is_not_installed_gets_a_plain_shell() {
     let tab = LoginTab { agent: "aider", account: None, command: None };
-    let args = shop_on_vps().login_tab_args(tab).expect("a place");
+    let args = shop_on_vps().login_tab_args(tab, None).expect("a place");
     assert_eq!(args, ["new-tab", "--workspace", "7", "--name", "aider login", "--json"]);
 }
 
 #[test]
 fn a_command_the_shell_would_split_is_quoted() {
     let tab = LoginTab { agent: "claude", account: None, command: Some("/home/ana/my tools/it's claude") };
-    let args = shop_on_vps().login_tab_args(tab).expect("a place");
+    let args = shop_on_vps().login_tab_args(tab, None).expect("a place");
     assert_eq!(args.last().map(String::as_str), Some(r"'/home/ana/my tools/it'\''s claude'"));
 }
 
 #[test]
 fn a_project_with_no_workspace_there_has_no_place_for_a_login_tab() {
     let spot = Spot { root: None, ..shop_on_vps() };
-    assert_eq!(spot.login_tab_args(LoginTab { agent: "claude", account: None, command: None }), None);
+    assert_eq!(spot.login_tab_args(LoginTab { agent: "claude", account: None, command: None }, None), None);
 }
 
 #[test]
@@ -83,4 +84,40 @@ fn a_project_pairs_by_what_the_server_says_or_by_its_repository() {
     assert_eq!(seen.pair_of(&by_pair).map(|there| there.id), Some(ThereId::heard(8)));
     assert_eq!(seen.pair_of(&by_repo).map(|there| there.id), Some(ThereId::heard(8)));
     assert_eq!(seen.pair_of(&none).map(|there| there.id), None);
+}
+
+#[test]
+fn the_login_tab_names_the_run_its_workspace_was_read_in_from_cornercase_0_13_63() {
+    let tab = LoginTab { agent: "claude", account: Some("work"), command: Some("/home/ana/bin/claude") };
+    for release in [Version::new(0, 13, 63), Version::new(0, 13, 68), Version::new(0, 14, 0)] {
+        let args = shop_on_vps().login_tab_args(tab, Some(release)).expect("a place");
+        let boot = shop_on_vps().boot;
+        assert_eq!(
+            args,
+            [
+                "new-tab",
+                "--workspace",
+                "7",
+                "--name",
+                "claude login",
+                "--json",
+                "--account",
+                "claude=work",
+                "--boot",
+                boot.as_str(),
+                "--",
+                "/home/ana/bin/claude"
+            ],
+            "{release}"
+        );
+    }
+}
+
+#[test]
+fn an_older_or_unknown_cornercase_here_opens_the_login_tab_without_the_run() {
+    let tab = LoginTab { agent: "aider", account: None, command: None };
+    for release in [Some(Version::new(0, 13, 62)), Some(Version::new(0, 13, 19)), None] {
+        let args = shop_on_vps().login_tab_args(tab, release).expect("a place");
+        assert_eq!(args, ["new-tab", "--workspace", "7", "--name", "aider login", "--json"]);
+    }
 }

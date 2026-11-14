@@ -80,6 +80,21 @@ impl Target {
     }
 }
 
+const NAMES_NO_ID: [&str; 1] = ["theme"];
+
+pub(crate) fn with_boot(mut args: Vec<String>, boot: &str) -> Vec<String> {
+    let at = args.iter().position(|a| a == "--").unwrap_or(args.len());
+    if args[..at].iter().any(|a| a == "--boot") {
+        return args;
+    }
+    args.splice(at..at, ["--boot".to_string(), boot.to_string()]);
+    args
+}
+
+fn reported(error: &anyhow::Error) -> Option<String> {
+    (!stale_boot(error)).then(|| error.to_string())
+}
+
 const CALLER: [&str; 3] = ["CORNERCASE_PANE", "CORNERCASE_SERVER", "CORNERCASE_REMOTE"];
 const STALE_BOOT: i32 = 4;
 
@@ -298,6 +313,15 @@ pub(crate) fn kill_all() {
     list.clear();
 }
 
+fn reap(id: u64) -> Option<i32> {
+    let mut child = {
+        let mut list = children().lock();
+        let at = list.iter().position(|(child, _)| *child == id)?;
+        list.swap_remove(at).1
+    };
+    child.wait().ok().and_then(|status| status.code())
+}
+
 pub(crate) fn stream_on<S: AsRef<str>>(
     target: &Target,
     args: &[S],
@@ -339,7 +363,7 @@ struct Piped {
     process: Stream,
 }
 
-fn piped(target: &Target, args: &[&str]) -> Option<Piped> {
+fn piped<S: AsRef<str>>(target: &Target, args: &[S]) -> Option<Piped> {
     let mut cmd = target.command(args);
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().ok()?;
@@ -399,6 +423,7 @@ pub(crate) fn moves_view<S: AsRef<str>>(args: &[S]) -> bool {
 pub(crate) struct Queue {
     tx: mpsc::Sender<Job>,
     view_moves: Arc<dyn Fn() + Send + Sync>,
+    run: Option<(String, Option<String>)>,
 }
 
 impl Queue {
@@ -406,23 +431,51 @@ impl Queue {
         on_error: impl Fn(String) + Send + Sync + 'static,
         on_view_move: impl Fn() + Send + Sync + 'static,
     ) -> Self {
-        Self::start(None, Arc::new(on_error), Arc::new(on_view_move))
+        Self::start(None, None, Arc::new(on_error), Arc::new(on_view_move))
     }
 
-    pub(crate) fn on(target: Target, on_error: impl Fn(String) + Send + Sync + 'static) -> Self {
-        Self::start(Some(target), Arc::new(on_error), Arc::new(|| {}))
+    pub(crate) fn on(
+        target: Target,
+        run: (String, Option<String>),
+        on_error: impl Fn(String) + Send + Sync + 'static,
+    ) -> Self {
+        Self::start(Some(target), Some(run), Arc::new(on_error), Arc::new(|| {}))
+    }
+
+    pub(crate) fn machine(&self) -> Option<&str> {
+        self.run.as_ref().map(|(machine, _)| machine.as_str())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn boot(&self) -> Option<&str> {
+        self.run.as_ref().and_then(|(_, boot)| boot.as_deref())
     }
 
     pub(crate) fn nowhere() -> Self {
         let (tx, _) = mpsc::channel();
-        Self { tx, view_moves: Arc::new(|| {}) }
+        Self { tx, view_moves: Arc::new(|| {}), run: None }
     }
 
-    fn start(target: Option<Target>, on_error: OnError, view_moves: Arc<dyn Fn() + Send + Sync>) -> Self {
-        let (tx, rx) = mpsc::channel::<Job>();
-        let mut worker = Worker::new(target, on_error);
+    fn start(
+        target: Option<Target>,
+        run: Option<(String, Option<String>)>,
+        on_error: OnError,
+        view_moves: Arc<dyn Fn() + Send + Sync>,
+    ) -> Self {
+        let (queue, mut worker, rx) = Self::made(target, run, on_error, view_moves);
         thread::spawn(move || worker.work(&rx));
-        Self { tx, view_moves }
+        queue
+    }
+
+    fn made(
+        target: Option<Target>,
+        run: Option<(String, Option<String>)>,
+        on_error: OnError,
+        view_moves: Arc<dyn Fn() + Send + Sync>,
+    ) -> (Self, Worker, mpsc::Receiver<Job>) {
+        let (tx, rx) = mpsc::channel::<Job>();
+        let boot = run.as_ref().and_then(|(_, boot)| boot.clone());
+        (Self { tx, view_moves, run }, Worker::new(target, boot, on_error), rx)
     }
 
     fn send(&self, cmd: Cmd) {
@@ -464,17 +517,19 @@ impl Queue {
 struct Worker {
     target: Target,
     generation: u64,
+    boot: Option<String>,
     on_error: OnError,
     typist: Option<Typist>,
     requests: Option<Requests>,
 }
 
 impl Worker {
-    fn new(target: Option<Target>, on_error: OnError) -> Self {
+    fn new(target: Option<Target>, boot: Option<String>, on_error: OnError) -> Self {
         let current = CURRENT.lock();
         Self {
             target: target.unwrap_or_else(|| current.target.clone()),
             generation: current.generation,
+            boot,
             on_error,
             typist: None,
             requests: None,
@@ -516,7 +571,7 @@ impl Worker {
         if self.typist.as_mut().is_some_and(|typist| typist.send(&lines)) {
             return true;
         }
-        self.typist = Typist::start(&self.target, &self.on_error);
+        self.typist = Typist::start(&self.target, &self.typist_args(), &self.on_error);
         let sent = self.typist.as_mut().is_some_and(|typist| typist.send(&lines));
         if !sent {
             self.typist = None;
@@ -524,12 +579,35 @@ impl Worker {
         sent
     }
 
+    fn on_run(&self, args: Vec<String>) -> Vec<String> {
+        match &self.boot {
+            Some(boot) if !args.first().is_some_and(|name| NAMES_NO_ID.contains(&name.as_str())) => {
+                with_boot(args, boot)
+            }
+            _ => args,
+        }
+    }
+
+    fn typist_args(&self) -> Vec<String> {
+        typist::args(self.boot.as_deref())
+    }
+
+    fn one_shot_input(&self, pane: u64) -> Vec<String> {
+        self.on_run(vec!["input".to_string(), "--pane".to_string(), pane.to_string(), "-".to_string()])
+    }
+
+    fn report(&self, error: &anyhow::Error) {
+        if let Some(said) = reported(error) {
+            (self.on_error)(said);
+        }
+    }
+
     fn type_one_shot(&self, events: &Typed) {
         for run in events.chunk_by(|a, b| a.0 == b.0) {
-            let args = ["input".to_string(), "--pane".to_string(), run[0].0.to_string(), "-".to_string()];
+            let args = self.one_shot_input(run[0].0);
             let lines = run.iter().map(|(_, event)| event.to_string()).collect::<Vec<_>>().join("\n") + "\n";
             if let Err(e) = run_on(&self.target, &args, Some(lines.as_bytes())) {
-                (self.on_error)(e.to_string());
+                self.report(&e);
             }
         }
     }
@@ -557,15 +635,22 @@ impl Worker {
         let result = self.run(&cmd.args, cmd.stdin.as_deref());
         match (cmd.reply, result) {
             (Some(reply), result) => reply(result),
-            (None, Err(e)) => (self.on_error)(e.to_string()),
+            (None, Err(e)) => self.report(&e),
             (None, Ok(_)) => {}
         }
         pending
     }
 
+    fn sent(&self, args: &[String], stdin: Option<&[u8]>) -> (Vec<String>, Option<String>) {
+        let args = self.on_run(args.to_vec());
+        let line = requests::line(&args, stdin);
+        (args, line)
+    }
+
     fn run(&mut self, args: &[String], stdin: Option<&[u8]>) -> Result<String> {
-        let name = args.first().map_or("", String::as_str);
-        match requests::line(args, stdin).and_then(|line| self.ask(&line)) {
+        let (args, line) = self.sent(args, stdin);
+        let (args, name) = (&args, args.first().map_or("", String::as_str));
+        match line.and_then(|line| self.ask(&line)) {
             Some(Ok(answer)) => requests::answer(name, &answer),
             Some(Err(why)) => Err(requests::lost(name, &why)),
             None => run_on(&self.target, args, stdin),
@@ -641,7 +726,7 @@ pub(crate) struct QueueTap(mpsc::Receiver<Job>);
 impl QueueTap {
     pub(crate) fn new() -> (Queue, Self) {
         let (tx, rx) = mpsc::channel();
-        (Queue { tx, view_moves: Arc::new(|| {}) }, Self(rx))
+        (Queue { tx, view_moves: Arc::new(|| {}), run: None }, Self(rx))
     }
 
     pub(crate) fn inputs(&self) -> Vec<(u64, serde_json::Value)> {

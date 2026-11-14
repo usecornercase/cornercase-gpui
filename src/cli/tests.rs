@@ -7,7 +7,7 @@ use serde_json::json;
 
 use super::{
     BINARY, Binary, CALLER, Job, Queue, QueueTap, Remote, Target, Worker, answered, failure, gather_input,
-    gather_scroll, moves_view, older_refusal, spawn_failure, stale_boot, use_binary,
+    gather_scroll, moves_view, older_refusal, reported, spawn_failure, stale_boot, use_binary, with_boot,
 };
 
 fn args(cmd: &Command) -> Vec<&str> {
@@ -15,7 +15,7 @@ fn args(cmd: &Command) -> Vec<&str> {
 }
 
 fn queue(tx: mpsc::Sender<Job>) -> Queue {
-    Queue { tx, view_moves: Arc::new(|| {}) }
+    Queue { tx, view_moves: Arc::new(|| {}), run: None }
 }
 
 fn remote(program: &str) -> Target {
@@ -165,7 +165,7 @@ fn a_command_through_the_queue_that_moves_the_view_tells_the_window() {
     let view_moves = Arc::new(move || {
         counted.fetch_add(1, Ordering::Relaxed);
     });
-    let queue = Queue { tx, view_moves };
+    let queue = Queue { tx, view_moves, run: None };
     queue.cmd(vec!["rename".into(), "--workspace".into(), "2".into(), "x".into()]);
     assert_eq!(told.load(Ordering::Relaxed), 0);
     queue.cmd(vec!["focus".into(), "--tab".into(), "3".into()]);
@@ -175,7 +175,7 @@ fn a_command_through_the_queue_that_moves_the_view_tells_the_window() {
 
 #[test]
 fn a_queue_made_for_a_machine_keeps_that_machine() {
-    let worker = Worker::new(Some(remote("")), Arc::new(|_| {}));
+    let worker = Worker::new(Some(remote("")), None, Arc::new(|_| {}));
     assert_eq!(worker.target, remote(""));
 }
 
@@ -228,4 +228,138 @@ fn a_one_shot_refused_as_older_fails_with_the_refusal_and_any_other_failure_with
     assert!(older_refusal(&other).is_none());
     assert_eq!(other.to_string(), "cornercase status: error: other");
     assert!(older_refusal(&answered("status", None, b"", b"").expect_err("killed")).is_none());
+}
+
+fn words(line: &[&str]) -> Vec<String> {
+    line.iter().map(ToString::to_string).collect()
+}
+
+fn queue_of(boot: Option<&str>) -> Worker {
+    Worker::new(Some(remote("")), boot.map(str::to_string), Arc::new(|_| {}))
+}
+
+#[test]
+fn a_boot_goes_at_the_end_of_a_command() {
+    let args = with_boot(words(&["mark", "--pane", "9"]), "b1");
+    assert_eq!(args, ["mark", "--pane", "9", "--boot", "b1"]);
+}
+
+#[test]
+fn a_boot_goes_before_the_words_after_two_dashes() {
+    let args = with_boot(words(&["account", "restart", "--json", "--pane", "9", "--", "claude", "work"]), "b1");
+    assert_eq!(args, ["account", "restart", "--json", "--pane", "9", "--boot", "b1", "--", "claude", "work"]);
+}
+
+#[test]
+fn a_command_that_already_names_its_run_gets_no_second_boot() {
+    let once = with_boot(words(&["mark", "--pane", "9"]), "b1");
+    assert_eq!(with_boot(once, "b1"), ["mark", "--pane", "9", "--boot", "b1"]);
+    let text = with_boot(words(&["send", "--pane", "9", "--", "--boot"]), "b1");
+    assert_eq!(text, ["send", "--pane", "9", "--boot", "b1", "--", "--boot"]);
+}
+
+#[test]
+fn a_machines_queue_writes_its_runs_boot_into_every_command_it_sends() {
+    let worker = queue_of(Some("b1"));
+    let lines: [&[&str]; 10] = [
+        &["scroll", "--pane", "3", "--up", "2"],
+        &["split", "--pane", "3", "--focus", "--view", "5"],
+        &["focus", "--tab", "4", "--view", "5"],
+        &["ratio", "--tab", "4", "0.4"],
+        &["selection", "--pane", "3", "--from", "0,0", "--to", "4,0"],
+        &["view-set", "--view", "5", "--cols", "80", "--rows", "24"],
+        &["redraw", "--surface", "6"],
+        &["held", "--pane", "3", "--send-now"],
+        &["paste-file", "--pane", "3", "/tmp/a.png"],
+        &["paste-file", "--pane", "3", "--name", "pasted.png", "-"],
+    ];
+    for line in lines {
+        let sent = worker.on_run(words(line));
+        let at = sent.iter().position(|arg| arg == "--boot").expect(line[0]);
+        assert_eq!(sent[at + 1], "b1", "{line:?}");
+        assert_eq!(sent.len(), line.len() + 2, "{line:?}");
+    }
+}
+
+#[test]
+fn a_machines_queue_gives_its_colours_without_the_run() {
+    assert_eq!(queue_of(Some("b1")).on_run(words(&["theme", "-"])), ["theme", "-"]);
+}
+
+#[test]
+fn the_windows_own_queue_sends_its_commands_as_given() {
+    let line = words(&["scroll", "--pane", "3", "--up", "2"]);
+    assert_eq!(queue_of(None).on_run(line.clone()), line);
+}
+
+#[test]
+fn a_command_of_a_machines_tab_that_names_its_run_already_gets_no_second_boot() {
+    let close = with_boot(words(&["close", "--pane", "5"]), "b1");
+    assert_eq!(queue_of(Some("b1")).on_run(close), ["close", "--pane", "5", "--boot", "b1"]);
+}
+
+#[test]
+fn a_machines_one_shot_input_names_its_run() {
+    assert_eq!(queue_of(Some("b1")).one_shot_input(3), ["input", "--pane", "3", "-", "--boot", "b1"]);
+    assert_eq!(queue_of(None).one_shot_input(3), ["input", "--pane", "3", "-"]);
+}
+
+#[test]
+fn a_machines_typist_is_started_with_its_runs_boot() {
+    assert_eq!(queue_of(Some("b1")).typist_args(), ["input", "--follow", "--json", "-", "--boot", "b1"]);
+    assert_eq!(queue_of(None).typist_args(), ["input", "--follow", "--json", "-"]);
+}
+
+#[test]
+fn what_a_machines_queue_asks_requests_to_run_names_its_run() {
+    let worker = queue_of(Some("b1"));
+    for line in [super::scroll_args(3, -2), words(&["split", "--pane", "3", "--focus", "--view", "5"])] {
+        let (args, sent) = worker.sent(&line, None);
+        assert_eq!(args.iter().filter(|arg| *arg == "--boot").count(), 1, "{line:?}");
+        let sent: serde_json::Value = serde_json::from_str(&sent.expect("a line")).expect("json");
+        assert_eq!(sent["args"], json!(args), "{line:?}");
+        assert!(args.windows(2).any(|pair| pair == ["--boot", "b1"]), "{line:?}");
+    }
+}
+
+#[test]
+fn what_the_windows_own_queue_asks_requests_to_run_is_as_given() {
+    let line = super::scroll_args(3, -2);
+    let (args, sent) = queue_of(None).sent(&line, None);
+    assert_eq!(args, line);
+    assert_eq!(sent.expect("a line"), json!({ "args": line }).to_string());
+}
+
+#[test]
+fn a_queue_reports_what_it_fails_at_but_not_a_refused_run() {
+    let heard = Arc::new(parking_lot::Mutex::new(Vec::new()));
+    let sink = heard.clone();
+    let worker = Worker::new(Some(remote("")), Some("b1".into()), Arc::new(move |said| sink.lock().push(said)));
+    worker.report(&failure("scroll", Some(4), b"error: another run\n"));
+    assert!(heard.lock().is_empty());
+    worker.report(&failure("scroll", Some(1), b"there is no pane 3"));
+    assert_eq!(*heard.lock(), ["cornercase scroll: there is no pane 3"]);
+}
+
+#[test]
+fn a_command_nobody_waits_for_refused_for_its_run_is_not_reported() {
+    let stale = failure("scroll", Some(4), b"error: this request is for the cornercase server started as 1-2\n");
+    assert_eq!(reported(&stale), None);
+}
+
+#[test]
+fn any_other_failure_of_a_command_nobody_waits_for_is_reported() {
+    let other = failure("scroll", Some(1), b"there is no pane 3");
+    assert_eq!(reported(&other).as_deref(), Some("cornercase scroll: there is no pane 3"));
+}
+
+#[test]
+fn a_queue_made_for_a_run_keeps_the_run_and_hands_its_worker_the_boot() {
+    let made = |run| Queue::made(Some(remote("")), run, Arc::new(|_| {}), Arc::new(|| {}));
+    let (queue, worker, _rx) = made(Some(("vps".to_string(), Some("b1".to_string()))));
+    assert_eq!((queue.machine(), queue.boot(), worker.boot.as_deref()), (Some("vps"), Some("b1"), Some("b1")));
+    let (queue, worker, _rx) = made(Some(("vps".to_string(), None)));
+    assert_eq!((queue.machine(), queue.boot(), worker.boot), (Some("vps"), None, None));
+    let (queue, worker, _rx) = made(None);
+    assert_eq!((queue.machine(), worker.boot), (None, None));
 }

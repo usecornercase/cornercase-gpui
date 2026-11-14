@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use super::{Piped, Stream, Target, piped, read_all};
+use super::{Piped, STALE_BOOT, Stream, Target, piped, read_all, reap, with_boot};
 
 const SETTLE: Duration = Duration::from_secs(10);
 
@@ -22,8 +22,9 @@ pub(super) struct Typist {
 }
 
 impl Typist {
-    pub(super) fn start(target: &Target, on_error: &OnError) -> Option<Self> {
-        let Piped { stdin, stdout, stderr, process } = piped(target, &["input", "--follow", "--json", "-"])?;
+    pub(super) fn start(target: &Target, args: &[String], on_error: &OnError) -> Option<Self> {
+        let Piped { stdin, stdout, stderr, process } = piped(target, args)?;
+        let id = process.id;
         let (tx, answered) = mpsc::channel();
         let stopping = Arc::new(AtomicBool::new(false));
         let (on_error, stopped) = (on_error.clone(), stopping.clone());
@@ -31,8 +32,9 @@ impl Typist {
             let errors = thread::spawn(move || read_all(stderr));
             read_answers(stdout, &tx, &*on_error);
             let why = errors.join().unwrap_or_default();
-            if !stopped.load(Ordering::Relaxed) {
-                on_error(ended(&why));
+            let code = reap(id);
+            if let Some(said) = told_end(&why, code, stopped.load(Ordering::Relaxed)) {
+                on_error(said);
             }
         });
         Some(Self { stdin, answered, unanswered: 0, stopping, _process: process })
@@ -88,6 +90,18 @@ fn answer(line: &str) -> (usize, Option<String>) {
     let Ok(value) = serde_json::from_str::<Value>(line) else { return (1, Some(line.trim().to_string())) };
     let events = value.get("events").and_then(Value::as_u64).and_then(|n| usize::try_from(n).ok()).unwrap_or(1);
     (events, value.get("error").and_then(Value::as_str).map(str::to_string))
+}
+
+pub(super) fn args(boot: Option<&str>) -> Vec<String> {
+    let command = ["input", "--follow", "--json", "-"].map(String::from).to_vec();
+    match boot {
+        Some(boot) => with_boot(command, boot),
+        None => command,
+    }
+}
+
+fn told_end(why: &str, code: Option<i32>, stopped: bool) -> Option<String> {
+    (!stopped && code != Some(STALE_BOOT)).then(|| ended(why))
 }
 
 fn ended(why: &str) -> String {

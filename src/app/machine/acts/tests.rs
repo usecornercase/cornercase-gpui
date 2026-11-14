@@ -196,7 +196,7 @@ fn a_new_connection_reads_the_accounts_again() {
     let mut tab = opening();
     tab.accounts = Asked::Failed("x".into());
     let (tx, _rx) = futures::channel::mpsc::unbounded();
-    tab.reopen(cli::Target::Local, &opening().aimed, &tx);
+    tab.reopen(cli::Target::Local, &opening().aimed, None, &tx);
     assert_eq!(tab.accounts, Asked::Unasked);
 }
 
@@ -223,4 +223,18 @@ fn an_older_read_of_the_accounts_never_replaces_a_newer_ask() {
     assert!(matches!(tab.accounts, Asked::Read(_)));
     assert!(!tab.take_accounts(serial, first, Err(anyhow!("late"))));
     assert!(matches!(tab.accounts, Asked::Read(_)));
+}
+
+#[test]
+fn a_machines_tab_carries_its_runs_boot_from_cornercase_0_13_63() {
+    for release in [v(13, 63), v(13, 68), Version::new(0, 14, 0)] {
+        assert_eq!(carried_boot("b1", Some(release)).as_deref(), Some("b1"), "{release}");
+    }
+}
+
+#[test]
+fn below_0_13_63_or_unknown_a_machines_tab_carries_no_boot() {
+    for release in [Some(v(13, 62)), Some(v(13, 60)), Some(v(13, 19)), None] {
+        assert_eq!(carried_boot("b1", release), None);
+    }
 }

@@ -2,20 +2,24 @@ use gpui::{App, Context};
 
 use super::{MachineRun, MachineTab};
 use crate::app::Root;
-use crate::cli::Version;
+use crate::cli::{Version, with_boot};
 use crate::desktop;
+use crate::model::PaneInfo;
 use crate::model::accounts::{AccountsInfo, Switch};
 use crate::model::machines::run_on::checks::Asked;
-use crate::model::{PaneInfo, with_boot};
+use crate::model::machines::seen::{ACTS_BOOT_SINCE, PANE_BOOT_SINCE};
 use crate::store::{self, Busy, Store, ToastKind, args, failed_there};
 
-pub(crate) const PANE_BOOT_SINCE: Version = Version::new(0, 13, 30);
 pub(crate) const MOVING: &str = "Moving a pane";
 pub(crate) const MARKING: &str = "Marking an agent";
 pub(crate) const SWITCHING: &str = "Switching the account";
 
 pub(crate) fn sends_boot(release: Option<Version>) -> bool {
     PANE_BOOT_SINCE.reached_by(release)
+}
+
+pub(crate) fn carried_boot(boot: &str, release: Option<Version>) -> Option<String> {
+    ACTS_BOOT_SINCE.reached_by(release).then(|| boot.to_string())
 }
 
 pub(crate) fn boot_note(release: Option<Version>) -> Option<String> {

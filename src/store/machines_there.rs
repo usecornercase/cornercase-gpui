@@ -101,6 +101,18 @@ pub(crate) fn stale_note(machine: &str, error: &anyhow::Error) -> Option<String>
     cli::stale_boot(error).then(|| sent_or_not(&format!("{machine} restarted")))
 }
 
+pub(crate) fn part_sent_note(machine: &str) -> String {
+    format!("{machine} restarted after part was sent: hand it again")
+}
+
+pub(crate) fn answer_words(queue: &cli::Queue, answer: Option<anyhow::Result<String>>) -> Option<String> {
+    answer.and_then(Result::err).map(|error| queue_words(queue, &error))
+}
+
+pub(crate) fn queue_words(queue: &cli::Queue, error: &anyhow::Error) -> String {
+    queue.machine().map_or_else(|| error.to_string(), |machine| failed_there(machine, error))
+}
+
 pub(crate) fn failed_there(machine: &str, error: &anyhow::Error) -> String {
     stale_note(machine, error).unwrap_or_else(|| format!("{machine}: {}", cli::reason(error)))
 }

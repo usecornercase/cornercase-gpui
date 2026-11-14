@@ -230,7 +230,7 @@ impl RunOn {
         }
         let command = self.checks.accounts.read().and_then(|info| info.command_of(&note.agent)).map(str::to_string);
         let tab = LoginTab { agent: &note.agent, account: note.account.as_deref(), command: command.as_deref() };
-        let Some(command) = spot.login_tab_args(tab) else {
+        let Some(command) = spot.login_tab_args(tab, Store::get(cx).read(cx).cli_release()) else {
             let why = format!("{} has no workspace of this project for the login tab", spot.machine);
             refused(&why, cx);
             return;

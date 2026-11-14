@@ -2,6 +2,7 @@ use anyhow::Context as _;
 use serde::Deserialize;
 
 use crate::app::{Msg, Root};
+use crate::cli;
 use crate::desktop::{self, Board};
 use crate::model::PaneGrid;
 use crate::model::link::row_cells;
@@ -75,6 +76,7 @@ pub(super) fn kept(board: Board, read: anyhow::Result<String>, on_machine: bool)
         serde_json::from_str::<Selected>(&out).context("could not read the selection cornercase answered with")
     });
     match selected {
+        Err(e) if cli::stale_boot(&e) => None,
         Ok(Selected { text: Some(text) }) => {
             let text = if on_machine { cleaned(&text) } else { text };
             (!text.is_empty()).then_some(Msg::Copied(board, text))
@@ -119,3 +121,6 @@ impl Root {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
