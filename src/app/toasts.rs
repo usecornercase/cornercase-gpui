@@ -114,8 +114,8 @@ fn toast_view(store: &Entity<Store>, toast: Toast, (most, capped): (f32, bool)) 
             d.child(ui::primary_button(SharedString::from(format!("toast-go-{id}")), label).on_click(
                 move |_: &ClickEvent, _, cx| {
                     go.update(cx, |s, cx| {
-                        s.go(&action, cx);
                         s.dismiss_toast(id, cx);
+                        s.go(&action, cx);
                     });
                 },
             ))

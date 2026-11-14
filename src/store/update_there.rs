@@ -1,6 +1,6 @@
 use gpui::Context;
 
-use super::{Busy, COPY_COMMAND, Clip, Store, ToastGo, ToastKind};
+use super::{Busy, COPY_COMMAND, Clip, Store, ToastAction, ToastGo, ToastKind};
 use crate::cli::{self, ByHand, Said, Target, UpdateAnswer};
 use crate::desktop;
 use crate::model::machines::Machine;
@@ -120,8 +120,6 @@ fn copy_of(machine: &str, answer: &UpdateAnswer) -> Option<Clip> {
         _ => None,
     }
 }
-
-type ToastAction = Option<(String, ToastGo)>;
 
 fn update_toast(machine: &str, answer: &UpdateAnswer) -> (String, ToastKind, ToastAction) {
     let (text, kind) = updated_words(machine, answer);

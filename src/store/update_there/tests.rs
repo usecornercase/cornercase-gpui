@@ -1,12 +1,6 @@
 use super::*;
-use crate::cli::Answer;
 use crate::model::machines::LinkState;
-use crate::test_util::fixture;
-
-#[expect(clippy::unnecessary_wraps, reason = "the readers take the Result a command gives")]
-fn reply(code: i32, stdout: &str) -> anyhow::Result<Answer> {
-    Ok(Answer { code: Some(code), stdout: stdout.to_string(), stderr: String::new() })
-}
+use crate::test_util::{fixture, reply};
 
 fn update() -> UpdateThere {
     UpdateThere {
@@ -141,7 +135,7 @@ fn a_manual_answer_there_offers_its_command_to_copy() {
 
 #[test]
 fn a_manual_line_through_remote_copies_the_machines_own_command() {
-    let answer = cli::update_answer(&reply(6, fixture!("remote/update-json-manual.txt")));
+    let answer = cli::update_answer(&reply(6, fixture!("remote/update-json-manual.txt"), ""));
     let (_, kind, action) = update_toast("vps", &answer);
     assert_eq!(kind, ToastKind::NeedsYou);
     assert_eq!(action, Some(copy_action("curl -fsSL https://usecornercase.dev/install.sh | sh", "vps")));
@@ -166,7 +160,7 @@ fn every_other_answer_toasts_without_a_button() {
 
 #[test]
 fn below_the_gate_the_toast_and_the_page_offer_no_command() {
-    let answer = cli::update_answer(&reply(1, fixture!("remote/update-manual.txt")));
+    let answer = cli::update_answer(&reply(1, fixture!("remote/update-manual.txt"), ""));
     assert!(matches!(&answer, UpdateAnswer::Printed(Said::Failed(text)) if text.contains("brew upgrade")));
     assert_eq!(update_toast("vps", &answer).2, None);
     assert_eq!(update_page("vps", &answer).0.copy, None);

@@ -1,7 +1,7 @@
 use super::feed::{Message, Notice};
 use crate::model::Session;
 use crate::panels::PanelKind;
-use crate::store::{Busy, NoticeThere, ToastGo, ToastKind, args, setup_key};
+use crate::store::{Busy, NoticeThere, ToastAction, ToastGo, ToastKind, args, setup_key};
 
 pub(super) const SHOW: &str = "Show";
 pub(super) const OPEN_QUEUE: &str = "Open Queue";
@@ -63,13 +63,11 @@ impl Kind {
     }
 }
 
-type Button = Option<(String, ToastGo)>;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Telling {
     pub text: String,
     pub kind: ToastKind,
-    pub button: Button,
+    pub button: ToastAction,
     pub headline: Option<String>,
     pub sound: Option<String>,
 }
@@ -130,7 +128,7 @@ impl Waiting {
     }
 }
 
-fn button(message: &Message, kind: Kind, session: Option<&Session>) -> Button {
+fn button(message: &Message, kind: Kind, session: Option<&Session>) -> ToastAction {
     if kind == Kind::FlowMerged {
         return message.workspace.map(|workspace| (REOPEN.to_string(), reopen(workspace, session)));
     }

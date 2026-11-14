@@ -5,6 +5,11 @@ use crate::model::machines::MachineIcon;
 use crate::model::{Aim, ReadReleases, Session, Spot, ThereId};
 use crate::store::{MachineRead, Reach};
 
+#[expect(clippy::unnecessary_wraps, reason = "the readers take the Result a command gives")]
+pub(crate) fn reply(code: i32, stdout: &str, stderr: &str) -> anyhow::Result<crate::cli::Answer> {
+    Ok(crate::cli::Answer { code: Some(code), stdout: stdout.into(), stderr: stderr.into() })
+}
+
 macro_rules! fixture {
     ($path:literal) => {
         include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/", $path))

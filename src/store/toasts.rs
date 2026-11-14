@@ -42,12 +42,14 @@ impl Shown {
     }
 }
 
+pub(crate) type ToastAction = Option<(String, ToastGo)>;
+
 #[derive(Clone)]
 pub(crate) struct Toast {
     pub id: u64,
     pub text: String,
     pub kind: ToastKind,
-    pub action: Option<(String, ToastGo)>,
+    pub action: ToastAction,
     pub shown: Shown,
     pub count: u32,
 }
@@ -143,7 +145,7 @@ impl Store {
         &mut self,
         text: impl Into<String>,
         kind: ToastKind,
-        action: Option<(String, ToastGo)>,
+        action: ToastAction,
         cx: &mut Context<Self>,
     ) {
         let id = self.next_toast;

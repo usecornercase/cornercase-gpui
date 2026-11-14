@@ -37,7 +37,7 @@ pub(crate) use machines_there::{
     MachineAct, NoticeThere, answer_words, failed_there, part_sent_note, read_refusal, restart_note, stale_note,
 };
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
-pub(crate) use toasts::{COPY_COMMAND, Clip, Toast, ToastKind};
+pub(crate) use toasts::{COPY_COMMAND, Clip, Toast, ToastAction, ToastKind};
 pub(crate) use tunnels::{
     Asked, Control, Held, MachineLink, ReverseState, Tail, TunnelRow, TunnelSection, Whose, address_there,
     copied_words, heading, none_note, remote_url, section_tail,
@@ -346,8 +346,7 @@ impl Store {
 
     pub(crate) fn copy_from(&mut self, path: String, place: &str, cx: &mut Context<Self>) {
         let text = format!("Copied {path}: it is on {place}, not on this {}", desktop::here());
-        cx.write_to_clipboard(ClipboardItem::new_string(path));
-        self.toast(text, ToastKind::Info, cx);
+        self.copy(&Clip { text: path, said: text }, cx);
     }
 
     pub(crate) fn go(&mut self, action: &ToastGo, cx: &mut Context<Self>) {

@@ -11,7 +11,7 @@ use crate::keymap::{Command, with_keys};
 use crate::model::Session;
 use crate::render::moving::Moves;
 use crate::sidebar::{cmd, tip};
-use crate::store::{self, Busy, COPY_COMMAND, Clip, PageAnswer, Store, reopen_key};
+use crate::store::{self, Busy, Clip, PageAnswer, reopen_key};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone};
 
@@ -175,11 +175,6 @@ fn answer_kept<'a>(answered: Option<&'a (String, PageAnswer)>, key: &str) -> Opt
 
 pub(super) fn answer_under(said: Option<&Said>) -> Div {
     div().children(answer_line(said))
-}
-
-pub(super) fn copy_button(id: &'static str, clip: Clip) -> Stateful<Div> {
-    tall(ui::icon_text_button(id, Icon::Copy, COPY_COMMAND, Tone::Primary))
-        .on_click(move |_: &ClickEvent, _, cx| Store::get(cx).update(cx, |s, cx| s.copy(&clip, cx)))
 }
 
 pub(super) fn retry_button(id: &'static str, cx: &mut Context<Root>) -> Stateful<Div> {

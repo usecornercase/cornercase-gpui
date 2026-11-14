@@ -1,6 +1,6 @@
 use gpui::{ClickEvent, Context, Div, ParentElement as _, Stateful, StatefulInteractiveElement as _, Window};
 
-use super::no_tab::{answer_under, column, copy_button, heading, lead_text, retry_button, row, scrolled, tall};
+use super::no_tab::{answer_under, column, heading, lead_text, retry_button, row, scrolled, tall};
 use crate::app::{Conn, Root};
 use crate::cli::{self, Behind, Older};
 use crate::desktop;
@@ -8,7 +8,9 @@ use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::platform::Os;
 use crate::sidebar::tip;
-use crate::store::{AfterUpdate, Busy, Clip, release_clause, run_update, update_job, update_page, update_question};
+use crate::store::{
+    AfterUpdate, Busy, COPY_COMMAND, Clip, Store, release_clause, run_update, update_job, update_page, update_question,
+};
 use crate::ui::{self, Icon, Tone};
 
 const RESTART: &str = "Restart";
@@ -61,6 +63,11 @@ fn plain_button(id: &'static str, icon: Icon, label: &str) -> Stateful<Div> {
     tall(ui::icon_text_button(id, icon, label.to_string(), Tone::Plain))
 }
 
+fn copy_button(clip: Clip) -> Stateful<Div> {
+    tall(ui::icon_text_button("older-copy", Icon::Copy, COPY_COMMAND, Tone::Primary))
+        .on_click(move |_: &ClickEvent, _, cx| Store::get(cx).update(cx, |s, cx| s.copy(&clip, cx)))
+}
+
 fn elsewhere_button() -> Stateful<Div> {
     plain_button("older-connect", Icon::Server, "Connect to another server")
         .tooltip(tip(with_keys("Connect to another server", Command::Connect)))
@@ -100,7 +107,7 @@ impl Root {
             .child(lead_text(older_lead(older, Os::CURRENT)))
             .child(buttons)
             .child(answer_under(self.answer_for(&key)))
-            .children(copy.map(|clip| copy_button("older-copy", clip)));
+            .children(copy.map(copy_button));
         scrolled("older-page", content)
     }
 
