@@ -30,7 +30,7 @@ pub(crate) use rows::{Control, Tail, TunnelRow, TunnelSection, Whose, heading, n
 
 use held::{
     Again, Fate, Hold, Reached, Settled, again_of, bring_back, came_back, fate, forgets_failed, live, local_before,
-    ports_kept, remembers, settle_now, up_toast, window_failure,
+    ports_kept, remembers, settle_now, unsent, up_toast, window_failure,
 };
 
 const SETTLE_AFTER: Duration = Duration::from_secs(3);
@@ -328,9 +328,13 @@ impl Store {
         }
         let failing = matches!(fate, Fate::Failed(_) | Fate::Retry(_));
         match fate {
-            Fate::Gone => drop(self.tunnels.holds.remove(at)),
+            Fate::Gone => {
+                self.tunnels.holds.remove(at);
+                self.tunnels.ended_unsent.extend(unsent(&hold));
+            }
             Fate::Closed => {
                 self.tunnels.holds.remove(at);
+                self.tunnels.ended_unsent.extend(unsent(&hold));
                 self.remember_tunnel(&hold.destination, hold.port, false, cx);
             }
             Fate::Failed(why) => {
