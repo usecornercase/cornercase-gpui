@@ -25,6 +25,7 @@ pub(crate) enum Event {
         #[serde(default)]
         pane: Option<u64>,
     },
+    Message(Message),
     #[serde(other)]
     Other,
 }
@@ -49,6 +50,18 @@ pub(crate) struct Notice {
     pub sound: Option<String>,
     #[serde(default)]
     pub machine: Option<String>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Clone)]
+pub(crate) struct Message {
+    #[serde(default)]
+    pub kind: String,
+    #[serde(rename = "message")]
+    pub text: String,
+    #[serde(default)]
+    pub panes: Vec<u64>,
+    #[serde(default)]
+    pub workspace: Option<u64>,
 }
 
 impl Notice {

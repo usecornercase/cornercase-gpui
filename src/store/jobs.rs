@@ -29,6 +29,10 @@ impl Busy {
     }
 }
 
+pub(crate) fn setup_key(workspace: u64) -> String {
+    format!("setup:{workspace}")
+}
+
 fn removal_key(workspace: u64) -> String {
     format!("remove-worktree:{workspace}")
 }

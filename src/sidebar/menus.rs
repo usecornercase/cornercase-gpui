@@ -261,7 +261,7 @@ fn setup_args(workspace: u64) -> Vec<String> {
 }
 
 fn run_setup(root: &mut Root, workspace: u64, name: &str, cx: &mut Context<Root>) {
-    let busy = Busy::new(format!("setup:{workspace}"), format!("Running the setup of {name}…"));
+    let busy = Busy::new(store::setup_key(workspace), format!("Running the setup of {name}…"));
     let args = root.store.read(cx).with_view(setup_args(workspace));
     store::run_busy(cx, busy, args, |this: &mut Root, result, cx| {
         if let Err(e) = result {

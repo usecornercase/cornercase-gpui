@@ -32,10 +32,10 @@ pub(super) fn available() -> bool {
 }
 
 #[derive(Default)]
-pub(crate) struct Posted(VecDeque<(String, ToastGo)>);
+pub(crate) struct Posted(VecDeque<(String, Option<ToastGo>)>);
 
 impl Posted {
-    pub(super) fn remember(&mut self, go: ToastGo) -> String {
+    pub(super) fn remember(&mut self, go: Option<ToastGo>) -> String {
         let id = format!("{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
         self.0.push_back((id.clone(), go));
         while self.0.len() > KEEP {
@@ -46,7 +46,7 @@ impl Posted {
 
     fn take(&mut self, id: &str) -> Option<ToastGo> {
         let at = self.0.iter().position(|(known, _)| known == id)?;
-        self.0.remove(at).map(|(_, go)| go)
+        self.0.remove(at).and_then(|(_, go)| go)
     }
 }
 

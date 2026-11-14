@@ -177,7 +177,7 @@ fn host_heard(event: Event) -> Option<Heard> {
     match event {
         Event::Clipboard { text, pane } => Some(Heard::Copied(text, pane)),
         Event::Bell { tab, .. } => Some(Heard::Bell(tab)),
-        Event::Notice(_) | Event::Other => None,
+        Event::Notice(_) | Event::Message(_) | Event::Other => None,
     }
 }
 

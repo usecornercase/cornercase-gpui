@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use super::{Busy, Jobs, SHOW_AFTER};
+use super::{Busy, Jobs, SHOW_AFTER, setup_key};
 
 fn later() -> Instant {
     Instant::now() + SHOW_AFTER
@@ -108,4 +108,9 @@ fn a_rename_on_a_machine_is_not_leaving() {
     let mut jobs = Jobs::default();
     jobs.start(Busy::new(super::renaming_key(&aim()), "Renaming notes on vps…"));
     assert!(!jobs.leaving_there(&aim()));
+}
+
+#[test]
+fn the_setup_job_key_names_its_workspace() {
+    assert_eq!(setup_key(7), "setup:7");
 }

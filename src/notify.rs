@@ -1,6 +1,7 @@
 mod alert;
 mod center;
 mod feed;
+mod telling;
 pub(crate) mod update;
 
 use std::collections::{HashMap, HashSet};
@@ -25,7 +26,9 @@ use update::UpdateToast;
 use update::outcome::{self, CameBack, Here, Outcome, Where};
 
 pub(crate) use center::{Posted, listen};
+use feed::Message;
 pub(crate) use feed::{AppState, Event, Notes, Notice, Prefs, parse_event};
+use telling::{Telling, Waiting};
 
 const FLASH: Duration = Duration::from_millis(160);
 const BELL_TOAST_EVERY: Duration = Duration::from_secs(30);
@@ -62,6 +65,7 @@ pub(crate) struct Notifier {
     waits: Option<String>,
     expected: Option<outcome::Expected>,
     later: Vec<UpdateToast>,
+    until_seen: Waiting,
 }
 
 #[derive(Default)]
@@ -96,6 +100,7 @@ impl Notifier {
             waits: None,
             expected: None,
             later: Vec::new(),
+            until_seen: Waiting::default(),
         }
     }
 
@@ -106,6 +111,7 @@ impl Notifier {
                 this.read_disk(cx);
                 this.tell_held(cx);
                 this.tell_later(cx);
+                this.tell_until_seen(cx);
             }
         })
         .detach();
@@ -167,6 +173,7 @@ impl Notifier {
                 self.waits = None;
                 self.restart = None;
                 self.bell_toasts.clear();
+                self.until_seen.forget();
                 self.store.update(cx, |s, _| s.posted = Posted::default());
             }
             self.boot = boot;
@@ -212,43 +219,66 @@ impl Notifier {
 
     fn on_line(&mut self, line: &str, cx: &mut Context<Self>) {
         match parse_event(line) {
-            Some(Event::Notice(notice)) => self.notice(notice, cx),
+            Some(Event::Notice(notice)) => self.notice(&notice, cx),
             Some(Event::Clipboard { text, pane }) => self.clipboard(text, pane, cx),
             Some(Event::Bell { tab, pane, .. }) => self.bell(tab, pane, cx),
+            Some(Event::Message(message)) => self.message(&message, cx),
             Some(Event::Other) | None => {}
         }
     }
 
-    fn notice(&mut self, notice: Notice, cx: &mut Context<Self>) {
+    fn notice(&mut self, notice: &Notice, cx: &mut Context<Self>) {
         let store = self.store.read(cx);
         let there = notice.there(store.session.as_ref().map_or(&[], |session| &session.machines));
         if self.active && there.as_ref().is_some_and(|there| store.shows_notice(there)) {
             return;
         }
-        let go = notice.go(there);
-        let button = Some(("Go".to_string(), go.clone()));
-        self.store.update(cx, |s, cx| s.toast_with(notice.message.clone(), notice.toast_kind(), button, cx));
+        self.announce(Telling::of_notice(notice, there), cx);
+    }
+
+    fn message(&mut self, message: &Message, cx: &mut Context<Self>) {
+        let store = self.store.read(cx);
+        let looking = telling::Looking::of(self.active, store.sheet);
+        if telling::dropped(message, &looking, |key| store.busy(key)) {
+            return;
+        }
+        let telling = Telling::of_message(message, store.session.as_ref());
+        self.announce(telling, cx);
+    }
+
+    fn announce(&mut self, telling: Telling, cx: &mut Context<Self>) {
+        let Some(telling) = self.until_seen.hold_or_pass(telling, self.active) else { return };
+        let (text, button) = (telling.text.clone(), telling.button.clone());
+        self.store.update(cx, |s, cx| s.toast_with(text, telling.kind, button, cx));
         let behind = !self.active;
-        if notice.sound.is_none() && !behind {
+        if !telling.needs_config(behind) {
             return;
         }
         store::run_json(cx, args(&["config", "--json"]), move |this, config, cx| {
             let prefs = config.map(|c| Prefs::from_config(&c)).unwrap_or_default();
-            if let Some(cue) = &notice.sound
+            if let Some(cue) = &telling.sound
                 && this.last_sound.is_none_or(|t| t.elapsed() >= SOUND_EVERY)
             {
                 this.last_sound = Some(Instant::now());
                 this.play(&prefs, cue, cx);
             }
-            if behind && prefs.desktop {
-                this.notify_desktop(&notice, go, cx);
+            if telling.posts(behind, prefs.desktop) {
+                this.notify_desktop(&telling, cx);
             }
         });
     }
 
-    fn notify_desktop(&mut self, notice: &Notice, go: ToastGo, cx: &mut Context<Self>) {
+    fn tell_until_seen(&mut self, cx: &mut Context<Self>) {
+        for telling in self.until_seen.release(self.active) {
+            self.announce(telling, cx);
+        }
+    }
+
+    fn notify_desktop(&mut self, telling: &Telling, cx: &mut Context<Self>) {
+        let Some(headline) = &telling.headline else { return };
+        let go = telling.button.as_ref().map(|(_, go)| go.clone());
         let id = center::available().then(|| self.store.update(cx, |s, _| s.posted.remember(go)));
-        let helper = alert::notification(Os::CURRENT, id, (&notice.headline(), &notice.message), &desktop::on_path);
+        let helper = alert::notification(Os::CURRENT, id, (headline, &telling.text), &desktop::on_path);
         self.run_or_tell(helper.map(|helper| vec![helper]), alert::NOTIFICATION_FAILED, cx);
     }
 
@@ -322,7 +352,7 @@ impl Notifier {
         self.bell_toasts.insert(key, Instant::now());
         let place = tab.and_then(|t| session.and_then(|s| tab_place(s, t)));
         let text = place.map_or_else(|| "Bell in another tab".to_string(), |p| format!("Bell in {p}"));
-        let action = tab.map(|t| ("Show".to_string(), ToastGo::Run(args(&["focus", "--tab", &t.to_string()]))));
+        let action = tab.map(|t| (telling::SHOW.to_string(), ToastGo::Run(args(&["focus", "--tab", &t.to_string()]))));
         self.store.update(cx, |s, cx| s.toast_with(text, ToastKind::Info, action, cx));
     }
 
