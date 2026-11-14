@@ -1,11 +1,9 @@
 use serde::Deserialize;
 
 use super::model::{FlowInfo, Run};
-use crate::cli::Version;
+use crate::cli::{Feature, Has, Version};
 use crate::store;
 
-pub(crate) const CLOSE_WHEN_MERGED_SINCE: Version = Version::new(0, 13, 33);
-pub(crate) const FREE_BUILDS_SINCE: Version = Version::new(0, 13, 64);
 pub(super) const LABEL: &str = "Close the agents once the pull request merges";
 pub(super) const FREE_LABEL: &str = "Free the build folders too";
 pub(super) const FREE_HOW: &str = "Deletes the git-ignored build folders, such as target and node_modules, of the run's worktree and of its roles' own once the agents have closed. The worktrees, their branches and the run's folder stay, and reopening the agents rebuilds what they need. A worktree where a program still runs keeps its builds. Turning the close off turns this off too.";
@@ -25,7 +23,7 @@ pub(super) struct Releases<'a> {
 }
 
 pub(super) fn rests(flow: Option<&FlowInfo>, releases: &Releases<'_>) -> Option<String> {
-    leaves_commits(flow).or_else(|| too_old(CLOSE_WHEN_MERGED_SINCE, releases))
+    leaves_commits(flow).or_else(|| too_old(Feature::FlowCloseWhenMerged, releases))
 }
 
 fn leaves_commits(flow: Option<&FlowInfo>) -> Option<String> {
@@ -33,17 +31,18 @@ fn leaves_commits(flow: Option<&FlowInfo>) -> Option<String> {
         .map(|f| format!("{} leaves the commits, so there is no pull request to wait for.", f.name))
 }
 
-fn too_old(since: Version, releases: &Releases<'_>) -> Option<String> {
-    if !since.reached_by(releases.here) {
-        return Some(needs(since, None, releases.here));
+fn too_old(feature: Feature, releases: &Releases<'_>) -> Option<String> {
+    if feature.on(releases.here) != Has::Yes {
+        return Some(needs(feature, None, releases.here));
     }
     releases
         .machine
-        .filter(|(_, release)| !since.reached_by(*release))
-        .map(|(machine, release)| needs(since, Some(machine), release))
+        .filter(|(_, release)| feature.on(*release) != Has::Yes)
+        .map(|(machine, release)| needs(feature, Some(machine), release))
 }
 
-fn needs(since: Version, machine: Option<&str>, release: Option<Version>) -> String {
+fn needs(feature: Feature, machine: Option<&str>, release: Option<Version>) -> String {
+    let since = feature.since();
     let place = machine.map(|machine| format!(" on {machine}")).unwrap_or_default();
     let who = if machine.is_some() { "it" } else { "the server" };
     let runs = release.map(|release| format!(": {who} runs {release}")).unwrap_or_default();
@@ -61,7 +60,7 @@ pub(super) fn switch(run: &Run, here: Option<Version>) -> Switch {
     if run.closed() || run.flow.ends_in_commits() {
         return Switch::Hidden;
     }
-    match too_old(CLOSE_WHEN_MERGED_SINCE, &Releases { here, machine: None }) {
+    match too_old(Feature::FlowCloseWhenMerged, &Releases { here, machine: None }) {
         Some(line) => Switch::Rests(line),
         None => Switch::Offered(run.close_when_merged),
     }
@@ -82,7 +81,7 @@ pub(super) fn free_box(flow: Option<&FlowInfo>, releases: &Releases<'_>, close: 
 }
 
 fn free_tail(releases: &Releases<'_>, close: bool, free: bool) -> Switch {
-    if let Some(line) = too_old(FREE_BUILDS_SINCE, releases) {
+    if let Some(line) = too_old(Feature::FlowFreeBuilds, releases) {
         return Switch::Rests(line);
     }
     if close { Switch::Offered(free) } else { Switch::Rests(FREE_HOW.to_string()) }
@@ -102,7 +101,7 @@ pub(super) enum Press {
 
 impl Choice {
     pub(super) fn of(run: &Run, here: Option<Version>) -> Self {
-        Self { close: run.close_when_merged, free: run.free_builds && FREE_BUILDS_SINCE.reached_by(here) }
+        Self { close: run.close_when_merged, free: run.free_builds && Feature::FlowFreeBuilds.on(here) == Has::Yes }
     }
 
     pub(super) fn pressed(self, press: Press) -> Self {

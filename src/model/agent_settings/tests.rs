@@ -143,6 +143,13 @@ fn the_line_under_the_mode_says_which_release_offers_default_and_which_runs() {
 }
 
 #[test]
+fn the_line_under_the_mode_names_no_release_while_none_is_read() {
+    let line = "default needs cornercase 0.13.28 or newer while settings choose plan";
+    assert_eq!(default_waits("plan", None, None), line);
+    assert_eq!(claude().on_server(None).waiting(None).as_deref(), Some(line));
+}
+
+#[test]
 fn default_rests_only_while_another_mode_is_chosen_on_an_older_server() {
     assert!(default_rests("plan", release("0.13.21")));
     assert!(!default_rests("default", release("0.13.21")));

@@ -5,13 +5,12 @@ use serde_json::Value;
 use super::data::Entry;
 use super::read::Keep;
 use super::time::{Civil, local, relative, when_label};
-use crate::cli::Version;
+use crate::cli::{Feature, Has, Version};
 use crate::model::PullRequest;
 use crate::panels::flows::model::epoch;
 use crate::ui::markdown::{self, Block};
 use crate::ui::selection;
 
-pub(crate) const QUEUE_RESULTS_SINCE: Version = Version::new(0, 13, 51);
 pub(super) const CUT_NOTE: &str = "Only the first 4 KiB of this message were kept.";
 pub(super) const EARLIER_NOTE: &str = "Earlier messages are left out: these are the newest 1,000.";
 pub(super) const NO_MESSAGE: &str = "No message was kept.";
@@ -20,7 +19,7 @@ const MESSAGE_CUT_LINE: &str = "… cut at 32 KiB";
 pub(super) const MESSAGE_CUT: &str = "Cut at 32 KiB.";
 
 pub(super) fn results_offered(server: Option<Version>) -> bool {
-    QUEUE_RESULTS_SINCE.reached_by(server)
+    Feature::QueueResults.on(server) == Has::Yes
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
