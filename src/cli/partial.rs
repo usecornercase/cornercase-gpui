@@ -73,7 +73,7 @@ fn reply_of(out: &std::process::Output) -> Answer {
     }
 }
 
-fn said(answer: &Answer) -> Said {
+pub(super) fn said(answer: &Answer) -> Said {
     let out = answer.stdout.trim();
     if answer.code == Some(0) {
         return Said::Done(out.to_string());

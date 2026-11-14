@@ -1,9 +1,9 @@
 use super::{UpdateToast, Updating};
-use crate::cli::{self, Answer, Said, Version};
+use crate::cli::{self, Answer, ByHand, Lacking, Said, UPDATE_JSON_SINCE, UpdateAnswer, UpdateGate, Version};
+use crate::desktop;
 use crate::notify::{AppState, InstallState};
+use crate::platform::Os;
 use crate::store::ToastKind;
-
-pub(crate) const UPDATE_JSON: &str = "usecornercase/cornercase-terminal#775";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Here {
@@ -15,15 +15,43 @@ pub(crate) struct Here {
 pub(crate) enum Outcome {
     Installed(String),
     Unchecked { version: String, host: String },
+    Manual(ByHand),
     Failed { why: String, printed: bool },
 }
 
-pub(crate) fn of(answer: anyhow::Result<Answer>, release: &str, host: Option<&str>, here: Option<&Here>) -> Outcome {
+pub(crate) enum Where<'a> {
+    Here(Option<&'a Here>),
+    There(&'a str),
+}
+
+pub(crate) fn of(answer: &anyhow::Result<Answer>, release: &str, place: &Where<'_>) -> Outcome {
     let printed = answer.as_ref().is_ok_and(|a| a.code != Some(0) && !a.stdout.trim().is_empty());
-    match (cli::said_of(answer), host) {
-        (Said::Failed(why), _) => Outcome::Failed { why, printed },
-        (Said::Done(_), Some(host)) => Outcome::Unchecked { version: release.to_string(), host: host.to_string() },
-        (Said::Done(_), None) => checked(release, here),
+    let failed = |why: String| Outcome::Failed { why, printed: false };
+    match (cli::update_answer(answer), place) {
+        (UpdateAnswer::Updated { version, .. }, _) => Outcome::Installed(version),
+        (UpdateAnswer::UpToDate { version }, _) if reaches(&version, release) => Outcome::Installed(version),
+        (UpdateAnswer::UpToDate { version }, place) => failed(none_newer(&version, place)),
+        (UpdateAnswer::Manual(by_hand), _) => Outcome::Manual(by_hand),
+        (UpdateAnswer::Refused, _) => failed(cli::refused_json()),
+        (UpdateAnswer::Printed(Said::Failed(why)), _) => Outcome::Failed { why, printed },
+        (UpdateAnswer::Printed(Said::Done(_)), Where::There(host)) => {
+            Outcome::Unchecked { version: release.to_string(), host: (*host).to_string() }
+        }
+        (UpdateAnswer::Printed(Said::Done(_)), Where::Here(here)) => checked(release, *here),
+    }
+}
+
+fn reaches(version: &str, release: &str) -> bool {
+    match (Version::parse(version), Version::parse(release)) {
+        (Some(version), Some(release)) => version >= release,
+        _ => version == release,
+    }
+}
+
+fn none_newer(version: &str, place: &Where<'_>) -> String {
+    match place {
+        Where::Here(_) => format!("cornercase update found no release newer than {version}"),
+        Where::There(host) => format!("cornercase update on {host} found no release newer than {version}"),
     }
 }
 
@@ -39,28 +67,57 @@ fn checked(release: &str, here: Option<&Here>) -> Outcome {
     }
 }
 
+fn needs(gate: UpdateGate, place: &Where<'_>, os: Os) -> Option<String> {
+    let lacking = gate.lacking()?;
+    let host = match place {
+        Where::There(host) => host,
+        Where::Here(_) => "the other machine",
+    };
+    let has = gate.here().map(|v| format!(" (it has {v})")).unwrap_or_default();
+    let here = format!("this {}{has}", desktop::machine(os));
+    let on = match lacking {
+        Lacking::Here => here,
+        Lacking::There => host.to_string(),
+        Lacking::Both => format!("{here} and on {host}"),
+    };
+    Some(format!("cornercase {UPDATE_JSON_SINCE} or newer on {on}"))
+}
+
 impl Outcome {
     pub(crate) fn state(&self) -> InstallState {
         match self {
             Self::Installed(version) | Self::Unchecked { version, .. } => InstallState::Done(version.clone()),
+            Self::Manual(by_hand) => InstallState::Manual(by_hand.clone()),
             Self::Failed { why, .. } => InstallState::Failed(why.clone()),
         }
     }
 
-    pub(crate) fn waits(&self) -> Option<String> {
+    pub(crate) fn waits(&self, gate: UpdateGate, place: &Where<'_>, os: Os) -> Option<String> {
+        let needs = needs(gate, place, os);
         match self {
-            Self::Failed { printed: true, .. } => Some(format!("Copy command needs {UPDATE_JSON}")),
+            Self::Failed { printed: true, .. } => needs.map(|needs| format!("Copy command needs {needs}")),
             Self::Unchecked { host, .. } => {
-                Some(format!("Not checked on {host} until its server restarts: needs {UPDATE_JSON}"))
+                let said = format!("Not checked on {host} until its server restarts");
+                Some(needs.map_or(said.clone(), |needs| format!("{said}: needs {needs}")))
             }
             _ => None,
         }
     }
 
-    pub(crate) fn toast(&self, release: &str) -> Option<UpdateToast> {
+    pub(crate) fn toast(&self, release: &str, place: &Where<'_>) -> Option<UpdateToast> {
         match self {
             Self::Failed { why, .. } => {
                 Some(UpdateToast::install_failed("cornercase", release, why, Updating::Cornercase))
+            }
+            Self::Manual(by_hand) => {
+                let text = match place {
+                    Where::Here(_) => format!("To install cornercase {}, run the command in Details", by_hand.latest),
+                    Where::There(host) => format!(
+                        "To install cornercase {} on {host}, run the command in Details on {host}",
+                        by_hand.latest
+                    ),
+                };
+                Some(UpdateToast { text, kind: ToastKind::NeedsYou, details: Some(Updating::Cornercase) })
             }
             _ => None,
         }
@@ -77,11 +134,6 @@ pub(crate) struct Expected {
 pub(crate) enum CameBack {
     Now(String),
     Behind { running: String, expected: String },
-}
-
-pub(crate) enum Where<'a> {
-    Here(Option<&'a Here>),
-    There(&'a str),
 }
 
 pub(crate) fn came_back(expected: &Expected, app: &AppState) -> Option<CameBack> {

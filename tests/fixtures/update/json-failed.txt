@@ -1,0 +1,1 @@
+Error: GitHub answered 404 to the update check

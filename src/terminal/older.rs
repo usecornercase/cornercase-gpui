@@ -8,7 +8,7 @@ use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::platform::Os;
 use crate::sidebar::tip;
-use crate::store::{AfterUpdate, Busy, release_clause, run_update, update_job, update_question};
+use crate::store::{AfterUpdate, Busy, release_clause, run_update, update_job, update_page, update_question};
 use crate::ui::{self, Icon, Tone};
 
 const RESTART: &str = "Restart";
@@ -144,10 +144,11 @@ impl Root {
     }
 
     fn update_there(&mut self, older: Older, cx: &mut Context<Self>) {
-        let Some(args) = cli::update_args(&older) else { return };
+        let Some(args) = cli::update_command(&older) else { return };
         let job = update_job(&older.destination, &older.destination);
-        let work = move || run_update(&args);
-        self.run_answered(job, work, move |this, done, cx| this.update_answered(older, done, cx), cx);
+        let destination = older.destination.clone();
+        let read = move || update_page(&destination, &cli::update_answer(&run_update(&args)));
+        self.run_read(job, read, move |this, done, cx| this.update_answered(older, done, cx), cx);
     }
 
     fn update_answered(&mut self, older: Older, done: bool, cx: &mut Context<Self>) {

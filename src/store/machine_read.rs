@@ -85,7 +85,7 @@ pub(crate) fn older_note(machine: &str, older: &Older, os: Os) -> OlderNote {
         None => format!("Update cornercase on {machine} from this {here}"),
     };
     let clause = release_clause(machine, older, os);
-    let update = cli::update_args(older).map(|args| {
+    let update = cli::update_command(older).map(|args| {
         Box::new(UpdateThere { machine: machine.to_string(), destination: older.destination.clone(), args })
     });
     OlderNote {

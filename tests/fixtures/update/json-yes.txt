@@ -1,0 +1,5 @@
+error: the argument '--json' cannot be used with '--yes'
+
+Usage: cornercase update --json
+
+For more information, try '--help'.

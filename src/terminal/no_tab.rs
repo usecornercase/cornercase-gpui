@@ -148,6 +148,12 @@ fn no_tab_page(no_tab: &NoTab, reopen_busy: bool, cx: &mut Context<Root>) -> Div
         .child(actions(no_tab, reopen_busy, cx))
 }
 
+fn said_and_done(result: anyhow::Result<cli::Answer>) -> (Said, bool) {
+    let said = cli::said_of(result);
+    let done = matches!(said, Said::Done(_));
+    (said, done)
+}
+
 pub(super) fn answer_lines(said: &Said) -> (Vec<String>, bool) {
     let (text, failed) = match said {
         Said::Done(text) => (text, false),
@@ -205,15 +211,29 @@ impl Root {
         then: impl FnOnce(&mut Root, bool, &mut Context<Root>) + 'static,
         cx: &mut Context<Self>,
     ) {
+        self.run_read(busy, move || said_and_done(work()), then, cx);
+    }
+
+    pub(super) fn run_read(
+        &mut self,
+        busy: Busy,
+        read: impl FnOnce() -> (Said, bool) + Send + 'static,
+        then: impl FnOnce(&mut Root, bool, &mut Context<Root>) + 'static,
+        cx: &mut Context<Self>,
+    ) {
         self.answered = None;
         cx.notify();
         let key = busy.key().to_string();
-        store::run_local_busy(cx, busy, work, move |this, result, cx| {
-            let said = cli::said_of(result);
-            let done = matches!(said, Said::Done(_));
-            this.answered = Some((key, said));
-            then(this, done, cx);
-        });
+        store::run_local_busy(
+            cx,
+            busy,
+            move || Ok(read()),
+            move |this, result, cx| {
+                let (said, done) = result.unwrap_or_else(|e| (Said::Failed(cli::reason(&e)), false));
+                this.answered = Some((key, said));
+                then(this, done, cx);
+            },
+        );
     }
 
     pub(super) fn shows_no_tab(&self) -> bool {
