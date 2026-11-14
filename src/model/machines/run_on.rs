@@ -4,9 +4,9 @@ use serde::Deserialize;
 
 use super::seen::{MachinePlace, MachineSeen, Spot, ThereId};
 use super::{Machine, MachineIcon};
-use crate::cli::Version;
+use crate::cli::{Feature, Version};
 use crate::model::{Project, Session};
-use crate::panels::flows::merged::{CLOSE_WHEN_MERGED_SINCE, FREE_BUILDS_SINCE, closes_clause};
+use crate::panels::flows::merged::closes_clause;
 
 pub(crate) mod checks;
 pub(crate) mod clone;
@@ -168,13 +168,15 @@ impl Starting {
     pub(crate) fn left_open(&self, machine: &str, answer: &Answer) -> Option<String> {
         let Self::Flow { name, close_when_merged, free_builds } = self else { return None };
         if *close_when_merged && !answer.close_when_merged {
+            let since = Feature::FlowCloseWhenMerged.since();
             return Some(format!(
-                "{name} on {machine} keeps its agents open after the merge: its cornercase did not take the choice, which needs {CLOSE_WHEN_MERGED_SINCE} or newer there"
+                "{name} on {machine} keeps its agents open after the merge: its cornercase did not take the choice, which needs {since} or newer there"
             ));
         }
         (*close_when_merged && *free_builds && !answer.free_builds).then(|| {
+            let since = Feature::FlowFreeBuilds.since();
             format!(
-                "{name} on {machine} keeps its build folders after the merge: its cornercase did not take the choice, which needs {FREE_BUILDS_SINCE} or newer there"
+                "{name} on {machine} keeps its build folders after the merge: its cornercase did not take the choice, which needs {since} or newer there"
             )
         })
     }

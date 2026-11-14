@@ -335,7 +335,10 @@ fn a_flow_started_there_that_dropped_the_choice_says_its_agents_stay_open() {
     let dropped = answer(fixture!("machines/there_flow.json"));
     let asked = Starting::Flow { name: "Quick".into(), close_when_merged: true, free_builds: false };
     let text = asked.left_open("vps", &dropped).expect("a warning");
-    assert!(text.contains("vps") && text.contains("0.13.33"));
+    assert_eq!(
+        text,
+        "Quick on vps keeps its agents open after the merge: its cornercase did not take the choice, which needs 0.13.33 or newer there"
+    );
     let not_asked = Starting::Flow { name: "Quick".into(), close_when_merged: false, free_builds: false };
     assert_eq!(not_asked.left_open("vps", &dropped), None);
 }
@@ -357,11 +360,17 @@ fn a_flow_started_there_that_frees_its_builds_says_so() {
 fn a_flow_started_there_that_dropped_the_free_says_its_builds_stay() {
     let kept = answer(r#"{"branch":"probe-flow","workspace":17,"close_when_merged":true}"#);
     let text = asking(true, true).left_open("vps", &kept).expect("a warning");
-    assert!(text.contains("build folders") && text.contains("vps") && text.contains("0.13.64"));
+    assert_eq!(
+        text,
+        "Quick on vps keeps its build folders after the merge: its cornercase did not take the choice, which needs 0.13.64 or newer there"
+    );
     assert_eq!(asking(true, false).left_open("vps", &kept), None);
     let nothing = answer(fixture!("machines/there_flow.json"));
     let closing = asking(true, true).left_open("vps", &nothing).expect("a warning");
-    assert!(closing.contains("agents open") && closing.contains("0.13.33"));
+    assert_eq!(
+        closing,
+        "Quick on vps keeps its agents open after the merge: its cornercase did not take the choice, which needs 0.13.33 or newer there"
+    );
 }
 
 #[test]

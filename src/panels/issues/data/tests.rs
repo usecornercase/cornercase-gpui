@@ -582,5 +582,8 @@ fn a_machine_whose_server_starts_default_offers_it_and_one_behind_rests_it() {
     let lab = source().on_server(server_release(Some("lab"), None, &list));
     assert_eq!(lab.sent(Some("default")), None);
     let line = lab.waiting(Some("lab")).expect("the line");
-    assert!(line.contains("on lab") && line.contains("lab's server runs 0.13.21"), "{line}");
+    assert_eq!(
+        line,
+        "default needs cornercase 0.13.28 or newer on lab while its settings choose plan (lab's server runs 0.13.21)"
+    );
 }

@@ -723,14 +723,24 @@ fn default_rests_with_its_line_on_a_server_before_0_13_28() {
         chips.iter().map(|chip| (chip.value.as_str(), chip.label.as_str(), chip.rests)).collect();
     assert_eq!(seen, [("default", "default", true), ("plan", "plan ✓", false)]);
     let line = line.expect("the line");
-    assert!(line.ends_with("(the server runs 0.13.21)"), "{line}");
+    assert_eq!(line, "default needs cornercase 0.13.28 or newer while settings choose plan (the server runs 0.13.21)");
+}
+
+#[test]
+fn default_rests_with_its_line_naming_no_release_while_none_is_read() {
+    let (chips, line) = mode_chips(&plan_config("plan"), "claude", None);
+    let seen: Vec<(&str, bool)> = chips.iter().map(|chip| (chip.label.as_str(), chip.rests)).collect();
+    assert_eq!(seen, [("default", true), ("plan ✓", false)]);
+    assert_eq!(line.as_deref(), Some("default needs cornercase 0.13.28 or newer while settings choose plan"));
 }
 
 #[test]
 fn every_mode_is_offered_on_a_server_that_starts_default() {
-    let (chips, line) = mode_chips(&plan_config("plan"), "claude", release("0.13.28"));
-    assert!(chips.iter().all(|chip| !chip.rests));
-    assert_eq!(line, None);
+    for text in ["0.13.28", "0.14.0"] {
+        let (chips, line) = mode_chips(&plan_config("plan"), "claude", release(text));
+        assert!(chips.iter().all(|chip| !chip.rests), "{text}");
+        assert_eq!(line, None);
+    }
 }
 
 #[test]
