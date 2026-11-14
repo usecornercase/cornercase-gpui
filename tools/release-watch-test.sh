@@ -27,7 +27,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' INT TERM HUP
 
-for tool in sed awk grep cat tr rm mktemp cut; do
+for tool in sed awk grep cat tr rm mktemp; do
   ln -s "$(command -v "$tool")" "$t/sys/$tool"
 done
 
@@ -429,7 +429,9 @@ a_tag_is_left_alone_once_a_later_version_is_released() {
   check "line" has "$t/out" "v0.1.90 has no release, but the later v0.1.91 has: left alone, since the download links and the window's update check use only the newest release, whose CHANGELOG.md carries v0.1.90's notes" &&
     check "Latest" nohas "$t/out" 'Latest' &&
     check "would re-run" nohas "$t/out" 'dry run: gh run rerun' &&
-    check "runs asked" nohas "$t/calls" 'release.yml/runs'
+    check "runs asked" nohas "$t/calls" 'release.yml/runs' &&
+    check "dry dispatch" nohas "$t/out" 'workflow run' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 a_pull_requests_run_is_never_re_run() {
@@ -488,7 +490,8 @@ an_attempt_already_told_is_not_told_again() {
   runw
   check "line" has "$t/out" 'already told in #7, nothing more' &&
     check "create" nohas "$t/calls" 'issue create' &&
-    check "comment" nohas "$t/calls" 'issue comment'
+    check "comment" nohas "$t/calls" 'issue comment' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 a_later_attempt_is_told_on_the_open_issue() {
@@ -612,7 +615,8 @@ no_tag_yet_is_nothing_to_do() {
   runw
   check "status $rc" [ "$rc" = 0 ] &&
     check "line" has "$t/out" 'no v* tag yet: nothing to do' &&
-    check "gh" nohas "$t/calls" 'api'
+    check "gh" nohas "$t/calls" 'api' &&
+    check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
 a_released_newest_tag_is_nothing_to_do() {
@@ -728,7 +732,17 @@ the_chain_of_watches_ends_by_itself() {
   done
   check "dispatches" [ "$(dispatches)" = 2 ] &&
     check "re-runs" [ "$(grep -c 'run rerun 123 --failed' "$t/calls")" = 2 ] &&
-    check "issues" [ "$(grep -c 'issue create' "$t/calls")" = 2 ]
+    check "issues" [ "$(grep -c 'issue create' "$t/calls")" = 2 ] &&
+    check "told already" settles_told
+}
+
+settles_told() {
+  issues '99|open|Release v0.1.90 failed'
+  issue_text 99 x "$(link 3)"
+  dropped v0.1.90 123 3
+  runw
+  check "line" has "$t/out" 'already told in #99, nothing more' &&
+    check "dispatches" [ "$(dispatches)" = 2 ]
 }
 
 a_failed_dispatch_after_a_re_run_is_a_warning_after_the_re_run_line() {
@@ -737,7 +751,7 @@ a_failed_dispatch_after_a_re_run_is_a_warning_after_the_re_run_line() {
   runw
   check "status $rc" [ "$rc" = 0 ] &&
     check "rerun" has "$t/calls" 'run rerun 123 --failed' &&
-    check "warning" has "$t/out" '::warning::the release watch that would look in 50 minutes was not started: dispatching release-watch.yml failed: could not create workflow dispatch event: HTTP 500' &&
+    check "warning" has "$t/out" '::warning::the release watch that would look in 50 minutes was not started: dispatching release-watch.yml failed: could not create workflow dispatch event: HTTP 500: Internal Server Error; the watch that the next push to main starts, or the schedule, looks instead, unless the workflow is turned off: gh workflow enable release-watch.yml turns it and its schedule back on' &&
     check "order" before "$t/out" 're-running the jobs no runner took' '::warning::' &&
     check "error" nohas "$t/out" '::error::'
 }
@@ -769,7 +783,7 @@ a_failed_later_is_a_warning_with_status_0() {
   : > "$t/control/fail-dispatch"
   runw --later
   check "status $rc" [ "$rc" = 0 ] &&
-    check "warning" has "$t/out" '::warning::the release watch that would look in 50 minutes was not started: dispatching release-watch.yml failed: could not create workflow dispatch event: HTTP 500' &&
+    check "warning" has "$t/out" '::warning::the release watch that would look in 50 minutes was not started: dispatching release-watch.yml failed: could not create workflow dispatch event: HTTP 500: Internal Server Error; the watch that the next push to main starts, or the schedule, looks instead, unless the workflow is turned off: gh workflow enable release-watch.yml turns it and its schedule back on' &&
     check "one call" [ "$(dispatches)" = 1 ]
 }
 

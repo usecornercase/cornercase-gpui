@@ -1,6 +1,6 @@
 name: Release watch
 
-run-name: ${{ inputs.wait > 0 && inputs.wait <= 55 && format('Release watch after a {0}-minute wait', inputs.wait) || 'Release watch' }}
+run-name: ${{ inputs.wait > 0 && !contains(format('{0}', inputs.wait), '.') && inputs.wait <= 55 && format('Release watch after a {0}-minute wait', inputs.wait) || 'Release watch' }}
 
 on:
   schedule:
@@ -32,7 +32,7 @@ jobs:
               exit 1
               ;;
           esac
-          echo "waiting $WAIT minutes, until $(date -u -d "+$WAIT minutes" '+%H:%M UTC'), then the watch job looks at the newest tag's release"
+          echo "waiting $WAIT minutes, until $(date -u -d "+$WAIT minutes" '+%H:%M UTC'), so that a release started or re-run just now has time to end; then the watch job looks at the newest tag's release"
           sleep "${WAIT}m"
 
   watch:
