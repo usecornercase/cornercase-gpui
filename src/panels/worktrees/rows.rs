@@ -6,6 +6,7 @@ use gpui::{
 use super::WorktreesPanel;
 use super::actions::{checking, freeing, removing};
 use super::data::{Tone, Worktree};
+use super::frees::{MergedJob, merged_job};
 use super::removal::{Said, Style};
 use crate::notify::tip;
 use crate::store::Store;
@@ -106,6 +107,7 @@ impl WorktreesPanel {
             return div().flex().child(ui::busy_button(id("busy"), label, tone));
         }
         let freed = worktree.clone();
+        let frees_merged = merged_job(|key| Store::get(cx).read(cx).busy(key)) != MergedJob::Idle;
         div()
             .flex()
             .gap(px(6.))
@@ -113,10 +115,13 @@ impl WorktreesPanel {
                 ui::button(id("changes"), "Changes").on_click(move |_: &ClickEvent, _, cx| Self::open_changes(ws, cx))
             }))
             .when(worktree.builds() > 0, |d| {
-                d.child(
+                d.child(if frees_merged {
+                    ui::resting_button(id("free"), "Free builds…", ui::Tone::Plain).into_any_element()
+                } else {
                     ui::button(id("free"), "Free builds…")
-                        .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| Self::check_free(freed.clone(), cx))),
-                )
+                        .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| Self::check_free(freed.clone(), cx)))
+                        .into_any_element()
+                })
             })
             .when(worktree.removable(), |d| d.child(self.remove_button(worktree, cx)))
     }

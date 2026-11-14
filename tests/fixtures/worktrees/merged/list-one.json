@@ -1,0 +1,150 @@
+{
+    "merged_builds": {
+        "bytes": 5361664,
+        "count": 1
+    },
+    "worktrees": [
+        {
+            "branch": "feat/a",
+            "changed": 0,
+            "error": null,
+            "kind": "linked",
+            "last_changed": "2026-11-14T11:06:33.000Z",
+            "lock": null,
+            "merged": true,
+            "no_commits": false,
+            "other_tabs": [],
+            "outside": [],
+            "path": "/private/tmp/cc255/worktrees/shop/feat-a",
+            "project": 4,
+            "project_name": "shop",
+            "removing": false,
+            "repository": "/private/tmp/cc255/shop",
+            "risks": [],
+            "run_role": false,
+            "running": [],
+            "safe": true,
+            "size": {
+                "builds": [],
+                "builds_bytes": 0,
+                "bytes": 12288,
+                "nested": [],
+                "path": "/private/tmp/cc255/worktrees/shop/feat-a"
+            },
+            "size_error": null,
+            "unpushed": 0,
+            "upstream_gone": false,
+            "workspace": 5
+        },
+        {
+            "branch": "feat/c",
+            "changed": 0,
+            "error": null,
+            "kind": "linked",
+            "last_changed": "2026-11-14T11:06:34.000Z",
+            "lock": null,
+            "merged": true,
+            "no_commits": false,
+            "other_tabs": [],
+            "outside": [],
+            "path": "/private/tmp/cc255/worktrees/shop/feat-c",
+            "project": 4,
+            "project_name": "shop",
+            "removing": false,
+            "repository": "/private/tmp/cc255/shop",
+            "risks": [],
+            "run_role": false,
+            "running": [],
+            "safe": true,
+            "size": {
+                "builds": [],
+                "builds_bytes": 0,
+                "bytes": 20480,
+                "nested": [],
+                "path": "/private/tmp/cc255/worktrees/shop/feat-c"
+            },
+            "size_error": null,
+            "unpushed": 0,
+            "upstream_gone": false,
+            "workspace": 7
+        },
+        {
+            "branch": "feat/d",
+            "changed": 0,
+            "error": null,
+            "kind": "linked",
+            "last_changed": "2026-11-14T11:06:34.000Z",
+            "lock": null,
+            "merged": true,
+            "no_commits": false,
+            "other_tabs": [],
+            "outside": [],
+            "path": "/private/tmp/cc255/worktrees/shop/feat-d",
+            "project": 4,
+            "project_name": "shop",
+            "removing": false,
+            "repository": "/private/tmp/cc255/shop",
+            "risks": [],
+            "run_role": false,
+            "running": [],
+            "safe": true,
+            "size": {
+                "builds": [
+                    {
+                        "bytes": 5361664,
+                        "path": "target"
+                    }
+                ],
+                "builds_bytes": 5361664,
+                "bytes": 5386240,
+                "nested": [
+                    "target/vendor/dep/.git"
+                ],
+                "path": "/private/tmp/cc255/worktrees/shop/feat-d"
+            },
+            "size_error": null,
+            "unpushed": 0,
+            "upstream_gone": false,
+            "workspace": 8
+        },
+        {
+            "branch": "feat/e",
+            "changed": 0,
+            "error": null,
+            "kind": "linked",
+            "last_changed": "2026-11-01T11:00:00.000Z",
+            "lock": null,
+            "merged": false,
+            "no_commits": false,
+            "other_tabs": [],
+            "outside": [],
+            "path": "/private/tmp/cc255/worktrees/shop/feat-e",
+            "project": 4,
+            "project_name": "shop",
+            "removing": false,
+            "repository": "/private/tmp/cc255/shop",
+            "risks": [
+                "1 commit not pushed"
+            ],
+            "run_role": false,
+            "running": [],
+            "safe": true,
+            "size": {
+                "builds": [
+                    {
+                        "bytes": 6291456,
+                        "path": "target"
+                    }
+                ],
+                "builds_bytes": 6291456,
+                "bytes": 6320128,
+                "nested": [],
+                "path": "/private/tmp/cc255/worktrees/shop/feat-e"
+            },
+            "size_error": null,
+            "unpushed": 1,
+            "upstream_gone": false,
+            "workspace": 9
+        }
+    ]
+}

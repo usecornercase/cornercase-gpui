@@ -1,0 +1,62 @@
+{
+    "bytes": 5242880,
+    "check": true,
+    "worktrees": [
+        {
+            "bytes": 2097152,
+            "check": true,
+            "failed": [],
+            "folders": [
+                {
+                    "bytes": 2097152,
+                    "path": "target"
+                }
+            ],
+            "kept": [],
+            "outcome": "freeable",
+            "path": "/private/tmp/cc255/worktrees/shop/feat-a",
+            "running": [],
+            "why": null
+        },
+        {
+            "bytes": 3145728,
+            "check": true,
+            "failed": [],
+            "folders": [
+                {
+                    "bytes": 3145728,
+                    "path": "target"
+                }
+            ],
+            "kept": [],
+            "outcome": "freeable",
+            "path": "/private/tmp/cc255/worktrees/shop/feat-b",
+            "running": [],
+            "why": null
+        },
+        {
+            "bytes": 0,
+            "check": true,
+            "failed": [],
+            "folders": [],
+            "kept": [],
+            "outcome": "refused",
+            "path": "/private/tmp/cc255/worktrees/shop/feat-c",
+            "running": [
+                "sleep"
+            ],
+            "why": "sleep runs in it"
+        },
+        {
+            "bytes": 0,
+            "check": true,
+            "failed": [],
+            "folders": [],
+            "kept": [],
+            "outcome": "refused",
+            "path": "/private/tmp/cc255/worktrees/shop/feat-d",
+            "running": [],
+            "why": "target/vendor/dep is a git checkout"
+        }
+    ]
+}

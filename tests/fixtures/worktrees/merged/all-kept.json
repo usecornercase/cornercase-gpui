@@ -1,0 +1,17 @@
+{
+    "bytes": 0,
+    "check": true,
+    "worktrees": [
+        {
+            "bytes": 0,
+            "check": true,
+            "failed": [],
+            "folders": [],
+            "kept": [],
+            "outcome": "refused",
+            "path": "/private/tmp/cc255/worktrees/shop/feat-d",
+            "running": [],
+            "why": "target/vendor/dep is a git checkout"
+        }
+    ]
+}

@@ -52,4 +52,4 @@ Why cornercase-gpui works the way it does, area by area. The rules every change 
 - [Plugins](design/plugins.md) (`panels/plugins.rs`, `panels/plugins/`): installed plugins, linking and running them.
 - [Processes](design/processes.md) (`panels/processes.rs`, `panels/processes/`, `panels/poll.rs`): what every pane runs, CPU and memory, stopping a program, sampling while open.
 - [Ports](design/ports.md) (`panels/ports.rs`, `panels/ports/`): the ports a workspace listens on, opening and stopping them.
-- [Worktrees](design/worktrees.md) (`panels/worktrees.rs`, `panels/worktrees/`): every worktree on disk, what makes it safe to remove, removing and freeing builds, the sidebar's Remove worktree….
+- [Worktrees](design/worktrees.md) (`panels/worktrees.rs`, `panels/worktrees/`): every worktree on disk, what makes it safe to remove, removing and freeing builds, the builds of merged worktrees and Free merged, the sidebar's Remove worktree….

@@ -1,10 +1,8 @@
-use std::fmt::Write as _;
-
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::panels::files::disk::human_size;
-use crate::panels::flows::model::{ago, epoch};
+use crate::panels::flows::model::{ago, epoch, plural};
 
 const IDLE_DAYS: i64 = 7;
 
@@ -12,6 +10,25 @@ const IDLE_DAYS: i64 = 7;
 #[serde(default)]
 pub(super) struct List {
     pub(super) worktrees: Vec<Worktree>,
+    pub(super) merged_builds: Option<MergedBuilds>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub(super) struct MergedBuilds {
+    pub(super) bytes: u64,
+    pub(super) count: usize,
+}
+
+impl List {
+    pub(super) fn merged(&self, measuring: bool) -> Option<MergedBuilds> {
+        self.merged_builds.filter(|m| m.count > 0 && !measuring)
+    }
+
+    pub(super) fn drop_row(&mut self, path: &str) {
+        self.worktrees.retain(|w| w.path != path);
+        self.merged_builds = None;
+    }
 }
 
 #[expect(clippy::struct_excessive_bools, reason = "mirrors the flags of `worktrees list --json`")]
@@ -54,15 +71,6 @@ pub(super) struct Size {
 pub(super) struct Build {
     pub(super) path: String,
     pub(super) bytes: u64,
-}
-
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(default)]
-pub(super) struct Freed {
-    pub(super) bytes: u64,
-    pub(super) folders: Vec<Build>,
-    pub(super) failed: Vec<Value>,
-    pub(super) running: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,17 +183,6 @@ pub(super) fn last_folder(path: &str) -> &str {
     path.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
-pub(super) fn free_command(path: &str, check: bool, force: bool) -> Vec<String> {
-    let mut command: Vec<String> = ["worktrees", "free-builds", "--path", path, "--json"].map(str::to_string).to_vec();
-    if check {
-        command.push("--check".into());
-    }
-    if force {
-        command.push("--force".into());
-    }
-    command
-}
-
 pub(super) fn list_command(sizes: bool, project: Option<u64>) -> Vec<String> {
     let mut command: Vec<String> = ["worktrees", "list", "--json"].map(str::to_string).to_vec();
     if !sizes {
@@ -209,29 +206,21 @@ pub(super) fn shown(worktrees: &[Worktree], filter: &str, order: Order) -> Vec<u
     shown
 }
 
-pub(super) fn total(worktrees: &[Worktree], now: i64) -> String {
+pub(super) fn totals(list: &List, measuring: bool, now: i64) -> Vec<String> {
+    let worktrees = &list.worktrees;
     let bytes: u64 = worktrees.iter().filter_map(|w| w.size.as_ref()).map(|s| s.bytes).sum();
     let idle: u64 = worktrees.iter().filter(|w| w.idle(now)).map(Worktree::builds).sum();
-    let unknown = worktrees.iter().any(|w| w.size.is_none());
-    let plus = if unknown { "+" } else { "" };
-    let count = worktrees.len();
-    let mut text = format!("{}{plus} in {count} worktree{}", human_size(bytes), if count == 1 { "" } else { "s" });
+    let plus = if worktrees.iter().any(|w| w.size.is_none()) { "+" } else { "" };
+    let mut parts = vec![format!("{}{plus} in {}", human_size(bytes), plural(worktrees.len(), "worktree"))];
     if idle > 0 {
-        let _ = write!(text, " · {} of builds idle {IDLE_DAYS}+ days", human_size(idle));
+        parts.push(format!("{} of builds idle {IDLE_DAYS}+ days", human_size(idle)));
     }
-    text
+    if let Some(merged) = list.merged(measuring) {
+        parts.push(format!("{} of builds in {}", human_size(merged.bytes), plural(merged.count, "merged worktree")));
+    }
+    parts
 }
 
-pub(super) fn free_message(freed: &Freed) -> String {
-    let folders: Vec<String> = freed.folders.iter().map(|f| format!("{} {}", f.path, human_size(f.bytes))).collect();
-    let mut text = format!(
-        "Frees {}: {}. The worktree, its branch and its changes stay; files inside these folders are lost, \
-         and the project's setup can rebuild them.",
-        human_size(freed.bytes),
-        folders.join(", ")
-    );
-    if !freed.running.is_empty() {
-        let _ = write!(text, " {} runs in it and may still use them.", freed.running.join(", "));
-    }
-    text
+pub(super) fn name_of(worktrees: &[Worktree], path: &str) -> String {
+    worktrees.iter().find(|w| w.path == path).map_or_else(|| last_folder(path).to_string(), Worktree::title)
 }
