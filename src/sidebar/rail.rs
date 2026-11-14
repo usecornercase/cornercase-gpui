@@ -21,7 +21,7 @@ mod gear;
 pub(crate) mod key;
 
 const RAIL_WIDTH: f32 = 44.;
-pub(super) const SLOT: f32 = 34.;
+const SLOT: f32 = 34.;
 const RING: f32 = 3.;
 const BUTTON_GAP: f32 = 6.;
 const FOOT: f32 = 10.;

@@ -1,6 +1,8 @@
 use gpui::{point, px};
 
-use super::{ABOVE_POINTER, Entry, above, act, choice, danger, item, item_with_keys, note, resting, step, submenu};
+use super::{
+    ABOVE_POINTER, Entry, above, act, choice, danger, item, item_with_keys, note, over_menu, resting, step, submenu,
+};
 use crate::ui::Icon;
 
 fn entries() -> Vec<Entry> {
@@ -98,4 +100,18 @@ fn the_keys_reach_an_entry_with_keys() {
     ];
     assert_eq!(step(&entries, Some(0), true), Some(2));
     assert_eq!(step(&entries, Some(2), false), Some(0));
+}
+
+#[test]
+fn a_press_on_the_menu_over_its_button_is_not_a_second_press() {
+    let at = point(px(40.), px(758.));
+    assert!(over_menu(at, point(px(60.), px(750.))));
+    assert!(over_menu(at, point(px(40.), px(758.))));
+}
+
+#[test]
+fn a_press_on_the_button_outside_the_menu_is_a_second_press() {
+    let at = point(px(40.), px(758.));
+    assert!(!over_menu(at, point(px(30.), px(764.))));
+    assert!(!over_menu(at, point(px(60.), px(770.))));
 }

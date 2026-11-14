@@ -28,7 +28,7 @@ pub(super) enum Spot {
     Gear,
 }
 
-pub(super) fn behind_gear(kind: PanelKind) -> bool {
+fn behind_gear(kind: PanelKind) -> bool {
     GEAR.iter().any(|group| group.contains(&kind))
 }
 
@@ -70,8 +70,8 @@ pub(super) fn gear_button((lit, ringed, tips): (bool, bool, bool), cx: &mut Cont
     ui::tool_button(GEAR_ID, Icon::Settings, SLOT, lit)
         .when(tips, |b| b.tooltip(tip("Settings and more")))
         .when(ringed, |b| b.shadow(ring(colours::brand())))
-        .capture_any_mouse_down(cx.listener(|this, _, window, cx| {
-            if this.menu_from(GEAR_ID) {
+        .capture_any_mouse_down(cx.listener(|this, e: &MouseDownEvent, window, cx| {
+            if this.menu_from(GEAR_ID, e.position) {
                 this.close_menu(window, cx);
                 cx.stop_propagation();
             }

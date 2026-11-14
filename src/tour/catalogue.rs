@@ -96,7 +96,7 @@ impl Tours {
 }
 
 impl Render for Tours {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let guide = self.guide.read(cx);
         let tours: Vec<(Tour, String)> =
             guide.catalogue.tours.iter().map(|t| (t.clone(), guide.catalogue.progress_label(t))).collect();
@@ -106,7 +106,7 @@ impl Render for Tours {
             "Help",
             div()
                 .id("tours")
-                .max_h(px(420.))
+                .max_h(px(dialogs::body_height(f32::from(window.viewport_size().height))))
                 .overflow_y_scroll()
                 .flex()
                 .flex_col()

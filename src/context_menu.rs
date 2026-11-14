@@ -44,27 +44,28 @@ fn plain(
     label: impl Into<SharedString>,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
     (danger, chosen): (bool, bool),
+    (icon, keys): (Option<Icon>, Option<SharedString>),
 ) -> Entry {
-    Entry::Item { label: label.into(), action: Rc::new(action), danger, chosen, icon: None, keys: None }
+    Entry::Item { label: label.into(), action: Rc::new(action), danger, chosen, icon, keys }
 }
 pub(crate) fn item(
     label: impl Into<SharedString>,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
 ) -> Entry {
-    plain(label, action, (false, false))
+    plain(label, action, (false, false), (None, None))
 }
 pub(crate) fn danger(
     label: impl Into<SharedString>,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
 ) -> Entry {
-    plain(label, action, (true, false))
+    plain(label, action, (true, false), (None, None))
 }
 pub(crate) fn choice(
     label: impl Into<SharedString>,
     chosen: bool,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
 ) -> Entry {
-    plain(label, action, (false, chosen))
+    plain(label, action, (false, chosen), (None, None))
 }
 pub(crate) fn item_with_keys(
     icon: Icon,
@@ -72,10 +73,7 @@ pub(crate) fn item_with_keys(
     keys: Option<String>,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
 ) -> Entry {
-    let Entry::Item { label, action, danger, chosen, .. } = plain(label, action, (false, false)) else {
-        unreachable!("plain makes an item")
-    };
-    Entry::Item { label, action, danger, chosen, icon: Some(icon), keys: keys.map(SharedString::from) }
+    plain(label, action, (false, false), (Some(icon), keys.map(SharedString::from)))
 }
 pub(crate) fn act(label: impl Into<SharedString>, args: Vec<String>) -> Entry {
     item(label, move |root, _, _| root.act(args.clone()))
@@ -123,6 +121,10 @@ fn step(entries: &[Entry], from: Option<usize>, down: bool) -> Option<usize> {
         Some(at) => at.checked_sub(1).unwrap_or(choices.len() - 1),
     };
     choices.get(next).copied()
+}
+
+fn over_menu(at: Point<Pixels>, press: Point<Pixels>) -> bool {
+    press.x >= at.x && press.y <= at.y
 }
 
 fn above(at: Point<Pixels>) -> Point<Pixels> {
@@ -196,8 +198,8 @@ impl Root {
         }
     }
 
-    pub(crate) fn menu_from(&self, opener: &str) -> bool {
-        self.side.menu.as_ref().is_some_and(|menu| menu.opener == Some(opener))
+    pub(crate) fn menu_from(&self, opener: &str, press: Point<Pixels>) -> bool {
+        self.side.menu.as_ref().is_some_and(|menu| menu.opener == Some(opener) && !over_menu(menu.at, press))
     }
 
     pub(crate) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
