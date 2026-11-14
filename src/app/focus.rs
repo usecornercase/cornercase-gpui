@@ -19,6 +19,10 @@ pub(crate) struct Overlays {
 }
 
 impl Overlays {
+    pub(super) fn ended_into(self, now: Self) -> bool {
+        self.dialog && !now.dialog
+    }
+
     fn open(self) -> bool {
         self.dialog || self.sheet.is_some()
     }
@@ -62,7 +66,7 @@ fn shows(place: Place, now: Overlays, dock: Option<PanelKind>) -> bool {
 
 pub(crate) fn keys_after(change: &Change) -> Keys {
     let Change { before, now, dock, in_dock, to_terminal, back } = *change;
-    let ended = before.dialog && !now.dialog;
+    let ended = before.ended_into(now);
     if ended && !to_terminal && back.is_some_and(|place| shows(place, now, dock)) {
         return Keys::Back;
     }
@@ -97,18 +101,16 @@ impl<T> Noted<T> {
 }
 
 impl Root {
-    pub(super) fn keep_keys(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn mind_the_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.keep_the_keys(window, cx);
         self.note_keys(window, cx);
     }
 
     fn note_keys(&mut self, window: &Window, cx: &App) {
         let dialog = self.store.read(cx).dialog.is_some();
-        if dialog {
-            return;
-        }
-        let noted = window.focused(cx).map(|focused| (self.place_of(&focused, window, cx), focused.downgrade()));
-        self.held.home.note(false, noted);
+        let noted = window.focused(cx).filter(|_| !dialog);
+        let noted = noted.map(|focused| (self.place_of(&focused, window, cx), focused.downgrade()));
+        self.held.home.note(dialog, noted);
     }
 
     fn place_of(&self, focused: &gpui::FocusHandle, window: &Window, cx: &App) -> Place {
@@ -143,8 +145,8 @@ impl Root {
     ) {
         let s = self.store.read(cx);
         let dock = s.shown_dock();
-        let in_dock = self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx);
-        let way = self.way_back(before.dialog && !now.dialog, window);
+        let in_dock = self.dock_focused(window, cx);
+        let way = self.way_back(before.ended_into(now), window);
         let change = Change { before, now, dock, in_dock, to_terminal, back: way.as_ref().map(|(place, _)| *place) };
         match (keys_after(&change), way) {
             (Keys::Back, Some((_, handle))) => window.focus(&handle),

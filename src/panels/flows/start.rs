@@ -530,15 +530,10 @@ impl Render for StartFlow {
         self.accounts.follow(choices, Self::clear_error, cx);
         let busy = (self.busy || dialog_starts(cx)).then_some("Starting…");
         let title = if self.issue.is_some() { "Start a flow on an issue" } else { "Start a flow" };
-        let height = dialogs::body_height(f32::from(window.viewport_size().height));
         dialogs::frame(
             title,
-            div()
-                .id("start-flow-form")
-                .max_h(px(height))
-                .overflow_y_scroll()
-                .track_scroll(&self.fields.scroller)
-                .child(self.form(window, cx)),
+            dialogs::scrolled_body("start-flow-form", window, self.form(window, cx))
+                .track_scroll(&self.fields.scroller),
             buttons(("start-cancel", "start-run"), (Icon::Play, "Start"), busy, cx),
         )
         .w(px(580.))

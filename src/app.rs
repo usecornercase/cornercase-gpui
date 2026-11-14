@@ -921,7 +921,7 @@ impl Render for Root {
         self.update_title(window);
         self.mind_the_parts(window, cx);
         self.keep_beating(window);
-        self.keep_keys(window, cx);
+        self.mind_the_focus(window, cx);
         let window_frame = frame::Frame::read(window, Os::CURRENT);
         let (sheet, dialog) = {
             let s = self.store.read(cx);

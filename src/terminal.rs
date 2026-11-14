@@ -149,7 +149,7 @@ impl Root {
         }
     }
 
-    fn dock_focused(&self, window: &Window, cx: &App) -> bool {
+    pub(crate) fn dock_focused(&self, window: &Window, cx: &App) -> bool {
         self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx)
     }
 

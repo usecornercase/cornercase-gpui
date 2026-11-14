@@ -48,8 +48,19 @@ pub(crate) fn body_height(window: f32) -> f32 {
     (window - 240.).clamp(200., 560.)
 }
 
+const RING_ROOM: f32 = 6.;
+
+pub(crate) fn scrolled_body(id: &'static str, window: &Window, body: impl IntoElement) -> Stateful<Div> {
+    sized_body(id, window, body, 0.)
+}
+
 pub(crate) fn fitted(id: &'static str, window: &Window, body: impl IntoElement) -> Stateful<Div> {
-    div().id(id).max_h(px(body_height(f32::from(window.viewport_size().height)))).overflow_y_scroll().child(body)
+    sized_body(id, window, body, RING_ROOM)
+}
+
+fn sized_body(id: &'static str, window: &Window, body: impl IntoElement, room: f32) -> Stateful<Div> {
+    let height = body_height(f32::from(window.viewport_size().height));
+    div().id(id).max_h(px(height + 2. * room)).p(px(room)).m(px(-room)).overflow_y_scroll().child(body)
 }
 
 pub(crate) fn cancel_and(action: Stateful<Div>) -> Div {
@@ -226,7 +237,10 @@ pub(crate) fn starting(agent: &str) -> Busy {
     Busy::new(format!("start:{agent}"), label)
 }
 
-fn within(scroller: &ScrollHandle, shape: impl FnOnce(TextField) -> TextField) -> impl FnOnce(TextField) -> TextField {
+pub(crate) fn within(
+    scroller: &ScrollHandle,
+    shape: impl FnOnce(TextField) -> TextField,
+) -> impl FnOnce(TextField) -> TextField {
     let scroller = scroller.clone();
     move |field| shape(field).inside(scroller)
 }
@@ -327,15 +341,9 @@ impl Render for StartAgent {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let choices = Store::get(cx).read(cx).account_choices();
         self.accounts.follow(choices, |_, _| {}, cx);
-        let height = body_height(f32::from(window.viewport_size().height));
         frame(
             "Start an agent in a new tab",
-            div()
-                .id("start-agent-form")
-                .max_h(px(height))
-                .overflow_y_scroll()
-                .track_scroll(&self.scroller)
-                .child(self.fields(window, cx)),
+            scrolled_body("start-agent-form", window, self.fields(window, cx)).track_scroll(&self.scroller),
             cancel_and(
                 ui::primary_button("start", "Start")
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
@@ -445,11 +453,8 @@ impl Confirm {
     }
 
     fn scrolled(&self, window: &Window, tick: Option<impl IntoElement>) -> impl IntoElement {
-        div()
-            .id("question-body")
-            .max_h(px(body_height(f32::from(window.viewport_size().height))))
-            .overflow_y_scroll()
-            .child(div().flex().flex_col().gap(px(12.)).child(self.said()).children(tick))
+        let body = div().flex().flex_col().gap(px(12.)).child(self.said()).children(tick);
+        scrolled_body("question-body", window, body)
     }
 
     fn tick_box(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {

@@ -8,7 +8,7 @@ use gpui::{
     Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
-use super::{body_height, cancel_and, close, frame, shaped_field, show, text_field, within};
+use super::{cancel_and, close, fitted, frame, shaped_field, show, text_field, within};
 use crate::cli::{self, Remote, Target};
 use crate::desktop;
 use crate::keymap::{self, Command};
@@ -136,9 +136,7 @@ impl Render for Connect {
         let button = ui::primary_button("connect", "Connect")
             .when(!ready, |b| b.opacity(0.5))
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)));
-        let height = body_height(f32::from(window.viewport_size().height));
-        let scrolling =
-            div().id("connect-body").max_h(px(height)).overflow_y_scroll().track_scroll(&self.scroller).child(body);
+        let scrolling = fitted("connect-body", window, body).track_scroll(&self.scroller);
         frame("Connect to a server", scrolling, cancel_and(button))
     }
 }

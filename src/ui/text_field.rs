@@ -8,8 +8,6 @@ use gpui::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
-#[cfg(test)]
-use self::element::reveal_room;
 use self::element::{Layout, TextElement};
 use self::rows::{clamp_scroll, line_breaks, one_line, previous_grapheme};
 use self::secure::Secure;

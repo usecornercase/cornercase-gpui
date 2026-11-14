@@ -1,8 +1,8 @@
-use gpui::{KeyBinding, KeyContext, px};
+use gpui::{KeyBinding, KeyContext};
 
 use super::{
-    Escaped, LINES_CONTEXT, NewLine, Submit, bindings, composed_selection, escaped, handed, prompt_keys, reveal_room,
-    send_key, shared, word_end, word_start,
+    Escaped, LINES_CONTEXT, NewLine, Submit, bindings, composed_selection, escaped, handed, prompt_keys, send_key,
+    shared, word_end, word_start,
 };
 use crate::platform::Os;
 
@@ -112,15 +112,4 @@ fn a_plain_field_hands_the_input_method_its_text_as_before() {
     assert_eq!(handed(content, &(1..2), false), Some(("\u{f1}".to_string(), 1..2)));
     assert_eq!(handed(content, &(3..4), false), Some((String::new(), 4..4)));
     assert_eq!(handed(content, &(4..9), false), Some(("b".to_string(), 4..5)));
-}
-
-#[test]
-fn a_field_asking_for_room_below_it_gets_that_room_revealed() {
-    assert_eq!(reveal_room(Some(px(74.)), false), px(74.));
-}
-
-#[test]
-fn a_field_asking_for_nothing_keeps_the_margin_of_its_kind() {
-    assert_eq!(reveal_room(None, false), px(12.));
-    assert_eq!(reveal_room(None, true), px(32.));
 }

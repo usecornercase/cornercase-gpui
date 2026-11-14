@@ -9,7 +9,7 @@ use super::data::{
     EFFORT_AGENTS, Issue, Place, Sources, StartPlan, When, branch_hint, branch_shown, modes_shown, there_footnote,
 };
 use crate::cli;
-use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts, follow_field};
+use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts, follow_field, within};
 use crate::model::Spot;
 use crate::model::agent_settings::{Agents, Choice, Modes};
 use crate::model::machines::run_on::Starting;
@@ -94,22 +94,14 @@ fn close(cx: &mut App) {
 
 const FOOTNOTE_ROOM: f32 = 74.;
 
-struct Fit {
-    scroller: ScrollHandle,
-    room: Option<f32>,
-}
-
 fn text_field(
     (placeholder, text): (&str, &str),
     clear_error: bool,
-    fit: Fit,
+    shape: impl FnOnce(TextField) -> TextField,
     cx: &mut Context<StartForm>,
 ) -> Entity<TextField> {
     let field = cx.new(|cx| {
-        let mut field = TextField::new(placeholder.to_string(), cx).in_tab_order().wraps().inside(fit.scroller);
-        if let Some(room) = fit.room {
-            field = field.room_below(room);
-        }
+        let mut field = shape(TextField::new(placeholder.to_string(), cx).in_tab_order().wraps());
         field.set_text(text.to_string(), cx);
         field
     });
@@ -186,13 +178,14 @@ impl StartForm {
         let places = Places::of(&sources, repository, project_name);
         let run_on = run_on_of(&issue, &places, cx);
         let scroller = ScrollHandle::new();
-        let fit = |room| Fit { scroller: scroller.clone(), room };
+        let plain = || within(&scroller, |field| field);
+        let roomy = within(&scroller, |field| field.room_below(FOOTNOTE_ROOM));
         Self {
-            model: text_field(("the agent's own, such as opus", ""), true, fit(None), cx),
-            effort: text_field(("the agent's own, such as high", ""), true, fit(None), cx),
-            branch: text_field((&branch_hint(None), &issue.branch), true, fit(None), cx),
-            name: text_field((&name_hint, ""), true, fit(Some(FOOTNOTE_ROOM)), cx),
-            at: text_field((When::At.placeholder().unwrap_or_default(), ""), true, fit(None), cx),
+            model: text_field(("the agent's own, such as opus", ""), true, plain(), cx),
+            effort: text_field(("the agent's own, such as high", ""), true, plain(), cx),
+            branch: text_field((&branch_hint(None), &issue.branch), true, plain(), cx),
+            name: text_field((&name_hint, ""), true, roomy, cx),
+            at: text_field((When::At.placeholder().unwrap_or_default(), ""), true, plain(), cx),
             places,
             issue,
             agents,
@@ -268,8 +261,8 @@ impl StartForm {
 
     fn set_when(&mut self, when: When, cx: &mut Context<Self>) {
         self.when = when;
-        let fit = Fit { scroller: self.scroller.clone(), room: None };
-        self.at = text_field((when.placeholder().unwrap_or_default(), ""), false, fit, cx);
+        let shape = within(&self.scroller, |field| field);
+        self.at = text_field((when.placeholder().unwrap_or_default(), ""), false, shape, cx);
         cx.notify();
     }
 

@@ -5,7 +5,7 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.1.107
 
 - **After a dialog closes, the keys are back where they were.** In the Issues sheet, after you close **Start work on an issue** with Escape or Cancel, ↓ and ↑ move through the issues again, Return opens it again and typing goes into the filter, in a narrow window and a wide one. The same holds for a dialog opened over Search or another sheet, over a docked panel, or while you rename something in the sidebar: the keys go back to the field or panel you were in, and to the terminal when that is gone.
-- **In a short window a dialog keeps its title and its buttons in view.** **Start work on an issue**, **Connect to a server** and the other dialogs that could be taller than the window now scroll their contents between the title and the buttons. In **Start work on an issue**, Tab brings each field into view, and the line that says why it cannot start yet shows above the buttons. In a window 800 px tall or taller nothing changes.
+- **In a short window a dialog keeps its title and its buttons in view.** **Start work on an issue**, **Connect to a server** and the other dialogs that could be taller than the window now scroll their contents between the title and the buttons. In **Start work on an issue**, Tab brings each field into view, and the line that says why it cannot start yet shows above the buttons. In a window 800 px tall or taller, **Start work on an issue** looks as before.
 
 ## 0.1.106
 
