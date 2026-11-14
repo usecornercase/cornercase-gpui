@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.96
+
+- **The tunnels menu and Ports now show the tunnels other windows and programs hold to a linked machine**, as they already did for a server you are connected to: each one is a row in the machine's section (`⇄ 3000 · in another program`) with Close and Forget, and Ports marks that port `⇄ elsewhere`. This needs cornercase 0.13.67 or newer running on this computer; with an older one the menu says so. A machine that is down keeps the tunnels it last sent, shown as such, with nothing to act on. The count in the status bar is still the tunnels this window holds.
+- **A tunnel says when its server stopped or restarted.** Its row shows `down` with that reason and is tried again as before, and a Chrome opened to a machine says it in its message. This needs cornercase 0.13.67 or newer on this computer.
+
 ## 0.1.95
 
 - **A release's notes on GitHub now also hold the versions that never got a release of their own.** The next release's page, and GitHub's notice of it, list such a version's changes under its number, below the release's own. The window's update dialog already showed them.

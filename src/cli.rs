@@ -1,3 +1,4 @@
+mod features;
 mod holds;
 mod kept;
 mod locate;
@@ -22,6 +23,9 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use locate::{Inputs, Probe as _, System};
 use parking_lot::Mutex;
 
+pub(crate) use features::{Feature, Has};
+#[cfg(test)]
+pub(crate) use holds::ended_after;
 pub(crate) use holds::{Ended, Holding, end_hold, end_holds, hold};
 pub(crate) use locate::parse_version;
 pub(crate) use locate::{Binary, INSTALL_GUIDE, MINIMUM, Missing, Origin, Problem, Version};

@@ -1,6 +1,6 @@
-use crate::cli::{self, Target};
+use crate::cli::{self, Ended, Target};
 use crate::model::machines::hide_destination;
-use crate::model::tunnels::Toward;
+use crate::model::tunnels::{HoldEnd, Toward, ended_line};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Asked {
@@ -101,15 +101,31 @@ pub(crate) fn live<'a>(holds: &'a [Hold], toward: &Toward, port: u16) -> Option<
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Fate {
     Gone,
+    Closed,
     Failed(String),
     Retry(String),
     Settle,
 }
 
-pub(crate) fn fate(hold: &Hold, code: Option<i32>, said: &str) -> Fate {
+pub(crate) fn fate(hold: &Hold, ended: &Ended) -> Fate {
     if hold.state == Held::Ending {
         return Fate::Gone;
     }
+    match ended_line(&ended.last_line) {
+        Some(end) => told(hold, end),
+        None => by_status(hold, ended.code, &ended.said),
+    }
+}
+
+fn told(hold: &Hold, end: HoldEnd) -> Fate {
+    match end.went() {
+        None => Fate::Closed,
+        Some(reason) if hold.was_up => Fate::Retry(capitalised(reason)),
+        Some(reason) => Fate::Failed(window_failure(&hold.toward, hold.port, reason)),
+    }
+}
+
+fn by_status(hold: &Hold, code: Option<i32>, said: &str) -> Fate {
     if code == Some(0) {
         return Fate::Settle;
     }
@@ -199,6 +215,11 @@ pub(crate) fn bring_back(remembered: &[u16], held: &[u16]) -> Vec<u16> {
 
 pub(crate) fn remembers(asked: Asked) -> bool {
     matches!(asked, Asked::Click | Asked::Open | Asked::Program)
+}
+
+pub(crate) fn unsent(hold: &Hold) -> Option<(String, u16, u16)> {
+    let (Toward::Machine(name), Some(local)) = (&hold.toward, hold.last_local) else { return None };
+    Some((name.clone(), hold.port, local))
 }
 
 pub(crate) fn forgets_failed(fate: &Fate, added: bool) -> bool {

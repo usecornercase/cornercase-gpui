@@ -6,7 +6,7 @@ use futures::channel::{mpsc, oneshot};
 use gpui::{AnyView, App, AppContext as _, AsyncApp, ClipboardItem, Context, Entity, FocusHandle, Global, WeakEntity};
 use serde_json::Value;
 
-use crate::cli::{self, Queue, Stream, Target};
+use crate::cli::{self, Feature, Has, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, ListMoves, Selection, Switch, switching_key};
@@ -39,8 +39,8 @@ pub(crate) use machines_there::{
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 pub(crate) use toasts::{Toast, ToastKind};
 pub(crate) use tunnels::{
-    Asked, Control, Held, MachineLink, ReverseState, Tail, TunnelRow, Whose, address_there, copied_words, heading,
-    none_note, others_note, remote_url, section_tail,
+    Asked, Control, Held, MachineLink, ReverseState, Tail, TunnelRow, TunnelSection, Whose, address_there,
+    copied_words, heading, none_note, remote_url, section_tail,
 };
 pub(crate) use update_there::{
     AfterUpdate, UpdateOffer, UpdateThere, run_update, update_job, update_key, update_question,
@@ -380,6 +380,10 @@ impl Store {
     pub(crate) fn end_job(&mut self, id: u64, cx: &mut Context<Self>) {
         self.jobs.end(id);
         cx.notify();
+    }
+
+    pub(crate) fn server_has(&self, feature: Feature) -> Has {
+        self.session.as_ref().map_or(Has::Unread, |session| feature.on(session.release()))
     }
 
     pub(crate) fn busy(&self, key: &str) -> bool {

@@ -1,8 +1,9 @@
 use super::{
-    Gate, Older, Release, TUNNEL_HOLD_SINCE, TUNNEL_ORDERS_SINCE, Toward, TunnelSeen, Way, gate_note, held_line,
-    local_kept, local_to_ask, machine_gate, older_note, orders_gate, orders_note, reverse_gate, reverse_note, way,
+    Gate, HoldEnd, Older, Release, TUNNEL_HOLD_SINCE, TUNNEL_ORDERS_SINCE, Toward, TunnelSeen, Way, ended_line,
+    gate_note, held_line, local_kept, local_to_ask, machine_gate, older_note, orders_gate, orders_note, others_note,
+    reverse_gate, reverse_note, way,
 };
-use crate::cli::Version;
+use crate::cli::{Has, Version};
 use crate::model::Session;
 use crate::test_util::fixture;
 
@@ -246,4 +247,59 @@ fn a_previous_local_port_equal_to_the_port_is_kept_for_the_toast_but_not_asked()
     assert_eq!(local_to_ask(release("0.13.61"), 8765, Some(8765)), None);
     assert_eq!(local_kept(release("0.13.60"), Some(8765)), None);
     assert_eq!(local_kept(Release::Unread, Some(8765)), None);
+}
+
+fn last_line_of(text: &str) -> String {
+    crate::cli::ended_after(text, None).last_line
+}
+
+#[test]
+fn a_holds_last_line_says_why_it_ended() {
+    let said = |text| ended_line(&last_line_of(text));
+    assert_eq!(said(fixture!("tunnels/hold_closed.txt")), Some(HoldEnd::Closed));
+    assert_eq!(said(fixture!("tunnels/hold_forgotten.txt")), Some(HoldEnd::Forgotten));
+    assert_eq!(said(fixture!("tunnels/hold_server_stopped.txt")), Some(HoldEnd::ServerStopped));
+    assert_eq!(said(fixture!("tunnels/hold_server_restarted.txt")), Some(HoldEnd::ServerRestarted));
+}
+
+#[test]
+fn a_line_the_window_does_not_know_says_nothing() {
+    assert_eq!(ended_line(&last_line_of(fixture!("tunnels/hold_end_unknown.txt"))), None);
+    assert_eq!(ended_line(&last_line_of(HELD_LINE)), None);
+    assert_eq!(ended_line(r#"{"ended":"clo"#), None);
+    assert_eq!(ended_line(""), None);
+}
+
+#[test]
+fn only_the_server_endings_give_a_reason() {
+    assert_eq!(HoldEnd::Closed.went(), None);
+    assert_eq!(HoldEnd::Forgotten.went(), None);
+    assert_eq!(HoldEnd::ServerStopped.went(), Some("its server stopped"));
+    assert_eq!(HoldEnd::ServerRestarted.went(), Some("its server restarted"));
+}
+
+#[test]
+fn the_muted_line_names_the_release_the_server_needs() {
+    let note = others_note(Has::No(Version::parse("0.13.66")), "vps and cap").expect("a line");
+    let here = crate::desktop::here();
+    assert_eq!(
+        note,
+        format!(
+            "Tunnels other windows or programs hold to vps and cap are not listed here: needs cornercase 0.13.67 or newer on this {here} (its server runs 0.13.66)"
+        )
+    );
+}
+
+#[test]
+fn the_muted_line_without_a_known_release_names_only_what_is_needed() {
+    let note = others_note(Has::No(None), "vps").expect("a line");
+    let here = crate::desktop::here();
+    assert!(note.ends_with(&format!("needs cornercase 0.13.67 or newer on this {here}")), "{note}");
+    assert!(!note.contains('('), "{note}");
+}
+
+#[test]
+fn no_muted_line_when_the_server_can_say_or_is_not_read_yet() {
+    assert_eq!(others_note(Has::Yes, "vps"), None);
+    assert_eq!(others_note(Has::Unread, "vps"), None);
 }

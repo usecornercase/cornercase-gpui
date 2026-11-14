@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::held::{Held, Hold};
 use super::reverse::{ReverseHold, ReverseState};
+use crate::model::MachineSeen;
 use crate::model::machines::listed;
-use crate::model::tunnels::{ELSEWHERE_ISSUE, Gate, Older, Toward, TunnelSeen, orders_note};
+use crate::model::tunnels::{Gate, Older, Toward, TunnelSeen, orders_note};
 use crate::store::{OlderNote, UpdateOffer, UpdateThere};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,7 +82,7 @@ fn is_ours(seen: &TunnelSeen, ours: &[&Hold]) -> bool {
         && ours.iter().any(|hold| hold.port == seen.port && hold.local().is_none_or(|local| Some(local) == seen.local))
 }
 
-fn others_row(seen: &TunnelSeen) -> TunnelRow {
+fn others_row(toward: &Toward, seen: &TunnelSeen) -> TunnelRow {
     let whose = if seen.state == "closed" {
         Whose::ClosedElsewhere
     } else if seen.kind == "window" {
@@ -89,46 +90,97 @@ fn others_row(seen: &TunnelSeen) -> TunnelRow {
     } else {
         Whose::Program
     };
-    TunnelRow { toward: Toward::Server, port: seen.port, whose }
+    TunnelRow { toward: toward.clone(), port: seen.port, whose }
 }
 
-fn on_server(held: &[Hold]) -> Vec<&Hold> {
-    held.iter().filter(|hold| hold.toward == Toward::Server).collect()
+fn of_place<'a>(held: &'a [Hold], toward: &Toward) -> Vec<&'a Hold> {
+    held.iter().filter(|hold| hold.toward == *toward).collect()
 }
 
-pub(crate) fn menu_rows(listed: &[TunnelSeen], held: &[Hold], reverse: Option<&ReverseHold>) -> Vec<TunnelRow> {
-    let ours = on_server(held);
+pub(crate) fn place_rows(
+    toward: &Toward,
+    listed: &[TunnelSeen],
+    held: &[Hold],
+    reverse: Option<&ReverseHold>,
+) -> Vec<TunnelRow> {
+    let ours = of_place(held, toward);
     let mine = ours.iter().copied().filter_map(ours_row);
-    let others = listed.iter().filter(|seen| seen.forward() && !is_ours(seen, &ours)).map(others_row);
+    let others = listed.iter().filter(|seen| seen.forward() && !is_ours(seen, &ours)).map(|s| others_row(toward, s));
     let mut rows: Vec<TunnelRow> = mine.chain(others).collect();
     rows.sort_by_key(|row| (row.port, !row.ours()));
-    rows.extend(reverse.map(|hold| reverse_row(&Toward::Server, hold)));
+    rows.extend(reverse.map(|hold| reverse_row(toward, hold)));
     rows
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TunnelSection {
+    pub(crate) name: String,
+    pub(crate) rows: Vec<TunnelRow>,
+    pub(crate) last_sent: Option<String>,
+}
+
+impl TunnelSection {
+    pub(crate) fn rests(&self, row: &TunnelRow) -> bool {
+        self.last_sent.is_some() && !row.ours()
+    }
+}
+
+pub(crate) fn last_sent_note(seen: &MachineSeen) -> String {
+    format!("{}: the tunnels other windows or programs hold to it are as it last sent them", seen.link_note())
+}
+
+fn hold_at(tunnel: &TunnelSeen) -> Option<(u16, u16)> {
+    let local = tunnel.local?;
+    (tunnel.forward() && tunnel.kind == "hold").then_some((tunnel.port, local))
+}
+
+pub(crate) fn pruned(ended: &mut BTreeSet<(String, u16, u16)>, machines: &[MachineSeen]) {
+    ended.retain(|(name, port, local)| {
+        let lists = |seen: &MachineSeen| seen.tunnels.iter().filter_map(hold_at).any(|at| at == (*port, *local));
+        machines.iter().find(|seen| seen.name == *name).is_none_or(|seen| !seen.linked() || lists(seen))
+    });
+}
+
+fn last_sent(seen: Option<&MachineSeen>, name: &str, ended: &BTreeSet<(String, u16, u16)>) -> Vec<TunnelSeen> {
+    let Some(seen) = seen else { return Vec::new() };
+    let gone = |tunnel: &TunnelSeen| {
+        let noted = |(port, local)| ended.contains(&(name.to_string(), port, local));
+        !seen.linked() && hold_at(tunnel).is_some_and(noted)
+    };
+    seen.tunnels.iter().filter(|tunnel| !gone(tunnel)).cloned().collect()
+}
+
+fn section(
+    name: &str,
+    (holds, reverses): (&[Hold], &BTreeMap<Toward, ReverseHold>),
+    (seen, ended): (Option<&MachineSeen>, &BTreeSet<(String, u16, u16)>),
+) -> Option<TunnelSection> {
+    let toward = Toward::Machine(name.to_string());
+    let listed = last_sent(seen, name, ended);
+    let rows = place_rows(&toward, &listed, holds, reverses.get(&toward));
+    if rows.is_empty() {
+        return None;
+    }
+    let others = rows.iter().any(|row| !row.ours());
+    let last_sent = seen.filter(|seen| !seen.linked() && others).map(last_sent_note);
+    Some(TunnelSection { name: name.to_string(), rows, last_sent })
 }
 
 pub(crate) fn machine_sections(
     holds: &[Hold],
     reverses: &BTreeMap<Toward, ReverseHold>,
-) -> Vec<(String, Vec<TunnelRow>)> {
-    let mut by_machine: BTreeMap<String, Vec<TunnelRow>> = BTreeMap::new();
-    for row in holds.iter().filter_map(ours_row) {
-        if let Toward::Machine(name) = &row.toward {
-            by_machine.entry(name.clone()).or_default().push(row);
-        }
-    }
-    for rows in by_machine.values_mut() {
-        rows.sort_by_key(|row| row.port);
-    }
-    for (toward, hold) in reverses {
-        if let Toward::Machine(name) = toward {
-            by_machine.entry(name.clone()).or_default().push(reverse_row(toward, hold));
-        }
-    }
-    by_machine.into_iter().collect()
+    machines: &[MachineSeen],
+    ended: &BTreeSet<(String, u16, u16)>,
+) -> Vec<TunnelSection> {
+    let towards = holds.iter().map(|hold| &hold.toward).chain(reverses.keys());
+    let held = towards.filter_map(|toward| toward.machine().map(str::to_string));
+    let names: BTreeSet<String> = held.chain(machines.iter().map(|seen| seen.name.clone())).collect();
+    let seen = |name: &str| machines.iter().find(|seen| seen.name == name);
+    names.iter().filter_map(|name| section(name, (holds, reverses), (seen(name), ended))).collect()
 }
 
-pub(crate) fn elsewhere(port: u16, listed: &[TunnelSeen], held: &[Hold]) -> bool {
-    let ours = on_server(held);
+pub(crate) fn elsewhere(toward: &Toward, port: u16, listed: &[TunnelSeen], held: &[Hold]) -> bool {
+    let ours = of_place(held, toward);
     listed.iter().any(|seen| seen.forward() && seen.port == port && seen.state != "closed" && !is_ours(seen, &ours))
 }
 
@@ -167,10 +219,6 @@ pub(crate) fn mark(shows: bool, held: Option<&Held>, elsewhere: bool) -> Option<
         }),
         Some(Held::Ending) | None => None,
     }
-}
-
-pub(crate) fn others_note(machines: &str) -> String {
-    format!("Tunnels other windows or programs hold to {machines} are not listed here: needs {ELSEWHERE_ISSUE}")
 }
 
 pub(crate) fn orders_notes(gates: &[(String, Gate)]) -> Vec<String> {

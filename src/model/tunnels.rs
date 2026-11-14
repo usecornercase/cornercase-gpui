@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::cli::Version;
+use crate::cli::{Feature, Has, Version};
 use crate::desktop;
 
 mod orders;
@@ -11,7 +11,6 @@ pub(crate) const TUNNEL_HOLD_SINCE: Version = Version::new(0, 13, 50);
 pub(crate) const TUNNEL_ORDERS_SINCE: Version = Version::new(0, 13, 57);
 pub(crate) const TUNNEL_LOCAL_SINCE: Version = Version::new(0, 13, 61);
 pub(crate) const TUNNEL_REVERSE_SINCE: Version = Version::new(0, 13, 61);
-pub(crate) const ELSEWHERE_ISSUE: &str = "usecornercase/cornercase-terminal#787";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -55,6 +54,40 @@ impl From<RawHeldLine> for HeldLine {
 pub(crate) fn held_line(line: &str) -> Option<HeldLine> {
     let held: HeldLine = serde_json::from_str(line.trim()).ok()?;
     (held.port != 0 && held.local != 0).then_some(held)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HoldEnd {
+    Closed,
+    Forgotten,
+    ServerStopped,
+    ServerRestarted,
+}
+
+impl HoldEnd {
+    pub(crate) fn went(self) -> Option<&'static str> {
+        match self {
+            Self::Closed | Self::Forgotten => None,
+            Self::ServerStopped => Some("its server stopped"),
+            Self::ServerRestarted => Some("its server restarted"),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct EndedLine {
+    ended: String,
+}
+
+pub(crate) fn ended_line(line: &str) -> Option<HoldEnd> {
+    let line: EndedLine = serde_json::from_str(line.trim()).ok()?;
+    match line.ended.as_str() {
+        "closed" => Some(HoldEnd::Closed),
+        "forgotten" => Some(HoldEnd::Forgotten),
+        "server-stopped" => Some(HoldEnd::ServerStopped),
+        "server-restarted" => Some(HoldEnd::ServerRestarted),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,6 +227,15 @@ pub(crate) fn gate_note(older: &Older, machine: &str) -> String {
 pub(crate) fn reverse_note(older: &Older, name: &str) -> String {
     let (place, has) = older_words(older, name);
     format!("needs cornercase {TUNNEL_REVERSE_SINCE} or newer on {place}{has}")
+}
+
+pub(crate) fn others_note(has: Has, machines: &str) -> Option<String> {
+    let Has::No(found) = has else { return None };
+    let (place, runs) = older_words(&Older::Server(found), &format!("this {}", desktop::here()));
+    let since = Feature::MachineTunnels.since();
+    Some(format!(
+        "Tunnels other windows or programs hold to {machines} are not listed here: needs cornercase {since} or newer on {place}{runs}"
+    ))
 }
 
 pub(crate) fn orders_note(older: &Older, host: &str) -> String {

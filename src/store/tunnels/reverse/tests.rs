@@ -1,7 +1,8 @@
 use super::{
-    ReverseState, address_there, approved_destination, closed_toast, copied_words, ended_toast, ending_toast,
-    failed_toast, opened_toast, reverse_reason, stopped_toast,
+    ReverseState, address_there, approved_destination, closed_toast, copied_words, ended_toast, ended_words,
+    ending_toast, failed_toast, opened_toast, reverse_reason, stopped_toast,
 };
+use crate::cli::ended_after;
 use crate::model::tunnels::Toward;
 use crate::store::ToastKind;
 use crate::test_util::fixture;
@@ -65,4 +66,72 @@ fn a_machine_whose_address_changed_while_the_question_was_open_is_not_opened_to(
     assert_eq!(approved_destination("vps.invalid", "vps.invalid"), Ok(()));
     let refused = approved_destination("vps.invalid", "other.invalid").expect_err("a different address");
     assert_eq!(refused, "The machine's address changed since you were asked");
+}
+
+const OPEN: ReverseState = ReverseState::Open { there: 60998 };
+
+fn said(state: ReverseState, text: &str, code: i32) -> (String, ToastKind) {
+    ended_words(state, &ended_after(text, Some(code)), "", "vps")
+}
+
+fn no_longer(why: Option<&str>) -> String {
+    ended_toast("vps", why)
+}
+
+#[test]
+fn a_reverse_hold_closed_there_says_it_is_no_longer_open() {
+    let text = fixture!("tunnels/reverse_closed.txt");
+    assert_eq!(said(OPEN, text, 0), (no_longer(None), ToastKind::Info));
+}
+
+#[test]
+fn a_reverse_hold_forgotten_there_says_the_same() {
+    let text = fixture!("tunnels/reverse_forgotten.txt");
+    assert_eq!(said(OPEN, text, 0), (no_longer(None), ToastKind::Info));
+}
+
+#[test]
+fn a_reverse_hold_whose_server_stopped_says_so() {
+    let text = fixture!("tunnels/reverse_server_stopped.txt");
+    assert_eq!(said(OPEN, text, 7), (no_longer(Some("its server stopped")), ToastKind::Error));
+}
+
+#[test]
+fn a_reverse_hold_whose_server_restarted_says_so() {
+    let text = fixture!("tunnels/reverse_server_restarted.txt");
+    assert_eq!(said(OPEN, text, 7), (no_longer(Some("its server restarted")), ToastKind::Error));
+}
+
+#[test]
+fn a_reverse_hold_that_exits_7_with_no_line_says_its_status_as_today() {
+    let text = fixture!("tunnels/held_reverse.txt");
+    let why = "cornercase tunnel hold ended with status 7";
+    assert_eq!(said(OPEN, text, 7), (no_longer(Some(why)), ToastKind::Error));
+}
+
+#[test]
+fn a_reverse_hold_that_exits_0_with_no_line_is_closed_as_today() {
+    let text = fixture!("tunnels/held_reverse.txt");
+    assert_eq!(said(OPEN, text, 0), (no_longer(None), ToastKind::Info));
+}
+
+#[test]
+fn a_line_the_window_does_not_know_leaves_a_reverse_hold_to_its_status() {
+    let text = "{\"port\":1,\"local\":2,\"direction\":\"reverse\"}\n{\"ended\":\"moved\"}\n";
+    let why = "cornercase tunnel hold ended with status 7";
+    assert_eq!(said(OPEN, text, 7), (no_longer(Some(why)), ToastKind::Error));
+    assert_eq!(said(OPEN, text, 0), (no_longer(None), ToastKind::Info));
+}
+
+#[test]
+fn a_reverse_hold_whose_server_stopped_while_opening_says_it_could_not_open() {
+    let text = fixture!("tunnels/reverse_server_stopped.txt");
+    let said = said(ReverseState::Opening, text, 7);
+    assert_eq!(said, (failed_toast("vps", "its server stopped"), ToastKind::Error));
+}
+
+#[test]
+fn a_reverse_hold_closed_while_opening_is_no_failure() {
+    let text = fixture!("tunnels/hold_end_alone.txt");
+    assert_eq!(said(ReverseState::Opening, text, 0), (no_longer(None), ToastKind::Info));
 }
