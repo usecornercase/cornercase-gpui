@@ -22,19 +22,19 @@ pub(super) fn section(shown: &Shown) -> Option<Div> {
             .flex_col()
             .gap(px(2.))
             .child(ui::section("Stack"))
-            .child(heading_row(stack))
+            .child(heading(stack))
             .children(rows)
             .children(blocker(pr))
             .children(merged_below(pr, stack, shown.behind).map(|text| muted(text).pt(px(4.)))),
     )
 }
 
-pub(super) fn heading(stack: &Stack) -> [String; 2] {
+pub(super) fn heading_parts(stack: &Stack) -> [String; 2] {
     [format!("#{} on {}", stack.number, stack.base), format!("layer {} of {}", stack.position, stack.size)]
 }
 
-fn heading_row(stack: &Stack) -> Div {
-    let parts = heading(stack).into_iter().map(ui::wrapped_fact).collect();
+fn heading(stack: &Stack) -> Div {
+    let parts = heading_parts(stack).into_iter().map(ui::wrapped_fact).collect();
     ui::dotted(parts, Vec::new()).text_size(px(12.)).text_color(colours::muted()).pb(px(4.))
 }
 

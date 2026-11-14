@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.1.100
 
-- **An issue's and a scheduled entry's details no longer start a line with a dot, and the Issues line no longer runs past the sheet's edge.** In the Issues sheet, the line under an issue's title (whom it is assigned to, who opened it, when it changed, then its labels), and in the Queue sheet, the line under an entry's title (its agent, mode, place and accounts), break between whole facts on a narrow window, with the dots only between two facts on one line, as on a flow's page. A fact too long for the whole line wraps between its words; nothing is cut. A worktree's risks in the Worktrees sheet, a recap's byline and a stacked pull request's heading wrap the same way.
+- **The line under a scheduled entry's title no longer starts or ends a line with a dot, and the line under an issue's title no longer runs past the sheet's edge.** In the Queue sheet, the line under an entry's title (its agent, mode, place and accounts), and in the Issues sheet, the line under an issue's title (whom it is assigned to, who opened it, when it changed, then its labels), now break between whole facts when they do not fit (the Issues line on a narrow window, the Queue line in its column), with the dots only between two facts on one line, as on a flow's page. A fact too long for the whole line wraps between its words; nothing is cut. A worktree's risks in the Worktrees sheet, a recap's byline and a stacked pull request's heading wrap the same way.
 
 ## 0.1.99
 
