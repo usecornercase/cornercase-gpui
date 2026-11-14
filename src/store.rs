@@ -302,10 +302,14 @@ impl Store {
         self.give_keys_back(cx);
     }
 
-    pub(crate) fn give_keys_back(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn ask_for_the_terminal(&mut self, cx: &mut Context<Self>) {
         self.keys_to_terminal = true;
-        self.file_full_screen = false;
         cx.notify();
+    }
+
+    pub(crate) fn give_keys_back(&mut self, cx: &mut Context<Self>) {
+        self.file_full_screen = false;
+        self.ask_for_the_terminal(cx);
     }
 
     pub(crate) fn toast(&mut self, text: impl Into<String>, kind: ToastKind, cx: &mut Context<Self>) {
@@ -320,8 +324,7 @@ impl Store {
         };
         self.cmd(args(&["send", "--pane", &pane.to_string(), "--", text]));
         self.focus("pane", pane);
-        self.keys_to_terminal = true;
-        self.file_full_screen = false;
+        self.give_keys_back(cx);
         self.toast(format!("Sent {label} to {agent}"), ToastKind::Info, cx);
     }
 
