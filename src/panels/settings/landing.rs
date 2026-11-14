@@ -61,6 +61,7 @@ pub(super) struct Spot {
 pub(super) struct Landed {
     found: FoundSetting,
     serial: u64,
+    revision: Option<u64>,
     row: Rc<Cell<Option<Bounds<Pixels>>>>,
     scrolled: bool,
 }
@@ -108,6 +109,13 @@ pub(super) fn spot(d: &Described, found: &FoundSetting) -> Spot {
     Spot { item: near, notice }
 }
 
+pub(super) fn settled(mut spot: Spot, found: &FoundSetting, taken: u64, now: u64) -> Spot {
+    if found.hidden && now > taken {
+        spot.notice = None;
+    }
+    spot
+}
+
 pub(super) fn offset_showing(row: (f32, f32), view: (f32, f32), offset: f32) -> f32 {
     if row.0 >= view.0 && row.1 <= view.1 {
         return offset;
@@ -141,13 +149,18 @@ impl SettingsPanel {
         {
             self.page.clone_from(&found.page);
         }
-        self.landed = Some(Landed { found, serial: self.landings, row: Rc::default(), scrolled: false });
+        self.landed =
+            Some(Landed { found, serial: self.landings, revision: None, row: Rc::default(), scrolled: false });
         cx.notify();
     }
 
     pub(super) fn settle_landing(&mut self) {
-        let landed = self.landed.as_ref().zip(self.described.as_ref());
-        self.spot = landed.map(|(landed, d)| spot(d, &landed.found)).unwrap_or_default();
+        if let Some((landed, d)) = self.landed.as_mut().zip(self.described.as_ref()) {
+            let taken = *landed.revision.get_or_insert(d.revision);
+            self.spot = settled(spot(d, &landed.found), &landed.found, taken, d.revision);
+        } else {
+            self.spot = Spot::default();
+        }
         let Some(landed) = self.landed.as_mut().filter(|landed| !landed.scrolled) else { return };
         let Some(row) = landed.row.take() else { return };
         landed.scrolled = true;

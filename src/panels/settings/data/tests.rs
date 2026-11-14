@@ -504,6 +504,11 @@ fn app(account: Option<&str>, note: &str) -> Connection {
     }
 }
 
+fn app_status(cs: &[Connection], at: usize) -> Option<String> {
+    let row = row_status(cs, at);
+    row.named.then_some(row.text)
+}
+
 const DAY: &str = "paired 2026-11-14 · enter forgets it";
 
 #[test]
@@ -536,7 +541,7 @@ fn a_server_that_lists_no_phone_app_offers_none() {
 fn a_paired_app_shows_its_name_as_cornercase_gives_it() {
     let cs = [app(Some("cornercase-mobile/0.1.0 (Ana's iPhone)"), DAY)];
     assert_eq!(app_status(&cs, 0).as_deref(), Some("cornercase-mobile/0.1.0 (Ana's iPhone)"));
-    assert_eq!(cs[0].status().1, Tone::Good);
+    assert_eq!(row_status(&cs, 0).tone, Tone::Good);
 }
 
 #[test]
@@ -566,7 +571,8 @@ fn apps_of_one_name_paired_on_different_days_are_told_by_their_date() {
 fn an_app_whose_name_is_missing_says_it_is_connected() {
     let cs = [app(None, DAY)];
     assert_eq!(app_status(&cs, 0), None);
-    assert_eq!(cs[0].status(), ("connected".to_string(), Tone::Good));
+    let row = row_status(&cs, 0);
+    assert_eq!((row.text.as_str(), row.tone), ("connected", Tone::Good));
 }
 
 #[test]

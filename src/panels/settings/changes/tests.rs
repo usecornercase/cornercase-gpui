@@ -92,3 +92,13 @@ fn the_questions_of_browsers_chats_and_tokens_are_as_they_were() {
 fn a_key_the_sheet_does_not_list_asks_nothing() {
     assert_eq!(removal(&phone_paired().connections, "app.none"), None);
 }
+
+#[test]
+fn the_question_for_an_app_with_no_note_keeps_only_what_happens_next() {
+    for note in ["", "enter forgets it"] {
+        let mut c = app(Some("Ana"));
+        c.note = note.into();
+        let ask = removal(&[c], "app.0011223344556677").expect("a question");
+        assert_eq!(ask.message, "It is disconnected at once and has to be paired again to reach this computer.");
+    }
+}

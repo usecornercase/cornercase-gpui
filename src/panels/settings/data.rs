@@ -369,12 +369,23 @@ pub(super) fn alike(connections: &[Connection], at: usize) -> Option<(usize, usi
     (n >= 2).then_some((k, n))
 }
 
-pub(super) fn app_status(connections: &[Connection], at: usize) -> Option<String> {
-    let name = connections.get(at)?.app_name()?;
-    Some(match alike(connections, at) {
-        Some((k, n)) => format!("{name} · {k} of {n}"),
-        None => name.to_string(),
-    })
+pub(super) struct RowStatus {
+    pub text: String,
+    pub tone: Tone,
+    pub named: bool,
+}
+
+pub(super) fn row_status(connections: &[Connection], at: usize) -> RowStatus {
+    let c = &connections[at];
+    if let Some(name) = c.app_name() {
+        let text = match alike(connections, at) {
+            Some((k, n)) => format!("{name} · {k} of {n}"),
+            None => name.to_string(),
+        };
+        return RowStatus { text, tone: Tone::Good, named: true };
+    }
+    let (text, tone) = c.status();
+    RowStatus { text, tone, named: false }
 }
 
 impl Connection {
@@ -422,9 +433,6 @@ impl Connection {
     }
 
     pub(super) fn status(&self) -> (String, Tone) {
-        if let Some(name) = self.app_name() {
-            return (name.to_string(), Tone::Good);
-        }
         if self.kind == ConnectionKind::Browsers {
             return match self.count.unwrap_or(0) {
                 0 => ("none paired".into(), Tone::Quiet),
@@ -645,7 +653,7 @@ fn haystack(d: &Described, item: &Item) -> String {
         Item::Setting(i) => setting_text(&d.settings[*i]),
         Item::Connection(i) => {
             let c = &d.connections[*i];
-            let status = c.status().0;
+            let status = row_status(&d.connections, *i).text;
             [c.label.as_str(), &c.note, &c.key, &c.page, &c.section, &status, c.field.as_deref().unwrap_or_default()]
                 .join(" ")
         }

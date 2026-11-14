@@ -3,7 +3,7 @@ use gpui::{
     prelude::*, px,
 };
 
-use super::data::{self, Connection, Described, Tone};
+use super::data::{self, Connection, Described, RowStatus, Tone};
 use super::forum::{self, Forum, Server, Stage};
 use super::pages::Slot;
 use super::{Role, SettingsPanel, widgets};
@@ -25,10 +25,9 @@ fn tone_dot(tone: Tone) -> (Option<Rgba>, Rgba) {
     }
 }
 
-fn connection_label(c: &Connection, named: Option<String>) -> Div {
-    let (status, tone) = c.status();
-    let (dot, ink) = tone_dot(tone);
-    let line = named.unwrap_or_else(|| widgets::capitalised(&status));
+fn connection_label(c: &Connection, status: RowStatus) -> Div {
+    let (dot, ink) = tone_dot(status.tone);
+    let line = if status.named { status.text } else { widgets::capitalised(&status.text) };
     let title = div()
         .flex()
         .flex_col()
@@ -128,7 +127,7 @@ impl SettingsPanel {
             .flex_col()
             .child(widgets::row(
                 slot.first,
-                connection_label(c, data::app_status(&d.connections, at)),
+                connection_label(c, data::row_status(&d.connections, at)),
                 control,
                 self.connection_slot(c, cx),
             ))

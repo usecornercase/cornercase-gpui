@@ -231,3 +231,22 @@ fn a_paired_app_found_by_search_lands_on_its_own_row() {
     let row = rows.into_iter().find(|r| r.key.as_deref() == Some("app.5d918c321e371d26")).expect("the nameless app");
     assert_eq!(key_of(&d, &spot(&d, &row)), "app.5d918c321e371d26");
 }
+
+#[test]
+fn a_notice_about_a_row_not_shown_yet_goes_once_the_settings_changed() {
+    let d = phone_paired();
+    let found = found(fixture!("settings/search/phone-app.json"), "Remote › pair a phone app");
+    let landed = spot(&d, &found);
+    assert!(landed.notice.is_some());
+    assert_eq!(settled(landed.clone(), &found, 7, 7), landed);
+    let later = settled(landed.clone(), &found, 7, 8);
+    assert_eq!((later.notice, later.item), (None, landed.item));
+}
+
+#[test]
+fn a_notice_about_a_row_in_cornercases_own_window_stays_when_the_settings_change() {
+    let d = phone_paired();
+    let found = FoundSetting { page: "Elsewhere".into(), label: "thing".into(), ..FoundSetting::default() };
+    let landed = spot(&d, &found);
+    assert_eq!(settled(landed.clone(), &found, 1, 2), landed);
+}
