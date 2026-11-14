@@ -1,6 +1,7 @@
 use gpui::{point, px};
 
-use super::{ABOVE_POINTER, Entry, above, choice, item, note, resting, step, submenu};
+use super::{ABOVE_POINTER, Entry, above, act, choice, danger, item, item_with_keys, note, resting, step, submenu};
+use crate::ui::Icon;
 
 fn entries() -> Vec<Entry> {
     vec![item("Copy", |_, _, _| {}), Entry::Separator, submenu("Move", Vec::new()), item("Close", |_, _, _| {})]
@@ -64,4 +65,37 @@ fn the_keys_skip_a_line_at_rest() {
 fn the_keys_skip_a_note() {
     let entries = [item("One", |_, _, _| {}), note("needs a fix"), item("Two", |_, _, _| {})];
     assert_eq!(step(&entries, Some(0), true), Some(2));
+}
+
+#[test]
+fn a_plain_entry_has_no_icon_or_keys() {
+    let plain = [
+        item("Copy", |_, _, _| {}),
+        danger("Close", |_, _, _| {}),
+        choice("work", true, |_, _, _| {}),
+        act("Run", Vec::new()),
+    ];
+    for entry in plain {
+        assert!(matches!(entry, Entry::Item { icon: None, keys: None, .. }));
+    }
+}
+
+#[test]
+fn an_entry_can_carry_its_icon_and_keys() {
+    let entry = item_with_keys(Icon::Usage, "Usage", Some("⌘U".into()), |_, _, _| {});
+    let Entry::Item { icon, keys, danger, chosen, .. } = entry else { panic!("an item") };
+    assert_eq!(icon, Some(Icon::Usage));
+    assert_eq!(keys.as_ref().map(AsRef::as_ref), Some("⌘U"));
+    assert!(!danger && !chosen);
+}
+
+#[test]
+fn the_keys_reach_an_entry_with_keys() {
+    let entries = [
+        item_with_keys(Icon::Usage, "Usage", None, |_, _, _| {}),
+        Entry::Separator,
+        item_with_keys(Icon::Ports, "Ports", None, |_, _, _| {}),
+    ];
+    assert_eq!(step(&entries, Some(0), true), Some(2));
+    assert_eq!(step(&entries, Some(2), false), Some(0));
 }
