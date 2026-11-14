@@ -35,7 +35,6 @@ use gpui::{
 
 use self::diagram::Played;
 pub(crate) use self::dock::build_dock;
-use self::list::Columns;
 use self::model::{Files, FlowInfo, Frame, Listing, Message, Run};
 use self::run_list::RunList;
 pub(crate) use self::start::{FlowStart, IssueTask, start_flow};
@@ -43,7 +42,7 @@ use crate::cli::Stream;
 use crate::panels::PanelKind;
 use crate::store::{self, Store, args};
 use crate::ui;
-use crate::ui::split::{self, Edge, Split};
+use crate::ui::split::{self, Columns, Edge, SHEET_AT_1280, Split};
 
 const POLL: Duration = Duration::from_secs(3);
 const AGES: Duration = Duration::from_secs(1);
@@ -52,7 +51,6 @@ const LIST: Split = Split::new(330., 240., 700.);
 const PAGE_LEAST: f32 = 620.;
 const PAGE_PAD: f32 = 20.;
 const BOARD: f32 = 680.;
-const SHEET_AT_1280: f32 = 1_050.;
 
 struct ListGrip;
 
@@ -471,8 +469,8 @@ impl Render for FlowsPanel {
             return div().size_full().child(editor.clone());
         }
         self.sync_run_list();
-        let sheet = div().size_full().relative().flex().child(wires::measure(self.sheet.clone()));
-        match list::columns(self.sheet.get(), &self.list_width) {
+        let sheet = div().size_full().relative().flex().child(split::measure(self.sheet.clone()));
+        match self.list_width.columns(self.sheet.get(), PAGE_LEAST) {
             Columns::Two { list } => sheet
                 .on_drag_move(split::follow::<_, ListGrip>(Edge::Right, PAGE_LEAST, list_width, cx))
                 .child(self.sidebar(Some(list), cx))
@@ -490,3 +488,6 @@ fn list_width(panel: &mut FlowsPanel) -> &mut Split {
 pub(crate) fn build(_window: &mut Window, cx: &mut gpui::App) -> AnyView {
     cx.new(|cx| FlowsPanel::new(Place::Sheet, cx)).into()
 }
+
+#[cfg(test)]
+mod tests;

@@ -7,8 +7,8 @@ use gpui::{
 use super::draft::saves_line;
 use super::editor::{FlowEditor, Layout, Mode, PLAN_PAD, Pill, View, layout};
 use super::widgets::{alert, glyph, own_axis, pill, pill_with};
-use super::wires;
 use crate::theme::colours;
+use crate::ui::split;
 use crate::ui::{self, Icon, TextField, Tone, boxed};
 
 pub(super) fn labelled(label: &str, field: &Entity<TextField>, window: &Window, cx: &App) -> Div {
@@ -219,7 +219,7 @@ impl Render for FlowEditor {
             .relative()
             .flex()
             .flex_col()
-            .child(wires::measure(self.width.clone()))
+            .child(split::measure(self.width.clone()))
             .child(self.header(layout, cx))
             .children(self.strip())
             .child(self.body(layout, window, cx))

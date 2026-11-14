@@ -282,7 +282,7 @@ impl FlowEditor {
             open: None,
             notes_open: !draft.notes.is_empty(),
             view: View::Form,
-            width: Rc::new(Cell::new(super::SHEET_AT_1280)),
+            width: Rc::new(Cell::new(crate::ui::split::SHEET_AT_1280)),
             opened,
             mode: Mode::Editing,
             error: None,

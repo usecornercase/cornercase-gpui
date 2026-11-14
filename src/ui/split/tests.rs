@@ -1,8 +1,9 @@
 use gpui::{Bounds, Pixels, point, px, size};
 
-use super::{Edge, Split, reach};
+use super::{Columns, Edge, Split, reach};
 
 const LIST: Split = Split::new(400., 260., 800.);
+const KEEP: f32 = 300.;
 
 fn container() -> Bounds<Pixels> {
     Bounds::new(point(px(100.), px(50.)), size(px(1000.), px(600.)))
@@ -110,4 +111,61 @@ fn a_size_is_fitted_to_the_room_but_never_below_the_minimum() {
     assert_size(Split::new(400., 260., 800.).restored(Some(500.), 5000.), 500.);
     assert!((LIST.fitted(500., 350.) - 350.).abs() < f32::EPSILON);
     assert!((LIST.fitted(500., 100.) - 260.).abs() < f32::EPSILON);
+}
+
+#[test]
+fn a_room_for_both_keeps_the_list_at_its_size() {
+    assert_eq!(LIST.columns(1_000., KEEP), Columns::Two { list: 400. });
+}
+
+#[test]
+fn a_narrower_room_narrows_the_list_so_the_other_side_keeps_its_width() {
+    assert_eq!(LIST.columns(620., KEEP), Columns::Two { list: 320. });
+}
+
+#[test]
+fn the_list_reaches_its_least_where_both_leasts_just_fit() {
+    assert_eq!(LIST.columns(560., KEEP), Columns::Two { list: 260. });
+}
+
+#[test]
+fn a_pixel_less_than_both_leasts_is_one_column() {
+    assert_eq!(LIST.columns(559., KEEP), Columns::One);
+}
+
+#[test]
+fn no_room_at_all_is_one_column() {
+    assert_eq!(LIST.columns(0., KEEP), Columns::One);
+}
+
+#[test]
+fn a_dragged_width_wider_than_the_room_is_drawn_narrower_and_kept() {
+    let mut split = LIST;
+    split.drag(700., 2_000.);
+    assert_eq!(split.columns(620., KEEP), Columns::Two { list: 320. });
+    assert_eq!(split.chosen(), Some(700.));
+}
+
+#[test]
+fn a_dragged_width_comes_back_when_the_room_does() {
+    let mut split = LIST;
+    split.drag(700., 2_000.);
+    assert_eq!(split.columns(620., KEEP), Columns::Two { list: 320. });
+    assert_eq!(split.columns(1_200., KEEP), Columns::Two { list: 700. });
+}
+
+#[test]
+fn a_dragged_width_that_fits_is_drawn_as_dragged() {
+    let mut split = LIST;
+    split.drag(300., 2_000.);
+    assert_eq!(split.columns(620., KEEP), Columns::Two { list: 300. });
+}
+
+#[test]
+fn a_reset_draws_the_default_fitted_again() {
+    let mut split = LIST;
+    split.drag(700., 2_000.);
+    split.reset();
+    assert_eq!(split.columns(1_200., KEEP), Columns::Two { list: 400. });
+    assert_eq!(split.columns(620., KEEP), Columns::Two { list: 320. });
 }

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FontWeight, IntoElement, ParentElement as _, SharedString,
+    AnyElement, ClickEvent, Context, Div, FontWeight, IntoElement, ParentElement as _, SharedString, Stateful,
     StatefulInteractiveElement as _, Styled as _, WeakEntity, div, list, prelude::FluentBuilder as _, px,
 };
 
@@ -27,13 +27,13 @@ struct Detail {
 }
 
 impl IssuesPanel {
-    pub(super) fn render_detail(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_detail(&self, back: Option<Stateful<Div>>, cx: &mut Context<Self>) -> AnyElement {
         let Some(issue) = self.selected.clone() else {
             return blank("Choose an issue to read it and start work on it.").size_full().into_any_element();
         };
         let read = self.reads.get(&issue.id());
         let info = issue.info(read.and_then(|r| r.as_ref().ok()).map(|page| &page.read));
-        let head = self.detail_header(&issue, &info, cx);
+        let head = self.detail_header(&issue, &info, back, cx);
         div()
             .size_full()
             .flex()
@@ -44,7 +44,13 @@ impl IssuesPanel {
             .into_any_element()
     }
 
-    fn detail_header(&self, issue: &Issue, info: &[String], cx: &mut Context<Self>) -> ui::Cued {
+    fn detail_header(
+        &self,
+        issue: &Issue,
+        info: &[String],
+        back: Option<Stateful<Div>>,
+        cx: &mut Context<Self>,
+    ) -> ui::Cued {
         let column = div()
             .flex()
             .flex_col()
@@ -52,7 +58,7 @@ impl IssuesPanel {
             .px(px(20.))
             .pt(px(16.))
             .pb(px(14.))
-            .child(self.detail_heading(issue))
+            .child(self.detail_heading(issue, back))
             .child(
                 div()
                     .text_size(px(18.))
@@ -67,12 +73,13 @@ impl IssuesPanel {
         ui::Cued { body: head.body.flex_initial().border_b_1().border_color(colours::border()), ..head }
     }
 
-    fn detail_heading(&self, issue: &Issue) -> Div {
+    fn detail_heading(&self, issue: &Issue, back: Option<Stateful<Div>>) -> Div {
         div()
             .flex()
             .items_center()
             .gap(px(8.))
             .text_size(px(12.))
+            .children(back)
             .child(state_pill(issue))
             .child(div().font_family(FONT_FAMILY).text_color(colours::accent()).child(issue.key.clone()))
             .child(div().text_color(colours::faint()).child("·"))
