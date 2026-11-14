@@ -724,6 +724,15 @@ a_refused_re_run_starts_no_watch() {
     check "dispatches" [ "$(dispatches)" = 0 ]
 }
 
+settles_told() {
+  issues '99|open|Release v0.1.90 failed'
+  issue_text 99 x "$(link 3)"
+  dropped v0.1.90 123 3
+  runw
+  check "line" has "$t/out" 'already told in #99, nothing more' &&
+    check "dispatches" [ "$(dispatches)" = 2 ]
+}
+
 the_chain_of_watches_ends_by_itself() {
   issues
   for n in 1 2 3 4; do
@@ -734,15 +743,6 @@ the_chain_of_watches_ends_by_itself() {
     check "re-runs" [ "$(grep -c 'run rerun 123 --failed' "$t/calls")" = 2 ] &&
     check "issues" [ "$(grep -c 'issue create' "$t/calls")" = 2 ] &&
     check "told already" settles_told
-}
-
-settles_told() {
-  issues '99|open|Release v0.1.90 failed'
-  issue_text 99 x "$(link 3)"
-  dropped v0.1.90 123 3
-  runw
-  check "line" has "$t/out" 'already told in #99, nothing more' &&
-    check "dispatches" [ "$(dispatches)" = 2 ]
 }
 
 a_failed_dispatch_after_a_re_run_is_a_warning_after_the_re_run_line() {
