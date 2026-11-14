@@ -33,6 +33,11 @@ fn fade(angle: f32, colour: Rgba, from: f32, to: f32) -> Background {
     linear_gradient(angle, linear_color_stop(tint(colour, from), 0.), linear_color_stop(tint(colour, to), 1.))
 }
 
+pub(crate) fn bottom_fade(height: f32) -> Div {
+    let end = colours::card_bottom();
+    div().absolute().bottom_0().left_0().right_0().h(px(height)).bg(fade(180., end, 0., end.a))
+}
+
 pub(crate) fn cobalt() -> Background {
     linear_gradient(180., linear_color_stop(colours::brand_light(), 0.), linear_color_stop(colours::brand(), 1.))
 }

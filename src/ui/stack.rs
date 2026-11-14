@@ -5,6 +5,8 @@ use gpui::{
     ParentElement as _, Pixels, Point, Size, Style, Window, div, point, px, size,
 };
 
+const SLACK: f32 = 0.5;
+
 type Build = Box<dyn Fn(Fit) -> AnyElement>;
 type Drawn = Box<dyn FnOnce(Range<usize>, &mut App)>;
 
@@ -12,6 +14,7 @@ type Drawn = Box<dyn FnOnce(Range<usize>, &mut App)>;
 pub(crate) struct Fit {
     pub(crate) most: f32,
     pub(crate) measuring: bool,
+    pub(crate) capped: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +33,7 @@ pub(crate) struct Stack {
 struct Placed {
     most: f32,
     height: f32,
+    capped: bool,
 }
 
 pub(crate) fn stack(gap: f32) -> Stack {
@@ -58,10 +62,14 @@ impl Stack {
 
     fn place(&self, newest: usize, (most, width): (f32, Pixels), window: &mut Window, cx: &mut App) -> Placed {
         let build = &self.items[newest];
-        let height = measure(build(Fit { most, measuring: true }), width, window, cx);
+        let fit = Fit { most, measuring: true, capped: false };
+        let height = measure(build(fit), width, window, cx);
         match trimmed(most, height) {
-            Some(most) => Placed { most, height: measure(build(Fit { most, measuring: true }), width, window, cx) },
-            None => Placed { most, height },
+            Some(most) => {
+                let fit = Fit { most, measuring: true, capped: true };
+                Placed { most, height: measure(build(fit), width, window, cx), capped: true }
+            }
+            None => Placed { most, height, capped: false },
         }
     }
 
@@ -82,7 +90,7 @@ impl Stack {
         let mut bottom = bounds.bottom();
         for (at, one) in placed.iter().enumerate() {
             let build = &self.items[self.items.len() - 1 - at];
-            let item = build(Fit { most: one.most, measuring: false });
+            let item = build(Fit { most: one.most, measuring: false, capped: one.capped });
             let at = point(bounds.left(), bottom - px(one.height));
             drawn.push(prepaint(item, at, bounds.size.width, window, cx));
             bottom -= px(one.height + self.gap);
@@ -101,12 +109,12 @@ pub(crate) fn fitting(newest_first: &[f32], gap: f32, room: f32, line: f32) -> F
         .zip(0u16..)
         .map(|(sum, at)| sum + f32::from(at) * gap)
         .collect();
-    let shown = tops.iter().take_while(|top| **top <= room).count();
+    let shown = tops.iter().take_while(|top| **top <= room + SLACK).count();
     if shown == newest_first.len() {
         return Fitting { shown, more: false };
     }
-    let shown_with_line = tops.iter().take_while(|top| **top + gap + line <= room).count();
-    Fitting { shown: shown_with_line, more: shown_with_line > 0 || line <= room }
+    let shown_with_line = tops.iter().take_while(|top| **top + gap + line <= room + SLACK).count();
+    Fitting { shown: shown_with_line, more: shown_with_line > 0 || line <= room + SLACK }
 }
 
 pub(crate) fn most(room: f32, items: usize, gap: f32, line: f32) -> f32 {
@@ -178,6 +186,7 @@ impl Element for Stack {
             let above = prepaint(more(waiting), point(bounds.left(), px(top - line)), width, window, cx);
             drawn.push(above);
         }
+        drawn.reverse();
         if let Some(on_drawn) = self.on_drawn.take() {
             on_drawn(waiting..self.items.len(), cx);
         }

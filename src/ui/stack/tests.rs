@@ -67,3 +67,13 @@ fn an_item_taller_than_its_most_is_asked_again_without_the_excess() {
     assert_eq!(trimmed(238., 260.), Some(216.));
     assert_eq!(trimmed(238., 200.), None);
 }
+
+#[test]
+fn an_item_cut_to_its_most_is_drawn_when_rounding_leaves_it_a_hair_over() {
+    assert_eq!(fitting(&[224.666_67, 40.], GAP, 256.666_66, 24.), Fitting { shown: 1, more: true });
+}
+
+#[test]
+fn an_item_more_than_a_pixel_over_the_room_is_not_drawn() {
+    assert_eq!(fits(&[101.], 100.), Fitting { shown: 0, more: true });
+}

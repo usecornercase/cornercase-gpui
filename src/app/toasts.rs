@@ -18,6 +18,16 @@ const TOAST_SLIDE: f32 = 28.;
 const WIDTH: f32 = 348.;
 const RIGHT: f32 = 16.;
 const BOTTOM: f32 = 40.;
+const FADE: f32 = 18.;
+
+fn top(frame: Frame) -> f32 {
+    frame.title_bottom() + GAP
+}
+
+#[cfg(test)]
+fn room(frame: Frame, window_height: f32) -> f32 {
+    window_height - top(frame) - BOTTOM
+}
 
 impl Root {
     pub(super) fn render_toasts(&self, window_frame: Frame, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -34,13 +44,7 @@ impl Root {
                     tell.update(cx, |s, cx| s.toasts_drawn(&ids[drawn], cx));
                 }
             });
-        div()
-            .absolute()
-            .top(px(window_frame.title_bottom() + GAP))
-            .bottom(px(BOTTOM))
-            .right(px(RIGHT))
-            .w(px(WIDTH))
-            .child(stack)
+        div().absolute().top(px(top(window_frame))).bottom(px(BOTTOM)).right(px(RIGHT)).w(px(WIDTH)).child(stack)
     }
 
     pub(super) fn open_update(&self, updating: Updating, window: &mut Window, cx: &mut Context<Self>) {
@@ -63,7 +67,7 @@ fn toast_colour(kind: ToastKind) -> Rgba {
 fn card(store: &Entity<Store>, toast: Toast) -> impl Fn(Fit) -> AnyElement + 'static {
     let store = store.clone();
     move |fit| {
-        let view = toast_view(&store, toast.clone(), fit.most);
+        let view = toast_view(&store, toast.clone(), (fit.most, fit.capped));
         if fit.measuring {
             view.into_any_element()
         } else {
@@ -88,7 +92,7 @@ fn waiting(n: usize) -> AnyElement {
         .into_any_element()
 }
 
-fn toast_view(store: &Entity<Store>, toast: Toast, most: f32) -> Stateful<Div> {
+fn toast_view(store: &Entity<Store>, toast: Toast, (most, capped): (f32, bool)) -> Stateful<Div> {
     let id = toast.id;
     let (go, dismiss) = (store.clone(), store.clone());
     let colour = toast_colour(toast.kind);
@@ -104,16 +108,7 @@ fn toast_view(store: &Entity<Store>, toast: Toast, most: f32) -> Stateful<Div> {
         .child(
             div().w(px(3.)).h(px(18.)).rounded_full().bg(colour).shadow(ui::glass::glow(colour, 0.6, 8.)).flex_none(),
         )
-        .child(
-            div()
-                .id(("toast-text", id))
-                .flex_1()
-                .min_w_0()
-                .max_h(px(most))
-                .overflow_y_scroll()
-                .text_size(px(12.))
-                .child(toast.text),
-        )
+        .child(toast_text(toast.text, id, most, capped))
         .when(toast.count > 1, |d| d.child(toast_count(toast.count)))
         .when_some(toast.action, move |d, (label, action)| {
             d.child(ui::primary_button(SharedString::from(format!("toast-go-{id}")), label).on_click(
@@ -129,6 +124,11 @@ fn toast_view(store: &Entity<Store>, toast: Toast, most: f32) -> Stateful<Div> {
             ui::icon_button(SharedString::from(format!("toast-x-{id}")), "✕")
                 .on_click(move |_: &ClickEvent, _, cx| dismiss.update(cx, |s, cx| s.dismiss_toast(id, cx))),
         )
+}
+
+fn toast_text(text: String, id: u64, most: f32, capped: bool) -> impl IntoElement {
+    let body = div().id(("toast-text", id)).max_h(px(most)).overflow_y_scroll().text_size(px(12.)).child(text);
+    div().relative().flex_1().min_w_0().child(body).when(capped, |d| d.child(ui::glass::bottom_fade(FADE)))
 }
 
 fn toast_count(count: u32) -> impl IntoElement {

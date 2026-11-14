@@ -1,6 +1,5 @@
 use std::fmt::Display;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
 use futures::channel::{mpsc, oneshot};
@@ -36,8 +35,7 @@ use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, OlderNote, Reach, TabThere, release_clause};
 pub(crate) use machines_there::{MachineAct, NoticeThere, answer_words, failed_there, part_sent_note, stale_note};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
-use toasts::push_toast;
-pub(crate) use toasts::{Shown, Toast, ToastKind};
+pub(crate) use toasts::{Toast, ToastKind};
 pub(crate) use tunnels::{
     Asked, Control, Held, MachineLink, ReverseState, Tail, TunnelRow, Whose, address_there, copied_words, heading,
     none_note, others_note, remote_url, section_tail,
@@ -46,7 +44,6 @@ pub(crate) use update_there::{
     AfterUpdate, UpdateOffer, UpdateThere, run_update, update_job, update_key, update_question,
 };
 
-const PAST_END: Duration = Duration::from_millis(100);
 const NO_FLOW: &str = "This workspace runs no flow";
 
 fn editor_command(path: &str, line: impl Display) -> String {
@@ -366,40 +363,6 @@ impl Store {
                 cx.notify();
             }
         }
-    }
-
-    pub(crate) fn toast_with(
-        &mut self,
-        text: impl Into<String>,
-        kind: ToastKind,
-        action: Option<(String, ToastGo)>,
-        cx: &mut Context<Self>,
-    ) {
-        let id = self.next_toast;
-        self.next_toast += 1;
-        let shown = Shown::default();
-        push_toast(&mut self.toasts, Toast { id, text: text.into(), kind, action, shown, count: 1 });
-        cx.notify();
-    }
-
-    pub(crate) fn toasts_drawn(&mut self, ids: &[u64], cx: &mut Context<Self>) {
-        for left in toasts::drawn(&mut self.toasts, ids, Instant::now()) {
-            Self::sweep_after(left + PAST_END, cx);
-        }
-    }
-
-    fn sweep_after(wait: Duration, cx: &mut Context<Self>) {
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(wait).await;
-            let _ = this.update(cx, |this, cx| this.swept().then(|| cx.notify()));
-        })
-        .detach();
-    }
-
-    fn swept(&mut self) -> bool {
-        let before = self.toasts.len();
-        self.toasts.retain(|t| !t.expired());
-        self.toasts.len() != before
     }
 
     pub(crate) fn start_job(&mut self, busy: Busy, cx: &mut Context<Self>) -> u64 {
