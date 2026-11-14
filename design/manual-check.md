@@ -138,6 +138,8 @@ A masked field turns macOS's secure event input on while it has the focus (`desi
 - **`hold <pid> <key> [ms]`** posts a key down, auto-repeats (800 ms by default) and a key up. It opened the press-and-hold accent popup only in a masked field with secure input on, before that field turned press-and-hold off (2026-11-13); in a plain field, ⌘G's prompt, the terminal and every field of 0.1.80 it inserts one letter and opens nothing, so "no popup" is not a regression, and a real held key may differ. A masked field now repeats the letter. A popup is another process's window: capture it with `screencapture -x -R<x,y,w,h>`; Escape closes it. **`paste <pid> <text>`** is ⌘V with made-up text: it reads every item of the clipboard into memory (and exits 1 with nothing done if a type cannot be read back), puts the text on it marked transient (clipboard-history apps skip it), posts ⌘V, waits 300 ms, writes the items back and prints only the counts; if it cannot give them back it exits 1 and says so, and the person running it tells whoever owns the clipboard at once.
 - A capture shows the frame before the last key: take it a second after, and twice.
 
+- **Keys that must never be posted** (2026-11-14): ⌘O opens macOS's own folder picker, which runs out of process: keys posted to the pid do not reach it, it takes the front from the user's app, and only stopping the window by its pid ends it. ⌘/ cannot be posted (the helper has no `/` key; it is ⇧7 on a Spanish layout). A Return inside a started form's field starts an agent: capture before each Return, since a sheet that closed under a resize turns it into a start.
+
 ## Cleaning up
 
 End first, each by its kept pid, what the check started beside the server, and see it gone (below); then:

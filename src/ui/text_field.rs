@@ -83,6 +83,7 @@ struct Options {
     wraps: bool,
     rows: Option<RangeInclusive<usize>>,
     scroller: Option<ScrollHandle>,
+    room_below: Option<Pixels>,
     on_down: Option<DownHook>,
 }
 
@@ -684,6 +685,11 @@ impl TextField {
 
     pub(crate) fn inside(mut self, scroller: ScrollHandle) -> Self {
         self.options.scroller = Some(scroller);
+        self
+    }
+
+    pub(crate) fn room_below(mut self, room: f32) -> Self {
+        self.options.room_below = Some(px(room));
         self
     }
 

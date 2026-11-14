@@ -1,7 +1,7 @@
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div,
-    prelude::FluentBuilder as _, px,
+    IntoElement, ParentElement as _, Render, ScrollHandle, StatefulInteractiveElement as _, Styled as _, WeakEntity,
+    Window, div, prelude::FluentBuilder as _, px,
 };
 
 use super::IssuesPanel;
@@ -9,7 +9,7 @@ use super::data::{
     EFFORT_AGENTS, Issue, Place, Sources, StartPlan, When, branch_hint, branch_shown, modes_shown, there_footnote,
 };
 use crate::cli;
-use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts, follow_field};
+use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts, follow_field, within};
 use crate::model::Spot;
 use crate::model::agent_settings::{Agents, Choice, Modes};
 use crate::model::machines::run_on::Starting;
@@ -72,6 +72,7 @@ pub(super) struct StartForm {
     name: Entity<TextField>,
     at: Entity<TextField>,
     error: Option<String>,
+    scroller: ScrollHandle,
     panel: WeakEntity<IssuesPanel>,
     run_on: Entity<RunOn>,
 }
@@ -91,9 +92,16 @@ fn close(cx: &mut App) {
     Store::get(cx).update(cx, Store::close_dialog);
 }
 
-fn text_field(placeholder: &str, text: &str, clear_error: bool, cx: &mut Context<StartForm>) -> Entity<TextField> {
+const FOOTNOTE_ROOM: f32 = 74.;
+
+fn text_field(
+    (placeholder, text): (&str, &str),
+    clear_error: bool,
+    shape: impl FnOnce(TextField) -> TextField,
+    cx: &mut Context<StartForm>,
+) -> Entity<TextField> {
     let field = cx.new(|cx| {
-        let mut field = TextField::new(placeholder.to_string(), cx).in_tab_order().wraps();
+        let mut field = shape(TextField::new(placeholder.to_string(), cx).in_tab_order().wraps());
         field.set_text(text.to_string(), cx);
         field
     });
@@ -169,12 +177,15 @@ impl StartForm {
         cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
         let places = Places::of(&sources, repository, project_name);
         let run_on = run_on_of(&issue, &places, cx);
+        let scroller = ScrollHandle::new();
+        let plain = || within(&scroller, |field| field);
+        let roomy = within(&scroller, |field| field.room_below(FOOTNOTE_ROOM));
         Self {
-            model: text_field("the agent's own, such as opus", "", true, cx),
-            effort: text_field("the agent's own, such as high", "", true, cx),
-            branch: text_field(&branch_hint(None), &issue.branch, true, cx),
-            name: text_field(&name_hint, "", true, cx),
-            at: text_field(When::At.placeholder().unwrap_or_default(), "", true, cx),
+            model: text_field(("the agent's own, such as opus", ""), true, plain(), cx),
+            effort: text_field(("the agent's own, such as high", ""), true, plain(), cx),
+            branch: text_field((&branch_hint(None), &issue.branch), true, plain(), cx),
+            name: text_field((&name_hint, ""), true, roomy, cx),
+            at: text_field((When::At.placeholder().unwrap_or_default(), ""), true, plain(), cx),
             places,
             issue,
             agents,
@@ -185,6 +196,7 @@ impl StartForm {
             schedule,
             when: When::At,
             error: None,
+            scroller: scroller.clone(),
             panel,
             run_on,
         }
@@ -249,7 +261,8 @@ impl StartForm {
 
     fn set_when(&mut self, when: When, cx: &mut Context<Self>) {
         self.when = when;
-        self.at = text_field(when.placeholder().unwrap_or_default(), "", false, cx);
+        let shape = within(&self.scroller, |field| field);
+        self.at = text_field((when.placeholder().unwrap_or_default(), ""), false, shape, cx);
         cx.notify();
     }
 
@@ -471,6 +484,10 @@ impl StartForm {
         })
     }
 
+    fn error_line(&self) -> Option<Div> {
+        self.error.clone().map(|error| div().text_size(px(12.)).text_color(colours::failed()).child(error))
+    }
+
     fn go_button(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
         if dialog_starts(cx) {
             return ui::busy_button("start-go", "Starting…", Tone::Primary);
@@ -506,15 +523,11 @@ impl Render for StartForm {
             .when(!schedule, |d| d.child(self.model_fields(window, cx)))
             .children(self.place_field(cx))
             .children(self.naming_fields(window, cx))
-            .child(self.footnote(cx))
-            .children(
-                self.error.clone().map(|error| div().text_size(px(12.)).text_color(colours::failed()).child(error)),
-            );
-        dialogs::frame(
-            if schedule { "Schedule work on an issue" } else { "Start work on an issue" },
-            div().id("start-form").max_h(px(560.)).overflow_y_scroll().child(body),
-            self.buttons(cx),
-        )
-        .w(px(580.))
+            .child(self.footnote(cx));
+        let height = dialogs::body_height(f32::from(window.viewport_size().height));
+        let fields = div().id("start-form").min_h_0().overflow_y_scroll().track_scroll(&self.scroller).child(body);
+        let column = div().flex().flex_col().gap(px(12.)).max_h(px(height)).child(fields).children(self.error_line());
+        let title = if schedule { "Schedule work on an issue" } else { "Start work on an issue" };
+        dialogs::frame(title, column, self.buttons(cx)).w(px(580.))
     }
 }

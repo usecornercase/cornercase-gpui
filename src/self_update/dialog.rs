@@ -6,7 +6,7 @@ use gpui::{
 use super::install::{Way, Why, program_name};
 use super::release::Found;
 use super::{CURRENT, NAME, Updater};
-use crate::dialogs::frame;
+use crate::dialogs::{fitted, frame};
 use crate::notify::InstallState;
 use crate::notify::update::{self, ParsedNotes};
 use crate::platform::Os;
@@ -116,7 +116,7 @@ fn close(cx: &mut App) {
 }
 
 impl Render for UpdateDialog {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let updater = self.updater.read(cx);
         let dialog = div().track_focus(&self.focus);
         let Some(found) = updater.found.clone() else {
@@ -140,7 +140,7 @@ impl Render for UpdateDialog {
         let title = format!("{NAME} {} is out", found.latest.version);
         dialog.child(frame(
             title,
-            body,
+            fitted("update-body", window, body),
             buttons(self.updater.clone(), act, fallback(&updater.install, &found), &found.latest.version),
         ))
     }

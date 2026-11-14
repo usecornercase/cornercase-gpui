@@ -7,7 +7,7 @@ use gpui::{
 use serde_json::Value;
 
 use super::{Check, Checked, bullet, buttons, keyed, line, load_check, show, warning};
-use crate::dialogs::{agent_doing, agent_title, closes_line, frame};
+use crate::dialogs::{agent_doing, agent_title, closes_line, fitted, frame};
 use crate::store::{Busy, Store, args};
 use crate::theme::colours;
 use crate::ui;
@@ -152,7 +152,7 @@ impl Focusable for CloseAgent {
 }
 
 impl Render for CloseAgent {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let waiting = agent_title(None, self.machine());
         let (title, body) = match &self.check {
             Check::Loading => (waiting, div().child(ui::busy("checking", "Checking what would stop…"))),
@@ -161,7 +161,7 @@ impl Render for CloseAgent {
         };
         keyed(&self.focus, Self::run, cx).child(frame(
             title,
-            body,
+            fitted("close-agent-body", window, body),
             buttons([ui::danger_button("close-agent", "Close agent")
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.run(cx)))]),
         ))

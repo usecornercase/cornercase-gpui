@@ -20,6 +20,10 @@ const THUMB_GAP: Pixels = px(4.);
 const SCROLLER_MARGIN: Pixels = px(12.);
 const PROMPT_MARGIN: Pixels = px(32.);
 
+fn reveal_room(room: Option<Pixels>, prompt: bool) -> Pixels {
+    room.unwrap_or(if prompt { PROMPT_MARGIN } else { SCROLLER_MARGIN })
+}
+
 pub(super) struct Layout {
     lines: Vec<WrappedLine>,
     rows: Rows,
@@ -295,7 +299,7 @@ impl TextElement {
                 sideways(input.view.scroll_left, (caret, layout.text_width()), layout.bounds.size.width);
         }
         if let Some(scroller) = input.options.scroller.as_ref().filter(|_| reveal && focused) {
-            let below = if input.options.rows.is_some() { PROMPT_MARGIN } else { SCROLLER_MARGIN };
+            let below = reveal_room(input.options.room_below, input.options.rows.is_some());
             show_in_scroller(scroller, (layout.text_top() + caret, layout.line_height, below), window);
         }
         let (scroll_top, scroll_left) = (layout.scroll_top, layout.scroll_left);
@@ -343,3 +347,6 @@ fn row_starts(line: &WrappedLine) -> Vec<usize> {
     let wraps = line.wrap_boundaries().iter().map(|wrap| runs[wrap.run_ix].glyphs[wrap.glyph_ix].index);
     std::iter::once(0).chain(wraps).collect()
 }
+
+#[cfg(test)]
+mod tests;

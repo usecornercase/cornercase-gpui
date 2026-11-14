@@ -225,6 +225,7 @@ pub(super) fn dock_files(cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| {
         s.close_dialog(cx);
         s.close_sheet(cx);
+        s.ask_for_the_terminal(cx);
         s.open(PanelKind::Files, cx);
     });
 }

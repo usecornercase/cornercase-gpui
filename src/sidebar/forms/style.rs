@@ -6,7 +6,7 @@ use gpui::{
 use serde_json::Value;
 
 use super::{Check, Checked, close, keyed, load_check, palette_colour, show, warning};
-use crate::dialogs::frame;
+use crate::dialogs::{fitted, frame};
 use crate::store::{Store, args};
 use crate::theme::{colours, radius};
 use crate::ui;
@@ -136,7 +136,7 @@ impl Focusable for GroupStyle {
 }
 
 impl Render for GroupStyle {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let body = match &self.check {
             Check::Loading => ui::busy("style-loading", "Loading…"),
             Check::Failed(e) => warning(e.clone()),
@@ -144,7 +144,7 @@ impl Render for GroupStyle {
         };
         keyed(&self.focus, |_: &mut Self, cx| close(cx), cx).child(frame(
             "Icon and colour",
-            body,
+            fitted("style-body", window, body),
             ui::primary_button("done", "Done").on_click(|_: &ClickEvent, _, cx| close(cx)),
         ))
     }

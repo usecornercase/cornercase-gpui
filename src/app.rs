@@ -1,5 +1,6 @@
 mod connection;
 mod dock;
+mod focus;
 pub(crate) mod frame;
 pub(crate) mod keeper;
 mod looks;
@@ -134,7 +135,7 @@ pub(crate) struct Root {
     pub(crate) sidebar_width: Split,
     pub(crate) pair_width: Split,
     dock_widths: DockWidths,
-    had: Overlays,
+    held: focus::Held,
     leaving_sheet: Leaving<PanelKind>,
     leaving_dialog: Leaving<AnyView>,
     leaving_dock: Leaving<PanelKind>,
@@ -283,21 +284,15 @@ impl Root {
             self.machine_place_changed(place, window, cx);
         }
         self.follow_link(cx);
-        let s = store.read(cx);
-        let now = Overlays {
-            open: s.dialog.is_some() || s.sheet.is_some(),
-            sheet: s.sheet,
-            full: s.shows_file_full_screen(),
+        let now = {
+            let s = store.read(cx);
+            focus::Overlays { dialog: s.dialog.is_some(), sheet: s.sheet, full: s.shows_file_full_screen() }
         };
-        let in_dock = self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx);
-        let gave_way = s.dialog.is_none() && sheet_gave_way(self.had.sheet, s.sheet);
-        if to_terminal || (self.had.open && !now.open) || gave_way || (s.shown_dock().is_none() && in_dock) {
-            window.focus(if now.full { &self.dock_focus } else { &self.focus });
-        }
-        let full_changed = now.full != self.had.full;
-        self.had = now;
+        self.keys_changed((self.held.had, now), to_terminal, window, cx);
+        let full_changed = now.full != self.held.had.full;
+        self.held.had = now;
         if full_changed {
-            self.own.tell_visible(self.visible && !self.had.full);
+            self.own.tell_visible(self.visible && !self.held.had.full);
             self.tell_machine_visible();
         }
         self.track_leaving(cx);
@@ -352,7 +347,7 @@ impl Root {
             sidebar_width: SIDEBAR,
             pair_width: PAIR,
             dock_widths: DOCKS,
-            had: Overlays::default(),
+            held: focus::Held::default(),
             leaving_sheet: Leaving::default(),
             leaving_dialog: Leaving::default(),
             leaving_dock: Leaving::default(),
@@ -398,7 +393,7 @@ impl Root {
             return;
         }
         self.visible = visible;
-        self.own.tell_visible(visible && !self.had.full);
+        self.own.tell_visible(visible && !self.held.had.full);
     }
 
     fn open_requested_panel(&self, cx: &mut Context<Self>) {
@@ -818,17 +813,6 @@ fn dock_access(kind: Option<PanelKind>) -> split::Access<Root> {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-struct Overlays {
-    open: bool,
-    sheet: Option<PanelKind>,
-    full: bool,
-}
-
-fn sheet_gave_way(before: Option<PanelKind>, now: Option<PanelKind>) -> bool {
-    before.is_some() && now.is_some() && before != now
-}
-
 fn bell_flash() -> Div {
     div()
         .absolute()
@@ -937,7 +921,7 @@ impl Render for Root {
         self.update_title(window);
         self.mind_the_parts(window, cx);
         self.keep_beating(window);
-        self.keep_the_keys(window, cx);
+        self.mind_the_focus(window, cx);
         let window_frame = frame::Frame::read(window, Os::CURRENT);
         let (sheet, dialog) = {
             let s = self.store.read(cx);

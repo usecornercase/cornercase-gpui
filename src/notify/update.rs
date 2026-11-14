@@ -9,7 +9,7 @@ use gpui::{
 use super::feed::{Notes, Release, Update};
 use super::{InstallState, Notifier};
 use crate::cli::{self, ByHand, Version};
-use crate::dialogs::frame;
+use crate::dialogs::{fitted, frame};
 use crate::model::link::is_web;
 use crate::store::{COPY_COMMAND, Clip, Store, ToastKind};
 use crate::theme::{colours, radius};
@@ -131,7 +131,7 @@ pub(crate) fn show_update(notifier: Entity<Notifier>, window: &mut Window, cx: &
 }
 
 impl Render for UpdateDialog {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let n = self.notifier.read(cx);
         let update = n.app.update.clone().unwrap_or_default();
         let running = n.app.version.clone().unwrap_or_default();
@@ -161,7 +161,11 @@ impl Render for UpdateDialog {
             .when_some(waits, |d, line| d.child(ui::dim(line)));
         let buttons =
             update_buttons(self.notifier.clone(), (command, installed.is_some()), &install, (&release.version, host));
-        dialog.child(frame(format!("cornercase {} is out", release.version), body, buttons))
+        dialog.child(frame(
+            format!("cornercase {} is out", release.version),
+            fitted("update-body", window, body),
+            buttons,
+        ))
     }
 }
 
