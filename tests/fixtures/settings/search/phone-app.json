@@ -1,0 +1,63 @@
+{
+  "results": [
+    {
+      "hidden": false,
+      "key": "app.e52f28b168b12e5d",
+      "label": "paired app",
+      "note": "paired 2026-11-14 · enter forgets it",
+      "page": "Remote",
+      "section": "Phone app",
+      "shown": "cornercase-mobile/0.1.0 (Ana's iPhone)",
+      "title": "Remote › Phone app › paired app"
+    },
+    {
+      "hidden": false,
+      "key": "app.5d918c321e371d26",
+      "label": "paired app",
+      "note": "paired 2026-11-14 · enter forgets it",
+      "page": "Remote",
+      "section": "Phone app",
+      "shown": "phone app",
+      "title": "Remote › Phone app › paired app"
+    },
+    {
+      "hidden": false,
+      "key": "app.2796e690b9e1cb93",
+      "label": "paired app",
+      "note": "paired 2026-11-14 · enter forgets it",
+      "page": "Remote",
+      "section": "Phone app",
+      "shown": "cornercase-mobile/0.1.0 (Ana's iPhone)",
+      "title": "Remote › Phone app › paired app"
+    },
+    {
+      "hidden": true,
+      "key": "browsers",
+      "label": "paired browsers",
+      "note": "shows once a browser is paired",
+      "page": "Remote",
+      "section": "Browser",
+      "shown": "",
+      "title": "Remote › paired browsers"
+    },
+    {
+      "hidden": true,
+      "label": "pair a phone app",
+      "note": "shows once the phone app is on",
+      "page": "Remote",
+      "section": "Phone app",
+      "shown": "",
+      "title": "Remote › pair a phone app"
+    },
+    {
+      "hidden": true,
+      "key": "discord_forum",
+      "label": "forum mode",
+      "note": "shows once a phone is paired",
+      "page": "Remote",
+      "section": "Discord",
+      "shown": "",
+      "title": "Remote › forum mode"
+    }
+  ]
+}

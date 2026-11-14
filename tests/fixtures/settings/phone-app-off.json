@@ -1,0 +1,87 @@
+{
+  "revision": 2,
+  "path": "/tmp/cc289/new/config.json",
+  "settings": [
+    {
+      "dangerous": false,
+      "default": false,
+      "key": "remote",
+      "label": "remote access",
+      "note": "open this computer's cornercase from your phone over Tailscale",
+      "page": "Remote",
+      "restart": false,
+      "section": "Browser",
+      "shown": "[ ] off",
+      "type": "switch",
+      "value": false
+    },
+    {
+      "dangerous": false,
+      "default": false,
+      "key": "phone_app",
+      "label": "phone app",
+      "note": "use cornercase from the phone app over Wi-Fi or Tailscale",
+      "page": "Remote",
+      "restart": false,
+      "section": "Phone app",
+      "shown": "[ ] off",
+      "type": "switch",
+      "value": false
+    }
+  ],
+  "connections": [
+    {
+      "count": 0,
+      "key": "browsers",
+      "kind": "browsers",
+      "label": "paired browsers",
+      "note": "enter forgets them all",
+      "page": "Remote",
+      "removable": false,
+      "section": "Browser",
+      "state": "missing"
+    },
+    {
+      "field": "Telegram bot token, from @BotFather",
+      "key": "telegram",
+      "kind": "bot",
+      "label": "Telegram bot",
+      "note": "make a bot with @BotFather and paste its token here",
+      "page": "Remote",
+      "removable": false,
+      "section": "Telegram",
+      "state": "missing"
+    },
+    {
+      "key": "telegram.chat",
+      "kind": "chat",
+      "label": "Telegram phone",
+      "note": "enter shows a code to scan with your phone",
+      "page": "Remote",
+      "removable": false,
+      "section": "Telegram",
+      "state": "missing"
+    },
+    {
+      "field": "Discord bot token (needs User Install on, Install Link None, Public Bot off)",
+      "key": "discord",
+      "kind": "bot",
+      "label": "Discord bot",
+      "note": "make a Discord app with User Install and paste its bot token",
+      "page": "Remote",
+      "removable": false,
+      "section": "Discord",
+      "state": "missing"
+    },
+    {
+      "key": "discord.chat",
+      "kind": "chat",
+      "label": "Discord phone",
+      "note": "enter shows a link to add the app to your account",
+      "page": "Remote",
+      "removable": false,
+      "section": "Discord",
+      "state": "missing"
+    }
+  ]
+}

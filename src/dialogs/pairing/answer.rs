@@ -13,6 +13,7 @@ const OWN_NAME: &str = "cornercase";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PairKey {
     Browsers,
+    App,
     Telegram,
     Discord,
 }
@@ -21,6 +22,7 @@ impl PairKey {
     pub(crate) fn of(key: &str) -> Option<Self> {
         match key {
             "browsers" => Some(Self::Browsers),
+            "app" => Some(Self::App),
             "telegram.chat" => Some(Self::Telegram),
             "discord.chat" => Some(Self::Discord),
             _ => None,
@@ -30,6 +32,7 @@ impl PairKey {
     fn name(self) -> &'static str {
         match self {
             Self::Browsers => "browsers",
+            Self::App => "app",
             Self::Telegram => "telegram.chat",
             Self::Discord => "discord.chat",
         }
@@ -38,9 +41,14 @@ impl PairKey {
     pub(super) fn title(self) -> &'static str {
         match self {
             Self::Browsers => "Remote",
+            Self::App => "Phone app",
             Self::Telegram => "Telegram",
             Self::Discord => "Discord",
         }
+    }
+
+    pub(super) fn opens_link(self) -> bool {
+        self != Self::App
     }
 
     pub(super) fn args(self) -> Vec<String> {
@@ -50,6 +58,7 @@ impl PairKey {
     fn connected(self, chat: Option<&str>) -> String {
         match (self, chat.filter(|name| !name.is_empty())) {
             (Self::Browsers, _) => "A browser connected".to_string(),
+            (Self::App, _) => "A phone app connected".to_string(),
             (_, Some(name)) => format!("{} connected with {name}", self.title()),
             (_, None) => format!("{} connected", self.title()),
         }

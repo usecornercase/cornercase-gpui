@@ -474,3 +474,178 @@ fn every_suggestion_is_saved_exactly_as_listed() {
     }
     assert_eq!(setting.offered()[0].value, "");
 }
+
+fn phone_off() -> Described {
+    parse(crate::test_util::fixture!("settings/phone-app-off.json")).expect("the off answer parses")
+}
+
+fn phone_paired() -> Described {
+    parse(crate::test_util::fixture!("settings/phone-app-paired.json")).expect("the paired answer parses")
+}
+
+fn phone_older() -> Described {
+    parse(crate::test_util::fixture!("settings/phone-app-older.json")).expect("the older answer parses")
+}
+
+fn apps(d: &Described) -> Vec<usize> {
+    (0..d.connections.len()).filter(|&i| d.connections[i].kind == ConnectionKind::App).collect()
+}
+
+fn app(account: Option<&str>, note: &str) -> Connection {
+    Connection {
+        key: "app.0011223344556677".into(),
+        kind: ConnectionKind::App,
+        label: "paired app".into(),
+        note: note.into(),
+        state: State::Connected,
+        account: account.map(str::to_string),
+        removable: true,
+        ..Connection::default()
+    }
+}
+
+const DAY: &str = "paired 2026-11-14 · enter forgets it";
+
+#[test]
+fn a_paired_phone_app_is_read_as_an_app() {
+    let d = phone_paired();
+    let at = apps(&d);
+    assert_eq!(at.len(), 3);
+    for i in at {
+        let c = &d.connections[i];
+        assert_eq!((c.state, c.removable, c.label.as_str()), (State::Connected, true, "paired app"));
+    }
+}
+
+#[test]
+fn the_phone_app_is_offered_only_while_its_switch_is_on() {
+    assert_eq!(app_offer(&phone_off()), None);
+    let mut on = phone_off();
+    on.settings.iter_mut().filter(|s| s.key == PHONE_APP).for_each(|s| s.value = Value::Bool(true));
+    assert_eq!(app_offer(&on), Some("Pair…"));
+    assert_eq!(app_offer(&phone_paired()), Some("Pair another…"));
+}
+
+#[test]
+fn a_server_that_lists_no_phone_app_offers_none() {
+    assert_eq!(app_offer(&phone_older()), None);
+    assert_eq!(app_offer(&sample()), None);
+}
+
+#[test]
+fn a_paired_app_shows_its_name_as_cornercase_gives_it() {
+    let cs = [app(Some("cornercase-mobile/0.1.0 (Ana's iPhone)"), DAY)];
+    assert_eq!(app_status(&cs, 0).as_deref(), Some("cornercase-mobile/0.1.0 (Ana's iPhone)"));
+    assert_eq!(cs[0].status().1, Tone::Good);
+}
+
+#[test]
+fn an_app_that_sent_no_name_shows_cornercases_word_for_it() {
+    let d = phone_paired();
+    let nameless = apps(&d).into_iter().find(|&i| d.connections[i].account.as_deref() == Some("phone app"));
+    assert_eq!(app_status(&d.connections, nameless.expect("the nameless app")).as_deref(), Some("phone app"));
+}
+
+#[test]
+fn two_apps_that_would_read_alike_are_numbered_in_the_order_cornercase_lists_them() {
+    let d = phone_paired();
+    let at = apps(&d);
+    assert_eq!(app_status(&d.connections, at[0]).as_deref(), Some("cornercase-mobile/0.1.0 (Ana's iPhone) · 1 of 2"));
+    assert_eq!(app_status(&d.connections, at[2]).as_deref(), Some("cornercase-mobile/0.1.0 (Ana's iPhone) · 2 of 2"));
+    assert_eq!(app_status(&d.connections, at[1]).as_deref(), Some("phone app"));
+}
+
+#[test]
+fn apps_of_one_name_paired_on_different_days_are_told_by_their_date() {
+    let cs = [app(Some("Ana"), "paired 2026-11-13 · enter forgets it"), app(Some("Ana"), DAY)];
+    assert_eq!((alike(&cs, 0), alike(&cs, 1)), (None, None));
+    assert_eq!(app_status(&cs, 1).as_deref(), Some("Ana"));
+}
+
+#[test]
+fn an_app_whose_name_is_missing_says_it_is_connected() {
+    let cs = [app(None, DAY)];
+    assert_eq!(app_status(&cs, 0), None);
+    assert_eq!(cs[0].status(), ("connected".to_string(), Tone::Good));
+}
+
+#[test]
+fn a_paired_apps_note_keeps_the_day_it_paired() {
+    assert_eq!(app(Some("Ana"), DAY).note_here(), "paired 2026-11-14");
+}
+
+#[test]
+fn a_row_that_is_not_an_app_has_no_name_of_one() {
+    let chat = Connection {
+        kind: ConnectionKind::Chat,
+        state: State::Connected,
+        account: Some("Ana".into()),
+        ..Connection::default()
+    };
+    let cs = [chat];
+    assert_eq!(app_status(&cs, 0), None);
+    assert_eq!(alike(&cs, 0), None);
+    assert_eq!(cs[0].status().0, "connected as Ana");
+}
+
+#[test]
+fn the_trash_of_a_paired_app_says_forget() {
+    let of = |kind| Connection { kind, ..Connection::default() };
+    assert_eq!(of(ConnectionKind::App).removal_hint(), "Forget…");
+    assert_eq!(of(ConnectionKind::Chat).removal_hint(), "Forget…");
+    assert_eq!(of(ConnectionKind::Browsers).removal_hint(), "Forget every paired browser…");
+    assert_eq!(of(ConnectionKind::Tracker).removal_hint(), "Remove…");
+}
+
+fn titles(d: &Described, page: &str) -> Vec<String> {
+    sections(d, page).into_iter().map(|s| s.title).collect()
+}
+
+#[test]
+fn the_phone_app_section_follows_the_browsers_with_nothing_paired() {
+    assert_eq!(titles(&phone_off(), "Remote"), ["Browser", "Phone app", "Telegram", "Discord"]);
+}
+
+#[test]
+fn the_phone_app_section_keeps_its_place_once_an_app_is_paired() {
+    let d = phone_paired();
+    assert_eq!(titles(&d, "Remote"), ["Browser", "Phone app", "Telegram", "Discord"]);
+    let section = &sections(&d, "Remote")[1];
+    let switch = d.settings.iter().position(|s| s.key == PHONE_APP).expect("the switch");
+    let expected: Vec<Item> =
+        std::iter::once(Item::Setting(switch)).chain(apps(&d).into_iter().map(Item::Connection)).collect();
+    assert_eq!(section.items, expected);
+}
+
+#[test]
+fn a_section_only_settings_name_with_none_before_it_still_goes_last() {
+    let d: Described = serde_json::from_value(serde_json::json!({
+        "settings": [{"key": "a", "page": "P", "section": "Only settings"}],
+        "connections": [{"key": "c", "kind": "tracker", "page": "P", "section": "Accounts"}]
+    }))
+    .expect("parses");
+    assert_eq!(titles(&d, "P"), ["Accounts", "Only settings"]);
+}
+
+#[test]
+fn an_older_servers_remote_page_keeps_its_sections() {
+    assert_eq!(titles(&phone_older(), "Remote"), ["Browser", "Telegram", "Discord"]);
+}
+
+#[test]
+fn search_for_phone_app_finds_the_switch_and_every_paired_app() {
+    let found = search(&phone_paired(), "phone app");
+    let phone: Vec<&Found> = found.iter().filter(|f| f.section.title == "Phone app").collect();
+    assert_eq!(phone.len(), 1);
+    assert_eq!(phone[0].section.items.len(), 4);
+}
+
+#[test]
+fn search_for_pair_finds_the_paired_apps() {
+    let d = phone_paired();
+    let found = search(&d, "pair");
+    let items: Vec<&Item> = found.iter().flat_map(|f| f.section.items.iter()).collect();
+    for i in apps(&d) {
+        assert!(items.contains(&&Item::Connection(i)));
+    }
+}

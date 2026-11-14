@@ -217,7 +217,7 @@ impl SettingsPanel {
     pub(super) fn render_item(&self, d: &Described, item: &Item, slot: Slot<'_>, cx: &mut Context<Self>) -> AnyElement {
         let row = match item {
             Item::Setting(i) => self.render_setting(&d.settings[*i], slot, cx),
-            Item::Connection(i) => self.render_connection(&d.connections[*i], slot, cx),
+            Item::Connection(i) => self.render_connection(d, *i, slot, cx),
             Item::Agent { kind, mode, extra } => {
                 let agent =
                     AgentItem { kind, mode: mode.map(|i| &d.settings[i]), extra: extra.map(|i| &d.settings[i]) };
@@ -239,6 +239,7 @@ impl SettingsPanel {
             .children(self.hint_of(&role, setting.hint(), slot.window, cx))
             .children(self.error_of(&role))
             .children(self.forum_under(&setting.key, cx))
+            .children(self.app_offer_under(&setting.key))
             .into_any_element()
     }
 

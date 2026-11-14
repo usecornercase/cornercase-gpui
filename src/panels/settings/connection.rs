@@ -3,7 +3,7 @@ use gpui::{
     prelude::*, px,
 };
 
-use super::data::{self, Connection, ConnectionKind, Tone};
+use super::data::{self, Connection, Described, Tone};
 use super::forum::{self, Forum, Server, Stage};
 use super::pages::Slot;
 use super::{Role, SettingsPanel, widgets};
@@ -14,6 +14,8 @@ use crate::theme::colours;
 use crate::ui::{self, Icon};
 
 const TOKEN: f32 = 230.;
+const OFFER: &str = "Pair a phone app";
+const OFFER_NOTE: &str = "Shows a code to scan with the cornercase app on your phone";
 
 fn tone_dot(tone: Tone) -> (Option<Rgba>, Rgba) {
     match tone {
@@ -23,14 +25,16 @@ fn tone_dot(tone: Tone) -> (Option<Rgba>, Rgba) {
     }
 }
 
-fn connection_label(c: &Connection) -> Div {
+fn connection_label(c: &Connection, named: Option<String>) -> Div {
     let (status, tone) = c.status();
     let (dot, ink) = tone_dot(tone);
-    let title = div().flex().flex_col().gap(px(4.)).child(widgets::capitalised(&c.label)).child(widgets::status(
-        widgets::capitalised(&status),
-        dot,
-        ink,
-    ));
+    let line = named.unwrap_or_else(|| widgets::capitalised(&status));
+    let title = div()
+        .flex()
+        .flex_col()
+        .gap(px(4.))
+        .child(widgets::capitalised(&c.label))
+        .child(widgets::status(line, dot, ink));
     widgets::labelled(title, widgets::capitalised(&c.note_here()))
 }
 
@@ -49,6 +53,12 @@ fn pair_control(c: &Connection) -> Div {
             .on_click(move |_: &ClickEvent, window, cx| dialogs::pairing(key, window, cx))
     });
     div().children(offer)
+}
+
+fn app_offer(button: &'static str) -> Div {
+    let pair = ui::button("pair-app", button)
+        .on_click(|_: &ClickEvent, window, cx| dialogs::pairing(PairKey::App, window, cx));
+    widgets::row(false, widgets::label(OFFER, OFFER_NOTE), pair, div())
 }
 
 fn server_row(at: usize, server: &Server, forum: &Forum, cx: &Context<SettingsPanel>) -> Stateful<Div> {
@@ -98,13 +108,30 @@ impl SettingsPanel {
         Some(forum_lines(&forum, cx))
     }
 
-    pub(super) fn render_connection(&self, c: &Connection, slot: Slot<'_>, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn app_offer_under(&self, key: &str) -> Option<Div> {
+        let offer = self.described.as_ref().and_then(data::app_offer).filter(|_| key == data::PHONE_APP)?;
+        Some(app_offer(offer))
+    }
+
+    pub(super) fn render_connection(
+        &self,
+        d: &Described,
+        at: usize,
+        slot: Slot<'_>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let c = &d.connections[at];
         let role = Role::Secret(c.key.clone());
         let control = if c.takes_secret() { self.token_control(c, slot.window, cx) } else { pair_control(c) };
         div()
             .flex()
             .flex_col()
-            .child(widgets::row(slot.first, connection_label(c), control, self.connection_slot(c, cx)))
+            .child(widgets::row(
+                slot.first,
+                connection_label(c, data::app_status(&d.connections, at)),
+                control,
+                self.connection_slot(c, cx),
+            ))
             .children(self.hint_of(&role, c.hint(), slot.window, cx))
             .children(self.error_of(&role))
             .children(self.forum_under(&c.key, cx))
@@ -152,14 +179,9 @@ impl SettingsPanel {
         if !c.removable || busy {
             return div().into_any_element();
         }
-        let hint = match c.kind {
-            ConnectionKind::Browsers => "Forget every paired browser…",
-            ConnectionKind::Chat => "Forget…",
-            _ => "Remove…",
-        };
-        let connection = c.clone();
-        ui::row_action(SharedString::from(format!("remove-{}", c.key)), Icon::Trash, hint, true)
-            .on_click(cx.listener(move |_, _, window, cx| Self::ask_remove(&connection, window, cx)))
+        let key = c.key.clone();
+        ui::row_action(SharedString::from(format!("remove-{}", c.key)), Icon::Trash, c.removal_hint(), true)
+            .on_click(cx.listener(move |this, _, window, cx| this.ask_remove(&key, window, cx)))
             .into_any_element()
     }
 }

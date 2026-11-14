@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.106
+
+- **Pair the cornercase phone app from Settings › Remote, and forget a paired one.** With cornercase 0.13.78 or newer, once the Phone app switch is on, the **Pair a phone app** row under it shows the code to scan with the cornercase app on your phone; when the app pairs, the dialog closes and says `A phone app connected`. Each paired app has a row with its name and the day it paired, and its trash asks before forgetting it: the app is disconnected at once and has to be paired again. Two apps of one name paired the same day are numbered in the order they paired. The Phone app section now sits right after Browser, as in cornercase's own window, also before an app is paired.
+
 ## 0.1.105
 
 - **In a narrow window the Issues sheet keeps an issue readable.** When the window is too narrow for the list and an issue side by side (under about 710 px wide), the sheet shows one at a time: the list, and the issue you choose across the sheet's whole width, with **‹ Issues** at the start of its top row to show the list again. ↓ and ↑ go from issue to issue there, and typing in the filter or changing a filter shows the list. In a window a little wider (up to about 880 px), the list narrows so the issue keeps room for its buttons and a readable line, and a list you widened by dragging its border gets that width back when the window widens again. In a usual window nothing changes.

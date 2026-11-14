@@ -21,7 +21,9 @@ fn telegram() -> Vec<&'static str> {
 }
 
 #[test]
-fn only_browsers_and_chats_can_be_paired() {
+fn only_browsers_the_phone_app_and_chats_can_be_paired() {
+    assert_eq!(PairKey::of("app"), Some(PairKey::App));
+    assert_eq!(PairKey::of("app.0011223344556677"), None);
     assert_eq!(PairKey::of("browsers"), Some(PairKey::Browsers));
     assert_eq!(PairKey::of("telegram.chat"), Some(PairKey::Telegram));
     assert_eq!(PairKey::of("discord.chat"), Some(PairKey::Discord));
@@ -33,6 +35,7 @@ fn only_browsers_and_chats_can_be_paired() {
 fn each_key_names_itself_to_the_command() {
     assert_eq!(PairKey::Discord.args(), ["config", "pair", "--json", "--", "discord.chat"]);
     assert_eq!(PairKey::Browsers.args(), ["config", "pair", "--json", "--", "browsers"]);
+    assert_eq!(PairKey::App.args(), ["config", "pair", "--json", "--", "app"]);
 }
 
 #[test]
@@ -40,6 +43,45 @@ fn the_dialogs_take_the_titles_of_the_tuis() {
     assert_eq!(PairKey::Browsers.title(), "Remote");
     assert_eq!(PairKey::Telegram.title(), "Telegram");
     assert_eq!(PairKey::Discord.title(), "Discord");
+    assert_eq!(PairKey::App.title(), "Phone app");
+}
+
+#[test]
+fn only_the_phone_apps_address_is_not_offered_to_open() {
+    assert!(!PairKey::App.opens_link());
+    assert!([PairKey::Browsers, PairKey::Telegram, PairKey::Discord].iter().all(|key| key.opens_link()));
+}
+
+#[test]
+fn a_paired_phone_app_says_a_phone_app_connected() {
+    let end = lines(fixture!("settings/pair-app.jsonl"))[1];
+    assert_eq!(Reading::Asking.line(PairKey::App, end).as_deref(), Some("A phone app connected"));
+}
+
+#[test]
+fn the_phone_apps_code_comes_with_the_servers_lines() {
+    let line = lines(fixture!("settings/pair-app.jsonl"))[0];
+    let linked = linked(read(PairKey::App, line));
+    assert_eq!(linked.url, "ws://127.0.0.1:47682/?code=00112233445566778899aabbccddeeff&name=Mac");
+    assert!(linked.code.is_some());
+    assert_eq!(
+        linked.notes,
+        [
+            "Scan the code with the cornercase app on your phone.",
+            "It reaches this computer on the same network or over Tailscale: 127.0.0.1."
+        ]
+    );
+}
+
+#[test]
+fn a_phone_app_with_no_address_yet_says_what_it_waits_for() {
+    let waiting = r#"{"lines":["no LAN or Tailscale address to listen on yet: join a Wi-Fi network or turn Tailscale on"],"url":null}"#;
+    assert_eq!(
+        read(PairKey::App, waiting),
+        Reading::Starting(vec![
+            "No LAN or Tailscale address to listen on yet: join a Wi-Fi network or turn Tailscale on".to_string()
+        ])
+    );
 }
 
 #[test]
@@ -139,6 +181,10 @@ fn a_refusal_to_start_comes_in_words() {
         (
             "Error: remote access is off: turn it on in Settings › Remote or with `cornercase config set remote true`\n",
             "Remote access is off: turn it on in Settings › Remote or with `cornercase config set remote true`",
+        ),
+        (
+            "Error: the phone app's access is off: turn it on in Settings › Remote or with `cornercase config set phone_app true`\n",
+            "The phone app's access is off: turn it on in Settings › Remote or with `cornercase config set phone_app true`",
         ),
         ("Error: tailscale is not installed on this computer\n", "Tailscale is not installed on this computer"),
         ("Error: paste the bot's token first\n", "Paste the bot's token first"),

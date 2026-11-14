@@ -196,3 +196,38 @@ fn landing_on_appearance_marks_nothing_and_says_nothing() {
     let found = FoundSetting { title: "Appearance".into(), page: "Appearance".into(), ..FoundSetting::default() };
     assert_eq!(spot(&described(), &found), Spot::default());
 }
+
+fn phone_paired() -> Described {
+    data::parse(fixture!("settings/phone-app-paired.json")).expect("the paired answer parses")
+}
+
+#[test]
+fn pair_a_phone_app_found_while_the_switch_is_off_lands_on_the_switch_saying_what_shows_it() {
+    let d = phone_paired();
+    let spot = spot(&d, &found(fixture!("settings/search/phone-app.json"), "Remote › pair a phone app"));
+    assert_eq!(key_of(&d, &spot), "phone_app");
+    assert_eq!(spot.notice.as_deref(), Some("Pair a phone app shows once the phone app is on"));
+}
+
+#[test]
+fn pair_a_phone_app_found_while_the_switch_is_on_lands_on_the_switch() {
+    let d = phone_paired();
+    let on = FoundSetting {
+        title: "Remote › pair a phone app".into(),
+        page: "Remote".into(),
+        section: "Phone app".into(),
+        label: "pair a phone app".into(),
+        ..FoundSetting::default()
+    };
+    let spot = spot(&d, &on);
+    assert_eq!(key_of(&d, &spot), "phone_app");
+    assert_eq!(spot.notice, None);
+}
+
+#[test]
+fn a_paired_app_found_by_search_lands_on_its_own_row() {
+    let d = phone_paired();
+    let rows = parse_found(fixture!("settings/search/phone-app.json")).expect("the answer parses");
+    let row = rows.into_iter().find(|r| r.key.as_deref() == Some("app.5d918c321e371d26")).expect("the nameless app");
+    assert_eq!(key_of(&d, &spot(&d, &row)), "app.5d918c321e371d26");
+}
