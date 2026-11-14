@@ -8,6 +8,7 @@ fn fixture(name: &str) -> Event {
         "clipboard" => crate::test_util::fixture!("events/clipboard.json"),
         "message" => crate::test_util::fixture!("events/message.json"),
         "message-workspace" => crate::test_util::fixture!("events/message-workspace.json"),
+        "message-failed" => crate::test_util::fixture!("events/message-failed.json"),
         "bell" => crate::test_util::fixture!("events/bell.json"),
         "status" => crate::test_util::fixture!("events/status.json"),
         "dropped" => crate::test_util::fixture!("events/dropped.json"),
@@ -229,4 +230,18 @@ fn on_windows_a_sound_file_of_your_own_is_on_a_drive_or_in_your_home() {
     assert_eq!(sound_path(Os::Windows, "/home/me/ding.wav", home), None);
     assert_eq!(sound_path(Os::Windows, "C:ding.wav", home), None);
     assert_eq!(sound_path(Os::Windows, "~/ding.wav", ""), None);
+}
+
+#[test]
+fn reads_a_merged_run_whose_free_failed() {
+    let Event::Message(m) = fixture("message-failed") else { panic!("not a message") };
+    assert_eq!((m.kind.as_str(), m.failed, m.workspace), ("flow-merged", true, Some(2)));
+}
+
+#[test]
+fn a_message_without_failed_reads_as_not_failed() {
+    for name in ["message", "message-workspace"] {
+        let Event::Message(m) = fixture(name) else { panic!("not a message") };
+        assert!(!m.failed, "{name}");
+    }
 }

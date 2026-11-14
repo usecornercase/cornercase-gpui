@@ -1,0 +1,113 @@
+{
+  "boot": "38859-1794650828806114000",
+  "revision": 2,
+  "runs": [
+    {
+      "dir": "/tmp/cc258/s.runs/2026-11-14-b258",
+      "ended": false,
+      "flow": {
+        "description": "A coder and one round of review, leaving the commits.",
+        "end": "commits",
+        "name": "Quick",
+        "notes": "",
+        "orchestrator": {
+          "agent": "claude",
+          "args": [],
+          "edits": false,
+          "effort": null,
+          "env": {},
+          "model": null,
+          "name": "orchestrator",
+          "prompt": "Keep every message to an agent self-contained: say what to do and what to answer with. Pass findings and failures on as the paths of the files that hold them, with the agent that found them, rather than their text.",
+          "worktree": "shared"
+        },
+        "roles": [
+          {
+            "agent": "claude",
+            "args": [],
+            "edits": true,
+            "effort": null,
+            "env": {},
+            "model": null,
+            "name": "coder",
+            "prompt": "You are the coder in a team of coding agents working in this git worktree. Another agent, the orchestrator, sends you the work. Implement it here, run the project's checks, and commit locally with clear messages. Do not push and do not open pull requests. End each turn with a short summary of what you changed and what you checked. Wait for the orchestrator's first message before doing anything.",
+            "worktree": "shared"
+          },
+          {
+            "agent": "copilot",
+            "args": [],
+            "edits": false,
+            "effort": null,
+            "env": {},
+            "model": null,
+            "name": "reviewer",
+            "prompt": "You are a code reviewer in a team of coding agents working in this git worktree. Do not edit the worktree's files and do not commit. When the orchestrator asks, review the changes on this branch against its base (`git log` and `git diff`). Answer with numbered findings, most severe first, each with the file and line, why it is a problem and how to fix it, or with `No findings.` when there are none. Wait for the orchestrator's first message before doing anything.",
+            "worktree": "shared"
+          }
+        ],
+        "stages": [
+          {
+            "back": null,
+            "roles": [
+              "coder"
+            ]
+          },
+          {
+            "back": {
+              "at_most": 1,
+              "to": 1,
+              "when": "findings"
+            },
+            "roles": [
+              "reviewer"
+            ]
+          }
+        ]
+      },
+      "holder": null,
+      "last": null,
+      "messages": 0,
+      "outside": null,
+      "project": 1,
+      "roles": [
+        {
+          "branch": null,
+          "closed": false,
+          "pane": 7,
+          "role": "orchestrator",
+          "status": "idle",
+          "tab": 10,
+          "worktree": null
+        },
+        {
+          "branch": null,
+          "closed": false,
+          "pane": 8,
+          "role": "coder",
+          "status": null,
+          "tab": 11,
+          "worktree": null
+        },
+        {
+          "branch": null,
+          "closed": false,
+          "pane": 9,
+          "role": "reviewer",
+          "status": "idle",
+          "tab": 12,
+          "worktree": null
+        }
+      ],
+      "rounds": [
+        0,
+        0
+      ],
+      "run": 6,
+      "stage": null,
+      "stopped": "2026-11-14T10:07:10.946Z",
+      "task": "bench task for cc258",
+      "workspace": 5
+    }
+  ],
+  "version": "0.13.70"
+}

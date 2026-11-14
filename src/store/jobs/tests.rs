@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use super::{Busy, Jobs, SHOW_AFTER, setup_key};
+use super::{Busy, Jobs, SHOW_AFTER, reopen_key, reopening, setup_key};
 
 fn later() -> Instant {
     Instant::now() + SHOW_AFTER
@@ -113,4 +113,12 @@ fn a_rename_on_a_machine_is_not_leaving() {
 #[test]
 fn the_setup_job_key_names_its_workspace() {
     assert_eq!(setup_key(7), "setup:7");
+}
+
+#[test]
+fn a_reopen_is_one_job_per_workspace() {
+    let (busy, args) = reopening(2, "x");
+    assert_eq!(busy.key(), reopen_key(2));
+    assert_eq!(args, ["agents", "reopen", "--workspace", "2"]);
+    assert_ne!(reopening(3, "x").0.key(), busy.key());
 }

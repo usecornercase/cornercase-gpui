@@ -108,7 +108,7 @@ impl FlowsPanel {
                     )
                     .child(ui::dim(ui::one_line(format!("{} · {}", run_place(run, session), run.summary()))))
                     .children(
-                        ended_without(run).map(|line| {
+                        row_notes(run).into_iter().map(|line| {
                             div().text_size(px(11.)).text_color(colours::waiting()).child(ui::one_line(line))
                         }),
                     ),
@@ -241,6 +241,10 @@ fn row_word(standing: Standing) -> &'static str {
 
 fn ended_without(run: &Run) -> Option<String> {
     run.ended.then(|| run.not_run_line()).flatten()
+}
+
+fn row_notes(run: &Run) -> Vec<String> {
+    ended_without(run).into_iter().chain(run.exited_line(0)).collect()
 }
 
 fn run_place(run: &Run, session: Option<&Session>) -> String {

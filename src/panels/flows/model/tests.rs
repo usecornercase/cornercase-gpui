@@ -322,3 +322,79 @@ fn an_age_below_zero_reads_as_now() {
     assert_eq!(age(-5), "now");
     assert_eq!(age(0), "now");
 }
+
+const EXITED: &str = crate::test_util::fixture!("flows/runs-exited.json");
+const EXITED_OLD: &str = crate::test_util::fixture!("flows/runs-exited-0.13.70.json");
+
+fn member(role: &str, pane: u64, exited: bool, closed: bool) -> Member {
+    Member { role: role.into(), pane: Some(pane), exited, closed, ..Member::default() }
+}
+
+fn team(members: Vec<Member>) -> Run {
+    Run { roles: members, ..Run::default() }
+}
+
+#[test]
+fn a_role_whose_agent_exited_reads_as_exited() {
+    let run = &parse_runs(EXITED).expect("runs").runs[0];
+    let coder = run.member("coder").expect("coder");
+    assert!(coder.exited && coder.agent_exited());
+    assert_eq!(coder.status, None);
+    assert!(!run.member("orchestrator").expect("orchestrator").exited);
+    assert_eq!(run.exited(), ["coder"]);
+}
+
+#[test]
+fn an_older_server_names_no_exited_role() {
+    for text in [EXITED_OLD, RUNS] {
+        let run = &parse_runs(text).expect("runs").runs[0];
+        assert_eq!(run.exited(), Vec::<&str>::new());
+        assert_eq!(run.exited_line(0), None);
+    }
+}
+
+#[test]
+fn a_closed_role_is_never_exited() {
+    assert!(!member("coder", 8, true, true).agent_exited());
+    let mut run = team(vec![member("coder", 8, true, false)]);
+    run.state = Some("closed".into());
+    assert_eq!(run.exited(), Vec::<&str>::new());
+}
+
+#[test]
+fn an_ended_run_still_names_its_exited_roles() {
+    let mut run = team(vec![member("coder", 8, true, false)]);
+    run.ended = true;
+    assert_eq!(run.exited(), ["coder"]);
+}
+
+#[test]
+fn exited_roles_read_as_words() {
+    let said = |names: &[&str]| {
+        team(names.iter().zip(1..).map(|(n, p)| member(n, p, true, false)).collect()).exited_line(0).expect("a line")
+    };
+    assert_eq!(said(&["coder"]), "the agent of coder exited");
+    assert_eq!(said(&["coder", "reviewer"]), "the agents of coder and reviewer exited");
+    assert_eq!(said(&["coder", "reviewer", "tester"]), "the agents of coder, reviewer and tester exited");
+}
+
+#[test]
+fn exited_roles_wait_for_the_workspaces_closed_agents() {
+    let run = team(vec![member("coder", 8, true, false)]);
+    assert_eq!(
+        run.exited_line(1).as_deref(),
+        Some("the agent of coder exited; Reopen brings back this workspace's closed agent first")
+    );
+    assert_eq!(
+        run.exited_line(2).as_deref(),
+        Some("the agent of coder exited; Reopen brings back this workspace's 2 closed agents first")
+    );
+}
+
+#[test]
+fn stop_goes_through_a_member_whose_agent_runs() {
+    let run = team(vec![member("orchestrator", 7, true, false), member("coder", 8, false, false)]);
+    assert_eq!((run.lead_pane(), run.stop_pane()), (Some(7), Some(8)));
+    let all = team(vec![member("orchestrator", 7, true, false), member("coder", 8, true, false)]);
+    assert_eq!((all.lead_pane(), all.stop_pane()), (Some(7), None));
+}

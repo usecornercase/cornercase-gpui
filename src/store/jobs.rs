@@ -33,6 +33,15 @@ pub(crate) fn setup_key(workspace: u64) -> String {
     format!("setup:{workspace}")
 }
 
+pub(crate) fn reopen_key(workspace: u64) -> String {
+    format!("reopen:{workspace}")
+}
+
+pub(crate) fn reopening(workspace: u64, name: &str) -> (Busy, Vec<String>) {
+    let busy = Busy::new(reopen_key(workspace), format!("Reopening the agents of {name}…"));
+    (busy, super::args(&["agents", "reopen", "--workspace", &workspace.to_string()]))
+}
+
 fn removal_key(workspace: u64) -> String {
     format!("remove-worktree:{workspace}")
 }

@@ -57,6 +57,10 @@ fn workspace_detail(ws: &Workspace, look: &WorkspaceLook) -> Vec<AnyElement> {
     if let Some(n) = ws.closed_agents.filter(|n| *n > 0) {
         detail.push(div().child(format!("{n} closed")).into_any_element());
     }
+    let exited = ws.exited_roles().len();
+    if exited > 0 {
+        detail.push(div().text_color(colours::waiting()).child(format!("{exited} exited")).into_any_element());
+    }
     detail
 }
 

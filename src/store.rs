@@ -30,7 +30,7 @@ mod tunnels;
 mod update_there;
 
 use jobs::Jobs;
-pub(crate) use jobs::{Busy, setup_key};
+pub(crate) use jobs::{Busy, reopen_key, reopening, setup_key};
 use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, OlderNote, Reach, TabThere, release_clause};
 pub(crate) use machines_there::{
@@ -358,7 +358,7 @@ impl Store {
                 self.open_in_browser(url.clone(), owner, cx);
             }
             ToastGo::Tunnelled(machine, port) => self.open_tunnel(machine, *port, cx),
-            ToastGo::Job(busy, args) => self.run_aside(busy.clone(), args.clone(), cx),
+            ToastGo::Job(busy, args) => self.run_aside_once(busy.clone(), args.clone(), cx),
             ToastGo::Open(kind) => self.open(*kind, cx),
             ToastGo::Update(updating) => {
                 self.asks.open_update = Some(*updating);
@@ -404,6 +404,17 @@ impl Store {
                 this.toast(e.to_string(), ToastKind::Error, cx);
             }
         });
+    }
+
+    pub(crate) fn run_aside_once(&mut self, busy: Busy, args: Vec<String>, cx: &mut Context<Self>) {
+        if !self.busy(busy.key()) {
+            self.run_aside(busy, args, cx);
+        }
+    }
+
+    pub(crate) fn reopen_agents(&mut self, workspace: u64, name: &str, cx: &mut Context<Self>) {
+        let (busy, args) = reopening(workspace, name);
+        self.run_aside_once(busy, args, cx);
     }
 
     pub(crate) fn run_then<R: Send + 'static>(

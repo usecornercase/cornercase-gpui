@@ -12,7 +12,9 @@ const PROJECT: &str = r#"{"groups":[{"id":7,"name":"team"}],"projects":[{"id":1,
     {"id":4,"name":"dark","path":"/home/ana/code/dark","branch":"dark","worktree":true,
         "pull_request":{"number":485,"url":"https://x/485","state":"open"}},
     {"id":5,"name":"fresh","path":"/home/ana/code/fresh","branch":"fresh","worktree":true,"setup":"running"},
-    {"id":6,"name":"broken","path":"/home/ana/code/broken","branch":"broken","worktree":true,"setup":"failed"}]}]}"#;
+    {"id":6,"name":"broken","path":"/home/ana/code/broken","branch":"broken","worktree":true,"setup":"failed"},
+    {"id":7,"name":"kept","path":"/home/ana/code/kept","branch":"kept","worktree":true,"closed_agents":2,"run":{"exited":["coder"]}},
+    {"id":8,"name":"live","path":"/home/ana/code/live","branch":"live","worktree":true,"run":{"exited":["coder","reviewer"]}}]}]}"#;
 
 const IMPORT: &str = "Import VS Code workspace…";
 
@@ -189,4 +191,26 @@ fn several_apps_share_a_submenu_without_the_default_app() {
     ];
     let names = vec!["Open in VS Code".to_string(), "Open in Zed".to_string()];
     assert_eq!(opener_labels(&found), Some(("Open in…".to_string(), names)));
+}
+
+#[test]
+fn a_workspace_menu_reopens_its_closed_agents_first() {
+    let labels = labels(7);
+    assert!(labels.iter().any(|l| l == "Reopen 2 closed agents"));
+    assert!(labels.iter().any(|l| l == "Forget 2 closed agents…"));
+    assert!(!labels.iter().any(|l| l.contains("exited")));
+}
+
+#[test]
+fn a_workspace_menu_reopens_its_runs_exited_agents_with_none_kept() {
+    let labels = labels(8);
+    assert!(labels.iter().any(|l| l == "Reopen 2 exited agents"));
+    assert!(!labels.iter().any(|l| l.starts_with("Forget")));
+}
+
+#[test]
+fn a_workspace_with_nothing_to_reopen_has_no_reopen_item() {
+    for workspace in [2, 3, 4] {
+        assert!(!labels(workspace).iter().any(|l| l.starts_with("Reopen")), "{workspace}");
+    }
 }

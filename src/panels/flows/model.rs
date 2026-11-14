@@ -291,10 +291,14 @@ pub(crate) fn stopped_line(secs: i64) -> String {
 
 pub(crate) fn stages_in_words(stages: &[usize]) -> String {
     let numbers: Vec<String> = stages.iter().map(|stage| (stage + 1).to_string()).collect();
-    match numbers.split_last() {
+    if numbers.is_empty() { String::new() } else { format!("stage {}", and_list(&numbers)) }
+}
+
+fn and_list(items: &[String]) -> String {
+    match items.split_last() {
         None => String::new(),
-        Some((only, [])) => format!("stage {only}"),
-        Some((last, rest)) => format!("stage {} and {last}", rest.join(", ")),
+        Some((only, [])) => only.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
     }
 }
 
@@ -306,6 +310,7 @@ pub(crate) struct Member {
     pub tab: Option<u64>,
     pub status: Option<String>,
     pub closed: bool,
+    pub exited: bool,
     pub awaited: Option<String>,
     pub worktree: Option<String>,
     pub branch: Option<String>,
@@ -333,6 +338,12 @@ pub(crate) enum Progress {
     Passed,
     Active,
     Ahead,
+}
+
+impl Member {
+    pub(crate) fn agent_exited(&self) -> bool {
+        self.exited && !self.closed
+    }
 }
 
 impl Run {
@@ -400,8 +411,37 @@ impl Run {
     }
 
     pub(crate) fn lead_pane(&self) -> Option<u64> {
-        let alive = |m: &&Member| !m.closed && m.pane.is_some();
+        self.first_pane(|m| !m.closed)
+    }
+
+    pub(crate) fn stop_pane(&self) -> Option<u64> {
+        self.first_pane(|m| !m.closed && !m.exited)
+    }
+
+    fn first_pane(&self, takes: impl Fn(&Member) -> bool) -> Option<u64> {
+        let alive = |m: &&Member| takes(m) && m.pane.is_some();
         self.orchestrator().filter(alive).or_else(|| self.roles.iter().find(alive)).and_then(|m| m.pane)
+    }
+
+    pub(crate) fn exited(&self) -> Vec<&str> {
+        if self.closed() {
+            return Vec::new();
+        }
+        self.roles.iter().filter(|m| m.agent_exited()).map(|m| m.role.as_str()).collect()
+    }
+
+    pub(crate) fn exited_line(&self, closed_first: usize) -> Option<String> {
+        let names: Vec<String> = self.exited().into_iter().map(str::to_string).collect();
+        if names.is_empty() {
+            return None;
+        }
+        let who = if names.len() == 1 { "agent" } else { "agents" };
+        let first = match closed_first {
+            0 => String::new(),
+            1 => "; Reopen brings back this workspace's closed agent first".to_string(),
+            n => format!("; Reopen brings back this workspace's {n} closed agents first"),
+        };
+        Some(format!("the {who} of {} exited{first}", and_list(&names)))
     }
 }
 

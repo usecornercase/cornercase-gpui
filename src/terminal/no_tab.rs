@@ -10,8 +10,8 @@ use crate::dialogs::{self, Question};
 use crate::keymap::{Command, with_keys};
 use crate::model::Session;
 use crate::render::moving::Moves;
-use crate::sidebar::{cmd, reopening, tip};
-use crate::store::{self, Busy};
+use crate::sidebar::{cmd, tip};
+use crate::store::{self, Busy, reopen_key};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone};
 
@@ -112,11 +112,10 @@ fn reopen_button(no_tab: &NoTab, workspace: u64, busy: bool, cx: &mut Context<Ro
     if busy {
         return tall(ui::busy_button("no-tab-reopen", "Reopening…", Tone::Primary));
     }
-    let (job, args) = reopening(workspace, &no_tab.name);
+    let name = no_tab.name.clone();
     tall(ui::icon_text_button("no-tab-reopen", Icon::Undo, reopen_label(no_tab.closed), Tone::Primary)).on_click(
         cx.listener(move |this, _: &ClickEvent, _, cx| {
-            let (job, args) = (job.clone(), args.clone());
-            this.store.update(cx, |s, cx| s.run_aside(job, args, cx));
+            this.store.update(cx, |s, cx| s.reopen_agents(workspace, &name, cx));
         }),
     )
 }
@@ -247,7 +246,7 @@ impl Root {
         Some(match empty {
             Empty::Welcome => welcome(cx),
             Empty::NoTab(no_tab) => {
-                let reopen_busy = no_tab.workspace.is_some_and(|ws| store.busy(reopening(ws, "").0.key()));
+                let reopen_busy = no_tab.workspace.is_some_and(|ws| store.busy(&reopen_key(ws)));
                 no_tab_page(&no_tab, reopen_busy, cx)
             }
         })
