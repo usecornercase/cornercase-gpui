@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::machine::acts::boot_refusal;
-use crate::model::with_boot;
+use crate::cli::with_boot;
 use crate::model::{Group, Project, Shown, ViewInfo, Workspace};
 
 fn project(id: u64, group: Option<u64>, workspaces: &[u64]) -> Project {

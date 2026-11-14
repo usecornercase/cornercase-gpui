@@ -27,7 +27,7 @@ pub(crate) use grid::{Applied, Grid, PaneGrid, Run};
 pub(crate) use link::Link;
 pub(crate) use machines::seen::{
     Aim, MachinePlace, MachineSeen, PaneAim, PaneThere, SectionRow, Spot, ThereAgent, ThereId, ThereProject, ThereRow,
-    ThereWorkspace, WorkspaceThere, with_boot,
+    ThereWorkspace, WorkspaceThere,
 };
 pub(crate) use owner::Owner;
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};

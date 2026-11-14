@@ -31,7 +31,7 @@ fn a_dropped_pane_asks_cornercase_to_move_it_beside_its_target() {
 
 #[test]
 fn a_move_on_a_machine_asks_for_the_layout_and_names_its_run() {
-    let args = crate::model::with_boot(move_pane_args(4, Aim { target: 7, place: Place::Below }), "b1");
+    let args = crate::cli::with_boot(move_pane_args(4, Aim { target: 7, place: Place::Below }), "b1");
     assert_eq!(args, ["move-pane", "--pane", "4", "--target", "7", "--place", "below", "--json", "--boot", "b1"]);
 }
 

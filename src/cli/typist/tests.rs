@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-use super::{answer, ended, line};
+use super::{answer, args, ended, line, told_end};
 
 #[test]
 fn a_line_names_the_pane_it_types_into() {
@@ -38,4 +38,28 @@ fn an_ended_typist_says_the_last_thing_it_wrote() {
         "cornercase input --follow: Error: no cornercase server is running"
     );
     assert_eq!(ended(""), "cornercase input --follow: it ended");
+}
+
+#[test]
+fn a_machines_typist_follows_with_its_runs_boot() {
+    assert_eq!(args(Some("b1")), ["input", "--follow", "--json", "-", "--boot", "b1"]);
+    assert_eq!(args(None), ["input", "--follow", "--json", "-"]);
+}
+
+#[test]
+fn a_typist_that_ended_on_a_refused_run_says_nothing() {
+    assert_eq!(told_end("error: stale", Some(4), false), None);
+}
+
+#[test]
+fn a_typist_that_ended_otherwise_says_its_last_line() {
+    assert_eq!(
+        told_end("Error: no cornercase server is running\n", Some(1), false).as_deref(),
+        Some("cornercase input --follow: Error: no cornercase server is running")
+    );
+}
+
+#[test]
+fn a_typist_the_window_stopped_says_nothing() {
+    assert_eq!(told_end("killed", None, true), None);
 }

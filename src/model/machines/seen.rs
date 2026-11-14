@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 use super::{LinkState, MachineIcon, NextTry, seen_ago};
+use crate::cli::Version;
 use crate::model::{PaneInfo, Project, Session, Tab, loudest_of, needs_you, status_rank, works};
 use crate::store::args;
 
@@ -9,6 +10,11 @@ mod spot;
 
 pub(crate) use agents::{PaneAim, PaneThere, SectionRow, ThereAgent, ThereRow, sighted_pane};
 pub(crate) use spot::{LoginTab, Spot};
+
+pub(crate) const PANE_BOOT_SINCE: Version = Version::new(0, 13, 30);
+pub(crate) const FOLD_BOOT_SINCE: Version = Version::new(0, 13, 32);
+pub(crate) const HAND_OFF_BOOT_SINCE: Version = Version::new(0, 13, 60);
+pub(crate) const ACTS_BOOT_SINCE: Version = Version::new(0, 13, 63);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Deserialize)]
 #[serde(transparent)]
@@ -203,12 +209,6 @@ impl Aim {
     pub(crate) fn ports_args(&self, all: bool) -> Vec<String> {
         if all { args(&["ports", "--json", "--all"]) } else { args(&["ports", "--json", "--workspace", &self.id()]) }
     }
-}
-
-pub(crate) fn with_boot(mut args: Vec<String>, boot: &str) -> Vec<String> {
-    let at = args.iter().position(|a| a == "--").unwrap_or(args.len());
-    args.splice(at..at, ["--boot".to_string(), boot.to_string()]);
-    args
 }
 
 pub(crate) fn sighted<'a>(

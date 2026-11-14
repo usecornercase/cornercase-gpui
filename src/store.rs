@@ -33,7 +33,7 @@ use jobs::Jobs;
 pub(crate) use jobs::{Busy, setup_key};
 use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, OlderNote, Reach, TabThere, release_clause};
-pub(crate) use machines_there::{MachineAct, NoticeThere, failed_there, stale_note};
+pub(crate) use machines_there::{MachineAct, NoticeThere, answer_words, failed_there, part_sent_note, stale_note};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 pub(crate) use tunnels::{
     Asked, Control, Held, MachineLink, ReverseState, Tail, TunnelRow, Whose, address_there, copied_words, heading,
@@ -317,18 +317,18 @@ impl Store {
 
     pub(crate) fn cmd_busy_on(&mut self, queue: &Queue, busy: Busy, args: Vec<String>, cx: &mut Context<Self>) {
         let id = self.start_job(busy, cx);
-        let reply = reply_of(queue, args);
+        let (reply, queue) = (reply_of(queue, args), queue.clone());
         cx.spawn(async move |this, cx| {
             let result = reply.await;
-            let _ = this.update(cx, |s, cx| s.answered(id, result.ok(), cx));
+            let _ = this.update(cx, |s, cx| s.answered(id, &queue, result.ok(), cx));
         })
         .detach();
     }
 
-    fn answered(&mut self, id: u64, answer: Option<anyhow::Result<String>>, cx: &mut Context<Self>) {
+    fn answered(&mut self, id: u64, queue: &Queue, answer: Option<anyhow::Result<String>>, cx: &mut Context<Self>) {
         self.end_job(id, cx);
-        if let Some(Err(e)) = answer {
-            self.toast(e.to_string(), ToastKind::Error, cx);
+        if let Some(said) = answer_words(queue, answer) {
+            self.toast(said, ToastKind::Error, cx);
         }
     }
 

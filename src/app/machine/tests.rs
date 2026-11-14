@@ -4,8 +4,8 @@ use serde_json::json;
 
 use super::*;
 use crate::cli::QueueTap;
+use crate::cli::with_boot;
 use crate::model::machines::LinkState;
-use crate::model::with_boot;
 use crate::model::{Shown, Tab, ThereProject, ThereWorkspace, ViewInfo};
 
 fn id(number: u64) -> ThereId {
@@ -669,4 +669,27 @@ fn falling_to_the_older_or_waiting_card_starts_the_retry_wait_over() {
     tab.next_wait();
     tab.fall(Lost::Link);
     assert_eq!(tab.attempts, 1);
+}
+
+#[test]
+fn a_tab_opens_its_queue_for_its_machine_with_its_runs_boot_from_cornercase_0_13_63() {
+    let (tx, _rx) = futures::channel::mpsc::unbounded();
+    let mut tab = opening();
+    let place = tab.aimed.clone();
+    tab.reopen(Target::Local, &place, Some(Version::new(0, 13, 63)), &tx);
+    assert_eq!(
+        (tab.conn.queue.machine(), tab.conn.queue.boot()),
+        (Some(tab.machine.as_str()), Some(tab.boot.as_str()))
+    );
+}
+
+#[test]
+fn a_tab_opens_its_queue_without_a_boot_below_0_13_63_or_with_the_release_unknown() {
+    let (tx, _rx) = futures::channel::mpsc::unbounded();
+    for release in [Some(Version::new(0, 13, 62)), None] {
+        let mut tab = opening();
+        let place = tab.aimed.clone();
+        tab.reopen(Target::Local, &place, release, &tx);
+        assert_eq!((tab.conn.queue.machine(), tab.conn.queue.boot()), (Some(tab.machine.as_str()), None));
+    }
 }

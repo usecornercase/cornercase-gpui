@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use super::connection::Connection;
 use super::{Heard, Msg, Root};
-use crate::cli::{self, Stream, Target};
+use crate::cli::{self, Stream, Target, Version};
 use crate::desktop;
 use crate::dialogs::{self, CloseWords, ContextThere, agent_doing, on_machine};
 use crate::model::accounts::{AccountsInfo, ListMoves};
@@ -407,8 +407,9 @@ impl MachineTab {
             cli::stream_on(self.conn.target(), &args(&["events", "--host", "--json"]), on_line, |_| {}).ok();
     }
 
-    fn reopen(&mut self, target: Target, place: &MachinePlace, tx: &UnboundedSender<Msg>) {
-        self.conn.open_queue(target, tx);
+    fn reopen(&mut self, target: Target, place: &MachinePlace, release: Option<Version>, tx: &UnboundedSender<Msg>) {
+        let run = (self.machine.clone(), acts::carried_boot(&self.boot, release));
+        self.conn.open_queue(target, run, tx);
         self.state = TabState::Opening;
         self.session = None;
         self.aimed = place.clone();
@@ -528,12 +529,13 @@ impl Root {
     }
 
     fn connect_machine(&mut self, target: Target, place: &MachinePlace, cx: &mut Context<Self>) {
+        let release = self.cli_release(cx);
         let Some(tab) = self.machine.as_mut() else { return };
         let size = tab.conn.size.or(self.own.size).unwrap_or((120, 36));
         let seen = self.window_active && !self.had.full;
         tab.told_visible = seen;
         tab.opened_visible = seen;
-        tab.reopen(target, place, &self.tx);
+        tab.reopen(target, place, release, &self.tx);
         let opened = tab.conn.open_view(&place.open_args(size, !seen), &self.tx);
         self.store.update(cx, Store::read_cli_release);
         if let Err(e) = opened {
@@ -627,7 +629,7 @@ impl Root {
         if let Some(tab) = self.machine.as_mut() {
             tab.drop_held();
         }
-        self.machine_error(why, cx);
+        self.store.update(cx, |s, cx| s.toast(why.to_string(), ToastKind::Error, cx));
     }
 
     fn machine_linked(&self, machine: &str) -> bool {
@@ -681,11 +683,11 @@ impl Root {
         let tx = self.tx.clone();
         let Some(tab) = self.machine.as_mut() else { return };
         let Some(view) = tab.conn.view_id else { return };
-        let serial = tab.conn.queue_serial();
+        let (serial, machine) = (tab.conn.queue_serial(), tab.machine.clone());
         let dropped = tab.steered(&place);
         tab.conn.queue.cmd_then(place.focus_args(view), move |answer| {
             if let Err(e) = answer {
-                let _ = tx.unbounded_send(Msg::Stream(serial, Heard::FocusRefused(e.to_string())));
+                let _ = tx.unbounded_send(Msg::Stream(serial, Heard::FocusRefused(failed_there(&machine, &e))));
             }
         });
         if dropped {

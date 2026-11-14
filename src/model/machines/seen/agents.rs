@@ -1,5 +1,7 @@
-use super::{Aim, MachinePlace, MachineSeen, ThereId, ThereProject, ThereWorkspace, with_boot};
-use crate::cli::Version;
+use super::{
+    Aim, FOLD_BOOT_SINCE, HAND_OFF_BOOT_SINCE, MachinePlace, MachineSeen, ThereId, ThereProject, ThereWorkspace,
+};
+use crate::cli::{Version, with_boot};
 use crate::model::tree::{self, Item, Node};
 use crate::model::{AgentRow, PaneInfo, Placed, Session, Tab, needs_you, status_rank};
 use crate::store::args;
@@ -32,8 +34,6 @@ pub(crate) enum SectionRow<'a> {
     Here(AgentRow<'a>),
     There(ThereRow<'a>),
 }
-
-const FOLD_BOOT_SINCE: Version = Version::new(0, 13, 32);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PaneAim {
@@ -176,19 +176,24 @@ impl PaneThere {
         format!("{}:{}:{}", self.machine, self.boot, self.pane.key())
     }
 
-    pub(crate) fn paste_file_args(&self, file: &std::path::Path) -> Vec<String> {
-        vec!["paste-file".into(), "--pane".into(), self.pane.0.to_string(), file.display().to_string()]
+    fn on_run(&self, command: Vec<String>, release: Option<Version>) -> Vec<String> {
+        if HAND_OFF_BOOT_SINCE.reached_by(release) { with_boot(command, &self.boot) } else { command }
     }
 
-    pub(crate) fn paste_args(&self, text: &str) -> Vec<String> {
+    pub(crate) fn paste_file_args(&self, file: &std::path::Path, release: Option<Version>) -> Vec<String> {
+        let command = vec!["paste-file".into(), "--pane".into(), self.pane.0.to_string(), file.display().to_string()];
+        self.on_run(command, release)
+    }
+
+    pub(crate) fn paste_args(&self, text: &str, release: Option<Version>) -> Vec<String> {
         let paste = serde_json::json!({ "paste": text }).to_string();
-        vec!["input".into(), "--pane".into(), self.pane.0.to_string(), paste]
+        self.on_run(vec!["input".into(), "--pane".into(), self.pane.0.to_string(), paste], release)
     }
 
-    pub(crate) fn send_args(&self, text: String) -> Vec<String> {
+    pub(crate) fn send_args(&self, text: String, release: Option<Version>) -> Vec<String> {
         let mut send = args(&["send", "--pane", &self.pane.0.to_string(), "--enter", "--"]);
         send.push(text);
-        send
+        self.on_run(send, release)
     }
 }
 

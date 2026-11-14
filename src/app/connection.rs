@@ -96,10 +96,10 @@ impl Connection {
         &self.target
     }
 
-    pub(super) fn open_queue(&mut self, target: Target, tx: &UnboundedSender<Msg>) {
+    pub(super) fn open_queue(&mut self, target: Target, run: (String, Option<String>), tx: &UnboundedSender<Msg>) {
         let serial = next_serial();
         let errors = tx.clone();
-        self.queue = Queue::on(target.clone(), move |e| {
+        self.queue = Queue::on(target.clone(), run, move |e| {
             let _ = errors.unbounded_send(Msg::Stream(serial, Heard::QueueError(e)));
         });
         self.queue_serial = serial;

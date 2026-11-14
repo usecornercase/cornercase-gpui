@@ -1,4 +1,5 @@
-use super::{MachineSeen, ThereId, ThereProject};
+use super::{ACTS_BOOT_SINCE, MachineSeen, ThereId, ThereProject};
+use crate::cli::{Version, with_boot};
 use crate::model::Project;
 use crate::store::args;
 
@@ -44,7 +45,7 @@ impl Spot {
         args(&["--machine", &self.machine, "--project", &self.id()])
     }
 
-    pub(crate) fn login_tab_args(&self, tab: LoginTab<'_>) -> Option<Vec<String>> {
+    pub(crate) fn login_tab_args(&self, tab: LoginTab<'_>, release: Option<Version>) -> Option<Vec<String>> {
         let workspace = self.root?.0.to_string();
         let name = format!("{} login", tab.agent);
         let mut command = args(&["new-tab", "--workspace", &workspace, "--name", &name, "--json"]);
@@ -54,7 +55,7 @@ impl Spot {
         if let Some(line) = tab.command {
             command.extend(["--".to_string(), typed(line)]);
         }
-        Some(command)
+        Some(if ACTS_BOOT_SINCE.reached_by(release) { with_boot(command, &self.boot) } else { command })
     }
 }
 

@@ -348,3 +348,30 @@ fn the_fold_says_what_it_does_and_why_it_failed() {
     assert_eq!(expand.label(), "Expand");
     assert_eq!(expand.failed("no pane 9"), "could not expand the agent on vps: no pane 9");
 }
+
+fn handed() -> PaneThere {
+    PaneThere { machine: "vps".into(), boot: "b1".into(), pane: ThereId::heard(9) }
+}
+
+#[test]
+fn a_hand_off_names_the_run_its_pane_was_read_in_from_cornercase_0_13_60() {
+    for release in [Version::new(0, 13, 60), Version::new(0, 13, 68), Version::new(0, 14, 0)] {
+        let (there, file) = (handed(), std::path::Path::new("/tmp/a.png"));
+        let at = Some(release);
+        assert_eq!(there.paste_file_args(file, at), ["paste-file", "--pane", "9", "/tmp/a.png", "--boot", "b1"]);
+        let paste = there.paste_args("look", at);
+        assert_eq!(paste, ["input", "--pane", "9", r#"{"paste":"look"}"#, "--boot", "b1"]);
+        let send = there.send_args("fix it".into(), at);
+        assert_eq!(send, ["send", "--pane", "9", "--enter", "--boot", "b1", "--", "fix it"]);
+    }
+}
+
+#[test]
+fn an_older_or_unknown_cornercase_here_hands_off_without_the_run() {
+    for release in [Some(Version::new(0, 13, 59)), Some(Version::new(0, 13, 19)), None] {
+        let (there, file) = (handed(), std::path::Path::new("/tmp/a.png"));
+        assert_eq!(there.paste_file_args(file, release), ["paste-file", "--pane", "9", "/tmp/a.png"]);
+        assert_eq!(there.paste_args("look", release), ["input", "--pane", "9", r#"{"paste":"look"}"#]);
+        assert_eq!(there.send_args("fix it".into(), release), ["send", "--pane", "9", "--enter", "--", "fix it"]);
+    }
+}
