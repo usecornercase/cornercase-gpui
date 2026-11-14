@@ -1,6 +1,8 @@
 use super::super::wire::Mode;
 use super::*;
-use crate::test_util::{reads_with_boot, vps_aim};
+use crate::cli;
+use crate::store::Reach;
+use crate::test_util::{reads_with_boot, vps_aim, vps_read, vps_target};
 
 fn selected(workspace: Whose) -> Selected {
     Selected { workspace, path: "src/a.rs".into(), mode: Mode::Commits }
@@ -79,4 +81,24 @@ fn reads_under_way_are_not_believed_after_a_restart_and_the_file_is_read_again()
     assert_ne!(open.generation, asked);
     assert!(!open.loading);
     assert_ne!(open.digest, "d5dccd1bdadf10a2");
+}
+
+#[test]
+fn a_failed_file_or_gap_read_latches_a_refusal_and_words_it() {
+    let mut hearing = Hearing::default();
+    hearing.believed();
+    let refused = cli::failure("changes", Some(4), b"error: another run");
+    assert_eq!(failed_read(&mut hearing, Some("vps"), &refused), "vps restarted");
+    let read = vps_read(Reach::Up(vps_target()));
+    assert_eq!(hearing.may_read(&read), Err("vps restarted".to_string()));
+}
+
+#[test]
+fn any_other_failed_read_keeps_its_words_and_latches_nothing() {
+    let mut hearing = Hearing::default();
+    hearing.believed();
+    let failed = cli::failure("changes", Some(1), b"no such file");
+    assert_eq!(failed_read(&mut hearing, Some("vps"), &failed), failed.to_string());
+    let read = vps_read(Reach::Up(vps_target()));
+    assert!(hearing.may_read(&read).is_ok());
 }

@@ -47,7 +47,7 @@ impl Hearing {
         self.retry.failed(why, now)
     }
 
-    fn believed(&mut self) -> bool {
+    pub(super) fn believed(&mut self) -> bool {
         self.boot_heard = true;
         self.retry.heard()
     }

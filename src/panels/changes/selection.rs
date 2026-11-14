@@ -7,6 +7,7 @@ use crate::cli::{self, Target};
 use crate::model::ReadReleases;
 use crate::store::{self, Busy, Store, ToastKind, args, read_refusal};
 
+use super::follow::Hearing;
 use super::pieces::{find, looks, parse, toast};
 use super::wire::{Base, Gap, Patch};
 use super::{ChangesPanel, DiffData, Gaps, Open, Scope, Selected, Whose, diff};
@@ -16,6 +17,11 @@ fn file_command(verb: &str, selected: &Selected, extra: &[String], releases: Rea
     a.extend(extra.iter().cloned());
     a.extend(args(&["--workspace", &selected.workspace.arg(), "--mode", selected.mode.name(), "--json"]));
     selected.workspace.reading(a, releases)
+}
+
+fn failed_read(hearing: &mut Hearing, machine: Option<&str>, error: &anyhow::Error) -> String {
+    hearing.read_refused(error);
+    refusal_text(machine, error)
 }
 
 fn refusal_text(machine: Option<&str>, error: &anyhow::Error) -> String {
@@ -50,8 +56,7 @@ impl ChangesPanel {
     }
 
     fn patch_failed(&mut self, machine: Option<&str>, error: &anyhow::Error, cx: &mut Context<Self>) {
-        self.hearing.read_refused(error);
-        let text = refusal_text(machine, error);
+        let text = failed_read(&mut self.hearing, machine, error);
         if self.open.read_failed(text.clone()) {
             toast(text, ToastKind::Error, cx);
         }
@@ -174,8 +179,8 @@ impl ChangesPanel {
             match parse::<Gap>(result) {
                 Ok(gap) => this.add_gap(hunk, gap),
                 Err(e) => {
-                    this.hearing.read_refused(&e);
-                    toast(refusal_text(machine.as_deref(), &e), ToastKind::Error, cx);
+                    let text = failed_read(&mut this.hearing, machine.as_deref(), &e);
+                    toast(text, ToastKind::Error, cx);
                 }
             }
             cx.notify();
