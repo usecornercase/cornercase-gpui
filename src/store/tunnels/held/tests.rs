@@ -1,6 +1,6 @@
 use super::{
     Again, Asked, Fate, Held, Hold, Settled, again_of, bring_back, came_back, fate as fate_of, forgets_after_close,
-    forgets_failed, live, local_before, ports_kept, remembers, settle_now, settled, test_hold, up_toast,
+    forgets_failed, live, local_before, ports_kept, remembers, settle_now, settled, test_hold, unsent, up_toast,
     window_failure,
 };
 use crate::cli::{Ended, ended_after};
@@ -340,4 +340,15 @@ fn a_hold_this_window_ended_goes_quietly_whatever_its_last_line() {
     let stopped = crate::test_util::fixture!("tunnels/hold_server_stopped.txt");
     assert_eq!(printed(&hold(Held::Ending, true), closed, 0), Fate::Gone);
     assert_eq!(printed(&hold(Held::Ending, true), stopped, 7), Fate::Gone);
+}
+
+#[test]
+fn a_machines_hold_dropped_without_the_machine_is_noted_by_its_port_and_local_port() {
+    let mut there = test_hold(Toward::Machine("vps".to_string()), 8765, Held::Up { local: 60950 });
+    assert_eq!(unsent(&there), None);
+    there.last_local = Some(60950);
+    assert_eq!(unsent(&there), Some(("vps".to_string(), 8765, 60950)));
+    let mut server = test_hold(Toward::Server, 8765, Held::Up { local: 60950 });
+    server.last_local = Some(60950);
+    assert_eq!(unsent(&server), None);
 }

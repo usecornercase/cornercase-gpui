@@ -397,19 +397,20 @@ fn a_hold_to_the_server_is_not_a_machines_own_hold() {
 }
 
 #[test]
-fn a_tunnel_closed_here_while_its_machine_was_down_is_not_listed_as_anothers() {
-    let ended = BTreeSet::from([("vps".to_string(), 8765)]);
+fn only_the_tunnel_closed_here_while_its_machine_was_down_leaves_its_list() {
+    let ended = BTreeSet::from([("vps".to_string(), 8765, 60950)]);
     let seen = down_entry();
-    let rows = |ended: &BTreeSet<(String, u16)>| {
+    let rows = |ended: &BTreeSet<(String, u16, u16)>| {
         machine_sections(&[], &BTreeMap::new(), std::slice::from_ref(&seen), ended)[0].rows.clone()
     };
-    assert!(rows(&BTreeSet::new()).iter().any(|row| row.port == 8765));
-    assert!(rows(&ended).iter().all(|row| row.port != 8765));
+    let on_8765 = |ended: &BTreeSet<(String, u16, u16)>| rows(ended).iter().filter(|row| row.port == 8765).count();
+    assert_eq!(on_8765(&BTreeSet::new()), 2);
+    assert_eq!(on_8765(&ended), 1);
 }
 
 #[test]
 fn a_linked_machine_lists_what_it_says_whatever_was_closed_here() {
-    let ended = BTreeSet::from([("vps".to_string(), 8765)]);
+    let ended = BTreeSet::from([("vps".to_string(), 8765, 60950)]);
     let seen = vps_entry();
     let sections = machine_sections(&[], &BTreeMap::new(), std::slice::from_ref(&seen), &ended);
     assert!(sections[0].rows.iter().any(|row| row.port == 8765));

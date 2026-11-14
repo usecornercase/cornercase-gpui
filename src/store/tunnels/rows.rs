@@ -129,10 +129,11 @@ pub(crate) fn last_sent_note(seen: &MachineSeen) -> String {
     format!("{}: the tunnels other windows or programs hold to it are as it last sent them", seen.link_note())
 }
 
-fn last_sent(seen: Option<&MachineSeen>, name: &str, ended: &BTreeSet<(String, u16)>) -> Vec<TunnelSeen> {
+fn last_sent(seen: Option<&MachineSeen>, name: &str, ended: &BTreeSet<(String, u16, u16)>) -> Vec<TunnelSeen> {
     let Some(seen) = seen else { return Vec::new() };
     let gone = |tunnel: &TunnelSeen| {
-        !seen.linked() && tunnel.forward() && tunnel.kind == "hold" && ended.contains(&(name.to_string(), tunnel.port))
+        let ours = |local: u16| ended.contains(&(name.to_string(), tunnel.port, local));
+        !seen.linked() && tunnel.forward() && tunnel.kind == "hold" && tunnel.local.is_some_and(ours)
     };
     seen.tunnels.iter().filter(|tunnel| !gone(tunnel)).cloned().collect()
 }
@@ -140,7 +141,7 @@ fn last_sent(seen: Option<&MachineSeen>, name: &str, ended: &BTreeSet<(String, u
 fn section(
     name: &str,
     (holds, reverses): (&[Hold], &BTreeMap<Toward, ReverseHold>),
-    (seen, ended): (Option<&MachineSeen>, &BTreeSet<(String, u16)>),
+    (seen, ended): (Option<&MachineSeen>, &BTreeSet<(String, u16, u16)>),
 ) -> Option<TunnelSection> {
     let toward = Toward::Machine(name.to_string());
     let listed = last_sent(seen, name, ended);
@@ -157,7 +158,7 @@ pub(crate) fn machine_sections(
     holds: &[Hold],
     reverses: &BTreeMap<Toward, ReverseHold>,
     machines: &[MachineSeen],
-    ended: &BTreeSet<(String, u16)>,
+    ended: &BTreeSet<(String, u16, u16)>,
 ) -> Vec<TunnelSection> {
     let towards = holds.iter().map(|hold| &hold.toward).chain(reverses.keys());
     let held = towards.filter_map(|toward| toward.machine().map(str::to_string));

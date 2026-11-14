@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use gpui::Context;
 
 use super::Store;
+use super::held::unsent;
 use super::links::{Linking, MachineLink, followed, linking, split_stale};
 use crate::model::tunnels::Toward;
 
@@ -42,7 +43,7 @@ impl Store {
         match linking(&link, self.tunnels.machines.get(name).map(String::as_str)) {
             Linking::Link { boot, destination } => {
                 self.tunnels.machines.insert(name.to_string(), boot.to_string());
-                self.tunnels.ended_unsent.retain(|(machine, _)| machine != name);
+                self.tunnels.ended_unsent.retain(|(machine, ..)| machine != name);
                 self.link_tunnels(&toward, destination, cx);
             }
             Linking::Pause => drop(self.tunnels.machines.remove(name)),
@@ -54,6 +55,7 @@ impl Store {
         }
         let (ended, kept) = split_stale(std::mem::take(&mut self.tunnels.holds), &toward, &link);
         self.tunnels.holds = kept;
+        self.tunnels.ended_unsent.extend(ended.iter().filter_map(unsent));
         self.end_holds_now(ended, cx);
         self.follow_machine_reverse(name, cx);
     }

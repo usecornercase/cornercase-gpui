@@ -1,6 +1,6 @@
 use gpui::Context;
 
-use super::held::{Held, Hold, Reached, forgets_after_close, live};
+use super::held::{Held, Hold, Reached, forgets_after_close, live, unsent};
 use super::{Busy, Store, ToastKind};
 use crate::cli;
 use crate::model::machines::hide_destination;
@@ -73,9 +73,7 @@ impl Store {
     fn close_here_only(&mut self, at: usize, port: u16, cx: &mut Context<Self>) {
         let hold = self.tunnels.holds[at].clone();
         self.remember_tunnel(&hold.destination, port, false, cx);
-        if let Toward::Machine(name) = &hold.toward {
-            self.tunnels.ended_unsent.insert((name.clone(), port));
-        }
+        self.tunnels.ended_unsent.extend(unsent(&hold));
         self.drop_hold(at, cx);
         self.toast(format!("Closed the tunnel of port {port} on {}", hold.label()), ToastKind::Info, cx);
     }

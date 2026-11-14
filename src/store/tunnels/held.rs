@@ -217,6 +217,11 @@ pub(crate) fn remembers(asked: Asked) -> bool {
     matches!(asked, Asked::Click | Asked::Open | Asked::Program)
 }
 
+pub(crate) fn unsent(hold: &Hold) -> Option<(String, u16, u16)> {
+    let (Toward::Machine(name), Some(local)) = (&hold.toward, hold.last_local) else { return None };
+    Some((name.clone(), hold.port, local))
+}
+
 pub(crate) fn forgets_failed(fate: &Fate, added: bool) -> bool {
     matches!(fate, Fate::Failed(_)) && added
 }

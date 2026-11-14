@@ -42,7 +42,7 @@ pub(crate) struct Tunnels {
     link: Option<String>,
     machines: BTreeMap<String, String>,
     settling: Vec<Settling>,
-    ended_unsent: BTreeSet<(String, u16)>,
+    ended_unsent: BTreeSet<(String, u16, u16)>,
     takers: BTreeMap<Toward, taker::Taker>,
     next_taker: u64,
 }
