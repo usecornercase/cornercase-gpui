@@ -5,6 +5,7 @@ use gpui::Context;
 use super::Store;
 use super::held::unsent;
 use super::links::{Linking, MachineLink, followed, linking, split_stale};
+use super::rows;
 use crate::model::tunnels::Toward;
 
 impl Store {
@@ -30,6 +31,8 @@ impl Store {
     }
 
     pub(crate) fn follow_machine_tunnels(&mut self, cx: &mut Context<Self>) {
+        let machines = self.session.as_ref().map_or(&[][..], |session| session.machines.as_slice());
+        rows::pruned(&mut self.tunnels.ended_unsent, machines);
         for name in self.machines_followed() {
             self.follow_machine(&name, cx);
         }

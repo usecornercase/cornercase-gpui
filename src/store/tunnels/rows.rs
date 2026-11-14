@@ -129,6 +129,15 @@ pub(crate) fn last_sent_note(seen: &MachineSeen) -> String {
     format!("{}: the tunnels other windows or programs hold to it are as it last sent them", seen.link_note())
 }
 
+pub(crate) fn pruned(ended: &mut BTreeSet<(String, u16, u16)>, machines: &[MachineSeen]) {
+    let lists = |seen: &MachineSeen, port: u16, local: u16| {
+        seen.tunnels.iter().any(|t| t.forward() && t.kind == "hold" && t.port == port && t.local == Some(local))
+    };
+    ended.retain(|(name, port, local)| {
+        machines.iter().find(|seen| seen.name == *name).is_none_or(|seen| !seen.linked() || lists(seen, *port, *local))
+    });
+}
+
 fn last_sent(seen: Option<&MachineSeen>, name: &str, ended: &BTreeSet<(String, u16, u16)>) -> Vec<TunnelSeen> {
     let Some(seen) = seen else { return Vec::new() };
     let gone = |tunnel: &TunnelSeen| {

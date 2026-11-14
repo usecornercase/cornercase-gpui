@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
-    Control, Tail, TunnelRow, Whose, count, elsewhere, machine_sections, mark, orders_notes, place_rows, row_control,
-    section_tail,
+    Control, Tail, TunnelRow, Whose, count, elsewhere, machine_sections, mark, orders_notes, place_rows, pruned,
+    row_control, section_tail,
 };
 use crate::cli::Version;
 use crate::model::MachineSeen;
@@ -414,4 +414,31 @@ fn a_linked_machine_lists_what_it_says_whatever_was_closed_here() {
     let seen = vps_entry();
     let sections = machine_sections(&[], &BTreeMap::new(), std::slice::from_ref(&seen), &ended);
     assert!(sections[0].rows.iter().any(|row| row.port == 8765));
+}
+
+#[test]
+fn a_note_is_dropped_once_its_linked_machine_no_longer_lists_the_tunnel() {
+    let mut ended = BTreeSet::from([("vps".to_string(), 8765, 60950)]);
+    let mut seen = vps_entry();
+    pruned(&mut ended, std::slice::from_ref(&seen));
+    assert_eq!(ended.len(), 1);
+    seen.tunnels.retain(|tunnel| tunnel.local != Some(60950));
+    pruned(&mut ended, std::slice::from_ref(&seen));
+    assert_eq!(ended.len(), 0);
+}
+
+#[test]
+fn a_note_waits_while_its_machine_is_not_linked_and_a_later_holder_of_that_port_still_shows() {
+    let mut ended = BTreeSet::from([("vps".to_string(), 8765, 60950)]);
+    let mut seen = down_entry();
+    seen.tunnels.retain(|tunnel| tunnel.local != Some(60950));
+    pruned(&mut ended, std::slice::from_ref(&seen));
+    assert_eq!(ended.len(), 1);
+    let mut linked = vps_entry();
+    linked.tunnels.retain(|tunnel| tunnel.local != Some(60950));
+    pruned(&mut ended, std::slice::from_ref(&linked));
+    assert_eq!(ended.len(), 0);
+    let down = down_entry();
+    let rows = machine_sections(&[], &BTreeMap::new(), std::slice::from_ref(&down), &ended)[0].rows.clone();
+    assert_eq!(rows.iter().filter(|row| row.port == 8765).count(), 2);
 }
