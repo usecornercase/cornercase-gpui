@@ -236,7 +236,7 @@ fn install_status(
     }
 }
 
-pub(crate) fn installed_words(version: &str, host: Option<&str>) -> String {
+fn installed_words(version: &str, host: Option<&str>) -> String {
     match host {
         Some(host) => format!(
             "cornercase {version} is installed on {host}; its server keeps running the release it started with until it restarts."
@@ -245,7 +245,7 @@ pub(crate) fn installed_words(version: &str, host: Option<&str>) -> String {
     }
 }
 
-pub(crate) fn manual_words(by_hand: &ByHand, host: Option<&str>) -> String {
+fn manual_words(by_hand: &ByHand, host: Option<&str>) -> String {
     let ByHand { version, latest, .. } = by_hand;
     match host {
         Some(host) => format!(
@@ -257,14 +257,14 @@ pub(crate) fn manual_words(by_hand: &ByHand, host: Option<&str>) -> String {
     }
 }
 
-pub(crate) fn copied_words(host: Option<&str>) -> String {
+fn copied_words(host: Option<&str>) -> String {
     match host {
         Some(host) => format!("Copied: run it on {host}"),
         None => "Copied: run it in a terminal".to_string(),
     }
 }
 
-pub(crate) fn offered_command(install: &InstallState, from_app: Option<String>) -> Option<String> {
+fn offered_command(install: &InstallState, from_app: Option<String>) -> Option<String> {
     match install {
         InstallState::Manual(by_hand) => Some(by_hand.command.clone()),
         _ => from_app,

@@ -393,6 +393,7 @@ impl Notifier {
         let release = self.app.release().map(|r| r.version.clone()).unwrap_or_default();
         let target = cli::target();
         let gate = self.update_gate(&target, cx);
+        let host = target.host().map(str::to_string);
         self.install = InstallState::Running;
         self.waits = None;
         cx.notify();
@@ -403,7 +404,7 @@ impl Notifier {
             move || Ok(ask_update(&target, &gate.args(vec!["update".to_string()]))),
             move |this, result, cx| {
                 let (answer, here) = result.unwrap_or_else(|e| (Err(e), None));
-                this.installed_by(&answer, here.as_ref(), (&release, gate), cx);
+                this.installed_by(&answer, here.as_ref(), (&release, gate, host.as_deref()), cx);
             },
         );
     }
@@ -412,11 +413,10 @@ impl Notifier {
         &mut self,
         answer: &anyhow::Result<cli::Answer>,
         here: Option<&Here>,
-        (release, gate): (&str, cli::UpdateGate),
+        (release, gate, host): (&str, cli::UpdateGate, Option<&str>),
         cx: &mut Context<Self>,
     ) {
-        let host = cli::host();
-        let place = host.as_deref().map_or(Where::Here(here), Where::There);
+        let place = host.map_or(Where::Here(here), Where::There);
         let outcome = outcome::of(answer, release, &place);
         self.waits = outcome.waits(gate, &place, Os::CURRENT);
         self.install = outcome.state();

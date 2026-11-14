@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 
-use super::{ByHand, UpdateAnswer, UpdateGate, update_answer, update_command};
+use super::{ByHand, Lacking, UpdateAnswer, UpdateGate, update_answer, update_command};
 use crate::cli::{Answer, Older, Remote, Said, Target, Version};
 use crate::test_util::fixture;
 
@@ -67,6 +67,12 @@ fn a_line_is_read_only_with_the_status_it_comes_with() {
 fn a_checks_available_line_is_no_install() {
     let answer = update_answer(&reply(0, fixture!("update/check-available.txt"), ""));
     assert!(matches!(answer, UpdateAnswer::Printed(Said::Done(_))));
+}
+
+#[test]
+fn a_checks_up_to_date_line_names_the_binary_on_disk() {
+    let answer = update_answer(&reply(0, fixture!("update/check-up-to-date.txt"), ""));
+    assert_eq!(answer, UpdateAnswer::UpToDate { version: "0.13.74".into() });
 }
 
 #[test]
@@ -166,7 +172,6 @@ fn through_remote_both_command_lines_need_it() {
 
 #[test]
 fn the_gate_names_which_command_line_lacks_it() {
-    use super::Lacking;
     let gate = |here, there| UpdateGate::Through { here: release(here), there: release(there) }.lacking();
     assert_eq!(gate("0.13.74", "0.13.51"), Some(Lacking::There));
     assert_eq!(gate("0.13.51", "0.13.74"), Some(Lacking::Here));
@@ -179,7 +184,17 @@ fn the_gate_follows_the_windows_target() {
     let (here, there) = (release("0.13.74"), release("0.13.51"));
     assert_eq!(UpdateGate::on(&Target::Local, here, there), UpdateGate::Here(here));
     let remote = Target::Remote(Remote::new("vps.invalid", "").expect("a destination"));
-    assert_eq!(UpdateGate::on(&remote, here, there), UpdateGate::Through { here, there });
+    assert_eq!(UpdateGate::on(&remote, here, there), UpdateGate::Through { here, there: here });
+}
+
+#[test]
+fn through_the_windows_remote_this_computers_release_bounds_the_binary_there() {
+    let remote = Target::Remote(Remote::new("vps.invalid", "").expect("a destination"));
+    let gate = |here, there| UpdateGate::on(&remote, release(here), release(there));
+    assert_eq!(gate("0.13.74", "0.13.51").lacking(), None);
+    assert_eq!(gate("0.13.51", "0.13.74").lacking(), Some(Lacking::Here));
+    assert_eq!(UpdateGate::on(&remote, release("0.13.74"), None).lacking(), None);
+    assert_eq!(UpdateGate::on(&remote, None, release("0.13.74")).lacking(), Some(Lacking::Here));
 }
 
 #[test]

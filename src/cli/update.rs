@@ -87,7 +87,7 @@ impl UpdateGate {
     pub(crate) fn on(target: &Target, here: Option<Version>, there: Option<Version>) -> Self {
         match target {
             Target::Local => Self::Here(here),
-            Target::Remote(_) => Self::Through { here, there },
+            Target::Remote(_) => Self::Through { here, there: there.max(here) },
         }
     }
 
