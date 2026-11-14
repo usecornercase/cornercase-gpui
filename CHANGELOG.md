@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.103
+
+- **In a short or narrow Issues sheet, an issue's description and its buttons no longer slip out of sight under its header.** When the header (its state, title, people, labels, Start…, Schedule…, Start a flow…, open and copy) would leave the description less than its heading and a line, it keeps the rest of the sheet and scrolls on its own: scroll over it to reach the buttons, while the description keeps its heading and first line in view. An issue with many labels or people shows this in a taller sheet too. In a usual window nothing changes.
+
 ## 0.1.102
 
 - **Copy command when cornercase on another machine cannot update itself.** With cornercase 0.13.53 or newer on this computer and on that machine, when Update cornercase on a linked machine finds that its cornercase cannot replace itself (Homebrew, a folder it cannot write), the toast names the release and the command to run there, and **Copy command** copies it. The page of a server that runs an older cornercase shows the same answer with **Copy command** under it. Once copied, a toast says on which machine to run it.

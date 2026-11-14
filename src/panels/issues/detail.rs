@@ -1,8 +1,9 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FontWeight, IntoElement, ParentElement as _, StatefulInteractiveElement as _,
-    Styled as _, WeakEntity, div, list, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Div, ElementId, FontWeight, InteractiveElement as _, IntoElement,
+    ParentElement as _, Stateful, StatefulInteractiveElement as _, Styled as _, WeakEntity, div, list,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::data::{self, Comment, Issue};
@@ -12,6 +13,8 @@ use crate::notify::tip;
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui::markdown::text;
 use crate::ui::{self, Icon, Tone, glass};
+
+const TEXT_LEAST: f32 = 78.;
 
 struct Detail {
     page: Rc<Page>,
@@ -32,21 +35,18 @@ impl IssuesPanel {
             .flex()
             .flex_col()
             .child(self.detail_header(&issue, &info, cx))
-            .child(self.detail_text(read, cx))
+            .child(text_area(self.detail_text(read, cx)))
             .into_any_element()
     }
 
-    fn detail_header(&self, issue: &Issue, info: &[String], cx: &mut Context<Self>) -> Div {
-        div()
-            .flex_none()
+    fn detail_header(&self, issue: &Issue, info: &[String], cx: &mut Context<Self>) -> Stateful<Div> {
+        let column = div()
             .flex()
             .flex_col()
             .gap(px(10.))
             .px(px(20.))
             .pt(px(16.))
             .pb(px(14.))
-            .border_b_1()
-            .border_color(colours::border())
             .child(self.detail_heading(issue))
             .child(
                 div()
@@ -57,7 +57,15 @@ impl IssuesPanel {
                     .child(issue.title.clone()),
             )
             .children(info_line(issue, info))
-            .child(detail_actions(&issue.url, cx))
+            .child(detail_actions(&issue.url, cx));
+        div()
+            .id(head_id(&issue.source, &issue.key))
+            .flex_initial()
+            .min_h_0()
+            .overflow_y_scroll()
+            .border_b_1()
+            .border_color(colours::border())
+            .child(column)
     }
 
     fn detail_heading(&self, issue: &Issue) -> Div {
@@ -131,19 +139,27 @@ impl Detail {
     }
 }
 
+fn head_id(source: &str, key: &str) -> ElementId {
+    ElementId::Name(format!("issue-head-{source}-{key}").into())
+}
+
+fn text_area(text: AnyElement) -> Div {
+    div().flex_1().min_h(px(TEXT_LEAST)).flex().flex_col().child(text)
+}
+
 fn nothing() -> AnyElement {
     div().into_any_element()
 }
 
 fn unread(view: BodyView, panel: &WeakEntity<IssuesPanel>, note: Div) -> AnyElement {
     div()
-        .flex()
-        .flex_col()
-        .gap(px(10.))
-        .px(px(20.))
-        .pt(px(14.))
-        .child(body_heading(view, panel))
-        .child(note)
+        .id("issue-unread")
+        .flex_1()
+        .min_h_0()
+        .overflow_y_scroll()
+        .child(
+            div().flex().flex_col().gap(px(10.)).px(px(20.)).pt(px(14.)).child(body_heading(view, panel)).child(note),
+        )
         .into_any_element()
 }
 
@@ -261,3 +277,6 @@ fn byline(comment: &Comment, now: i64) -> Div {
         .child(div().font_weight(FontWeight::SEMIBOLD).child(comment.author.clone()))
         .child(div().text_color(colours::faint()).child(comment.when(now)))
 }
+
+#[cfg(test)]
+mod tests;
