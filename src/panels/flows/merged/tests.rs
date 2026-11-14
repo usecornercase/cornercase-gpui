@@ -301,3 +301,55 @@ fn the_dialogs_second_box_asks_this_server_and_the_machine_chosen() {
     let here = Switch::Rests(format!("{FREE_NEEDS}: the server runs 0.13.63."));
     assert_eq!(box_for("0.13.63", "0.13.64"), here);
 }
+
+fn both() -> Choice {
+    Choice { close: true, free: true }
+}
+
+fn sent_with(here: Option<Version>, machine: Option<(&str, Option<Version>)>) -> Choice {
+    sent(Some(&flow("Arena")), &Releases { here, machine }, both())
+}
+
+#[test]
+fn the_dialog_sends_both_flags_when_every_release_has_them() {
+    let there = Some(("vps", release("0.13.64")));
+    assert_eq!(sent_with(release("0.13.64"), there), both());
+    assert_eq!(sent_with(release("0.14.0"), None), both());
+}
+
+#[test]
+fn the_dialog_sends_no_flag_below_the_servers_close_release() {
+    let none = Choice { close: false, free: false };
+    assert_eq!(sent_with(release("0.13.32"), None), none);
+    assert_eq!(sent_with(None, None), none);
+}
+
+#[test]
+fn the_dialog_sends_the_close_without_the_free_below_the_free_release() {
+    let close_only = Choice { close: true, free: false };
+    assert_eq!(sent_with(release("0.13.63"), None), close_only);
+    assert_eq!(sent_with(release("0.13.64"), Some(("vps", release("0.13.63")))), close_only);
+}
+
+#[test]
+fn the_dialog_sends_no_flag_to_a_machine_below_the_close_release() {
+    let none = Choice { close: false, free: false };
+    assert_eq!(sent_with(release("0.14.0"), Some(("vps", release("0.13.32")))), none);
+    assert_eq!(sent_with(release("0.14.0"), Some(("vps", None))), none);
+    assert_eq!(sent_with(release("0.14.0"), Some(("vps", release("0.13.33")))), Choice { close: true, free: false });
+}
+
+#[test]
+fn the_dialog_sends_no_flag_for_a_flow_that_leaves_the_commits() {
+    let quick = ends_in_commits("Quick");
+    let releases = Releases { here: release("0.14.0"), machine: None };
+    assert_eq!(sent(Some(&quick), &releases, both()), Choice { close: false, free: false });
+}
+
+#[test]
+fn the_dialog_sends_the_free_flag_only_with_the_close_ticked() {
+    let releases = Releases { here: release("0.14.0"), machine: None };
+    let sent = |close, free| sent(Some(&flow("Arena")), &releases, Choice { close, free });
+    assert_eq!(sent(false, true), Choice { close: false, free: false });
+    assert_eq!(sent(true, false), Choice { close: true, free: false });
+}

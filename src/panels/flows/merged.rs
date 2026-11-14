@@ -80,6 +80,13 @@ pub(super) fn free_box(flow: Option<&FlowInfo>, releases: &Releases<'_>, close: 
     }
 }
 
+pub(super) fn sent(flow: Option<&FlowInfo>, releases: &Releases<'_>, ticked: Choice) -> Choice {
+    let close = ticked.close && rests(flow, releases).is_none();
+    let free =
+        close && ticked.free && matches!(free_box(flow, releases, ticked.close, ticked.free), Switch::Offered(_));
+    Choice { close, free }
+}
+
 fn free_tail(releases: &Releases<'_>, close: bool, free: bool) -> Switch {
     if let Some(line) = too_old(Feature::FlowFreeBuilds, releases) {
         return Switch::Rests(line);

@@ -822,6 +822,8 @@ fn the_snapshot_offers_results_from_the_servers_release() {
     use super::rows::Snapshot;
     let session = |version: &str| Session { version: version.into(), ..Session::default() };
     assert!(!Snapshot::new(None, Some(session("0.13.39"))).results);
+    assert!(!Snapshot::new(None, Some(session("0.13.50"))).results);
+    assert!(Snapshot::new(None, Some(session("0.13.51"))).results);
     assert!(Snapshot::new(None, Some(session("0.13.53"))).results);
     assert!(!Snapshot::new(None, None).results);
 }

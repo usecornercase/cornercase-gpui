@@ -259,15 +259,15 @@ impl StartFlow {
     fn typed(&self, cx: &App) -> Typed {
         let text = |field: &Entity<TextField>| field.read(cx).text();
         let fields = &self.fields;
-        let close = self.ticks.close_when_merged && self.merged_rests(cx).is_none();
+        let sent = self.sent(cx);
         Typed {
             prompt: text(&fields.prompt),
             issue: text(&fields.issue),
             branch: text(&fields.branch),
             workspace: text(&fields.workspace),
             focus: self.ticks.focus,
-            close_when_merged: close,
-            free_builds: close && self.ticks.free_builds && matches!(self.free_rests(cx), Switch::Offered(_)),
+            close_when_merged: sent.close,
+            free_builds: sent.free,
             accounts: self.accounts.picks(&self.team(), cx),
         }
     }
@@ -404,6 +404,11 @@ impl StartFlow {
         let run_on = self.run_on.read(cx);
         let machine = run_on.machine().map(|name| (name, run_on.release(cx)));
         then(&merged::Releases { here, machine })
+    }
+
+    fn sent(&self, cx: &App) -> merged::Choice {
+        let ticked = merged::Choice { close: self.ticks.close_when_merged, free: self.ticks.free_builds };
+        self.with_releases(cx, |releases| merged::sent(self.selected(), releases, ticked))
     }
 
     fn merged_rests(&self, cx: &App) -> Option<String> {
