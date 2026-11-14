@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.1.103
 
-- **In a short or narrow Issues sheet, an issue's description and its buttons no longer slip out of sight under its header.** When the header (its state, title, people, labels, Start…, Schedule…, Start a flow…, open and copy) would leave the description less than its heading and a line, it keeps the rest of the sheet and scrolls on its own: scroll over it to reach the buttons, while the description keeps its heading and first line in view. An issue with many labels or people shows this in a taller sheet too. In a usual window nothing changes.
+- **In a short or narrow Issues sheet, an issue's description no longer disappears under its header, and its buttons can be scrolled to.** When the header (its state, title, people, labels, Start…, Schedule…, Start a flow…, open and copy) would leave the description less than its heading and a line, the header scrolls on its own, with a small arrow at its bottom edge while there is more below: scroll over it to reach the buttons, while the description keeps its heading and first line in view. An issue with many labels or people shows this in a taller sheet too. In a usual window nothing changes.
 
 ## 0.1.102
 
