@@ -7,27 +7,13 @@ use gpui::{
 use super::cards::badge;
 use super::model::{Broken, FlowInfo, Listing, Run, Standing};
 use super::widgets::{error_small, file_name, flow_summary, glyph, name_line, standing_colour};
-use super::{FlowsPanel, PAGE_LEAST, Selected};
+use super::{FlowsPanel, Selected};
 use crate::model::Session;
 use crate::store::Store;
 use crate::theme::colours;
-use crate::ui::split::Split;
 use crate::ui::{self, Icon, Tone};
 
 const GLYPH: f32 = 36.;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum Columns {
-    Two { list: f32 },
-    One,
-}
-
-pub(super) fn columns(sheet: f32, list: &Split) -> Columns {
-    if sheet < list.min() + PAGE_LEAST {
-        return Columns::One;
-    }
-    Columns::Two { list: list.fitted(list.size(), sheet - PAGE_LEAST) }
-}
 
 impl FlowsPanel {
     pub(super) fn sidebar(&self, width: Option<f32>, cx: &Context<Self>) -> impl IntoElement + use<> {

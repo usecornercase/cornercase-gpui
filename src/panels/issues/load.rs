@@ -1,7 +1,7 @@
 use gpui::Context;
 
 use super::data::{self, Issue, Lists, People, ReadIssue, SourceInfo, Sources, Who};
-use super::{IssuesPanel, ListKey, ListState, Tab, ask, first_line, page};
+use super::{IssuesPanel, ListKey, ListState, Tab, Wants, ask, first_line, page};
 use crate::model::agent_settings::Agents;
 use crate::store::args;
 
@@ -166,6 +166,7 @@ impl IssuesPanel {
             page.to_top();
         }
         self.selected = Some(issue);
+        self.wants = Wants::Issue;
         cx.notify();
     }
 

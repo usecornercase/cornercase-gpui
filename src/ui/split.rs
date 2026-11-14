@@ -1,9 +1,20 @@
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gpui::{
-    App, AppContext as _, Bounds, ClickEvent, Context, Div, DragMoveEvent, ElementId, InteractiveElement as _,
-    IntoElement, Pixels, Point, Render, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    App, AppContext as _, Bounds, Canvas, ClickEvent, Context, Div, DragMoveEvent, ElementId, InteractiveElement as _,
+    IntoElement, Pixels, Point, Render, Stateful, StatefulInteractiveElement as _, Styled as _, Window, canvas, div,
+    px,
 };
 
 const GRIP: f32 = 8.;
+pub(crate) const SHEET_AT_1280: f32 = 1_050.;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum Columns {
+    Two { list: f32 },
+    One,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Edge {
@@ -50,6 +61,13 @@ impl Split {
 
     pub(crate) fn fitted(&self, size: f32, room: f32) -> f32 {
         size.clamp(self.min, room.min(self.max).max(self.min)).round()
+    }
+
+    pub(crate) fn columns(&self, room: f32, keep: f32) -> Columns {
+        if room < self.min + keep {
+            return Columns::One;
+        }
+        Columns::Two { list: self.fitted(self.size(), room - keep) }
     }
 
     fn drag(&mut self, wanted: f32, room: f32) -> bool {
@@ -126,6 +144,22 @@ pub(crate) fn handle<V: 'static, T: 'static>(
         Edge::Top => handle.left_0().right_0().bottom(start).h(px(GRIP)).cursor_row_resize(),
         Edge::Bottom => handle.left_0().right_0().top(start).h(px(GRIP)).cursor_row_resize(),
     }
+}
+
+pub(crate) fn follow_width(bounds: Bounds<Pixels>, room: &Cell<f32>, window: &mut Window) {
+    let width = f32::from(bounds.size.width);
+    if (room.get() - width).abs() > 0.5 {
+        room.set(width);
+        window.request_animation_frame();
+    }
+}
+
+pub(crate) fn measure(width: Rc<Cell<f32>>) -> Canvas<()> {
+    canvas(move |bounds, window, _| follow_width(bounds, &width, window), |_, (), _, _| {})
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
 }
 
 #[cfg(test)]

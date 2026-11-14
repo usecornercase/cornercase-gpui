@@ -8,6 +8,7 @@ use gpui::{
 
 use super::graph::{Curve, HEAD, Spot, Way};
 use crate::ui::glass::tint;
+use crate::ui::split;
 
 const GRID: f32 = 18.;
 const DOT: f32 = 1.5;
@@ -52,31 +53,15 @@ pub(super) fn lines(lines: Vec<Line>) -> Canvas<()> {
     .size_full()
 }
 
-fn follow_width(bounds: Bounds<Pixels>, room: &Cell<f32>, window: &mut Window) {
-    let width = f32::from(bounds.size.width);
-    if (room.get() - width).abs() > 0.5 {
-        room.set(width);
-        window.request_animation_frame();
-    }
-}
-
 pub(super) fn backdrop(colour: Rgba, room: Rc<Cell<f32>>) -> Canvas<()> {
     canvas(
-        move |bounds, window, _| follow_width(bounds, &room, window),
+        move |bounds, window, _| split::follow_width(bounds, &room, window),
         move |bounds, (), window, _| paint_dots(window, bounds, colour),
     )
     .absolute()
     .top_0()
     .left_0()
     .size_full()
-}
-
-pub(super) fn measure(width: Rc<Cell<f32>>) -> Canvas<()> {
-    canvas(move |bounds, window, _| follow_width(bounds, &width, window), |_, (), _, _| {})
-        .absolute()
-        .top_0()
-        .left_0()
-        .size_full()
 }
 
 pub(super) fn spark(at: Spot, colour: Rgba, shown: f32) -> Canvas<()> {

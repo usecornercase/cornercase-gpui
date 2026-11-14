@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.105
+
+- **In a narrow window the Issues sheet keeps an issue readable.** When the window is too narrow for the list and an issue side by side (under about 710 px wide), the sheet shows one at a time: the list, and the issue you choose across the sheet's whole width, with **‹ Issues** at the start of its top row to show the list again. ↓ and ↑ go from issue to issue there, and typing in the filter or changing a filter shows the list. In a window a little wider (up to about 880 px), the list narrows so the issue keeps room for its buttons and a readable line, and a list you widened by dragging its border gets that width back when the window widens again. In a usual window nothing changes.
+
 ## 0.1.104
 
 - **Close once merged, Free the build folders and a queue run's result say beforehand when this computer's cornercase is too old.** With the window on another computer's newer cornercase, when the cornercase on this computer is older than the release each needs (0.13.33 to close the agents once the pull request merges, 0.13.64 to free the build folders too, 0.13.51 to show what a queue run did), the box in Start a flow… or on a run's page now rests and says `Needs cornercase 0.13.33 or newer on this Mac (it has 0.13.27).`, and the Queue sheet says above its list that showing what a run did needs it, instead of ending in an error after the press. On a run's page, a box that rests now shows the run's choice: ticked when it closes its agents once merged or frees its build folders. With the window and cornercase on one computer nothing changes.

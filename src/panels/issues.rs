@@ -8,19 +8,21 @@ mod picker;
 mod start;
 mod toolbar;
 
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, ClipboardItem, Context, Div, Entity, Focusable as _,
+    AnyElement, AnyView, App, AppContext as _, ClickEvent, ClipboardItem, Context, Div, Entity, Focusable as _,
     InteractiveElement as _, IntoElement, KeyDownEvent, ListAlignment, MouseButton, MouseDownEvent, ParentElement as _,
-    Render, SharedString, Styled as _, Subscription, Svg, Window, div, px,
+    Render, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Subscription, Svg, Window, div, px,
 };
 
 use crate::model::agent_settings::Agents;
 use crate::panels::{PanelKind, flows};
 use crate::store::{self, Store, ToastKind};
 use crate::theme::{colours, radius};
-use crate::ui::split::{self, Edge, Split};
+use crate::ui::split::{self, Columns, Edge, SHEET_AT_1280, Split};
 use crate::ui::{self, Icon, TextField, TextFieldEvent, glass};
 
 use data::{Issue, Listed, SourceState, Sources, StartPlan, Who};
@@ -32,6 +34,36 @@ const DETAIL_KEEP: f32 = 320.;
 const OVERDRAW: f32 = 400.;
 
 struct ListGrip;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Wants {
+    Issue,
+    List,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Panes {
+    Both { list: f32 },
+    List,
+    Issue,
+}
+
+impl Panes {
+    fn of(sheet: f32, list: &Split, chosen: bool, list_open: bool) -> Self {
+        match list.columns(sheet, DETAIL_KEEP) {
+            Columns::Two { list } => Self::Both { list },
+            Columns::One if chosen && !list_open => Self::Issue,
+            Columns::One => Self::List,
+        }
+    }
+
+    fn list_width(self, sheet: f32) -> f32 {
+        match self {
+            Self::Both { list } => list,
+            Self::List | Self::Issue => sheet,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Tab {
@@ -95,6 +127,8 @@ pub(crate) struct IssuesPanel {
     agents: Option<Agents>,
     was_open: bool,
     list_width: Split,
+    sheet: Rc<Cell<f32>>,
+    wants: Wants,
     rows: Rows,
     _subscriptions: Vec<Subscription>,
 }
@@ -124,6 +158,8 @@ impl IssuesPanel {
             agents: None,
             was_open: true,
             list_width: LIST,
+            sheet: Rc::new(Cell::new(SHEET_AT_1280)),
+            wants: Wants::Issue,
             rows: Rows::new(),
             _subscriptions: subscriptions,
         };
@@ -204,6 +240,7 @@ impl IssuesPanel {
     }
 
     fn after_filter(&mut self, cx: &mut Context<Self>) {
+        self.wants = Wants::List;
         if let Some(key) = self.list_key()
             && !self.lists.get(&key).is_some_and(|l| l.loaded || l.loading)
         {
@@ -213,7 +250,13 @@ impl IssuesPanel {
         cx.notify();
     }
 
+    fn show_list(&mut self, cx: &mut Context<Self>) {
+        self.wants = Wants::List;
+        cx.notify();
+    }
+
     fn search_changed(&mut self, cx: &mut Context<Self>) {
+        self.wants = Wants::List;
         self.scroll_list_to_top();
         cx.notify();
     }
@@ -227,10 +270,10 @@ impl IssuesPanel {
         self.rows.to_top();
     }
 
-    fn sync_rows(&mut self, cx: &Context<Self>) {
+    fn sync_rows(&mut self, width: f32, cx: &Context<Self>) {
         let capped = self.current().is_some_and(|s| s.issues.len() >= data::LIST_CAP);
         let shown = self.shown(cx);
-        self.rows.sync(shown, capped, self.list_width.size());
+        self.rows.sync(shown, capped, width);
     }
 
     fn toggle_picker(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -313,7 +356,7 @@ impl IssuesPanel {
         });
     }
 
-    fn content(&self, window: &Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn content(&self, panes: Panes, window: &Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
         if self.project.is_none() {
             return vec![ui::loading("Waiting for cornercase to show a project…").into_any_element()];
         }
@@ -329,7 +372,7 @@ impl IssuesPanel {
         }
         vec![
             self.toolbar_with_filters(tab_source.as_ref(), window, cx).into_any_element(),
-            self.panes(cx).into_any_element(),
+            self.body(panes, cx).into_any_element(),
         ]
     }
 
@@ -340,8 +383,15 @@ impl IssuesPanel {
         }
     }
 
-    fn panes(&self, cx: &mut Context<Self>) -> Div {
-        let width = self.list_width.size();
+    fn body(&self, panes: Panes, cx: &mut Context<Self>) -> Div {
+        match panes {
+            Panes::Both { list } => self.two_columns(list, cx),
+            Panes::List => one_column(self.render_list(cx)),
+            Panes::Issue => one_column(self.render_detail(Some(back_button(cx)), cx)),
+        }
+    }
+
+    fn two_columns(&self, list: f32, cx: &mut Context<Self>) -> Div {
         div()
             .flex_1()
             .min_h_0()
@@ -350,16 +400,24 @@ impl IssuesPanel {
             .on_drag_move(split::follow::<_, ListGrip>(Edge::Right, DETAIL_KEEP, list_width, cx))
             .child(
                 div()
-                    .w(px(width))
+                    .w(px(list))
                     .flex_none()
                     .h_full()
                     .border_r_1()
                     .border_color(colours::border())
                     .child(self.render_list(cx)),
             )
-            .child(div().flex_1().min_w_0().h_full().child(self.render_detail(cx)))
-            .child(split::handle("issues-split", ListGrip, (Edge::Right, width), list_width, cx))
+            .child(div().flex_1().min_w_0().h_full().child(self.render_detail(None, cx)))
+            .child(split::handle("issues-split", ListGrip, (Edge::Right, list), list_width, cx))
     }
+}
+
+fn one_column(content: impl IntoElement) -> Div {
+    div().flex_1().min_h_0().relative().flex().child(div().flex_1().min_w_0().h_full().child(content))
+}
+
+fn back_button(cx: &Context<IssuesPanel>) -> Stateful<Div> {
+    ui::button("issues-back", "‹ Issues").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.show_list(cx)))
 }
 
 fn list_width(panel: &mut IssuesPanel) -> &mut Split {
@@ -368,14 +426,18 @@ fn list_width(panel: &mut IssuesPanel) -> &mut Split {
 
 impl Render for IssuesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.sync_rows(cx);
+        let sheet = self.sheet.get();
+        let panes = Panes::of(sheet, &self.list_width, self.selected.is_some(), self.wants == Wants::List);
+        self.sync_rows(panes.list_width(sheet), cx);
         div()
             .size_full()
+            .relative()
             .flex()
             .flex_col()
+            .child(split::measure(self.sheet.clone()))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| this.on_key(event, cx)))
             .on_mouse_down(MouseButton::Left, cx.listener(|this, _: &MouseDownEvent, _, cx| this.close_picker(cx)))
-            .children(self.content(window, cx))
+            .children(self.content(panes, window, cx))
     }
 }
 
@@ -494,3 +556,6 @@ fn state_chip(state: &str, closed: bool) -> Div {
     let colour = if closed { colours::faint() } else { colours::accent() };
     chip(state.to_string(), colour, glass::tint(colour, 0.45))
 }
+
+#[cfg(test)]
+mod tests;
