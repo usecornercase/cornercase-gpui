@@ -7,6 +7,8 @@ fail() { echo "::error::$*" >&2; exit 1; }
 
 note() { echo "$*" >&2; }
 
+warn() { echo "::warning::$*" >&2; }
+
 cd "$(dirname "$0")/../.."
 
 version() {
@@ -20,12 +22,26 @@ latest() {
   git -c versionsort.suffix=- tag --list 'v*' --sort=-v:refname | head -n 1 | sed 's/^v//'
 }
 
+ordered() {
+  tr - '~' | sort -V "$@" | tr '~' -
+}
+
 highest() {
-  tr - '~' | sort -V | tail -n 1 | tr '~' -
+  ordered | tail -n 1
 }
 
 newer() {
   [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | highest)" = "$1" ]
+}
+
+needs_repo() {
+  [ -n "${GH_REPO:-}" ] || fail "GH_REPO is not set: name the repository, such as usecornercase/cornercase-gpui"
+}
+
+published() {
+  tags=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+    --jq '.[] | select((.draft or .prerelease) | not) | .tag_name') || return 1
+  printf '%s\n' "$tags" | sed -n 's/^v//p' | grep -E "$version_pattern" || :
 }
 
 latest_flag() {
@@ -39,11 +55,10 @@ latest_flag() {
       return
       ;;
   esac
-  [ -n "${GH_REPO:-}" ] || fail "GH_REPO is not set: name the repository, such as usecornercase/cornercase-gpui"
-  tags=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
-    --jq '.[] | select((.draft or .prerelease) | not) | .tag_name') \
+  needs_repo
+  versions=$(published) \
     || fail "nothing was published: listing the releases of $GH_REPO failed (gh's error is the line before this one in the release step's log); re-run the failed jobs once GitHub answers"
-  top=$(printf '%s\n' "$tags" | sed -n 's/^v//p' | grep -E "$version_pattern" | highest)
+  top=$(printf '%s\n' "$versions" | highest)
   if [ -z "$top" ]; then
     note "no release is published yet, so $wanted becomes the Latest release: --latest"
     echo --latest
@@ -133,8 +148,51 @@ section() {
   ' CHANGELOG.md
 }
 
+below() {
+  while read -r found; do
+    if newer "$1" "$found"; then printf '%s\n' "$found"; fi
+  done | highest
+}
+
+carried() {
+  sed -n 's/^## //p' CHANGELOG.md | grep -E "$version_pattern" | ordered -r | while read -r found; do
+    newer "$found" "$2" || break
+    if newer "$1" "$found" && [ -n "$(section "$found")" ]; then printf '%s\n' "$found"; fi
+  done
+}
+
+carried_versions() {
+  if ! listed=$(published); then
+    warn "listing the releases of $GH_REPO failed (gh's error is the line before this one in the notes and checksums step's log), so the notes are $1's section alone, without the sections of any versions below it that were never published"
+    return
+  fi
+  previous=$(printf '%s\n' "$listed" | below "$1")
+  if [ -z "$previous" ]; then
+    note "no release is published below $1, so the notes are its section alone"
+    return
+  fi
+  unreleased=$(carried "$1" "$previous" | tr '\n' ' ')
+  if [ -z "$unreleased" ]; then
+    note "$previous is the highest release below $1, so the notes are $1's section alone"
+  else
+    note "$previous is the highest release below $1, so the notes hold $1's section, then those of the unpublished $(printf "%s" "${unreleased% }" | sed "s/ /, /g")"
+  fi
+  printf '%s\n' "$unreleased"
+}
+
 notes() {
+  printf '%s\n' "$1" | grep -Eq "$version_pattern" \
+    || fail "notes takes a version such as 0.1.91, not '$1'"
+  [ -n "$(section "$1")" ] \
+    || fail "CHANGELOG.md has no '## $1' section with text, so there are no notes to publish"
+  needs_repo
+  extra=$(carried_versions "$1")
   section "$1"
+  for older in $extra; do
+    printf '\n### %s\n\n' "$older"
+    section "$older"
+  done
+  if [ -n "$extra" ]; then printf '\n---\n'; fi
   printf '\nDownloads, how to open an unsigned build and how to check the checksums: https://github.com/usecornercase/cornercase-gpui#install\n'
 }
 
