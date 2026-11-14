@@ -428,16 +428,20 @@ fn a_note_is_dropped_once_its_linked_machine_no_longer_lists_the_tunnel() {
 }
 
 #[test]
-fn a_note_waits_while_its_machine_is_not_linked_and_a_later_holder_of_that_port_still_shows() {
+fn a_note_waits_while_its_machine_is_not_linked() {
     let mut ended = BTreeSet::from([("vps".to_string(), 8765, 60950)]);
     let mut seen = down_entry();
     seen.tunnels.retain(|tunnel| tunnel.local != Some(60950));
     pruned(&mut ended, std::slice::from_ref(&seen));
     assert_eq!(ended.len(), 1);
+}
+
+#[test]
+fn a_later_holder_of_a_dropped_notes_port_shows_when_its_machine_falls() {
+    let mut ended = BTreeSet::from([("vps".to_string(), 8765, 60950)]);
     let mut linked = vps_entry();
     linked.tunnels.retain(|tunnel| tunnel.local != Some(60950));
     pruned(&mut ended, std::slice::from_ref(&linked));
-    assert_eq!(ended.len(), 0);
     let down = down_entry();
     let rows = machine_sections(&[], &BTreeMap::new(), std::slice::from_ref(&down), &ended)[0].rows.clone();
     assert_eq!(rows.iter().filter(|row| row.port == 8765).count(), 2);

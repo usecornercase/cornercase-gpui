@@ -129,20 +129,23 @@ pub(crate) fn last_sent_note(seen: &MachineSeen) -> String {
     format!("{}: the tunnels other windows or programs hold to it are as it last sent them", seen.link_note())
 }
 
+fn hold_at(tunnel: &TunnelSeen) -> Option<(u16, u16)> {
+    let local = tunnel.local?;
+    (tunnel.forward() && tunnel.kind == "hold").then_some((tunnel.port, local))
+}
+
 pub(crate) fn pruned(ended: &mut BTreeSet<(String, u16, u16)>, machines: &[MachineSeen]) {
-    let lists = |seen: &MachineSeen, port: u16, local: u16| {
-        seen.tunnels.iter().any(|t| t.forward() && t.kind == "hold" && t.port == port && t.local == Some(local))
-    };
     ended.retain(|(name, port, local)| {
-        machines.iter().find(|seen| seen.name == *name).is_none_or(|seen| !seen.linked() || lists(seen, *port, *local))
+        let lists = |seen: &MachineSeen| seen.tunnels.iter().filter_map(hold_at).any(|at| at == (*port, *local));
+        machines.iter().find(|seen| seen.name == *name).is_none_or(|seen| !seen.linked() || lists(seen))
     });
 }
 
 fn last_sent(seen: Option<&MachineSeen>, name: &str, ended: &BTreeSet<(String, u16, u16)>) -> Vec<TunnelSeen> {
     let Some(seen) = seen else { return Vec::new() };
     let gone = |tunnel: &TunnelSeen| {
-        let ours = |local: u16| ended.contains(&(name.to_string(), tunnel.port, local));
-        !seen.linked() && tunnel.forward() && tunnel.kind == "hold" && tunnel.local.is_some_and(ours)
+        let noted = |(port, local)| ended.contains(&(name.to_string(), port, local));
+        !seen.linked() && hold_at(tunnel).is_some_and(noted)
     };
     seen.tunnels.iter().filter(|tunnel| !gone(tunnel)).cloned().collect()
 }
