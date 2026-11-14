@@ -1,4 +1,4 @@
-use super::{Fitting, fitting, most, trimmed};
+use super::{Fit, Fitting, cut_to, fitting, most};
 
 const GAP: f32 = 8.;
 const LINE: f32 = 22.;
@@ -62,10 +62,28 @@ fn the_most_is_never_below_nothing() {
     assert!(most(10., 2, GAP, LINE).abs() < f32::EPSILON);
 }
 
+fn card(text: f32) -> impl FnMut(Fit) -> f32 {
+    move |fit| text.min(fit.most) + 22.
+}
+
 #[test]
-fn an_item_taller_than_its_most_is_asked_again_without_the_excess() {
-    assert_eq!(trimmed(238., 260.), Some(216.));
-    assert_eq!(trimmed(238., 200.), None);
+fn an_item_that_fits_its_most_is_left_as_it_is() {
+    let placed = cut_to(268., card(200.));
+    assert!((placed.height - 222.).abs() < f32::EPSILON && !placed.capped);
+}
+
+#[test]
+fn an_item_far_over_its_most_ends_on_it() {
+    let placed = cut_to(268., card(2000.));
+    assert!((placed.height - 268.).abs() < f32::EPSILON && placed.capped);
+}
+
+#[test]
+fn an_item_whose_chrome_alone_puts_it_over_its_most_ends_on_it() {
+    for text in [247., 252.5, 260., 267.9] {
+        let placed = cut_to(268., card(text));
+        assert!(placed.height <= 268. + 1., "text {text} ended at {}", placed.height);
+    }
 }
 
 #[test]

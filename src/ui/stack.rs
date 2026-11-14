@@ -62,15 +62,7 @@ impl Stack {
 
     fn place(&self, newest: usize, (most, width): (f32, Pixels), window: &mut Window, cx: &mut App) -> Placed {
         let build = &self.items[newest];
-        let fit = Fit { most, measuring: true, capped: false };
-        let height = measure(build(fit), width, window, cx);
-        match trimmed(most, height) {
-            Some(most) => {
-                let fit = Fit { most, measuring: true, capped: true };
-                Placed { most, height: measure(build(fit), width, window, cx), capped: true }
-            }
-            None => Placed { most, height, capped: false },
-        }
+        cut_to(most, |fit| measure(build(fit), width, window, cx))
     }
 
     fn placed(&self, bounds: Bounds<Pixels>, line: f32, window: &mut Window, cx: &mut App) -> Vec<Placed> {
@@ -122,8 +114,15 @@ pub(crate) fn most(room: f32, items: usize, gap: f32, line: f32) -> f32 {
     (room - reserve).max(0.)
 }
 
-pub(crate) fn trimmed(most: f32, measured: f32) -> Option<f32> {
-    (measured > most).then(|| (2. * most - measured).max(0.))
+fn cut_to(most: f32, mut measure: impl FnMut(Fit) -> f32) -> Placed {
+    let height = measure(Fit { most, measuring: true, capped: false });
+    if height <= most {
+        return Placed { most, height, capped: false };
+    }
+    let probe = most / 2.;
+    let chrome = measure(Fit { most: probe, measuring: true, capped: true }) - probe;
+    let cap = (most - chrome).max(0.);
+    Placed { most: cap, height: measure(Fit { most: cap, measuring: true, capped: true }), capped: true }
 }
 
 fn available(width: Pixels) -> Size<AvailableSpace> {
