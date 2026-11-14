@@ -16,7 +16,7 @@ fn ends_in_commits(name: &str) -> FlowInfo {
 
 #[expect(clippy::unnecessary_wraps, reason = "the releases are optional")]
 fn new() -> Option<Version> {
-    Some(CLOSE_WHEN_MERGED_SINCE)
+    Some(Feature::FlowCloseWhenMerged.since())
 }
 
 #[expect(clippy::unnecessary_wraps, reason = "the releases are optional")]
@@ -123,12 +123,12 @@ fn the_free_flag_is_never_sent_below_its_release() {
     let choice = Choice::of(&freed, old);
     assert_eq!(choice, Choice { close: true, free: false });
     assert!(!switch_args(7, choice).contains(&"--free-builds".to_string()));
-    assert!(Choice::of(&freed, Some(FREE_BUILDS_SINCE)).free);
+    assert!(Choice::of(&freed, Some(Feature::FlowFreeBuilds.since())).free);
 }
 
 #[test]
 fn the_second_box_is_hidden_wherever_the_first_is_hidden_or_rests() {
-    let here = Some(FREE_BUILDS_SINCE);
+    let here = Some(Feature::FlowFreeBuilds.since());
     assert_eq!(free_switch(&run(true, false, true), here), Switch::Hidden);
     assert_eq!(free_switch(&run(false, true, true), here), Switch::Hidden);
     assert_eq!(free_switch(&run(false, false, true), old()), Switch::Hidden);
@@ -143,13 +143,13 @@ fn a_server_older_than_0_13_64_rests_the_second_box_and_names_its_release() {
 
 #[test]
 fn the_second_box_rests_while_the_close_is_off() {
-    let here = Some(FREE_BUILDS_SINCE);
+    let here = Some(Feature::FlowFreeBuilds.since());
     assert_eq!(free_switch(&run(false, false, false), here), Switch::Rests(FREE_HOW.into()));
 }
 
 #[test]
 fn the_second_box_shows_whether_the_run_frees_its_builds() {
-    let here = Some(FREE_BUILDS_SINCE);
+    let here = Some(Feature::FlowFreeBuilds.since());
     let freed = Run { free_builds: true, ..run(false, false, true) };
     assert_eq!(free_switch(&freed, here), Switch::Offered(true));
     assert_eq!(free_switch(&run(false, false, true), here), Switch::Offered(false));
@@ -192,7 +192,7 @@ fn the_close_line_says_nothing_is_removed_only_while_the_builds_stay() {
 fn the_dialogs_second_box_follows_the_machine_chosen() {
     let arena = flow("Arena");
     let box_for = |here, machine, close| free_box(Some(&arena), &Releases { here, machine }, close, false);
-    let new = Some(FREE_BUILDS_SINCE);
+    let new = Some(Feature::FlowFreeBuilds.since());
     let vps = Some(("vps", Some(Version::new(0, 13, 57))));
     assert_eq!(
         box_for(new, vps, true),

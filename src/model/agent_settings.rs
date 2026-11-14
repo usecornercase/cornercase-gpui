@@ -3,10 +3,9 @@ use std::collections::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::cli::Version;
+use crate::cli::{Feature, Has, Version};
 
 pub(crate) const NO_MODE: &str = "default";
-pub(crate) const NO_MODE_SINCE: Version = Version::new(0, 13, 28);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -88,7 +87,7 @@ impl Agents {
 }
 
 fn default_rests(chosen: &str, server: Option<Version>) -> bool {
-    chosen != NO_MODE && !NO_MODE_SINCE.reached_by(server)
+    chosen != NO_MODE && Feature::ModeDefault.on(server) != Has::Yes
 }
 
 fn default_waits(chosen: &str, machine: Option<&str>, server: Option<Version>) -> String {
@@ -97,7 +96,8 @@ fn default_waits(chosen: &str, machine: Option<&str>, server: Option<Version>) -
         None => (" while settings".to_string(), "the server runs".to_string()),
     };
     let release = server.map(|server| format!(" ({runs} {server})")).unwrap_or_default();
-    format!("default needs cornercase {NO_MODE_SINCE} or newer{place} choose {chosen}{release}")
+    let since = Feature::ModeDefault.since();
+    format!("default needs cornercase {since} or newer{place} choose {chosen}{release}")
 }
 
 impl Modes {
