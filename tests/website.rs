@@ -126,10 +126,11 @@ impl App {
         self.icon_file(icon)
     }
 
-    fn panel_titles(&self) -> Found<HashMap<String, String>> {
+    fn panel_title(&self, panel: &str) -> Found<String> {
         let body = block(&self.panels, PANELS, "fn title(self)")?;
         let titles = arms(body, "Self::", PANELS)?;
-        Ok(titles.into_iter().filter_map(|(panel, value)| Some((quoted(&value)?.to_string(), panel))).collect())
+        let title = titles.get(panel).and_then(|value| quoted(value));
+        title.map(str::to_string).ok_or_else(|| unread(PANELS, &format!("PanelKind::title gives {panel} no title")))
     }
 
     fn listed(&self, name: &str) -> Found<Vec<String>> {
@@ -202,7 +203,9 @@ impl App {
 
     fn drawn_as_read(&self) -> Found<()> {
         let panels = block(&self.rail, RAIL, "fn rail_panels(")?;
-        if !panels.contains("column(") || panels.contains(".child(") || panels.matches(".children(").count() != 1 {
+        let compact: String = panels.chars().filter(|c| !c.is_whitespace()).collect();
+        let piped = compact.contains("column(flow).into_iter().flat_map(") && compact.contains("}).collect()");
+        if !piped || panels.contains(".child(") || panels.matches(".children(").count() != 1 {
             return Err(unread(RAIL, "rail_panels draws something besides column's slots"));
         }
         let button = block(&self.rail, RAIL, "fn rail_button(")?;
@@ -214,10 +217,15 @@ impl App {
 
     fn check_head(&self, file: &str, astro: &str) -> Found<()> {
         let (icon, title) = page_head(astro, file)?;
-        let panel = self.panel_titles()?.remove(&title).ok_or_else(|| {
-            format!("{file}: its head says {title}, which is no panel's title in {PANELS} (PanelKind::title): change the page's title to its panel's")
-        })?;
-        let drawn = self.panel_icon(&panel)?;
+        let name = file.rsplit('/').next().unwrap_or(file);
+        let panel = name.strip_prefix("Dock").and_then(|rest| rest.strip_suffix(".astro")).unwrap_or(name);
+        let expected = self.panel_title(panel)?;
+        if title != expected {
+            return Err(format!(
+                "{file}: its head says {title}; the app's {panel} panel is titled {expected} ({PANELS} PanelKind::title): change the page's title to its panel's"
+            ));
+        }
+        let drawn = self.panel_icon(panel)?;
         if icon == drawn {
             return Ok(());
         }
@@ -268,6 +276,20 @@ fn trailing_name(text: &str) -> &str {
     &text[start..]
 }
 
+fn callback_draws_its_value(template: &str, at: usize) -> Found<()> {
+    let line = template[at..].lines().next().unwrap_or_default();
+    let param: String = line[".map(".len()..]
+        .trim_start_matches('(')
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    let draws = format!("<Icon name={{{param}}}");
+    if param.is_empty() || line.matches("<Icon").count() != 1 || !line.contains(&draws) {
+        return Err(unread(PAGE_RAIL, &format!("a map callback does not draw `{draws}` once, on its own line")));
+    }
+    Ok(())
+}
+
 fn page_rail(astro: &str) -> Found<Vec<String>> {
     let (front, template) = frontmatter(astro)?;
     let lists = lists(front)?;
@@ -277,6 +299,7 @@ fn page_rail(astro: &str) -> Found<Vec<String>> {
         let items = lists
             .get(name)
             .ok_or_else(|| unread(PAGE_RAIL, &format!("maps {name}, which its frontmatter does not declare")))?;
+        callback_draws_its_value(template, at)?;
         marks.push((at, items.clone()));
     }
     for (needle, mark) in [("w-rail__rule", RULE), ("w-rail__gap", GAP)] {
@@ -404,6 +427,8 @@ fn a_call_in_the_column_this_test_does_not_know_fails() {
     assert!(why.contains("column calls machines"), "{why}");
 }
 
+const SLOTS: &str = "let slots = column(flow)\n        .into_iter()\n        .flat_map(|slot| match slot {\n            Slot::Divider => vec![rule()],\n        })\n        .collect();";
+
 fn rail_drawn(panels: &str, button: &str) -> String {
     let rail = format!(
         "fn render_rail(&self) {{\n    card()\n}}\nfn rail_panels() {{\n    {panels}\n}}\nfn rail_button() {{\n    {button}\n}}\n"
@@ -413,19 +438,29 @@ fn rail_drawn(panels: &str, button: &str) -> String {
 
 #[test]
 fn a_rail_panels_that_draws_a_child_besides_the_column_fails() {
-    let why = rail_drawn("div().children(column(flow)).child(machines_button())", "kind.icon()");
+    let why = rail_drawn(&format!("{SLOTS}\ndiv().children(slots).child(machines_button())"), "kind.icon()");
     assert!(why.contains("rail_panels draws something besides column's slots"), "{why}");
 }
 
 #[test]
 fn a_rail_panels_that_draws_a_second_list_of_children_fails() {
-    let why = rail_drawn("div().children(column(flow)).children(extra())", "kind.icon()");
+    let why = rail_drawn(&format!("{SLOTS}\ndiv().children(slots).children(extra())"), "kind.icon()");
     assert!(why.contains("rail_panels draws something besides column's slots"), "{why}");
 }
 
 #[test]
+fn a_rail_panels_that_reorders_the_columns_slots_fails() {
+    let before = "let slots = column(flow).into_iter().rev().flat_map(|slot| match slot {\n    Slot::Divider => vec![rule()],\n}).collect();\ndiv().children(slots)";
+    let after = "let slots = column(flow).into_iter().flat_map(|slot| match slot {\n    Slot::Divider => vec![rule()],\n}).rev().collect();\ndiv().children(slots)";
+    for panels in [before, after] {
+        let why = rail_drawn(panels, "kind.icon()");
+        assert!(why.contains("rail_panels draws something besides column's slots"), "{why}");
+    }
+}
+
+#[test]
 fn a_rail_button_that_draws_another_icon_than_its_panels_fails() {
-    let why = rail_drawn("div().children(column(flow))", "Icon::Repeat");
+    let why = rail_drawn(&format!("{SLOTS}\ndiv().children(slots)"), "Icon::Repeat");
     assert!(why.contains("rail_button draws a panel's icon other than kind.icon()"), "{why}");
 }
 
@@ -456,4 +491,21 @@ fn a_list_the_page_builds_from_more_than_quoted_names_fails() {
         "---\nconst docked = [...extra, 'a'];\n---\n<nav>\n{docked.map((name) => <Icon name={name} />)}\n</nav>\n";
     let why = page_rail(astro).expect_err("a spread is an error");
     assert!(why.contains("docked holds more than quoted names"), "{why}");
+}
+
+#[test]
+fn a_map_callback_that_draws_another_icon_than_its_value_fails() {
+    let astro = "---\nconst docked = ['a'];\n---\n<nav>\n{docked.map((name) => <Icon name={'settings'} />)}\n</nav>\n";
+    let why = page_rail(astro).expect_err("a callback that ignores its value is an error");
+    assert!(why.contains("a map callback does not draw `<Icon name={name}`"), "{why}");
+}
+
+#[test]
+fn a_dock_page_headed_with_another_panels_heading_fails() {
+    let panels = "fn icon(self) -> Icon {\n    Self::Flow => Icon::Waypoints,\n    Self::Browser => Icon::Globe,\n}\nfn title(self) -> &'static str {\n    Self::Flow => \"Flow\",\n    Self::Browser => \"Browser\",\n}\n";
+    let icons = "Icon::Waypoints => asset!(\"waypoints\"),\nIcon::Globe => asset!(\"globe\"),\n";
+    let app = App { rail: String::new(), gear: String::new(), panels: panels.to_string(), icons: icons.to_string() };
+    let astro = "<header class=\"w-dockhead\"><Icon name=\"globe\" size={16} /><b>Browser</b></header>";
+    let why = app.check_head("site/src/components/stage/DockFlow.astro", astro).expect_err("another panel's head");
+    assert!(why.contains("the app's Flow panel is titled Flow"), "{why}");
 }
