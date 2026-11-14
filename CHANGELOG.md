@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.1.104
 
-- **Close once merged, Free the build folders and a queue run's result say beforehand when this computer's cornercase is too old.** With the window on another computer's newer cornercase, when the cornercase on this computer is older than the one thing each needs (0.13.33 to close the agents once the pull request merges, 0.13.64 to free the build folders too, 0.13.51 to show what a queue run did), the box in Start a flow… or on a run's page now rests and says `Needs cornercase 0.13.33 or newer on this Mac (it has 0.13.27).`, and the Queue sheet says above its list that showing what a run did needs it, instead of ending in an error after the press. On a run's page a resting box now shows what the run does. With the window and cornercase on one computer nothing changes.
+- **Close once merged, Free the build folders and a queue run's result say beforehand when this computer's cornercase is too old.** With the window on another computer's newer cornercase, when the cornercase on this computer is older than the release each needs (0.13.33 to close the agents once the pull request merges, 0.13.64 to free the build folders too, 0.13.51 to show what a queue run did), the box in Start a flow… or on a run's page now rests and says `Needs cornercase 0.13.33 or newer on this Mac (it has 0.13.27).`, and the Queue sheet says above its list that showing what a run did needs it, instead of ending in an error after the press. On a run's page, a box that rests now shows the run's choice: ticked when it closes its agents once merged or frees its build folders. With the window and cornercase on one computer nothing changes.
 
 ## 0.1.103
 

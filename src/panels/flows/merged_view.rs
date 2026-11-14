@@ -8,12 +8,11 @@ use gpui::{
 use super::FlowsPanel;
 use super::actions::toast;
 use super::merged::{
-    Choice, FREE_HOW, FREE_LABEL, LABEL, Press, Switch, doing, free_key, free_switch, how, key, parse_set, switch,
-    switch_args, take,
+    Choice, FREE_HOW, FREE_LABEL, Free, LABEL, Page, Press, doing, free_key, key, page, parse_set, switch_args, take,
 };
 use super::model::Run;
-use crate::cli::{self, Releases};
-use crate::model::Session;
+use crate::cli;
+use crate::platform::Os;
 use crate::store::{self, Busy, Store, ToastKind};
 use crate::ui;
 
@@ -43,25 +42,23 @@ impl FlowsPanel {
 }
 
 pub(super) fn run_switch(run: &Run, cx: &Context<FlowsPanel>) -> Option<Div> {
-    let store = Store::get(cx).read(cx);
-    let releases = Releases {
-        server: store.session.as_ref().and_then(Session::release),
-        here: store.heard_release(),
-        machine: None,
-    };
-    match switch(run, &releases) {
-        Switch::Hidden => None,
-        Switch::Rests(line) => Some(with_line(ui::resting_checkbox(run.close_when_merged, LABEL), line)),
-        Switch::Offered(_) => Some(offered_pair(run, Choice::of(run, &releases), free_switch(run, &releases), cx)),
+    let releases = Store::get(cx).read(cx).releases();
+    match page(run, &releases, Os::CURRENT) {
+        Page::Hidden => None,
+        Page::Rests { close, free } => {
+            let first = with_line(ui::resting_checkbox(close.ticked, LABEL), close.line);
+            Some(pair(first, free.map(|free| free_resting(free.ticked, free.line))))
+        }
+        Page::Offered { choice, line, free } => Some(offered_pair(run, choice, line, free, cx)),
     }
 }
 
-fn offered_pair(run: &Run, choice: Choice, free: Switch, cx: &Context<FlowsPanel>) -> Div {
-    let first = Row { run, press: Press::Close, choice, line: how(None, run.free_builds) };
+fn offered_pair(run: &Run, choice: Choice, line: String, free: Free, cx: &Context<FlowsPanel>) -> Div {
+    let first = Row { run, press: Press::Close, choice, line };
     let second = match free {
-        Switch::Hidden => None,
-        Switch::Rests(line) => Some(free_resting(run.free_builds, line)),
-        Switch::Offered(_) => Some(nested(row(&Row { press: Press::Free, line: FREE_HOW.into(), ..first }, cx))),
+        Free::Hidden => None,
+        Free::Rests(free) => Some(free_resting(free.ticked, free.line)),
+        Free::Offered => Some(nested(row(&Row { press: Press::Free, line: FREE_HOW.into(), ..first }, cx))),
     };
     pair(row(&first, cx), second)
 }

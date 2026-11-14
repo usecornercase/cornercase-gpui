@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use super::model::{FlowInfo, Run};
 use crate::cli::{self, Feature, Lacks, Releases};
+use crate::desktop;
 use crate::platform::Os;
 use crate::store;
 
@@ -70,6 +71,60 @@ pub(super) fn free_box(flow: Option<&FlowInfo>, releases: &Releases<'_>, close: 
     match rests(flow, releases) {
         Some(_) => Switch::Hidden,
         None => free_tail(releases, close, free),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Resting {
+    pub ticked: bool,
+    pub line: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Page {
+    Hidden,
+    Rests { close: Resting, free: Option<Resting> },
+    Offered { choice: Choice, line: String, free: Free },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Free {
+    Hidden,
+    Rests(Resting),
+    Offered,
+}
+
+pub(super) fn page(run: &Run, releases: &Releases<'_>, os: Os) -> Page {
+    match switch(run, releases) {
+        Switch::Hidden => Page::Hidden,
+        Switch::Rests(line) => Page::Rests {
+            close: Resting { ticked: run.close_when_merged, line },
+            free: run
+                .free_builds
+                .then(|| too_old(Feature::FlowFreeBuilds, releases))
+                .flatten()
+                .map(|line| Resting { ticked: true, line }),
+        },
+        Switch::Offered(_) => Page::Offered {
+            choice: Choice::of(run, releases),
+            line: how(None, run.free_builds),
+            free: match free_switch(run, releases) {
+                Switch::Offered(_) => Free::Offered,
+                Switch::Rests(line) => Free::Rests(Resting { ticked: run.free_builds, line: kept_line(run, line, os) }),
+                Switch::Hidden => Free::Hidden,
+            },
+        },
+    }
+}
+
+fn kept_line(run: &Run, line: String, os: Os) -> String {
+    if run.free_builds && line != FREE_HOW {
+        format!(
+            "{line} Turning the close off turns this off, and this {} cannot turn it on again.",
+            desktop::machine(os)
+        )
+    } else {
+        line
     }
 }
 

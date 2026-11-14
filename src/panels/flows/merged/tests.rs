@@ -1,5 +1,6 @@
 use super::*;
 use crate::cli::{Release, Version};
+use crate::desktop;
 use crate::platform::Os;
 
 const LIST: &str = crate::test_util::fixture!("flows/list.json");
@@ -387,7 +388,7 @@ fn unreadable(server: &str) -> Releases<'static> {
 
 #[test]
 fn a_command_line_below_0_13_33_rests_the_dialog_and_the_page_and_names_what_it_has() {
-    let line = format!("{CLOSE_NEEDS} on this Mac (it has 0.13.27).");
+    let line = format!("{CLOSE_NEEDS} on this {} (it has 0.13.27).", desktop::here());
     let releases = here_on("0.13.76", "0.13.27");
     assert_eq!(rests(Some(&flow("Arena")), &releases), Some(line.clone()));
     assert_eq!(switch(&run(false, false, true), &releases), Switch::Rests(line));
@@ -396,13 +397,13 @@ fn a_command_line_below_0_13_33_rests_the_dialog_and_the_page_and_names_what_it_
 #[test]
 fn a_command_line_at_0_13_33_offers_the_close_and_one_below_does_not() {
     assert_eq!(switch(&run(false, false, false), &here_on("0.13.76", "0.13.33")), Switch::Offered(false));
-    let line = format!("{CLOSE_NEEDS} on this Mac (it has 0.13.32).");
+    let line = format!("{CLOSE_NEEDS} on this {} (it has 0.13.32).", desktop::here());
     assert_eq!(switch(&run(false, false, false), &here_on("0.13.76", "0.13.32")), Switch::Rests(line));
 }
 
 #[test]
 fn a_command_line_whose_release_cannot_be_read_rests_the_close_without_a_release() {
-    let line = format!("{CLOSE_NEEDS} on this Mac.");
+    let line = format!("{CLOSE_NEEDS} on this {}.", desktop::here());
     assert_eq!(switch(&run(false, false, false), &unreadable("0.13.76")), Switch::Rests(line));
 }
 
@@ -422,12 +423,12 @@ fn the_server_is_named_before_this_computer_when_both_are_too_old() {
 
 #[test]
 fn a_command_line_below_0_13_64_rests_the_free_box_and_hides_it_below_0_13_33() {
-    let line = format!("{FREE_NEEDS} on this Mac (it has 0.13.63).");
+    let line = format!("{FREE_NEEDS} on this {} (it has 0.13.63).", desktop::here());
     let freed = Run { free_builds: true, ..run(false, false, true) };
     assert_eq!(free_switch(&freed, &here_on("0.13.76", "0.13.63")), Switch::Rests(line));
     assert_eq!(free_switch(&freed, &here_on("0.13.76", "0.13.64")), Switch::Offered(true));
     assert_eq!(free_switch(&freed, &here_on("0.13.76", "0.13.32")), Switch::Hidden);
-    let line = format!("{FREE_NEEDS} on this Mac.");
+    let line = format!("{FREE_NEEDS} on this {}.", desktop::here());
     assert_eq!(
         free_switch(&run(false, false, true), &Releases { here: Release::Read(None), ..on(release("0.13.76")) }),
         Switch::Hidden
@@ -471,7 +472,7 @@ fn a_machines_run_asks_this_server_then_this_computer_then_the_machine() {
     };
     let server = format!("{CLOSE_NEEDS}: the server runs 0.13.21.");
     assert_eq!(three("0.13.21", "0.13.21", "0.13.21"), Some(server));
-    let here = format!("{CLOSE_NEEDS} on this Mac (it has 0.13.27).");
+    let here = format!("{CLOSE_NEEDS} on this {} (it has 0.13.27).", desktop::here());
     assert_eq!(three("0.13.76", "0.13.27", "0.13.21"), Some(here));
     let vps = format!("{CLOSE_NEEDS} on vps: it runs 0.13.21.");
     assert_eq!(three("0.13.76", "0.13.76", "0.13.21"), Some(vps));
@@ -494,4 +495,62 @@ fn the_words_for_this_computer_follow_the_platform() {
     assert_eq!(this(Os::Windows), "Needs cornercase 0.13.64 or newer on this PC (it has 0.13.63).");
     let unread = needs(Feature::FlowCloseWhenMerged, Lacks::ThisComputer(None), Os::Linux);
     assert_eq!(unread, "Needs cornercase 0.13.33 or newer on this computer.");
+}
+
+fn freeing() -> Run {
+    Run { free_builds: true, ..run(false, false, true) }
+}
+
+fn page_of(run: &Run, here: &str) -> Page {
+    page(run, &here_on("0.13.76", here), Os::CURRENT)
+}
+
+#[test]
+fn a_run_that_frees_its_builds_shows_the_free_box_ticked_and_the_close_line_without_nothing_is_removed() {
+    for here in ["0.13.50", "0.13.63"] {
+        let Page::Offered { line, free: Free::Rests(free), .. } = page_of(&freeing(), here) else {
+            panic!("the close is offered and the free rests at {here}")
+        };
+        assert!(free.ticked, "{here}");
+        assert!(!line.contains("Nothing is removed"), "{here}");
+        assert_eq!(line, how(None, true));
+    }
+}
+
+#[test]
+fn a_run_that_keeps_its_builds_shows_the_free_box_unticked_and_the_line_with_nothing_is_removed() {
+    let Page::Offered { line, free: Free::Rests(free), .. } = page_of(&run(false, false, true), "0.13.63") else {
+        panic!("the close is offered and the free rests")
+    };
+    assert!(!free.ticked);
+    assert!(line.contains("Nothing is removed"));
+}
+
+#[test]
+fn a_resting_free_box_of_a_run_that_frees_says_the_close_off_cannot_be_undone_from_this_computer() {
+    let Page::Offered { free: Free::Rests(free), .. } = page_of(&freeing(), "0.13.63") else { panic!("rests") };
+    let here = desktop::here();
+    let words = format!("Turning the close off turns this off, and this {here} cannot turn it on again.");
+    assert_eq!(free.line, format!("{FREE_NEEDS} on this {here} (it has 0.13.63). {words}"));
+    let Page::Offered { free: Free::Rests(kept), .. } = page_of(&run(false, false, true), "0.13.63") else { panic!() };
+    assert!(!kept.line.contains("cannot turn it on again"));
+}
+
+#[test]
+fn a_resting_close_box_shows_what_the_run_does_and_so_does_the_free_box_under_it() {
+    let Page::Rests { close, free } = page_of(&freeing(), "0.13.27") else { panic!("the close rests") };
+    assert!(close.ticked);
+    assert_eq!(close.line, format!("{CLOSE_NEEDS} on this {} (it has 0.13.27).", desktop::here()));
+    let free = free.expect("a run that frees its builds keeps its free box");
+    assert!(free.ticked);
+    assert_eq!(free.line, format!("{FREE_NEEDS} on this {} (it has 0.13.27).", desktop::here()));
+    let Page::Rests { close, free } = page_of(&run(false, false, false), "0.13.27") else { panic!("rests") };
+    assert!(!close.ticked && free.is_none());
+}
+
+#[test]
+fn a_page_offers_both_boxes_and_hides_for_a_closed_run() {
+    let Page::Offered { choice, free, .. } = page_of(&freeing(), "0.13.76") else { panic!("offered") };
+    assert_eq!((choice, free), (both(), Free::Offered));
+    assert_eq!(page_of(&run(true, false, false), "0.13.76"), Page::Hidden);
 }

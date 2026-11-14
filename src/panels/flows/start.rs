@@ -20,7 +20,6 @@ use super::model::{self, FlowInfo, Listing, Started, project_args};
 use super::widgets::{error_text, flow_summary, glyph};
 use crate::cli;
 use crate::dialogs::{self, Gate, RunOn, accounts_of, dialog_starts};
-use crate::model::Session;
 use crate::store::{self, Store, args};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::account_picker::AccountPickers;
@@ -403,8 +402,7 @@ impl StartFlow {
         let store = Store::get(cx).read(cx);
         let run_on = self.run_on.read(cx);
         let machine = run_on.machine().map(|name| (name, run_on.release(cx)));
-        let server = store.session.as_ref().and_then(Session::release);
-        then(&cli::Releases { server, here: store.heard_release(), machine })
+        then(&cli::Releases { machine, ..store.releases() })
     }
 
     fn sent(&self, cx: &App) -> merged::Choice {

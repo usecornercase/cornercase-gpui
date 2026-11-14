@@ -9,7 +9,7 @@ use crate::cli::{self, Release, Target, Version};
 use crate::model::machines::hide_destination;
 use crate::model::machines::run_on::server_release;
 use crate::model::machines::seen::{ReadReleases, sighted, sighted_pane};
-use crate::model::{Aim, MachinePlace, MachineSeen, PaneAim, ThereId};
+use crate::model::{Aim, MachinePlace, MachineSeen, PaneAim, Session, ThereId};
 
 const NOTHING_SENT: &str = "nothing was sent";
 const FOLD_CAP: Duration = Duration::from_secs(15);
@@ -284,6 +284,14 @@ impl Store {
 
     pub(crate) fn heard_release(&self) -> Release {
         if self.there.release.heard { Release::Read(self.there.release.known) } else { Release::Unread }
+    }
+
+    pub(crate) fn releases(&self) -> cli::Releases<'static> {
+        cli::Releases {
+            server: self.session.as_ref().and_then(Session::release),
+            here: self.heard_release(),
+            machine: None,
+        }
     }
 
     pub(crate) fn read_cli_release(&mut self, cx: &mut Context<Self>) {

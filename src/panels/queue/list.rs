@@ -4,7 +4,7 @@ use gpui::{
 };
 
 use super::QueuePanel;
-use super::data::{Entry, Group, ROUTINES_NOTE, Row, Section, clear_goes_in, sections, shows_note};
+use super::data::{Entry, Group, ROUTINES_NOTE, Row, Section, clear_goes_in, sections, shows_results_note};
 use super::rows::Snapshot;
 use crate::notify::tip;
 use crate::theme::colours;
@@ -49,6 +49,10 @@ fn nothing_scheduled() -> Div {
 
 fn routines_note() -> Div {
     ui::dim(ROUTINES_NOTE).px(px(12.)).pb(px(6.))
+}
+
+fn results_line(note: &str) -> Div {
+    ui::dim(note.to_string()).px(px(12.)).pt(px(8.))
 }
 
 fn clear_started(cx: &mut Context<QueuePanel>) -> AnyElement {
@@ -112,9 +116,10 @@ impl QueuePanel {
     pub(super) fn list(&self, entries: &[Entry], filter: &str, snapshot: &Snapshot, cx: &mut Context<Self>) -> Div {
         let sections = sections(entries, filter, snapshot.session.as_ref());
         let clear = clear_goes_in(&sections);
-        let note = snapshot.note.as_deref().filter(|_| shows_note(&sections));
+        let (boot, session) = (snapshot.boot.as_deref(), snapshot.session.as_ref());
+        let note = snapshot.results_note.as_deref().filter(|_| shows_results_note(&sections, boot, session));
         let parts: Vec<AnyElement> = note
-            .map(|note| ui::dim(note.to_string()).px(px(12.)).pt(px(8.)).into_any_element())
+            .map(|note| results_line(note).into_any_element())
             .into_iter()
             .chain(
                 sections.iter().flat_map(|section| self.section(section, clear == Some(section.group), snapshot, cx)),
