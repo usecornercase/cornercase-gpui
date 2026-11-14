@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.91
+
+- **A release that finishes late no longer replaces a newer one as the latest.** If an older version's release is published after a newer one's, the newer one stays the latest release on GitHub, so the Download links and the update the window offers keep pointing at it.
+
 ## 0.1.90
 
 - **A shorter rail.** The rail keeps the workspace's panels and the sheets you reach for every day: Search, Issues, Queue and Flows. Usage, Accounts, Machines, Processes, Ports, Worktrees and Plugins moved behind the gear at its foot, with Settings. A click on the gear opens a menu that shows each one's icon and its keys, and the gear is lit while one of them is open. Every shortcut is the same.

@@ -302,8 +302,10 @@ jobs:
 
       - name: release
         run: |
+          gh --version
+          latest=$(.github/release/release.sh latest-flag "$VERSION")
           pre=""
           case "$VERSION" in *-*) pre="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "cornercase-gpui $VERSION" \
             --notes-file "$RUNNER_TEMP/notes.md" $pre dist/*
-          gh release edit "$GITHUB_REF_NAME" --draft=false
+          gh release edit "$GITHUB_REF_NAME" --draft=false "$latest"

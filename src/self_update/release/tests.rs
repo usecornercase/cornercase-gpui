@@ -95,18 +95,41 @@ fn a_machine_without_a_download_has_no_asset() {
     assert_eq!(asset_name(Os::Windows, "aarch64"), None);
 }
 
+const HELLO_SHA256: &str = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+
+fn sums_file(digest: &str) -> String {
+    format!("{digest}  hello.zip\n")
+}
+
+#[test]
+fn a_digest_is_written_as_64_lower_case_hex_digits() {
+    assert_eq!(sha256_hex(b"hello"), HELLO_SHA256);
+}
+
 #[test]
 fn a_download_matches_its_checksum() {
-    let sums = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824  hello.zip\n";
-    assert!(matches(b"hello", sums));
-    assert!(matches(b"hello", &sums.to_uppercase()));
+    assert!(matches(b"hello", &sums_file(HELLO_SHA256)));
+}
+
+#[test]
+fn an_upper_case_checksum_matches_too() {
+    assert!(matches(b"hello", &sums_file(&HELLO_SHA256.to_uppercase())));
 }
 
 #[test]
 fn a_download_that_differs_from_its_checksum_is_refused() {
-    let sums = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824  hello.zip\n";
-    assert!(!matches(b"hellO", sums));
+    assert!(!matches(b"hellO", &sums_file(HELLO_SHA256)));
+}
+
+#[test]
+fn an_empty_checksum_is_refused() {
     assert!(!matches(b"hello", ""));
+    assert!(!matches(b"hello", " \n"));
+}
+
+#[test]
+fn a_shortened_checksum_is_refused() {
+    assert!(!matches(b"hello", &sums_file(&HELLO_SHA256[..63])));
 }
 
 #[test]
