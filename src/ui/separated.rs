@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, Bounds, Div, IntoElement as _, ParentElement as _, Pixels, Styled as _, canvas, div, fill, point, px,
-    size,
+    AnyElement, Bounds, Div, IntoElement as _, ParentElement as _, Pixels, SharedString, Styled as _, canvas, div,
+    fill, point, px, size,
 };
 
 use crate::theme::colours;
@@ -80,9 +80,16 @@ fn marks(separators: &[Option<Separator>], bounds: &[Bounds<Pixels>]) -> Vec<(Se
 }
 
 pub(crate) fn facts(parts: Vec<String>, extra: Vec<AnyElement>) -> Div {
-    let separators = fact_separators(parts.len(), extra.len());
-    let elements = parts.into_iter().map(|part| super::one_line(part).into_any_element()).chain(extra);
-    separated(6., separators.into_iter().zip(elements).collect())
+    dotted(parts.into_iter().map(|part| super::one_line(part).into_any_element()).collect(), extra)
+}
+
+pub(crate) fn dotted(facts: Vec<AnyElement>, extra: Vec<AnyElement>) -> Div {
+    let separators = fact_separators(facts.len(), extra.len());
+    separated(6., separators.into_iter().zip(facts.into_iter().chain(extra)).collect())
+}
+
+pub(crate) fn wrapped_fact(text: impl Into<SharedString>) -> AnyElement {
+    div().min_w_0().child(text.into()).into_any_element()
 }
 
 fn fact_separators(facts: usize, extra: usize) -> Vec<Option<Separator>> {

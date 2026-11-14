@@ -56,7 +56,7 @@ impl IssuesPanel {
                     .text_ellipsis()
                     .child(issue.title.clone()),
             )
-            .child(info_line(issue, info))
+            .children(info_line(issue, info))
             .child(detail_actions(&issue.url, cx))
     }
 
@@ -193,20 +193,14 @@ fn state_pill(issue: &Issue) -> Div {
         .child(issue.state_label())
 }
 
-fn info_line(issue: &Issue, info: &[String]) -> Div {
-    let mut parts = issue.info_extras(info);
-    if !issue.updated_at.is_empty() {
-        parts.push(format!("updated {}", data::ago(&issue.updated_at, data::now())));
+fn info_line(issue: &Issue, info: &[String]) -> Option<Div> {
+    let parts = issue.info_parts(info, data::now());
+    if parts.is_empty() && issue.labels.is_empty() {
+        return None;
     }
-    div()
-        .flex()
-        .flex_wrap()
-        .items_center()
-        .gap(px(6.))
-        .text_size(px(12.))
-        .text_color(colours::muted())
-        .child(parts.join(" · "))
-        .children(issue.labels.iter().cloned().map(label_chip))
+    let facts = parts.into_iter().map(ui::wrapped_fact).collect();
+    let chips = issue.labels.iter().cloned().map(|label| label_chip(label).into_any_element()).collect();
+    Some(ui::dotted(facts, chips).text_size(px(12.)).text_color(colours::muted()))
 }
 
 fn detail_actions(url: &str, cx: &mut Context<IssuesPanel>) -> Div {

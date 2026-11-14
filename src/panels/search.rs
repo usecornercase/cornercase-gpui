@@ -359,10 +359,13 @@ impl SearchPanel {
             .gap(px(10.))
             .px(px(16.))
             .pt(px(14.))
-            .child(div().flex_1().child(ui::input_box(
-                div().flex().items_center().gap(px(8.)).child(prompt).child(div().flex_1().child(self.field.clone())),
-                focused,
-            )))
+            .child(
+                ui::input_box(
+                    div().flex().items_center().gap(px(8.)).child(prompt).child(ui::field_slot(self.field.clone())),
+                    focused,
+                )
+                .flex_1(),
+            )
             .child(self.mode_segments(cx))
     }
 

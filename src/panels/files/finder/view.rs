@@ -41,6 +41,8 @@ impl Finder {
         let focused = self.field.read(cx).focus_handle(cx).is_focused(window);
         div()
             .flex_none()
+            .flex()
+            .flex_col()
             .px(px(14.))
             .pt(px(14.))
             .pb(px(12.))

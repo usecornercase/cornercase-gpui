@@ -80,18 +80,21 @@ fn title(label: &str) -> impl IntoElement + use<> {
     div().id("queue-detail-title").flex_1().min_w(px(0.)).tooltip(tip(label.to_string())).child(text)
 }
 
-fn status_line(entry: &Entry, shown: &Shown, snapshot: &Snapshot, refreshing: bool) -> Div {
-    let colour = state_colour(shown.state);
-    let meta = format!("· {}", entry.meta(snapshot.session.as_ref()));
+fn status_lead(entry: &Entry, shown: &Shown) -> AnyElement {
     div()
         .flex()
-        .flex_wrap()
         .gap(px(6.))
-        .text_size(px(12.))
         .child(state_icon(entry.id, shown.state))
-        .child(div().text_color(colour).child(status_label(entry, shown.pane)))
-        .child(div().flex_1().min_w(px(0.)).text_color(colours::faint()).child(meta))
-        .when(refreshing, |d| d.child(ui::busy("queue-detail-busy", "Reading…").text_size(px(11.))))
+        .child(div().text_color(state_colour(shown.state)).child(status_label(entry, shown.pane)))
+        .into_any_element()
+}
+
+fn status_line(entry: &Entry, shown: &Shown, snapshot: &Snapshot, refreshing: bool) -> Div {
+    let facts = std::iter::once(status_lead(entry, shown))
+        .chain(entry.meta_parts(snapshot.session.as_ref()).into_iter().map(ui::wrapped_fact))
+        .collect();
+    let note = refreshing.then(|| ui::busy("queue-detail-busy", "Reading…").text_size(px(11.)).into_any_element());
+    ui::dotted(facts, note.into_iter().collect()).text_size(px(12.)).text_color(colours::faint())
 }
 
 impl QueuePanel {

@@ -28,7 +28,7 @@ use gpui::{
 
 pub(crate) use icons::{Icon, icon};
 pub(crate) use one_line::{OneLine, one_line};
-pub(crate) use separated::{Separator, facts, separated};
+pub(crate) use separated::{Separator, dotted, facts, separated, wrapped_fact};
 pub(crate) use signs::{
     ROW_ACTION, accent_chip, callout, copy_button, done_line, dot, error_line, field_action, quiet_chip,
     resting_action, row_action, tinted_chip, warning_line,
@@ -381,7 +381,7 @@ pub(crate) fn prompt_box(field: &Entity<TextField>, verb: &str, window: &Window,
         .child(div().text_size(px(11.)).text_color(colours::muted()).child(text_field::prompt_keys(Os::CURRENT, verb)))
 }
 
-fn field_slot(field: impl IntoElement) -> Div {
+pub(crate) fn field_slot(field: impl IntoElement) -> Div {
     div().flex_1().min_w_0().flex().child(field)
 }
 

@@ -63,14 +63,17 @@ fn heading(worktree: &Worktree, now: i64, measuring: bool) -> Div {
 }
 
 fn details(worktree: &Worktree) -> Div {
-    let risks = (!worktree.safe && !worktree.risks.is_empty()).then(|| worktree.risks.join(" · "));
+    let risks = (!worktree.safe && !worktree.risks.is_empty()).then(|| {
+        let parts = worktree.risks.iter().cloned().map(ui::wrapped_fact).collect();
+        ui::dotted(parts, Vec::new()).text_size(px(12.)).text_color(colours::waiting())
+    });
     div()
         .flex()
         .flex_col()
         .gap(px(2.))
         .child(ui::dim(ui::home_relative(&worktree.path)))
         .when(worktree.run_role, |d| d.child(ui::dim(RUN_ROLE)))
-        .children(risks.map(|r| div().text_size(px(12.)).text_color(colours::waiting()).child(r)))
+        .children(risks)
         .children(worktree.error.clone().map(|e| div().text_size(px(12.)).text_color(colours::failed()).child(e)))
 }
 

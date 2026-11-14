@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.100
+
+- **The line under a scheduled entry's title no longer starts or ends a line with a dot, and the line under an issue's title no longer runs past the sheet's edge.** In the Queue sheet, the line under an entry's title (its agent, mode, place and accounts), and in the Issues sheet, the line under an issue's title (whom it is assigned to, who opened it, when it changed, then its labels), now break between whole facts when they do not fit (the Issues line on a narrow window, the Queue line in its column), with the dots only between two facts on one line, as on a flow's page. A fact too long for the whole line wraps between its words; nothing is cut. A worktree's risks in the Worktrees sheet, a recap's byline and a stacked pull request's heading wrap the same way.
+
 ## 0.1.99
 
 - **cornercase's update dialog says what `cornercase update` did.** With cornercase 0.13.53 or newer, Install shows the version it put on disk and offers the restart on it, also when that version was already installed. When this cornercase cannot replace itself (Homebrew, a folder it cannot write), the dialog shows the command that installs the release and **Copy command** copies it, with a toast saying to run it in a terminal; a toast with Details tells you too if the dialog was closed. If `cornercase update` finds no release newer than the one on disk, the dialog says so instead of showing an install.

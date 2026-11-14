@@ -64,7 +64,7 @@ fn the_byline_says_who_wrote_it_what_it_read_and_when() {
     written.written_at = Some("2026-11-06T10:00:00.000Z".to_string());
     let page = Page::new(written);
     let now = crate::panels::flows::model::epoch("2026-11-06T10:05:00.000Z").expect("a time");
-    assert_eq!(page.byline(now), "Claude Code · claude-sonnet-4-5 · read 3 conversations · written 5m ago");
+    assert_eq!(page.byline_parts(now), ["Claude Code", "claude-sonnet-4-5", "read 3 conversations", "written 5m ago"]);
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn a_recap_written_a_moment_ago_says_so() {
     let time = "2026-11-06T10:00:00.000Z";
     let page = Page::new(Answer { written_at: Some(time.to_string()), conversations: 1, ..Answer::default() });
     let now = crate::panels::flows::model::epoch(time).expect("a time");
-    assert_eq!(page.byline(now), "read 1 conversation · written just now");
+    assert_eq!(page.byline_parts(now), ["read 1 conversation", "written just now"]);
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn an_agent_without_a_title_goes_by_its_name_and_a_time_that_does_not_read_is_le
         conversations: 2,
         ..Answer::default()
     };
-    assert_eq!(Page::new(written).byline(0), "codex · read 2 conversations");
+    assert_eq!(Page::new(written).byline_parts(0), ["codex", "read 2 conversations"]);
 }
 
 #[test]

@@ -82,7 +82,7 @@ impl QueuePanel {
             .py(px(12.))
             .border_b_1()
             .border_color(colours::border())
-            .child(div().flex_1().min_w(px(0.)).child(self.search_box(window, cx)))
+            .child(self.search_box(window, cx).flex_1().min_w(px(0.)))
             .child(
                 ui::icon_text_button("queue-new", Icon::Plus, "Schedule…", Tone::Primary)
                     .tooltip(tip("Schedule an agent to start later, or a routine that repeats"))

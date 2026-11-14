@@ -13,7 +13,7 @@ use crate::model::accounts::pick::AccountPick;
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::panels::flows::model::FlowInfo;
 use crate::platform::Os;
-use crate::test_util::fixture;
+use crate::test_util::{bare_parts, fixture};
 
 #[test]
 fn reads_entries_leniently() {
@@ -280,6 +280,51 @@ fn a_routine_names_its_flow_and_its_cleanup() {
     assert_eq!(flow.meta(None), "flow Quick · shop · removes its workspace");
     let agent = Entry { agent: "claude".into(), place, ..routine(2, "2h") };
     assert_eq!(agent.meta(None), "claude · shop");
+}
+
+fn shop_place() -> Place {
+    Place { project: "/src/shop".into(), branch: Some("fix-login".into()), ..Place::default() }
+}
+
+#[test]
+fn an_entrys_status_line_names_its_agent_mode_place_accounts_and_cleanup() {
+    let entry = Entry {
+        agent: "claude".into(),
+        mode: Some("plan".into()),
+        place: shop_place(),
+        accounts: [("claude".to_string(), "work".to_string()), ("codex".to_string(), String::new())].into(),
+        cleanup: true,
+        ..routine(1, "2h")
+    };
+    let expected = ["claude", "plan", "shop › fix-login", "claude: work", "codex: System", "removes its workspace"];
+    assert_eq!(entry.meta_parts(None), expected);
+}
+
+#[test]
+fn the_default_mode_is_not_a_fact_of_the_line() {
+    let entry =
+        Entry { agent: "claude".into(), mode: Some("default".into()), place: shop_place(), ..entry(1, "pending") };
+    assert_eq!(entry.meta_parts(None), ["claude", "shop › fix-login"]);
+}
+
+#[test]
+fn with_a_session_the_place_takes_the_projects_name() {
+    let root = Workspace { path: "/src/shop".into(), ..Workspace::default() };
+    let shop = Project { name: "Shop".into(), ..project(1, root) };
+    let session = Session { projects: vec![shop], ..Session::default() };
+    let entry = Entry { agent: "claude".into(), place: shop_place(), ..entry(1, "pending") };
+    assert_eq!(entry.meta_parts(Some(&session)), ["claude", "Shop › fix-login"]);
+}
+
+#[test]
+fn no_part_of_an_entrys_line_is_blank_or_starts_or_ends_with_a_dot() {
+    let place = Place { project: "/src/shop".into(), ..Place::default() };
+    let nameless = Entry { place: place.clone(), ..entry(1, "pending") };
+    assert_eq!(nameless.meta_parts(None), ["shop"]);
+    assert!(bare_parts(&nameless.meta_parts(None)));
+    let flow = Entry { flow: Some("Quick".into()), place, ..entry(2, "pending") };
+    assert_eq!(flow.meta_parts(None), ["flow Quick", "shop"]);
+    assert!(bare_parts(&flow.meta_parts(None)));
 }
 
 #[test]

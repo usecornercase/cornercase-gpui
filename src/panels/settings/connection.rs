@@ -121,7 +121,7 @@ impl SettingsPanel {
             .items_center()
             .gap(px(8.))
             .child(ui::icon(Icon::Key, 13.).text_color(key_ink))
-            .child(div().flex_1().min_w_0().child(field.clone()));
+            .child(ui::field_slot(field.clone()));
         div()
             .flex()
             .items_center()

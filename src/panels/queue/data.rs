@@ -221,6 +221,10 @@ impl Entry {
     }
 
     pub(super) fn meta(&self, session: Option<&Session>) -> String {
+        self.meta_parts(session).join(" · ")
+    }
+
+    pub(super) fn meta_parts(&self, session: Option<&Session>) -> Vec<String> {
         let mut meta = vec![self.who()];
         if let Some(mode) = self.mode.as_ref().filter(|m| *m != "default") {
             meta.push(mode.clone());
@@ -234,7 +238,7 @@ impl Entry {
         if self.is_routine() && self.cleanup {
             meta.push("removes its workspace".into());
         }
-        meta.join(" · ")
+        meta.into_iter().map(|part| part.trim().to_string()).filter(|part| !part.is_empty()).collect()
     }
 
     pub(super) fn matches(&self, filter: &str, session: Option<&Session>) -> bool {
