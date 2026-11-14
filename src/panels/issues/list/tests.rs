@@ -54,3 +54,12 @@ fn going_to_the_top_shows_the_first_row() {
     rows.to_top();
     assert_eq!(top(&rows), (0, px(0.)));
 }
+
+#[test]
+fn a_row_revealed_while_the_list_is_not_drawn_becomes_its_top() {
+    let mut rows = Rows::new();
+    let keys: Vec<String> = (0..30).map(|n| format!("#{n}")).collect();
+    rows.sync(issues(&keys.iter().map(String::as_str).collect::<Vec<_>>()), false, 523.);
+    rows.reveal(20, false);
+    assert_eq!(top(&rows), (20, px(0.)));
+}

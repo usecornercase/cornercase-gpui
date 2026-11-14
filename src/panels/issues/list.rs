@@ -43,8 +43,12 @@ impl Rows {
         self.list.scroll_to(ListOffset::default());
     }
 
-    pub(super) fn reveal(&self, index: usize) {
-        self.list.scroll_to_reveal_item(index);
+    pub(super) fn reveal(&self, index: usize, drawn: bool) {
+        if drawn {
+            self.list.scroll_to_reveal_item(index);
+        } else {
+            self.list.scroll_to(ListOffset { item_ix: index, offset_in_item: px(0.) });
+        }
     }
 }
 

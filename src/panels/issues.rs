@@ -49,10 +49,10 @@ enum Panes {
 }
 
 impl Panes {
-    fn of(sheet: f32, list: &Split, chosen: bool, list_open: bool) -> Self {
+    fn of(sheet: f32, list: &Split, chosen: bool, wants: Wants) -> Self {
         match list.columns(sheet, DETAIL_KEEP) {
             Columns::Two { list } => Self::Both { list },
-            Columns::One if chosen && !list_open => Self::Issue,
+            Columns::One if chosen && wants == Wants::Issue => Self::Issue,
             Columns::One => Self::List,
         }
     }
@@ -316,6 +316,10 @@ impl IssuesPanel {
         }
     }
 
+    fn panes(&self) -> Panes {
+        Panes::of(self.sheet.get(), &self.list_width, self.selected.is_some(), self.wants)
+    }
+
     fn move_selection(&mut self, down: bool, cx: &mut Context<Self>) {
         let shown = self.shown(cx);
         let Some(last) = shown.len().checked_sub(1) else { return };
@@ -325,7 +329,7 @@ impl IssuesPanel {
             Some(at) => at.saturating_sub(1),
             None => 0,
         };
-        self.rows.reveal(next);
+        self.rows.reveal(next, self.panes() != Panes::Issue);
         self.select(shown[next].clone(), cx);
     }
 
@@ -427,7 +431,7 @@ fn list_width(panel: &mut IssuesPanel) -> &mut Split {
 impl Render for IssuesPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let sheet = self.sheet.get();
-        let panes = Panes::of(sheet, &self.list_width, self.selected.is_some(), self.wants == Wants::List);
+        let panes = self.panes();
         self.sync_rows(panes.list_width(sheet), cx);
         div()
             .size_full()
