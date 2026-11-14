@@ -2,7 +2,7 @@
 
 Code: `src/panels/ports.rs`, `src/panels/ports/`, `src/panels/poll.rs`
 
-- **The TUI's ports dialog as a sheet** (⇧⌘O, the rail's plug icon, or **Ports…** in a workspace's menu, which shows that workspace first): the TCP ports the workspace's programs listen on, from `ports --json`, with the URL, the addresses, the program and its arguments, its pid and how it belongs to the workspace (`pane 12 · dev`, `agent claude · pane 9`, `in the worktree, no tab`).
+- **The TUI's ports dialog as a sheet** (⇧⌘O, the gear's menu, or **Ports…** in a workspace's menu, which shows that workspace first): the TCP ports the workspace's programs listen on, from `ports --json`, with the URL, the addresses, the program and its arguments, its pid and how it belongs to the workspace (`pane 12 · dev`, `agent claude · pane 9`, `in the worktree, no tab`).
 - **This workspace or every port**: the default is the workspace on screen; **Every port** passes `--all` and names each port's workspace, or "no workspace". Ports Docker publishes show only there, which the sheet says.
 - **Refreshed every 2 s while open**, like Processes (`poll::Watch`); a change of the workspace on screen drops the old list.
 - **Open shows the port in the Browser panel** (since 2026-10-31): the sheet closes, the dock shows the Browser, and the URL opens in the workspace on screen, or that workspace's tab already on the same origin comes forward (`Store::open_in_browser`, `design/browser.md`). On another machine, where the URL is that machine's `localhost`, the Browser tunnels it first (through cornercase's hold from 0.13.50, else its own ssh), so a remote port is one click too, as it is here. On this Mac the system browser stays, as the icon button beside Open; **Copy** stays everywhere.
