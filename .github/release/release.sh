@@ -163,7 +163,7 @@ carried() {
 
 carried_versions() {
   if ! listed=$(published); then
-    warn "listing the releases of $GH_REPO failed (gh's error is the line before this one), so the notes are $1's section alone: the sections of versions not published since the previous release are left out"
+    warn "listing the releases of $GH_REPO failed (gh's error is the line before this one in the notes and checksums step's log), so the notes are $1's section alone, without the sections of any versions below it that were never published"
     return
   fi
   previous=$(printf '%s\n' "$listed" | below "$1")
@@ -175,7 +175,7 @@ carried_versions() {
   if [ -z "$unreleased" ]; then
     note "$previous is the highest release below $1, so the notes are $1's section alone"
   else
-    note "$previous is the highest release below $1, so the notes hold $1's section and those of $(printf "%s" "${unreleased% }" | sed "s/ /, /g"), none of which is published"
+    note "$previous is the highest release below $1, so the notes hold $1's section, then those of the unpublished $(printf "%s" "${unreleased% }" | sed "s/ /, /g")"
   fi
   printf '%s\n' "$unreleased"
 }
@@ -192,6 +192,7 @@ notes() {
     printf '\n### %s\n\n' "$older"
     section "$older"
   done
+  if [ -n "$extra" ]; then printf '\n---\n'; fi
   printf '\nDownloads, how to open an unsigned build and how to check the checksums: https://github.com/usecornercase/cornercase-gpui#install\n'
 }
 

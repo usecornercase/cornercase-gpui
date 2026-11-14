@@ -293,6 +293,8 @@ a_version_never_released_is_carried_under_its_heading() {
 - A change of 0.1.64.
 - Another change of 0.1.64.
 
+---
+
 $install
 BODY
   :
@@ -316,6 +318,8 @@ several_versions_never_released_come_newest_first() {
 
 - A change of 0.1.63.
 - Another change of 0.1.63.
+
+---
 
 $install
 BODY
@@ -341,6 +345,8 @@ sections_come_newest_first_whatever_their_order_in_the_changelog() {
 - A change of 0.1.63.
 - Another change of 0.1.63.
 
+---
+
 $install
 BODY
   :
@@ -364,6 +370,8 @@ carried_versions_compare_as_numbers() {
 
 - A change of 0.1.9.
 - Another change of 0.1.9.
+
+---
 
 $install
 BODY
@@ -398,6 +406,8 @@ the_versions_own_release_is_not_the_previous_one() {
 - A change of 0.1.64.
 - Another change of 0.1.64.
 
+---
+
 $install
 BODY
   :
@@ -416,6 +426,8 @@ a_draft_is_not_the_previous_release() {
 
 - A change of 0.1.64.
 - Another change of 0.1.64.
+
+---
 
 $install
 BODY
@@ -441,6 +453,8 @@ a_pre_release_is_not_the_previous_release() {
 - A change of 0.1.64.
 - Another change of 0.1.64.
 
+---
+
 $install
 BODY
   :
@@ -459,6 +473,8 @@ a_tag_that_is_no_version_is_not_the_previous_release() {
 
 - A change of 0.1.64.
 - Another change of 0.1.64.
+
+---
 
 $install
 BODY
@@ -479,6 +495,8 @@ the_previous_release_on_a_later_page_counts() {
 
 - A change of 0.1.64.
 - Another change of 0.1.64.
+
+---
 
 $install
 BODY
@@ -513,6 +531,8 @@ sections_above_the_version_are_left_out() {
 - A change of 0.1.63.
 - Another change of 0.1.63.
 
+---
+
 $install
 BODY
   :
@@ -531,6 +551,8 @@ a_pre_releases_notes_count_from_the_previous_release() {
 
 - A change of 0.2.0-rc.1.
 - Another change of 0.2.0-rc.1.
+
+---
 
 $install
 BODY
@@ -597,7 +619,7 @@ a_version_without_a_section_fails_and_asks_nothing() {
 }
 
 a_wrong_argument_to_notes_fails_and_asks_nothing() {
-  changelog 0.1.65
+  changelog 0.1.65 soon v0.1.65
   page 1 v0.1.63
   for args in "" "0.1.65 0.1.64" v0.1.65 soon; do
     # shellcheck disable=SC2086
