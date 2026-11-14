@@ -10,7 +10,7 @@ use super::diagram::{Plan, role_colour};
 use super::flow_page::block;
 use super::hero::{facts, hero, stages_bar, task, title};
 use super::merged_view;
-use super::model::{Member, RoleSpec, Run, Standing, plural, stopped_line};
+use super::model::{Member, RoleSpec, Run, Standing, plural};
 use super::widgets::{loop_words, panel_box, pill, show_pane, standing_colour};
 use crate::model::Reopen;
 use crate::store::{Store, args, reopen_key};
@@ -91,7 +91,7 @@ enum Note {
 
 fn run_notes(run: &Run, standing: Standing, closed_first: usize) -> Vec<(String, Note)> {
     let stopped = match standing {
-        Standing::Stopped(secs) => Some((stopped_line(secs), Note::Stopped)),
+        Standing::Stopped(secs) => Some((run.stopped_line(secs), Note::Stopped)),
         _ => None,
     };
     stopped
@@ -126,9 +126,9 @@ fn run_facts(run: &Run, cx: &App) -> Vec<String> {
 }
 
 fn offer(run: &Run, cx: &App) -> Option<(Reopen, String)> {
-    let session = Store::get(cx).read(cx).session.clone()?;
-    let (_, workspace) = session.workspace(run.workspace)?;
-    Some((workspace.reopen()?, workspace.name.clone()))
+    let store = Store::get(cx).read(cx);
+    let (_, workspace) = store.session.as_ref()?.workspace(run.workspace)?;
+    Some((workspace.reopen_for_run(run.closed())?, workspace.name.clone()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,7 +140,7 @@ enum Action {
 }
 
 fn actions(run: &Run, reopen: Option<Reopen>) -> Vec<Action> {
-    let reopen = reopen.filter(|_| run.closed() || !run.exited().is_empty()).map(|r| Action::Reopen(r.label()));
+    let reopen = reopen.map(|reopen| Action::Reopen(reopen.label()));
     if run.closed() {
         return reopen.into_iter().chain([Action::Forget]).collect();
     }

@@ -17,6 +17,10 @@ impl Workspace {
         }
         Some(self.exited_roles().len()).filter(|n| *n > 0).map(Reopen::Exited)
     }
+
+    pub(crate) fn reopen_for_run(&self, run_closed: bool) -> Option<Reopen> {
+        self.reopen().filter(|_| run_closed || !self.exited_roles().is_empty())
+    }
 }
 
 fn agents(n: usize) -> &'static str {

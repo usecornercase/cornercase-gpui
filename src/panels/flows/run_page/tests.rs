@@ -88,12 +88,6 @@ fn a_run_with_exited_roles_where_closed_agents_come_first_says_so() {
 }
 
 #[test]
-fn a_live_run_does_not_offer_the_workspaces_other_closed_agents() {
-    let run = exited_run(&[]);
-    assert_eq!(actions(&run, Some(Reopen::Closed(1))), [Action::Show(6), Action::Stop(6)]);
-}
-
-#[test]
 fn a_run_whose_server_sent_no_exited_offers_what_it_offered_before() {
     assert_eq!(actions(&exited_run(&[]), None), [Action::Show(6), Action::Stop(6)]);
 }

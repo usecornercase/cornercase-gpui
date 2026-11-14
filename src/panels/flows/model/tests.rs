@@ -324,7 +324,7 @@ fn an_age_below_zero_reads_as_now() {
 }
 
 const EXITED: &str = crate::test_util::fixture!("flows/runs-exited.json");
-const EXITED_OLD: &str = crate::test_util::fixture!("flows/runs-exited-0.13.70.json");
+const EXITED_OLD: &str = crate::test_util::fixture!("flows/runs-exited-0_13_70.json");
 
 fn member(role: &str, pane: u64, exited: bool, closed: bool) -> Member {
     Member { role: role.into(), pane: Some(pane), exited, closed, ..Member::default() }
@@ -397,4 +397,12 @@ fn stop_goes_through_a_member_whose_agent_runs() {
     assert_eq!((run.lead_pane(), run.stop_pane()), (Some(7), Some(8)));
     let all = team(vec![member("orchestrator", 7, true, false), member("coder", 8, true, false)]);
     assert_eq!((all.lead_pane(), all.stop_pane()), (Some(7), None));
+}
+
+#[test]
+fn a_run_whose_orchestrators_agent_exited_says_so_when_it_stopped() {
+    let run = team(vec![member("orchestrator", 7, true, false), member("coder", 8, false, false)]);
+    assert_eq!(run.stopped_line(60), "stopped moving 1m ago: the orchestrator's agent exited");
+    let plain = team(vec![member("orchestrator", 7, false, false)]);
+    assert_eq!(plain.stopped_line(60), stopped_line(60));
 }

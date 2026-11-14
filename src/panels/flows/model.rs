@@ -286,7 +286,11 @@ impl Run {
 }
 
 pub(crate) fn stopped_line(secs: i64) -> String {
-    format!("stopped moving {} ago: the orchestrator's turn is over and no agent of the team works", age(secs))
+    stopped_words(secs, "the orchestrator's turn is over and no agent of the team works")
+}
+
+fn stopped_words(secs: i64, why: &str) -> String {
+    format!("stopped moving {} ago: {why}", age(secs))
 }
 
 pub(crate) fn stages_in_words(stages: &[usize]) -> String {
@@ -421,6 +425,13 @@ impl Run {
     fn first_pane(&self, takes: impl Fn(&Member) -> bool) -> Option<u64> {
         let alive = |m: &&Member| takes(m) && m.pane.is_some();
         self.orchestrator().filter(alive).or_else(|| self.roles.iter().find(alive)).and_then(|m| m.pane)
+    }
+
+    pub(crate) fn stopped_line(&self, secs: i64) -> String {
+        if self.orchestrator().is_some_and(Member::agent_exited) {
+            return stopped_words(secs, "the orchestrator's agent exited");
+        }
+        stopped_line(secs)
     }
 
     pub(crate) fn exited(&self) -> Vec<&str> {

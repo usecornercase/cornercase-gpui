@@ -56,3 +56,24 @@ fn a_status_line_of_0_13_72_reads_the_runs_exited_roles() {
     assert_eq!(workspace.exited_roles(), ["coder"]);
     assert_eq!(workspace.reopen(), Some(Reopen::Exited(1)));
 }
+
+#[test]
+fn a_live_run_does_not_offer_the_workspaces_other_closed_agents() {
+    assert_eq!(workspace(Some(1), &[]).reopen_for_run(false), None);
+    assert_eq!(workspace(Some(2), &["coder"]).reopen_for_run(false), Some(Reopen::Closed(2)));
+}
+
+#[test]
+fn a_closed_run_offers_the_workspaces_closed_agents() {
+    assert_eq!(workspace(Some(3), &[]).reopen_for_run(true), Some(Reopen::Closed(3)));
+    assert_eq!(workspace(None, &[]).reopen_for_run(true), None);
+}
+
+#[test]
+fn a_status_line_with_kept_and_exited_agents_reopens_the_kept_ones_first() {
+    let session: crate::model::Session =
+        serde_json::from_str(crate::test_util::fixture!("session/status-exited-kept.json")).expect("a status");
+    let (_, workspace) = session.workspace(5).expect("the run's workspace");
+    assert_eq!(workspace.exited_roles(), ["orchestrator", "coder"]);
+    assert_eq!((workspace.closed_agents, workspace.reopen()), (Some(1), Some(Reopen::Closed(1))));
+}
