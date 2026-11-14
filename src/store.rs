@@ -39,8 +39,8 @@ pub(crate) use machines_there::{
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 pub(crate) use toasts::{Toast, ToastKind};
 pub(crate) use tunnels::{
-    Asked, Control, Held, MachineLink, ReverseState, Tail, TunnelRow, Whose, address_there, copied_words, heading,
-    none_note, others_note, remote_url, section_tail,
+    Asked, Control, Held, MachineLink, ReverseState, Tail, TunnelRow, TunnelSection, Whose, address_there,
+    copied_words, heading, none_note, remote_url, section_tail,
 };
 pub(crate) use update_there::{
     AfterUpdate, UpdateOffer, UpdateThere, run_update, update_job, update_key, update_question,

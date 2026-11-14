@@ -7,7 +7,7 @@ use gpui::Context;
 
 use super::browse::{listed_gate, toast_go};
 use super::{Busy, Store, ToastKind};
-use crate::cli::{self, Ended, Holding, Version};
+use crate::cli::{self, Ended, Feature, Has, Holding, Version};
 use crate::model::tunnels::{
     Gate, Release, Toward, TunnelSeen, Way, gate_note, held_line, local_kept, local_to_ask, machine_gate, way,
 };
@@ -26,7 +26,7 @@ pub(crate) use held::{Asked, Held};
 pub(crate) use links::MachineLink;
 pub(crate) use reverse::{ReverseHold, ReverseState, address_there, copied_words};
 use rows::Mark;
-pub(crate) use rows::{Control, Tail, TunnelRow, Whose, heading, none_note, others_note, section_tail};
+pub(crate) use rows::{Control, Tail, TunnelRow, TunnelSection, Whose, heading, none_note, section_tail};
 
 use held::{
     Again, Fate, Hold, Reached, Settled, again_of, bring_back, came_back, fate, forgets_failed, live, local_before,
@@ -162,16 +162,26 @@ impl Store {
         }
     }
 
-    fn listed_tunnels(&self) -> &[TunnelSeen] {
-        self.session.as_ref().map_or(&[], |session| session.tunnels.as_slice())
+    fn listed_tunnels(&self, toward: &Toward) -> &[TunnelSeen] {
+        let Some(session) = self.session.as_ref() else { return &[] };
+        match toward {
+            Toward::Server => session.tunnels.as_slice(),
+            Toward::Machine(name) => session.machine(name).map_or(&[], |seen| seen.tunnels.as_slice()),
+        }
     }
 
     pub(crate) fn tunnel_rows(&self) -> Vec<TunnelRow> {
-        rows::menu_rows(self.listed_tunnels(), &self.tunnels.holds, self.tunnels.reverses.get(&Toward::Server))
+        let listed = self.listed_tunnels(&Toward::Server);
+        rows::place_rows(&Toward::Server, listed, &self.tunnels.holds, self.tunnels.reverses.get(&Toward::Server))
     }
 
-    pub(crate) fn machine_tunnel_sections(&self) -> Vec<(String, Vec<TunnelRow>)> {
-        rows::machine_sections(&self.tunnels.holds, &self.tunnels.reverses)
+    pub(crate) fn machine_tunnel_sections(&self) -> Vec<TunnelSection> {
+        let machines = self.session.as_ref().map_or(&[][..], |session| session.machines.as_slice());
+        rows::machine_sections(&self.tunnels.holds, &self.tunnels.reverses, machines)
+    }
+
+    pub(crate) fn server_has(&self, feature: Feature) -> Has {
+        self.session.as_ref().map_or(Has::Unread, |session| feature.on(session.release()))
     }
 
     pub(crate) fn tunnel_control(&self, toward: &Toward, port: u16) -> Control {
@@ -179,7 +189,7 @@ impl Store {
     }
 
     pub(crate) fn tunnel_mark(&self, toward: &Toward, port: u16) -> Option<Mark> {
-        let there = *toward == Toward::Server && rows::elsewhere(port, self.listed_tunnels(), &self.tunnels.holds);
+        let there = rows::elsewhere(toward, port, self.listed_tunnels(toward), &self.tunnels.holds);
         rows::mark(self.can_tunnel(toward), self.held_tunnel(toward, port), there)
     }
 
@@ -315,13 +325,17 @@ impl Store {
         if let Some(job) = hold.job {
             self.end_job(job, cx);
         }
-        let fate = fate(&hold, ended.code, &ended.said);
+        let fate = fate(&hold, ended);
         if forgets_failed(&fate, hold.added) {
             self.remember_tunnel(&hold.destination, hold.port, false, cx);
         }
         let failing = matches!(fate, Fate::Failed(_) | Fate::Retry(_));
         match fate {
             Fate::Gone => drop(self.tunnels.holds.remove(at)),
+            Fate::Closed => {
+                self.tunnels.holds.remove(at);
+                self.remember_tunnel(&hold.destination, hold.port, false, cx);
+            }
             Fate::Failed(why) => {
                 self.tunnels.holds.remove(at);
                 self.toast(why, ToastKind::Error, cx);

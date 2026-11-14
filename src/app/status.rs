@@ -68,7 +68,7 @@ impl Root {
             Some(_) => store.tunnel_way() == Way::Cornercase,
             None => !sections.is_empty(),
         };
-        let names: Vec<String> = sections.into_iter().map(|(name, _)| name).collect();
+        let names: Vec<String> = sections.into_iter().map(|section| section.name).collect();
         let tunnelled = self.host.clone().or_else(|| held.then(|| listed(&names)));
         let tip = connection_tip(why, tunnelled.as_deref().filter(|_| held));
         let parts = label_parts(self.host.as_deref(), if held { store.tunnel_count() } else { 0 }, &label);

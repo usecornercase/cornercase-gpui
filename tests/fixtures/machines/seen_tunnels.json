@@ -1,0 +1,14 @@
+{
+  "boot": "4242-1793303771316290000",
+  "icon": "☁",
+  "name": "vps",
+  "projects": [],
+  "state": "linked",
+  "tunnels": [
+    {"error": null, "holder": 13, "kind": "hold", "local": 60950, "port": 8765, "state": "up"},
+    {"error": null, "holder": 6, "kind": "hold", "local": 8765, "port": 8765, "state": "up"},
+    {"error": null, "holder": 9, "kind": "window", "local": 5173, "port": 5173, "state": "up"},
+    {"error": null, "holder": 4, "kind": "hold", "local": 9000, "port": 9000, "state": "closed"},
+    {"direction": "reverse", "error": null, "holder": 6, "kind": "hold", "local": 9222, "port": 60971, "state": "up"}
+  ]
+}

@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 use super::{LinkState, MachineIcon, NextTry, seen_ago};
 use crate::cli::{Version, with_boot};
+use crate::model::tunnels::TunnelSeen;
 use crate::model::{PaneInfo, Project, Session, Tab, loudest_of, needs_you, status_rank, works};
 use crate::store::args;
 
@@ -58,6 +59,7 @@ pub(crate) struct MachineSeen {
     pub retry_at: Option<String>,
     pub boot: String,
     pub projects: Vec<ThereProject>,
+    pub tunnels: Vec<TunnelSeen>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

@@ -81,7 +81,47 @@ mod on_unix {
     fn a_hold_that_ends_by_itself_gives_its_status_and_stderr() {
         let (_, heard) = start(shell("echo could not tunnel port 1 >&2; exit 1"));
         let Heard::End(ended) = next(&heard) else { panic!("it ends") };
-        assert_eq!(ended, Ended { code: Some(1), said: "could not tunnel port 1".to_string() });
+        assert_eq!(
+            ended,
+            Ended { code: Some(1), said: "could not tunnel port 1".to_string(), last_line: String::new() }
+        );
+    }
+
+    fn ended_of(script: &str) -> Ended {
+        let (_, heard) = start(shell(script));
+        loop {
+            if let Heard::End(ended) = next(&heard) {
+                return ended;
+            }
+        }
+    }
+
+    #[test]
+    fn a_hold_gives_the_last_line_it_printed_with_its_end() {
+        let ended = ended_of(
+            r#"echo '{"port":8765,"local":61014,"url":"http://localhost:61014"}'; echo '{"ended":"server-stopped"}'; exit 7"#,
+        );
+        assert_eq!(
+            ended,
+            Ended { code: Some(7), said: String::new(), last_line: r#"{"ended":"server-stopped"}"#.to_string() }
+        );
+    }
+
+    #[test]
+    fn a_partial_last_line_comes_as_it_was_printed() {
+        let ended = ended_of(r#"echo first; printf '{"ended":"clo'"#);
+        assert_eq!(ended.last_line, r#"{"ended":"clo"#);
+    }
+
+    #[test]
+    fn an_empty_line_after_the_end_does_not_hide_it() {
+        let ended = ended_of(r#"echo '{"ended":"closed"}'; echo; echo '   '"#);
+        assert_eq!(ended.last_line, r#"{"ended":"closed"}"#);
+    }
+
+    #[test]
+    fn a_hold_that_printed_nothing_has_no_last_line() {
+        assert_eq!(ended_of("exit 0").last_line, "");
     }
 }
 

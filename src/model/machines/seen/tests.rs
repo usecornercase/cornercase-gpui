@@ -617,3 +617,20 @@ fn a_read_puts_its_boot_before_a_double_dash() {
     let sent = aim.reading(command, releases(Some((0, 13, 66)), Some((0, 12, 212))));
     assert_eq!(sent[5..], ["--boot", aim.boot.as_str(), "--", "./a"]);
 }
+
+#[test]
+fn a_machines_entry_carries_its_tunnels() {
+    let seen: MachineSeen = serde_json::from_str(fixture!("machines/seen_tunnels.json")).expect("an entry");
+    let ports: Vec<u16> = seen.tunnels.iter().map(|tunnel| tunnel.port).collect();
+    assert_eq!(ports, [8765, 8765, 5173, 9000, 60971]);
+    let kinds: Vec<&str> = seen.tunnels.iter().map(|tunnel| tunnel.kind.as_str()).collect();
+    assert_eq!(kinds, ["hold", "hold", "window", "hold", "hold"]);
+    assert!(seen.tunnels[0].forward());
+    assert!(!seen.tunnels[4].forward());
+}
+
+#[test]
+fn a_machines_entry_without_the_key_has_no_tunnels() {
+    let seen: MachineSeen = serde_json::from_str(fixture!("machines/seen_fallen.json")).expect("an entry");
+    assert_eq!(seen.tunnels.len(), 0);
+}

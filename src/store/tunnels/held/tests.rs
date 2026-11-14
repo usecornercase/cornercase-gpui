@@ -1,9 +1,18 @@
 use super::{
-    Again, Asked, Fate, Held, Hold, Settled, again_of, bring_back, came_back, fate, forgets_after_close,
+    Again, Asked, Fate, Held, Hold, Settled, again_of, bring_back, came_back, fate as fate_of, forgets_after_close,
     forgets_failed, live, local_before, ports_kept, remembers, settle_now, settled, test_hold, up_toast,
     window_failure,
 };
+use crate::cli::{Ended, ended_after};
 use crate::model::tunnels::Toward;
+
+fn fate(hold: &Hold, code: Option<i32>, said: &str) -> Fate {
+    fate_of(hold, &Ended { code, said: said.to_string(), last_line: String::new() })
+}
+
+fn printed(hold: &Hold, text: &str, code: i32) -> Fate {
+    fate_of(hold, &ended_after(text, Some(code)))
+}
 
 fn hold(state: Held, was_up: bool) -> Hold {
     let mut hold = test_hold(Toward::Server, 5173, state);
@@ -263,4 +272,72 @@ fn a_port_pending_settlement_is_not_brought_back_with_the_link() {
     let kept = ports_kept(&holds, &toward, [3000].into_iter());
     assert_eq!(kept, vec![5173, 3000]);
     assert_eq!(bring_back(&[3000, 5173, 8080], &kept), vec![8080]);
+}
+
+#[test]
+fn a_hold_closed_there_ends_at_once() {
+    let text = crate::test_util::fixture!("tunnels/hold_closed.txt");
+    assert_eq!(printed(&hold(Held::Up { local: 61014 }, true), text, 0), Fate::Closed);
+}
+
+#[test]
+fn a_hold_forgotten_there_ends_at_once() {
+    let text = crate::test_util::fixture!("tunnels/hold_forgotten.txt");
+    assert_eq!(printed(&hold(Held::Up { local: 61017 }, true), text, 0), Fate::Closed);
+}
+
+#[test]
+fn a_hold_whose_server_stopped_falls_and_says_so() {
+    let text = crate::test_util::fixture!("tunnels/hold_server_stopped.txt");
+    let fate = printed(&hold(Held::Up { local: 61020 }, true), text, 7);
+    assert_eq!(fate, Fate::Retry("Its server stopped".to_string()));
+}
+
+#[test]
+fn a_hold_whose_server_restarted_falls_and_says_so() {
+    let text = crate::test_util::fixture!("tunnels/hold_server_restarted.txt");
+    let fate = printed(&hold(Held::Up { local: 8765 }, true), text, 7);
+    assert_eq!(fate, Fate::Retry("Its server restarted".to_string()));
+}
+
+#[test]
+fn a_hold_that_exits_7_with_no_line_falls_as_today() {
+    let text = crate::test_util::fixture!("tunnels/held_line.txt");
+    let fate = printed(&hold(Held::Up { local: 65433 }, true), text, 7);
+    assert_eq!(fate, Fate::Retry("cornercase tunnel hold ended with status 7".to_string()));
+}
+
+#[test]
+fn a_hold_that_exits_0_with_no_line_still_settles() {
+    let text = crate::test_util::fixture!("tunnels/held_line.txt");
+    assert_eq!(printed(&hold(Held::Up { local: 65433 }, true), text, 0), Fate::Settle);
+}
+
+#[test]
+fn a_line_the_window_does_not_know_leaves_the_status_to_decide() {
+    let text = crate::test_util::fixture!("tunnels/hold_end_unknown.txt");
+    let up = hold(Held::Up { local: 61014 }, true);
+    assert_eq!(printed(&up, text, 0), Fate::Settle);
+    assert_eq!(printed(&up, text, 7), Fate::Retry("cornercase tunnel hold ended with status 7".to_string()));
+}
+
+#[test]
+fn a_hold_that_never_came_up_and_was_closed_ends_at_once() {
+    let text = crate::test_util::fixture!("tunnels/hold_end_alone.txt");
+    assert_eq!(printed(&hold(Held::Opening, false), text, 0), Fate::Closed);
+}
+
+#[test]
+fn a_hold_that_never_came_up_says_why_its_server_went() {
+    let text = crate::test_util::fixture!("tunnels/hold_server_stopped.txt");
+    let fate = printed(&hold(Held::Opening, false), text, 7);
+    assert_eq!(fate, Fate::Failed("Could not tunnel port 5173: its server stopped".to_string()));
+}
+
+#[test]
+fn a_hold_this_window_ended_goes_quietly_whatever_its_last_line() {
+    let closed = crate::test_util::fixture!("tunnels/hold_closed.txt");
+    let stopped = crate::test_util::fixture!("tunnels/hold_server_stopped.txt");
+    assert_eq!(printed(&hold(Held::Ending, true), closed, 0), Fate::Gone);
+    assert_eq!(printed(&hold(Held::Ending, true), stopped, 7), Fate::Gone);
 }

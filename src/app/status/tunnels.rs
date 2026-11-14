@@ -1,17 +1,18 @@
 use gpui::{ClipboardItem, Context, Pixels, Point, Window};
 
 use crate::app::Root;
+use crate::cli::Feature;
 use crate::context_menu::{self, Entry};
 use crate::dialogs;
 use crate::keymap::{Command, keys_of};
 use crate::model::Owner;
 use crate::model::machines::listed;
-use crate::model::tunnels::Toward;
+use crate::model::tunnels::{Toward, others_note};
 use crate::panels::{PanelKind, on_machine};
 use crate::platform::Os;
 use crate::store::ToastKind;
 use crate::store::remote_url;
-use crate::store::{Reach, Tail, TunnelRow, Whose, heading, none_note, others_note, section_tail};
+use crate::store::{Reach, Tail, TunnelRow, TunnelSection, Whose, heading, none_note, section_tail};
 use crate::store::{Store, address_there, copied_words};
 
 fn closing(toward: &Toward, port: u16) -> Vec<Entry> {
@@ -132,22 +133,33 @@ fn tail_entry(tail: Tail) -> Entry {
     }
 }
 
-fn machine_section(name: &str, rows: &[TunnelRow], store: &Store) -> Vec<Entry> {
+fn section_row(section: &TunnelSection, row: &TunnelRow, shown: Option<Owner>) -> Entry {
+    if section.rests(row) {
+        context_menu::resting(row.text())
+    } else {
+        context_menu::submenu(row.text(), actions(row, shown, &section.name))
+    }
+}
+
+fn machine_section(section: &TunnelSection, store: &Store) -> Vec<Entry> {
+    let name = &section.name;
     let mut entries = vec![Entry::Heading(heading(name).into())];
     let shown = store.owner_on(name);
-    entries.extend(rows.iter().map(|row| context_menu::submenu(row.text(), actions(row, shown.clone(), name))));
+    entries.extend(section.rows.iter().map(|row| section_row(section, row, shown.clone())));
+    entries.extend(section.last_sent.iter().cloned().map(context_menu::note));
     let reach = store.reach_of(name);
     let note = reach.as_ref().and_then(Reach::older);
     entries.extend(section_tail(note, &store.update_offer(note)).into_iter().map(tail_entry));
     entries
 }
 
-fn machine_entries(sections: &[(String, Vec<TunnelRow>)], store: &Store) -> Vec<Entry> {
-    let mut entries: Vec<Entry> = sections.iter().flat_map(|(name, rows)| machine_section(name, rows, store)).collect();
-    let names: Vec<String> = sections.iter().map(|(name, _)| name.clone()).collect();
+fn machine_entries(sections: &[TunnelSection], store: &Store) -> Vec<Entry> {
+    let mut entries: Vec<Entry> = sections.iter().flat_map(|section| machine_section(section, store)).collect();
+    let names: Vec<String> = sections.iter().map(|section| section.name.clone()).collect();
     let towards: Vec<Toward> = names.iter().cloned().map(Toward::Machine).collect();
     entries.extend(store.orders_notes(&towards).into_iter().map(context_menu::note));
-    entries.push(context_menu::note(others_note(&listed(&names))));
+    let gate = store.server_has(Feature::MachineTunnels);
+    entries.extend(others_note(gate, &listed(&names)).map(context_menu::note));
     entries
 }
 

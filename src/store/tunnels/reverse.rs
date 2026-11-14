@@ -4,7 +4,7 @@ use super::held::status_words;
 use super::{Busy, Heard, Store, ToastKind, listed_gate, listen_to_hold};
 use crate::cli::{self, Holding};
 use crate::model::machines::hide_destination;
-use crate::model::tunnels::{Gate, Toward, held_line, reverse_gate, reverse_note};
+use crate::model::tunnels::{Gate, HoldEnd, Toward, ended_line, held_line, reverse_gate, reverse_note};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReverseState {
@@ -71,6 +71,21 @@ pub(crate) fn ending_toast(state: ReverseState, code: Option<i32>, why: &str, la
             let why = why.map_or_else(|| status_words(code), str::to_string);
             (ended_toast(label, Some(&why)), ToastKind::Error)
         }
+    }
+}
+
+pub(crate) fn ended_words(state: ReverseState, ended: &cli::Ended, why: &str, label: &str) -> (String, ToastKind) {
+    match ended_line(&ended.last_line) {
+        Some(end) => told_toast(state, end, label),
+        None => ending_toast(state, ended.code, why, label),
+    }
+}
+
+fn told_toast(state: ReverseState, end: HoldEnd, label: &str) -> (String, ToastKind) {
+    match (end.went(), state) {
+        (None, _) => (ended_toast(label, None), ToastKind::Info),
+        (Some(reason), ReverseState::Opening) => (failed_toast(label, reason), ToastKind::Error),
+        (Some(reason), ReverseState::Open { .. }) => (ended_toast(label, Some(reason)), ToastKind::Error),
     }
 }
 
@@ -203,7 +218,7 @@ impl Store {
             self.end_job(job, cx);
         }
         let why = reverse_reason(&ended.said, toward, &hold.label, &hold.destination);
-        let (text, kind) = ending_toast(hold.state, ended.code, &why, &hold.label);
+        let (text, kind) = ended_words(hold.state, ended, &why, &hold.label);
         self.toast(text, kind, cx);
         if let (Toward::Machine(name), true) = (toward, ended.code != Some(0)) {
             self.there_failed(name, cx);
