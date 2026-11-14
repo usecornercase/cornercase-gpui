@@ -380,19 +380,13 @@ impl Notifier {
         self.flashing.then_some(self.flash)
     }
 
-    fn update_gate(&self, target: &cli::Target, cx: &Context<Self>) -> cli::UpdateGate {
-        let store = self.store.read(cx);
-        let server = store.session.as_ref().and_then(Session::release);
-        cli::UpdateGate::on(target, store.cli_release(), server)
-    }
-
     pub(crate) fn install(&mut self, cx: &mut Context<Self>) {
         if self.install == InstallState::Running {
             return;
         }
         let release = self.app.release().map(|r| r.version.clone()).unwrap_or_default();
         let target = cli::target();
-        let gate = self.update_gate(&target, cx);
+        let gate = cli::UpdateGate::Here(self.store.read(cx).cli_release());
         let host = target.host().map(str::to_string);
         self.install = InstallState::Running;
         self.waits = None;
@@ -418,7 +412,7 @@ impl Notifier {
     ) {
         let place = host.map_or(Where::Here(here), Where::There);
         let outcome = outcome::of(answer, release, &place);
-        self.waits = outcome.waits(gate, &place, Os::CURRENT);
+        self.waits = outcome.waits(gate, Os::CURRENT);
         self.install = outcome.state();
         if let InstallState::Done(version) = &self.install {
             self.expect(version.clone());

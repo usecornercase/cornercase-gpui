@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use super::partial::said;
-use super::{Answer, Older, Said, Target, Version, reason, update_args};
+use super::{Answer, Older, Said, Version, reason, update_args};
 
 pub(crate) const UPDATE_JSON_SINCE: Version = Version::new(0, 13, 53);
 
@@ -84,13 +84,6 @@ pub(crate) enum Lacking {
 }
 
 impl UpdateGate {
-    pub(crate) fn on(target: &Target, here: Option<Version>, there: Option<Version>) -> Self {
-        match target {
-            Target::Local => Self::Here(here),
-            Target::Remote(_) => Self::Through { here, there: there.max(here) },
-        }
-    }
-
     pub(crate) fn of(older: &Older) -> Self {
         Self::Through { here: Version::parse(&older.here), there: older.there.as_deref().and_then(Version::parse) }
     }

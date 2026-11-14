@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 
 use super::{ByHand, Lacking, UpdateAnswer, UpdateGate, update_answer, update_command};
-use crate::cli::{Answer, Older, Remote, Said, Target, Version};
+use crate::cli::{Answer, Older, Said, Version};
 use crate::test_util::fixture;
 
 #[expect(clippy::unnecessary_wraps, reason = "the readers take the Result a command gives")]
@@ -177,24 +177,6 @@ fn the_gate_names_which_command_line_lacks_it() {
     assert_eq!(gate("0.13.51", "0.13.74"), Some(Lacking::Here));
     assert_eq!(gate("0.13.51", "0.13.50"), Some(Lacking::Both));
     assert_eq!(UpdateGate::Here(release("0.13.51")).lacking(), Some(Lacking::Here));
-}
-
-#[test]
-fn the_gate_follows_the_windows_target() {
-    let (here, there) = (release("0.13.74"), release("0.13.51"));
-    assert_eq!(UpdateGate::on(&Target::Local, here, there), UpdateGate::Here(here));
-    let remote = Target::Remote(Remote::new("vps.invalid", "").expect("a destination"));
-    assert_eq!(UpdateGate::on(&remote, here, there), UpdateGate::Through { here, there: here });
-}
-
-#[test]
-fn through_the_windows_remote_this_computers_release_bounds_the_binary_there() {
-    let remote = Target::Remote(Remote::new("vps.invalid", "").expect("a destination"));
-    let gate = |here, there| UpdateGate::on(&remote, release(here), release(there));
-    assert_eq!(gate("0.13.74", "0.13.51").lacking(), None);
-    assert_eq!(gate("0.13.51", "0.13.74").lacking(), Some(Lacking::Here));
-    assert_eq!(UpdateGate::on(&remote, release("0.13.74"), None).lacking(), None);
-    assert_eq!(UpdateGate::on(&remote, None, release("0.13.74")).lacking(), Some(Lacking::Here));
 }
 
 #[test]

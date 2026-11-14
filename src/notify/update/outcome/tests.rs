@@ -12,8 +12,8 @@ fn release(text: &str) -> Option<Version> {
     Version::parse(text)
 }
 
-fn through(here: &str, there: &str) -> UpdateGate {
-    UpdateGate::Through { here: release(here), there: release(there) }
+fn here_gate(here: &str) -> UpdateGate {
+    UpdateGate::Here(release(here))
 }
 
 fn by_hand() -> ByHand {
@@ -42,7 +42,7 @@ fn an_updated_line_is_installed_under_its_version() {
     let outcome = of(&answer(0, fixture!("update/json-updated.txt"), ""), "0.13.74", &place);
     assert_eq!(outcome, Outcome::Installed("0.13.74".into()));
     assert_eq!(outcome.state(), InstallState::Done("0.13.74".into()));
-    assert_eq!((outcome.toast("0.13.74", &place), outcome.waits(gate, &place, Os::Mac)), (None, None));
+    assert_eq!((outcome.toast("0.13.74", &place), outcome.waits(gate, Os::Mac)), (None, None));
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn an_install_on_another_machine_is_checked_by_its_line() {
     let place = Where::There("vps");
     let outcome = of(&answer(0, fixture!("update/json-updated.txt"), ""), "0.13.74", &place);
     assert_eq!(outcome, Outcome::Installed("0.13.74".into()));
-    assert_eq!(outcome.waits(through("0.13.74", "0.13.53"), &place, Os::Mac), None);
+    assert_eq!(outcome.waits(here_gate("0.13.74"), Os::Mac), None);
 }
 
 #[test]
@@ -150,18 +150,14 @@ fn an_install_there_below_the_gate_is_not_checked_and_says_what_it_needs() {
     let outcome = of(&answer(0, "", ""), "0.13.50", &place);
     assert_eq!(outcome, Outcome::Unchecked { version: "0.13.50".into(), host: "vps".into() });
     assert_eq!(outcome.state(), InstallState::Done("0.13.50".into()));
-    let waits = |gate| outcome.waits(gate, &place, Os::Mac);
+    let waits = |gate| outcome.waits(gate, Os::Mac);
     let said = "Not checked on vps until its server restarts";
-    assert_eq!(waits(through("0.13.74", "0.13.51")), Some(format!("{said}: needs cornercase 0.13.53 or newer on vps")));
     assert_eq!(
-        waits(through("0.13.51", "0.13.74")),
+        waits(here_gate("0.13.51")),
         Some(format!("{said}: needs cornercase 0.13.53 or newer on this Mac (it has 0.13.51)"))
     );
-    assert_eq!(
-        waits(through("0.13.51", "0.13.50")),
-        Some(format!("{said}: needs cornercase 0.13.53 or newer on this Mac (it has 0.13.51) and on vps"))
-    );
-    assert_eq!(waits(through("0.13.74", "0.13.53")), Some(said.to_string()));
+    assert_eq!(waits(UpdateGate::Here(None)), Some(format!("{said}: needs cornercase 0.13.53 or newer on this Mac")));
+    assert_eq!(waits(here_gate("0.13.74")), Some(said.to_string()));
 }
 
 #[test]
@@ -171,9 +167,9 @@ fn a_manual_answer_below_the_gate_names_the_release_copy_command_needs() {
     let Outcome::Failed { why, printed } = &outcome else { panic!("not a failure: {outcome:?}") };
     assert!(why.contains("brew update && brew upgrade cornercase"), "{why}");
     assert!(printed);
-    let waits = outcome.waits(UpdateGate::Here(release("0.13.51")), &place, Os::Mac);
+    let waits = outcome.waits(UpdateGate::Here(release("0.13.51")), Os::Mac);
     assert_eq!(waits.as_deref(), Some("Copy command needs cornercase 0.13.53 or newer on this Mac (it has 0.13.51)"));
-    assert_eq!(outcome.waits(UpdateGate::Here(release("0.13.74")), &place, Os::Mac), None);
+    assert_eq!(outcome.waits(UpdateGate::Here(release("0.13.74")), Os::Mac), None);
 }
 
 #[test]
@@ -187,7 +183,7 @@ fn a_manual_answer_with_status_six_and_no_line_is_what_it_printed() {
 fn this_computers_release_unknown_needs_no_parenthesis() {
     let place = Where::Here(None);
     let outcome = of(&answer(1, fixture!("update/manual.txt"), ""), "0.13.50", &place);
-    let waits = outcome.waits(UpdateGate::Here(None), &place, Os::Mac);
+    let waits = outcome.waits(UpdateGate::Here(None), Os::Mac);
     assert_eq!(waits.as_deref(), Some("Copy command needs cornercase 0.13.53 or newer on this Mac"));
 }
 
@@ -195,7 +191,7 @@ fn this_computers_release_unknown_needs_no_parenthesis() {
 fn on_linux_it_names_this_computer() {
     let place = Where::Here(None);
     let outcome = of(&answer(1, fixture!("update/manual.txt"), ""), "0.13.50", &place);
-    let waits = outcome.waits(UpdateGate::Here(release("0.13.51")), &place, Os::Linux);
+    let waits = outcome.waits(UpdateGate::Here(release("0.13.51")), Os::Linux);
     assert_eq!(
         waits.as_deref(),
         Some("Copy command needs cornercase 0.13.53 or newer on this computer (it has 0.13.51)")
@@ -208,7 +204,7 @@ fn a_failure_on_standard_error_gives_its_reason() {
     let outcome = of(&answer(1, "", fixture!("update/failed.txt")), "0.13.50", &place);
     let why = "GitHub answered 503 to the update check";
     assert_eq!(outcome, Outcome::Failed { why: why.into(), printed: false });
-    assert_eq!(outcome.waits(UpdateGate::Here(release("0.13.51")), &place, Os::Mac), None);
+    assert_eq!(outcome.waits(UpdateGate::Here(release("0.13.51")), Os::Mac), None);
 }
 
 #[test]

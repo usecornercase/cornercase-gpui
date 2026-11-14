@@ -1,5 +1,5 @@
 use super::{UpdateToast, Updating};
-use crate::cli::{self, Answer, ByHand, Lacking, Said, UPDATE_JSON_SINCE, UpdateAnswer, UpdateGate, Version};
+use crate::cli::{self, Answer, ByHand, Said, UPDATE_JSON_SINCE, UpdateAnswer, UpdateGate, Version};
 use crate::desktop;
 use crate::notify::{AppState, InstallState};
 use crate::platform::Os;
@@ -67,20 +67,10 @@ fn checked(release: &str, here: Option<&Here>) -> Outcome {
     }
 }
 
-fn needs(gate: UpdateGate, place: &Where<'_>, os: Os) -> Option<String> {
-    let lacking = gate.lacking()?;
-    let host = match place {
-        Where::There(host) => host,
-        Where::Here(_) => "the other machine",
-    };
+fn needs(gate: UpdateGate, os: Os) -> Option<String> {
+    gate.lacking()?;
     let has = gate.here().map(|v| format!(" (it has {v})")).unwrap_or_default();
-    let here = format!("this {}{has}", desktop::machine(os));
-    let on = match lacking {
-        Lacking::Here => here,
-        Lacking::There => host.to_string(),
-        Lacking::Both => format!("{here} and on {host}"),
-    };
-    Some(format!("cornercase {UPDATE_JSON_SINCE} or newer on {on}"))
+    Some(format!("cornercase {UPDATE_JSON_SINCE} or newer on this {}{has}", desktop::machine(os)))
 }
 
 impl Outcome {
@@ -92,8 +82,8 @@ impl Outcome {
         }
     }
 
-    pub(crate) fn waits(&self, gate: UpdateGate, place: &Where<'_>, os: Os) -> Option<String> {
-        let needs = needs(gate, place, os);
+    pub(crate) fn waits(&self, gate: UpdateGate, os: Os) -> Option<String> {
+        let needs = needs(gate, os);
         match self {
             Self::Failed { printed: true, .. } => needs.map(|needs| format!("Copy command needs {needs}")),
             Self::Unchecked { host, .. } => {

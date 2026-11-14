@@ -38,7 +38,7 @@ pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
 use typist::{OnError, Typist};
 pub(crate) use update::{
-    ByHand, Lacking, UPDATE_JSON_SINCE, UpdateAnswer, UpdateGate, refused_json, update_answer, update_command,
+    ByHand, UPDATE_JSON_SINCE, UpdateAnswer, UpdateGate, refused_json, update_answer, update_command,
 };
 pub(crate) use window_processes::{keep_window_processes, stop_window_processes};
 
