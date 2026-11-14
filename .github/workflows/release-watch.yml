@@ -1,22 +1,49 @@
 name: Release watch
 
+run-name: ${{ inputs.wait > 0 && !contains(format('{0}', inputs.wait), '.') && inputs.wait <= 55 && format('Release watch after a {0}-minute wait', inputs.wait) || 'Release watch' }}
+
 on:
   schedule:
     - cron: '2-59/5 * * * *'
   workflow_dispatch:
-
-concurrency:
-  group: release-watch
-  cancel-in-progress: false
+    inputs:
+      wait:
+        description: 'Minutes to wait before watching: a whole number from 0 (watch at once) to 55'
+        type: number
+        default: 0
 
 permissions: {}
 
 jobs:
+  wait:
+    name: wait before watching
+    if: ${{ github.ref == 'refs/heads/main' && inputs.wait != 0 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: wait
+        env:
+          WAIT: ${{ inputs.wait }}
+        run: |
+          case $WAIT in
+            [1-9] | [1-4][0-9] | 5[0-5]) ;;
+            *)
+              echo "::error::wait takes a whole number of minutes from 0 to 55, not '$WAIT': the watch job looks now instead"
+              exit 1
+              ;;
+          esac
+          echo "waiting $WAIT minutes, until $(date -u -d "+$WAIT minutes" '+%H:%M UTC'), so that a release started or re-run just now has time to end; then the watch job looks at the newest tag's release"
+          sleep "${WAIT}m"
+
   watch:
     name: watch the newest tag's release
-    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: wait
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    concurrency:
+      group: release-watch
+      cancel-in-progress: false
     permissions:
       actions: write
       contents: read
