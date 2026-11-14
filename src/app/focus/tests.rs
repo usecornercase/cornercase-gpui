@@ -135,3 +135,15 @@ fn what_was_given_back_is_not_given_twice() {
     noted.take();
     assert_eq!(noted.take(), None);
 }
+
+#[test]
+fn a_sheet_giving_way_to_another_takes_the_keys_to_the_window() {
+    let change = change(over(false, Some(PanelKind::Search)), over(false, Some(PanelKind::Accounts)), None);
+    assert_eq!(keys_after(&change), Keys::Root);
+}
+
+#[test]
+fn an_answer_asking_for_the_terminal_with_no_dialog_or_sheet_change_takes_the_keys_there() {
+    let change = Change { to_terminal: true, ..change(over(false, Some(ISSUES)), over(false, Some(ISSUES)), None) };
+    assert_eq!(keys_after(&change), Keys::Root);
+}
