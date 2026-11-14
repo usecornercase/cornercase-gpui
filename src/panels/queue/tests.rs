@@ -872,3 +872,12 @@ fn the_detail_goes_when_its_entry_leaves_the_feed_or_the_release_stops_offering_
     assert_eq!(shown_entry(&list, 4, true), None);
     assert_eq!(shown_entry(&list, 3, false), None);
 }
+
+#[test]
+fn the_line_about_the_command_line_shows_above_a_routine_whose_only_openable_row_is_a_run() {
+    use super::data::shows_results_note;
+    let alone = vec![routine(1, "day 09:00")];
+    assert!(!shows_results_note(&sections(&alone, "", None), None, None));
+    let with_run = vec![routine(1, "day 09:00"), run_of(1, 2, "started")];
+    assert!(shows_results_note(&sections(&with_run, "", None), None, None));
+}
