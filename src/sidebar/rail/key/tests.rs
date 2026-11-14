@@ -30,7 +30,7 @@ impl Inputs {
 }
 
 const CHANGES: &[Change<Inputs>] = &[
-    ("the store", |i| i.store += 1),
+    ("the store, which a sheet opening or closing notifies", |i| i.store += 1),
     ("the session", |i| i.session += 1),
     ("the look", |i| i.look.todo_dot = !i.look.todo_dot),
     ("an open menu", |i| i.menu = true),

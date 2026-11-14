@@ -79,6 +79,39 @@ fn every_panel_has_keys() {
     }
 }
 
+const PANEL_KEYS: [(PanelKind, &str, &str, bool); 18] = [
+    (PanelKind::Changes, "⇧⌘C", "c", true),
+    (PanelKind::Files, "⇧⌘E", "e", true),
+    (PanelKind::Todo, "⇧⌘L", "l", true),
+    (PanelKind::Recap, "⇧⌘H", "h", true),
+    (PanelKind::Browser, "⇧⌘B", "b", true),
+    (PanelKind::Flow, "⇧⌘F", "f", true),
+    (PanelKind::Search, "⌘F", "f", false),
+    (PanelKind::Issues, "⌘I", "i", false),
+    (PanelKind::Queue, "⇧⌘S", "s", true),
+    (PanelKind::Flows, "⇧⌘G", "g", true),
+    (PanelKind::Accounts, "⇧⌘A", "a", true),
+    (PanelKind::Machines, "⇧⌘N", "n", true),
+    (PanelKind::Usage, "⌘U", "u", false),
+    (PanelKind::Plugins, "⇧⌘X", "x", true),
+    (PanelKind::Processes, "⇧⌘M", "m", true),
+    (PanelKind::Ports, "⇧⌘O", "o", true),
+    (PanelKind::Worktrees, "⇧⌘T", "t", true),
+    (PanelKind::Settings, "⌘,", ",", false),
+];
+
+#[test]
+fn every_panel_keeps_its_keys() {
+    assert_eq!(PANEL_KEYS.len(), PanelKind::ALL.len());
+    for kind in PanelKind::ALL {
+        assert!(PANEL_KEYS.iter().any(|(k, ..)| *k == kind), "{kind:?} is not pinned");
+    }
+    for (kind, label, key, shift) in PANEL_KEYS {
+        assert_eq!(keys_of(Command::Panel(kind), Os::Mac).as_deref(), Some(label), "{kind:?}");
+        assert_eq!(command(key, shift), Some(Command::Panel(kind)), "{kind:?}");
+    }
+}
+
 #[test]
 fn no_two_shortcuts_share_a_chord() {
     for (i, a) in SHORTCUTS.iter().enumerate() {

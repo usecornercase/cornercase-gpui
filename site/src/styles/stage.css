@@ -172,7 +172,7 @@
   width: 34px;
   height: 34px;
   flex: none;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   display: grid;
   place-items: center;
   border-radius: 9px;
@@ -196,7 +196,7 @@
   width: 22px;
   height: 1px;
   flex: none;
-  margin: 3px 0 9px;
+  margin: 6px 0 12px;
   background: var(--line);
 }
 

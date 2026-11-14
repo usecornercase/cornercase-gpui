@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, ClickEvent, Context, Corner, Div, FocusHandle, FontWeight, InteractiveElement, IntoElement,
-    KeyDownEvent, MouseButton, ParentElement, Pixels, Point, SharedString, Stateful, StatefulInteractiveElement,
+    KeyDownEvent, MouseButton, ParentElement, Pixels, Point, Rgba, SharedString, Stateful, StatefulInteractiveElement,
     Styled, Window, anchored, deferred, div, point, prelude::FluentBuilder as _, px,
 };
 
@@ -21,31 +21,59 @@ pub(crate) type Action = Rc<dyn Fn(&mut Root, &mut Window, &mut Context<Root>)>;
 
 #[derive(Clone)]
 pub(crate) enum Entry {
-    Item { label: SharedString, action: Action, danger: bool, chosen: bool },
-    Submenu { label: SharedString, entries: Vec<Entry> },
+    Item {
+        label: SharedString,
+        action: Action,
+        danger: bool,
+        chosen: bool,
+        icon: Option<Icon>,
+        keys: Option<SharedString>,
+    },
+    Submenu {
+        label: SharedString,
+        entries: Vec<Entry>,
+    },
     Heading(SharedString),
-    Resting { label: SharedString },
+    Resting {
+        label: SharedString,
+    },
     Note(SharedString),
     Separator,
+}
+fn plain(
+    label: impl Into<SharedString>,
+    action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
+    (danger, chosen): (bool, bool),
+    (icon, keys): (Option<Icon>, Option<SharedString>),
+) -> Entry {
+    Entry::Item { label: label.into(), action: Rc::new(action), danger, chosen, icon, keys }
 }
 pub(crate) fn item(
     label: impl Into<SharedString>,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
 ) -> Entry {
-    Entry::Item { label: label.into(), action: Rc::new(action), danger: false, chosen: false }
+    plain(label, action, (false, false), (None, None))
 }
 pub(crate) fn danger(
     label: impl Into<SharedString>,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
 ) -> Entry {
-    Entry::Item { label: label.into(), action: Rc::new(action), danger: true, chosen: false }
+    plain(label, action, (true, false), (None, None))
 }
 pub(crate) fn choice(
     label: impl Into<SharedString>,
     chosen: bool,
     action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
 ) -> Entry {
-    Entry::Item { label: label.into(), action: Rc::new(action), danger: false, chosen }
+    plain(label, action, (false, chosen), (None, None))
+}
+pub(crate) fn item_with_keys(
+    icon: Icon,
+    label: impl Into<SharedString>,
+    keys: Option<String>,
+    action: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
+) -> Entry {
+    plain(label, action, (false, false), (Some(icon), keys.map(SharedString::from)))
 }
 pub(crate) fn act(label: impl Into<SharedString>, args: Vec<String>) -> Entry {
     item(label, move |root, _, _| root.act(args.clone()))
@@ -76,6 +104,7 @@ pub(crate) struct Menu {
     pub focus: FocusHandle,
     pub highlight: Option<usize>,
     pub from_bottom: bool,
+    pub opener: Option<&'static str>,
 }
 
 fn choosable(entry: &Entry) -> bool {
@@ -92,6 +121,10 @@ fn step(entries: &[Entry], from: Option<usize>, down: bool) -> Option<usize> {
         Some(at) => at.checked_sub(1).unwrap_or(choices.len() - 1),
     };
     choices.get(next).copied()
+}
+
+fn over_menu(at: Point<Pixels>, press: Point<Pixels>) -> bool {
+    press.x >= at.x && press.y <= at.y
 }
 
 fn above(at: Point<Pixels>) -> Point<Pixels> {
@@ -138,7 +171,7 @@ impl Root {
         let focus = cx.focus_handle();
         window.focus(&focus);
         window.prevent_default();
-        self.side.menu = Some(Menu { at, entries, focus, highlight: None, from_bottom });
+        self.side.menu = Some(Menu { at, entries, focus, highlight: None, from_bottom, opener: None });
         cx.notify();
     }
 
@@ -150,6 +183,23 @@ impl Root {
         cx: &mut Context<Self>,
     ) {
         self.show_menu((above(pointer), true), entries, window, cx);
+    }
+
+    pub(crate) fn open_menu_above_from(
+        &mut self,
+        (opener, pointer): (&'static str, Point<Pixels>),
+        entries: Vec<Entry>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.show_menu((above(pointer), true), entries, window, cx);
+        if let Some(menu) = &mut self.side.menu {
+            menu.opener = Some(opener);
+        }
+    }
+
+    pub(crate) fn menu_from(&self, opener: &str, press: Point<Pixels>) -> bool {
+        self.side.menu.as_ref().is_some_and(|menu| menu.opener == Some(opener) && !over_menu(menu.at, press))
     }
 
     pub(crate) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -243,13 +293,15 @@ fn menu_entry(index: usize, entry: Entry, highlighted: bool, cx: &mut Context<Ro
         Entry::Heading(label) => menu_heading(label).into_any_element(),
         Entry::Resting { label } => resting_row(label).into_any_element(),
         Entry::Note(text) => ui::dim(text.clone()).px(px(10.)).py(px(5.)).into_any_element(),
-        Entry::Item { label, action, danger, chosen } => menu_row(id, label, false, (highlighted, danger))
-            .when(chosen, |d| d.child(icon(Icon::Check, 12.).text_color(colours::text())))
-            .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                this.close_menu(window, cx);
-                action(this, window, cx);
-            }))
-            .into_any_element(),
+        Entry::Item { label, action, danger, chosen, icon: glyph, keys } => {
+            item_row(id, label, (glyph, keys), (highlighted, danger))
+                .when(chosen, |d| d.child(icon(Icon::Check, 12.).text_color(colours::text())))
+                .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                    this.close_menu(window, cx);
+                    action(this, window, cx);
+                }))
+                .into_any_element()
+        }
         Entry::Submenu { label, entries } => menu_row(id, label, true, (highlighted, false))
             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_submenu(&entries, cx)))
             .into_any_element(),
@@ -272,18 +324,13 @@ fn resting_row(label: SharedString) -> Div {
     div().px(px(10.)).py(px(5.)).text_color(colours::faint()).child(label)
 }
 
-pub(crate) fn menu_row(
-    id: SharedString,
-    label: SharedString,
-    more: bool,
-    (highlighted, danger): (bool, bool),
-) -> Stateful<Div> {
+fn row_base(id: SharedString, (highlighted, danger): (bool, bool)) -> (Stateful<Div>, Rgba, Rgba) {
     let (lit, ink, lit_ink) = if danger {
         (glass::tint(colours::failed(), 0.16).into(), colours::failed(), colours::failed())
     } else {
         (glass::cobalt(), colours::text(), colours::on_brand())
     };
-    div()
+    let base = div()
         .id(id)
         .px(px(10.))
         .py(px(5.))
@@ -295,9 +342,38 @@ pub(crate) fn menu_row(
         .cursor_pointer()
         .text_color(ink)
         .when(highlighted, |d| d.bg(lit).text_color(lit_ink))
-        .hover(|s| s.bg(lit).text_color(lit_ink))
+        .hover(|s| s.bg(lit).text_color(lit_ink));
+    (base, ink, lit_ink)
+}
+
+pub(crate) fn menu_row(id: SharedString, label: SharedString, more: bool, state: (bool, bool)) -> Stateful<Div> {
+    row_base(id, state)
+        .0
         .child(div().min_w_0().flex().child(ui::one_line(label)))
         .when(more, |d| d.child(div().text_color(colours::muted()).child("›")))
+}
+
+fn item_row(
+    id: SharedString,
+    label: SharedString,
+    (glyph, keys): (Option<Icon>, Option<SharedString>),
+    state: (bool, bool),
+) -> Stateful<Div> {
+    if glyph.is_none() && keys.is_none() {
+        return menu_row(id, label, false, state);
+    }
+    let (base, ink, lit_ink) = row_base(id, state);
+    let ink = if state.0 { lit_ink } else { ink };
+    let named = div()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap(px(8.))
+        .children(glyph.map(|glyph| icon(glyph, 14.).flex_none().text_color(ink)))
+        .child(ui::one_line(label));
+    base.child(named).children(
+        keys.map(|keys| div().flex_none().text_color(if state.0 { lit_ink } else { colours::muted() }).child(keys)),
+    )
 }
 
 #[cfg(test)]

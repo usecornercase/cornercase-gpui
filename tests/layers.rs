@@ -294,7 +294,7 @@ const DRAWINGS: &[Drawing] = &[
     },
     Drawing {
         what: "the rail",
-        files: &["src/sidebar/rail.rs", "src/sidebar/rail/key.rs"],
+        files: &["src/sidebar/rail.rs", "src/sidebar/rail/gear.rs", "src/sidebar/rail/key.rs"],
         root: &["session", "side", "store", "parts"],
         side: &["look", "menu", "machine_place"],
         parts: &["rail", "store_seen"],

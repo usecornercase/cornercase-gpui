@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.90
+
+- **A shorter rail.** The rail keeps the workspace's panels and the sheets you reach for every day: Search, Issues, Queue and Flows. Usage, Accounts, Machines, Processes, Ports, Worktrees and Plugins moved behind the gear at its foot, with Settings. A click on the gear opens a menu that shows each one's icon and its keys, and the gear is lit while one of them is open. Every shortcut is the same.
+- **Keyboard shortcuts is in Help.** The rail's keyboard button went into Help, beside Docs and Report a bug; the shortcut that opens the list from anywhere still does.
+
 ## 0.1.89
 
 - **The notices that carry no agent are told.** With cornercase 0.13.39 or newer, the window shows a toast for `cornercase notify`, for what the queue and its routines started, could not start, missed or left behind, for a failed setup, for a flow's agent waiting for your consent, and for a run whose agents closed once its pull request merged. The toast has **Show**, **Open Queue** or **Reopen agents** when it names something to go to, and while the window is in the background a desktop notification says the same (a merged run's toast waits for you instead). No sound plays for them, and while the Queue sheet is open, the queue's toasts are left out, since its rows already show them.

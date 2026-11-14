@@ -6,6 +6,7 @@ use gpui::{
 use super::Guide;
 use super::model::{Tour, reset_command};
 use crate::dialogs::{self, Question};
+use crate::keymap::{Command, with_keys};
 use crate::store::{Busy, Store};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone};
@@ -36,8 +37,14 @@ fn link(id: &'static str, label: &'static str, url: &'static str) -> impl IntoEl
     ui::icon_text_button(id, Icon::External, label, Tone::Plain).on_click(move |_: &ClickEvent, _, cx| cx.open_url(url))
 }
 
+fn shortcuts() -> impl IntoElement {
+    ui::icon_text_button("help-keys", Icon::Keyboard, "Keyboard shortcuts", Tone::Plain)
+        .tooltip(crate::notify::tip(with_keys("Keyboard shortcuts", Command::Shortcuts)))
+        .on_click(|_: &ClickEvent, window, cx| dialogs::shortcuts(window, cx))
+}
+
 fn links() -> Div {
-    div().flex().gap(px(8.)).pb(px(12.)).child(link("help-docs", "Docs", DOCS)).child(link(
+    div().flex().gap(px(8.)).pb(px(12.)).child(shortcuts()).child(link("help-docs", "Docs", DOCS)).child(link(
         "help-bug",
         "Report a bug",
         REPORT_A_BUG,
@@ -89,7 +96,7 @@ impl Tours {
 }
 
 impl Render for Tours {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let guide = self.guide.read(cx);
         let tours: Vec<(Tour, String)> =
             guide.catalogue.tours.iter().map(|t| (t.clone(), guide.catalogue.progress_label(t))).collect();
@@ -99,7 +106,7 @@ impl Render for Tours {
             "Help",
             div()
                 .id("tours")
-                .max_h(px(420.))
+                .max_h(px(dialogs::body_height(f32::from(window.viewport_size().height))))
                 .overflow_y_scroll()
                 .flex()
                 .flex_col()

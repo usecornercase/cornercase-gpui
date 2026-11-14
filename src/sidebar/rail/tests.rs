@@ -40,3 +40,35 @@ fn the_todo_icon_shows_a_dot_while_items_wait() {
     assert!(Notes { todo: true, ..Notes::default() }.mark(PanelKind::Todo).is_some());
     assert!(Notes::default().mark(PanelKind::Todo).is_none());
 }
+
+#[test]
+fn the_rail_draws_the_dock_its_plugins_a_line_then_four_sheets() {
+    use super::{Slot, column};
+    let panel = Slot::Panel;
+    assert_eq!(
+        column(false),
+        [
+            panel(PanelKind::Changes),
+            panel(PanelKind::Files),
+            panel(PanelKind::Todo),
+            panel(PanelKind::Recap),
+            panel(PanelKind::Browser),
+            Slot::Plugins,
+            Slot::Divider,
+            panel(PanelKind::Search),
+            panel(PanelKind::Issues),
+            panel(PanelKind::Queue),
+            panel(PanelKind::Flows),
+        ]
+    );
+}
+
+#[test]
+fn a_flows_workspace_adds_flow_after_the_browser() {
+    use super::{Slot, column};
+    let with = column(true);
+    let at = with.iter().position(|slot| *slot == Slot::Panel(PanelKind::Browser)).expect("browser");
+    assert_eq!(with[at + 1], Slot::Panel(PanelKind::Flow));
+    assert_eq!(with[at + 2], Slot::Plugins);
+    assert_eq!(with.len(), column(false).len() + 1);
+}
