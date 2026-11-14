@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 
-use super::{ByHand, Lacking, UpdateAnswer, UpdateGate, update_answer, update_command};
+use super::{ByHand, UpdateAnswer, UpdateGate, update_answer, update_command};
 use crate::cli::{Answer, Older, Said, Version};
 use crate::test_util::fixture;
 
@@ -161,22 +161,13 @@ fn this_computer_sends_json_from_the_release_that_has_it() {
 
 #[test]
 fn through_remote_both_command_lines_need_it() {
-    let json = |here, there| UpdateGate::Through { here: release(here), there: release(there) }.lacking().is_none();
-    assert!(json("0.13.74", "0.13.53"));
-    assert!(!json("0.13.74", "0.13.51"));
-    assert!(!json("0.13.74", "unknown"));
-    assert!(!json("0.13.51", "0.13.74"));
-    assert!(!json("0.13.51", "0.13.51"));
-    assert!(!json("unknown", "0.13.74"));
-}
-
-#[test]
-fn the_gate_names_which_command_line_lacks_it() {
-    let gate = |here, there| UpdateGate::Through { here: release(here), there: release(there) }.lacking();
-    assert_eq!(gate("0.13.74", "0.13.51"), Some(Lacking::There));
-    assert_eq!(gate("0.13.51", "0.13.74"), Some(Lacking::Here));
-    assert_eq!(gate("0.13.51", "0.13.50"), Some(Lacking::Both));
-    assert_eq!(UpdateGate::Here(release("0.13.51")).lacking(), Some(Lacking::Here));
+    let lacks = |here, there| UpdateGate::Through { here: release(here), there: release(there) }.lacks();
+    assert!(!lacks("0.13.74", "0.13.53"));
+    assert!(lacks("0.13.74", "0.13.51"));
+    assert!(lacks("0.13.74", "unknown"));
+    assert!(lacks("0.13.51", "0.13.74"));
+    assert!(lacks("0.13.51", "0.13.51"));
+    assert!(lacks("unknown", "0.13.74"));
 }
 
 #[test]

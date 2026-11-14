@@ -68,7 +68,9 @@ fn checked(release: &str, here: Option<&Here>) -> Outcome {
 }
 
 fn needs(gate: UpdateGate, os: Os) -> Option<String> {
-    gate.lacking()?;
+    if !gate.lacks() {
+        return None;
+    }
     let has = gate.here().map(|v| format!(" (it has {v})")).unwrap_or_default();
     Some(format!("cornercase {UPDATE_JSON_SINCE} or newer on this {}{has}", desktop::machine(os)))
 }

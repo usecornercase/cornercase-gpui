@@ -76,13 +76,6 @@ pub(crate) enum UpdateGate {
     Through { here: Option<Version>, there: Option<Version> },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Lacking {
-    Here,
-    There,
-    Both,
-}
-
 impl UpdateGate {
     pub(crate) fn of(older: &Older) -> Self {
         Self::Through { here: Version::parse(&older.here), there: older.there.as_deref().and_then(Version::parse) }
@@ -94,21 +87,16 @@ impl UpdateGate {
         }
     }
 
-    pub(crate) fn lacking(self) -> Option<Lacking> {
-        let has = |release| UPDATE_JSON_SINCE.reached_by(release);
+    pub(crate) fn lacks(self) -> bool {
+        let lacks = |release| !UPDATE_JSON_SINCE.reached_by(release);
         match self {
-            Self::Here(here) => (!has(here)).then_some(Lacking::Here),
-            Self::Through { here, there } => match (has(here), has(there)) {
-                (true, true) => None,
-                (false, true) => Some(Lacking::Here),
-                (true, false) => Some(Lacking::There),
-                (false, false) => Some(Lacking::Both),
-            },
+            Self::Here(here) => lacks(here),
+            Self::Through { here, there } => lacks(here) || lacks(there),
         }
     }
 
     pub(crate) fn args(self, mut words: Vec<String>) -> Vec<String> {
-        if self.lacking().is_none() {
+        if !self.lacks() {
             words.push("--json".to_string());
         }
         words

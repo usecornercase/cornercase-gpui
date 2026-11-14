@@ -74,3 +74,12 @@ fn the_binary_is_read_again_only_when_update_said_nothing_the_window_reads() {
     assert!(!checks_disk(&Target::Local, &UpdateAnswer::Printed(Said::Failed("no".into()))));
     assert!(!checks_disk(&Target::Local, &UpdateAnswer::Refused));
 }
+
+#[test]
+fn install_sends_json_by_this_computers_release_whatever_the_target() {
+    let words = |release: &str| update_words(Version::parse(release)).1;
+    assert_eq!(words("0.13.53"), ["update", "--json"]);
+    assert_eq!(words("0.13.74"), ["update", "--json"]);
+    assert_eq!(words("0.13.52"), ["update"]);
+    assert_eq!(update_words(None).1, ["update"]);
+}

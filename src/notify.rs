@@ -386,7 +386,7 @@ impl Notifier {
         }
         let release = self.app.release().map(|r| r.version.clone()).unwrap_or_default();
         let target = cli::target();
-        let gate = cli::UpdateGate::Here(self.store.read(cx).cli_release());
+        let (gate, words) = update_words(self.store.read(cx).cli_release());
         let host = target.host().map(str::to_string);
         self.install = InstallState::Running;
         self.waits = None;
@@ -395,7 +395,7 @@ impl Notifier {
         store::run_local_busy(
             cx,
             busy,
-            move || Ok(ask_update(&target, &gate.args(vec!["update".to_string()]))),
+            move || Ok(ask_update(&target, &words)),
             move |this, result, cx| {
                 let (answer, here) = result.unwrap_or_else(|e| (Err(e), None));
                 this.installed_by(&answer, here.as_ref(), (&release, gate, host.as_deref()), cx);
@@ -593,6 +593,11 @@ impl Notifier {
                 .into_any_element(),
         )
     }
+}
+
+fn update_words(here: Option<Version>) -> (cli::UpdateGate, Vec<String>) {
+    let gate = cli::UpdateGate::Here(here);
+    (gate, gate.args(vec!["update".to_string()]))
 }
 
 fn ask_update(target: &cli::Target, args: &[String]) -> (anyhow::Result<cli::Answer>, Option<Here>) {
