@@ -126,11 +126,10 @@ impl App {
         self.icon_file(icon)
     }
 
-    fn panel_title(&self, panel: &str) -> Found<String> {
+    fn panel_title(&self, panel: &str) -> Found<Option<String>> {
         let body = block(&self.panels, PANELS, "fn title(self)")?;
         let titles = arms(body, "Self::", PANELS)?;
-        let title = titles.get(panel).and_then(|value| quoted(value));
-        title.map(str::to_string).ok_or_else(|| unread(PANELS, &format!("PanelKind::title gives {panel} no title")))
+        Ok(titles.get(panel).and_then(|value| quoted(value)).map(str::to_string))
     }
 
     fn listed(&self, name: &str) -> Found<Vec<String>> {
@@ -205,7 +204,8 @@ impl App {
         let panels = block(&self.rail, RAIL, "fn rail_panels(")?;
         let compact: String = panels.chars().filter(|c| !c.is_whitespace()).collect();
         let piped = compact.contains("column(flow).into_iter().flat_map(") && compact.contains("}).collect()");
-        if !piped || panels.contains(".child(") || panels.matches(".children(").count() != 1 {
+        let once = words(panels).iter().filter(|word| **word == "slots").count() == 2;
+        if !(piped && once) || panels.contains(".child(") || panels.matches(".children(").count() != 1 {
             return Err(unread(RAIL, "rail_panels draws something besides column's slots"));
         }
         let button = block(&self.rail, RAIL, "fn rail_button(")?;
@@ -219,7 +219,12 @@ impl App {
         let (icon, title) = page_head(astro, file)?;
         let name = file.rsplit('/').next().unwrap_or(file);
         let panel = name.strip_prefix("Dock").and_then(|rest| rest.strip_suffix(".astro")).unwrap_or(name);
-        let expected = self.panel_title(panel)?;
+        let expected = self.panel_title(panel)?.ok_or_else(|| {
+            unread(
+                file,
+                &format!("its name gives PanelKind::{panel}, which {PANELS} has no title for: name it Dock<panel>.astro after the panel it draws"),
+            )
+        })?;
         if title != expected {
             return Err(format!(
                 "{file}: its head says {title}; the app's {panel} panel is titled {expected} ({PANELS} PanelKind::title): change the page's title to its panel's"
@@ -276,7 +281,7 @@ fn trailing_name(text: &str) -> &str {
     &text[start..]
 }
 
-fn callback_draws_its_value(template: &str, at: usize) -> Found<()> {
+fn callback_draws_its_value(template: &str, at: usize, list: &str) -> Found<()> {
     let line = template[at..].lines().next().unwrap_or_default();
     let param: String = line[".map(".len()..]
         .trim_start_matches('(')
@@ -285,7 +290,10 @@ fn callback_draws_its_value(template: &str, at: usize) -> Found<()> {
         .collect();
     let draws = format!("<Icon name={{{param}}}");
     if param.is_empty() || line.matches("<Icon").count() != 1 || !line.contains(&draws) {
-        return Err(unread(PAGE_RAIL, &format!("a map callback does not draw `{draws}` once, on its own line")));
+        return Err(unread(
+            PAGE_RAIL,
+            &format!("the callback of {list}.map does not draw `{draws}` once, on its own line"),
+        ));
     }
     Ok(())
 }
@@ -299,7 +307,7 @@ fn page_rail(astro: &str) -> Found<Vec<String>> {
         let items = lists
             .get(name)
             .ok_or_else(|| unread(PAGE_RAIL, &format!("maps {name}, which its frontmatter does not declare")))?;
-        callback_draws_its_value(template, at)?;
+        callback_draws_its_value(template, at, name)?;
         marks.push((at, items.clone()));
     }
     for (needle, mark) in [("w-rail__rule", RULE), ("w-rail__gap", GAP)] {
@@ -459,6 +467,13 @@ fn a_rail_panels_that_reorders_the_columns_slots_fails() {
 }
 
 #[test]
+fn a_rail_panels_that_reorders_the_slots_in_another_statement_fails() {
+    let panels = format!("{SLOTS}\nlet slots = slots.into_iter().rev().collect();\ndiv().children(slots)");
+    let why = rail_drawn(&panels, "kind.icon()");
+    assert!(why.contains("rail_panels draws something besides column's slots"), "{why}");
+}
+
+#[test]
 fn a_rail_button_that_draws_another_icon_than_its_panels_fails() {
     let why = rail_drawn(&format!("{SLOTS}\ndiv().children(slots)"), "Icon::Repeat");
     assert!(why.contains("rail_button draws a panel's icon other than kind.icon()"), "{why}");
@@ -497,7 +512,7 @@ fn a_list_the_page_builds_from_more_than_quoted_names_fails() {
 fn a_map_callback_that_draws_another_icon_than_its_value_fails() {
     let astro = "---\nconst docked = ['a'];\n---\n<nav>\n{docked.map((name) => <Icon name={'settings'} />)}\n</nav>\n";
     let why = page_rail(astro).expect_err("a callback that ignores its value is an error");
-    assert!(why.contains("a map callback does not draw `<Icon name={name}`"), "{why}");
+    assert!(why.contains("the callback of docked.map does not draw `<Icon name={name}`"), "{why}");
 }
 
 #[test]
@@ -508,4 +523,17 @@ fn a_dock_page_headed_with_another_panels_heading_fails() {
     let astro = "<header class=\"w-dockhead\"><Icon name=\"globe\" size={16} /><b>Browser</b></header>";
     let why = app.check_head("site/src/components/stage/DockFlow.astro", astro).expect_err("another panel's head");
     assert!(why.contains("the app's Flow panel is titled Flow"), "{why}");
+}
+
+#[test]
+fn a_dock_page_named_after_no_panel_fails_naming_the_page() {
+    let app = App {
+        rail: String::new(),
+        gear: String::new(),
+        panels: "fn title(self) -> &'static str {\n    Self::Flow => \"Flow\",\n}\n".to_string(),
+        icons: String::new(),
+    };
+    let astro = "<header class=\"w-dockhead\"><Icon name=\"x\" /><b>Diff</b></header>";
+    let why = app.check_head("site/src/components/stage/DockDiff.astro", astro).expect_err("no such panel");
+    assert!(why.starts_with("site/src/components/stage/DockDiff.astro: its name gives PanelKind::Diff"), "{why}");
 }
