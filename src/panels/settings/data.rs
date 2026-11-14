@@ -66,6 +66,7 @@ pub(super) enum ConnectionKind {
     Browsers,
     Bot,
     Chat,
+    App,
     #[serde(other)]
     Other,
 }
@@ -348,7 +349,59 @@ pub(super) enum Tone {
     Quiet,
 }
 
+pub(super) const PHONE_APP: &str = "phone_app";
+
+pub(super) fn app_offer(d: &Described) -> Option<&'static str> {
+    let switch = d.settings.iter().find(|s| s.key == PHONE_APP)?;
+    if !switch.on() {
+        return None;
+    }
+    let paired = d.connections.iter().any(|c| c.kind == ConnectionKind::App);
+    Some(if paired { "Pair another…" } else { "Pair…" })
+}
+
+pub(super) fn alike(connections: &[Connection], at: usize) -> Option<(usize, usize)> {
+    let c = connections.get(at)?;
+    let name = c.app_name()?;
+    let same = |o: &&Connection| o.app_name() == Some(name) && o.note_here() == c.note_here();
+    let n = connections.iter().filter(same).count();
+    let k = connections[..=at].iter().filter(same).count();
+    (n >= 2).then_some((k, n))
+}
+
+pub(super) struct RowStatus {
+    pub text: String,
+    pub tone: Tone,
+    pub named: bool,
+}
+
+pub(super) fn row_status(connections: &[Connection], at: usize) -> RowStatus {
+    let c = &connections[at];
+    if let Some(name) = c.app_name() {
+        let text = match alike(connections, at) {
+            Some((k, n)) => format!("{name} · {k} of {n}"),
+            None => name.to_string(),
+        };
+        return RowStatus { text, tone: Tone::Good, named: true };
+    }
+    let (text, tone) = c.status();
+    RowStatus { text, tone, named: false }
+}
+
 impl Connection {
+    pub(super) fn app_name(&self) -> Option<&str> {
+        let named = self.kind == ConnectionKind::App && self.state == State::Connected;
+        self.account.as_deref().filter(|a| named && !a.trim().is_empty())
+    }
+
+    pub(super) fn removal_hint(&self) -> &'static str {
+        match self.kind {
+            ConnectionKind::Browsers => "Forget every paired browser…",
+            ConnectionKind::Chat | ConnectionKind::App => "Forget…",
+            _ => "Remove…",
+        }
+    }
+
     pub(super) fn hint(&self) -> Option<&str> {
         hint_of(self.field.as_deref(), &self.label, &self.note)
     }
@@ -394,7 +447,7 @@ impl Connection {
         };
         match self.state {
             State::Connected => match &self.account {
-                Some(account) if !account.is_empty() => (format!("connected as {account}{source}"), Tone::Good),
+                Some(account) if !account.trim().is_empty() => (format!("connected as {account}{source}"), Tone::Good),
                 _ => (format!("connected{source}"), Tone::Good),
             },
             State::Refused => (format!("refused{source}"), Tone::Bad),
@@ -503,15 +556,26 @@ pub(super) fn caption(described: &Described, section: &Section) -> String {
 
 fn section_titles<'d>(described: &'d Described, page: &str) -> Vec<&'d str> {
     let mut titles: Vec<&str> = Vec::new();
-    let connections = described.connections.iter().filter(|c| c.page == page).map(|c| c.section.as_str());
-    let settings = described.settings.iter().filter(|s| s.page == page).map(|s| s.section.as_str());
-    for title in connections.chain(settings) {
-        if !titles.contains(&title) {
-            titles.push(title);
+    for c in described.connections.iter().filter(|c| c.page == page) {
+        if !titles.contains(&c.section.as_str()) {
+            titles.push(&c.section);
         }
+    }
+    let mut after = None;
+    for s in described.settings.iter().filter(|s| s.page == page) {
+        after = Some(place_title(&mut titles, &s.section, after));
     }
     titles.sort_by_key(|t| !t.is_empty());
     titles
+}
+
+fn place_title<'d>(titles: &mut Vec<&'d str>, title: &'d str, after: Option<usize>) -> usize {
+    if let Some(at) = titles.iter().position(|t| *t == title) {
+        return at;
+    }
+    let at = after.map_or(titles.len(), |before| before + 1);
+    titles.insert(at, title);
+    at
 }
 
 fn section_items(described: &Described, page: &str, title: &str) -> Vec<Item> {
@@ -589,7 +653,7 @@ fn haystack(d: &Described, item: &Item) -> String {
         Item::Setting(i) => setting_text(&d.settings[*i]),
         Item::Connection(i) => {
             let c = &d.connections[*i];
-            let status = c.status().0;
+            let status = row_status(&d.connections, *i).text;
             [c.label.as_str(), &c.note, &c.key, &c.page, &c.section, &status, c.field.as_deref().unwrap_or_default()]
                 .join(" ")
         }

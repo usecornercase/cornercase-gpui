@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use gpui::{AppContext as _, ClipboardItem, Context, Window};
 
 use super::data::{self, Connection, ConnectionKind, Kind, Script, Setting};
-use super::{Role, SettingsPanel, links};
+use super::{Role, SettingsPanel, links, widgets};
 use crate::cli;
 use crate::dialogs::{self, Question};
 use crate::store::{self, Busy, Store, ToastKind, args};
@@ -12,6 +12,7 @@ use crate::ui::TextField;
 
 pub(super) const EXPORTING: &str = "settings-export";
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Ask {
     title: String,
     message: String,
@@ -86,25 +87,9 @@ impl SettingsPanel {
         Self::ask(ask, move |this, cx| this.save(&key, &value, cx), window, cx);
     }
 
-    pub(super) fn ask_remove(c: &Connection, window: &mut Window, cx: &mut Context<Self>) {
-        let ask = match c.kind {
-            ConnectionKind::Browsers => Ask {
-                title: "Forget every paired browser?".into(),
-                message: "Each one has to be paired again to reach this computer.".into(),
-                button: "Forget",
-            },
-            ConnectionKind::Chat => Ask {
-                title: format!("Forget the {}?", c.label),
-                message: "Agents stop messaging it, and it has to be paired again.".into(),
-                button: "Forget",
-            },
-            _ => Ask {
-                title: format!("Remove the {}?", c.label),
-                message: "cornercase forgets it, and it has to be pasted again to be used.".into(),
-                button: "Remove",
-            },
-        };
-        let key = c.key.clone();
+    pub(super) fn ask_remove(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ask) = self.described.as_ref().and_then(|d| removal(&d.connections, key)) else { return };
+        let key = key.to_string();
         Self::ask(ask, move |this, cx| this.remove(&key, cx), window, cx);
     }
 
@@ -212,6 +197,43 @@ impl SettingsPanel {
     }
 }
 
+fn removal(connections: &[Connection], key: &str) -> Option<Ask> {
+    let at = connections.iter().position(|c| c.key == key)?;
+    let c = &connections[at];
+    Some(match c.kind {
+        ConnectionKind::Browsers => Ask {
+            title: "Forget every paired browser?".into(),
+            message: "Each one has to be paired again to reach this computer.".into(),
+            button: "Forget",
+        },
+        ConnectionKind::Chat => Ask {
+            title: format!("Forget the {}?", c.label),
+            message: "Agents stop messaging it, and it has to be paired again.".into(),
+            button: "Forget",
+        },
+        ConnectionKind::App => forget_app(connections, at),
+        _ => Ask {
+            title: format!("Remove the {}?", c.label),
+            message: "cornercase forgets it, and it has to be pasted again to be used.".into(),
+            button: "Remove",
+        },
+    })
+}
+
+fn forget_app(connections: &[Connection], at: usize) -> Ask {
+    let c = &connections[at];
+    let title = match (c.app_name(), data::alike(connections, at)) {
+        (Some(name), Some((k, n))) => format!("Forget “{name}” ({k} of {n})?"),
+        (Some(name), None) => format!("Forget “{name}”?"),
+        (None, _) => "Forget this phone app?".to_string(),
+    };
+    let ending = "It is disconnected at once and has to be paired again to reach this computer.";
+    let note = c.note_here();
+    let message =
+        if note.is_empty() { ending.to_string() } else { format!("{}. {ending}", widgets::capitalised(&note)) };
+    Ask { title, message, button: "Forget" }
+}
+
 fn written_here(exported: data::Exported, to: Option<&PathBuf>) -> anyhow::Result<data::Exported> {
     if let Some(path) = to
         && cli::host().is_some()
@@ -220,3 +242,6 @@ fn written_here(exported: data::Exported, to: Option<&PathBuf>) -> anyhow::Resul
     }
     Ok(exported)
 }
+
+#[cfg(test)]
+mod tests;

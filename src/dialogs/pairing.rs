@@ -99,7 +99,7 @@ impl PairingDialog {
             .items_center()
             .gap(px(8.))
             .children(linked.map(|linked| copy_button(linked.url.clone())))
-            .children(linked.map(|linked| open_button(linked.url.clone())))
+            .children(linked.filter(|_| self.key.opens_link()).map(|linked| open_button(linked.url.clone())))
             .child(div().flex_1())
             .children(again)
             .child(ui::primary_button("pairing-done", "Done").on_click(|_: &ClickEvent, _, cx| close(cx)))

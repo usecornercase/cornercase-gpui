@@ -130,11 +130,12 @@ pub(crate) fn status(text: impl Into<SharedString>, colour: Option<Rgba>, ink: R
     div()
         .flex()
         .items_center()
+        .min_w_0()
         .gap(px(6.))
         .text_size(px(11.5))
         .text_color(ink)
-        .child(ui::dot(colour))
-        .child(text.into())
+        .child(div().flex_none().child(ui::dot(colour)))
+        .child(div().flex_1().min_w_0().child(text.into()))
 }
 
 pub(crate) fn under(line: impl IntoElement) -> Div {

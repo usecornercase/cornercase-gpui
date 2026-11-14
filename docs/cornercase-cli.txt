@@ -1,4 +1,4 @@
-cornercase 0.13.72: the help of every command and subcommand, in the order of `cornercase --help`.
+cornercase 0.13.78: the help of every command and subcommand, in the order of `cornercase --help`.
 Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
 
 ================================================================ cornercase status
@@ -1854,8 +1854,8 @@ it has not ended and no wake is being sent) says `stopped moving 50 min ago: …
 time it stopped, left out while the run moves).
 
 A role whose agent exited by itself while its tab is still open says `exited` (exited: true with --json) where a
-role not started yet says `-`, and the run adds `exited: coder; cornercase agents reopen --workspace 7 brings it
-back`. A run whose orchestrator's agent exited has stopped moving too: `stopped moving 5 min ago: the
+role not started yet says `-`, and the run adds the line exited: coder; `cornercase agents reopen --workspace 7` brings
+it back. A run whose orchestrator's agent exited has stopped moving too: `stopped moving 5 min ago: the
 orchestrator's agent exited`.
 
 Examples:
@@ -2555,7 +2555,7 @@ Commands:
   set           Change settings: KEY VALUE pairs, checked together, all or none
   project       Set the commands a project runs when it makes a worktree and before it removes one
   secret        Check and save a tracker's token or a bot's, read from standard input
-  remove        Remove a token, a bot, a paired chat or the paired browsers
+  remove        Remove a token, a bot, a paired chat, the paired browsers or a paired phone app
   pair          Pair a phone: print the address its QR code holds, then wait for it
   forum-server  Pick the server of the Discord forum, once the forum's setup waits for that
   export        Write the settings to share with a colleague, without tokens or personal ones
@@ -2588,8 +2588,8 @@ false for a switch, a whole number, a comma-separated list for issue_tabs, other
 
 A token is never an argument: `secret` reads it from standard input (hidden on a terminal), checks it
 with its service as the dialog does, and says which account accepted it, never the token. `remove`
-forgets a token, a bot, a paired chat or the paired browsers. `pair` connects a phone to a chat or a
-browser: `cornercase config pair --help`.
+forgets a token, a bot, a paired chat, the paired browsers or a paired phone app. `pair` connects a phone
+to a chat, a browser or the phone app: `cornercase config pair --help`.
 
 `forum-server` picks the server of the Discord forum, when forum mode waits for one and the app is in
 several: `status --app` lists them as `servers`, in Discord's `forum`, and this is a click on one in the
@@ -2615,6 +2615,7 @@ Examples:
   printf '%s' "$LINEAR_API_KEY" | cornercase config secret linear
   cornercase config remove linear
   cornercase config pair browsers --json
+  cornercase config pair app --routes --json
   cornercase config forum-server 1041234567890123459
   cornercase config project ~/code/web-shop --setup 'npm ci'
   cornercase config export --to team.toml
@@ -2697,12 +2698,12 @@ Options:
   -h, --help                      Print help
 
 ================================================================ cornercase config remove
-Remove a token, a bot, a paired chat or the paired browsers
+Remove a token, a bot, a paired chat, the paired browsers or a paired phone app
 
 Usage: cornercase config remove [OPTIONS] <KEY>
 
 Arguments:
-  <KEY>  The connection, such as linear, telegram.chat or browsers
+  <KEY>  The connection, such as linear, telegram.chat, browsers or app.ID
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
@@ -2716,17 +2717,18 @@ Pair a phone: print the address its QR code holds, then wait for it
 Usage: cornercase config pair [OPTIONS] <KEY>
 
 Arguments:
-  <KEY>  What to pair: browsers, telegram.chat or discord.chat
+  <KEY>  What to pair: app, browsers, telegram.chat or discord.chat
 
 Options:
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --routes                    With app: print the addresses the phone app reaches now, then end
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
 Does what the window's dialog does, for a program that draws cornercase itself: for browsers what
-opening More > remote... > open in your phone's browser does, for a chat what Enter on the phone row
-in Settings > Remote does. It prints the address the dialog's QR code holds and the lines under it,
+opening More > remote... > open in your phone's browser does, for app what Enter on pair a phone app in
+Settings > Remote does, for a chat what Enter on the phone row in Settings > Remote does. It prints the address the dialog's QR code holds and the lines under it,
 and again whenever they change, such as Discord's advice and failures. With --json each is one line:
 {"url", "lines"}, url null while there is none yet (Tailscale still starting). Draw the QR code from url.
 
@@ -2742,9 +2744,21 @@ last one that came, and it is dropped when the last one goes. Nothing opens in t
 it says so as it does for its dialog. The address holds a code, so treat it as a secret: it is never
 written to server.log. Discord has no code: its owner is asked for while this runs.
 
+`app` pairs the cornercase phone app, on the same network or over Tailscale, once `phone_app` is on. Its
+address is the app's own code: ws://HOST:PORT/?code=CODE&also=HOST&name=NAME, with every address the
+computer listens on for the app (also= for each one after the first, IPv6 in brackets only in the first)
+and the computer's name. The app opens it as a WebSocket, which trades the code for a secret of its own
+and ends the command with {"paired": true}. --routes does not wait: it prints the addresses the app
+can reach now, one HOST:PORT per line or, with --json, {"routes": [{"host", "port"}]}, so an app
+that paired earlier can add a network that came up since. A paired app is forgotten with
+`config remove app.ID`.
+
 Examples:
   cornercase config set remote true
   cornercase config pair browsers --json
+  cornercase config set phone_app true
+  cornercase config pair app --json
+  cornercase config pair app --routes --json
   printf '%s' "$BOT_TOKEN" | cornercase config secret telegram
   cornercase config pair telegram.chat --json
   cornercase --remote devbox config pair discord.chat
@@ -3874,6 +3888,243 @@ Examples:
   cornercase recap yesterday --language Spanish
   cornercase recap week --fresh --json
   cornercase recap --dossier yesterday
+
+================================================================ cornercase bot
+Make and talk to bots: agents of your own, outside any project, with a chat and a memory
+
+Usage: cornercase bot [OPTIONS] <COMMAND>
+
+Commands:
+  agents   List the agents, which can be a bot and why not
+  new      Make a bot: a name, a folder, a memory and a chat; it starts nothing
+  list     List the bots with their state and unread answers
+  edit     Change a bot's name, model, effort, account or access, from its next message
+  remove   Delete a bot and its folder; refused while it answers
+  say      Write to a bot; it answers in its chat
+  history  Print a bot's chat
+  reset    Forget the bot's conversation; the next message starts a new one that reads bot.md and memory.md
+  stop     End the answer the bot is writing, and drop what was held for it
+  seen     Mark the bot's answers as read
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+A bot is an agent of your own, outside any project: a name, a folder, a memory and a chat. Each
+message you write runs one turn of its agent (Claude Code or Codex) in a conversation that continues,
+and the answer lands in the chat. It can see every project and act on them through `cornercase`.
+Making a bot starts nothing; it spends tokens only when you write to it, and only while the server
+runs. Nothing is drawn in the window for it yet.
+
+Events: `cornercase events` reports each chat line, the bot starting or finishing a turn, and a
+bot being created, edited or removed. `cornercase status --app` carries the list as `bots`.
+
+Example:
+  cornercase bot new prs --about "Review my open pull requests"
+  cornercase bot say prs "which of my PRs are blocked?" --wait
+  cornercase bot history prs
+
+================================================================ cornercase bot agents
+List the agents, which can be a bot and why not
+
+Usage: cornercase bot agents [OPTIONS]
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+Prints every agent cornercase knows with whether it is installed, whether it can be a bot,
+why not (`not yet`, `not installed`) or what limits it (`its sandbox cannot reach cornercase`),
+the accesses it supports, its efforts and the models it suggests. A window builds its form from this
+list.
+
+With --json it prints {"agents": [{"agent", "title", "installed", "bot", "why", "accesses",
+"efforts", "models"}]}.
+
+================================================================ cornercase bot new
+Make a bot: a name, a folder, a memory and a chat; it starts nothing
+
+Usage: cornercase bot new [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>  1 to 40 characters, not used by another bot
+
+Options:
+      --agent <AGENT>             claude or codex [default: the agent chosen in Settings, when it can be a bot]
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --model <MODEL>             The model, as `start --model` takes it
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --effort <LEVEL>            The effort, as `start --effort` takes it
+      --account <NAME>            An account of that agent [default: the agent's own login]
+      --access <ACCESS>           cornercase (the default) or full: it can change any file and run anything, unattended [possible values: cornercase, full]
+      --about <TEXT>              What the bot is for; it goes into bot.md
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Makes a bot and prints its id. A bot is an agent of your own: a name, a folder (bots/<id>/ beside
+the session: bot.json, bot.md, memory.md and chat.jsonl), a memory and a chat. It belongs to no
+project but can see all of them through the `cornercase` command line. Making one starts nothing
+and spends no tokens: it only runs when you write to it with `cornercase bot say`.
+
+--access cornercase (the default) holds the agent itself to reading anything, running `cornercase`,
+read-only git and gh, and searching the web, and to writing only in its own folder (not bot.json or
+chat.jsonl); your own Claude allow rules apply on top. What it does through `cornercase` is as
+powerful as what that reaches: it can start agents and type into panes. The commands a bot is
+refused and those two files prevent mistakes, not a determined bot. --access full lets it change
+any file and run anything, unattended; it is off by default. A Codex bot can have full access only:
+its sandbox did not let it reach cornercase on Linux, and macOS and Windows were not tried.
+
+A bot works only while the server runs. With --json it prints the bot as `bot list --json` does.
+
+Example:
+  cornercase bot new prs --agent claude --about "Review my open pull requests and tell me which are blocked"
+
+================================================================ cornercase bot list
+List the bots with their state and unread answers
+
+Usage: cornercase bot list [OPTIONS]
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase bot edit
+Change a bot's name, model, effort, account or access, from its next message
+
+Usage: cornercase bot edit [OPTIONS] <BOT>
+
+Arguments:
+  <BOT>  The bot's id or its name
+
+Options:
+      --name <NAME>               The new name; the id stays
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --agent <AGENT>             Only the bot's own agent: another one cannot continue its conversation
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --model <MODEL>             The model; an empty one goes back to the agent's own
+      --effort <LEVEL>            The effort; an empty one goes back to the agent's own
+      --account <NAME>            The account; an empty one goes back to the agent's own login
+      --access <ACCESS>           cornercase or full [possible values: cornercase, full]
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Changes what the bot uses from its next message on; a running answer is not changed. An empty
+--model, --effort or --account goes back to the agent's own. The agent cannot change, because
+another agent cannot continue the conversation: make another bot instead.
+
+================================================================ cornercase bot remove
+Delete a bot and its folder; refused while it answers
+
+Usage: cornercase bot remove [OPTIONS] <BOT>
+
+Arguments:
+  <BOT>  The bot's id or its name
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase bot say
+Write to a bot; it answers in its chat
+
+Usage: cornercase bot say [OPTIONS] <BOT> [TEXT]
+
+Arguments:
+  <BOT>   The bot's id or its name
+  [TEXT]  The message, at most 20,000 characters; - reads it from standard input
+
+Options:
+      --file <FILE>               Read the message from a file; - is standard input
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --wait                      Wait for the answer and print it; exit 3 when the turn fails or is stopped
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Writes to a bot and starts a turn: the agent runs without its window, continuing the bot's
+conversation, and its answer lands in the chat. The command answers at once with the line's id; with
+--wait it prints the bot's answer when the turn ends, and exits 3 when the turn fails, is stopped
+or times out (15 minutes), with the reason on standard error.
+
+A message sent while the bot answers is held and goes, with the others held, as the next turn. The
+first message of a conversation opens with what cornercase tells the bot about itself, then bot.md
+and memory.md. A bot runs with CORNERCASE_BOT set, so its `cornercase` commands must name the
+project: it runs in no pane.
+
+With --json it prints {"bot", "line"} (and "asked" with --wait): the chat line.
+
+Examples:
+  cornercase bot say prs "which of my PRs are blocked?" --wait
+  echo "summarize this" | cornercase bot say prs - --wait
+
+================================================================ cornercase bot history
+Print a bot's chat
+
+Usage: cornercase bot history [OPTIONS] <BOT>
+
+Arguments:
+  <BOT>  The bot's id or its name
+
+Options:
+      --last <N>                  Only the last N lines
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --after <LINE>              Only the lines after this id
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+Prints a bot's chat as you see it: what you wrote, what the bot used (`▸ cornercase status --json`)
+and its answers. --after LINE and --last N cut it.
+
+With --json it prints {"bot", "name", "lines": [{"id", "at", "kind", "text"}]}. A kind is you, bot, step,
+error or notice; a you line may be held, a step names its tool, and a bot line has its model, tokens
+and conversation.
+
+================================================================ cornercase bot reset
+Forget the bot's conversation; the next message starts a new one that reads bot.md and memory.md
+
+Usage: cornercase bot reset [OPTIONS] <BOT>
+
+Arguments:
+  <BOT>  The bot's id or its name
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase bot stop
+End the answer the bot is writing, and drop what was held for it
+
+Usage: cornercase bot stop [OPTIONS] <BOT>
+
+Arguments:
+  <BOT>  The bot's id or its name
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase bot seen
+Mark the bot's answers as read
+
+Usage: cornercase bot seen [OPTIONS] <BOT>
+
+Arguments:
+  <BOT>  The bot's id or its name
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
 
 ================================================================ cornercase processes
 List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program
