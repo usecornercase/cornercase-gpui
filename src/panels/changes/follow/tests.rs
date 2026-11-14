@@ -262,3 +262,22 @@ fn a_stream_that_ended_is_not_read_until_another_says_its_boot() {
     hearing.believed();
     assert_eq!(hearing.may_read(&up()), Ok(on_machine()));
 }
+
+#[test]
+fn a_file_read_refused_for_its_boot_stops_the_next_click_from_asking() {
+    let read = read(Reach::Up(on_machine()));
+    let mut hearing = Hearing::default();
+    hearing.believed();
+    let refused = cli::failure("changes", Some(4), b"error: another run");
+    assert!(hearing.read_refused(&refused));
+    assert_eq!(hearing.may_read(&read), Err("vps restarted".to_string()));
+}
+
+#[test]
+fn any_other_failed_read_leaves_the_stream_believed() {
+    let read = read(Reach::Up(on_machine()));
+    let mut hearing = Hearing::default();
+    hearing.believed();
+    assert!(!hearing.read_refused(&cli::failure("changes", Some(1), b"no such file")));
+    assert_eq!(hearing.may_read(&read), Ok(on_machine()));
+}

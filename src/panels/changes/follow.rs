@@ -29,6 +29,14 @@ impl Hearing {
         self.boot_heard = false;
     }
 
+    pub(super) fn read_refused(&mut self, error: &anyhow::Error) -> bool {
+        let refused = cli::stale_boot(error);
+        if refused {
+            self.refused();
+        }
+        refused
+    }
+
     fn refused(&mut self) {
         self.boot_heard = false;
         self.retry.restarted();

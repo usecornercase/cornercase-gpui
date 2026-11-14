@@ -149,6 +149,10 @@ fn link_step(state: &TabState, linked: bool, older: Option<&OlderNote>) -> LinkS
     }
 }
 
+fn surface_pauses(no_tab: bool, ended: &StreamEnd) -> bool {
+    no_tab && refused_lost(ended).is_none()
+}
+
 fn refused_lost(ended: &StreamEnd) -> Option<Lost> {
     ended.stale_boot().then_some(Lost::Restarted)
 }
@@ -643,7 +647,8 @@ impl Root {
 
     fn machine_surface_ended(&mut self, ended: &StreamEnd, cx: &mut Context<Self>) {
         let Some(tab) = self.machine.as_mut() else { return };
-        if tab.session.as_ref().is_some_and(|session| session.shown().tab.is_none()) {
+        let no_tab = tab.session.as_ref().is_some_and(|session| session.shown().tab.is_none());
+        if surface_pauses(no_tab, ended) {
             tab.conn.pause_surface();
             return;
         }

@@ -60,6 +60,9 @@ impl Retry {
     }
 
     pub(crate) fn heard(&mut self) -> bool {
+        if self.restarted {
+            return false;
+        }
         let failed = self.why.is_some();
         *self = Self::default();
         failed

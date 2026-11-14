@@ -50,6 +50,7 @@ impl ChangesPanel {
     }
 
     fn patch_failed(&mut self, machine: Option<&str>, error: &anyhow::Error, cx: &mut Context<Self>) {
+        self.hearing.read_refused(error);
         let text = refusal_text(machine, error);
         if self.open.read_failed(text.clone()) {
             toast(text, ToastKind::Error, cx);
@@ -172,7 +173,10 @@ impl ChangesPanel {
             }
             match parse::<Gap>(result) {
                 Ok(gap) => this.add_gap(hunk, gap),
-                Err(e) => toast(refusal_text(machine.as_deref(), &e), ToastKind::Error, cx),
+                Err(e) => {
+                    this.hearing.read_refused(&e);
+                    toast(refusal_text(machine.as_deref(), &e), ToastKind::Error, cx);
+                }
             }
             cx.notify();
         });

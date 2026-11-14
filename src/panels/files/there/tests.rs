@@ -413,3 +413,19 @@ fn a_tree_with_nothing_listed_says_nothing_was_read_once_the_machine_refused() {
     assert_eq!(unread_root(&read, false, &retry).as_deref(), Some("Nothing read from vps"));
     assert_eq!(unread_root(&read, true, &retry), None);
 }
+
+#[test]
+fn a_place_opened_before_the_releases_were_known_is_rebuilt_once_they_are() {
+    let read = vps_read(Reach::Up(target()));
+    let old = source_of(&read, ReadReleases::default()).expect("a source");
+    let fresh = refreshed(&old, &read, reads_with_boot()).expect("another source");
+    assert_eq!(fresh, Source::There(with_boot()));
+    assert_eq!(refreshed(&fresh, &read, reads_with_boot()), None);
+}
+
+#[test]
+fn a_machine_that_cannot_be_reached_keeps_the_source_it_had() {
+    let down = vps_read(Reach::Down("vps unreachable".into()));
+    let old = source_of(&vps_read(Reach::Up(target())), ReadReleases::default()).expect("a source");
+    assert_eq!(refreshed(&old, &down, reads_with_boot()), None);
+}

@@ -752,3 +752,11 @@ fn a_tab_decides_once_per_connection_whether_its_streams_carry_its_boot() {
     tab.reopen(Target::Local, &place, releases(Some(Version::new(0, 13, 66))), &tx);
     assert_eq!(tab.stream_boot, None);
 }
+
+#[test]
+fn a_surface_that_ended_with_no_tab_pauses_unless_it_was_refused_for_its_boot() {
+    assert!(surface_pauses(true, &ended(Some(1))));
+    assert!(surface_pauses(true, &ended(None)));
+    assert!(!surface_pauses(true, &ended(Some(4))));
+    assert!(!surface_pauses(false, &ended(Some(1))));
+}

@@ -231,11 +231,11 @@ fn a_failure_after_a_refusal_keeps_the_refusal() {
 }
 
 #[test]
-fn hearing_from_the_machine_ends_a_refusal() {
+fn an_answer_that_comes_after_a_refusal_does_not_end_it() {
     let mut retry = restarted();
-    retry.heard();
-    assert!(retry.due(Instant::now()));
-    assert_eq!(may_ask(&read(up()), &retry), Ok(vps_target()));
+    assert!(!retry.heard());
+    assert!(!retry.due(Instant::now()));
+    assert_eq!(may_ask(&read(up()), &retry), Err("vps restarted".to_string()));
 }
 
 #[test]

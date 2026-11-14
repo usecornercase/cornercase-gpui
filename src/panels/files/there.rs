@@ -173,6 +173,10 @@ impl There {
     }
 }
 
+pub(super) fn refreshed(current: &Source, read: &MachineRead, releases: ReadReleases) -> Option<Source> {
+    source_of(read, releases).filter(|fresh| fresh != current)
+}
+
 pub(super) fn unread_root(read: &MachineRead, listed: bool, retry: &Retry) -> Option<String> {
     let waits = matches!(read.reach, Reach::Waiting(_) | Reach::Older(_)) || retry.refused();
     (waits && !listed).then(|| on_machine::nothing_read(read))
@@ -182,6 +186,8 @@ impl FilesPanel {
     pub(super) fn follow_machine(&mut self, read: &MachineRead, cx: &mut Context<Self>) {
         let key = place_key(read);
         if self.current == Some(key) {
+            let releases = self.store.read(cx).read_releases(&read.aim.machine);
+            self.refresh_source(read, releases);
             self.stay_on_machine(read, cx);
             return;
         }
@@ -195,6 +201,13 @@ impl FilesPanel {
                     cx.notify();
                 }
             }
+        }
+    }
+
+    fn refresh_source(&mut self, read: &MachineRead, releases: ReadReleases) {
+        let Some(place) = self.place_mut() else { return };
+        if let Some(fresh) = refreshed(&place.source, read, releases) {
+            place.source = fresh;
         }
     }
 
