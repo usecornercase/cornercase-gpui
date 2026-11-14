@@ -52,3 +52,12 @@ fn a_spot_far_inside_a_long_line_scrolls_into_that_line() {
     let lines = lines(&["a", &long]);
     assert_eq!(top_for(&lines, (1, 505), Fit::Wrap { columns: 10 }, 10), (1, 40));
 }
+
+#[test]
+fn a_refused_read_keeps_a_file_on_screen_and_says_why_when_there_is_none() {
+    let refused = Content::Restarted("vps restarted".into());
+    assert!(keeps_what_shows(Some(&refused), true));
+    assert!(!keeps_what_shows(Some(&refused), false));
+    assert!(keeps_what_shows(Some(&Content::Lost("x".into())), false));
+    assert!(!keeps_what_shows(None, true));
+}

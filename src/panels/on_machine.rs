@@ -75,6 +75,10 @@ impl Retry {
         !self.restarted && self.next.is_none_or(|next| now >= next)
     }
 
+    pub(crate) fn refused(&self) -> bool {
+        self.restarted
+    }
+
     fn waiting(&self) -> bool {
         self.why.is_some()
     }

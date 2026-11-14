@@ -4,7 +4,7 @@ use super::super::seen::{ReadReleases, Spot, ThereId};
 use super::issue::IssueThere;
 use crate::model::accounts::{AccountsInfo, LoginState, Provider};
 use crate::model::agent_settings::Agents;
-use crate::store::{args, restart_note};
+use crate::store::{args, read_refusal};
 
 const UNREADABLE: &str = "its answer could not be read";
 const UNNAMED: &str = "the project";
@@ -82,7 +82,7 @@ impl Wanted {
 }
 
 pub(crate) fn check_failure(machine: &str, error: &anyhow::Error) -> String {
-    if crate::cli::stale_boot(error) { restart_note(machine) } else { crate::cli::reason(error) }
+    read_refusal(machine, error).unwrap_or_else(|| crate::cli::reason(error))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

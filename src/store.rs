@@ -34,7 +34,7 @@ pub(crate) use jobs::{Busy, setup_key};
 use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, OlderNote, Reach, TabThere, release_clause};
 pub(crate) use machines_there::{
-    MachineAct, NoticeThere, answer_words, failed_there, part_sent_note, restart_note, stale_note,
+    MachineAct, NoticeThere, answer_words, failed_there, part_sent_note, read_refusal, restart_note, stale_note,
 };
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
 pub(crate) use toasts::{Toast, ToastKind};

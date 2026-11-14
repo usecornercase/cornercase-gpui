@@ -102,8 +102,12 @@ pub(crate) fn restart_note(machine: &str) -> String {
     format!("{machine} restarted")
 }
 
+pub(crate) fn read_refusal(machine: &str, error: &anyhow::Error) -> Option<String> {
+    cli::stale_boot(error).then(|| restart_note(machine))
+}
+
 pub(crate) fn stale_note(machine: &str, error: &anyhow::Error) -> Option<String> {
-    cli::stale_boot(error).then(|| sent_or_not(&restart_note(machine)))
+    read_refusal(machine, error).map(|why| sent_or_not(&why))
 }
 
 pub(crate) fn part_sent_note(machine: &str) -> String {

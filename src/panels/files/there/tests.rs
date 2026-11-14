@@ -301,7 +301,7 @@ fn a_margin_is_not_asked_of_a_server_that_restarted_since_its_answer_could_not_s
 
 #[test]
 fn a_tree_never_read_says_so_only_while_waiting_or_older_and_keeps_what_it_read() {
-    let said = |reach, listed| unread_root(&vps_read(reach), listed);
+    let said = |reach, listed| unread_root(&vps_read(reach), listed, &Retry::default());
     assert_eq!(said(Reach::Waiting("w".into()), false).as_deref(), Some("Nothing read from vps"));
     assert_eq!(
         said(Reach::Older(OlderNote { line: "l".into(), tip: "t".into(), ..OlderNote::default() }), false).as_deref(),
@@ -318,7 +318,7 @@ fn with_boot() -> There {
 }
 
 fn refused(_: &Target, _: &[String]) -> Result<String> {
-    Err(cli::failure("files", Some(4), b"error: this request is for another run"))
+    Err(crate::cli::failure("files", Some(4), b"error: this request is for another run"))
 }
 
 fn boot_flags(args: &[String]) -> &[String] {
@@ -383,7 +383,7 @@ fn a_listing_refused_for_its_boot_is_told_by_its_type_not_its_words() {
 #[test]
 fn a_read_refused_for_its_boot_says_the_machine_restarted() {
     let (content, stamp) = with_boot().read_with(&refused, Path::new("README.md"));
-    assert!(matches!(&content, Content::Lost(why) if why == "vps restarted"), "{content:?}");
+    assert!(matches!(&content, Content::Restarted(why) if why == "vps restarted"), "{content:?}");
     assert_eq!(stamp, None);
 }
 
@@ -391,4 +391,25 @@ fn a_read_refused_for_its_boot_says_the_machine_restarted() {
 fn a_search_refused_for_its_boot_fails_with_the_machines_restart() {
     let results = with_boot().search_with(&refused, "main", Mode::Names);
     assert!(matches!(&results, Results::Failed(why) if why == "vps restarted"));
+}
+
+#[test]
+fn a_refused_read_is_kept_apart_from_a_lost_link_by_its_type() {
+    let (refused, _) = with_boot().read_with(&refused, Path::new("README.md"));
+    assert!(matches!(&refused, Content::Restarted(why) if why == "vps restarted"), "{refused:?}");
+    let (lost, _) = with_boot().read_with(&down, Path::new("README.md"));
+    assert!(matches!(lost, Content::Lost(_)));
+    let words_only = |_: &Target, _: &[String]| -> Result<String> { Err(anyhow!("vps restarted")) };
+    let (plain, _) = with_boot().read_with(&words_only, Path::new("README.md"));
+    assert!(matches!(plain, Content::Lost(_)));
+}
+
+#[test]
+fn a_tree_with_nothing_listed_says_nothing_was_read_once_the_machine_refused() {
+    let mut retry = Retry::default();
+    let read = vps_read(Reach::Up(target()));
+    assert_eq!(unread_root(&read, false, &retry), None);
+    retry.restarted();
+    assert_eq!(unread_root(&read, false, &retry).as_deref(), Some("Nothing read from vps"));
+    assert_eq!(unread_root(&read, true, &retry), None);
 }

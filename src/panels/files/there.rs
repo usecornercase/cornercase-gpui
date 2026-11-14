@@ -9,10 +9,10 @@ use anyhow::{Result, bail};
 use gpui::{App, Context, Div};
 use serde::Deserialize;
 
-use crate::cli::{self, Target};
+use crate::cli::Target;
 use crate::model::{Aim, ReadReleases};
 use crate::panels::on_machine::{self, Retry};
-use crate::store::{MachineRead, Reach, Store, restart_note};
+use crate::store::{MachineRead, Reach, Store, read_refusal, restart_note};
 
 use super::disk::{Content, Stamp};
 use super::gutter::Gutter;
@@ -76,6 +76,13 @@ fn lost_in(listed: &Listed) -> Option<String> {
     listed.iter().find_map(|(_, listing)| listing.as_ref().err().filter(|e| is_lost(e)).map(Error::to_string))
 }
 
+fn lost_content(error: &anyhow::Error) -> Content {
+    match error.downcast_ref::<Restarted>() {
+        Some(restarted) => Content::Restarted(restarted.to_string()),
+        None => Content::Lost(error.to_string()),
+    }
+}
+
 fn not_connected(error: &anyhow::Error) -> Error {
     match error.downcast_ref::<Restarted>() {
         Some(restarted) => Error::new(ErrorKind::NotConnected, restarted.clone()),
@@ -95,8 +102,9 @@ impl There {
 
     fn asked(&self, ask: Ask<'_>, args: &[String]) -> Result<String> {
         let sent = self.aim.reading(args.to_vec(), self.releases);
-        let json = ask(&self.target, &sent).map_err(|e| {
-            if cli::stale_boot(&e) { anyhow::Error::new(Restarted(restart_note(&self.aim.machine))) } else { e }
+        let json = ask(&self.target, &sent).map_err(|e| match read_refusal(&self.aim.machine, &e) {
+            Some(why) => anyhow::Error::new(Restarted(why)),
+            None => e,
         })?;
         if restarted(&json, &self.aim.boot) {
             bail!("{}", restart_note(&self.aim.machine));
@@ -116,7 +124,7 @@ impl There {
         let args = served::files_args("read", &self.workspace, &[], [served::arg(rel)]);
         match self.asked(ask, &args) {
             Ok(json) => served::content(rel, Ok(json)),
-            Err(e) => (Content::Lost(e.to_string()), None),
+            Err(e) => (lost_content(&e), None),
         }
     }
 
@@ -165,8 +173,8 @@ impl There {
     }
 }
 
-pub(super) fn unread_root(read: &MachineRead, listed: bool) -> Option<String> {
-    let waits = matches!(read.reach, Reach::Waiting(_) | Reach::Older(_));
+pub(super) fn unread_root(read: &MachineRead, listed: bool, retry: &Retry) -> Option<String> {
+    let waits = matches!(read.reach, Reach::Waiting(_) | Reach::Older(_)) || retry.refused();
     (waits && !listed).then(|| on_machine::nothing_read(read))
 }
 
@@ -261,6 +269,10 @@ impl FilesPanel {
             Some(Content::Lost(why)) => {
                 self.retry.failed(why.clone(), Instant::now());
                 self.there_failed(cx);
+            }
+            Some(Content::Restarted(_)) => {
+                self.retry.restarted();
+                cx.notify();
             }
             Some(_) => {
                 self.retry.heard();

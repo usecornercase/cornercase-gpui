@@ -103,7 +103,9 @@ fn other_body(content: &Content) -> AnyElement {
         Content::NotRegular => {
             centered_note("Not a regular file", "Devices, sockets and pipes are not read.").into_any_element()
         }
-        Content::Gone(e) | Content::Lost(e) => centered_note("Cannot read this file", e.clone()).into_any_element(),
+        Content::Gone(e) | Content::Lost(e) | Content::Restarted(e) => {
+            centered_note("Cannot read this file", e.clone()).into_any_element()
+        }
         Content::Text(_) => div().into_any_element(),
     }
 }

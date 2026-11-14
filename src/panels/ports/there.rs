@@ -12,7 +12,7 @@ use crate::model::ThereId;
 use crate::model::machines::hide_destination;
 use crate::model::tunnels::{Gate, gate_note};
 use crate::panels::on_machine::Missed;
-use crate::panels::poll::Polled as _;
+use crate::panels::poll::{Polled as _, parse_json};
 use crate::store::{self, MachineRead, Reach, Store};
 
 pub(super) fn machine_notes(gate: &Gate, machine: &str, reach: &Reach) -> Vec<String> {
@@ -42,12 +42,12 @@ pub(crate) fn sample_there<T: 'static>(
         (store.there_facts(&machine), store.read_releases(&machine))
     };
     store::run_on(cx, target, read.aim.ports_args(all, releases), move |this, result, cx| {
-        let list = result.and_then(|out| serde_json::from_str::<List<ThereId>>(&out).map_err(anyhow::Error::from));
-        if let Err(e) = &list
+        if let Err(e) = &result
             && !cli::stale_boot(e)
         {
             Store::get(cx).update(cx, |s, cx| s.there_refused(&machine, (e, asked), cx));
         }
+        let list = parse_json::<List<ThereId>>(result);
         then(this, list.map(|list| list.ports).map_err(|e| missed_of(&machine, &destination, &e)), cx);
     });
 }

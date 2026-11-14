@@ -5,7 +5,7 @@ use gpui::{Context, ListOffset, px};
 
 use crate::cli::{self, Target};
 use crate::model::ReadReleases;
-use crate::store::{self, Busy, Store, ToastKind, args, restart_note};
+use crate::store::{self, Busy, Store, ToastKind, args, read_refusal};
 
 use super::pieces::{find, looks, parse, toast};
 use super::wire::{Base, Gap, Patch};
@@ -19,10 +19,7 @@ fn file_command(verb: &str, selected: &Selected, extra: &[String], releases: Rea
 }
 
 fn refusal_text(machine: Option<&str>, error: &anyhow::Error) -> String {
-    match machine {
-        Some(machine) if cli::stale_boot(error) => restart_note(machine),
-        _ => error.to_string(),
-    }
+    machine.and_then(|machine| read_refusal(machine, error)).unwrap_or_else(|| error.to_string())
 }
 
 pub(super) fn switching_base(workspace: u64) -> String {

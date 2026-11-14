@@ -3,7 +3,7 @@ use serde_json::json;
 
 use super::*;
 use crate::app::machine::tests::{opening, tapped};
-use crate::cli;
+use crate::cli::{self, Version};
 use crate::model::PaneInfo;
 use crate::test_util::fixture;
 
@@ -196,7 +196,7 @@ fn a_new_connection_reads_the_accounts_again() {
     let mut tab = opening();
     tab.accounts = Asked::Failed("x".into());
     let (tx, _rx) = futures::channel::mpsc::unbounded();
-    tab.reopen(cli::Target::Local, &opening().aimed, crate::model::ReadReleases::default(), &tx);
+    tab.reopen(cli::Target::Local, &opening().aimed, ReadReleases::default(), &tx);
     assert_eq!(tab.accounts, Asked::Unasked);
 }
 
@@ -237,4 +237,12 @@ fn below_0_13_63_or_unknown_a_machines_tab_carries_no_boot() {
     for release in [Some(v(13, 62)), Some(v(13, 60)), Some(v(13, 19)), None] {
         assert_eq!(carried_boot("b1", release), None);
     }
+}
+
+#[test]
+fn a_tabs_streams_carry_its_boot_only_when_the_reads_do() {
+    let on = ReadReleases { here: Some(Version::new(0, 13, 66)), there: Some(Version::new(0, 12, 212)) };
+    assert_eq!(streamed_boot("b1", on).as_deref(), Some("b1"));
+    assert_eq!(streamed_boot("b1", ReadReleases { here: Some(Version::new(0, 13, 65)), ..on }), None);
+    assert_eq!(streamed_boot("b1", ReadReleases { there: None, ..on }), None);
 }

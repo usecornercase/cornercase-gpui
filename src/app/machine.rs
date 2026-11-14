@@ -429,7 +429,7 @@ impl MachineTab {
 
     fn reopen(&mut self, target: Target, place: &MachinePlace, releases: ReadReleases, tx: &UnboundedSender<Msg>) {
         let run = (self.machine.clone(), acts::carried_boot(&self.boot, releases.here));
-        self.stream_boot = releases.carry_boot().then(|| self.boot.clone());
+        self.stream_boot = acts::streamed_boot(&self.boot, releases);
         self.conn.open_queue(target, run, tx);
         self.state = TabState::Opening;
         self.session = None;

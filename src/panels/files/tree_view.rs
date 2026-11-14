@@ -89,7 +89,7 @@ impl FilesPanel {
         }
         let rows = tree::rows(&place.listings, &place.expanded, self.show_hidden);
         let listed = place.listings.contains_key(Path::new(""));
-        let unread = self.machine.as_ref().and_then(|read| unread_root(read, listed));
+        let unread = self.machine.as_ref().and_then(|read| unread_root(read, listed, &self.retry));
         let loading = unread.is_none() && !listed;
         let truncated = place.listings.values().any(|l| l.truncated);
         let any_open = !place.expanded.is_empty();

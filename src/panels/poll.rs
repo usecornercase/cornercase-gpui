@@ -194,8 +194,12 @@ pub(crate) fn parse<T: DeserializeOwned>(result: anyhow::Result<Value>) -> Resul
     result.and_then(|v| serde_json::from_value(v).map_err(anyhow::Error::from)).map_err(|e| e.to_string())
 }
 
+pub(crate) fn parse_json<T: DeserializeOwned>(result: anyhow::Result<String>) -> anyhow::Result<T> {
+    result.and_then(|out| serde_json::from_str(&out).map_err(anyhow::Error::from))
+}
+
 pub(crate) fn parse_text<T: DeserializeOwned>(result: anyhow::Result<String>) -> Result<T, String> {
-    parse(result.and_then(|out| serde_json::from_str(&out).map_err(anyhow::Error::from)))
+    parse_json(result).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
