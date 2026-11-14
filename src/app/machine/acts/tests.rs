@@ -4,6 +4,7 @@ use serde_json::json;
 use super::*;
 use crate::app::machine::tests::{opening, tapped};
 use crate::cli::{self, Version};
+use crate::desktop;
 use crate::model::PaneInfo;
 use crate::test_util::fixture;
 

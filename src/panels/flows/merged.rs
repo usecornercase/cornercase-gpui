@@ -1,7 +1,9 @@
 use serde::Deserialize;
 
 use super::model::{FlowInfo, Run};
-use crate::cli::{Feature, Has, Version};
+use crate::cli::{self, Feature, Lacks, Releases};
+use crate::desktop;
+use crate::platform::Os;
 use crate::store;
 
 pub(super) const LABEL: &str = "Close the agents once the pull request merges";
@@ -17,11 +19,6 @@ pub(super) fn how(machine: Option<&str>, free: bool) -> String {
     }
 }
 
-pub(super) struct Releases<'a> {
-    pub here: Option<Version>,
-    pub machine: Option<(&'a str, Option<Version>)>,
-}
-
 pub(super) fn rests(flow: Option<&FlowInfo>, releases: &Releases<'_>) -> Option<String> {
     leaves_commits(flow).or_else(|| too_old(Feature::FlowCloseWhenMerged, releases))
 }
@@ -32,19 +29,16 @@ fn leaves_commits(flow: Option<&FlowInfo>) -> Option<String> {
 }
 
 fn too_old(feature: Feature, releases: &Releases<'_>) -> Option<String> {
-    if feature.on(releases.here) != Has::Yes {
-        return Some(needs(feature, None, releases.here));
-    }
-    releases
-        .machine
-        .filter(|(_, release)| feature.on(*release) != Has::Yes)
-        .map(|(machine, release)| needs(feature, Some(machine), release))
+    releases.lacks(feature).map(|lacks| needs(feature, lacks, Os::CURRENT))
 }
 
-fn needs(feature: Feature, machine: Option<&str>, release: Option<Version>) -> String {
+fn needs(feature: Feature, lacks: Lacks<'_>, os: Os) -> String {
     let since = feature.since();
-    let place = machine.map(|machine| format!(" on {machine}")).unwrap_or_default();
-    let who = if machine.is_some() { "it" } else { "the server" };
+    let (place, who, release) = match lacks {
+        Lacks::ThisComputer(release) => return format!("Needs {}.", cli::newer_here(since, release, os)),
+        Lacks::Server(release) => (String::new(), "the server", release),
+        Lacks::Machine(machine, release) => (format!(" on {machine}"), "it", release),
+    };
     let runs = release.map(|release| format!(": {who} runs {release}")).unwrap_or_default();
     format!("Needs cornercase {since} or newer{place}{runs}.")
 }
@@ -56,19 +50,19 @@ pub(super) enum Switch {
     Offered(bool),
 }
 
-pub(super) fn switch(run: &Run, here: Option<Version>) -> Switch {
+pub(super) fn switch(run: &Run, releases: &Releases<'_>) -> Switch {
     if run.closed() || run.flow.ends_in_commits() {
         return Switch::Hidden;
     }
-    match too_old(Feature::FlowCloseWhenMerged, &Releases { here, machine: None }) {
+    match too_old(Feature::FlowCloseWhenMerged, releases) {
         Some(line) => Switch::Rests(line),
         None => Switch::Offered(run.close_when_merged),
     }
 }
 
-pub(super) fn free_switch(run: &Run, here: Option<Version>) -> Switch {
-    match switch(run, here) {
-        Switch::Offered(close) => free_tail(&Releases { here, machine: None }, close, run.free_builds),
+pub(super) fn free_switch(run: &Run, releases: &Releases<'_>) -> Switch {
+    match switch(run, releases) {
+        Switch::Offered(close) => free_tail(releases, close, run.free_builds),
         _ => Switch::Hidden,
     }
 }
@@ -78,6 +72,66 @@ pub(super) fn free_box(flow: Option<&FlowInfo>, releases: &Releases<'_>, close: 
         Some(_) => Switch::Hidden,
         None => free_tail(releases, close, free),
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Resting {
+    pub ticked: bool,
+    pub line: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Page {
+    Hidden,
+    Rests { close: Resting, free: Option<Resting> },
+    Offered { choice: Choice, line: String, free: Free },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Free {
+    Hidden,
+    Rests(Resting),
+    Offered,
+}
+
+pub(super) fn page(run: &Run, releases: &Releases<'_>) -> Page {
+    match switch(run, releases) {
+        Switch::Hidden => Page::Hidden,
+        Switch::Rests(line) => Page::Rests {
+            close: Resting { ticked: run.close_when_merged, line },
+            free: run
+                .free_builds
+                .then(|| too_old(Feature::FlowFreeBuilds, releases))
+                .flatten()
+                .map(|line| Resting { ticked: true, line }),
+        },
+        Switch::Offered(_) => Page::Offered {
+            choice: Choice::of(run, releases),
+            line: how(None, run.free_builds),
+            free: match free_switch(run, releases) {
+                Switch::Offered(_) => Free::Offered,
+                Switch::Rests(line) => {
+                    Free::Rests(Resting { ticked: run.free_builds, line: kept_line(run, releases, line) })
+                }
+                Switch::Hidden => Free::Hidden,
+            },
+        },
+    }
+}
+
+fn kept_line(run: &Run, releases: &Releases<'_>, line: String) -> String {
+    if run.free_builds && matches!(releases.lacks(Feature::FlowFreeBuilds), Some(Lacks::ThisComputer(_))) {
+        format!("{line} Turning the close off turns this off, and this {} cannot turn it on again.", desktop::here())
+    } else {
+        line
+    }
+}
+
+pub(super) fn sent(flow: Option<&FlowInfo>, releases: &Releases<'_>, ticked: Choice) -> Choice {
+    let close = ticked.close && rests(flow, releases).is_none();
+    let free =
+        close && ticked.free && matches!(free_box(flow, releases, ticked.close, ticked.free), Switch::Offered(_));
+    Choice { close, free }
 }
 
 fn free_tail(releases: &Releases<'_>, close: bool, free: bool) -> Switch {
@@ -100,8 +154,11 @@ pub(super) enum Press {
 }
 
 impl Choice {
-    pub(super) fn of(run: &Run, here: Option<Version>) -> Self {
-        Self { close: run.close_when_merged, free: run.free_builds && Feature::FlowFreeBuilds.on(here) == Has::Yes }
+    pub(super) fn of(run: &Run, releases: &Releases<'_>) -> Self {
+        Self {
+            close: run.close_when_merged,
+            free: run.free_builds && releases.lacks(Feature::FlowFreeBuilds).is_none(),
+        }
     }
 
     pub(super) fn pressed(self, press: Press) -> Self {

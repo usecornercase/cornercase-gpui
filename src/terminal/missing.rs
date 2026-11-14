@@ -44,10 +44,9 @@ fn not_found(places: &[PathBuf], asked_shell: bool, os: Os, home: &str) -> Strin
     let shell = if asked_shell { ", in your login shell's PATH" } else { "" };
     let places: Vec<String> = places.iter().map(|place| shown(place, home)).collect();
     format!(
-        "This window needs cornercase {} or newer on this {}, and found none on the PATH{shell} or where its \
+        "This window needs {}, and found none on the PATH{shell} or where its \
          installers put it: {}. Install it, then try again, or choose it yourself.",
-        cli::MINIMUM,
-        desktop::machine(os),
+        cli::newer_here(cli::MINIMUM, None, os),
         places.join(", ")
     )
 }

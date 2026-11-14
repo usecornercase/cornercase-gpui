@@ -4,10 +4,10 @@ use serde::Deserialize;
 
 use super::data::{Build, MergedBuilds, Worktree, name_of};
 use super::removal::{Said, Style};
-use crate::cli::Version;
-use crate::desktop;
+use crate::cli::{self, Version};
 use crate::panels::files::disk::human_size;
 use crate::panels::flows::model::plural;
+use crate::platform::Os;
 use crate::store::{Busy, ToastKind};
 
 pub(super) const FREE_MERGED_SINCE: Version = Version::new(0, 13, 70);
@@ -301,10 +301,9 @@ pub(super) fn merged_job(busy: impl Fn(&str) -> bool) -> MergedJob {
 }
 
 fn needs_note(here: Option<Version>) -> String {
-    let has = here.map(|v| format!(" (it has {v})")).unwrap_or_default();
     format!(
-        "Freeing the merged worktrees' builds in one go needs cornercase {FREE_MERGED_SINCE} or newer on this {}{has}.",
-        desktop::here()
+        "Freeing the merged worktrees' builds in one go needs {}.",
+        cli::newer_here(FREE_MERGED_SINCE, here, Os::CURRENT)
     )
 }
 

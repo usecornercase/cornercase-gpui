@@ -242,15 +242,15 @@ impl QueuePanel {
 
 impl Render for QueuePanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (app, session) = {
+        let (app, session, releases) = {
             let s = Store::get(cx).read(cx);
-            (s.app.clone(), s.session.clone())
+            (s.app.clone(), s.session.clone(), s.releases())
         };
         let entries = entries(app.as_ref());
         self.sync_form(&entries, session.as_ref());
         self.sync_flows(cx);
         self.sync_accounts(cx);
-        let snapshot = Snapshot::new(app.as_ref(), session);
+        let snapshot = Snapshot::new(app.as_ref(), session, &releases);
         self.sync_detail(&entries, snapshot.results, window, cx);
         let main = self.main(&entries, &snapshot, window, cx);
         let at = (Edge::Left, self.side_width.size());

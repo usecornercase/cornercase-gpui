@@ -8,12 +8,10 @@ use gpui::{
 use super::FlowsPanel;
 use super::actions::toast;
 use super::merged::{
-    Choice, FREE_HOW, FREE_LABEL, LABEL, Press, Switch, doing, free_key, free_switch, how, key, parse_set, switch,
-    switch_args, take,
+    Choice, FREE_HOW, FREE_LABEL, Free, LABEL, Page, Press, doing, free_key, key, page, parse_set, switch_args, take,
 };
 use super::model::Run;
 use crate::cli;
-use crate::model::Session;
 use crate::store::{self, Busy, Store, ToastKind};
 use crate::ui;
 
@@ -43,20 +41,23 @@ impl FlowsPanel {
 }
 
 pub(super) fn run_switch(run: &Run, cx: &Context<FlowsPanel>) -> Option<Div> {
-    let here = Store::get(cx).read(cx).session.as_ref().and_then(Session::release);
-    match switch(run, here) {
-        Switch::Hidden => None,
-        Switch::Rests(line) => Some(with_line(ui::resting_checkbox(false, LABEL), line)),
-        Switch::Offered(_) => Some(offered_pair(run, Choice::of(run, here), free_switch(run, here), cx)),
+    let releases = Store::get(cx).read(cx).releases();
+    match page(run, &releases) {
+        Page::Hidden => None,
+        Page::Rests { close, free } => {
+            let first = with_line(ui::resting_checkbox(close.ticked, LABEL), close.line);
+            Some(pair(first, free.map(|free| free_resting(free.ticked, free.line))))
+        }
+        Page::Offered { choice, line, free } => Some(offered_pair(run, choice, line, free, cx)),
     }
 }
 
-fn offered_pair(run: &Run, choice: Choice, free: Switch, cx: &Context<FlowsPanel>) -> Div {
-    let first = Row { run, press: Press::Close, choice, line: how(None, choice.free) };
+fn offered_pair(run: &Run, choice: Choice, line: String, free: Free, cx: &Context<FlowsPanel>) -> Div {
+    let first = Row { run, press: Press::Close, choice, line };
     let second = match free {
-        Switch::Hidden => None,
-        Switch::Rests(line) => Some(free_resting(line)),
-        Switch::Offered(_) => Some(nested(row(&Row { press: Press::Free, line: FREE_HOW.into(), ..first }, cx))),
+        Free::Hidden => None,
+        Free::Rests(free) => Some(free_resting(free.ticked, free.line)),
+        Free::Offered => Some(nested(row(&Row { press: Press::Free, line: FREE_HOW.into(), ..first }, cx))),
     };
     pair(row(&first, cx), second)
 }
@@ -65,8 +66,8 @@ pub(super) fn pair(first: Div, second: Option<Div>) -> Div {
     div().flex().flex_col().gap(px(8.)).child(first).children(second)
 }
 
-pub(super) fn free_resting(line: String) -> Div {
-    nested(with_line(ui::resting_checkbox(false, FREE_LABEL), line))
+pub(super) fn free_resting(ticked: bool, line: String) -> Div {
+    nested(with_line(ui::resting_checkbox(ticked, FREE_LABEL), line))
 }
 
 pub(super) fn free_offered(the_box: impl IntoElement) -> Div {

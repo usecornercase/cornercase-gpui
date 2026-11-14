@@ -24,7 +24,7 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use locate::{Inputs, Probe as _, System};
 use parking_lot::Mutex;
 
-pub(crate) use features::{Feature, Has};
+pub(crate) use features::{Feature, Has, Lacks, Release, Releases, it_has, newer_here};
 #[cfg(test)]
 pub(crate) use holds::ended_after;
 pub(crate) use holds::{Ended, Holding, end_hold, end_holds, hold};

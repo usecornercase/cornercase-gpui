@@ -106,3 +106,14 @@ fn a_too_old_binary_offers_to_update_it_here() {
     let text = lead(&too_old("/opt/cc", Origin::Path), Os::Mac, "/Users/ana");
     assert!(text.contains("Update it here"), "{text}");
 }
+
+#[test]
+fn not_found_says_what_this_window_needs_word_for_word_on_each_platform() {
+    let missing = Missing::NotFound { places: vec![PathBuf::from("/opt/bin")], asked_shell: true };
+    let tail = "and found none on the PATH, in your login shell's PATH or where its installers put it: /opt/bin. \
+                Install it, then try again, or choose it yourself.";
+    let words = |place| format!("This window needs cornercase 0.13.19 or newer on this {place}, {tail}");
+    assert_eq!(lead(&missing, Os::Mac, ""), words("Mac"));
+    assert_eq!(lead(&missing, Os::Linux, ""), words("computer"));
+    assert_eq!(lead(&missing, Os::Windows, ""), words("PC"));
+}

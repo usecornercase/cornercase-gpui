@@ -8,7 +8,7 @@ use super::data::{
 use super::draft::{Draft, Target, When, cleanup_flag};
 use super::form::{Times, starting_agent};
 use super::time::{Civil, days, local, relative, when_label};
-use crate::cli::Version;
+use crate::cli::{Release, Releases, Version};
 use crate::model::accounts::pick::AccountPick;
 use crate::model::{PaneInfo, Project, Session, Tab, Workspace};
 use crate::panels::flows::model::FlowInfo;
@@ -817,13 +817,51 @@ fn reads_when_an_entry_started_and_kept_a_result() {
     assert_eq!(entry(1, "started").started, None);
 }
 
+fn snapshot(server: Option<&str>, here: Release) -> super::rows::Snapshot {
+    let session = server.map(|version| Session { version: version.into(), ..Session::default() });
+    let releases = Releases { server: session.as_ref().and_then(Session::release), here, machine: None };
+    super::rows::Snapshot::new(None, session, &releases)
+}
+
 #[test]
 fn the_snapshot_offers_results_from_the_servers_release() {
-    use super::rows::Snapshot;
-    let session = |version: &str| Session { version: version.into(), ..Session::default() };
-    assert!(!Snapshot::new(None, Some(session("0.13.39"))).results);
-    assert!(Snapshot::new(None, Some(session("0.13.53"))).results);
-    assert!(!Snapshot::new(None, None).results);
+    assert!(!snapshot(Some("0.13.39"), Release::Unread).results);
+    assert!(!snapshot(Some("0.13.50"), Release::Unread).results);
+    assert!(snapshot(Some("0.13.51"), Release::Unread).results);
+    assert!(snapshot(Some("0.13.53"), Release::Unread).results);
+    assert!(!snapshot(None, Release::Unread).results);
+}
+
+#[test]
+fn the_snapshot_holds_the_results_back_and_says_why_when_this_computers_command_line_is_older() {
+    let older = snapshot(Some("0.13.53"), Release::Read(Version::parse("0.13.50")));
+    assert!(!older.results);
+    assert!(older.results_note.as_deref().is_some_and(|note| note.contains("it has 0.13.50")));
+    let same = snapshot(Some("0.13.53"), Release::Read(Version::parse("0.13.53")));
+    assert!(same.results && same.results_note.is_none());
+}
+
+#[test]
+fn the_line_about_the_command_line_shows_only_above_a_row_that_would_open_a_detail() {
+    use super::data::shows_results_note;
+    let closed = vec![entry(1, "started")];
+    let pending = vec![entry(2, "pending"), entry(3, "pending")];
+    assert!(shows_results_note(&sections(&closed, "", None), None, None));
+    assert!(!shows_results_note(&sections(&pending, "", None), None, None));
+}
+
+#[test]
+fn the_line_about_the_command_line_waits_for_a_row_whose_pane_is_live_and_has_no_result() {
+    use super::data::shows_results_note;
+    let live = vec![Entry { pane: Some(9), server: Some("boot-1".into()), ..entry(1, "started") }];
+    let session = session_with_pane(9);
+    let shows =
+        |list: &[Entry]| shows_results_note(&sections(list, "", Some(&session)), Some("boot-1"), Some(&session));
+    assert!(!shows(&live));
+    let with_result = vec![Entry { result_at: Some(5), ..live[0].clone() }];
+    assert!(shows(&with_result));
+    let gone = vec![Entry { pane: Some(4), ..live[0].clone() }];
+    assert!(shows(&gone));
 }
 
 #[test]
@@ -833,4 +871,13 @@ fn the_detail_goes_when_its_entry_leaves_the_feed_or_the_release_stops_offering_
     assert_eq!(shown_entry(&list, 3, true).map(|e| e.id), Some(3));
     assert_eq!(shown_entry(&list, 4, true), None);
     assert_eq!(shown_entry(&list, 3, false), None);
+}
+
+#[test]
+fn the_line_about_the_command_line_shows_above_a_routine_whose_only_openable_row_is_a_run() {
+    use super::data::shows_results_note;
+    let alone = vec![routine(1, "day 09:00")];
+    assert!(!shows_results_note(&sections(&alone, "", None), None, None));
+    let with_run = vec![routine(1, "day 09:00"), run_of(1, 2, "started")];
+    assert!(shows_results_note(&sections(&with_run, "", None), None, None));
 }

@@ -148,6 +148,12 @@ pub(super) fn offers_detail(entry: &Entry) -> bool {
     }
 }
 
+pub(super) fn shows_results_note(sections: &[Section<'_>], boot: Option<&str>, session: Option<&Session>) -> bool {
+    let would_open = |entry: &Entry| offers_result(entry, live_pane(entry, boot, session), true);
+    let rows = sections.iter().flat_map(|section| &section.rows);
+    rows.into_iter().any(|row| would_open(row.entry) || row.runs.iter().any(|run| would_open(run)))
+}
+
 pub(super) fn shown_entry(entries: &[Entry], id: u64, results: bool) -> Option<&Entry> {
     entries.iter().find(|entry| entry.id == id).filter(|_| results)
 }

@@ -1,6 +1,5 @@
 use super::{UpdateToast, Updating};
 use crate::cli::{self, Answer, ByHand, Said, UPDATE_JSON_SINCE, UpdateAnswer, UpdateGate, Version};
-use crate::desktop;
 use crate::notify::{AppState, InstallState};
 use crate::platform::Os;
 use crate::store::ToastKind;
@@ -71,8 +70,7 @@ fn needs(gate: UpdateGate, os: Os) -> Option<String> {
     if !gate.lacks() {
         return None;
     }
-    let has = gate.here().map(|v| format!(" (it has {v})")).unwrap_or_default();
-    Some(format!("cornercase {UPDATE_JSON_SINCE} or newer on this {}{has}", desktop::machine(os)))
+    Some(cli::newer_here(UPDATE_JSON_SINCE, gate.here(), os))
 }
 
 impl Outcome {

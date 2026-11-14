@@ -6,11 +6,13 @@ use gpui::{
 use serde_json::Value;
 
 use super::data::{Click, Entry, Row, State, live_pane, notice, offers_result, remove_tip, status_label};
-use super::result::results_offered;
+use super::result::{results_note, results_offered};
 use super::time::{Civil, local, now, relative, when_label};
 use super::{QueuePanel, open_pane, pausing, starting};
+use crate::cli::Releases;
 use crate::model::Session;
 use crate::notify::tip;
+use crate::platform::Os;
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone};
@@ -26,16 +28,18 @@ const RESUME: &str = "Resume: it goes on from its next time, with no catch-up";
 pub(super) struct Snapshot {
     pub(super) loaded: bool,
     pub(super) session: Option<Session>,
-    boot: Option<String>,
+    pub(super) boot: Option<String>,
     pub(super) today: Civil,
     pub(super) now: i64,
     pub(super) results: bool,
+    pub(super) results_note: Option<String>,
 }
 
 impl Snapshot {
-    pub(super) fn new(app: Option<&Value>, session: Option<Session>) -> Self {
+    pub(super) fn new(app: Option<&Value>, session: Option<Session>, releases: &Releases<'_>) -> Self {
         let now = now();
-        let results = results_offered(session.as_ref().and_then(Session::release));
+        let results = results_offered(releases);
+        let results_note = results_note(releases, Os::CURRENT);
         Self {
             loaded: app.is_some(),
             session,
@@ -43,6 +47,7 @@ impl Snapshot {
             today: local(now).unwrap_or(Civil::EPOCH),
             now,
             results,
+            results_note,
         }
     }
 }

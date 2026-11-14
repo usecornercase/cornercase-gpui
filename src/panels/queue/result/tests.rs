@@ -2,12 +2,13 @@ use serde_json::json;
 
 use super::{
     Answer, Fact, Kept, Page, Said, Talk, can_copy, can_retry_talk, copied, facts, merged, message_lines, notes,
-    page_after, results_offered, role_word, said_heading, talk_lines, time_words, with_talk,
+    page_after, results_note, results_offered, role_word, said_heading, talk_lines, time_words, with_talk,
 };
-use crate::cli::Version;
+use crate::cli::{Release, Releases, Version};
 use crate::panels::queue::data::Entry;
 use crate::panels::queue::read::Keep;
 use crate::panels::queue::time::Civil;
+use crate::platform::Os;
 use crate::test_util::fixture;
 
 const TODAY: Civil = Civil { year: 2026, month: 11, day: 12, hour: 12, minute: 0, weekday: 4 };
@@ -16,17 +17,25 @@ fn release(text: &str) -> Option<Version> {
     Version::parse(text)
 }
 
+fn server(server: Option<Version>) -> Releases<'static> {
+    Releases { server, here: Release::Unread, machine: None }
+}
+
+fn command_line(server: &str, here: Release) -> Releases<'static> {
+    Releases { server: release(server), here, machine: None }
+}
+
 fn said(role: &str, text: &str, written: Option<&str>, cut: bool) -> Said {
     Said { role: role.into(), text: text.into(), written: written.map(str::to_string), cut }
 }
 
 #[test]
 fn the_detail_needs_cornercase_0_13_51() {
-    assert!(!results_offered(None));
-    assert!(!results_offered(release("0.13.50")));
-    assert!(!results_offered(release("0.13.39")));
-    assert!(results_offered(release("0.13.51")));
-    assert!(results_offered(release("0.13.53")));
+    assert!(!results_offered(&server(None)));
+    assert!(!results_offered(&server(release("0.13.50"))));
+    assert!(!results_offered(&server(release("0.13.39"))));
+    assert!(results_offered(&server(release("0.13.51"))));
+    assert!(results_offered(&server(release("0.13.53"))));
 }
 
 #[test]
@@ -281,4 +290,41 @@ fn a_retry_shows_the_conversation_as_loading_until_it_answers() {
     assert!(can_retry_talk(&answer));
     answer.forget_talk();
     assert_eq!(answer.talk, None);
+}
+
+#[test]
+fn the_results_need_this_computers_command_line_to_have_queue_show_too() {
+    let offered = |here| results_offered(&command_line("0.13.76", here));
+    assert!(offered(Release::Unread));
+    assert!(!offered(Release::Read(release("0.13.50"))));
+    assert!(offered(Release::Read(release("0.13.51"))));
+    assert!(!offered(Release::Read(None)));
+    assert!(!results_offered(&command_line("0.13.50", Release::Read(release("0.13.76")))));
+}
+
+#[test]
+fn a_command_line_below_0_13_51_says_what_it_has_on_each_platform() {
+    let below = command_line("0.13.76", Release::Read(release("0.13.50")));
+    let note = |os| results_note(&below, os);
+    let words = "Showing what a run did needs cornercase 0.13.51 or newer on this";
+    assert_eq!(note(Os::Mac), Some(format!("{words} Mac (it has 0.13.50).")));
+    assert_eq!(note(Os::Linux), Some(format!("{words} computer (it has 0.13.50).")));
+    assert_eq!(note(Os::Windows), Some(format!("{words} PC (it has 0.13.50).")));
+}
+
+#[test]
+fn a_command_line_whose_release_cannot_be_read_says_so_without_a_release() {
+    let unread = command_line("0.13.76", Release::Read(None));
+    let words = "Showing what a run did needs cornercase 0.13.51 or newer on this Mac.";
+    assert_eq!(results_note(&unread, Os::Mac).as_deref(), Some(words));
+}
+
+#[test]
+fn nothing_is_said_when_the_server_or_the_command_line_has_the_results_or_is_not_read() {
+    for here in [Release::Unread, Release::Read(release("0.13.51"))] {
+        assert_eq!(results_note(&command_line("0.13.76", here), Os::Mac), None);
+    }
+    for here in [Release::Unread, Release::Read(release("0.13.50")), Release::Read(None)] {
+        assert_eq!(results_note(&command_line("0.13.50", here), Os::Mac), None);
+    }
 }

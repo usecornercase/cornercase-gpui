@@ -1,4 +1,6 @@
 use super::Version;
+use crate::desktop;
+use crate::platform::Os;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Feature {
@@ -30,6 +32,50 @@ pub(crate) enum Has {
     Unread,
     Yes,
     No(Option<Version>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Release {
+    Unread,
+    Read(Option<Version>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Releases<'a> {
+    pub server: Option<Version>,
+    pub here: Release,
+    pub machine: Option<(&'a str, Option<Version>)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Lacks<'a> {
+    Server(Option<Version>),
+    ThisComputer(Option<Version>),
+    Machine(&'a str, Option<Version>),
+}
+
+impl<'a> Releases<'a> {
+    pub(crate) fn lacks(&self, feature: Feature) -> Option<Lacks<'a>> {
+        if feature.on(self.server) != Has::Yes {
+            return Some(Lacks::Server(self.server));
+        }
+        if let Release::Read(here) = self.here
+            && !feature.since().reached_by(here)
+        {
+            return Some(Lacks::ThisComputer(here));
+        }
+        self.machine
+            .filter(|(_, release)| feature.on(*release) != Has::Yes)
+            .map(|(machine, release)| Lacks::Machine(machine, release))
+    }
+}
+
+pub(crate) fn it_has(release: Option<Version>) -> String {
+    release.map(|release| format!(" (it has {release})")).unwrap_or_default()
+}
+
+pub(crate) fn newer_here(since: Version, release: Option<Version>, os: Os) -> String {
+    format!("cornercase {since} or newer on this {}{}", desktop::machine(os), it_has(release))
 }
 
 #[cfg(test)]

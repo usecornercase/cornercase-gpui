@@ -2,12 +2,12 @@ use gpui::{App, Context};
 
 use super::{MachineRun, MachineTab};
 use crate::app::Root;
-use crate::cli::{Version, with_boot};
-use crate::desktop;
+use crate::cli::{self, Version, with_boot};
 use crate::model::accounts::{AccountsInfo, Switch};
 use crate::model::machines::run_on::checks::Asked;
 use crate::model::machines::seen::{ACTS_BOOT_SINCE, PANE_BOOT_SINCE};
 use crate::model::{PaneInfo, ReadReleases};
+use crate::platform::Os;
 use crate::store::{self, Busy, Store, ToastKind, args, failed_there};
 
 pub(crate) const MOVING: &str = "Moving a pane";
@@ -27,13 +27,12 @@ pub(crate) fn streamed_boot(boot: &str, releases: ReadReleases) -> Option<String
 }
 
 pub(crate) fn boot_note(release: Option<Version>) -> Option<String> {
-    (!sends_boot(release)).then(|| format!("needs cornercase {PANE_BOOT_SINCE} or newer on this {}", desktop::here()))
+    (!sends_boot(release)).then(|| format!("needs {}", cli::newer_here(PANE_BOOT_SINCE, None, Os::CURRENT)))
 }
 
 pub(crate) fn boot_refusal(doing: &str, machine: &str, release: Option<Version>) -> Option<String> {
-    let note = boot_note(release)?;
-    let has = release.map(|release| format!(" (it has {release})")).unwrap_or_default();
-    Some(format!("{doing} on {machine} {note}{has}"))
+    (!sends_boot(release))
+        .then(|| format!("{doing} on {machine} needs {}", cli::newer_here(PANE_BOOT_SINCE, release, Os::CURRENT)))
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
