@@ -50,7 +50,7 @@ impl Ask {
 }
 
 impl Render for Ask {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let question = &self.question;
         let button = if question.danger {
             ui::danger_button("yes", question.button)
@@ -60,7 +60,7 @@ impl Render for Ask {
         div().track_focus(&self.focus).on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| this.key(e, cx))).child(
             dialogs::frame(
                 question.title.clone(),
-                body(question),
+                dialogs::fitted("ask-body", window, body(question)),
                 div()
                     .flex()
                     .gap(px(8.))

@@ -18,11 +18,32 @@ fn a_worktree_on_a_machine_says_so() {
 }
 
 #[test]
-fn a_dialog_body_grows_with_the_window_within_limits() {
+fn a_dialog_body_has_its_least_in_the_least_window() {
+    assert_eq!(body_height(360.), 200.);
+}
+
+#[test]
+fn a_dialog_body_starts_growing_past_a_window_of_440() {
+    assert_eq!(body_height(439.), 200.);
+    assert_eq!(body_height(440.), 200.);
+    assert_eq!(body_height(441.), 201.);
+}
+
+#[test]
+fn a_dialog_body_stops_growing_at_a_window_of_800() {
+    assert_eq!(body_height(799.), 559.);
     assert_eq!(body_height(800.), 560.);
-    assert_eq!(body_height(600.), 360.);
-    assert_eq!(body_height(300.), 200.);
-    assert_eq!(body_height(1400.), 560.);
+    assert_eq!(body_height(801.), 560.);
+}
+
+#[test]
+fn a_dialog_body_in_a_usual_window_leaves_240_around_it() {
+    assert_eq!(body_height(640.), 400.);
+}
+
+#[test]
+fn a_window_of_no_height_still_gets_the_least_body() {
+    assert_eq!(body_height(0.), 200.);
 }
 
 #[test]

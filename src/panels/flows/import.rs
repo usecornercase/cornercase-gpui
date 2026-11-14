@@ -215,7 +215,7 @@ impl Render for ImportFlow {
         let (label, busy) = if self.checked.is_some() { ("Import", "Importing…") } else { ("Check", "Checking…") };
         dialogs::frame(
             "Import a flow",
-            self.form(window, cx),
+            dialogs::fitted("import-body", window, self.form(window, cx)),
             buttons(("import-cancel", "import-run"), (Icon::Download, label), self.busy.then_some(busy), cx),
         )
         .w(px(520.))

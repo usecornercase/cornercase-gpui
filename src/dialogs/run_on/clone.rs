@@ -6,7 +6,7 @@ use gpui::{
 };
 
 use crate::cli::{self, Target};
-use crate::dialogs::{body_height, frame, muted};
+use crate::dialogs::{body_height, fitted, frame, muted};
 use crate::model::machines::run_on::clone::{
     FileList, IgnoredFile, NO_FILES, READING, clone_address, destination, ignored_args, intro, not_offered,
 };
@@ -203,6 +203,7 @@ impl CloneForm {
 impl Render for CloneForm {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let body = self.body(window, cx);
-        frame(format!("Clone {} on {}", self.place.name, self.place.machine), body, self.buttons(cx))
+        let title = format!("Clone {} on {}", self.place.name, self.place.machine);
+        frame(title, fitted("clone-body", window, body), self.buttons(cx))
     }
 }

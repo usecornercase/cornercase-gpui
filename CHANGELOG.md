@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.107
+
+- **After a dialog closes, the keys are back where they were.** In the Issues sheet, after you close **Start work on an issue** with Escape or Cancel, ↓ and ↑ move through the issues again, Return opens it again and typing goes into the filter, in a narrow window and a wide one. The same holds for a dialog opened over Search or another sheet, over a docked panel, or while you rename something in the sidebar: the keys go back to the field or panel you were in, and to the terminal when that is gone.
+- **In a short window a dialog keeps its title and its buttons in view.** **Start work on an issue**, **Connect to a server** and the other dialogs that could be taller than the window now scroll their contents between the title and the buttons. In **Start work on an issue**, Tab brings each field into view, and the line that says why it cannot start yet shows above the buttons. In a window 800 px tall or taller nothing changes.
+
 ## 0.1.106
 
 - **Pair the cornercase phone app from Settings › Remote, and forget a paired one.** With cornercase 0.13.78 or newer, once the Phone app switch is on, the **Pair a phone app** row under it shows the code to scan with the cornercase app on your phone; when the app pairs, the dialog closes and says `A phone app connected`. Each paired app has a row with its name and the day it paired, and its trash asks before forgetting it: the app is disconnected at once and has to be paired again. Two apps of one name paired the same day are numbered in the order they paired. The Phone app section now sits right after Browser, as in cornercase's own window, also before an app is paired.

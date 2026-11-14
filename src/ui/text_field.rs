@@ -8,6 +8,8 @@ use gpui::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
+#[cfg(test)]
+use self::element::reveal_room;
 use self::element::{Layout, TextElement};
 use self::rows::{clamp_scroll, line_breaks, one_line, previous_grapheme};
 use self::secure::Secure;
@@ -83,6 +85,7 @@ struct Options {
     wraps: bool,
     rows: Option<RangeInclusive<usize>>,
     scroller: Option<ScrollHandle>,
+    room_below: Option<Pixels>,
     on_down: Option<DownHook>,
 }
 
@@ -684,6 +687,11 @@ impl TextField {
 
     pub(crate) fn inside(mut self, scroller: ScrollHandle) -> Self {
         self.options.scroller = Some(scroller);
+        self
+    }
+
+    pub(crate) fn room_below(mut self, room: f32) -> Self {
+        self.options.room_below = Some(px(room));
         self
     }
 

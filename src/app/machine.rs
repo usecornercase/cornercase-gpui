@@ -557,7 +557,7 @@ impl Root {
         let releases = self.store.read(cx).read_releases(&place.machine);
         let Some(tab) = self.machine.as_mut() else { return };
         let size = tab.conn.size.or(self.own.size).unwrap_or((120, 36));
-        let seen = self.window_active && !self.had.full;
+        let seen = self.window_active && !self.held.had.full;
         tab.told_visible = seen;
         tab.opened_visible = seen;
         tab.reopen(target, place, releases, &self.tx);
@@ -732,7 +732,7 @@ impl Root {
     }
 
     pub(super) fn tell_machine_visible(&mut self) {
-        let seen = self.window_active && !self.had.full;
+        let seen = self.window_active && !self.held.had.full;
         if let Some(tab) = self.machine.as_mut().filter(|tab| tab.told_visible != seen) {
             tab.told_visible = seen;
             tab.conn.tell_visible(seen);

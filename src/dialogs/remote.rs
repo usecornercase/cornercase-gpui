@@ -4,11 +4,11 @@ use std::rc::Rc;
 
 use gpui::{
     App, AppContext as _, ClickEvent, Context, Div, ElementId, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _,
-    Window, div, prelude::FluentBuilder as _, px,
+    IntoElement, ParentElement as _, Render, ScrollHandle, SharedString, Stateful, StatefulInteractiveElement as _,
+    Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
-use super::{cancel_and, close, frame, show, text_field};
+use super::{body_height, cancel_and, close, frame, shaped_field, show, text_field, within};
 use crate::cli::{self, Remote, Target};
 use crate::desktop;
 use crate::keymap::{self, Command};
@@ -37,6 +37,7 @@ fn machines_note() -> String {
 pub(crate) struct Connect {
     destination: Entity<TextField>,
     program: Entity<TextField>,
+    scroller: ScrollHandle,
     hosts: Vec<String>,
     current: Target,
 }
@@ -45,15 +46,17 @@ pub(crate) fn connect(window: &mut Window, cx: &mut App) {
     let current = cli::target();
     let view = cx.new(|cx| {
         let submit = |this: &mut Connect, _: &mut Window, cx: &mut Context<Connect>| this.submit(cx);
-        let destination = text_field("a host from ~/.ssh/config, or user@host", cx, submit, window);
-        let program = text_field("cornercase", cx, submit, window);
+        let scroller = ScrollHandle::new();
+        let place = "a host from ~/.ssh/config, or user@host";
+        let destination = shaped_field(place, within(&scroller, |field| field), cx, submit, window);
+        let program = shaped_field("cornercase", within(&scroller, |field| field), cx, submit, window);
         if let Target::Remote(remote) = &current {
             destination.update(cx, |f, cx| f.set_text(remote.destination().to_string(), cx));
             program.update(cx, |f, cx| f.set_text(remote.program().unwrap_or_default().to_string(), cx));
         }
         let mut hosts: Vec<String> = current.host().map(str::to_string).into_iter().collect();
         hosts.extend(hosts::read().into_iter().filter(|host| current.host() != Some(host)));
-        Connect { destination, program, hosts, current }
+        Connect { destination, program, scroller, hosts, current }
     });
     let focus = view.read(cx).destination.read(cx).focus_handle(cx);
     show(view.into(), &focus, window, cx);
@@ -133,7 +136,10 @@ impl Render for Connect {
         let button = ui::primary_button("connect", "Connect")
             .when(!ready, |b| b.opacity(0.5))
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)));
-        frame("Connect to a server", body, cancel_and(button))
+        let height = body_height(f32::from(window.viewport_size().height));
+        let scrolling =
+            div().id("connect-body").max_h(px(height)).overflow_y_scroll().track_scroll(&self.scroller).child(body);
+        frame("Connect to a server", scrolling, cancel_and(button))
     }
 }
 

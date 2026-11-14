@@ -48,6 +48,10 @@ pub(crate) fn body_height(window: f32) -> f32 {
     (window - 240.).clamp(200., 560.)
 }
 
+pub(crate) fn fitted(id: &'static str, window: &Window, body: impl IntoElement) -> Stateful<Div> {
+    div().id(id).max_h(px(body_height(f32::from(window.viewport_size().height)))).overflow_y_scroll().child(body)
+}
+
 pub(crate) fn cancel_and(action: Stateful<Div>) -> Div {
     div()
         .flex()
@@ -197,24 +201,23 @@ impl NewWorkspace {
 impl Render for NewWorkspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let focused = self.name.read(cx).focus_handle(cx).is_focused(window);
-        frame(
-            format!("New workspace in {}", self.project_name),
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(10.))
-                .child(ui::field("Branch or name", ui::input_box(self.name.clone(), focused)))
-                .child(
-                    ui::checkbox("worktree", self.worktree, "Check the branch out in a git worktree of its own")
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.worktree = !this.worktree;
-                            cx.notify();
-                        })),
-                )
-                .when(self.run_on.read(cx).offered(cx), |d| d.child(self.run_on.clone()))
-                .children(self.where_line(cx)),
-            cancel_and(Self::create_button(cx)),
-        )
+        let body = div()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(ui::field("Branch or name", ui::input_box(self.name.clone(), focused)))
+            .child(
+                ui::checkbox("worktree", self.worktree, "Check the branch out in a git worktree of its own").on_click(
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.worktree = !this.worktree;
+                        cx.notify();
+                    }),
+                ),
+            )
+            .when(self.run_on.read(cx).offered(cx), |d| d.child(self.run_on.clone()))
+            .children(self.where_line(cx));
+        let title = format!("New workspace in {}", self.project_name);
+        frame(title, fitted("new-workspace-body", window, body), cancel_and(Self::create_button(cx)))
     }
 }
 
