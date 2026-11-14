@@ -970,7 +970,7 @@ impl Render for Root {
             }))
             .children(self.render_leaving(window_frame, window, cx))
             .child(crate::tour::Guide::get(cx))
-            .child(self.render_toasts(cx));
+            .child(self.render_toasts(window_frame, cx));
         self.keep_counting(cx);
         self.keep_widths(cx);
         frame::framed(content, window_frame, window)

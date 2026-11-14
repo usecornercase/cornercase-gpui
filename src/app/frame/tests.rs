@@ -335,3 +335,11 @@ fn the_first_window_never_opens_below_its_minimum_size() {
 fn the_first_window_keeps_its_size_when_no_screen_is_known() {
     assert_eq!(opening_size((1280., 800.), (640., 360.), None), (1280., 800.));
 }
+
+#[test]
+fn the_title_bar_ends_with_the_title_row_on_every_platform() {
+    let frames = [Frame::default(), windows(false, false), client(Tiling::default()), server()];
+    for frame in frames {
+        assert!((frame.title_bottom() - crate::app::TITLEBAR_HEIGHT).abs() < f32::EPSILON);
+    }
+}

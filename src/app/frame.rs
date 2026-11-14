@@ -164,6 +164,10 @@ impl Frame {
         if self.caption { (CAPTION_BUTTON, TITLEBAR_HEIGHT) } else { (CONTROL, CONTROL) }
     }
 
+    pub(crate) fn title_bottom(self) -> f32 {
+        TITLEBAR_HEIGHT.max(self.button_size().1)
+    }
+
     pub(crate) fn margins(self) -> Sides {
         let side = |tiled: bool| if self.drawn && !tiled { INSET } else { 0. };
         let t = self.tiling;

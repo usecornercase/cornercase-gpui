@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.93
+
+- **Toasts stay inside the window, however small.** When more toasts come than the window has room for, the newest stay at the bottom, whole, and the older ones wait above them under a `+2 more`, instead of running past the top of the window where they could not be read or closed. A toast that waits shows as soon as there is room, and its seconds count only while it shows, so it does not run out before you see it. A toast too long for the window scrolls inside its card, with its button and ✕ in view.
+
 ## 0.1.92
 
 - **What you hand to or type into another machine can no longer reach the wrong pane after its cornercase restarted.** A machine's pane numbers start again when its cornercase restarts, so something sent in the moment before the window noticed could reach whatever pane took that number. Now the machine refuses what comes after the restart, and nothing is typed, pasted or changed there. When you hand a picture, an element, console errors or a note to an agent there from the Browser panel, the window says `vps restarted: nothing was sent`, or `vps restarted after part was sent: hand it again` when a file had already gone to the run that ended. Keys, scrolls and splits in the machine's tab do nothing while it reconnects to the new run, and Run on's login tab is refused the same way. Hand-offs need cornercase 0.13.60 or newer on this computer, the machine's tab and the login tab 0.13.63 or newer; with an older one everything works as before.
