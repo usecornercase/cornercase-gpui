@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, AppContext as _, ClickEvent, ClipboardItem, Context, Div, Entity, FocusHandle, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
+    App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, InteractiveElement as _, IntoElement,
+    ParentElement as _, Render, Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
@@ -11,7 +11,7 @@ use super::{InstallState, Notifier};
 use crate::cli::{self, ByHand, Version};
 use crate::dialogs::frame;
 use crate::model::link::is_web;
-use crate::store::{Store, ToastKind};
+use crate::store::{COPY_COMMAND, Clip, Store, ToastKind};
 use crate::theme::{colours, radius};
 use crate::ui;
 use crate::ui::markdown::text::{self, OnLink};
@@ -159,9 +159,8 @@ impl Render for UpdateDialog {
             .child(div().text_size(px(12.)).text_color(colours::muted()).child(how_to_install(command.as_deref())))
             .when_some(status, |d, (text, colour)| d.child(div().text_size(px(12.)).text_color(colour).child(text)))
             .when_some(waits, |d, line| d.child(ui::dim(line)));
-        let copied = copied_words(host.as_deref());
         let buttons =
-            update_buttons(self.notifier.clone(), (command, installed.is_some()), &install, (&release.version, copied));
+            update_buttons(self.notifier.clone(), (command, installed.is_some()), &install, (&release.version, host));
         dialog.child(frame(format!("cornercase {} is out", release.version), body, buttons))
     }
 }
@@ -257,13 +256,6 @@ fn manual_words(by_hand: &ByHand, host: Option<&str>) -> String {
     }
 }
 
-fn copied_words(host: Option<&str>) -> String {
-    match host {
-        Some(host) => format!("Copied: run it on {host}"),
-        None => "Copied: run it in a terminal".to_string(),
-    }
-}
-
 fn offered_command(install: &InstallState, from_app: Option<String>) -> Option<String> {
     match install {
         InstallState::Manual(by_hand) => Some(by_hand.command.clone()),
@@ -278,24 +270,22 @@ fn how_to_install(command: Option<&str>) -> String {
     }
 }
 
-pub(crate) fn copy_command(command: String, copied: String) -> Stateful<Div> {
-    ui::primary_button("copy", "Copy command").on_click(move |_: &ClickEvent, _, cx| {
-        cx.write_to_clipboard(ClipboardItem::new_string(command.clone()));
-        Store::get(cx).update(cx, |s, cx| s.toast(copied.clone(), ToastKind::Info, cx));
-    })
+pub(crate) fn copy_command(clip: Clip) -> Stateful<Div> {
+    ui::primary_button("copy", COPY_COMMAND)
+        .on_click(move |_: &ClickEvent, _, cx| Store::get(cx).update(cx, |s, cx| s.copy(&clip, cx)))
 }
 
 fn update_buttons(
     notifier: Entity<Notifier>,
     (command, installed): (Option<String>, bool),
     install: &InstallState,
-    (version, copied): (&str, String),
+    (version, host): (&str, Option<String>),
 ) -> impl IntoElement + use<> {
     let action = match (command, install) {
         (_, InstallState::Running) => ui::busy_button("installing", "Installing…", ui::Tone::Primary),
         _ if installed => ui::danger_button("restart", "Restart…")
             .on_click(move |_: &ClickEvent, window, cx| show_restart(notifier.clone(), window, cx)),
-        (Some(cmd), _) => copy_command(cmd, copied),
+        (Some(cmd), _) => copy_command(Clip::command(cmd, host.as_deref())),
         (None, _) => ui::primary_button("install", format!("Install {version}"))
             .on_click(move |_: &ClickEvent, _, cx| notifier.update(cx, Notifier::install)),
     };

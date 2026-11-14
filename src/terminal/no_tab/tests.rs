@@ -1,6 +1,8 @@
-use super::{Empty, NoTab, answer_kept, answer_lines, empty_of, lead, new_shell_args};
-use crate::cli::Said;
+use super::{Empty, NoTab, answer_kept, answer_lines, empty_of, lead, new_shell_args, said_and_done};
+use crate::cli::{Answer, Said};
 use crate::model::{Project, Session, Shown, ViewInfo, Workspace};
+use crate::store::{Clip, PageAnswer};
+use crate::test_util::fixture;
 
 fn showing(project: Option<u64>, workspace: Option<u64>) -> Session {
     let ws =
@@ -77,8 +79,17 @@ fn an_answer_is_drawn_line_by_line() {
 
 #[test]
 fn an_answer_shows_only_on_the_page_of_the_job_that_gave_it() {
-    let kept = ("update-here".to_string(), Said::Done("updated".into()));
+    let clip = Clip::command("brew update".into(), Some("vps"));
+    let kept = ("update-here".to_string(), PageAnswer { said: Said::Done("updated".into()), copy: Some(clip) });
     assert_eq!(answer_kept(Some(&kept), "update-here"), Some(&kept.1));
     assert_eq!(answer_kept(Some(&kept), "update-there:vps"), None);
     assert_eq!(answer_kept(None, "update-here"), None);
+}
+
+#[test]
+fn a_plain_answer_keeps_no_command() {
+    let answer = Answer { code: Some(1), stdout: fixture!("update/manual.txt").into(), stderr: String::new() };
+    let (kept, done) = said_and_done(Ok(answer));
+    assert!(matches!(kept.said, Said::Failed(_)));
+    assert_eq!((kept.copy, done), (None, false));
 }

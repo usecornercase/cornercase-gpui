@@ -1,6 +1,10 @@
-use super::{behind_heading, behind_lead, older_heading, older_lead, restart_args, restart_job, restart_question};
+use super::{
+    behind_heading, behind_lead, older_heading, older_lead, restart_args, restart_job, restart_question, update_tone,
+};
 use crate::cli::{Behind, Older};
 use crate::platform::Os;
+use crate::store::Clip;
+use crate::ui::Tone;
 
 fn older(there: Option<&str>) -> Older {
     Older {
@@ -60,4 +64,11 @@ fn the_restart_runs_with_yes_on_the_windows_target() {
 #[test]
 fn the_jobs_name_the_machine() {
     assert_eq!(restart_job("vps").key(), "restart-there:vps");
+}
+
+#[test]
+fn the_page_keeps_one_primary_while_its_command_is_offered() {
+    let clip = Clip::command("brew update".into(), Some("vps"));
+    assert_eq!(update_tone(None), Tone::Primary);
+    assert_eq!(update_tone(Some(&clip)), Tone::Plain);
 }

@@ -10,7 +10,7 @@ use crate::dialogs::frame;
 use crate::notify::InstallState;
 use crate::notify::update::{self, ParsedNotes};
 use crate::platform::Os;
-use crate::store::Store;
+use crate::store::{Clip, Store};
 use crate::theme::colours;
 use crate::ui;
 
@@ -156,7 +156,7 @@ fn buttons(updater: Entity<Updater>, act: Action, fallback: Option<String>, vers
         Action::Download(url) => {
             ui::primary_button("download", "Download").on_click(move |_: &ClickEvent, _, cx| cx.open_url(&url))
         }
-        Action::Copy(command) => update::copy_command(command, "Copied".into()),
+        Action::Copy(command) => update::copy_command(Clip { text: command, said: "Copied".into() }),
     };
     div()
         .flex()

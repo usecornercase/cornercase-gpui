@@ -11,7 +11,7 @@ use crate::keymap::{Command, with_keys};
 use crate::model::Session;
 use crate::render::moving::Moves;
 use crate::sidebar::{cmd, tip};
-use crate::store::{self, Busy, reopen_key};
+use crate::store::{self, Busy, COPY_COMMAND, Clip, PageAnswer, Store, reopen_key};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone};
 
@@ -148,10 +148,10 @@ fn no_tab_page(no_tab: &NoTab, reopen_busy: bool, cx: &mut Context<Root>) -> Div
         .child(actions(no_tab, reopen_busy, cx))
 }
 
-fn said_and_done(result: anyhow::Result<cli::Answer>) -> (Said, bool) {
+fn said_and_done(result: anyhow::Result<cli::Answer>) -> (PageAnswer, bool) {
     let said = cli::said_of(result);
     let done = matches!(said, Said::Done(_));
-    (said, done)
+    (said.into(), done)
 }
 
 pub(super) fn answer_lines(said: &Said) -> (Vec<String>, bool) {
@@ -169,12 +169,17 @@ fn answer_line(said: Option<&Said>) -> Option<Div> {
     Some(div().max_w(px(540.)).text_center().text_size(px(12.)).text_color(colour).children(lines))
 }
 
-fn answer_kept<'a>(answered: Option<&'a (String, Said)>, key: &str) -> Option<&'a Said> {
-    answered.filter(|(kept, _)| kept == key).map(|(_, said)| said)
+fn answer_kept<'a>(answered: Option<&'a (String, PageAnswer)>, key: &str) -> Option<&'a PageAnswer> {
+    answered.filter(|(kept, _)| kept == key).map(|(_, kept)| kept)
 }
 
 pub(super) fn answer_under(said: Option<&Said>) -> Div {
     div().children(answer_line(said))
+}
+
+pub(super) fn copy_button(id: &'static str, clip: Clip) -> Stateful<Div> {
+    tall(ui::icon_text_button(id, Icon::Copy, COPY_COMMAND, Tone::Primary))
+        .on_click(move |_: &ClickEvent, _, cx| Store::get(cx).update(cx, |s, cx| s.copy(&clip, cx)))
 }
 
 pub(super) fn retry_button(id: &'static str, cx: &mut Context<Root>) -> Stateful<Div> {
@@ -189,7 +194,11 @@ impl Root {
     }
 
     pub(super) fn answer_for(&self, key: &str) -> Option<&Said> {
-        answer_kept(self.answered.as_ref(), key)
+        answer_kept(self.answered.as_ref(), key).map(|kept| &kept.said)
+    }
+
+    pub(super) fn copy_for(&self, key: &str) -> Option<&Clip> {
+        answer_kept(self.answered.as_ref(), key)?.copy.as_ref()
     }
 
     pub(super) fn ask_then(
@@ -217,7 +226,7 @@ impl Root {
     pub(super) fn run_read(
         &mut self,
         busy: Busy,
-        read: impl FnOnce() -> (Said, bool) + Send + 'static,
+        read: impl FnOnce() -> (PageAnswer, bool) + Send + 'static,
         then: impl FnOnce(&mut Root, bool, &mut Context<Root>) + 'static,
         cx: &mut Context<Self>,
     ) {
@@ -229,7 +238,7 @@ impl Root {
             busy,
             move || Ok(read()),
             move |this, result, cx| {
-                let (said, done) = result.unwrap_or_else(|e| (Said::Failed(cli::reason(&e)), false));
+                let (said, done) = result.unwrap_or_else(|e| (Said::Failed(cli::reason(&e)).into(), false));
                 this.answered = Some((key, said));
                 then(this, done, cx);
             },
