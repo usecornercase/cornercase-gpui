@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
-use super::{Shown, Toast, ToastKind, drawn, push_toast};
+use super::{Clip, Shown, Toast, ToastKind, drawn, push_toast};
+use crate::store::ToastGo;
 
 fn toast(id: u64, text: &str) -> Toast {
     toast_of(id, text, ToastKind::Error)
@@ -148,4 +149,36 @@ fn the_new_toast_never_makes_way() {
     let mut v: Vec<_> = (1..=5).map(|id| toast(id, &id.to_string())).collect();
     push_toast(&mut v, toast_of(6, "6", ToastKind::Info));
     assert_eq!(ids(&v), [2, 3, 4, 5, 6]);
+}
+
+fn copying(id: u64, text: &str) -> Toast {
+    let clip = Clip::command(text.into(), Some("vps"));
+    Toast {
+        action: Some(("Copy command".into(), ToastGo::Copy(clip))),
+        ..toast_of(id, "run it there", ToastKind::NeedsYou)
+    }
+}
+
+#[test]
+fn a_copied_command_says_where_to_run_it() {
+    let here = Clip::command("brew update".into(), None);
+    assert_eq!(here, Clip { text: "brew update".into(), said: "Copied: run it in a terminal".into() });
+    let there = Clip::command("brew update".into(), Some("vps"));
+    assert_eq!(there, Clip { text: "brew update".into(), said: "Copied: run it on vps".into() });
+}
+
+#[test]
+fn toasts_that_copy_different_texts_stay_apart() {
+    let mut toasts = Vec::new();
+    push_toast(&mut toasts, copying(1, "brew update"));
+    push_toast(&mut toasts, copying(2, "curl | sh"));
+    assert_eq!(ids(&toasts), [1, 2]);
+}
+
+#[test]
+fn a_toast_that_copies_the_same_text_counts_as_a_repeat() {
+    let mut toasts = Vec::new();
+    push_toast(&mut toasts, copying(1, "brew update"));
+    push_toast(&mut toasts, copying(2, "brew update"));
+    assert_eq!((ids(&toasts), toasts[0].count), (vec![2], 2));
 }

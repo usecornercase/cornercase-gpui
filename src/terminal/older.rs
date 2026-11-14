@@ -8,11 +8,17 @@ use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::platform::Os;
 use crate::sidebar::tip;
-use crate::store::{AfterUpdate, Busy, release_clause, run_update, update_job, update_page, update_question};
+use crate::store::{
+    AfterUpdate, Busy, COPY_COMMAND, Clip, Store, release_clause, run_update, update_job, update_page, update_question,
+};
 use crate::ui::{self, Icon, Tone};
 
 const RESTART: &str = "Restart";
 const NEEDS: &str = "To connect, the window needs the same release there, or a newer one.";
+
+fn update_tone(copy: Option<&Clip>) -> Tone {
+    if copy.is_some() { Tone::Plain } else { Tone::Primary }
+}
 
 fn older_heading(older: &Older) -> String {
     format!("{} runs an older cornercase", older.destination)
@@ -57,6 +63,11 @@ fn plain_button(id: &'static str, icon: Icon, label: &str) -> Stateful<Div> {
     tall(ui::icon_text_button(id, icon, label.to_string(), Tone::Plain))
 }
 
+fn copy_button(clip: Clip) -> Stateful<Div> {
+    tall(ui::icon_text_button("older-copy", Icon::Copy, COPY_COMMAND, Tone::Primary))
+        .on_click(move |_: &ClickEvent, _, cx| Store::get(cx).update(cx, |s, cx| s.copy(&clip, cx)))
+}
+
 fn elsewhere_button() -> Stateful<Div> {
     plain_button("older-connect", Icon::Server, "Connect to another server")
         .tooltip(tip(with_keys("Connect to another server", Command::Connect)))
@@ -83,9 +94,11 @@ impl Root {
     }
 
     fn older_page(&self, older: &Older, cx: &mut Context<Self>) -> Stateful<Div> {
-        let busy = self.store.read(cx).busy(update_job(&older.destination, &older.destination).key());
+        let key = update_job(&older.destination, &older.destination).key().to_string();
+        let busy = self.store.read(cx).busy(&key);
+        let copy = self.copy_for(&key).cloned();
         let buttons = row()
-            .children(Self::update_button(older, busy, cx))
+            .children(Self::update_button(older, (busy, update_tone(copy.as_ref())), cx))
             .child(retry_button("older-retry", cx))
             .child(elsewhere_button());
         let content = column()
@@ -93,7 +106,8 @@ impl Root {
             .child(heading(&older_heading(older)))
             .child(lead_text(older_lead(older, Os::CURRENT)))
             .child(buttons)
-            .child(answer_under(self.answer_for(update_job(&older.destination, &older.destination).key())));
+            .child(answer_under(self.answer_for(&key)))
+            .children(copy.map(copy_button));
         scrolled("older-page", content)
     }
 
@@ -112,7 +126,7 @@ impl Root {
         scrolled("behind-page", content)
     }
 
-    fn update_button(older: &Older, busy: bool, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
+    fn update_button(older: &Older, (busy, tone): (bool, Tone), cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         cli::update_args(older)?;
         let label = format!("Update cornercase on {}…", older.destination);
         if busy {
@@ -121,7 +135,7 @@ impl Root {
         }
         let older = older.clone();
         Some(
-            tall(ui::icon_text_button("older-update", Icon::Download, label, Tone::Primary)).on_click(
+            tall(ui::icon_text_button("older-update", Icon::Download, label, tone)).on_click(
                 cx.listener(move |_, _: &ClickEvent, window, cx| Self::ask_update(older.clone(), window, cx)),
             ),
         )

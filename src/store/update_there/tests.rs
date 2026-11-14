@@ -1,5 +1,6 @@
 use super::*;
 use crate::model::machines::LinkState;
+use crate::test_util::{fixture, reply};
 
 fn update() -> UpdateThere {
     UpdateThere {
@@ -119,14 +120,58 @@ fn an_up_to_date_machine_says_its_release() {
     assert_eq!(kind, ToastKind::Info);
 }
 
+fn copy_action(text: &str, place: &str) -> (String, ToastGo) {
+    let clip = Clip { text: text.into(), said: format!("Copied: run it on {place}") };
+    ("Copy command".to_string(), ToastGo::Copy(clip))
+}
+
 #[test]
-fn a_manual_answer_there_gives_the_command_to_run_there() {
-    let (text, kind) = updated_words("vps", &by_hand());
-    assert_eq!(
-        text,
-        "cornercase 0.13.53 on vps cannot update itself: run `brew update && brew upgrade cornercase` there to install 0.13.74"
-    );
+fn a_manual_answer_there_offers_its_command_to_copy() {
+    let (text, kind, action) = update_toast("vps", &by_hand());
+    assert_eq!(text, "To install cornercase 0.13.74 on vps, run there: brew update && brew upgrade cornercase");
     assert_eq!(kind, ToastKind::NeedsYou);
+    assert_eq!(action, Some(copy_action("brew update && brew upgrade cornercase", "vps")));
+}
+
+#[test]
+fn a_manual_line_through_remote_copies_the_machines_own_command() {
+    let answer = cli::update_answer(&reply(6, fixture!("remote/update-json-manual.txt"), ""));
+    let (_, kind, action) = update_toast("vps", &answer);
+    assert_eq!(kind, ToastKind::NeedsYou);
+    assert_eq!(action, Some(copy_action("curl -fsSL https://usecornercase.dev/install.sh | sh", "vps")));
+}
+
+#[test]
+fn every_other_answer_toasts_without_a_button() {
+    let kill = "updated\nrun `cornercase --remote vps.invalid kill-server`";
+    let answers = [
+        updated(),
+        UpdateAnswer::UpToDate { version: "0.13.74".into() },
+        UpdateAnswer::Refused,
+        UpdateAnswer::Printed(Said::Failed("no".into())),
+        UpdateAnswer::Printed(Said::Done(kill.into())),
+    ];
+    for answer in answers {
+        let (text, kind, action) = update_toast("vps", &answer);
+        assert_eq!((text, kind), updated_words("vps", &answer));
+        assert_eq!(action, None);
+    }
+}
+
+#[test]
+fn below_the_gate_the_toast_and_the_page_offer_no_command() {
+    let answer = cli::update_answer(&reply(1, fixture!("remote/update-manual.txt"), ""));
+    assert!(matches!(&answer, UpdateAnswer::Printed(Said::Failed(text)) if text.contains("brew upgrade")));
+    assert_eq!(update_toast("vps", &answer).2, None);
+    assert_eq!(update_page("vps", &answer).0.copy, None);
+}
+
+#[test]
+fn the_older_page_keeps_the_words_and_the_command_of_a_manual_answer() {
+    let (page, ended) = update_page("vps.invalid", &by_hand());
+    let said = Said::Done(updated_words("vps.invalid", &by_hand()).0);
+    let copy = Clip::command("brew update && brew upgrade cornercase".into(), Some("vps.invalid"));
+    assert_eq!((page, ended), (PageAnswer { said, copy: Some(copy) }, false));
 }
 
 #[test]
@@ -142,15 +187,14 @@ fn a_refused_json_there_is_a_failure() {
 #[test]
 fn the_older_page_shows_the_same_words_and_connects_again_only_when_it_ended() {
     let words = |answer: &UpdateAnswer| updated_words("vps.invalid", answer).0;
-    let (said, ended) = update_page("vps.invalid", &updated());
-    assert_eq!((said, ended), (Said::Done(words(&updated())), true));
+    let said = |answer: &UpdateAnswer| update_page("vps.invalid", answer);
+    let page = |said: Said| PageAnswer { said, copy: None };
+    assert_eq!(said(&updated()), (page(Said::Done(words(&updated()))), true));
     let up = UpdateAnswer::UpToDate { version: "0.13.74".into() };
-    assert_eq!(update_page("vps.invalid", &up), (Said::Done(words(&up)), true));
-    assert_eq!(update_page("vps.invalid", &by_hand()), (Said::Done(words(&by_hand())), false));
-    let refused = update_page("vps.invalid", &UpdateAnswer::Refused);
-    assert_eq!(refused, (Said::Failed(words(&UpdateAnswer::Refused)), false));
+    assert_eq!(said(&up), (page(Said::Done(words(&up))), true));
+    assert_eq!(said(&UpdateAnswer::Refused), (page(Said::Failed(words(&UpdateAnswer::Refused))), false));
     let failed = UpdateAnswer::Printed(Said::Failed("no".into()));
-    assert_eq!(update_page("vps.invalid", &failed), (Said::Failed("no".into()), false));
+    assert_eq!(said(&failed), (page(Said::Failed("no".into())), false));
     let done = UpdateAnswer::Printed(Said::Done("updated".into()));
-    assert_eq!(update_page("vps.invalid", &done), (Said::Done("updated".into()), true));
+    assert_eq!(said(&done), (page(Said::Done("updated".into())), true));
 }

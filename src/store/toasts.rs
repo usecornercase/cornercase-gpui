@@ -1,8 +1,10 @@
 use std::time::{Duration, Instant};
 
-use gpui::Context;
+use gpui::{ClipboardItem, Context};
 
 use super::{Store, ToastGo};
+
+pub(crate) const COPY_COMMAND: &str = "Copy command";
 
 const KEPT: usize = 5;
 const PAST_END: Duration = Duration::from_millis(100);
@@ -40,12 +42,14 @@ impl Shown {
     }
 }
 
+pub(crate) type ToastAction = Option<(String, ToastGo)>;
+
 #[derive(Clone)]
 pub(crate) struct Toast {
     pub id: u64,
     pub text: String,
     pub kind: ToastKind,
-    pub action: Option<(String, ToastGo)>,
+    pub action: ToastAction,
     pub shown: Shown,
     pub count: u32,
 }
@@ -56,6 +60,22 @@ pub(crate) enum ToastKind {
     Error,
     NeedsYou,
     Done,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Clip {
+    pub text: String,
+    pub said: String,
+}
+
+impl Clip {
+    pub(crate) fn command(command: String, place: Option<&str>) -> Self {
+        let said = match place {
+            Some(place) => format!("Copied: run it on {place}"),
+            None => "Copied: run it in a terminal".to_string(),
+        };
+        Self { text: command, said }
+    }
 }
 
 impl Toast {
@@ -116,11 +136,16 @@ pub(crate) fn push_toast(toasts: &mut Vec<Toast>, mut toast: Toast) {
 }
 
 impl Store {
+    pub(crate) fn copy(&mut self, clip: &Clip, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ClipboardItem::new_string(clip.text.clone()));
+        self.toast(clip.said.clone(), ToastKind::Info, cx);
+    }
+
     pub(crate) fn toast_with(
         &mut self,
         text: impl Into<String>,
         kind: ToastKind,
-        action: Option<(String, ToastGo)>,
+        action: ToastAction,
         cx: &mut Context<Self>,
     ) {
         let id = self.next_toast;

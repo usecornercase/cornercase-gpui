@@ -1,6 +1,6 @@
 use gpui::Context;
 
-use super::{Busy, Store, ToastKind};
+use super::{Busy, COPY_COMMAND, Clip, Store, ToastAction, ToastGo, ToastKind};
 use crate::cli::{self, ByHand, Said, Target, UpdateAnswer};
 use crate::desktop;
 use crate::model::machines::Machine;
@@ -30,6 +30,18 @@ pub(crate) enum UpdateOffer {
 pub(crate) enum AfterUpdate {
     Connects,
     Reads,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PageAnswer {
+    pub said: Said,
+    pub copy: Option<Clip>,
+}
+
+impl From<Said> for PageAnswer {
+    fn from(said: Said) -> Self {
+        Self { said, copy: None }
+    }
 }
 
 pub(crate) fn update_key(destination: &str) -> String {
@@ -92,12 +104,9 @@ pub(crate) fn updated_words(machine: &str, answer: &UpdateAnswer) -> (String, To
         UpdateAnswer::UpToDate { version } => {
             (format!("cornercase on {machine} is already {version}, the latest release"), ToastKind::Info)
         }
-        UpdateAnswer::Manual(ByHand { version, latest, command }) => (
-            format!(
-                "cornercase {version} on {machine} cannot update itself: run `{command}` there to install {latest}"
-            ),
-            ToastKind::NeedsYou,
-        ),
+        UpdateAnswer::Manual(ByHand { latest, command, .. }) => {
+            (format!("To install cornercase {latest} on {machine}, run there: {command}"), ToastKind::NeedsYou)
+        }
         UpdateAnswer::Refused => {
             (format!("Could not update cornercase on {machine}: {}", cli::refused_json()), ToastKind::Error)
         }
@@ -105,7 +114,20 @@ pub(crate) fn updated_words(machine: &str, answer: &UpdateAnswer) -> (String, To
     }
 }
 
-pub(crate) fn update_page(machine: &str, answer: &UpdateAnswer) -> (Said, bool) {
+fn copy_of(machine: &str, answer: &UpdateAnswer) -> Option<Clip> {
+    match answer {
+        UpdateAnswer::Manual(by_hand) => Some(Clip::command(by_hand.command.clone(), Some(machine))),
+        _ => None,
+    }
+}
+
+fn update_toast(machine: &str, answer: &UpdateAnswer) -> (String, ToastKind, ToastAction) {
+    let (text, kind) = updated_words(machine, answer);
+    let action = copy_of(machine, answer).map(|clip| (COPY_COMMAND.to_string(), ToastGo::Copy(clip)));
+    (text, kind, action)
+}
+
+pub(crate) fn update_page(machine: &str, answer: &UpdateAnswer) -> (PageAnswer, bool) {
     let said = match answer {
         UpdateAnswer::Printed(said) => said.clone(),
         other => match updated_words(machine, other) {
@@ -113,7 +135,7 @@ pub(crate) fn update_page(machine: &str, answer: &UpdateAnswer) -> (Said, bool) 
             (text, _) => Said::Done(text),
         },
     };
-    (said, answer.ended())
+    (PageAnswer { said, copy: copy_of(machine, answer) }, answer.ended())
 }
 
 impl Store {
@@ -144,8 +166,8 @@ impl Store {
         cx: &mut Context<Self>,
     ) {
         let answer = cli::update_answer(result);
-        let (text, kind) = updated_words(&update.machine, &answer);
-        self.toast(text, kind, cx);
+        let (text, kind, action) = update_toast(&update.machine, &answer);
+        self.toast_with(text, kind, action, cx);
         if answer.ended() {
             self.probe_after_update(update, cx);
         }

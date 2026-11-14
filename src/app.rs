@@ -36,7 +36,7 @@ use crate::render::layout::{Along, Layout};
 use crate::render::moving::Moves;
 use crate::self_update;
 use crate::sidebar::{self, Arrangement, Fold, SideState};
-use crate::store::{Store, ToastKind};
+use crate::store::{PageAnswer, Store, ToastKind};
 use crate::terminal::Pointer;
 use crate::theme::{self, colours, radius};
 use crate::ui;
@@ -125,7 +125,7 @@ pub(crate) struct Root {
     attempts: u32,
     pub(crate) came_up: bool,
     pub(crate) updated_there: Option<cli::Older>,
-    pub(crate) answered: Option<(String, cli::Said)>,
+    pub(crate) answered: Option<(String, PageAnswer)>,
     place: Vec<String>,
     pub(crate) side: SideState,
     pub(crate) visible: bool,

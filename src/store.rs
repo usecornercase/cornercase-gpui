@@ -37,13 +37,13 @@ pub(crate) use machines_there::{
     MachineAct, NoticeThere, answer_words, failed_there, part_sent_note, read_refusal, restart_note, stale_note,
 };
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
-pub(crate) use toasts::{Toast, ToastKind};
+pub(crate) use toasts::{COPY_COMMAND, Clip, Toast, ToastAction, ToastKind};
 pub(crate) use tunnels::{
     Asked, Control, Held, MachineLink, ReverseState, Tail, TunnelRow, TunnelSection, Whose, address_there,
     copied_words, heading, none_note, remote_url, section_tail,
 };
 pub(crate) use update_there::{
-    AfterUpdate, UpdateOffer, UpdateThere, run_update, update_job, update_key, update_page, update_question,
+    AfterUpdate, PageAnswer, UpdateOffer, UpdateThere, run_update, update_job, update_key, update_page, update_question,
 };
 
 const NO_FLOW: &str = "This workspace runs no flow";
@@ -111,6 +111,7 @@ pub(crate) enum ToastGo {
     Tunnelled(String, u16),
     Job(Busy, Vec<String>),
     Open(PanelKind),
+    Copy(Clip),
 }
 
 struct GlobalStore(Entity<Store>);
@@ -345,8 +346,7 @@ impl Store {
 
     pub(crate) fn copy_from(&mut self, path: String, place: &str, cx: &mut Context<Self>) {
         let text = format!("Copied {path}: it is on {place}, not on this {}", desktop::here());
-        cx.write_to_clipboard(ClipboardItem::new_string(path));
-        self.toast(text, ToastKind::Info, cx);
+        self.copy(&Clip { text: path, said: text }, cx);
     }
 
     pub(crate) fn go(&mut self, action: &ToastGo, cx: &mut Context<Self>) {
@@ -360,6 +360,7 @@ impl Store {
             ToastGo::Tunnelled(machine, port) => self.open_tunnel(machine, *port, cx),
             ToastGo::Job(busy, args) => self.run_aside_once(busy.clone(), args.clone(), cx),
             ToastGo::Open(kind) => self.open(*kind, cx),
+            ToastGo::Copy(clip) => self.copy(clip, cx),
             ToastGo::Update(updating) => {
                 self.asks.open_update = Some(*updating);
                 cx.notify();

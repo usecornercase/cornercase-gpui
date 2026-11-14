@@ -1,13 +1,8 @@
 use anyhow::anyhow;
 
 use super::{ByHand, UpdateAnswer, UpdateGate, update_answer, update_command};
-use crate::cli::{Answer, Older, Said, Version};
-use crate::test_util::fixture;
-
-#[expect(clippy::unnecessary_wraps, reason = "the readers take the Result a command gives")]
-fn reply(code: i32, stdout: &str, stderr: &str) -> anyhow::Result<Answer> {
-    Ok(Answer { code: Some(code), stdout: stdout.to_string(), stderr: stderr.to_string() })
-}
+use crate::cli::{Older, Said, Version};
+use crate::test_util::{fixture, reply};
 
 fn release(text: &str) -> Option<Version> {
     Version::parse(text)

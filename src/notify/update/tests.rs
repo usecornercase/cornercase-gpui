@@ -124,12 +124,6 @@ fn a_manual_answer_says_how_and_where_to_run_its_command() {
 }
 
 #[test]
-fn the_copy_toast_says_where_to_run_the_command() {
-    assert_eq!(copied_words(None), "Copied: run it in a terminal");
-    assert_eq!(copied_words(Some("vps")), "Copied: run it on vps");
-}
-
-#[test]
 fn the_manual_lines_command_is_the_one_offered() {
     let app = Some("curl | sh".to_string());
     let manual = InstallState::Manual(by_hand());

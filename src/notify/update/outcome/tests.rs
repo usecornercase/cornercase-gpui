@@ -1,12 +1,7 @@
 use serde_json::Value;
 
 use super::*;
-use crate::test_util::fixture;
-
-#[expect(clippy::unnecessary_wraps, reason = "the readers take the Result a command gives")]
-fn answer(code: i32, stdout: &str, stderr: &str) -> anyhow::Result<Answer> {
-    Ok(Answer { code: Some(code), stdout: stdout.into(), stderr: stderr.into() })
-}
+use crate::test_util::{fixture, reply as answer};
 
 fn release(text: &str) -> Option<Version> {
     Version::parse(text)
