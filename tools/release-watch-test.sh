@@ -395,7 +395,8 @@ a_pre_release_is_re_run_like_a_release() {
   dropped v0.2.0-rc.1 123 1
   tags v0.2.0-rc.1 v0.1.90
   runw
-  check "rerun" has "$t/calls" 'run rerun 123 --failed'
+  check "asked about the pre-release" has "$t/calls" 'branch=v0.2.0-rc.1&' &&
+    check "rerun" has "$t/calls" 'run rerun 123 --failed'
 }
 
 a_tag_with_no_release_run_is_left_to_the_version_workflow() {
@@ -466,10 +467,19 @@ the_issue_is_matched_by_its_exact_title_and_attempt() {
   issue_text 8 'other'
   issue_text 9 'again'
   runw
-  check "comment on 7" has "$t/calls" 'issue comment 7' &&
+  check "closed issues asked for" has "$t/calls" 'issues?state=all&' &&
+    check "comment on 7" has "$t/calls" 'issue comment 7' &&
     check "comment on 8" nohas "$t/calls" 'issue comment 8' &&
     check "comment on 9" nohas "$t/calls" 'issue comment 9' &&
     check "told" nohas "$t/out" 'already told'
+}
+
+a_release_of_a_tag_that_only_starts_the_same_does_not_release_it() {
+  dropped v0.1.9 123 1
+  releases v0.1.90 v0.1.1
+  runw
+  check "line" nohas "$t/out" 'is released' &&
+    check "rerun" has "$t/calls" 'run rerun 123 --failed'
 }
 
 a_draft_is_not_a_release() {
@@ -682,6 +692,7 @@ run_test a_later_attempt_is_told_on_the_open_issue
 run_test a_closed_issue_that_told_the_attempt_counts
 run_test a_closed_issue_without_the_attempt_leaves_a_new_one
 run_test the_issue_is_matched_by_its_exact_title_and_attempt
+run_test a_release_of_a_tag_that_only_starts_the_same_does_not_release_it
 run_test a_draft_is_not_a_release
 run_test every_failing_read_stops_it_with_status_1
 run_test a_refused_re_run_is_an_error
