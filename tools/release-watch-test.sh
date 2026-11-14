@@ -640,7 +640,7 @@ pointed_at_attempt_1_of_the_real_case_it_decides_a_re_run() {
   GA=none
   runw --dry-run --tag v0.1.82 --attempt 1
   check "status $rc" [ "$rc" = 0 ] &&
-    check "taking" has "$t/out" 'dry run: looking at v0.1.82 in place of the newest tag' &&
+    check "looking at" has "$t/out" 'dry run: looking at v0.1.82 in place of the newest tag' &&
     check "deciding" has "$t/out" "dry run: deciding on attempt 1 of v0.1.82's last Release run (43441808932) as if it had just ended" &&
     check "rerun line" has "$t/out" '(attempt 2 of 3): macOS (sign and notarize)' &&
     check "dry" has "$t/out" 'dry run: gh run rerun 43441808932 --failed' &&
