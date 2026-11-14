@@ -25,9 +25,13 @@ impl List {
         self.merged_builds.filter(|m| m.count > 0 && !measuring)
     }
 
+    pub(super) fn forget_merged(&mut self) {
+        self.merged_builds = None;
+    }
+
     pub(super) fn drop_row(&mut self, path: &str) {
         self.worktrees.retain(|w| w.path != path);
-        self.merged_builds = None;
+        self.forget_merged();
     }
 }
 

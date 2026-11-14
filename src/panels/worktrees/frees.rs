@@ -210,7 +210,7 @@ fn entry_problems(entry: &Entry, name: &str) -> Vec<String> {
 fn unlisted(answer: &Merged, worktrees: &[Worktree], confirmed: &[String]) -> Vec<String> {
     let goes = answer.going().into_iter().filter(|e| e.freed.bytes > 0);
     let unlisted = goes.filter(|e| !confirmed.contains(&e.freed.path));
-    unlisted.map(|e| format!("Also freed {}, which the question did not list", e.name(worktrees))).collect()
+    unlisted.map(|e| format!("Also freed {}, which the question did not offer to free", e.name(worktrees))).collect()
 }
 
 pub(super) fn merged_toast(answer: &Merged, worktrees: &[Worktree], confirmed: &[String]) -> (String, ToastKind) {

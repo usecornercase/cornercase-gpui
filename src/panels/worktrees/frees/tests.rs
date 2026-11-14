@@ -381,7 +381,7 @@ fn the_merged_jobs_have_keys_of_their_own() {
 fn a_worktree_freed_that_the_question_did_not_list_is_named() {
     let confirmed = vec!["/private/tmp/cc255/worktrees/shop/feat-a".to_string()];
     let (text, kind) = merged_toast(&freed(), &rows(), &confirmed);
-    assert!(text.contains("\nAlso freed shop › feat/b, which the question did not list"));
+    assert!(text.contains("\nAlso freed shop › feat/b, which the question did not offer to free"));
     assert!(!text.contains("Also freed shop › feat/a"));
     assert_eq!(kind, ToastKind::Error);
 }
@@ -402,4 +402,19 @@ fn a_hidden_button_stays_hidden_while_a_row_is_busy() {
 fn an_older_command_line_gets_the_note_even_while_a_row_is_busy() {
     let result = free_merged(Some(merged(4)), MergedJob::Idle, true, Some(Version::new(0, 13, 69)));
     assert!(matches!(result, FreeMerged::Needs(_)));
+}
+
+#[test]
+fn a_worktree_the_question_kept_and_the_free_took_is_named_as_not_offered() {
+    let answer = freed();
+    let confirmed = vec![
+        "/private/tmp/cc255/worktrees/shop/feat-a".to_string(),
+        "/private/tmp/cc255/worktrees/shop/feat-b".to_string(),
+    ];
+    let mut took = answer.clone();
+    took.worktrees[2].outcome = "freed".into();
+    took.worktrees[2].freed.bytes = 4_194_304;
+    let (text, kind) = merged_toast(&took, &rows(), &confirmed);
+    assert!(text.contains("\nAlso freed shop › feat/c, which the question did not offer to free"));
+    assert_eq!(kind, ToastKind::Error);
 }

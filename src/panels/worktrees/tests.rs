@@ -209,3 +209,11 @@ fn a_worktree_missing_from_the_list_goes_by_its_folder() {
     assert_eq!(name_of(&list.worktrees, "/private/tmp/cc255/worktrees/shop/gone"), "gone");
     assert_eq!(name_of(&list.worktrees, "/private/tmp/cc255/worktrees/shop/feat-a"), "shop › feat/a");
 }
+
+#[test]
+fn reading_again_forgets_the_figure_and_keeps_the_rows() {
+    let mut list = merged_list("list");
+    list.forget_merged();
+    assert_eq!(list.merged(false), None);
+    assert_eq!(list.worktrees.len(), 6);
+}

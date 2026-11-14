@@ -92,7 +92,7 @@ impl WorktreesPanel {
         self.generation += 1;
         self.measuring = true;
         if let Some(list) = &mut self.list {
-            list.merged_builds = None;
+            list.forget_merged();
         }
         self.load(false, cx);
         self.load(true, cx);
