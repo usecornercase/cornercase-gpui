@@ -288,7 +288,18 @@ on_attempt_3_it_tells_which_jobs_no_runner_took() {
     check "title" [ "$(cat "$t/created-title" 2> /dev/null)" = 'Release v0.1.90 failed' ] &&
     check "attempts" has "$t/created-body" 'No runner took these jobs on attempt 3.' &&
     check "link" has "$t/created-body" "](${base}/actions/runs/123/attempts/3)" &&
-    check "line" has "$t/out" "and no runner took macOS (sign and notarize) on attempt 3, the last Release watch re-runs: opened $base/issues/99"
+    check "line" has "$t/out" "and no runner took macOS (sign and notarize) on attempt 3 (Release watch re-runs only up to attempt 3): opened $base/issues/99"
+}
+
+a_job_no_runner_took_on_attempt_4_is_told_without_claiming_the_watch_ran_it() {
+  dropped v0.1.90 123 4
+  issues
+  runw
+  check "rerun" nohas "$t/calls" 'run rerun' &&
+    check "create" has "$t/calls" 'issue create' &&
+    check "line" has "$t/out" 'on attempt 4 (Release watch re-runs only up to attempt 3): opened' &&
+    check "false claim" nohas "$t/out" 'the last Release watch re-runs' &&
+    check "cause" has "$t/created-body" 'No runner took these jobs on attempt 4.'
 }
 
 a_job_that_ran_a_step_and_failed_is_told_not_re_run() {
@@ -316,7 +327,8 @@ a_failure_with_no_job_listed_is_told_not_re_run() {
   check "rerun" nohas "$t/calls" 'run rerun' &&
     check "create" has "$t/calls" 'issue create' &&
     check "none" has "$t/created-body" 'none listed' &&
-    check "no job to re-run" nohas "$t/created-body" 'gh run rerun' &&
+    check "no failed job to re-run" nohas "$t/created-body" '--failed' &&
+    check "whole run" has "$t/created-body" "If the cause has passed, re-run it: \`gh run rerun 123 --repo $slug\`" &&
     check "open the run" has "$t/created-body" 'Open the run' &&
     check "line" has "$t/out" 'but no job is listed as failed'
 }
@@ -652,6 +664,7 @@ missing_gh_git_or_gh_repo_exits_3_naming_each() {
 run_test the_real_case_re_runs_the_failed_jobs_of_attempt_1
 run_test a_job_no_runner_took_on_attempt_2_is_re_run_again
 run_test on_attempt_3_it_tells_which_jobs_no_runner_took
+run_test a_job_no_runner_took_on_attempt_4_is_told_without_claiming_the_watch_ran_it
 run_test a_job_that_ran_a_step_and_failed_is_told_not_re_run
 run_test a_dropped_job_beside_a_real_failure_is_told_not_re_run
 run_test a_failure_with_no_job_listed_is_told_not_re_run

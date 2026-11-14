@@ -224,6 +224,11 @@ rerun() {
   ask_write "re-running the failed jobs of run $1" gh run rerun "$1" --failed
 }
 
+open_step() {
+  printf "Open the run (the link above) to see why it ended in failure. If the cause has passed, re-run it: \`gh run rerun %s --repo %s\`" \
+    "$id" "$GH_REPO"
+}
+
 rerun_step() {
   printf "If the cause has passed (Apple's notary service, a download), %s: \`gh run rerun %s --failed --repo %s\`" \
     "$1" "$id" "$GH_REPO"
@@ -316,12 +321,12 @@ explain_failure() {
   if [ "$broken" -eq 0 ]; then
     tail=', but no job is listed as failed'
     cause='GitHub lists no job of this attempt as failed, so Release watch did not re-run it.'
-    steps_text=$(fix_steps 'Open the run (the link above) to see why it ended in failure.')
+    steps_text=$(fix_steps "$(open_step)")
   elif [ "$dropped" -ne "$broken" ]; then
     tail=', and a job ran and failed'
     cause='A job ran and failed. Release watch re-runs only jobs that no runner took (no step ran).'
   else
-    tail=", and no runner took $names on attempt $n, the last Release watch re-runs"
+    tail=", and no runner took $names on attempt $n (Release watch re-runs only up to attempt $attempts)"
     cause="No runner took these jobs on attempt $n. Release watch re-runs a run only up to attempt $attempts."
     steps_text=$(out_steps)
   fi
