@@ -4,9 +4,9 @@ use gpui::{
 };
 
 use super::WorktreesPanel;
-use super::actions::{checking, freeing, removing};
+use super::actions::removing;
 use super::data::{Tone, Worktree};
-use super::frees::{MergedJob, merged_job};
+use super::frees::{MergedJob, checking, freeing, merged_job};
 use super::removal::{Said, Style};
 use crate::notify::tip;
 use crate::store::Store;
@@ -101,34 +101,43 @@ impl WorktreesPanel {
             .into_any_element()
     }
 
-    fn row_buttons(&self, worktree: &Worktree, busy: Option<(&'static str, ui::Tone)>, cx: &mut Context<Self>) -> Div {
+    fn free_button(worktree: &Worktree, frees_merged: bool, cx: &mut Context<Self>) -> AnyElement {
+        let id = SharedString::from(format!("free-{}", worktree.path));
+        if frees_merged {
+            return ui::resting_button(id, "Free builds…", ui::Tone::Plain).into_any_element();
+        }
+        let freed = worktree.clone();
+        ui::button(id, "Free builds…")
+            .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| Self::check_free(freed.clone(), cx)))
+            .into_any_element()
+    }
+
+    fn row_buttons(
+        &self,
+        worktree: &Worktree,
+        busy: Option<(&'static str, ui::Tone)>,
+        frees_merged: bool,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let id = |what: &str| SharedString::from(format!("{what}-{}", worktree.path));
         if let Some((label, tone)) = busy {
             return div().flex().child(ui::busy_button(id("busy"), label, tone));
         }
-        let freed = worktree.clone();
-        let frees_merged = merged_job(|key| Store::get(cx).read(cx).busy(key)) != MergedJob::Idle;
         div()
             .flex()
             .gap(px(6.))
             .children(worktree.workspace.map(|ws| {
                 ui::button(id("changes"), "Changes").on_click(move |_: &ClickEvent, _, cx| Self::open_changes(ws, cx))
             }))
-            .when(worktree.builds() > 0, |d| {
-                d.child(if frees_merged {
-                    ui::resting_button(id("free"), "Free builds…", ui::Tone::Plain).into_any_element()
-                } else {
-                    ui::button(id("free"), "Free builds…")
-                        .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| Self::check_free(freed.clone(), cx)))
-                        .into_any_element()
-                })
-            })
+            .when(worktree.builds() > 0, |d| d.child(Self::free_button(worktree, frees_merged, cx)))
             .when(worktree.removable(), |d| d.child(self.remove_button(worktree, cx)))
     }
 
     pub(super) fn row(&self, worktree: &Worktree, now: i64, cx: &mut Context<Self>) -> AnyElement {
         let path = worktree.path.clone();
-        let busy = self.activity(worktree, Store::get(cx).read(cx));
+        let store = Store::get(cx).read(cx);
+        let busy = self.activity(worktree, store);
+        let frees_merged = merged_job(|key| store.busy(key)) != MergedJob::Idle;
         let ticked = self.ticked.contains(&path) && busy.is_none();
         let tick = ui::checkbox(SharedString::from(format!("tick-{path}")), ticked, "");
         let tick = if worktree.removable() && busy.is_none() {
@@ -155,7 +164,7 @@ impl WorktreesPanel {
                     .gap(px(4.))
                     .child(heading(worktree, now, self.measuring).when(busy.is_some(), |d| d.opacity(0.6)))
                     .child(details(worktree))
-                    .child(self.row_buttons(worktree, busy, cx)),
+                    .child(self.row_buttons(worktree, busy, frees_merged, cx)),
             )
             .into_any_element()
     }

@@ -18,6 +18,7 @@ const FREEABLE: &str = "freeable";
 const FREED: &str = "freed";
 const REFUSED: &str = "refused";
 const NO_WHY: &str = "cornercase did not say why";
+const NOTHING_FREED: &str = "Nothing was freed";
 const NOTHING_TO_FREE: &str = "No merged worktree has builds to free";
 const PROGRAM_HINT: &str = "Where a program runs, Free builds… on that worktree's row can free it anyway.";
 const FILTER_NOTE: &str = "This frees every worktree named here, including those the filter hides.";
@@ -66,9 +67,9 @@ enum Outcome {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Asked {
-    Nothing,
+    Nothing(String),
     Cannot(String),
-    Question { title: String, lines: Vec<Said>, job: Busy },
+    Question { title: String, lines: Vec<Said>, job: Busy, confirmed: Vec<String> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,9 +112,21 @@ impl Merged {
         self.worktrees.iter().filter(|e| e.outcome() == Outcome::Goes).collect()
     }
 
+    fn going_bytes(&self) -> u64 {
+        self.going().iter().map(|e| e.freed.bytes).sum()
+    }
+
     fn names_a_program(&self) -> bool {
         self.worktrees.iter().any(|e| e.outcome() == Outcome::Kept && !e.freed.running.is_empty())
     }
+}
+
+pub(super) fn checking(path: &str) -> String {
+    format!("check-builds:{path}")
+}
+
+pub(super) fn freeing(path: &str) -> String {
+    format!("free-builds:{path}")
 }
 
 pub(super) fn free_command(path: &str, check: bool, force: bool) -> Vec<String> {
@@ -182,8 +195,7 @@ fn toast_of(first: String, problems: Vec<String>) -> (String, ToastKind) {
 }
 
 pub(super) fn row_toast(freed: &Freed, name: &str) -> (String, ToastKind) {
-    let first =
-        if freed.bytes == 0 { "Nothing was freed".to_string() } else { format!("Freed {}", human_size(freed.bytes)) };
+    let first = if freed.bytes == 0 { NOTHING_FREED.to_string() } else { format!("Freed {}", human_size(freed.bytes)) };
     toast_of(first, folder_problems(freed, name))
 }
 
@@ -195,17 +207,25 @@ fn entry_problems(entry: &Entry, name: &str) -> Vec<String> {
     }
 }
 
-pub(super) fn merged_toast(answer: &Merged, worktrees: &[Worktree]) -> (String, ToastKind) {
+fn unlisted(answer: &Merged, worktrees: &[Worktree], confirmed: &[String]) -> Vec<String> {
+    let goes = answer.going().into_iter().filter(|e| e.freed.bytes > 0);
+    let unlisted = goes.filter(|e| !confirmed.contains(&e.freed.path));
+    unlisted.map(|e| format!("Also freed {}, which the question did not list", e.name(worktrees))).collect()
+}
+
+pub(super) fn merged_toast(answer: &Merged, worktrees: &[Worktree], confirmed: &[String]) -> (String, ToastKind) {
     if answer.worktrees.is_empty() {
         return (NOTHING_TO_FREE.to_string(), ToastKind::Info);
     }
     let freed = answer.going().iter().filter(|e| e.freed.bytes > 0).count();
     let first = if freed == 0 {
-        "Nothing was freed".to_string()
+        NOTHING_FREED.to_string()
     } else {
-        format!("Freed {} in {}", human_size(answer.bytes), plural(freed, "merged worktree"))
+        format!("Freed {} in {}", human_size(answer.going_bytes()), plural(freed, "merged worktree"))
     };
-    let problems = answer.worktrees.iter().flat_map(|entry| entry_problems(entry, &entry.name(worktrees))).collect();
+    let mut problems: Vec<String> =
+        answer.worktrees.iter().flat_map(|entry| entry_problems(entry, &entry.name(worktrees))).collect();
+    problems.extend(unlisted(answer, worktrees, confirmed));
     toast_of(first, problems)
 }
 
@@ -238,7 +258,11 @@ fn question_title(answer: &Merged, worktrees: &[Worktree]) -> (String, String) {
     match answer.going().as_slice() {
         [one] => (free_title(&one.name(worktrees)), freeing_label(&one.name(worktrees))),
         many => (
-            format!("Free {} of builds in {}?", human_size(answer.bytes), plural(many.len(), "merged worktree")),
+            format!(
+                "Free {} of builds in {}?",
+                human_size(answer.going_bytes()),
+                plural(many.len(), "merged worktree")
+            ),
             freeing_label(&plural(many.len(), "merged worktree")),
         ),
     }
@@ -246,7 +270,7 @@ fn question_title(answer: &Merged, worktrees: &[Worktree]) -> (String, String) {
 
 pub(super) fn ask_merged(answer: &Merged, worktrees: &[Worktree], filtering: bool) -> Asked {
     if answer.worktrees.is_empty() {
-        return Asked::Nothing;
+        return Asked::Nothing(NOTHING_TO_FREE.to_string());
     }
     if answer.going().is_empty() {
         let mut lines: Vec<String> = answer
@@ -262,6 +286,7 @@ pub(super) fn ask_merged(answer: &Merged, worktrees: &[Worktree], filtering: boo
         title,
         lines: question_lines(answer, worktrees, filtering),
         job: Busy::new(FREEING_MERGED, label),
+        confirmed: answer.going().iter().map(|e| e.freed.path.clone()).collect(),
     }
 }
 

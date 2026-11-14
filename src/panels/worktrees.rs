@@ -91,6 +91,9 @@ impl WorktreesPanel {
     fn reload(&mut self, cx: &mut Context<Self>) {
         self.generation += 1;
         self.measuring = true;
+        if let Some(list) = &mut self.list {
+            list.merged_builds = None;
+        }
         self.load(false, cx);
         self.load(true, cx);
         cx.notify();
@@ -187,14 +190,10 @@ impl WorktreesPanel {
     }
 
     fn totals_row(&self, list: &List) -> impl IntoElement + use<> {
-        let parts = totals(list, self.measuring, now());
-        let dots = (0..parts.len()).map(|i| (i > 0).then_some(ui::Separator::Dot));
-        let mut pieces: Vec<ui::separated::Piece> =
-            dots.zip(parts).map(|(dot, part)| (dot, ui::one_line(part).into_any_element())).collect();
-        if self.measuring {
-            pieces.push((None, ui::busy("measuring", "measuring").text_size(px(11.)).into_any_element()));
-        }
-        div().flex_1().min_w_0().child(ui::separated(6., pieces).text_size(px(11.)).text_color(colours::faint()))
+        let measuring =
+            self.measuring.then(|| ui::busy("measuring", "measuring").text_size(px(11.)).into_any_element());
+        let facts = ui::facts(totals(list, self.measuring, now()), measuring.into_iter().collect());
+        div().flex_1().min_w_0().child(facts.text_size(px(11.)).text_color(colours::faint()))
     }
 
     fn free_merged_state(&self, list: &List, cx: &mut Context<Self>) -> FreeMerged {

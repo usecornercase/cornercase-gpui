@@ -28,13 +28,17 @@ fn all_kept() -> Merged {
 
 fn question(answer: &Merged, filtering: bool) -> (String, Vec<(String, Style)>, String) {
     match ask_merged(answer, &rows(), filtering) {
-        Asked::Question { title, lines, job } => (title, lines, format!("{job:?}")),
+        Asked::Question { title, lines, job, .. } => (title, lines, format!("{job:?}")),
         other => panic!("expected a question, got {other:?}"),
     }
 }
 
 fn texts(lines: &[(String, Style)]) -> Vec<&str> {
     lines.iter().map(|(text, _)| text.as_str()).collect()
+}
+
+fn listed(answer: &Merged) -> Vec<String> {
+    answer.going().iter().map(|e| e.freed.path.clone()).collect()
 }
 
 fn with_outcome(mut answer: Merged, index: usize, outcome: &str) -> Merged {
@@ -192,9 +196,12 @@ fn when_nothing_can_go_a_running_program_is_still_pointed_out() {
 
 #[test]
 fn an_empty_check_has_nothing_to_free() {
-    assert_eq!(ask_merged(&Merged::default(), &rows(), false), Asked::Nothing);
     assert_eq!(
-        merged_toast(&Merged::default(), &rows()),
+        ask_merged(&Merged::default(), &rows(), false),
+        Asked::Nothing("No merged worktree has builds to free".to_string())
+    );
+    assert_eq!(
+        merged_toast(&Merged::default(), &rows(), &[]),
         ("No merged worktree has builds to free".into(), ToastKind::Info)
     );
 }
@@ -210,9 +217,9 @@ fn a_failed_measure_cannot_go() {
 #[test]
 fn an_unknown_outcome_is_never_counted_as_freed() {
     let answer = with_outcome(freed(), 0, "skipped");
-    let (text, kind) = merged_toast(&answer, &rows());
+    let (text, kind) = merged_toast(&answer, &rows(), &listed(&answer));
     assert!(
-        text.starts_with("Freed 5.0 MB in 1 merged worktree\nCould not free shop › feat/a: cornercase did not say why")
+        text.starts_with("Freed 3.0 MB in 1 merged worktree\nCould not free shop › feat/a: cornercase did not say why")
     );
     assert_eq!(kind, ToastKind::Error);
 }
@@ -232,12 +239,15 @@ fn a_missing_why_says_so() {
 fn a_free_that_went_well_is_plain_news() {
     let mut answer = freed();
     answer.worktrees.truncate(2);
-    assert_eq!(merged_toast(&answer, &rows()), ("Freed 5.0 MB in 2 merged worktrees".to_string(), ToastKind::Info));
+    assert_eq!(
+        merged_toast(&answer, &rows(), &listed(&answer)),
+        ("Freed 5.0 MB in 2 merged worktrees".to_string(), ToastKind::Info)
+    );
 }
 
 #[test]
 fn a_kept_worktree_makes_the_toast_an_error_and_says_why() {
-    let (text, kind) = merged_toast(&freed(), &rows());
+    let (text, kind) = merged_toast(&freed(), &rows(), &listed(&freed()));
     assert_eq!(
         text,
         "Freed 5.0 MB in 2 merged worktrees\nDid not free shop › feat/c: sleep runs in it\n\
@@ -248,9 +258,10 @@ fn a_kept_worktree_makes_the_toast_an_error_and_says_why() {
 
 #[test]
 fn a_failed_worktree_is_named_after_the_good_news() {
-    let (text, _) = merged_toast(&with_outcome(freed(), 1, "failed"), &rows());
+    let answer = with_outcome(freed(), 1, "failed");
+    let (text, _) = merged_toast(&answer, &rows(), &listed(&answer));
     assert!(
-        text.starts_with("Freed 5.0 MB in 1 merged worktree\nCould not free shop › feat/b: cornercase did not say why")
+        text.starts_with("Freed 2.0 MB in 1 merged worktree\nCould not free shop › feat/b: cornercase did not say why")
     );
 }
 
@@ -259,7 +270,7 @@ fn nothing_freed_says_so_first() {
     let mut answer = freed();
     answer.worktrees.drain(..2);
     answer.bytes = 0;
-    let (text, kind) = merged_toast(&answer, &rows());
+    let (text, kind) = merged_toast(&answer, &rows(), &listed(&answer));
     assert!(text.starts_with("Nothing was freed\nDid not free shop › feat/c: sleep runs in it"));
     assert_eq!(kind, ToastKind::Error);
 }
@@ -272,7 +283,7 @@ fn a_folder_that_could_not_be_deleted_is_named() {
         .freed
         .failed
         .push(super::FailedFolder { path: "target".into(), error: "permission denied".into() });
-    let (text, kind) = merged_toast(&answer, &rows());
+    let (text, kind) = merged_toast(&answer, &rows(), &listed(&answer));
     assert!(text.ends_with("Could not free target in shop › feat/a: permission denied"));
     assert_eq!(kind, ToastKind::Error);
 }
@@ -282,7 +293,7 @@ fn a_kept_folder_is_named() {
     let mut answer = freed();
     answer.worktrees.truncate(1);
     answer.worktrees[0].freed.kept.push("target".into());
-    let (text, _) = merged_toast(&answer, &rows());
+    let (text, _) = merged_toast(&answer, &rows(), &listed(&answer));
     assert!(text.ends_with(
         "Kept target in shop › feat/a: it is no longer an ignored folder there, or it is on another filesystem"
     ));
@@ -364,4 +375,31 @@ fn the_merged_jobs_have_keys_of_their_own() {
     assert_eq!(merged_job(|key| key == FREEING_MERGED), MergedJob::Freeing);
     assert_eq!(merged_job(|key| key == CHECKING_MERGED), MergedJob::Checking);
     assert_eq!(merged_job(|key| key == "free-builds:/w"), MergedJob::Idle);
+}
+
+#[test]
+fn a_worktree_freed_that_the_question_did_not_list_is_named() {
+    let confirmed = vec!["/private/tmp/cc255/worktrees/shop/feat-a".to_string()];
+    let (text, kind) = merged_toast(&freed(), &rows(), &confirmed);
+    assert!(text.contains("\nAlso freed shop › feat/b, which the question did not list"));
+    assert!(!text.contains("Also freed shop › feat/a"));
+    assert_eq!(kind, ToastKind::Error);
+}
+
+#[test]
+fn a_question_remembers_the_worktrees_it_listed() {
+    let Asked::Question { confirmed, .. } = ask_merged(&check(), &rows(), false) else { panic!("a question") };
+    assert_eq!(confirmed.len(), 2);
+    assert!(confirmed[0].ends_with("feat-a"));
+}
+
+#[test]
+fn a_hidden_button_stays_hidden_while_a_row_is_busy() {
+    assert_eq!(free_merged(None, MergedJob::Idle, true, Some(newest())), FreeMerged::Hidden);
+}
+
+#[test]
+fn an_older_command_line_gets_the_note_even_while_a_row_is_busy() {
+    let result = free_merged(Some(merged(4)), MergedJob::Idle, true, Some(Version::new(0, 13, 69)));
+    assert!(matches!(result, FreeMerged::Needs(_)));
 }

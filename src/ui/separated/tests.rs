@@ -1,6 +1,6 @@
 use gpui::{Bounds, Pixels, point, px, size};
 
-use super::{Separator, marks, rooms};
+use super::{Separator, fact_separators, marks, rooms};
 
 const DOT: Option<Separator> = Some(Separator::Dot);
 const LINE: Option<Separator> = Some(Separator::Line);
@@ -99,4 +99,11 @@ fn a_dot_is_as_small_as_a_typed_one_and_sits_below_the_lines_middle() {
     let (_, dot) = found[0];
     assert!((f32::from(dot.size.width) - 2.).abs() < f32::EPSILON);
     assert!(f32::from(dot.center().y) > 8.);
+}
+
+#[test]
+fn every_fact_but_the_first_has_a_dot_before_it_and_a_tag_has_none() {
+    assert_eq!(fact_separators(3, 2), vec![None, DOT, DOT, None, None]);
+    assert_eq!(fact_separators(1, 0), vec![None]);
+    assert_eq!(fact_separators(0, 2), vec![None, None]);
 }

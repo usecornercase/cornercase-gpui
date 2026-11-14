@@ -3,8 +3,8 @@ use gpui::{App, Context, Entity};
 use super::WorktreesPanel;
 use super::data::Worktree;
 use super::frees::{
-    Asked, CHECKING_MERGED, Freed, Merged, ask_merged, free_command, free_merged_command, free_message, free_title,
-    freeing_label, merged_toast, row_toast,
+    Asked, CHECKING_MERGED, Freed, Merged, ask_merged, checking, free_command, free_merged_command, free_message,
+    free_title, freeing, freeing_label, merged_toast, row_toast,
 };
 use super::removal::{Answer, Folder, branch_label, button, cannot_go, check_command, said, summary, title};
 use super::rows::said_lines;
@@ -27,14 +27,6 @@ pub(super) fn ask(question: Question, unasked: &str, cx: &mut App) {
     if !asked {
         toast(unasked.to_string(), ToastKind::Error, cx);
     }
-}
-
-pub(super) fn checking(path: &str) -> String {
-    format!("check-builds:{path}")
-}
-
-pub(super) fn freeing(path: &str) -> String {
-    format!("free-builds:{path}")
 }
 
 pub(super) fn removing(path: &str) -> String {
@@ -84,14 +76,29 @@ fn start_row_free(this: &Entity<WorktreesPanel>, busy: &Busy, command: &[String]
     });
 }
 
-fn start_merged_free(this: &Entity<WorktreesPanel>, job: &Busy, command: &[String], cx: &mut App) {
-    this.update(cx, |_, cx| store::run_partial_busy(cx, job.clone(), command.to_vec(), after_free_merged));
+fn start_merged_free(
+    this: &Entity<WorktreesPanel>,
+    job: &Busy,
+    command: &[String],
+    confirmed: Vec<String>,
+    cx: &mut App,
+) {
+    this.update(cx, |_, cx| {
+        store::run_partial_busy(cx, job.clone(), command.to_vec(), move |this, result, cx| {
+            after_free_merged(&confirmed, this, result, cx);
+        });
+    });
 }
 
-fn after_free_merged(this: &mut WorktreesPanel, result: anyhow::Result<String>, cx: &mut Context<WorktreesPanel>) {
+fn after_free_merged(
+    confirmed: &[String],
+    this: &mut WorktreesPanel,
+    result: anyhow::Result<String>,
+    cx: &mut Context<WorktreesPanel>,
+) {
     let rows = this.list.as_ref().map(|list| list.worktrees.as_slice()).unwrap_or_default();
-    let (text, kind) =
-        parse_text::<Merged>(result).map_or_else(|e| (e, ToastKind::Error), |answer| merged_toast(&answer, rows));
+    let (text, kind) = parse_text::<Merged>(result)
+        .map_or_else(|e| (e, ToastKind::Error), |answer| merged_toast(&answer, rows, confirmed));
     toast(text, kind, cx);
     this.reload(cx);
 }
@@ -213,17 +220,17 @@ impl WorktreesPanel {
         let filtering = !self.filter.read(cx).text().trim().is_empty();
         let rows = self.list.as_ref().map(|list| list.worktrees.as_slice()).unwrap_or_default();
         match ask_merged(answer, rows, filtering) {
-            Asked::Nothing => {
-                toast(merged_toast(answer, rows).0, ToastKind::Info, cx);
+            Asked::Nothing(text) => {
+                toast(text, ToastKind::Info, cx);
                 self.reload(cx);
             }
             Asked::Cannot(text) => toast(text, ToastKind::Error, cx),
-            Asked::Question { title, lines, job } => {
+            Asked::Question { title, lines, job, confirmed } => {
                 let this = cx.entity();
                 let command = free_merged_command(false, project);
                 let question = Question::new(title, "", "Free", Vec::new())
                     .body(move |_| said_lines(&lines))
-                    .on_yes(move |cx| start_merged_free(&this, &job, &command, cx));
+                    .on_yes(move |cx| start_merged_free(&this, &job, &command, confirmed.clone(), cx));
                 ask(question, NOT_FREED, cx);
             }
         }
