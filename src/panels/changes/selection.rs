@@ -4,17 +4,25 @@ use std::rc::Rc;
 use gpui::{Context, ListOffset, px};
 
 use crate::cli::{self, Target};
-use crate::store::{self, Busy, Store, ToastKind, args};
+use crate::model::ReadReleases;
+use crate::store::{self, Busy, Store, ToastKind, args, restart_note};
 
 use super::pieces::{find, looks, parse, toast};
 use super::wire::{Base, Gap, Patch};
 use super::{ChangesPanel, DiffData, Gaps, Open, Scope, Selected, Whose, diff};
 
-fn file_command(verb: &str, selected: &Selected, extra: &[String]) -> Vec<String> {
+fn file_command(verb: &str, selected: &Selected, extra: &[String], releases: ReadReleases) -> Vec<String> {
     let mut a = args(&["changes", verb, &selected.path]);
     a.extend(extra.iter().cloned());
     a.extend(args(&["--workspace", &selected.workspace.arg(), "--mode", selected.mode.name(), "--json"]));
-    a
+    selected.workspace.reading(a, releases)
+}
+
+fn refusal_text(machine: Option<&str>, error: &anyhow::Error) -> String {
+    match machine {
+        Some(machine) if cli::stale_boot(error) => restart_note(machine),
+        _ => error.to_string(),
+    }
 }
 
 pub(super) fn switching_base(workspace: u64) -> String {
@@ -44,8 +52,8 @@ impl ChangesPanel {
         self.hearing.may_read(read)
     }
 
-    fn patch_failed(&mut self, error: &anyhow::Error, cx: &mut Context<Self>) {
-        let text = error.to_string();
+    fn patch_failed(&mut self, machine: Option<&str>, error: &anyhow::Error, cx: &mut Context<Self>) {
+        let text = refusal_text(machine, error);
         if self.open.read_failed(text.clone()) {
             toast(text, ToastKind::Error, cx);
         }
@@ -107,7 +115,9 @@ impl ChangesPanel {
         self.open.loading = true;
         self.open.generation += 1;
         let generation = self.open.generation;
-        let a = file_command("file", &selected, &[]);
+        let releases = selected.workspace.releases(Store::get(cx).read(cx));
+        let a = file_command("file", &selected, &[], releases);
+        let machine = self.machine_followed();
         store::run_on(cx, target, a, move |this: &mut Self, result, cx| {
             if this.open.generation != generation {
                 return;
@@ -115,7 +125,7 @@ impl ChangesPanel {
             this.open.loading = false;
             match parse::<Patch>(result) {
                 Ok(patch) => this.show_patch(selected, patch),
-                Err(e) => this.patch_failed(&e, cx),
+                Err(e) => this.patch_failed(machine.as_deref(), &e, cx),
             }
             cx.notify();
         });
@@ -155,7 +165,9 @@ impl ChangesPanel {
             return;
         }
         let Ok(target) = self.read_target(&data.selected.workspace) else { return };
-        let a = file_command("gap", &data.selected, &args(&["--hunk", &hunk.to_string()]));
+        let releases = data.selected.workspace.releases(Store::get(cx).read(cx));
+        let a = file_command("gap", &data.selected, &args(&["--hunk", &hunk.to_string()]), releases);
+        let machine = self.machine_followed();
         let generation = self.open.generation;
         store::run_on(cx, target, a, move |this: &mut Self, result, cx| {
             if this.open.generation != generation {
@@ -163,7 +175,7 @@ impl ChangesPanel {
             }
             match parse::<Gap>(result) {
                 Ok(gap) => this.add_gap(hunk, gap),
-                Err(e) => toast(e.to_string(), ToastKind::Error, cx),
+                Err(e) => toast(refusal_text(machine.as_deref(), &e), ToastKind::Error, cx),
             }
             cx.notify();
         });

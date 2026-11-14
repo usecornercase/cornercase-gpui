@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use crate::cli::{Remote, Target};
+use crate::cli::{Remote, Target, Version};
 use crate::model::machines::MachineIcon;
-use crate::model::{Aim, Session, Spot, ThereId};
+use crate::model::{Aim, ReadReleases, Session, Spot, ThereId};
 use crate::store::{MachineRead, Reach};
 
 macro_rules! fixture {
@@ -21,6 +21,10 @@ pub(crate) fn shop_on_vps() -> Spot {
 
 pub(crate) fn in_usr_bin(tools: &'static [&'static str]) -> impl Fn(&str) -> Option<PathBuf> {
     move |name| tools.contains(&name).then(|| PathBuf::from(format!("/usr/bin/{name}")))
+}
+
+pub(crate) fn reads_with_boot() -> ReadReleases {
+    ReadReleases { here: Some(Version::new(0, 13, 66)), there: Some(Version::new(0, 12, 212)) }
 }
 
 pub(crate) fn vps_aim() -> Aim {

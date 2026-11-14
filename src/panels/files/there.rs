@@ -1,4 +1,5 @@
 use std::collections::hash_map::DefaultHasher;
+use std::fmt;
 use std::hash::{Hash as _, Hasher as _};
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -8,10 +9,10 @@ use anyhow::{Result, bail};
 use gpui::{App, Context, Div};
 use serde::Deserialize;
 
-use crate::cli::Target;
-use crate::model::Aim;
+use crate::cli::{self, Target};
+use crate::model::{Aim, ReadReleases};
 use crate::panels::on_machine::{self, Retry};
-use crate::store::{MachineRead, Reach, Store};
+use crate::store::{MachineRead, Reach, Store, restart_note};
 
 use super::disk::{Content, Stamp};
 use super::gutter::Gutter;
@@ -27,9 +28,20 @@ type Ask<'a> = &'a dyn Fn(&Target, &[String]) -> Result<String>;
 pub(super) struct There {
     target: Target,
     workspace: String,
-    machine: String,
-    boot: String,
+    aim: Aim,
+    releases: ReadReleases,
 }
+
+#[derive(Debug, Clone)]
+struct Restarted(String);
+
+impl fmt::Display for Restarted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for Restarted {}
 
 #[derive(Deserialize)]
 struct Booted {
@@ -41,8 +53,8 @@ fn restarted(json: &str, boot: &str) -> bool {
     answered.is_some_and(|answered| answered != boot)
 }
 
-pub(super) fn source_of(read: &MachineRead) -> Option<Source> {
-    Some(Source::There(There::new(read.reach.target()?.clone(), &read.aim)))
+pub(super) fn source_of(read: &MachineRead, releases: ReadReleases) -> Option<Source> {
+    Some(Source::There(There::new(read.reach.target()?.clone(), &read.aim, releases)))
 }
 
 pub(super) fn place_key(read: &MachineRead) -> u64 {
@@ -64,15 +76,30 @@ fn lost_in(listed: &Listed) -> Option<String> {
     listed.iter().find_map(|(_, listing)| listing.as_ref().err().filter(|e| is_lost(e)).map(Error::to_string))
 }
 
+fn not_connected(error: &anyhow::Error) -> Error {
+    match error.downcast_ref::<Restarted>() {
+        Some(restarted) => Error::new(ErrorKind::NotConnected, restarted.clone()),
+        None => Error::new(ErrorKind::NotConnected, error.to_string()),
+    }
+}
+
+fn restarted_in(listed: &Listed) -> bool {
+    let refused = |error: &Error| error.get_ref().is_some_and(<dyn std::error::Error + Send + Sync>::is::<Restarted>);
+    listed.iter().any(|(_, listing)| listing.as_ref().err().is_some_and(refused))
+}
+
 impl There {
-    fn new(target: Target, aim: &Aim) -> Self {
-        Self { target, workspace: aim.workspace_arg(), machine: aim.machine.clone(), boot: aim.boot.clone() }
+    fn new(target: Target, aim: &Aim, releases: ReadReleases) -> Self {
+        Self { target, workspace: aim.workspace_arg(), aim: aim.clone(), releases }
     }
 
     fn asked(&self, ask: Ask<'_>, args: &[String]) -> Result<String> {
-        let json = ask(&self.target, args)?;
-        if restarted(&json, &self.boot) {
-            bail!("{} restarted", self.machine);
+        let sent = self.aim.reading(args.to_vec(), self.releases);
+        let json = ask(&self.target, &sent).map_err(|e| {
+            if cli::stale_boot(&e) { anyhow::Error::new(Restarted(restart_note(&self.aim.machine))) } else { e }
+        })?;
+        if restarted(&json, &self.aim.boot) {
+            bail!("{}", restart_note(&self.aim.machine));
         }
         Ok(json)
     }
@@ -81,10 +108,7 @@ impl There {
         let args = served::files_args("list", &self.workspace, &[], folders.iter().map(|rel| served::arg(rel)));
         match self.asked(ask, &args) {
             Ok(json) => served::listings(folders, Ok(json)),
-            Err(e) => {
-                let why = e.to_string();
-                folders.into_iter().map(|rel| (rel, Err(Error::new(ErrorKind::NotConnected, why.clone())))).collect()
-            }
+            Err(e) => folders.into_iter().map(|rel| (rel, Err(not_connected(&e)))).collect(),
         }
     }
 
@@ -103,6 +127,9 @@ impl There {
     }
 
     fn same_run(&self, ask: Ask<'_>) -> Result<()> {
+        if self.releases.carry_boot() {
+            return Ok(());
+        }
         let root = served::arg(Path::new(""));
         self.asked(ask, &served::files_args("list", &self.workspace, &[], [root])).map(drop)
     }
@@ -151,7 +178,8 @@ impl FilesPanel {
             return;
         }
         self.leave_machine(cx);
-        match source_of(read) {
+        let releases = self.store.read(cx).read_releases(&read.aim.machine);
+        match source_of(read, releases) {
             Some(source) => self.switch_to(key, PathBuf::from(&read.path), source, cx),
             None => {
                 if self.current.take().is_some() {
@@ -203,6 +231,10 @@ impl FilesPanel {
 
     pub(super) fn machine_answered(&mut self, listed: &Listed, cx: &mut Context<Self>) {
         match lost_in(listed) {
+            Some(_) if restarted_in(listed) => {
+                self.retry.restarted();
+                cx.notify();
+            }
             Some(why) => {
                 self.retry.failed(why, Instant::now());
                 self.there_failed(cx);

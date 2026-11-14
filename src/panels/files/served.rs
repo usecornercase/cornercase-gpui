@@ -129,6 +129,9 @@ fn answered(code: Option<i32>, stdout: &[u8], stderr: &[u8]) -> Result<String> {
     if let Some(older) = cli::refused_older("files", code, stdout, stderr) {
         return Err(older);
     }
+    if let Some(refused) = cli::refused_boot("files", code, stderr) {
+        return Err(refused);
+    }
     let stdout = String::from_utf8_lossy(stdout).into_owned();
     if stdout.trim_start().starts_with('{') {
         return Ok(stdout);

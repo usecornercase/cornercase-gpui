@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_util::{fixture, shop_on_vps};
+use crate::test_util::{fixture, reads_with_boot, shop_on_vps};
 
 fn info() -> AccountsInfo {
     serde_json::from_str(fixture!("machines/there_accounts.json")).expect("what the machine answered")
@@ -129,7 +129,7 @@ fn an_answer_about_another_project_is_dropped_but_the_accounts_are_kept() {
 fn the_commands_ask_the_machines_project() {
     let spot = shop_on_vps();
     let wanted = a_start();
-    let args = |check: Check| check.args(Some(&spot), &wanted);
+    let args = |check: Check| check.args(Some(&spot), &wanted, ReadReleases::default());
     assert_eq!(args(Check::Accounts), ["account", "list", "--check", "--json"]);
     assert_eq!(args(Check::Trackers), ["issue", "sources", "--json", "--project", "8"]);
     assert_eq!(args(Check::Flows), ["flow", "list", "--json", "--project", "8"]);
@@ -412,4 +412,36 @@ fn what_could_not_be_read_is_said_by_name() {
     );
     assert_eq!(Check::Modes.doing("vps"), "Reading the modes on vps…");
     assert_eq!(Check::Issue.doing("vps"), "Reading the issue on vps…");
+}
+
+#[test]
+fn a_check_reads_the_machines_project_with_the_spots_boot() {
+    let spot = shop_on_vps();
+    let wanted = a_start();
+    let args = |check: Check| check.args(Some(&spot), &wanted, reads_with_boot());
+    let boot = ["--boot", spot.boot.as_str()];
+    assert_eq!(args(Check::Trackers), [&["issue", "sources", "--json", "--project", "8"], &boot[..]].concat());
+    assert_eq!(args(Check::Flows), [&["flow", "list", "--json", "--project", "8"], &boot[..]].concat());
+    let read = ["issue", "read", "#7", "--source", "github", "--json", "--project", "8"];
+    assert_eq!(args(Check::Issue), [&read[..], &boot[..]].concat());
+}
+
+#[test]
+fn accounts_and_modes_are_asked_without_a_boot() {
+    let spot = shop_on_vps();
+    let wanted = a_start();
+    assert_eq!(Check::Accounts.args(Some(&spot), &wanted, reads_with_boot()), ["account", "list", "--check", "--json"]);
+    assert_eq!(Check::Modes.args(Some(&spot), &wanted, reads_with_boot()), ["config", "--json"]);
+}
+
+#[test]
+fn a_check_refused_for_its_boot_says_the_machine_restarted() {
+    let refused = crate::cli::failure("issue", Some(4), b"error: the server restarted");
+    assert_eq!(check_failure("vps", &refused), "vps restarted");
+}
+
+#[test]
+fn any_other_failed_check_keeps_cornercases_reason() {
+    let failed = crate::cli::failure("issue", Some(1), b"error: no such tracker");
+    assert_eq!(check_failure("vps", &failed), crate::cli::reason(&failed));
 }

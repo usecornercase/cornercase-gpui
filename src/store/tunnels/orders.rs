@@ -88,7 +88,7 @@ impl Store {
             &reached.target,
             orders_args(),
             move |this, line, cx| this.orders_heard(&heard, generation, &line, cx),
-            move |this, said, cx| this.orders_ended(&ended, generation, &said, cx),
+            move |this, said, cx| this.orders_ended(&ended, generation, said.said(), cx),
         );
         let attempts = self.tunnels.takers.get(toward).map_or(0, |taker| taker.attempts);
         let told = self.tunnels.takers.get(toward).is_some_and(|taker| taker.told);

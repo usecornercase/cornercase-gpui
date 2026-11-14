@@ -161,3 +161,9 @@ fn a_patch_past_the_pane_asks_for_a_whole_frame_on_its_own_queue() {
     assert_eq!(tap.commands(), [["redraw", "--surface", "4"]]);
     assert_eq!(conn.grid.panes[0].lines.len(), 2);
 }
+
+#[test]
+fn a_machines_surface_carries_its_runs_boot_and_the_windows_does_not() {
+    assert_eq!(surface_args(9, Some("b1")), ["surface", "--view", "9", "--patches", "--boot", "b1"]);
+    assert_eq!(surface_args(9, None), ["surface", "--view", "9", "--patches"]);
+}

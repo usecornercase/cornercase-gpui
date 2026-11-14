@@ -11,7 +11,9 @@ use crate::model::machines::NextTry;
 use crate::notify::tip;
 use crate::panels::queue;
 use crate::platform::Os;
-use crate::store::{AfterUpdate, MachineRead, OlderNote, Reach, Store, UpdateOffer, UpdateThere, update_question};
+use crate::store::{
+    AfterUpdate, MachineRead, OlderNote, Reach, Store, UpdateOffer, UpdateThere, restart_note, update_question,
+};
 use crate::theme::colours;
 use crate::ui;
 use crate::ui::counting::Counting;
@@ -21,9 +23,31 @@ pub(crate) struct Retry {
     failures: u32,
     next: Option<Instant>,
     why: Option<String>,
+    restarted: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Missed {
+    Restarted,
+    Failed(String),
 }
 
 impl Retry {
+    pub(crate) fn restarted(&mut self) {
+        self.restarted = true;
+        self.next = None;
+        self.why = None;
+    }
+
+    pub(crate) fn missed(&mut self, missed: Missed, now: Instant) {
+        match missed {
+            Missed::Restarted => self.restarted(),
+            Missed::Failed(why) => {
+                self.failed(why, now);
+            }
+        }
+    }
+
     pub(crate) fn failed(&mut self, why: String, now: Instant) -> Duration {
         self.why = Some(why);
         if let Some(next) = self.next.filter(|next| now < *next) {
@@ -48,7 +72,7 @@ impl Retry {
     }
 
     pub(crate) fn due(&self, now: Instant) -> bool {
-        self.next.is_none_or(|next| now >= next)
+        !self.restarted && self.next.is_none_or(|next| now >= next)
     }
 
     fn waiting(&self) -> bool {
@@ -62,6 +86,7 @@ pub(crate) enum Note {
     Waiting(String),
     Older(OlderNote),
     Refused(String),
+    Restarted(String),
 }
 
 impl Note {
@@ -70,7 +95,7 @@ impl Note {
             Self::Reconnecting { why, next } => format!("{why} · {}", next.words()),
             Self::Waiting(why) => format!("{why}…"),
             Self::Older(note) => note.line.clone(),
-            Self::Refused(why) => why.clone(),
+            Self::Refused(why) | Self::Restarted(why) => why.clone(),
         }
     }
 
@@ -85,6 +110,7 @@ fn did_not_answer(read: &MachineRead) -> String {
 
 fn note_at(read: &MachineRead, retry: &Retry, now: i64) -> Option<Note> {
     match &read.reach {
+        Reach::Up(_) if retry.restarted => Some(Note::Restarted(restart_note(&read.aim.machine))),
         Reach::Up(_) => {
             retry.waiting().then(|| Note::Reconnecting { why: did_not_answer(read), next: NextTry::UnderWay })
         }
@@ -103,6 +129,7 @@ pub(crate) fn note(read: &MachineRead, retry: &Retry) -> Option<Note> {
 
 pub(crate) fn may_ask(read: &MachineRead, retry: &Retry) -> Result<Target, String> {
     match &read.reach {
+        Reach::Up(_) if retry.restarted => Err(restart_note(&read.aim.machine)),
         Reach::Up(_) if retry.waiting() => Err(did_not_answer(read)),
         Reach::Up(target) => Ok(target.clone()),
         Reach::Older(note) => Err(note.line.clone()),
@@ -130,7 +157,9 @@ fn where_line(read: &MachineRead, read_only: bool) -> impl IntoElement + use<> {
 fn note_line(note: &Note, why: Option<&str>) -> AnyElement {
     let text = note.text();
     let line = match note {
-        Note::Refused(_) | Note::Older(_) => div().text_color(colours::working()).child(ui::one_line(text)),
+        Note::Refused(_) | Note::Older(_) | Note::Restarted(_) => {
+            div().text_color(colours::working()).child(ui::one_line(text))
+        }
         _ if note.counts() => div().text_color(colours::muted()).child(ui::one_line(text)),
         Note::Reconnecting { .. } | Note::Waiting(_) => ui::busy("on-machine-reconnecting", text).text_size(px(11.)),
     };

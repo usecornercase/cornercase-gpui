@@ -26,8 +26,8 @@ pub(crate) use details::memory_size;
 pub(crate) use grid::{Applied, Grid, PaneGrid, Run};
 pub(crate) use link::Link;
 pub(crate) use machines::seen::{
-    Aim, MachinePlace, MachineSeen, PaneAim, PaneThere, SectionRow, Spot, ThereAgent, ThereId, ThereProject, ThereRow,
-    ThereWorkspace, WorkspaceThere,
+    Aim, MachinePlace, MachineSeen, PaneAim, PaneThere, ReadReleases, SectionRow, Spot, ThereAgent, ThereId,
+    ThereProject, ThereRow, ThereWorkspace, WorkspaceThere,
 };
 pub(crate) use owner::Owner;
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};

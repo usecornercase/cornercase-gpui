@@ -9,10 +9,10 @@ use super::super::tree;
 use super::super::{Place, Search};
 use super::*;
 use crate::store::{OlderNote, Reach};
-use crate::test_util::{fixture, vps_aim as aim, vps_read, vps_target as target};
+use crate::test_util::{fixture, reads_with_boot, vps_aim as aim, vps_read, vps_target as target};
 
 fn there() -> There {
-    There::new(target(), &aim())
+    There::new(target(), &aim(), ReadReleases::default())
 }
 
 struct Machine {
@@ -210,7 +210,7 @@ fn only_the_disk_source_is_on_this_disk() {
 fn a_machines_workspace_is_read_through_the_machine_though_its_folder_exists_here() {
     let here = folder_here("source");
     let read = MachineRead { path: here.to_string_lossy().into_owned(), ..vps_read(Reach::Up(target())) };
-    assert_eq!(source_of(&read), Some(Source::There(there())));
+    assert_eq!(source_of(&read, ReadReleases::default()), Some(Source::There(there())));
 }
 
 #[test]
@@ -218,7 +218,7 @@ fn a_machine_down_gives_no_way_to_read_rather_than_this_disk() {
     let here = folder_here("source-down");
     let read =
         MachineRead { path: here.to_string_lossy().into_owned(), ..vps_read(Reach::Down("vps unreachable".into())) };
-    assert_eq!(source_of(&read), None);
+    assert_eq!(source_of(&read, ReadReleases::default()), None);
 }
 
 fn place_with_a_folder_open() -> Place {
@@ -311,4 +311,84 @@ fn a_tree_never_read_says_so_only_while_waiting_or_older_and_keeps_what_it_read(
     assert_eq!(said(Reach::Down("d".into()), false), None);
     assert_eq!(said(Reach::Refused("r".into()), false), None);
     assert_eq!(said(Reach::Up(target()), false), None);
+}
+
+fn with_boot() -> There {
+    There::new(target(), &aim(), reads_with_boot())
+}
+
+fn refused(_: &Target, _: &[String]) -> Result<String> {
+    Err(cli::failure("files", Some(4), b"error: this request is for another run"))
+}
+
+fn boot_flags(args: &[String]) -> &[String] {
+    let at = args.iter().position(|arg| arg == "--").expect("a double dash");
+    &args[at - 2..=at]
+}
+
+#[test]
+fn every_read_on_a_machine_carries_the_aims_boot_before_the_double_dash() {
+    let boot = aim().boot;
+    let expected = ["--boot", boot.as_str(), "--"];
+    let listing = Machine::answering(fixture!("files/list.json"));
+    with_boot().list_with(&|t, a| Ok(listing.ask(t, a)), vec![PathBuf::new()]);
+    assert_eq!(boot_flags(&listing.only_request().1), expected);
+    let read = Machine::answering(r#"{"kind":"text","bytes":3,"modified":null,"image":null,"text":"x"}"#);
+    with_boot().read_with(&|t, a| Ok(read.ask(t, a)), Path::new("README.md"));
+    assert_eq!(boot_flags(&read.only_request().1), expected);
+    let stamp = Machine::answering(fixture!("files/list.json"));
+    with_boot().stamp_with(&|t, a| Ok(stamp.ask(t, a)), Path::new("a.svg"));
+    assert_eq!(boot_flags(&stamp.only_request().1), expected);
+    let search = Machine::answering(fixture!("files/search-names.json"));
+    with_boot().search_with(&|t, a| Ok(search.ask(t, a)), "main", Mode::Names);
+    assert_eq!(boot_flags(&search.only_request().1), expected);
+    let margin = Machine::answering(fixture!("changes/file.json"));
+    with_boot().gutter_with(&|t, a| Ok(margin.ask(t, a)), Path::new("a.txt"));
+    assert_eq!(boot_flags(&margin.only_request().1), expected);
+}
+
+#[test]
+fn below_the_gate_no_read_on_a_machine_carries_a_boot() {
+    let search = Machine::answering(fixture!("files/search-names.json"));
+    there().search_with(&|t, a| Ok(search.ask(t, a)), "main", Mode::Names);
+    assert!(search.asked.borrow().iter().all(|(_, args)| !args.contains(&"--boot".to_string())));
+}
+
+#[test]
+fn from_0_13_66_a_search_and_the_margin_ask_no_root_listing_first() {
+    let search = Machine::answering(fixture!("files/search-names.json"));
+    with_boot().search_with(&|t, a| Ok(search.ask(t, a)), "main", Mode::Names);
+    assert_eq!(search.only_request().1[1], "search");
+    let margin = Machine::answering(fixture!("changes/file.json"));
+    with_boot().gutter_with(&|t, a| Ok(margin.ask(t, a)), Path::new("a.txt"));
+    assert_eq!(margin.only_request().1[..2], ["changes", "file"]);
+}
+
+#[test]
+fn below_0_13_66_a_search_still_lists_the_root_first() {
+    let search = Machine::answering(fixture!("files/search-names.json"));
+    there().search_with(&|t, a| Ok(search.ask(t, a)), "main", Mode::Names);
+    assert_eq!(search.asked_which_run_first().1[1], "search");
+}
+
+#[test]
+fn a_listing_refused_for_its_boot_is_told_by_its_type_not_its_words() {
+    let listed = with_boot().list_with(&refused, vec![PathBuf::new()]);
+    assert!(restarted_in(&listed));
+    assert_eq!(lost_in(&listed).as_deref(), Some("vps restarted"));
+    let words_only = |_: &Target, _: &[String]| -> Result<String> { Err(anyhow!("vps restarted")) };
+    assert!(!restarted_in(&with_boot().list_with(&words_only, vec![PathBuf::new()])));
+}
+
+#[test]
+fn a_read_refused_for_its_boot_says_the_machine_restarted() {
+    let (content, stamp) = with_boot().read_with(&refused, Path::new("README.md"));
+    assert!(matches!(&content, Content::Lost(why) if why == "vps restarted"), "{content:?}");
+    assert_eq!(stamp, None);
+}
+
+#[test]
+fn a_search_refused_for_its_boot_fails_with_the_machines_restart() {
+    let results = with_boot().search_with(&refused, "main", Mode::Names);
+    assert!(matches!(&results, Results::Failed(why) if why == "vps restarted"));
 }

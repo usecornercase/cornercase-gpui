@@ -1,4 +1,5 @@
 use super::*;
+use crate::cli::Version;
 use crate::model::PaneInfo;
 use crate::test_util::fixture;
 
@@ -380,7 +381,10 @@ fn a_place_opens_a_view_on_its_tab_at_the_size_wanted() {
     let session = session();
     let seen = vps(&session);
     let place = MachinePlace::at(seen, named(seen, "notes"), Some(ThereId(16)));
-    assert_eq!(place.open_args((80, 24), false), ["view", "--cols", "80", "--rows", "24", "--tab", "16"]);
+    assert_eq!(
+        place.open_args((80, 24), false, ReadReleases::default()),
+        ["view", "--cols", "80", "--rows", "24", "--tab", "16"]
+    );
 }
 
 #[test]
@@ -388,7 +392,10 @@ fn a_place_on_a_workspace_with_no_tab_opens_a_view_on_the_workspace() {
     let session = session();
     let seen = vps(&session);
     let place = MachinePlace { tab: None, ..MachinePlace::at(seen, named(seen, "notes"), None) };
-    assert_eq!(place.open_args((80, 24), false), ["view", "--cols", "80", "--rows", "24", "--workspace", "11"]);
+    assert_eq!(
+        place.open_args((80, 24), false, ReadReleases::default()),
+        ["view", "--cols", "80", "--rows", "24", "--workspace", "11"]
+    );
 }
 
 #[test]
@@ -396,7 +403,7 @@ fn a_view_opened_behind_other_windows_starts_hidden() {
     let session = session();
     let seen = vps(&session);
     let place = MachinePlace::at(seen, named(seen, "notes"), Some(ThereId(16)));
-    assert_eq!(place.open_args((80, 24), true).last().map(String::as_str), Some("--hidden"));
+    assert_eq!(place.open_args((80, 24), true, ReadReleases::default()).last().map(String::as_str), Some("--hidden"));
 }
 
 #[test]
@@ -440,8 +447,8 @@ fn a_machine_workspaces_ports_go_by_its_own_id() {
     let seen = vps(&session);
     let aim = seen.aim_at(named(seen, "main"));
     let id = aim.workspace_arg();
-    assert_eq!(aim.ports_args(false), ["ports", "--json", "--workspace", id.as_str()]);
-    assert_eq!(aim.ports_args(true), ["ports", "--json", "--all"]);
+    assert_eq!(aim.ports_args(false, ReadReleases::default()), ["ports", "--json", "--workspace", id.as_str()]);
+    assert_eq!(aim.ports_args(true, ReadReleases::default()), ["ports", "--json", "--all"]);
 }
 
 #[test]
@@ -521,4 +528,92 @@ fn owners_of_one_workspace_are_equal_whatever_their_path_or_destination() {
         hasher.finish()
     };
     assert_eq!(hash(&a), hash(&b));
+}
+
+fn releases(here: Option<(u64, u64, u64)>, there: Option<(u64, u64, u64)>) -> ReadReleases {
+    let version = |(major, minor, patch)| Version::new(major, minor, patch);
+    ReadReleases { here: here.map(version), there: there.map(version) }
+}
+
+fn main_aim(session: &Session) -> Aim {
+    let seen = vps(session);
+    seen.aim_at(named(seen, "main"))
+}
+
+#[test]
+fn the_reads_carry_the_boot_their_aim_was_read_with_from_0_13_66_here() {
+    let session = session();
+    let aim = main_aim(&session);
+    for here in [(0, 13, 66), (0, 13, 69)] {
+        let on = releases(Some(here), Some((0, 13, 62)));
+        let ports = aim.ports_args(false, on);
+        assert_eq!(ports[ports.len() - 2..], ["--boot", aim.boot.as_str()]);
+        let all = aim.ports_args(true, on);
+        assert_eq!(all, ["ports", "--json", "--all", "--boot", aim.boot.as_str()]);
+    }
+}
+
+#[test]
+fn below_0_13_66_here_or_with_it_unknown_the_reads_carry_no_boot() {
+    let session = session();
+    let aim = main_aim(&session);
+    for here in [Some((0, 13, 65)), None] {
+        let on = releases(here, Some((0, 13, 69)));
+        assert_eq!(aim.ports_args(true, on), ["ports", "--json", "--all"]);
+        assert!(!aim.ports_args(false, on).contains(&"--boot".to_string()));
+    }
+}
+
+#[test]
+fn a_machine_whose_server_is_older_than_0_12_212_or_unknown_reads_without_boot() {
+    let session = session();
+    let aim = main_aim(&session);
+    for there in [Some((0, 12, 211)), None] {
+        let on = releases(Some((0, 13, 69)), there);
+        assert!(!aim.ports_args(false, on).contains(&"--boot".to_string()));
+    }
+    let open = aim.ports_args(true, releases(Some((0, 13, 69)), Some((0, 12, 212))));
+    assert_eq!(open, ["ports", "--json", "--all", "--boot", aim.boot.as_str()]);
+}
+
+#[test]
+fn a_place_opens_its_view_with_its_own_runs_boot_when_the_reads_carry_it() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace::at(seen, named(seen, "notes"), Some(ThereId(16)));
+    let opened = place.open_args((80, 24), true, releases(Some((0, 13, 66)), Some((0, 12, 212))));
+    let boot = place.boot.as_str();
+    assert_eq!(opened, ["view", "--cols", "80", "--rows", "24", "--tab", "16", "--hidden", "--boot", boot]);
+}
+
+#[test]
+fn a_place_opens_its_view_without_a_boot_below_either_gate() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace::at(seen, named(seen, "notes"), Some(ThereId(16)));
+    for on in [releases(Some((0, 13, 65)), Some((0, 12, 212))), releases(Some((0, 13, 66)), Some((0, 12, 211)))] {
+        assert!(!place.open_args((80, 24), false, on).contains(&"--boot".to_string()));
+    }
+}
+
+#[test]
+fn after_a_restart_a_place_reads_with_the_new_runs_id_and_boot_together() {
+    let session = session();
+    let seen = vps(&session);
+    let place = MachinePlace::at(seen, named(seen, "main"), None);
+    let after = restarted(&session);
+    let followed = place.followed(&after).expect("the workspace is found by its path");
+    let ports = followed.aim().ports_args(false, releases(Some((0, 13, 66)), Some((0, 12, 212))));
+    let id = followed.aim().workspace_arg();
+    assert_eq!(ports, ["ports", "--json", "--workspace", id.as_str(), "--boot", "another-boot"]);
+    assert_ne!(id, place.aim().workspace_arg());
+}
+
+#[test]
+fn a_read_puts_its_boot_before_a_double_dash() {
+    let session = session();
+    let aim = main_aim(&session);
+    let command = ["files", "list", "--workspace", "7", "--json", "--", "./a"].map(String::from).to_vec();
+    let sent = aim.reading(command, releases(Some((0, 13, 66)), Some((0, 12, 212))));
+    assert_eq!(sent[5..], ["--boot", aim.boot.as_str(), "--", "./a"]);
 }

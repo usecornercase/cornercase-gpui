@@ -7,11 +7,12 @@ use super::data::{List, Port};
 use super::rows::cornercase_note;
 use super::source::{Listed, Scope};
 use super::view::there_key;
-use crate::cli::Target;
+use crate::cli::{self, Target};
 use crate::model::ThereId;
 use crate::model::machines::hide_destination;
 use crate::model::tunnels::{Gate, gate_note};
-use crate::panels::poll::{Polled as _, parse_text};
+use crate::panels::on_machine::Missed;
+use crate::panels::poll::Polled as _;
 use crate::store::{self, MachineRead, Reach, Store};
 
 pub(super) fn machine_notes(gate: &Gate, machine: &str, reach: &Reach) -> Vec<String> {
@@ -23,19 +24,31 @@ pub(super) fn machine_notes(gate: &Gate, machine: &str, reach: &Reach) -> Vec<St
     }
 }
 
+pub(super) fn missed_of(machine: &str, destination: &str, error: &anyhow::Error) -> Missed {
+    if cli::stale_boot(error) {
+        return Missed::Restarted;
+    }
+    Missed::Failed(hide_destination(&error.to_string(), machine, destination))
+}
+
 pub(crate) fn sample_there<T: 'static>(
     cx: &mut Context<T>,
     (read, target, all): (&MachineRead, Target, bool),
-    then: impl FnOnce(&mut T, Result<Vec<Port<ThereId>>, String>, &mut Context<T>) + 'static,
+    then: impl FnOnce(&mut T, Result<Vec<Port<ThereId>>, Missed>, &mut Context<T>) + 'static,
 ) {
     let (machine, destination) = (read.aim.machine.clone(), read.destination.clone());
-    let asked = Store::get(cx).read(cx).there_facts(&machine);
-    store::run_on(cx, target, read.aim.ports_args(all), move |this, result, cx| {
-        if let Err(e) = &result {
+    let (asked, releases) = {
+        let store = Store::get(cx).read(cx);
+        (store.there_facts(&machine), store.read_releases(&machine))
+    };
+    store::run_on(cx, target, read.aim.ports_args(all, releases), move |this, result, cx| {
+        let list = result.and_then(|out| serde_json::from_str::<List<ThereId>>(&out).map_err(anyhow::Error::from));
+        if let Err(e) = &list
+            && !cli::stale_boot(e)
+        {
             Store::get(cx).update(cx, |s, cx| s.there_refused(&machine, (e, asked), cx));
         }
-        let list = parse_text::<List<ThereId>>(result).map(|list| list.ports);
-        then(this, list.map_err(|why| hide_destination(&why, &machine, &destination)), cx);
+        then(this, list.map(|list| list.ports).map_err(|e| missed_of(&machine, &destination, &e)), cx);
     });
 }
 
@@ -58,7 +71,7 @@ impl PortsPanel {
     fn heard_there(
         &mut self,
         scope: Option<&Scope>,
-        answer: Result<Vec<Port<ThereId>>, String>,
+        answer: Result<Vec<Port<ThereId>>, Missed>,
         cx: &mut Context<Self>,
     ) {
         self.watch.end();
@@ -71,9 +84,7 @@ impl PortsPanel {
                 self.retry.heard();
                 self.listed_there(ports);
             }
-            Err(said) => {
-                self.retry.failed(said, Instant::now());
-            }
+            Err(missed) => self.retry.missed(missed, Instant::now()),
         }
         cx.notify();
     }

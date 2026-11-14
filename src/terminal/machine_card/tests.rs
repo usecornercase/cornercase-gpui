@@ -233,3 +233,12 @@ fn no_other_card_offers_an_update() {
     let text = card_text(&MachinePlace::at(&seen, ws, None), &seen, &told, &Standing::LinkDown);
     assert_eq!(text.update, UpdateOffer::Hidden);
 }
+
+#[test]
+fn a_refused_tab_says_its_machine_restarted_and_counts_nothing() {
+    let text = card_in(&Standing::Restarted);
+    assert_eq!(text.state, Some(CardState::Said("vps restarted".into())));
+    assert_eq!(text.why, None);
+    let seen = machine(LinkState::Linked, Vec::new());
+    assert!(!card_counts(&Standing::Restarted, &seen, NOW));
+}

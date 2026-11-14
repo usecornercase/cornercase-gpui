@@ -1,23 +1,28 @@
 use super::super::wire::Mode;
 use super::*;
-use crate::test_util::vps_aim;
+use crate::test_util::{reads_with_boot, vps_aim};
 
 fn selected(workspace: Whose) -> Selected {
     Selected { workspace, path: "src/a.rs".into(), mode: Mode::Commits }
 }
 
+fn on_a_machine() -> Selected {
+    selected(Whose::There(vps_aim(), "ana@vps.example.com".into()))
+}
+
 #[test]
 fn a_machines_file_is_asked_with_the_machines_own_id() {
     assert_eq!(
-        file_command("file", &selected(Whose::There(vps_aim(), "ana@vps.example.com".into())), &[]),
+        file_command("file", &on_a_machine(), &[], ReadReleases::default()),
         ["changes", "file", "src/a.rs", "--workspace", "7", "--mode", "commits", "--json"]
     );
 }
 
 #[test]
 fn a_machines_gap_is_asked_with_the_machines_own_id() {
+    let hunk = args(&["--hunk", "1"]);
     assert_eq!(
-        file_command("gap", &selected(Whose::There(vps_aim(), "ana@vps.example.com".into())), &args(&["--hunk", "1"])),
+        file_command("gap", &on_a_machine(), &hunk, ReadReleases::default()),
         ["changes", "gap", "src/a.rs", "--hunk", "1", "--workspace", "7", "--mode", "commits", "--json"]
     );
 }
@@ -25,9 +30,28 @@ fn a_machines_gap_is_asked_with_the_machines_own_id() {
 #[test]
 fn a_file_here_is_asked_as_it_always_was() {
     assert_eq!(
-        file_command("file", &selected(Whose::Here(43)), &[]),
+        file_command("file", &selected(Whose::Here(43)), &[], reads_with_boot()),
         ["changes", "file", "src/a.rs", "--workspace", "43", "--mode", "commits", "--json"]
     );
+}
+
+#[test]
+fn a_file_read_on_a_machine_carries_the_boot_of_its_aim_reads_with_boot() {
+    let boot = vps_aim().boot;
+    let file = file_command("file", &on_a_machine(), &[], reads_with_boot());
+    assert_eq!(file[file.len() - 3..], ["--json", "--boot", boot.as_str()]);
+    let hunk = args(&["--hunk", "1"]);
+    let gap = file_command("gap", &on_a_machine(), &hunk, reads_with_boot());
+    assert_eq!(gap[gap.len() - 3..], ["--json", "--boot", boot.as_str()]);
+}
+
+#[test]
+fn a_refused_file_read_says_the_machine_restarted_and_any_other_failure_keeps_its_words() {
+    let refused = cli::failure("changes", Some(4), b"stale");
+    assert_eq!(refusal_text(Some("vps"), &refused), "vps restarted");
+    let other = cli::failure("changes", Some(1), b"no such file");
+    assert_eq!(refusal_text(Some("vps"), &other), other.to_string());
+    assert_eq!(refusal_text(None, &refused), refused.to_string());
 }
 
 fn opened(digest: &str) -> Open {

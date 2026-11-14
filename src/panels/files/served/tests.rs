@@ -186,3 +186,16 @@ fn an_older_refusal_is_not_read_as_an_answer() {
 fn a_json_answer_is_still_an_answer() {
     assert_eq!(answered(Some(0), b"{\"folders\":[]}", b"").expect("answered"), "{\"folders\":[]}");
 }
+
+#[test]
+fn a_files_answer_with_status_4_is_a_refused_boot() {
+    let error = answered(Some(4), b"", b"Error: this request is for another run").expect_err("refused");
+    assert!(cli::stale_boot(&error));
+}
+
+#[test]
+fn a_files_failure_with_another_status_keeps_its_words() {
+    let error = answered(Some(1), b"", b"Error: no such folder").expect_err("failed");
+    assert!(!cli::stale_boot(&error));
+    assert_eq!(error.to_string(), "no such folder");
+}

@@ -11,7 +11,7 @@ use gpui::{
 };
 
 use crate::cli;
-use crate::model::{Project, Workspace};
+use crate::model::{Project, ReadReleases, Workspace};
 use crate::platform::paths::Style;
 use crate::store::{MachineRead, Store};
 use crate::theme::radius;
@@ -46,12 +46,12 @@ impl Spot {
         Self { id: workspace.id, root, style, source, label: place_label(project, workspace) }
     }
 
-    fn on_machine(read: &MachineRead) -> Option<Self> {
+    fn on_machine(read: &MachineRead, releases: ReadReleases) -> Option<Self> {
         Some(Self {
             id: place_key(read),
             root: PathBuf::from(&read.path),
             style: Style::of_path(&read.path),
-            source: source_of(read)?,
+            source: source_of(read, releases)?,
             label: format!("{} on {}", read.place, read.aim.machine),
         })
     }
@@ -250,7 +250,7 @@ impl Finder {
         let store = store.read(cx);
         let read = store.machine_read();
         let spot = match &read {
-            Some(read) => Spot::on_machine(read),
+            Some(read) => Spot::on_machine(read, store.read_releases(&read.aim.machine)),
             None => shown_workspace(store.session.as_ref()).map(|(project, ws)| Spot::new(project, ws)),
         };
         let refused = read.and_then(|read| read.reach.why_not().map(str::to_string));

@@ -1,7 +1,8 @@
 use super::super::Mode;
 use super::*;
+use crate::cli::Version;
 use crate::store::Reach;
-use crate::test_util::{vps_aim as aim, vps_read as read, vps_target as on_machine};
+use crate::test_util::{reads_with_boot, vps_aim as aim, vps_read as read, vps_target as on_machine};
 
 fn on_vps() -> Whose {
     Whose::There(aim(), "ana@vps.example.com".into())
@@ -18,15 +19,69 @@ fn every() -> Follow {
 #[test]
 fn a_machines_workspace_is_listed_with_its_own_id_and_the_panels_mode() {
     assert_eq!(
-        list_args(&there(Mode::Commits)),
+        list_args(&there(Mode::Commits), ReadReleases::default()),
         ["changes", "list", "--follow", "--workspace", "7", "--mode", "commits"]
     );
 }
 
 #[test]
+fn a_machines_changes_follow_with_the_boot_of_its_aim_from_0_13_66() {
+    let boot = aim().boot;
+    let listed = list_args(&there(Mode::Commits), reads_with_boot());
+    assert_eq!(listed[listed.len() - 2..], ["--boot", boot.as_str()]);
+}
+
+#[test]
+fn below_0_13_66_or_with_either_release_unknown_they_follow_without_one() {
+    let known = |here: Option<Version>, server: Option<Version>| {
+        list_args(&there(Mode::Commits), ReadReleases { here, there: server })
+    };
+    let below = known(Some(Version::new(0, 13, 65)), Some(Version::new(0, 12, 212)));
+    let old_server = known(Some(Version::new(0, 13, 66)), Some(Version::new(0, 12, 211)));
+    let client_unknown = known(None, Some(Version::new(0, 12, 212)));
+    let server_unknown = known(Some(Version::new(0, 13, 66)), None);
+    for listed in [below, old_server, client_unknown, server_unknown] {
+        assert_eq!(listed, ["changes", "list", "--follow", "--workspace", "7", "--mode", "commits"]);
+    }
+}
+
+#[test]
+fn a_workspace_here_never_follows_with_a_boot() {
+    let follow = Follow { scope: Scope::Project(Mode::All), workspace: Some(Whose::Here(43)) };
+    assert!(!list_args(&follow, reads_with_boot()).contains(&"--boot".to_string()));
+}
+
+#[test]
+fn every_workspace_is_followed_without_a_boot() {
+    assert_eq!(list_args(&every(), reads_with_boot()), ["changes", "list", "--follow", "--every"]);
+}
+
+#[test]
+fn a_stream_refused_for_its_boot_waits_instead_of_trying_again() {
+    let refused = StreamEnd::new("error".into(), Some(4));
+    let lost = StreamEnd::new("link dropped".into(), Some(1));
+    assert_eq!(after_end(Some("vps"), &refused), AfterEnd::Refused);
+    assert_eq!(after_end(Some("vps"), &lost), AfterEnd::TryAgain("link dropped".into()));
+    assert_eq!(after_end(None, &refused), AfterEnd::Ended("error".into()));
+}
+
+#[test]
+fn after_a_refusal_a_click_asks_nothing() {
+    let read = read(Reach::Up(on_machine()));
+    let mut hearing = Hearing::default();
+    hearing.believed();
+    assert_eq!(hearing.may_read(&read), Ok(on_machine()));
+    hearing.refused();
+    assert_eq!(hearing.may_read(&read), Err("vps restarted".to_string()));
+}
+
+#[test]
 fn a_workspace_here_is_listed_as_it_always_was() {
     let follow = Follow { scope: Scope::Project(Mode::All), workspace: Some(Whose::Here(43)) };
-    assert_eq!(list_args(&follow), ["changes", "list", "--follow", "--workspace", "43", "--mode", "all"]);
+    assert_eq!(
+        list_args(&follow, ReadReleases::default()),
+        ["changes", "list", "--follow", "--workspace", "43", "--mode", "all"]
+    );
 }
 
 #[test]

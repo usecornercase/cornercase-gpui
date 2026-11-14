@@ -196,7 +196,7 @@ fn a_new_connection_reads_the_accounts_again() {
     let mut tab = opening();
     tab.accounts = Asked::Failed("x".into());
     let (tx, _rx) = futures::channel::mpsc::unbounded();
-    tab.reopen(cli::Target::Local, &opening().aimed, None, &tx);
+    tab.reopen(cli::Target::Local, &opening().aimed, crate::model::ReadReleases::default(), &tx);
     assert_eq!(tab.accounts, Asked::Unasked);
 }
 

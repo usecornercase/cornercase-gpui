@@ -76,9 +76,9 @@ pub(crate) enum Msg {
 
 pub(crate) enum Heard {
     Line(Box<Session>),
-    ViewEnded(String),
+    ViewEnded(cli::StreamEnd),
     Frame(Box<Frame>),
-    SurfaceEnded(String),
+    SurfaceEnded(cli::StreamEnd),
     QueueError(String),
     FocusRefused(String),
     Copied(String, Option<u64>),
@@ -507,11 +507,11 @@ impl Root {
     fn own_heard(&mut self, serial: u64, heard: Heard, cx: &mut Context<Self>) {
         match heard {
             Heard::Line(session) => self.session_arrived(*session, cx),
-            Heard::ViewEnded(err) => self.view_ended(&err, cx),
+            Heard::ViewEnded(ended) => self.view_ended(ended.said(), cx),
             Heard::Frame(frame) => {
                 self.own.frame_arrived(*frame);
             }
-            Heard::SurfaceEnded(err) => self.surface_ended(serial, &err, cx),
+            Heard::SurfaceEnded(ended) => self.surface_ended(serial, ended.said(), cx),
             Heard::QueueError(e) | Heard::FocusRefused(e) => self.say(&e, cx),
             Heard::Copied(..) | Heard::Bell(_) => {}
         }

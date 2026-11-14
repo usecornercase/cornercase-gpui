@@ -6,8 +6,8 @@ use std::sync::{Arc, mpsc};
 use serde_json::json;
 
 use super::{
-    BINARY, Binary, CALLER, Job, Queue, QueueTap, Remote, Target, Worker, answered, failure, gather_input,
-    gather_scroll, moves_view, older_refusal, reported, spawn_failure, stale_boot, use_binary, with_boot,
+    BINARY, Binary, CALLER, Job, Queue, QueueTap, Remote, StreamEnd, Target, Worker, answered, failure, gather_input,
+    gather_scroll, moves_view, older_refusal, refused_boot, reported, spawn_failure, stale_boot, use_binary, with_boot,
 };
 
 fn args(cmd: &Command) -> Vec<&str> {
@@ -362,4 +362,24 @@ fn a_queue_made_for_a_run_keeps_the_run_and_hands_its_worker_the_boot() {
     assert_eq!((queue.machine(), queue.boot(), worker.boot), (Some("vps"), None, None));
     let (queue, worker, _rx) = made(None);
     assert_eq!((queue.machine(), worker.boot), (None, None));
+}
+
+#[test]
+fn a_stream_that_ended_with_status_4_was_refused_for_its_boot() {
+    assert!(StreamEnd::new("error: another run".into(), Some(4)).stale_boot());
+}
+
+#[test]
+fn a_stream_that_ended_otherwise_or_was_stopped_was_not() {
+    for status in [Some(1), Some(0), None] {
+        assert!(!StreamEnd::new(String::new(), status).stale_boot());
+    }
+}
+
+#[test]
+fn only_status_4_is_a_refused_boot_for_an_answer_read_by_hand() {
+    let refused = refused_boot("files", Some(4), b"error: another run").expect("refused");
+    assert!(stale_boot(&refused));
+    assert!(refused_boot("files", Some(1), b"error").is_none());
+    assert!(refused_boot("files", None, b"").is_none());
 }
