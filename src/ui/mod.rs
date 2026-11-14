@@ -16,6 +16,7 @@ pub(crate) mod separated;
 pub(crate) mod signs;
 pub(crate) mod slider;
 pub(crate) mod split;
+pub(crate) mod stack;
 pub(crate) mod text_field;
 pub(crate) mod track;
 
@@ -32,6 +33,7 @@ pub(crate) use signs::{
     ROW_ACTION, accent_chip, callout, copy_button, done_line, dot, error_line, field_action, quiet_chip,
     resting_action, row_action, tinted_chip, warning_line,
 };
+pub(crate) use stack::{Fit, stack};
 pub(crate) use text_field::{TextField, TextFieldEvent};
 
 use crate::platform::Os;

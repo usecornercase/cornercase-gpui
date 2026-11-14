@@ -1,6 +1,5 @@
 use std::fmt::Display;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use futures::StreamExt as _;
 use futures::channel::{mpsc, oneshot};
@@ -26,6 +25,7 @@ mod jobs;
 mod machine_read;
 mod machines_there;
 mod run_on;
+mod toasts;
 mod tunnels;
 mod update_there;
 
@@ -35,6 +35,7 @@ use machine_read::ThereState;
 pub(crate) use machine_read::{AgentReach, MachineRead, OlderNote, Reach, TabThere, release_clause};
 pub(crate) use machines_there::{MachineAct, NoticeThere, answer_words, failed_there, part_sent_note, stale_note};
 pub(crate) use run_on::{CloneThere, StartHere, StartThere};
+pub(crate) use toasts::{Toast, ToastKind};
 pub(crate) use tunnels::{
     Asked, Control, Held, MachineLink, ReverseState, Tail, TunnelRow, Whose, address_there, copied_words, heading,
     none_note, others_note, remote_url, section_tail,
@@ -93,16 +94,6 @@ pub(crate) struct Store {
     app_stream: Option<Stream>,
 }
 
-#[derive(Clone)]
-pub(crate) struct Toast {
-    pub id: u64,
-    pub text: String,
-    pub kind: ToastKind,
-    pub action: Option<(String, ToastGo)>,
-    pub at: Instant,
-    pub count: u32,
-}
-
 #[derive(Default)]
 pub(crate) struct Asks {
     pub refocus: Option<FocusHandle>,
@@ -118,39 +109,6 @@ pub(crate) enum ToastGo {
     Tunnelled(String, u16),
     Job(Busy, Vec<String>),
     Open(PanelKind),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ToastKind {
-    Info,
-    Error,
-    NeedsYou,
-    Done,
-}
-
-impl Toast {
-    pub(crate) fn expired(&self) -> bool {
-        let ttl = match self.kind {
-            ToastKind::Info => 4,
-            ToastKind::Error => 8,
-            ToastKind::Done | ToastKind::NeedsYou => 15,
-        };
-        self.at.elapsed() > Duration::from_secs(ttl)
-    }
-
-    fn repeats(&self, other: &Toast) -> bool {
-        self.kind == other.kind && self.text == other.text && self.action == other.action && !self.expired()
-    }
-}
-
-pub(crate) fn push_toast(toasts: &mut Vec<Toast>, mut toast: Toast) {
-    if let Some(at) = toasts.iter().position(|t| t.repeats(&toast)) {
-        toast.count += toasts.remove(at).count;
-    }
-    toasts.push(toast);
-    if toasts.len() > 5 {
-        toasts.remove(0);
-    }
 }
 
 struct GlobalStore(Entity<Store>);
@@ -405,27 +363,6 @@ impl Store {
                 cx.notify();
             }
         }
-    }
-
-    pub(crate) fn toast_with(
-        &mut self,
-        text: impl Into<String>,
-        kind: ToastKind,
-        action: Option<(String, ToastGo)>,
-        cx: &mut Context<Self>,
-    ) {
-        let id = self.next_toast;
-        self.next_toast += 1;
-        push_toast(&mut self.toasts, Toast { id, text: text.into(), kind, action, at: Instant::now(), count: 1 });
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(Duration::from_secs(16)).await;
-            let _ = this.update(cx, |this, cx| {
-                this.toasts.retain(|t| !t.expired());
-                cx.notify();
-            });
-        })
-        .detach();
-        cx.notify();
     }
 
     pub(crate) fn start_job(&mut self, busy: Busy, cx: &mut Context<Self>) -> u64 {
