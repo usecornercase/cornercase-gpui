@@ -12,7 +12,7 @@ categories = ["development-tools"]
 
 [dependencies]
 anyhow = "1.0.104"
-base64 = "0.22.1"
+base64 = "0.23.1"
 futures = "0.3"
 libc = "0.2, <0.2.190"
 gpui = { version = "0.2.2", default-features = false, features = ["font-kit", "runtime_shaders", "wayland", "x11"] }
