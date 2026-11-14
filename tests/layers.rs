@@ -6,6 +6,9 @@ use std::{
 const MAX_LINES: usize = 1000;
 const WINDOW: &[&str] = &["app", "context_menu", "sidebar", "tabs", "terminal"];
 
+const SCRIPTS: &[&str] = &["tools", ".github", "site/scripts", "site/package.json"];
+const STOPS_BY_NAME: &[&str] = &["pkill", "killall"];
+
 const LONG_FILES: &[&str] = &[];
 const COMMENTED_FILES: &[&str] = &[];
 const INLINE_TESTS: &[&str] = &[];
@@ -178,21 +181,58 @@ fn sources() -> Vec<Source> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut paths = Vec::new();
     for folder in ["src", "tests"] {
-        collect(&root.join(folder), &mut paths);
+        collect(&root.join(folder), &mut paths, is_rust);
     }
     paths.sort();
     paths.iter().map(|path| Source::read(root, path)).collect()
 }
 
-fn collect(dir: &Path, paths: &mut Vec<PathBuf>) {
+fn collect(dir: &Path, paths: &mut Vec<PathBuf>, keep: fn(&Path) -> bool) {
     for entry in fs::read_dir(dir).expect("folder is readable") {
         let path = entry.expect("entry is readable").path();
         if path.is_dir() {
-            collect(&path, paths);
-        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            collect(&path, paths, keep);
+        } else if keep(&path) {
             paths.push(path);
         }
     }
+}
+
+fn is_rust(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "rs")
+}
+
+fn is_not_markdown(path: &Path) -> bool {
+    path.extension().is_none_or(|ext| ext != "md")
+}
+
+fn scripts() -> Vec<PathBuf> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut paths = Vec::new();
+    for entry in SCRIPTS {
+        let path = root.join(entry);
+        if path.is_dir() {
+            collect(&path, &mut paths, is_not_markdown);
+        } else {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    paths
+}
+
+fn is_word(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
+fn stops_by_name(text: &str) -> bool {
+    STOPS_BY_NAME.iter().any(|name| {
+        text.match_indices(name).any(|(at, _)| {
+            let before = text[..at].chars().next_back();
+            let after = text[at + name.len()..].chars().next();
+            !before.is_some_and(is_word) && !after.is_some_and(is_word)
+        })
+    })
 }
 
 fn check(name: &str, exceptions: &[&str], breaks: impl Fn(&Source) -> bool) {
@@ -492,4 +532,23 @@ fn the_lexer_tells_comments_from_strings() {
     let text = "let a = \"// not\"; // yes\nlet b = r#\"/* no */\"#; /* yes */\nlet c = '\"'; fn f<'a>() {}\n";
     let (code, comments) = Lexer::new(text).split();
     assert_eq!((comments, code.contains("fn f<'a>")), (vec![1, 2], true));
+}
+
+#[test]
+fn checked_in_scripts_never_stop_a_process_by_name() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let found: Vec<String> = scripts()
+        .iter()
+        .filter(|path| stops_by_name(&String::from_utf8_lossy(&fs::read(path).expect("script is readable"))))
+        .map(|path| path.strip_prefix(root).expect("script is under the root").display().to_string())
+        .collect();
+    assert!(found.is_empty(), "a script stops a process by its name (AGENTS.md, Manual check): {found:?}");
+}
+
+#[test]
+fn the_stop_check_tells_a_command_from_a_longer_word() {
+    let stops = ["sleep 1; pkill -f \"sleep 3600\" -u $USER", "/usr/bin/killall y", "x=$(pkill z)"];
+    let words = ["skillall pkillx pkill_y", "pgrep -P 1; kill 2", "xpkill"];
+    assert_eq!(stops.map(stops_by_name), [true; 3]);
+    assert_eq!(words.map(stops_by_name), [false; 3]);
 }
