@@ -207,6 +207,16 @@ impl Issue {
             .collect()
     }
 
+    pub(super) fn info_parts(&self, info: &[String], now: i64) -> Vec<String> {
+        let updated = (!self.updated_at.is_empty()).then(|| format!("updated {}", ago(&self.updated_at, now)));
+        self.info_extras(info)
+            .into_iter()
+            .chain(updated)
+            .map(|part| part.trim().to_string())
+            .filter(|part| !part.is_empty())
+            .collect()
+    }
+
     pub(super) fn id(&self) -> (String, String) {
         (self.source.clone(), self.key.clone())
     }

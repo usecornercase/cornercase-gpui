@@ -89,9 +89,7 @@ impl Browser {
 
     fn address_box(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let focused = self.address.read(cx).focus_handle(cx).is_focused(window);
-        let field = div()
-            .flex_1()
-            .min_w_0()
+        let field = ui::field_slot(self.address.clone())
             .capture_any_mouse_down(cx.listener(|this, _: &MouseDownEvent, window, cx| {
                 this.address_pressed = !this.address.read(cx).focus_handle(cx).is_focused(window);
             }))
@@ -102,11 +100,10 @@ impl Browser {
                         this.select_address(window, cx);
                     }
                 }),
-            )
-            .child(self.address.clone());
+            );
         let open = self.active_url().as_deref().and_then(outside_url).map(|url| open_outside(url.to_string()));
         let inner = div().h(px(INLINE)).flex().items_center().gap(px(4.)).child(field).children(open);
-        div().flex_1().min_w_0().child(ui::input_box(inner, focused).py(px(4.)).pr(px(4.)))
+        ui::input_box(inner, focused).py(px(4.)).pr(px(4.)).flex_1().min_w_0()
     }
 
     pub(super) fn loading(&self) -> bool {

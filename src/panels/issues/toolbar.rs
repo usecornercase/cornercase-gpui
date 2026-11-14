@@ -74,12 +74,8 @@ impl IssuesPanel {
     }
 
     fn filters_row(&self, window: &Window, cx: &mut Context<Self>) -> Div {
-        let mut row = div()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .child(div().flex_1().min_w(px(160.)).child(self.search_box(window, cx)))
-            .child(
+        let mut row =
+            div().flex().items_center().gap(px(8.)).child(self.search_box(window, cx).flex_1().min_w(px(160.))).child(
                 ui::checkbox("issues-closed", self.closed, "Include closed")
                     .flex_none()
                     .text_size(px(12.))

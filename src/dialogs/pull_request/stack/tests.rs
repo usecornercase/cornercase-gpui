@@ -13,7 +13,7 @@ fn stacked(state: &str, layers: Vec<Layer>, position: usize) -> PullRequest {
 #[test]
 fn the_heading_names_the_stack_its_base_and_the_layer() {
     let pr = stacked("open", vec![layer(483, "open", None), layer(485, "open", None)], 2);
-    assert_eq!(heading(pr.stack.as_ref().expect("a stack")), "#480 on main · layer 2 of 2");
+    assert_eq!(heading(pr.stack.as_ref().expect("a stack")), ["#480 on main", "layer 2 of 2"]);
 }
 
 #[test]

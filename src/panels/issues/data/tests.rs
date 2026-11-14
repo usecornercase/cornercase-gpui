@@ -1,7 +1,7 @@
 use super::*;
 use crate::model::machines::parse_list;
 use crate::model::machines::run_on::server_release;
-use crate::test_util::{fixture, shop_on_vps};
+use crate::test_util::{bare_parts, fixture, shop_on_vps};
 
 const SOURCES: &str = r#"{
   "closed": false,
@@ -320,6 +320,56 @@ fn info_without_chips() {
     let issue = Issue { state: "open".into(), labels: vec!["bug".into(), "ui".into()], ..Default::default() };
     let info: Vec<String> = ["open", "bug, ui", "assigned to @a", "opened by @b"].map(String::from).into();
     assert_eq!(issue.info_extras(&info), ["assigned to @a", "opened by @b"]);
+}
+
+const LINE_NOW: i64 = 1_792_699_989;
+
+fn texts(parts: &[&str]) -> Vec<String> {
+    parts.iter().map(ToString::to_string).collect()
+}
+
+#[test]
+fn an_issues_line_lists_the_facts_its_chips_do_not_repeat_and_when_it_changed() {
+    let issue = Issue {
+        state: "open".into(),
+        labels: texts(&["bug", "ui"]),
+        updated_at: "2026-10-19T20:13:09Z".into(),
+        ..Default::default()
+    };
+    let info = texts(&["open", "bug, ui", "assigned to @a @b", "opened by @c"]);
+    assert_eq!(issue.info_parts(&info, LINE_NOW), ["assigned to @a @b", "opened by @c", "updated 3d ago"]);
+}
+
+#[test]
+fn an_issue_without_extras_says_only_when_it_changed() {
+    let issue = Issue { state: "open".into(), updated_at: "2026-10-22T19:13:09Z".into(), ..Default::default() };
+    assert_eq!(issue.info_parts(&texts(&["open"]), LINE_NOW), ["updated 1h ago"]);
+}
+
+#[test]
+fn an_issue_never_updated_has_no_time_on_its_line() {
+    let issue = Issue { state: "open".into(), ..Default::default() };
+    assert_eq!(issue.info_parts(&texts(&["open", "opened by @c"]), LINE_NOW), ["opened by @c"]);
+}
+
+#[test]
+fn an_issue_with_nothing_to_tell_has_no_line_parts() {
+    let issue = Issue { state: "open".into(), ..Default::default() };
+    assert_eq!(issue.info_parts(&texts(&["open"]), LINE_NOW), Vec::<String>::new());
+}
+
+#[test]
+fn no_part_of_an_issues_line_is_blank_or_starts_or_ends_with_a_dot() {
+    let issue = Issue {
+        state: "open".into(),
+        labels: texts(&["bug"]),
+        updated_at: "2026-10-22T19:13:09Z".into(),
+        ..Default::default()
+    };
+    let info = texts(&["open", "bug", "", "  ", " opened by @b ", "milestone 2"]);
+    let parts = issue.info_parts(&info, LINE_NOW);
+    assert_eq!(parts, ["opened by @b", "milestone 2", "updated 1h ago"]);
+    assert!(bare_parts(&parts));
 }
 
 #[test]

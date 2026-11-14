@@ -62,3 +62,7 @@ pub(crate) fn each_change_moves<I: Clone + Default, K: PartialEq + std::fmt::Deb
         assert_ne!(key(&moved), key(&base), "{what} did not move the key");
     }
 }
+
+pub(crate) fn bare_parts(parts: &[String]) -> bool {
+    parts.iter().all(|part| !part.is_empty() && !part.starts_with('·') && !part.ends_with('·'))
+}

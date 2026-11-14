@@ -408,7 +408,7 @@ impl FilesPanel {
             .gap(px(4.))
             .p(px(6.))
             .h(px(FIELD_HEIGHT))
-            .child(div().flex_1().min_w_0().child(ui::search_field(find.field.clone(), focused, None)))
+            .child(ui::search_field(find.field.clone(), focused, None).flex_1().min_w_0())
             .child(div().flex_none().px(px(4.)).child(Self::find_count(find, blank)))
             .children(Self::find_buttons(cx));
         let bar = div()

@@ -22,15 +22,20 @@ pub(super) fn section(shown: &Shown) -> Option<Div> {
             .flex_col()
             .gap(px(2.))
             .child(ui::section("Stack"))
-            .child(muted(heading(stack)).pb(px(4.)))
+            .child(heading_row(stack))
             .children(rows)
             .children(blocker(pr))
             .children(merged_below(pr, stack, shown.behind).map(|text| muted(text).pt(px(4.)))),
     )
 }
 
-pub(super) fn heading(stack: &Stack) -> String {
-    format!("#{} on {} · layer {} of {}", stack.number, stack.base, stack.position, stack.size)
+pub(super) fn heading(stack: &Stack) -> [String; 2] {
+    [format!("#{} on {}", stack.number, stack.base), format!("layer {} of {}", stack.position, stack.size)]
+}
+
+fn heading_row(stack: &Stack) -> Div {
+    let parts = heading(stack).into_iter().map(ui::wrapped_fact).collect();
+    ui::dotted(parts, Vec::new()).text_size(px(12.)).text_color(colours::muted()).pb(px(4.))
 }
 
 fn tone(layer: &Layer, own: bool) -> Rgba {

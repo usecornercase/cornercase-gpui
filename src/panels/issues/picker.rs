@@ -49,7 +49,12 @@ impl IssuesPanel {
             .child(ui::section(capitalise(field)).px(px(10.)).pt(px(6.)).pb(px(4.)));
         let focused = self.picker_search.read(cx).focus_handle(cx).is_focused(window);
         let search = self.tab.source().map(|_| {
-            div().px(px(2.)).pb(px(4.)).child(ui::search_field(self.picker_search.clone(), focused, None).py(px(4.)))
+            div()
+                .flex()
+                .flex_col()
+                .px(px(2.))
+                .pb(px(4.))
+                .child(ui::search_field(self.picker_search.clone(), focused, None).py(px(4.)))
         });
         card.children(search)
             .child(div().id("issues-picker-rows").max_h(px(300.)).overflow_y_scroll().flex().flex_col().children(rows))

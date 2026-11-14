@@ -130,7 +130,7 @@ impl ColourPicker {
 
     fn hex_row(&self) -> impl IntoElement + use<> {
         let preview = swatch(self.colour(), 24.);
-        let field = div().flex_1().min_w_0().child(super::input_box(self.field.clone(), false));
+        let field = super::input_box(self.field.clone(), false).flex_1().min_w_0();
         div().flex().items_center().gap(px(8.)).child(preview).child(field)
     }
 }

@@ -112,7 +112,7 @@ impl SettingsPanel {
         let open = self.choice.as_ref().is_some_and(|c| matches!(role, Role::Setting(key) if *key == c.key));
         let tail = self.field_tail(role, cx);
         let opener = look.suggests.then(|| self.suggestions_opener(role, cx)).flatten();
-        let inner = div().flex().items_center().gap(px(4.)).child(div().flex_1().min_w_0().child(field.clone()));
+        let inner = div().flex().items_center().gap(px(4.)).child(ui::field_slot(field.clone()));
         ui::input_box(inner.children(tail).children(opener), focused)
             .when(open, |d| d.border_color(colours::accent()))
             .when(look.warn && !focused && !open, |d| d.border_color(ui::menu::edge(false, true)))

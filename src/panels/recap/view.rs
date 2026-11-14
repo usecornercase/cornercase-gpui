@@ -124,7 +124,12 @@ fn heading(page: &Page, choice: Choice, now: i64) -> Div {
         .flex_col()
         .gap(px(2.))
         .child(div().text_size(px(13.)).font_weight(FontWeight::MEDIUM).child(label))
-        .child(ui::dim(page.byline(now)).text_size(px(12.)))
+        .child(byline(page, now))
+}
+
+fn byline(page: &Page, now: i64) -> Div {
+    let parts = page.byline_parts(now).into_iter().map(ui::wrapped_fact).collect();
+    ui::dotted(parts, Vec::new()).text_size(px(12.)).text_color(colours::faint())
 }
 
 fn explained(content: Div) -> AnyElement {

@@ -138,7 +138,7 @@ impl ProcessesPanel {
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.filter.update(cx, TextField::clear)))
         });
         let focused = self.filter.read(cx).focus_handle(cx).is_focused(window);
-        div().flex_1().child(ui::search_field(self.filter.clone(), focused, clear))
+        ui::search_field(self.filter.clone(), focused, clear).flex_1()
     }
 
     fn toolbar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {

@@ -330,7 +330,7 @@ impl FilesPanel {
             .py(px(10.))
             .border_b_1()
             .border_color(colours::border())
-            .child(div().flex_1().min_w_0().child(ui::input_box(self.query.clone(), focused)))
+            .child(ui::input_box(self.query.clone(), focused).flex_1().min_w_0())
             .child(ui::segments(vec![
                 self.mode_segment("files-mode-names", "Name", Mode::Names, cx),
                 self.mode_segment("files-mode-text", "Text", Mode::Text, cx),

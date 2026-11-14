@@ -125,7 +125,7 @@ impl Page {
         Self { answer, blocks, list }
     }
 
-    pub(super) fn byline(&self, now: i64) -> String {
+    pub(super) fn byline_parts(&self, now: i64) -> Vec<String> {
         let answer = &self.answer;
         let who = answer.title.clone().or_else(|| answer.agent.clone());
         let read = match answer.conversations {
@@ -133,7 +133,7 @@ impl Page {
             many => format!("read {many} conversations"),
         };
         let written = answer.written_at.as_deref().and_then(|time| written(time, now));
-        who.into_iter().chain(answer.model.clone()).chain(Some(read)).chain(written).collect::<Vec<_>>().join(" · ")
+        who.into_iter().chain(answer.model.clone()).chain(Some(read)).chain(written).collect()
     }
 }
 

@@ -447,13 +447,13 @@ impl TodoPanel {
 
     fn new_item_field(&self, window: &Window, cx: &App) -> impl IntoElement + use<> {
         let focused = self.new_item.read(cx).focus_handle(cx).is_focused(window);
-        div().flex_none().px(px(12.)).pb(px(12.)).pt(px(6.)).child(ui::input_box(
+        div().flex_none().flex().flex_col().px(px(12.)).pb(px(12.)).pt(px(6.)).child(ui::input_box(
             div()
                 .flex()
                 .items_start()
                 .gap(px(6.))
                 .child(div().text_color(if focused { colours::accent() } else { colours::faint() }).child("+"))
-                .child(div().flex_1().min_w(px(0.)).child(self.new_item.clone())),
+                .child(ui::field_slot(self.new_item.clone())),
             focused,
         ))
     }
