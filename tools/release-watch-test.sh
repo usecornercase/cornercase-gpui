@@ -286,18 +286,18 @@ on_attempt_3_it_tells_which_jobs_no_runner_took() {
   runw
   check "rerun" nohas "$t/calls" 'run rerun' &&
     check "title" [ "$(cat "$t/created-title" 2> /dev/null)" = 'Release v0.1.90 failed' ] &&
-    check "attempts" has "$t/created-body" 'in 3 attempts' &&
+    check "attempts" has "$t/created-body" 'No runner took these jobs on attempt 3.' &&
     check "link" has "$t/created-body" "](${base}/actions/runs/123/attempts/3)" &&
-    check "line" has "$t/out" "and no runner took macOS (sign and notarize) in 3 attempts: opened $base/issues/99"
+    check "line" has "$t/out" "and no runner took macOS (sign and notarize) on attempt 3, the last Release watch re-runs: opened $base/issues/99"
 }
 
 a_job_that_ran_a_step_and_failed_is_told_not_re_run() {
-  real_failure v0.1.90 123 1
+  scenario v0.1.90 123 1 failure '1|failure|macOS (sign and notarize)'
   issues
   runw
   check "rerun" nohas "$t/calls" 'run rerun' &&
     check "create" has "$t/calls" 'issue create' &&
-    check "steps" has "$t/created-body" "\`macOS (sign and notarize)\` (failure, 6 steps ran)" &&
+    check "steps" has "$t/created-body" "\`macOS (sign and notarize)\` (failure, 1 step ran)" &&
     check "line" has "$t/out" 'ended in failure on attempt 1, and a job ran and failed: opened'
 }
 
@@ -316,6 +316,8 @@ a_failure_with_no_job_listed_is_told_not_re_run() {
   check "rerun" nohas "$t/calls" 'run rerun' &&
     check "create" has "$t/calls" 'issue create' &&
     check "none" has "$t/created-body" 'none listed' &&
+    check "no job to re-run" nohas "$t/created-body" 'gh run rerun' &&
+    check "open the run" has "$t/created-body" 'Open the run' &&
     check "line" has "$t/out" 'but no job is listed as failed'
 }
 
@@ -325,7 +327,7 @@ a_cancelled_run_is_told_not_re_run() {
   runw
   check "rerun" nohas "$t/calls" 'run rerun' &&
     check "create" has "$t/calls" 'issue create' &&
-    check "body" has "$t/created-body" 'The run was cancelled.' &&
+    check "body" has "$t/created-body" 'was cancelled, so v0.1.90 is tagged' &&
     check "line" has "$t/out" 'was cancelled on attempt 1: opened'
 }
 
@@ -388,7 +390,7 @@ a_tag_with_no_release_run_is_left_to_the_version_workflow() {
   dropped v0.1.90 123 1
   runs
   runw
-  check "line" has "$t/out" 'v0.1.90 has no Release run yet: left to the Version workflow, which dispatches it on the next push to main' &&
+  check "line" has "$t/out" 'v0.1.90 has no Release run yet: left to the Version workflow, which dispatches a tag right after making it, and again on the next push to main if that dispatch was lost' &&
     check "rerun" nohas "$t/calls" 'rerun' &&
     check "dispatch" nohas "$t/calls" 'workflow run' &&
     check "issue" nohas "$t/calls" 'issue '
@@ -400,6 +402,7 @@ a_failure_it_leaves_opens_one_issue_with_commands() {
   runw
   check "title" [ "$(cat "$t/created-title" 2> /dev/null)" = 'Release v0.1.90 failed' ] &&
     check "link" has "$t/created-body" "](${base}/actions/runs/123/attempts/1)" &&
+    check "steps" has "$t/created-body" '(failure, 6 steps ran)' &&
     check "rerun command" has "$t/created-body" "gh run rerun 123 --failed --repo $slug" &&
     check "delete command" has "$t/created-body" "gh api -X DELETE repos/$slug/git/refs/tags/v0.1.90"
 }
@@ -446,12 +449,14 @@ a_closed_issue_without_the_attempt_leaves_a_new_one() {
 
 the_issue_is_matched_by_its_exact_title_and_attempt() {
   real_failure v0.1.90 123 1
-  issues '8|open|Release v0.1.9 failed' '7|open|Release v0.1.90 failed'
+  issues '9|open|Release v0.1.90 failed again' '8|open|Release v0.1.9 failed' '7|open|Release v0.1.90 failed'
   issue_text 7 'first' "$(link 10)"
   issue_text 8 'other'
+  issue_text 9 'again'
   runw
   check "comment on 7" has "$t/calls" 'issue comment 7' &&
     check "comment on 8" nohas "$t/calls" 'issue comment 8' &&
+    check "comment on 9" nohas "$t/calls" 'issue comment 9' &&
     check "told" nohas "$t/out" 'already told'
 }
 
@@ -480,8 +485,12 @@ every_failing_read_stops_it_with_status_1() {
     : > "$t/control/fail-${pair%%|*}"
     : > "$t/calls"
     runw
+    case ${pair%%|*} in
+      issues*) lead="the release watch found that v0.1.90's Release run 123 ended in failure on attempt 1 and could not tell it" ;;
+      *) lead='the release watch stopped and decided nothing' ;;
+    esac
     check "status $rc for $pair" [ "$rc" = 1 ] &&
-      check "error for $pair" has "$t/out" "::error::the release watch stopped and decided nothing: ${pair#*|} failed: " &&
+      check "error for $pair" has "$t/out" "::error::$lead: ${pair#*|} failed: " &&
       check "said nothing to do for $pair" nohas "$t/out" 'nothing to do' &&
       check "wrote for $pair" nohas "$t/calls" 'issue create' &&
       check "rerun for $pair" nohas "$t/calls" 'run rerun' || return 1
@@ -562,6 +571,17 @@ pointed_at_attempt_1_of_the_real_case_it_decides_a_re_run() {
     check "rerun line" has "$t/out" '(attempt 2 of 3): macOS (sign and notarize)' &&
     check "dry" has "$t/out" 'dry run: gh run rerun 43441808932 --failed' &&
     check "attempt asked" has "$t/calls" 'attempts/1'
+}
+
+an_attempt_that_succeeded_does_not_claim_there_is_no_release() {
+  real_case
+  releases v0.1.82 v0.1.81
+  runs '43441808932 workflow_dispatch completed 2'
+  attempt 43441808932 2 completed success workflow_dispatch
+  GA=none
+  runw --dry-run --tag v0.1.82 --attempt 2
+  check "line" has "$t/out" "v0.1.82's Release run 43441808932 ended in success on attempt 2: nothing to re-run or tell" &&
+    check "claim" nohas "$t/out" 'no published release'
 }
 
 acting_outside_a_runner_is_refused() {
@@ -659,6 +679,7 @@ run_test a_dry_run_re_runs_nothing_and_says_what_it_would
 run_test a_dry_run_opens_no_issue_and_prints_it
 run_test a_dry_run_comments_nowhere_and_says_where_it_would
 run_test pointed_at_attempt_1_of_the_real_case_it_decides_a_re_run
+run_test an_attempt_that_succeeded_does_not_claim_there_is_no_release
 run_test acting_outside_a_runner_is_refused
 run_test a_wrong_word_exits_2_and_asks_nothing
 run_test a_tag_that_does_not_exist_exits_2

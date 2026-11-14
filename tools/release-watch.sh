@@ -5,6 +5,7 @@ name=release-watch.sh
 attempts=3
 tag_pattern='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
 tab=$(printf '\t')
+stance='the release watch stopped and decided nothing'
 
 say() {
   printf '%s: %s\n' "$name" "$*" >&2
@@ -23,8 +24,8 @@ It acts only on a GitHub Actions runner (GITHUB_ACTIONS=true); anywhere else, ad
   --tag TAG     with --dry-run: take TAG as the newest tag
   --attempt N   with --tag: decide on attempt N of TAG's last Release run as if it had just ended
 It needs gh and git on the PATH, and GH_REPO (owner/name).
-Exit status: 0 it decided, whatever it did; 1 a gh or git call failed and nothing was decided;
-2 a wrong word, or acting outside a runner; 3 gh, git or GH_REPO is missing.
+Exit status: 0 it decided, whatever it did; 1 a gh or git call failed (the ::error:: line says which,
+and whether it had decided); 2 a wrong word, or acting outside a runner; 3 gh, git or GH_REPO is missing.
 See design/releases.md.
 USAGE
 }
@@ -100,7 +101,7 @@ first_line() {
 }
 
 stop() {
-  printf '::error::the release watch %s: %s failed: %s\n' "$1" "$2" "$(first_line)"
+  printf '::error::%s: %s failed: %s\n' "$1" "$2" "$(first_line)"
   exit 1
 }
 
@@ -111,13 +112,13 @@ run_cmd() {
 ask() {
   what=$1
   shift
-  run_cmd "$@" || stop 'stopped and decided nothing' "$what"
+  run_cmd "$@" || stop "$stance" "$what"
 }
 
 ask_write() {
   what=$1
   shift
-  run_cmd "$@" || stop 'decided what to do and could not do it' "$what"
+  run_cmd "$@" || stop 'the release watch decided what to do and could not do it' "$what"
 }
 
 in_list() {
@@ -223,9 +224,13 @@ rerun() {
   ask_write "re-running the failed jobs of run $1" gh run rerun "$1" --failed
 }
 
-fix_steps() {
-  printf "1. If the cause has passed (Apple's notary service, a download), %s: \`gh run rerun %s --failed --repo %s\`\n" \
+rerun_step() {
+  printf "If the cause has passed (Apple's notary service, a download), %s: \`gh run rerun %s --failed --repo %s\`" \
     "$1" "$id" "$GH_REPO"
+}
+
+fix_steps() {
+  printf '1. %s\n' "$1"
   printf "2. Otherwise, fix it in a pull request with the next version. Once that is released, delete this tag: \`gh api -X DELETE repos/%s/git/refs/tags/%s\`. If \`gh release list --repo %s\` shows a draft of it, delete that too: \`gh release delete %s --yes --repo %s\`." \
     "$GH_REPO" "$tag" "$GH_REPO" "$tag" "$GH_REPO"
 }
@@ -236,7 +241,7 @@ out_steps() {
 }
 
 issue_body() {
-  printf '%s\n\n' "The [Release run of $tag, attempt $n]($url/attempts/$n) ended in $conclusion, so $tag is tagged and has no release."
+  printf '%s\n\n' "The [Release run of $tag, attempt $n]($url/attempts/$n) $verb, so $tag is tagged and has no release."
   printf 'Jobs that did not pass: %s.\n\n' "${described:-none listed}"
   printf '%s\n\n' "$cause"
   printf 'What to do:\n%s\n\n' "$steps_text"
@@ -295,6 +300,7 @@ post() {
 tell() {
   title="Release $tag failed"
   body=$(issue_body)
+  stance="the release watch found that $tag's Release run $id $verb on attempt $n and could not tell it"
   find_issues
   if [ -n "$told_in" ]; then
     result="already told in #$told_in, nothing more"
@@ -306,23 +312,24 @@ tell() {
 
 explain_failure() {
   verb='ended in failure'
-  steps_text=$(fix_steps 're-run the jobs that did not pass')
+  steps_text=$(fix_steps "$(rerun_step 're-run the jobs that did not pass')")
   if [ "$broken" -eq 0 ]; then
     tail=', but no job is listed as failed'
     cause='GitHub lists no job of this attempt as failed, so Release watch did not re-run it.'
+    steps_text=$(fix_steps 'Open the run (the link above) to see why it ended in failure.')
   elif [ "$dropped" -ne "$broken" ]; then
     tail=', and a job ran and failed'
     cause='A job ran and failed. Release watch re-runs only jobs that no runner took (no step ran).'
   else
-    tail=", and no runner took $names in $attempts attempts"
-    cause="No runner took these jobs in $attempts attempts. Release watch stops re-running them there."
+    tail=", and no runner took $names on attempt $n, the last Release watch re-runs"
+    cause="No runner took these jobs on attempt $n. Release watch re-runs a run only up to attempt $attempts."
     steps_text=$(out_steps)
   fi
 }
 
 explain_other() {
   tail=
-  steps_text=$(fix_steps 're-run its cancelled and failed jobs')
+  steps_text=$(fix_steps "$(rerun_step 're-run its cancelled and failed jobs')")
   if [ "$conclusion" = cancelled ]; then
     verb='was cancelled'
     cause='The run was cancelled. Release watch re-runs only a run that failed because no runner took a job.'
@@ -336,6 +343,10 @@ decide() {
   id=$1
   n=$2
   read_attempt "$id" "$n"
+  if [ "$conclusion" = success ] && [ -n "$attempt_arg" ]; then
+    printf '%s\n' "$tag's Release run $id ended in success on attempt $n: nothing to re-run or tell"
+    return
+  fi
   if [ "$conclusion" = success ]; then
     printf '%s\n' "$tag's last Release run ($id) ended in success on attempt $n, yet $tag has no published release: left alone"
     return
@@ -393,7 +404,7 @@ present() {
 present_run() {
   read_runs "$tag"
   if [ -z "$runs" ]; then
-    printf '%s\n' "$tag has no Release run yet: left to the Version workflow, which dispatches it on the next push to main"
+    printf '%s\n' "$tag has no Release run yet: left to the Version workflow, which dispatches a tag right after making it, and again on the next push to main if that dispatch was lost"
   elif unfinished; then
     printf '%s\n' "$tag's Release run has not ended (run $uid, attempt $uattempt, $ustatus): nothing to do yet"
   else
