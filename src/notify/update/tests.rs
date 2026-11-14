@@ -93,3 +93,74 @@ fn a_failed_install_names_the_program_and_opens_its_dialog() {
     assert_eq!(toast.text, "Could not install cornercase-gpui 0.1.65: no space left");
     assert_eq!((toast.kind, toast.details), (ToastKind::Error, Some(Updating::Window)));
 }
+
+fn by_hand() -> ByHand {
+    ByHand {
+        version: "0.13.53".into(),
+        latest: "0.13.74".into(),
+        command: "brew update && brew upgrade cornercase".into(),
+    }
+}
+
+#[test]
+fn the_dialog_says_where_cornercase_is_installed() {
+    assert_eq!(installed_words("0.13.74", None), "cornercase 0.13.74 is installed. Restart to use it.");
+    assert_eq!(
+        installed_words("0.13.74", Some("vps")),
+        "cornercase 0.13.74 is installed on vps; its server keeps running the release it started with until it restarts."
+    );
+}
+
+#[test]
+fn a_manual_answer_says_how_and_where_to_run_its_command() {
+    assert_eq!(
+        manual_words(&by_hand(), None),
+        "cornercase 0.13.53 cannot update itself: run the command above in a terminal to install 0.13.74."
+    );
+    assert_eq!(
+        manual_words(&by_hand(), Some("vps")),
+        "cornercase 0.13.53 on vps cannot update itself: run the command above on vps to install 0.13.74."
+    );
+}
+
+#[test]
+fn the_copy_toast_says_where_to_run_the_command() {
+    assert_eq!(copied_words(None), "Copied: run it in a terminal");
+    assert_eq!(copied_words(Some("vps")), "Copied: run it on vps");
+}
+
+#[test]
+fn the_manual_lines_command_is_the_one_offered() {
+    let app = Some("curl | sh".to_string());
+    let manual = InstallState::Manual(by_hand());
+    assert_eq!(offered_command(&manual, app.clone()).as_deref(), Some("brew update && brew upgrade cornercase"));
+    assert_eq!(offered_command(&InstallState::Idle, app.clone()), app);
+    assert_eq!(offered_command(&InstallState::Idle, None), None);
+}
+
+#[test]
+fn a_manual_answer_shows_its_line_until_the_release_is_on_disk() {
+    let update = Update::default();
+    let manual = InstallState::Manual(by_hand());
+    let (text, colour) = install_status(&manual, &update, (None, None)).expect("a line");
+    assert_eq!(text, manual_words(&by_hand(), None));
+    assert_eq!(colour, colours::muted());
+    let (text, colour) = install_status(&manual, &update, (Some("0.13.74"), None)).expect("a line");
+    assert_eq!(text, "cornercase 0.13.74 is installed. Restart to use it.");
+    assert_eq!(colour, colours::done());
+}
+
+#[test]
+fn a_manual_answer_leaves_the_chip_on_the_release() {
+    let out = release("0.13.74");
+    let seen = Chip::of(false, None, Some(&out), &InstallState::Manual(by_hand()));
+    assert_eq!(seen, Some(Chip::Found("0.13.74".into())));
+}
+
+#[test]
+fn a_manual_answer_is_not_an_install() {
+    let offer = offered("0.13.74", false);
+    let manual = InstallState::Manual(by_hand());
+    assert_eq!(installed(&manual, Some(&offer), None), None);
+    assert_eq!(installed(&manual, Some(&offer), disk("0.13.74")).as_deref(), Some("0.13.74"));
+}

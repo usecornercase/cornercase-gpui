@@ -1,7 +1,6 @@
 use gpui::{
-    App, ClickEvent, ClipboardItem, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Rgba, StatefulInteractiveElement as _, Styled as _, Window, div,
-    prelude::FluentBuilder as _, px,
+    App, ClickEvent, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _, Render,
+    Rgba, StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
 };
 
 use super::install::{Way, Why, program_name};
@@ -11,7 +10,7 @@ use crate::dialogs::frame;
 use crate::notify::InstallState;
 use crate::notify::update::{self, ParsedNotes};
 use crate::platform::Os;
-use crate::store::{Store, ToastKind};
+use crate::store::Store;
 use crate::theme::colours;
 use crate::ui;
 
@@ -105,8 +104,10 @@ fn status(install: &InstallState, found: &Found, error: Option<&str>) -> Option<
         InstallState::Running => Some(("Downloading and installing…".to_string(), colours::muted())),
         InstallState::Done(version) => Some(installed(version)),
         InstallState::Failed(why) => Some((why.clone(), colours::failed())),
-        InstallState::Idle if found.on_disk => Some(installed(&found.latest.version)),
-        InstallState::Idle => error.map(|why| (format!("The last check failed: {why}"), colours::muted())),
+        InstallState::Idle | InstallState::Manual(_) if found.on_disk => Some(installed(&found.latest.version)),
+        InstallState::Idle | InstallState::Manual(_) => {
+            error.map(|why| (format!("The last check failed: {why}"), colours::muted()))
+        }
     }
 }
 
@@ -155,10 +156,7 @@ fn buttons(updater: Entity<Updater>, act: Action, fallback: Option<String>, vers
         Action::Download(url) => {
             ui::primary_button("download", "Download").on_click(move |_: &ClickEvent, _, cx| cx.open_url(&url))
         }
-        Action::Copy(command) => ui::primary_button("copy", "Copy command").on_click(move |_: &ClickEvent, _, cx| {
-            cx.write_to_clipboard(ClipboardItem::new_string(command.clone()));
-            Store::get(cx).update(cx, |s, cx| s.toast("Copied", ToastKind::Info, cx));
-        }),
+        Action::Copy(command) => update::copy_command(command, "Copied".into()),
     };
     div()
         .flex()

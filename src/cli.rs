@@ -7,6 +7,7 @@ mod partial;
 mod remote;
 mod requests;
 mod typist;
+mod update;
 mod window_processes;
 
 use std::ffi::OsStr;
@@ -36,6 +37,9 @@ pub(crate) use partial::{Answer, Said, answer_at, answer_on, run_partial, run_pa
 pub(crate) use remote::{Remote, backoff, from_home};
 use requests::{Answered, Requests};
 use typist::{OnError, Typist};
+pub(crate) use update::{
+    ByHand, UPDATE_JSON_SINCE, UpdateAnswer, UpdateGate, refused_json, update_answer, update_command,
+};
 pub(crate) use window_processes::{keep_window_processes, stop_window_processes};
 
 const ANSWER_POLL: Duration = Duration::from_millis(40);

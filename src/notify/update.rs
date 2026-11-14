@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, AppContext as _, ClickEvent, ClipboardItem, Context, Entity, FocusHandle, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, Rgba, StatefulInteractiveElement as _, Styled as _, Window, div,
+    App, AppContext as _, ClickEvent, ClipboardItem, Context, Div, Entity, FocusHandle, InteractiveElement as _,
+    IntoElement, ParentElement as _, Render, Rgba, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
 use super::feed::{Notes, Release, Update};
 use super::{InstallState, Notifier};
-use crate::cli::Version;
+use crate::cli::{self, ByHand, Version};
 use crate::dialogs::frame;
 use crate::model::link::is_web;
 use crate::store::{Store, ToastKind};
@@ -144,9 +144,11 @@ impl Render for UpdateDialog {
                 ui::button("close", "Close").on_click(|_: &ClickEvent, _, cx| close(cx)),
             ));
         };
-        let command = update.install.as_ref().filter(|i| i.method == "command").and_then(|i| i.command.clone());
+        let from_app = update.install.as_ref().filter(|i| i.method == "command").and_then(|i| i.command.clone());
+        let command = offered_command(&install, from_app);
         let installed = n.installed_version();
-        let status = install_status(&install, &update, installed.as_deref());
+        let host = cli::host();
+        let status = install_status(&install, &update, (installed.as_deref(), host.as_deref()));
         let waits = n.waits().map(str::to_string);
         let body = div()
             .flex()
@@ -157,7 +159,9 @@ impl Render for UpdateDialog {
             .child(div().text_size(px(12.)).text_color(colours::muted()).child(how_to_install(command.as_deref())))
             .when_some(status, |d, (text, colour)| d.child(div().text_size(px(12.)).text_color(colour).child(text)))
             .when_some(waits, |d, line| d.child(ui::dim(line)));
-        let buttons = update_buttons(self.notifier.clone(), (command, installed.is_some()), &install, &release.version);
+        let copied = copied_words(host.as_deref());
+        let buttons =
+            update_buttons(self.notifier.clone(), (command, installed.is_some()), &install, (&release.version, copied));
         dialog.child(frame(format!("cornercase {} is out", release.version), body, buttons))
     }
 }
@@ -218,12 +222,52 @@ fn notes_section(section: &Notes, blocks: &[Block], on_link: &OnLink) -> impl In
         )
 }
 
-fn install_status(install: &InstallState, update: &Update, installed: Option<&str>) -> Option<(String, Rgba)> {
+fn install_status(
+    install: &InstallState,
+    update: &Update,
+    (installed, host): (Option<&str>, Option<&str>),
+) -> Option<(String, Rgba)> {
     match (install, installed) {
         (InstallState::Running, _) => Some(("Downloading and installing…".into(), colours::muted())),
         (InstallState::Failed(e), _) => Some((e.clone(), colours::failed())),
-        (_, Some(v)) => Some((format!("cornercase {v} is installed. Restart to use it."), colours::done())),
+        (_, Some(v)) => Some((installed_words(v, host), colours::done())),
+        (InstallState::Manual(by_hand), None) => Some((manual_words(by_hand, host), colours::muted())),
         (_, None) => update.install_error.clone().map(|e| (e, colours::failed())),
+    }
+}
+
+fn installed_words(version: &str, host: Option<&str>) -> String {
+    match host {
+        Some(host) => format!(
+            "cornercase {version} is installed on {host}; its server keeps running the release it started with until it restarts."
+        ),
+        None => format!("cornercase {version} is installed. Restart to use it."),
+    }
+}
+
+fn manual_words(by_hand: &ByHand, host: Option<&str>) -> String {
+    let ByHand { version, latest, .. } = by_hand;
+    match host {
+        Some(host) => format!(
+            "cornercase {version} on {host} cannot update itself: run the command above on {host} to install {latest}."
+        ),
+        None => format!(
+            "cornercase {version} cannot update itself: run the command above in a terminal to install {latest}."
+        ),
+    }
+}
+
+fn copied_words(host: Option<&str>) -> String {
+    match host {
+        Some(host) => format!("Copied: run it on {host}"),
+        None => "Copied: run it in a terminal".to_string(),
+    }
+}
+
+fn offered_command(install: &InstallState, from_app: Option<String>) -> Option<String> {
+    match install {
+        InstallState::Manual(by_hand) => Some(by_hand.command.clone()),
+        _ => from_app,
     }
 }
 
@@ -234,20 +278,24 @@ fn how_to_install(command: Option<&str>) -> String {
     }
 }
 
+pub(crate) fn copy_command(command: String, copied: String) -> Stateful<Div> {
+    ui::primary_button("copy", "Copy command").on_click(move |_: &ClickEvent, _, cx| {
+        cx.write_to_clipboard(ClipboardItem::new_string(command.clone()));
+        Store::get(cx).update(cx, |s, cx| s.toast(copied.clone(), ToastKind::Info, cx));
+    })
+}
+
 fn update_buttons(
     notifier: Entity<Notifier>,
     (command, installed): (Option<String>, bool),
     install: &InstallState,
-    version: &str,
+    (version, copied): (&str, String),
 ) -> impl IntoElement + use<> {
     let action = match (command, install) {
         (_, InstallState::Running) => ui::busy_button("installing", "Installing…", ui::Tone::Primary),
         _ if installed => ui::danger_button("restart", "Restart…")
             .on_click(move |_: &ClickEvent, window, cx| show_restart(notifier.clone(), window, cx)),
-        (Some(cmd), _) => ui::primary_button("copy", "Copy command").on_click(move |_: &ClickEvent, _, cx| {
-            cx.write_to_clipboard(ClipboardItem::new_string(cmd.clone()));
-            Store::get(cx).update(cx, |s, cx| s.toast("Copied", ToastKind::Info, cx));
-        }),
+        (Some(cmd), _) => copy_command(cmd, copied),
         (None, _) => ui::primary_button("install", format!("Install {version}"))
             .on_click(move |_: &ClickEvent, _, cx| notifier.update(cx, Notifier::install)),
     };

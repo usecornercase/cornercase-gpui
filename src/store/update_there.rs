@@ -1,7 +1,7 @@
 use gpui::Context;
 
 use super::{Busy, Store, ToastKind};
-use crate::cli::{self, Said, Target};
+use crate::cli::{self, ByHand, Said, Target, UpdateAnswer};
 use crate::desktop;
 use crate::model::machines::Machine;
 use crate::platform::Os;
@@ -72,12 +72,48 @@ pub(crate) fn offer_of(update: Option<&UpdateThere>, listed: Option<&Machine>, r
     }
 }
 
-pub(crate) fn updated_words(machine: &str, said: &Said) -> (String, ToastKind) {
+fn printed_words(machine: &str, said: &Said) -> (String, ToastKind) {
     match said {
         Said::Done(text) if text.is_empty() => (format!("{machine}: cornercase update ended"), ToastKind::Info),
         Said::Done(text) => (format!("{machine}: {text}"), ToastKind::Info),
         Said::Failed(text) => (format!("Could not update cornercase on {machine}: {text}"), ToastKind::Error),
     }
+}
+
+pub(crate) fn updated_words(machine: &str, answer: &UpdateAnswer) -> (String, ToastKind) {
+    match answer {
+        UpdateAnswer::Updated { from, version } => (
+            format!(
+                "cornercase {version} is installed on {machine}, in place of {from}; \
+                 its server keeps running the release it started with until it restarts there"
+            ),
+            ToastKind::Done,
+        ),
+        UpdateAnswer::UpToDate { version } => {
+            (format!("cornercase on {machine} is already {version}, the latest release"), ToastKind::Info)
+        }
+        UpdateAnswer::Manual(ByHand { version, latest, command }) => (
+            format!(
+                "cornercase {version} on {machine} cannot update itself: run `{command}` there to install {latest}"
+            ),
+            ToastKind::NeedsYou,
+        ),
+        UpdateAnswer::Refused => {
+            (format!("Could not update cornercase on {machine}: {}", cli::refused_json()), ToastKind::Error)
+        }
+        UpdateAnswer::Printed(said) => printed_words(machine, said),
+    }
+}
+
+pub(crate) fn update_page(machine: &str, answer: &UpdateAnswer) -> (Said, bool) {
+    let said = match answer {
+        UpdateAnswer::Printed(said) => said.clone(),
+        other => match updated_words(machine, other) {
+            (text, ToastKind::Error) => Said::Failed(text),
+            (text, _) => Said::Done(text),
+        },
+    };
+    (said, answer.ended())
 }
 
 impl Store {
@@ -96,7 +132,7 @@ impl Store {
         self.run_then(
             job,
             move || run_update(&args),
-            move |this, result, cx| this.updated_on_machine(&update, result, cx),
+            move |this, result, cx| this.updated_on_machine(&update, &result, cx),
             cx,
         );
     }
@@ -104,13 +140,13 @@ impl Store {
     fn updated_on_machine(
         &mut self,
         update: &UpdateThere,
-        result: anyhow::Result<cli::Answer>,
+        result: &anyhow::Result<cli::Answer>,
         cx: &mut Context<Self>,
     ) {
-        let said = cli::said_of(result);
-        let (text, kind) = updated_words(&update.machine, &said);
+        let answer = cli::update_answer(result);
+        let (text, kind) = updated_words(&update.machine, &answer);
         self.toast(text, kind, cx);
-        if matches!(said, Said::Done(_)) {
+        if answer.ended() {
             self.probe_after_update(update, cx);
         }
     }

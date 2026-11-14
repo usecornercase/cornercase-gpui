@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.99
+
+- **cornercase's update dialog says what `cornercase update` did.** With cornercase 0.13.53 or newer, Install shows the version it put on disk and offers the restart on it, also when that version was already installed. When this cornercase cannot replace itself (Homebrew, a folder it cannot write), the dialog shows the command that installs the release and **Copy command** copies it, with a toast saying to run it in a terminal; a toast with Details tells you too if the dialog was closed. If `cornercase update` finds no release newer than the one on disk, the dialog says so instead of showing an install.
+- **On another machine, an update says which version is on disk there**, and that its server keeps running the release it started with until it restarts. This covers the dialog when the window is on that machine, the toast of Update cornercase on a linked machine and the page of a server that runs an older cornercase. They also say when the machine was already on the latest release, or give the command to run there when it cannot update itself. This needs cornercase 0.13.53 or newer on this computer and on that machine.
+- **With an older cornercase, the dialog says which computer needs 0.13.53** where it used to name an upstream issue.
+
 ## 0.1.98
 
 - **The Worktrees sheet adds up the builds of merged worktrees and frees them in one go.** With cornercase 0.13.70 or newer, its footer says how much the build folders of merged worktrees take (`· 6.2 GB of builds in 4 merged worktrees`), and **Free merged…** beside it first lists each worktree with the folders that go and their sizes, and each one that keeps its builds with why (a program runs in it, or a build folder holds a git checkout), then frees them and says in one toast what went and what stayed. It frees every merged worktree of the sheet, whatever the filter shows. A worktree where a program runs keeps its builds; Free builds… on its own row still frees it, after asking. The button needs cornercase 0.13.70 or newer on this computer too, which matters when the window is on another machine: below it, the footer says so in its place. On a narrow window the footer's figures wrap onto more lines, each one whole.

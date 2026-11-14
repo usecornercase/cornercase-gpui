@@ -1154,7 +1154,7 @@ dependencies = [
 
 [[package]]
 name = "cornercase-gpui"
-version = "0.1.98"
+version = "0.1.99"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

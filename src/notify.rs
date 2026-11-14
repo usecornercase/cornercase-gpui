@@ -23,7 +23,7 @@ use crate::store::{self, Busy, Store, ToastGo, ToastKind, args};
 use crate::theme::{UI_FAMILY, colours, radius};
 use crate::ui::{self, glass};
 use update::UpdateToast;
-use update::outcome::{self, CameBack, Here, Outcome, Where};
+use update::outcome::{self, CameBack, Here, Where};
 
 pub(crate) use center::{Posted, listen};
 use feed::Message;
@@ -41,6 +41,7 @@ pub(crate) enum InstallState {
     Idle,
     Running,
     Done(String),
+    Manual(cli::ByHand),
     Failed(String),
 }
 
@@ -385,6 +386,7 @@ impl Notifier {
         }
         let release = self.app.release().map(|r| r.version.clone()).unwrap_or_default();
         let target = cli::target();
+        let (gate, words) = update_words(self.store.read(cx).cli_release());
         let host = target.host().map(str::to_string);
         self.install = InstallState::Running;
         self.waits = None;
@@ -393,22 +395,29 @@ impl Notifier {
         store::run_local_busy(
             cx,
             busy,
-            move || Ok(ask_update(&target)),
+            move || Ok(ask_update(&target, &words)),
             move |this, result, cx| {
                 let (answer, here) = result.unwrap_or_else(|e| (Err(e), None));
-                let outcome = outcome::of(answer, &release, host.as_deref(), here.as_ref());
-                this.settle(&outcome, &release, cx);
+                this.installed_by(&answer, here.as_ref(), (&release, gate, host.as_deref()), cx);
             },
         );
     }
 
-    fn settle(&mut self, outcome: &Outcome, release: &str, cx: &mut Context<Self>) {
+    fn installed_by(
+        &mut self,
+        answer: &anyhow::Result<cli::Answer>,
+        here: Option<&Here>,
+        (release, gate, host): (&str, cli::UpdateGate, Option<&str>),
+        cx: &mut Context<Self>,
+    ) {
+        let place = host.map_or(Where::Here(here), Where::There);
+        let outcome = outcome::of(answer, release, &place);
+        self.waits = outcome.waits(gate, Os::CURRENT);
         self.install = outcome.state();
-        self.waits = outcome.waits();
         if let InstallState::Done(version) = &self.install {
             self.expect(version.clone());
         }
-        if let Some(toast) = outcome.toast(release) {
+        if let Some(toast) = outcome.toast(release, &place) {
             self.tell(toast, cx);
         }
         cx.notify();
@@ -586,10 +595,19 @@ impl Notifier {
     }
 }
 
-fn ask_update(target: &cli::Target) -> (anyhow::Result<cli::Answer>, Option<Here>) {
-    let answer = cli::answer_on(target, &["update"]);
-    let verify = answer.as_ref().is_ok_and(|a| a.code == Some(0)) && matches!(target, cli::Target::Local);
+fn update_words(here: Option<Version>) -> (cli::UpdateGate, Vec<String>) {
+    let gate = cli::UpdateGate::Here(here);
+    (gate, gate.args(vec!["update".to_string()]))
+}
+
+fn ask_update(target: &cli::Target, args: &[String]) -> (anyhow::Result<cli::Answer>, Option<Here>) {
+    let answer = cli::answer_on(target, args);
+    let verify = checks_disk(target, &cli::update_answer(&answer));
     (answer, verify.then(binary_here))
+}
+
+fn checks_disk(target: &cli::Target, answer: &cli::UpdateAnswer) -> bool {
+    matches!(target, cli::Target::Local) && matches!(answer, cli::UpdateAnswer::Printed(cli::Said::Done(_)))
 }
 
 fn binary_here() -> Here {

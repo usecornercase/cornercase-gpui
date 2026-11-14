@@ -60,3 +60,26 @@ fn an_update_toast_waits_while_the_window_is_behind() {
     assert_eq!(hold_or_tell(true, toast.clone(), &mut later), Some(toast));
     assert_eq!(later.len(), 1);
 }
+
+#[test]
+fn the_binary_is_read_again_only_when_update_said_nothing_the_window_reads() {
+    use cli::{Said, Target, UpdateAnswer};
+    let remote = Target::Remote(cli::Remote::new("vps", "").expect("a destination"));
+    let nothing = UpdateAnswer::Printed(Said::Done(String::new()));
+    assert!(checks_disk(&Target::Local, &nothing));
+    assert!(!checks_disk(&remote, &nothing));
+    let updated = UpdateAnswer::Updated { from: "0.13.53".into(), version: "0.13.74".into() };
+    assert!(!checks_disk(&Target::Local, &updated));
+    assert!(!checks_disk(&Target::Local, &UpdateAnswer::UpToDate { version: "0.13.74".into() }));
+    assert!(!checks_disk(&Target::Local, &UpdateAnswer::Printed(Said::Failed("no".into()))));
+    assert!(!checks_disk(&Target::Local, &UpdateAnswer::Refused));
+}
+
+#[test]
+fn install_sends_json_by_this_computers_release_whatever_the_target() {
+    let words = |release: &str| update_words(Version::parse(release)).1;
+    assert_eq!(words("0.13.53"), ["update", "--json"]);
+    assert_eq!(words("0.13.74"), ["update", "--json"]);
+    assert_eq!(words("0.13.52"), ["update"]);
+    assert_eq!(update_words(None).1, ["update"]);
+}

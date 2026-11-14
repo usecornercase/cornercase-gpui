@@ -71,11 +71,11 @@ fn the_windows_page_asks_as_before() {
 fn a_done_update_says_cornercases_words_not_a_success() {
     let printed =
         "updated cornercase 0.13.62 → 0.13.64\nthe server keeps running 0.13.62; run `cornercase kill-server`";
-    let (text, kind) = updated_words("vps", &Said::Done(printed.into()));
+    let (text, kind) = updated_words("vps", &UpdateAnswer::Printed(Said::Done(printed.into())));
     assert_eq!(kind, ToastKind::Info);
     assert!(text.starts_with("vps: updated cornercase 0.13.62"), "{text}");
     assert!(text.contains("the server keeps running"), "{text}");
-    let (text, _) = updated_words("vps", &Said::Done(String::new()));
+    let (text, _) = updated_words("vps", &UpdateAnswer::Printed(Said::Done(String::new())));
     assert_eq!(text, "vps: cornercase update ended");
 }
 
@@ -83,8 +83,74 @@ fn a_done_update_says_cornercases_words_not_a_success() {
 fn a_failed_update_says_why() {
     let printed =
         "cornercase 0.13.64 is out (you have 0.13.62). Update it with:\nbrew update && brew upgrade cornercase";
-    let (text, kind) = updated_words("vps", &Said::Failed(printed.into()));
+    let (text, kind) = updated_words("vps", &UpdateAnswer::Printed(Said::Failed(printed.into())));
     assert_eq!(kind, ToastKind::Error);
     assert!(text.starts_with("Could not update cornercase on vps: "), "{text}");
     assert!(text.ends_with("brew upgrade cornercase"), "{text}");
+}
+
+fn updated() -> UpdateAnswer {
+    UpdateAnswer::Updated { from: "0.13.53".into(), version: "0.13.74".into() }
+}
+
+fn by_hand() -> UpdateAnswer {
+    UpdateAnswer::Manual(ByHand {
+        version: "0.13.53".into(),
+        latest: "0.13.74".into(),
+        command: "brew update && brew upgrade cornercase".into(),
+    })
+}
+
+#[test]
+fn an_install_there_names_the_version_on_disk_and_its_server() {
+    let (text, kind) = updated_words("vps", &updated());
+    assert_eq!(
+        text,
+        "cornercase 0.13.74 is installed on vps, in place of 0.13.53; \
+         its server keeps running the release it started with until it restarts there"
+    );
+    assert_eq!(kind, ToastKind::Done);
+}
+
+#[test]
+fn an_up_to_date_machine_says_its_release() {
+    let (text, kind) = updated_words("vps", &UpdateAnswer::UpToDate { version: "0.13.74".into() });
+    assert_eq!(text, "cornercase on vps is already 0.13.74, the latest release");
+    assert_eq!(kind, ToastKind::Info);
+}
+
+#[test]
+fn a_manual_answer_there_gives_the_command_to_run_there() {
+    let (text, kind) = updated_words("vps", &by_hand());
+    assert_eq!(
+        text,
+        "cornercase 0.13.53 on vps cannot update itself: run `brew update && brew upgrade cornercase` there to install 0.13.74"
+    );
+    assert_eq!(kind, ToastKind::NeedsYou);
+}
+
+#[test]
+fn a_refused_json_there_is_a_failure() {
+    let (text, kind) = updated_words("vps", &UpdateAnswer::Refused);
+    assert_eq!(
+        text,
+        "Could not update cornercase on vps: cornercase refused update --json, which needs cornercase 0.13.53 or newer"
+    );
+    assert_eq!(kind, ToastKind::Error);
+}
+
+#[test]
+fn the_older_page_shows_the_same_words_and_connects_again_only_when_it_ended() {
+    let words = |answer: &UpdateAnswer| updated_words("vps.invalid", answer).0;
+    let (said, ended) = update_page("vps.invalid", &updated());
+    assert_eq!((said, ended), (Said::Done(words(&updated())), true));
+    let up = UpdateAnswer::UpToDate { version: "0.13.74".into() };
+    assert_eq!(update_page("vps.invalid", &up), (Said::Done(words(&up)), true));
+    assert_eq!(update_page("vps.invalid", &by_hand()), (Said::Done(words(&by_hand())), false));
+    let refused = update_page("vps.invalid", &UpdateAnswer::Refused);
+    assert_eq!(refused, (Said::Failed(words(&UpdateAnswer::Refused)), false));
+    let failed = UpdateAnswer::Printed(Said::Failed("no".into()));
+    assert_eq!(update_page("vps.invalid", &failed), (Said::Failed("no".into()), false));
+    let done = UpdateAnswer::Printed(Said::Done("updated".into()));
+    assert_eq!(update_page("vps.invalid", &done), (Said::Done("updated".into()), true));
 }

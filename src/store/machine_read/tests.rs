@@ -259,6 +259,15 @@ fn an_older_note_names_both_releases_and_the_update() {
 }
 
 #[test]
+fn a_machines_update_sends_json_when_both_releases_have_it() {
+    let older = refusal_of(Some("0.13.53"), &["cornercase", "--remote", "vps.invalid", "update"]);
+    let note = older_note("vps", &older, Os::Mac);
+    let update = note.update.expect("an update");
+    assert_eq!(update.args, ["--remote", "vps.invalid", "update", "--json"]);
+    assert_eq!(note.tip, "Update it from this Mac with cornercase --remote vps.invalid update");
+}
+
+#[test]
 fn a_refusal_without_update_words_offers_no_update() {
     for words in [&[][..], &["sh", "update"][..]] {
         assert_eq!(older_note("vps", &refusal_of(Some("0.13.39"), words), Os::Mac).update, None);

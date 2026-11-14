@@ -43,7 +43,7 @@ pub(crate) use tunnels::{
     copied_words, heading, none_note, remote_url, section_tail,
 };
 pub(crate) use update_there::{
-    AfterUpdate, UpdateOffer, UpdateThere, run_update, update_job, update_key, update_question,
+    AfterUpdate, UpdateOffer, UpdateThere, run_update, update_job, update_key, update_page, update_question,
 };
 
 const NO_FLOW: &str = "This workspace runs no flow";
