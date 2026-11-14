@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FontWeight, IntoElement, ParentElement as _, StatefulInteractiveElement as _,
-    Styled as _, WeakEntity, div, list, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Div, FontWeight, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, WeakEntity, div, list, prelude::FluentBuilder as _, px,
 };
 
 use super::data::{self, Comment, Issue};
@@ -12,6 +12,12 @@ use crate::notify::tip;
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui::markdown::text;
 use crate::ui::{self, Icon, Tone, glass};
+
+const HEADING_TOP: f32 = 14.;
+const TEXT_TOP: f32 = 10.;
+const SWITCH: f32 = 33.;
+const LINE: f32 = 21.;
+const TEXT_LEAST: f32 = HEADING_TOP + SWITCH + TEXT_TOP + LINE;
 
 struct Detail {
     page: Rc<Page>,
@@ -27,26 +33,25 @@ impl IssuesPanel {
         };
         let read = self.reads.get(&issue.id());
         let info = issue.info(read.and_then(|r| r.as_ref().ok()).map(|page| &page.read));
+        let head = self.detail_header(&issue, &info, cx);
         div()
             .size_full()
             .flex()
             .flex_col()
-            .child(self.detail_header(&issue, &info, cx))
-            .child(self.detail_text(read, cx))
+            .child(head.body)
+            .child(text_area(self.detail_text(&issue, read, cx)))
+            .child(head.cue)
             .into_any_element()
     }
 
-    fn detail_header(&self, issue: &Issue, info: &[String], cx: &mut Context<Self>) -> Div {
-        div()
-            .flex_none()
+    fn detail_header(&self, issue: &Issue, info: &[String], cx: &mut Context<Self>) -> ui::Cued {
+        let column = div()
             .flex()
             .flex_col()
             .gap(px(10.))
             .px(px(20.))
             .pt(px(16.))
             .pb(px(14.))
-            .border_b_1()
-            .border_color(colours::border())
             .child(self.detail_heading(issue))
             .child(
                 div()
@@ -57,7 +62,9 @@ impl IssuesPanel {
                     .child(issue.title.clone()),
             )
             .children(info_line(issue, info))
-            .child(detail_actions(&issue.url, cx))
+            .child(detail_actions(&issue.url, cx));
+        let head = ui::cued(scroller_id(issue, "issue-head"), column, ui::Seat::OnBorder);
+        ui::Cued { body: head.body.flex_initial().border_b_1().border_color(colours::border()), ..head }
     }
 
     fn detail_heading(&self, issue: &Issue) -> Div {
@@ -72,12 +79,12 @@ impl IssuesPanel {
             .child(div().text_color(colours::muted()).child(self.source_name(&issue.source)))
     }
 
-    fn detail_text(&self, read: Option<&Read>, cx: &mut Context<Self>) -> AnyElement {
+    fn detail_text(&self, issue: &Issue, read: Option<&Read>, cx: &mut Context<Self>) -> AnyElement {
         let (view, panel) = (self.body_view, cx.entity().downgrade());
         match read {
             Some(Ok(page)) => Detail { page: page.clone(), view, panel, now: data::now() }.render(),
-            Some(Err(e)) => unread(view, &panel, error_note(e.clone())),
-            None => unread(view, &panel, ui::loading("Reading the issue…").p_0()),
+            Some(Err(e)) => unread(issue, view, &panel, error_note(e.clone())),
+            None => unread(issue, view, &panel, ui::loading("Reading the issue…").p_0()),
         }
     }
 }
@@ -92,8 +99,8 @@ impl Detail {
         let items = self.page.items(self.view);
         let Some(&item) = items.get(index) else { return nothing() };
         let top = match index {
-            0 => 14.,
-            1 => 10.,
+            0 => HEADING_TOP,
+            1 => TEXT_TOP,
             _ => 8.,
         };
         div()
@@ -131,20 +138,30 @@ impl Detail {
     }
 }
 
+fn scroller_id(issue: &Issue, name: &str) -> SharedString {
+    let (source, key) = issue.id();
+    SharedString::from(format!("{name}-{source}-{key}"))
+}
+
+fn text_area(text: AnyElement) -> Div {
+    div().flex_1().min_h(px(TEXT_LEAST)).flex().flex_col().child(text)
+}
+
 fn nothing() -> AnyElement {
     div().into_any_element()
 }
 
-fn unread(view: BodyView, panel: &WeakEntity<IssuesPanel>, note: Div) -> AnyElement {
-    div()
+fn unread(issue: &Issue, view: BodyView, panel: &WeakEntity<IssuesPanel>, note: Div) -> AnyElement {
+    let column = div()
         .flex()
         .flex_col()
-        .gap(px(10.))
+        .gap(px(TEXT_TOP))
         .px(px(20.))
-        .pt(px(14.))
+        .pt(px(HEADING_TOP))
         .child(body_heading(view, panel))
-        .child(note)
-        .into_any_element()
+        .child(note);
+    let area = ui::cued(scroller_id(issue, "issue-unread"), column, ui::Seat::Inside);
+    area.body.flex_1().child(area.cue).into_any_element()
 }
 
 fn body_heading(view: BodyView, panel: &WeakEntity<IssuesPanel>) -> Div {
@@ -261,3 +278,6 @@ fn byline(comment: &Comment, now: i64) -> Div {
         .child(div().font_weight(FontWeight::SEMIBOLD).child(comment.author.clone()))
         .child(div().text_color(colours::faint()).child(comment.when(now)))
 }
+
+#[cfg(test)]
+mod tests;
