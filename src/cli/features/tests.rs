@@ -28,3 +28,19 @@ fn a_server_has_each_gated_feature_from_the_release_that_brought_it() {
 fn a_server_whose_release_cannot_be_read_does_not_have_a_feature() {
     assert_eq!(Feature::MachineTunnels.on(None), Has::No(None));
 }
+
+#[test]
+fn the_words_for_this_computer_name_what_it_has_on_each_platform() {
+    let since = Version::new(0, 13, 33);
+    let has = Some(Version::new(0, 13, 27));
+    assert_eq!(newer_here(since, has, Os::Mac), "cornercase 0.13.33 or newer on this Mac (it has 0.13.27)");
+    assert_eq!(newer_here(since, has, Os::Linux), "cornercase 0.13.33 or newer on this computer (it has 0.13.27)");
+    assert_eq!(newer_here(since, has, Os::Windows), "cornercase 0.13.33 or newer on this PC (it has 0.13.27)");
+    assert_eq!(newer_here(since, None, Os::Mac), "cornercase 0.13.33 or newer on this Mac");
+}
+
+#[test]
+fn it_has_says_nothing_for_a_release_that_could_not_be_read() {
+    assert_eq!(it_has(Some(Version::new(0, 13, 27))), " (it has 0.13.27)");
+    assert_eq!(it_has(None), "");
+}

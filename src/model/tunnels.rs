@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::cli::{Feature, Has, Version};
+use crate::cli::{self, Feature, Has, Version};
 use crate::desktop;
 
 mod orders;
@@ -212,9 +212,9 @@ fn older_words(older: &Older, machine: &str) -> (String, String) {
         Older::Server(found) => (machine.to_string(), found),
     };
     let has = match (older, found) {
-        (Older::ThisComputer(_), Some(version)) => format!(" (it has {version})"),
+        (Older::ThisComputer(_), found) => cli::it_has(*found),
         (Older::Server(_), Some(version)) => format!(" (its server runs {version})"),
-        (_, None) => String::new(),
+        (Older::Server(_), None) => String::new(),
     };
     (place, has)
 }

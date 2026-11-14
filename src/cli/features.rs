@@ -1,4 +1,6 @@
 use super::Version;
+use crate::desktop;
+use crate::platform::Os;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Feature {
@@ -30,6 +32,14 @@ pub(crate) enum Has {
     Unread,
     Yes,
     No(Option<Version>),
+}
+
+pub(crate) fn it_has(release: Option<Version>) -> String {
+    release.map(|release| format!(" (it has {release})")).unwrap_or_default()
+}
+
+pub(crate) fn newer_here(since: Version, release: Option<Version>, os: Os) -> String {
+    format!("cornercase {since} or newer on this {}{}", desktop::machine(os), it_has(release))
 }
 
 #[cfg(test)]
