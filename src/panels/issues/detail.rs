@@ -1,10 +1,8 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, Bounds, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    PathBuilder, Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, WeakEntity, canvas, div, fill,
-    list, point, prelude::FluentBuilder as _, px,
+    AnyElement, ClickEvent, Context, Div, FontWeight, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, WeakEntity, div, list, prelude::FluentBuilder as _, px,
 };
 
 use super::data::{self, Comment, Issue};
@@ -12,6 +10,7 @@ use super::page::{Item, Page, Read};
 use super::{BodyView, IssuesPanel, blank, card, copy_text, error_note, label_chip, state_icon};
 use crate::notify::tip;
 use crate::theme::{FONT_FAMILY, colours};
+use crate::ui::cued::Seat;
 use crate::ui::markdown::text;
 use crate::ui::{self, Icon, Tone, glass};
 
@@ -20,10 +19,6 @@ const TEXT_TOP: f32 = 10.;
 const SWITCH: f32 = 33.;
 const LINE: f32 = 21.;
 const TEXT_LEAST: f32 = HEADING_TOP + SWITCH + TEXT_TOP + LINE;
-const CUE_FADE: f32 = 18.;
-const CUE_WIDTH: f32 = 9.;
-const CUE_HEIGHT: f32 = 5.;
-const CUE_FROM_EDGE: f32 = 6.;
 
 struct Detail {
     page: Rc<Page>,
@@ -67,7 +62,10 @@ impl IssuesPanel {
             )
             .children(info_line(issue, info))
             .child(detail_actions(&issue.url, cx));
-        cued(scroller_id(issue, "issue-head"), column).flex_initial().border_b_1().border_color(colours::border())
+        ui::cued::cued(scroller_id(issue, "issue-head"), column, Seat::OnBorder)
+            .flex_initial()
+            .border_b_1()
+            .border_color(colours::border())
     }
 
     fn detail_heading(&self, issue: &Issue) -> Div {
@@ -146,46 +144,6 @@ fn scroller_id(issue: &Issue, name: &str) -> SharedString {
     SharedString::from(format!("{name}-{source}-{key}"))
 }
 
-fn hidden_below(visible: Pixels, content: Pixels) -> bool {
-    content - visible > px(1.)
-}
-
-fn cued(id: SharedString, content: Div) -> Div {
-    let seen: Rc<RefCell<Vec<Bounds<Pixels>>>> = Rc::default();
-    let laid = seen.clone();
-    let scroller = div()
-        .on_children_prepainted(move |bounds, _, _| *seen.borrow_mut() = bounds)
-        .id(id)
-        .flex_1()
-        .min_h_0()
-        .overflow_y_scroll()
-        .child(content);
-    let cue = canvas(
-        |_, _, _| {},
-        move |bounds, (), window, _| {
-            if laid.borrow().first().is_some_and(|c| hidden_below(bounds.bottom(), c.bottom())) {
-                paint_cue(bounds, window);
-            }
-        },
-    )
-    .absolute()
-    .size_full();
-    div().relative().flex().flex_col().min_h_0().child(scroller).child(cue)
-}
-
-fn paint_cue(bounds: Bounds<Pixels>, window: &mut gpui::Window) {
-    let band = Bounds::from_corners(point(bounds.left(), bounds.bottom() - px(CUE_FADE)), bounds.bottom_right());
-    window.paint_quad(fill(band, glass::fade_to_card()));
-    let (x, y) = (bounds.center().x, bounds.bottom() - px(CUE_FROM_EDGE));
-    let mut builder = PathBuilder::stroke(px(1.5));
-    builder.move_to(point(x - px(CUE_WIDTH / 2.), y - px(CUE_HEIGHT)));
-    builder.line_to(point(x, y));
-    builder.line_to(point(x + px(CUE_WIDTH / 2.), y - px(CUE_HEIGHT)));
-    if let Ok(path) = builder.build() {
-        window.paint_path(path, colours::muted());
-    }
-}
-
 fn text_area(text: AnyElement) -> Div {
     div().flex_1().min_h(px(TEXT_LEAST)).flex().flex_col().child(text)
 }
@@ -203,7 +161,7 @@ fn unread(issue: &Issue, view: BodyView, panel: &WeakEntity<IssuesPanel>, note: 
         .pt(px(HEADING_TOP))
         .child(body_heading(view, panel))
         .child(note);
-    cued(scroller_id(issue, "issue-unread"), column).flex_1().into_any_element()
+    ui::cued::cued(scroller_id(issue, "issue-unread"), column, Seat::Inside).flex_1().into_any_element()
 }
 
 fn body_heading(view: BodyView, panel: &WeakEntity<IssuesPanel>) -> Div {
