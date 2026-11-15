@@ -1,4 +1,5 @@
 use super::form::Draft;
+use crate::cli::flag;
 use crate::keymap::{self, Command};
 use crate::model::machines::{Machine, THIS_COMPUTER};
 use crate::platform::Os;
@@ -88,10 +89,6 @@ pub(super) fn update_ask(name: &str) -> Ask {
 pub(super) struct Saving {
     pub command: Vec<String>,
     pub job: Busy,
-}
-
-fn flag(name: &str, value: &str) -> String {
-    format!("--{name}={value}")
 }
 
 pub(super) fn add(draft: &Draft) -> Saving {

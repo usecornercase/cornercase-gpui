@@ -15,13 +15,14 @@ use crate::dialogs;
 use crate::keymap::{self, Command, Focus, with_keys};
 use crate::keys;
 use crate::model::Grid;
+use crate::model::bots::Making;
 use crate::model::link::Hovered;
 use crate::panels::{PanelKind, bot_chat, files};
 use crate::platform::Os;
 use crate::render::layout::{Hit, Layout};
 use crate::render::moving::Moves;
 use crate::render::{self, Metrics, Surface};
-use crate::store::Store;
+use crate::store::{Store, ToastKind};
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
 
@@ -181,6 +182,16 @@ impl Root {
         self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx)
     }
 
+    fn new_bot_key(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match self.store.read(cx).making() {
+            Some(Making::Offered) => dialogs::new_bot(window, cx),
+            Some(Making::Here(why) | Making::Server(why)) => {
+                self.store.update(cx, |s, cx| s.toast(why, ToastKind::Info, cx));
+            }
+            None => {}
+        }
+    }
+
     fn shortcut(&mut self, chord: Chord<'_>, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let Some(command) = keymap::find(chord.key, chord.shift, chord.focus, Os::CURRENT).map(|s| s.command) else {
             return false;
@@ -209,6 +220,7 @@ impl Root {
             Command::OpenProject => self.open_project(window, cx),
             Command::Connect => dialogs::connect(window, cx),
             Command::NewWorkspace => dialogs::new_workspace(None, window, cx),
+            Command::NewBot => self.new_bot_key(window, cx),
             Command::StartAgent => dialogs::start_agent(window, cx),
             Command::PullRequest => dialogs::shown_pull_request(window, cx),
             _ => self.view_shortcut(command, chord.key, cx),

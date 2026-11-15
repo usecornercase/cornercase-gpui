@@ -7,6 +7,7 @@ use crate::model::bots::{self, BotEvent, CatchUp, Chat, Heard, Offer, Read};
 use crate::model::place::Moved;
 use crate::platform::Os;
 
+mod manage;
 mod talk;
 
 impl Store {
@@ -21,16 +22,21 @@ impl Store {
     pub(super) fn take_bots(&mut self, app: &Value, cx: &mut Context<Self>) {
         let shown = self.shown_bot().and_then(|id| self.bots.find(id)).map(|bot| (bot.id.clone(), bot.name.clone()));
         let draft = shown.as_ref().map(|(id, _)| self.bots.drafts.text(id).to_string()).unwrap_or_default();
+        let asked = shown.as_ref().is_some_and(|(id, _)| self.bots.manage.asked(id));
         let moved = self.bots.take_app(app);
-        self.place(Moved::Listed(moved.listed));
+        self.place(Moved::Listed(moved.listed.clone()));
+        self.close_dialog_if_gone(&moved.listed, cx);
         match shown {
             Some((_, name)) if self.shown_bot().is_none() => {
-                self.toast_with(format!("{name} was removed"), ToastKind::Info, talk::copy_action(&draft), cx);
+                if !asked {
+                    self.toast_with(format!("{name} was removed"), ToastKind::Info, talk::copy_action(&draft), cx);
+                }
             }
             _ if moved.boot_changed && self.bots.chat.is_some() => self.read_chat(None, cx),
             _ => self.heal_chat(&moved.settled, cx),
         }
         self.mind_seen(cx);
+        self.follow_made(cx);
     }
 
     fn heal_chat(&mut self, settled: &[String], cx: &mut Context<Self>) {
@@ -44,7 +50,7 @@ impl Store {
             return;
         }
         if self.shown_bot() != Some(id) {
-            self.placing.awaited = None;
+            self.forget_awaited();
             self.bots.forget_seen();
             self.place(Moved::Bot(id.to_string()));
             let asked = self.bots.next_ask();
@@ -87,9 +93,10 @@ impl Store {
         let name = self.bots.find(bot).map_or_else(|| bot.to_string(), |found| found.name.clone());
         let draft = self.bots.drafts.take(bot).unwrap_or_default();
         self.place(Moved::Removed(bot.to_string()));
-        if shown {
+        if self.bots.manage.told(bot, shown) {
             self.toast_with(format!("{name} was removed"), ToastKind::Info, talk::copy_action(&draft), cx);
         }
+        self.close_dialog_naming(bot, cx);
         cx.notify();
     }
 

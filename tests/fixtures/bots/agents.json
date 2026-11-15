@@ -1,0 +1,121 @@
+{
+  "agents": [
+    {
+      "accesses": [
+        "cornercase",
+        "full"
+      ],
+      "agent": "claude",
+      "bot": true,
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "installed": true,
+      "models": [
+        "opus",
+        "sonnet",
+        "haiku"
+      ],
+      "title": "Claude Code",
+      "why": null
+    },
+    {
+      "accesses": [],
+      "agent": "codex",
+      "bot": false,
+      "efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "installed": false,
+      "models": [],
+      "title": "Codex",
+      "why": "not installed"
+    },
+    {
+      "accesses": [],
+      "agent": "gemini",
+      "bot": false,
+      "efforts": [],
+      "installed": false,
+      "models": [],
+      "title": "Gemini CLI",
+      "why": "not yet"
+    },
+    {
+      "accesses": [],
+      "agent": "opencode",
+      "bot": false,
+      "efforts": [],
+      "installed": false,
+      "models": [],
+      "title": "opencode",
+      "why": "not yet"
+    },
+    {
+      "accesses": [],
+      "agent": "grok",
+      "bot": false,
+      "efforts": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "installed": false,
+      "models": [],
+      "title": "Grok Build",
+      "why": "not yet"
+    },
+    {
+      "accesses": [],
+      "agent": "cursor",
+      "bot": false,
+      "efforts": [],
+      "installed": false,
+      "models": [],
+      "title": "Cursor CLI",
+      "why": "not yet"
+    },
+    {
+      "accesses": [],
+      "agent": "copilot",
+      "bot": false,
+      "efforts": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "installed": false,
+      "models": [
+        "auto"
+      ],
+      "title": "GitHub Copilot CLI",
+      "why": "not yet"
+    },
+    {
+      "accesses": [],
+      "agent": "vibe",
+      "bot": false,
+      "efforts": [],
+      "installed": false,
+      "models": [],
+      "title": "Vibe CLI",
+      "why": "not yet"
+    }
+  ]
+}

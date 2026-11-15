@@ -50,12 +50,7 @@ fn chip(
     cx: &mut Context<QueuePanel>,
     change: impl Fn(&mut Form) + 'static,
 ) -> AnyElement {
-    let edge = if selected { colours::accent() } else { colours::border() };
-    pick(ui::segment(id, label, selected).border_1().border_color(edge), cx, change)
-}
-
-fn chips(items: Vec<AnyElement>) -> Div {
-    div().flex().flex_wrap().gap(px(4.)).children(items)
+    pick(ui::chip(id, label, selected), cx, change)
 }
 
 fn stack() -> Div {
@@ -105,7 +100,7 @@ fn issue(form: &Form, window: &Window, cx: &mut Context<QueuePanel>) -> AnyEleme
     }
     stack()
         .child(boxed(&form.issue_key, window, cx))
-        .child(ui::field("Tracker, for an ambiguous key or a self-hosted URL", chips(sources)))
+        .child(ui::field("Tracker, for an ambiguous key or a self-hosted URL", ui::chips(sources)))
         .into_any_element()
 }
 
@@ -258,7 +253,7 @@ fn projects(
     let projects: Vec<(u64, String)> = session
         .map(|s| s.projects.iter().filter(|p| shown(p)).map(|p| (p.id, p.name.clone())).collect())
         .unwrap_or_default();
-    chips(
+    ui::chips(
         projects
             .into_iter()
             .map(|(id, name)| {
@@ -281,7 +276,7 @@ fn workspaces(form: &Form, project: u64, session: Option<&Session>, cx: &mut Con
         .collect();
     let new = form.spot == Spot::NewWorktree;
     choices.push(chip("q-ws-new", "+ new worktree", new, cx, |f| f.spot = Spot::NewWorktree));
-    chips(choices)
+    ui::chips(choices)
 }
 
 fn agents(form: &Form, config: &Value, flows: Option<&[String]>, cx: &mut Context<QueuePanel>) -> Div {
@@ -304,7 +299,7 @@ fn agents(form: &Form, config: &Value, flows: Option<&[String]>, cx: &mut Contex
     if form.repeats() {
         items.extend(flow_chips(form, flows, cx));
     }
-    chips(items)
+    ui::chips(items)
 }
 
 fn flow_chips(form: &Form, flows: Option<&[String]>, cx: &mut Context<QueuePanel>) -> Vec<AnyElement> {
@@ -334,7 +329,7 @@ fn modes(form: &Form, config: &Value, cx: &mut Context<QueuePanel>) -> Option<Di
     }
     let mut items = vec![chip("q-mode-settings", "as in settings", form.mode.is_none(), cx, |f| f.mode = None)];
     items.extend(offered.into_iter().enumerate().map(|(at, offer)| mode_chip(form, at, offer, cx)));
-    Some(ui::field("Mode", stack().child(chips(items)).children(line.map(ui::dim))))
+    Some(ui::field("Mode", stack().child(ui::chips(items)).children(line.map(ui::dim))))
 }
 
 fn mode_chip(form: &Form, at: usize, offer: ModeChip, cx: &mut Context<QueuePanel>) -> AnyElement {

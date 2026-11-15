@@ -6,10 +6,14 @@ use serde_json::Value;
 use crate::cli::{Feature, Lacks, newer_here};
 use crate::platform::Os;
 
+pub(crate) use self::form::{AgentInfo, CORNERCASE, FULL, NotSent, Typed, agents_of, chosen_at_open, id_of, new_args};
+pub(crate) use self::manage::{Arrival, Creating, Making, Managing, making};
 pub(crate) use self::talk::{
     Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
 };
 
+mod form;
+mod manage;
 mod talk;
 
 pub(crate) const KEPT: usize = 1_000;
@@ -299,6 +303,7 @@ pub(crate) struct Bots {
     pub active: bool,
     pub seen: Option<(String, usize)>,
     pub drafts: Drafts,
+    pub manage: Managing,
     stopping: HashSet<String>,
     revision: u64,
     asked: u64,
@@ -362,6 +367,7 @@ impl Bots {
         }
         let listed: Vec<String> = self.list.iter().map(|bot| bot.id.clone()).collect();
         self.drafts.keep_only(&listed);
+        self.manage.keep_listed(&listed);
         let thinking: HashSet<String> =
             self.list.iter().filter(|bot| bot.thinking()).map(|bot| bot.id.clone()).collect();
         self.stopping.retain(|id| thinking.contains(id));

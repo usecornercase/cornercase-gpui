@@ -478,6 +478,20 @@ pub(crate) fn segment(id: impl Into<ElementId>, label: impl Into<SharedString>, 
     segment_base(id, selected).child(label.into())
 }
 
+pub(crate) fn chip(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> Stateful<Div> {
+    let edge = if selected { colours::accent() } else { colours::border() };
+    segment(id, label, selected).border_1().border_color(edge)
+}
+
+pub(crate) fn resting_chip(id: impl Into<ElementId>, label: impl Into<SharedString>, selected: bool) -> Stateful<Div> {
+    let edge = if selected { colours::accent() } else { colours::border() };
+    resting_segment(id, label, selected).border_1().border_color(edge)
+}
+
+pub(crate) fn chips(items: Vec<impl IntoElement>) -> Div {
+    div().flex().flex_wrap().gap(px(4.)).children(items)
+}
+
 pub(crate) fn icon_segment(
     id: impl Into<ElementId>,
     glyph: Icon,

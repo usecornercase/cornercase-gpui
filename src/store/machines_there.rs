@@ -133,7 +133,7 @@ fn fold_refusal(aim: &PaneAim, destination: &str, error: &anyhow::Error) -> Stri
 
 impl Store {
     pub(crate) fn pick_machine_place(&mut self, place: MachinePlace, cx: &mut Context<Self>) {
-        self.placing.awaited = None;
+        self.forget_awaited();
         self.select_there(place, cx);
     }
 
