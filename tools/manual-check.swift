@@ -913,11 +913,6 @@ struct Display: Equatable {
     let main: Bool
 }
 
-struct Cover {
-    let window: Shown
-    let part: CGRect
-}
-
 let displaysNone = "the system lists no active display (CGGetActiveDisplayList), so there is none to name"
 let displaysNoneFree =
     "no display is free: on each a window of a higher layer covers all or part of it (the lines above say which and where); a place clear of a cover can be asked with displays X Y WIDTH HEIGHT"
@@ -941,15 +936,15 @@ func readDisplays() -> [Display] {
     return (activeDisplays() ?? []).map { Display(uuid: displayUUID($0), frame: CGDisplayBounds($0), main: $0 == mainNumber) }
 }
 
-func coversOf(_ display: Display, place: CGRect?, in list: [Shown], on screen: Screen) -> [Cover]? {
+func coversOf(_ display: Display, place: CGRect?, in list: [Shown], on screen: Screen) -> [(window: Shown, part: CGRect)]? {
     let own = CGRect(origin: .zero, size: display.frame.size)
     let local = place ?? own
     guard own.contains(local) else { return nil }
     let there = local.offsetBy(dx: display.frame.minX, dy: display.frame.minY)
-    return coversBeforeFront(of: nil, frame: there, in: list, on: screen).map { Cover(window: $0.window, part: $0.part) }
+    return coversBeforeFront(of: nil, frame: there, in: list, on: screen)
 }
 
-func displayLine(_ display: Display, place: CGRect?, found: [Cover]?, naming: (Shown) -> String) -> String {
+func displayLine(_ display: Display, place: CGRect?, found: [(window: Shown, part: CGRect)]?, naming: (Shown) -> String) -> String {
     let frame = display.frame
     let numbers = [frame.minX, frame.minY, frame.width, frame.height].map { String(Int($0)) }
     let head = ([display.uuid ?? "-"] + numbers + [display.main ? "main" : "other"]).joined(separator: " ")
@@ -973,7 +968,7 @@ func askedPlace(_ words: [String]) throws -> CGRect? {
     guard !words.isEmpty else { return nil }
     guard words.count == 4 else {
         throw Failure(
-            message: "displays takes no pid: nothing, or a place as x y width height in a display's own points from its top-left (as layout.json's bounds), not '\(words.joined(separator: " "))'",
+            message: "displays takes nothing, or a place as x y width height in a display's own points from its top-left (as layout.json's bounds), and no pid; not '\(words.joined(separator: " "))'",
             status: 2)
     }
     let numbers = try zip(["x", "y", "width", "height"], words).map { CGFloat(try wholeNumber($1, $0)) }
@@ -1752,24 +1747,6 @@ enum SelfTest {
         ]
     }
 
-    static func run() throws {
-        let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests() + keyTests() + clipboardTests() + pressStepTests() + pressTests()
-            + uuidTests() + coverOfDisplayTests() + everyMacTests() + negativeDisplayTests() + twoCheckTests() + answerTests() + placeTests()
-        var failed = 0
-        for (name, body) in cases {
-            if let why = body() {
-                failed += 1
-                print("not ok - \(name): \(why)")
-            } else {
-                print("ok - \(name)")
-            }
-        }
-        print("\(cases.count) tests, \(failed) failed")
-        guard failed == 0 else { throw Failure(message: "self-test failed", status: 1) }
-    }
-}
-
-extension SelfTest {
     static let firstUUID = "00000000-0000-4000-8000-000000000001"
     static let secondUUID = "00000000-0000-4000-8000-000000000002"
     static let mainFrame = CGRect(x: 0, y: 0, width: 1000, height: 800)
@@ -1936,7 +1913,7 @@ extension SelfTest {
     }
 
     static func placeTests() -> [(String, () -> String?)] {
-        let say = "displays takes no pid: nothing, or a place as x y width height in a display's own points from its top-left (as layout.json's bounds), not "
+        let say = "displays takes nothing, or a place as x y width height in a display's own points from its top-left (as layout.json's bounds), and no pid; not "
         let words = { (list: [String]) in refusal { _ = try askedPlace(list) } }
         return [
             ("displays_reads_nothing_or_a_place", {
@@ -1956,6 +1933,22 @@ extension SelfTest {
                 return expect([[0, 1, 3].contains(found.status), shapes.allSatisfy { $0 }, (found.status == 1) == found.lines.isEmpty], [true, true, true])
             }),
         ]
+    }
+
+    static func run() throws {
+        let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests() + keyTests() + clipboardTests() + pressStepTests() + pressTests()
+            + uuidTests() + coverOfDisplayTests() + everyMacTests() + negativeDisplayTests() + twoCheckTests() + answerTests() + placeTests()
+        var failed = 0
+        for (name, body) in cases {
+            if let why = body() {
+                failed += 1
+                print("not ok - \(name): \(why)")
+            } else {
+                print("ok - \(name)")
+            }
+        }
+        print("\(cases.count) tests, \(failed) failed")
+        guard failed == 0 else { throw Failure(message: "self-test failed", status: 1) }
     }
 }
 
