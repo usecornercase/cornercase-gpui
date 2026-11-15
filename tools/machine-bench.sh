@@ -813,9 +813,13 @@ down() {
   snapshot=$(scan pids | tr '\n' ' ')$(socket_holders)
   stop_servers
   if ! wait_gone "$snapshot"; then
-    printf 'still running, or running as late as the last 3 s:\n' >&2
-    scan left "$snapshot" >&2
-    fail "end them by pid, then run down again; $folder is kept"
+    now=$(scan left "$snapshot")
+    if [ -n "$now" ]; then
+      printf 'still running:\n%s\n' "$now" >&2
+    else
+      printf 'nothing runs now, but something of the bench ran in the last 3 s\n' >&2
+    fi
+    fail "end what is listed by pid, if anything, then run down again; $folder is kept"
   fi
   rm -rf -- "$folder"
   printf 'removed %s\n' "$folder"

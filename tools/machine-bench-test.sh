@@ -703,6 +703,13 @@ counted_by_the_note() {
     test "$(cat "$t/counted" "$t/counted.err" | grep -c /)" -eq 0
 }
 
+the_helper_names_only_sections_the_note_has() {
+  for h in "What this shell may do" "What needs no press" "Captures"; do
+    check "the helper names '$h' and the note has no such heading" grep -qx "## $h" "$repo/design/manual-check.md" || return 1
+    check "the helper no longer names '$h'" grep -qF "$h" "$repo/tools/manual-check.swift" || return 1
+  done
+}
+
 the_notes_counter_and_up_agree_on_the_agents_a_release_knows() {
   counted_by_the_note "$b" || return 1
   check "the counter does not say all pinned: $(cat "$t/counted")" contains "$t/counted" "16 agents known, all pinned" || return 1
@@ -1267,17 +1274,11 @@ down_keeps_the_folder_when_the_bench_ran_until_the_last_second() {
   runb down "$t/b9"
   rc1=$rc
   check "exit $rc1, not 1: the folder went after less than 3 s of quiet" [ "$rc1" = 1 ] || return 1
+  check "the message names nothing to end: $(cat "$t/err")" contains "$t/err" "nothing runs now, but something of the bench ran in the last 3 s" || return 1
   check "the folder was removed" [ -d "$t/b9" ] || return 1
   wait "$bpid" 2> /dev/null
   runb down "$t/b9"
   check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
-}
-
-the_helper_names_only_sections_the_note_has() {
-  for h in "What this shell may do" "What needs no press" "Captures"; do
-    check "the helper names '$h' and the note has no such heading" grep -qx "## $h" "$repo/design/manual-check.md" || return 1
-    check "the helper no longer names '$h'" grep -qF "$h" "$repo/tools/manual-check.swift" || return 1
-  done
 }
 
 down_stops_here_then_there_and_removes_the_folder() {
@@ -1426,6 +1427,7 @@ run_test the_note_makes_the_folder_its_tmpdir_names
 run_test the_note_listens_for_a_phone_on_loopback_only
 run_test there_run_sets_what_the_note_exports_except_what_it_leaves_out
 run_test the_notes_counter_and_up_agree_on_the_agents_a_release_knows
+run_test the_helper_names_only_sections_the_note_has
 run_test there_cannot_reach_here
 run_test the_stand_in_runs_a_link_against_there
 run_test the_stand_in_refuses_while_held
@@ -1456,7 +1458,6 @@ run_test down_refuses_a_window_started_in_a_bench_folder
 run_test down_takes_no_other_program_in_a_bench_folder_for_a_window
 run_test down_waits_until_nothing_of_the_bench_runs_for_three_seconds
 run_test down_keeps_the_folder_when_the_bench_ran_until_the_last_second
-run_test the_helper_names_only_sections_the_note_has
 run_test down_stops_here_then_there_and_removes_the_folder
 run_test down_keeps_the_folder_while_bench_processes_remain
 run_test down_lists_a_forward_left_running
