@@ -498,7 +498,7 @@ export class Stage {
     const phone = p >= 0.25 && p < 0.38;
     flag(this.toolDevice, 'is-on', phone);
     flag(this.device, 'is-on', phone);
-    paint(this.site, '--page', phone ? '296px' : '100%');
+    flag(this.site, 'is-phone', phone);
     const picking = p >= 0.42 && p < 0.55;
     flag(this.toolPick, 'is-on', picking);
     flag(this.banner, 'is-on', picking);
