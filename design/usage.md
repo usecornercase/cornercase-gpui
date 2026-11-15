@@ -16,6 +16,7 @@ The Usage sheet shows what agents did in cornercase (`cornercase stats --json`: 
 ## The head
 
 - The pages' segments and the buttons keep their size; the status (`updated …`, hidden while loading) takes the room left, ends in an ellipsis and goes to nothing before a button is cut, and never wraps, so `updated 5 s ago` to `updated 1 min ago` never moves a line. It is flexbox alone (`status_box`), so there is no function to test. At 640 with Copy card link the status shows `updated just…` and Refresh is whole (before it was cut at the sheet's edge); at 1,280 the head is byte-identical to before. Rejected: the buttons wrapping under the pages (a second line for a head that fits on one), a status that wraps.
+- Checked live: on 2026-11-15 (#313; the coder and the UI reviewer, macOS 26, cornercase 0.13.84, dark and light): a wrapper answered `stats --json` with a fixture of made-up figures and refused `--share`, since a private server has no history. At 640 × 600 and 640 × 360 loading, at rest and reopened with stats held (Copy card link beside `Refreshing…`) every button is whole, the status reading `updated just…`; at 720 to 900 the whole status; 1,280 × 800 identical to before. Not seen: `Copying…`, Limits and By agent.
 
 ## Numbers as the TUI prints them
 
@@ -55,8 +56,6 @@ The Usage sheet shows what agents did in cornercase (`cornercase stats --json`: 
 - **Readings are compared on the server's clock**: a machine's row was read at the machine's `read_at`, when this server read the answer, minus the row's `age`; this computer's at its own `read_at`. A row's `read_at` under a machine is that machine's clock, so one whose clock is off would win or lose by it, and it is not used. Its `updated 5m ago` comes from the same time. The TUI counts ages on its clock instead; here no clock of this window enters the comparison, so a window on another computer changes nothing.
 
 ### Checked live
-
-On 2026-11-15 (#313; the coder and the UI reviewer, macOS 26, cornercase 0.13.84, dark and light): a wrapper answered `stats --json` with a fixture of made-up figures and refused `--share`, since a private server has no history. At 640 × 600 and 640 × 360 loading, at rest and reopened with stats held (Copy card link beside `Refreshing…`) every button is whole, the status reading `updated just…`; at 720 to 900 the whole status; 1,280 × 800 identical to before. Not seen: `Copying…`, Limits and By agent.
 
 On 2026-11-06 with cornercase 0.13.1, on Linux x86_64 under Xvfb with lavapipe, with a fake `ssh` between two servers on one box (no real sshd, no macOS, no Windows).
 

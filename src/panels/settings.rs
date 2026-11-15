@@ -206,8 +206,9 @@ impl SettingsPanel {
                 false
             }
         };
+        let revision = self.held().revision;
         if let Some(landed) = self.landed.as_mut().filter(|_| answered) {
-            landed.take_answer(self.described.as_ref().map_or(0, |d| d.revision));
+            landed.take_answer(revision);
         }
         self.read_again_if_behind(answered, cx);
         cx.notify();

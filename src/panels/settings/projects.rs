@@ -47,9 +47,13 @@ fn project_header(project: &ProjectEntry) -> Div {
         .children(chips.into_iter().flatten())
 }
 
-fn script_lines(text: &str) -> Div {
+fn script_width(room: f32) -> f32 {
+    Look::SCRIPT.width.min(room)
+}
+
+fn script_lines(text: &str, room: f32) -> Div {
     let lines = div().children(text.lines().map(|l| div().child(l.to_string())));
-    ui::input_box(lines, false).w(px(Look::SCRIPT.width)).min_w_0().font_family(FONT_FAMILY).text_size(px(12.))
+    ui::input_box(lines, false).w(px(script_width(room))).font_family(FONT_FAMILY).text_size(px(12.))
 }
 
 fn script_label(script: Script) -> Div {
@@ -93,7 +97,9 @@ impl SettingsPanel {
         });
         let scripts: Vec<AnyElement> =
             Script::all_of(project).iter().map(|s| self.render_script(project, *s, window, cx)).collect();
-        widgets::card().child(project_header(project)).children(warning).children(scripts)
+        widgets::card().child(
+            widgets::measured(&self.card_room).child(project_header(project)).children(warning).children(scripts),
+        )
     }
 
     fn render_script(
@@ -106,7 +112,7 @@ impl SettingsPanel {
         let role = Role::Script(project.folder.clone(), script);
         let text = script.of(project);
         let (control, slot) = if text.contains('\n') {
-            (script_lines(&text).into_any_element(), self.clear_action(project, script, cx))
+            (script_lines(&text, self.card_room.get()).into_any_element(), self.clear_action(project, script, cx))
         } else {
             (self.render_text(&role, Look::SCRIPT, window, cx).into_any_element(), div().into_any_element())
         };
@@ -131,3 +137,6 @@ impl SettingsPanel {
             .into_any_element()
     }
 }
+
+#[cfg(test)]
+mod tests;
