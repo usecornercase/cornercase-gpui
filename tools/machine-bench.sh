@@ -516,6 +516,37 @@ run_start() {
   }
 }
 
+check_agents() {
+  step "checking the agents $1 knows"
+  ver=$here_ver
+  [ "$1" = there ] && ver=$there_ver
+  if ! json=$("$folder/bin/$1" config --json 2> /dev/null); then
+    say "config --json failed on $1, so its agents were not compared with the bench's pins"
+    return 0
+  fi
+  rc=0
+  unpinned=$(printf '%s' "$json" | python3 -I -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    names = [a["name"] for a in data["agents"]]
+except (ValueError, KeyError, TypeError):
+    sys.exit(3)
+pinned = sys.argv[1].split()
+print(" and ".join(n for n in names if n not in pinned))
+' "$agents") || rc=$?
+  if [ "$rc" = 3 ]; then
+    say "cornercase $ver on $1 lists no agents (config --json lists them from 0.13.43), so they were not compared with the bench's pins"
+    return 0
+  fi
+  [ "$rc" = 0 ] || fail "python3 failed (status $rc) reading the agents of $1's config --json"
+  [ -z "$unpinned" ] || {
+    which=it
+    case $unpinned in *" and "*) which=one ;; esac
+    fail "cornercase $ver on $1 knows $unpinned, which this bench does not pin, so starting $which would run this computer's own $unpinned: add it to agents= in tools/$me and to the config.json block of design/manual-check.md (A server of its own), then down this folder and up again"
+  }
+}
+
 open_project() {
   id=$("$folder/bin/$1" open "$2") || fail "cornercase open failed on $1"
   case $id in
@@ -606,7 +637,7 @@ summary() {
     printf '  agent  claude on there: pane %s, its child pane %s\n' "$parent_pane" "$child_pane"
   fi
   if [ "$updates" = 1 ]; then
-    printf '  updates here checks for a newer cornercase at its start and every hour (--check-updates); there does not\n'
+    printf '  update here checks for a newer cornercase at its start and every hour (--check-updates); there does not\n'
   fi
   if [ "$log" = 1 ]; then
     printf '  log    %s/commands.log\n' "$folder"
@@ -622,33 +653,6 @@ summary() {
   printf 'vps elsewhere      here machines edit %s --destination %s points it at the same server by its other name (--destination %s puts it back)\n' \
     "$name" "$second" "$dest"
   printf 'take it down       kill "%s(cat %s/window.pid)"; %s/tools/%s down %s\n' '$' "$folder" "$repo" "$me" "$folder"
-}
-
-check_agents() {
-  step "checking the agents $1 knows"
-  ver=$here_ver
-  [ "$1" = there ] && ver=$there_ver
-  if ! json=$("$folder/bin/$1" config --json 2> /dev/null); then
-    say "config --json failed on $1, so its agents were not compared with the bench's pins"
-    return 0
-  fi
-  rc=0
-  unpinned=$(printf '%s' "$json" | python3 -I -c '
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    names = [a["name"] for a in data["agents"]]
-except (ValueError, KeyError, TypeError):
-    sys.exit(3)
-pinned = sys.argv[1].split()
-print(" and ".join(n for n in names if n not in pinned))
-' "$agents") || rc=$?
-  if [ "$rc" != 0 ]; then
-    say "cornercase $ver on $1 lists no agents (config --json lists them from 0.13.43), so they were not compared with the bench's pins"
-    return 0
-  fi
-  [ -z "$unpinned" ] ||
-    fail "cornercase $ver on $1 knows $unpinned, which this bench does not pin, so a start of it would run this computer's own: add it to agents in tools/$me and to the config.json block of design/manual-check.md (A server of its own), then up again"
 }
 
 up() {
@@ -671,6 +675,7 @@ up() {
   step "starting there"
   run_start there
   check_agents there
+  step "opening the project of there"
   open_project there "$folder/there/home/there-proj"
   if [ "$agent" = 1 ]; then
     start_agent
@@ -678,6 +683,7 @@ up() {
   step "starting here"
   run_start here
   check_agents here
+  step "opening the project of here"
   open_project here "$folder/here/here-proj"
   link_there
   finished=1

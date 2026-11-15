@@ -72,6 +72,13 @@ case $cmd in
   config)
     side=there
     case $sock in */here/server.sock) side=here ;; esac
+    if [ -e "$t/control/fail-config-$side" ]; then
+      exit 1
+    fi
+    if [ -e "$t/control/bad-agents-$side" ]; then
+      echo '{"agents": [{"name": 5}]}'
+      exit 0
+    fi
     if [ -e "$t/control/no-agents-$side" ]; then
       echo '{"settings": []}'
       exit 0
@@ -86,7 +93,14 @@ case $cmd in
     done
     printf '{"agents": [%s]}\n' "$out"
     exit 0 ;;
-  open) echo 1 ;;
+  open)
+    side=there
+    case $sock in */here/server.sock) side=here ;; esac
+    if [ -e "$t/control/fail-open-$side" ]; then
+      echo 'no such project' >&2
+      exit 1
+    fi
+    echo 1 ;;
   start) : > "$state-agent"; echo 3 ;;
   send)
     : > "$state-child"
@@ -273,7 +287,7 @@ b=$t/b
 
 make_main_bench() {
   runb_env "CORNERCASE_SOCKET=$t/caller.sock" CORNERCASE_REMOTE=devbox CORNERCASE_PANE=7 CORNERCASE_SERVER=x \
-    "CODEX_HOME=$t/home/.codex" "GEMINI_CLI_HOME=$t/home" MBT_TEST_TOKEN=made-up up "$b" --here "$t/new/cornercase" --agent --log
+    "CODEX_HOME=$t/home/.codex" "GEMINI_CLI_HOME=$t/home" MBT_TEST_TOKEN=made-up MBT_TEST_API_KEY=made-up MBT_TEST_KEY=made-up MBT_TEST_SECRET=made-up up "$b" --here "$t/new/cornercase" --agent --log
   [ "$rc" = 0 ] || { cat "$t/err" >&2; return 1; }
   calls
 }
@@ -421,6 +435,12 @@ the_bench_env_names_what_the_note_env_names() {
   differs_from_the_note env env "$b/env"
 }
 
+the_bench_filters_tokens_as_the_note_does() {
+  grep -F -e '>> /tmp/cc-check/env' "$repo/design/manual-check.md" | sed -e 's/^ *//' -e 's| >> /tmp/cc-check/env$||' > "$t/note.filter"
+  check "the note has no token filter" test -s "$t/note.filter" || return 1
+  check "the bench's filter is not the note's" grep -q -F -f "$t/note.filter" "$script"
+}
+
 up_turns_cornercases_own_update_check_off() {
   check "here may check for updates" contains "$b/here/config.json" '"check_updates": false' || return 1
   check "there may check for updates" contains "$b/there/config.json" '"check_updates": false'
@@ -437,7 +457,9 @@ up_with_check_updates_checks_on_here_only() {
 }
 
 the_env_keeps_no_token_value() {
-  check "the token is not unset" contains "$b/env" "unset MBT_TEST_TOKEN" || return 1
+  for v in MBT_TEST_TOKEN MBT_TEST_API_KEY MBT_TEST_KEY MBT_TEST_SECRET; do
+    check "$v is not unset" contains "$b/env" "unset $v" || return 1
+  done
   check "the token's value is in env" test ! "$(grep -c made-up "$b/env")" -gt 0
 }
 
@@ -548,6 +570,36 @@ up_stops_when_here_knows_an_agent_it_does_not_pin() {
   check "the folder or its mark is gone" [ -f "$t/k2/.machine-bench" ] || return 1
   runb down "$t/k2"
   check "down of k2: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+up_says_when_a_release_cannot_list_its_agents() {
+  : > "$t/control/fail-config-here"
+  runb up "$t/n2" --here "$t/new/cornercase"
+  rm -f "$t/control/fail-config-here"
+  check "exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  check "it does not say the listing failed" contains "$t/err" "config --json failed on here" || return 1
+  runb down "$t/n2"
+  check "down of n2: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+up_stops_when_python_cannot_read_the_agents() {
+  : > "$t/control/bad-agents-there"
+  runb up "$t/n3" --here "$t/new/cornercase"
+  rm -f "$t/control/bad-agents-there"
+  check "exit $rc, not 1" [ "$rc" = 1 ] || return 1
+  check "it does not name python3: $(cat "$t/err")" contains "$t/err" "python3 failed" || return 1
+  runb down "$t/n3"
+  check "down of n3: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+up_names_the_stage_a_failed_open_stopped_at() {
+  : > "$t/control/fail-open-there"
+  runb up "$t/n4" --here "$t/new/cornercase"
+  rm -f "$t/control/fail-open-there"
+  check "exit $rc, not 1" [ "$rc" = 1 ] || return 1
+  check "the stage is wrong: $(cat "$t/err")" contains "$t/err" "up failed at opening the project of there" || return 1
+  runb down "$t/n4"
+  check "down of n4: $(cat "$t/err")" [ "$rc" = 0 ]
 }
 
 up_says_when_a_release_lists_no_agents() {
@@ -1158,6 +1210,7 @@ run_test the_bench_env_names_what_the_note_env_names
 run_test up_turns_cornercases_own_update_check_off
 run_test up_with_check_updates_checks_on_here_only
 run_test the_env_keeps_no_token_value
+run_test the_bench_filters_tokens_as_the_note_does
 run_test up_gives_here_the_homes_of_the_bench
 run_test the_callers_homes_never_reach_there
 run_test up_turns_on_the_agents_section_on_here_only
@@ -1173,6 +1226,9 @@ run_test up_says_why_an_unreachable_machine_failed
 run_test up_stops_when_there_knows_an_agent_it_does_not_pin
 run_test up_stops_when_here_knows_an_agent_it_does_not_pin
 run_test up_says_when_a_release_lists_no_agents
+run_test up_says_when_a_release_cannot_list_its_agents
+run_test up_stops_when_python_cannot_read_the_agents
+run_test up_names_the_stage_a_failed_open_stopped_at
 run_test down_removes_the_folders_a_failed_up_kept
 run_test the_env_aims_the_shell_at_here
 run_test there_cannot_reach_here
