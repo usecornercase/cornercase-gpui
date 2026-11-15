@@ -147,32 +147,37 @@ fn a_new_server_run_forgets_everything() {
 
 #[test]
 fn the_chat_shown_in_the_active_window_tells_nothing() {
-    assert!(!tells(&answer("prs", 1), Some("prs"), true));
+    assert!(!tells(&answer("prs", 1), (Some("prs"), true), true));
 }
 
 #[test]
 fn the_chat_shown_while_the_window_is_behind_tells() {
-    assert!(tells(&answer("prs", 1), Some("prs"), false));
+    assert!(tells(&answer("prs", 1), (Some("prs"), false), true));
 }
 
 #[test]
 fn a_bot_whose_chat_does_not_show_tells_whether_the_window_is_active_or_behind() {
     for active in [true, false] {
-        assert!(tells(&answer("notes", 1), Some("prs"), active));
-        assert!(tells(&answer("notes", 1), None, active));
+        assert!(tells(&answer("notes", 1), (Some("prs"), active), true));
+        assert!(tells(&answer("notes", 1), (None, active), true));
     }
 }
 
 #[test]
 fn a_runs_error_is_left_to_its_queue_message() {
     let failed = Answer { failed: true, run: true, ..answer("notes", 1) };
-    assert!(!tells(&failed, None, false));
-    assert!(tells(&Answer { run: false, ..failed }, None, false));
+    assert!(!tells(&failed, (None, false), true));
+    assert!(tells(&Answer { run: false, ..failed }, (None, false), true));
+}
+
+#[test]
+fn nothing_is_told_below_the_gate() {
+    assert!(!tells(&answer("notes", 1), (None, false), false));
 }
 
 #[test]
 fn a_runs_answer_is_told() {
-    assert!(tells(&Answer { run: true, ..answer("notes", 1) }, None, true));
+    assert!(tells(&Answer { run: true, ..answer("notes", 1) }, (None, true), true));
 }
 
 #[test]
@@ -231,7 +236,16 @@ fn an_answers_toast_names_the_bot_and_its_first_line() {
 #[test]
 fn an_errors_toast_says_the_bot_could_not_answer() {
     let failed = Answer { failed: true, text: "Not logged in\nmore".into(), ..answer("notes", 1) };
-    assert_eq!(Told::new(&failed, "notes").text(), "notes could not answer: Not logged in more");
+    assert_eq!(Told::new(&failed, "notes").text(), "notes could not answer: Not logged in");
+}
+
+#[test]
+fn an_error_is_read_as_the_chat_draws_it_not_as_markdown() {
+    let failed = Answer { failed: true, text: "\n__init__.py *failed* [x](y)\nnext".into(), ..answer("notes", 1) };
+    assert_eq!(Told::new(&failed, "notes").first, "__init__.py *failed* [x](y)");
+    let long = Answer { text: "e".repeat(300), ..failed };
+    let first = Told::new(&long, "notes").first;
+    assert_eq!((first.chars().count(), first.ends_with('…')), (100, true));
 }
 
 #[test]

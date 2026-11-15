@@ -67,22 +67,20 @@ impl Store {
     }
 
     fn tell_answers(&mut self, answers: &[Answer], cx: &mut Context<Self>) {
-        if answers.is_empty() || self.bots_offer() != Offer::Rows {
-            return;
-        }
+        let offered = self.bots_offer() == Offer::Rows;
         let told: Vec<Told> = answers
             .iter()
-            .filter(|answer| bots::tells(answer, self.shown_bot(), self.bots.active))
-            .map(|answer| {
-                let name = self.bots.find(&answer.bot).map_or_else(|| answer.bot.clone(), |bot| bot.name.clone());
-                Told::new(answer, &name)
-            })
+            .filter(|answer| bots::tells(answer, (self.shown_bot(), self.bots.active), offered))
+            .map(|answer| Told::new(answer, &self.bot_name(&answer.bot)))
             .collect();
+        if told.is_empty() {
+            return;
+        }
         self.bots.to_tell.extend(told);
         cx.notify();
     }
 
-    pub(crate) fn go_to_bot(&mut self, id: &str, name: &str, cx: &mut Context<Self>) {
+    pub(super) fn go_to_bot(&mut self, id: &str, name: &str, cx: &mut Context<Self>) {
         if self.bots.find(id).is_some() {
             self.show_bot(id, cx);
         } else {
@@ -225,10 +223,11 @@ impl Store {
         cx.notify();
     }
 
-    pub(super) fn mind_seen(&mut self, _cx: &mut Context<Self>) {
+    pub(super) fn mind_seen(&mut self, cx: &mut Context<Self>) {
         let Some(id) = self.bots.seen_due(self.places.showing.bot()) else { return };
         let unread = self.bots.find(&id).map_or(0, |bot| bot.unread);
         self.bots.seen = Some((id.clone(), unread));
         self.cmd(args(&["bot", "seen", &id]));
+        self.drop_bot_toasts(&id, cx);
     }
 }

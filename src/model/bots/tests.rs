@@ -539,7 +539,7 @@ fn a_line_of_a_routines_run_is_a_run() {
 #[test]
 fn cornercases_own_lines_are_answers_and_a_runs_error_is_left_to_its_message() {
     let told: Vec<(bool, bool, bool)> =
-        answers().iter().filter_map(told_of).map(|a| (a.failed, a.run, tells(&a, None, false))).collect();
+        answers().iter().filter_map(told_of).map(|a| (a.failed, a.run, tells(&a, (None, false), true))).collect();
     assert_eq!(told, [(false, false, true), (true, false, true), (false, true, true), (true, true, false)]);
 }
 

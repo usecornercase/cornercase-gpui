@@ -25,10 +25,10 @@ pub(crate) fn answer_of(bot: &str, line: &Line, run: bool) -> Option<Answer> {
     Some(Answer { bot: bot.to_string(), id: line.id, failed, run, text: line.text.clone() })
 }
 
-pub(crate) fn tells(answer: &Answer, shown: Option<&str>, active: bool) -> bool {
+pub(crate) fn tells(answer: &Answer, (shown, active): (Option<&str>, bool), offered: bool) -> bool {
     let run_failed = answer.run && answer.failed;
     let on_screen = active && shown == Some(answer.bot.as_str());
-    !run_failed && !on_screen
+    offered && !run_failed && !on_screen
 }
 
 #[derive(Debug, Clone, Default)]
@@ -113,7 +113,7 @@ pub(crate) struct Told {
 
 impl Told {
     pub(crate) fn new(answer: &Answer, name: &str) -> Self {
-        Self { bot: answer.bot.clone(), name: name.to_string(), failed: answer.failed, first: first_line(&answer.text) }
+        Self { bot: answer.bot.clone(), name: name.to_string(), failed: answer.failed, first: first_of(answer) }
     }
 
     pub(crate) fn headline(&self) -> String {
@@ -155,14 +155,25 @@ fn block_text(block: &Block) -> String {
     }
 }
 
-pub(crate) fn first_line(source: &str) -> String {
-    let first = markdown::parse(source).iter().map(block_text).find(|text| !text.is_empty()).unwrap_or_default();
+fn cut(first: String) -> String {
     if first.chars().count() <= FIRST_LINE {
         return first;
     }
     let mut cut: String = first.chars().take(FIRST_LINE - 1).collect();
     cut.push('…');
     cut
+}
+
+pub(crate) fn first_line(source: &str) -> String {
+    cut(markdown::parse(source).iter().map(block_text).find(|text| !text.is_empty()).unwrap_or_default())
+}
+
+fn plain_first_line(text: &str) -> String {
+    cut(text.lines().map(tidy).find(|line| !line.is_empty()).unwrap_or_default())
+}
+
+fn first_of(answer: &Answer) -> String {
+    if answer.failed { plain_first_line(&answer.text) } else { first_line(&answer.text) }
 }
 
 pub(crate) fn gone(name: &str) -> String {
