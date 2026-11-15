@@ -141,6 +141,12 @@ fn mark() -> Div {
         .border_color(glass::tint(accent, MARK_EDGE))
 }
 
+impl Landed {
+    pub(super) fn take_answer(&mut self, revision: u64) {
+        self.revision = landed_at(self.revision, false, revision);
+    }
+}
+
 impl SettingsPanel {
     pub(super) fn take_landing(&mut self, cx: &mut Context<Self>) {
         let Some(found) = Store::get(cx).update(cx, |s, _| s.landing.take()) else { return };

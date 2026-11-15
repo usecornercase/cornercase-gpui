@@ -13,6 +13,11 @@ The Usage sheet shows what agents did in cornercase (`cornercase stats --json`: 
 - **A partial answer is an answer**: `cornercase usage` exits 3 when it printed every plan but some agent could not be asked (#472 upstream), each failure in its plan's `error`, or with `--machine` when a machine could not be read, the rest being still the answer; `stats --machine` exits 0 and says so in its fields. The panel runs it through `store::run_partial` (`cli::run_partial`), which takes exit 0 and 3 as success and any other status as an error from standard error.
 - **A probe's error is shown as cornercase words it**, with no note of our own: the Codex limits bug that once needed one is fixed upstream (#462, checked with cornercase 0.12.225).
 
+## The head
+
+- The pages' segments and the buttons keep their size; the status (`updated …`, hidden while loading) takes the room left, ends in an ellipsis and goes to nothing before a button is cut, and never wraps, so `updated 5 s ago` to `updated 1 min ago` never moves a line. It is flexbox alone (`status_box`), so there is no function to test. At 640 with Copy card link the status shows `updated just…` and Refresh is whole (before it was cut at the sheet's edge); at 1,280 the head is byte-identical to before. Rejected: the buttons wrapping under the pages (a second line for a head that fits on one), a status that wraps.
+- Checked live: on 2026-11-15 (#313; the coder and the UI reviewer, macOS 26, cornercase 0.13.84, dark and light): a wrapper answered `stats --json` with a fixture of made-up figures and refused `--share`, since a private server has no history. At 640 × 600 and 640 × 360 loading, at rest and reopened with stats held (Copy card link beside `Refreshing…`) every button is whole, the status reading `updated just…`; at 720 to 900 the whole status; 1,280 × 800 identical to before. Not seen: `Copying…`, Limits and By agent.
+
 ## Numbers as the TUI prints them
 
 - **Parsing is lenient** (every field defaults), so a newer cornercase with more fields or fewer still reads.

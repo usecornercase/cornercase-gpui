@@ -1,11 +1,23 @@
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gpui::{Div, ElementId, FontWeight, IntoElement, Rgba, ScrollHandle, SharedString, Stateful, div, prelude::*, px};
 
 use crate::theme::{colours, radius};
+use crate::ui::split;
 use crate::ui::{self, Icon, glass};
 
 pub(crate) const SLOT: f32 = ui::ROW_ACTION;
 const LABEL: f32 = 230.;
 const CONTENT: f32 = 800.;
+const PAGE_SIDES: f32 = 28.;
+const CARD_SIDES: f32 = 16.;
+const CARD_EDGE: f32 = 1.;
+pub(crate) const WIDEST_CARD: f32 = CONTENT - 2. * PAGE_SIDES - 2. * (CARD_SIDES + CARD_EDGE);
+
+pub(crate) fn measured(room: &Rc<Cell<f32>>) -> Div {
+    div().relative().flex().flex_col().child(split::measure(room.clone()))
+}
 
 pub(crate) fn nav(width: f32) -> Div {
     div()
@@ -46,7 +58,16 @@ pub(crate) fn page(id: impl Into<ElementId>, scroll: &ScrollHandle) -> Stateful<
 }
 
 pub(crate) fn column() -> Div {
-    div().w_full().max_w(px(CONTENT)).mx_auto().px(px(28.)).pt(px(22.)).pb(px(40.)).flex().flex_col().gap(px(20.))
+    div()
+        .w_full()
+        .max_w(px(CONTENT))
+        .mx_auto()
+        .px(px(PAGE_SIDES))
+        .pt(px(22.))
+        .pb(px(40.))
+        .flex()
+        .flex_col()
+        .gap(px(20.))
 }
 
 pub(crate) fn heading(glyph: Icon, title: impl Into<SharedString>, about: impl Into<SharedString>) -> Div {
@@ -86,7 +107,7 @@ pub(crate) fn card() -> Div {
     div()
         .flex()
         .flex_col()
-        .px(px(16.))
+        .px(px(CARD_SIDES))
         .rounded(px(radius::card()))
         .bg(colours::terminal())
         .border_1()

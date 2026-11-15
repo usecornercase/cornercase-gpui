@@ -1,3 +1,6 @@
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gpui::{
     AnyElement, Context, Div, InteractiveElement as _, IntoElement as _, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, div, px,
@@ -10,6 +13,14 @@ use crate::notify::tip;
 use crate::panels::settings::SettingsPanel;
 use crate::theme::colours;
 use crate::ui::{self, Icon};
+
+const CARD: f32 = WIDTH + 8.;
+const CARD_GAP: f32 = 10.;
+
+#[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a count of cards from a width")]
+fn per_line(room: f32) -> usize {
+    ((room + CARD_GAP) / (CARD + CARD_GAP)).floor().max(1.) as usize
+}
 
 fn badges(listed: &Listed, snap: &Snap) -> Vec<AnyElement> {
     if !snap.follows {
@@ -55,7 +66,8 @@ impl SettingsPanel {
         let ring = if chosen { colours::brand() } else { gpui::transparent_black().into() };
         div()
             .id(SharedString::from(format!("theme-{}", listed.id)))
-            .w(px(WIDTH + 8.))
+            .w(px(CARD))
+            .flex_none()
             .p(px(3.))
             .flex()
             .flex_col()
@@ -73,7 +85,7 @@ impl SettingsPanel {
             .into_any_element()
     }
 
-    pub(super) fn theme_group(snap: &Snap, cx: &mut Context<Self>) -> Div {
+    pub(super) fn theme_group(snap: &Snap, room: &Rc<Cell<f32>>, cx: &mut Context<Self>) -> Div {
         let follow = widgets::row(
             true,
             widgets::label("Follow the system's light and dark", "Use one theme in light and another in dark."),
@@ -88,14 +100,18 @@ impl SettingsPanel {
         let cards: Vec<AnyElement> = snap.listed.iter().map(|listed| Self::theme_card(listed, snap, cx)).collect();
         let mut cards = cards.into_iter();
         let mut lines = Vec::new();
+        let across = per_line(room.get());
         loop {
-            let line: Vec<AnyElement> = cards.by_ref().take(4).collect();
+            let line: Vec<AnyElement> = cards.by_ref().take(across).collect();
             if line.is_empty() {
                 break;
             }
-            lines.push(div().flex().gap(px(10.)).children(line));
+            lines.push(div().flex().gap(px(CARD_GAP)).children(line));
         }
-        let gallery = div().flex().flex_col().gap(px(10.)).py(px(12.)).children(lines);
+        let gallery = widgets::measured(room).gap(px(CARD_GAP)).py(px(12.)).children(lines);
         widgets::group("Theme", widgets::card().child(follow).child(gallery))
     }
 }
+
+#[cfg(test)]
+mod tests;
