@@ -1,4 +1,5 @@
 use super::entries::{Entry, EntryKey, STEPS_SHOWN, Turn, entries, folded, held, keys, row_splices, spliced, turn};
+use super::global::follows;
 use super::words::{folded_label, time_label, turn_label};
 use super::{Scroll, scroll_distance, scroll_of};
 
@@ -225,4 +226,10 @@ fn a_run_of_steps_that_lost_its_oldest_step_is_measured_alone() {
     let new = keys_of(&plain(&[(2, "step"), (3, "step"), (4, "bot"), (5, "you")]));
     let splices = spliced(&old, &new);
     assert!(splices.iter().all(|(range, _)| range.len() <= 1), "{splices:?}");
+}
+
+#[test]
+fn a_chat_made_for_another_store_is_not_kept_after_a_server_switch() {
+    assert!(follows(&7, &7));
+    assert!(!follows(&7, &8));
 }

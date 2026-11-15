@@ -102,10 +102,19 @@ impl Selection {
 pub(crate) struct ListMoves {
     accounts: Option<u64>,
     config: Option<u64>,
-    pub(crate) asked: u64,
+    asked: u64,
 }
 
 impl ListMoves {
+    pub(crate) fn next_ask(&mut self) -> u64 {
+        self.asked += 1;
+        self.asked
+    }
+
+    pub(crate) fn is_latest(&self, ask: u64) -> bool {
+        self.asked == ask
+    }
+
     pub(crate) fn app_line(&mut self, app: &Value) -> bool {
         let now = app.get("accounts_revision").and_then(Value::as_u64).unwrap_or(0);
         self.accounts.replace(now) != Some(now)

@@ -92,6 +92,7 @@ fn steps(first: u64, texts: &[String], meta: &Meta) -> Div {
             .text_color(colours::muted())
             .rounded(px(radius::chip()))
             .px(px(4.))
+            .ml(px(-4.))
             .hover(|s| s.bg(colours::hover()).text_color(colours::soft()))
             .child(folded_label(hidden))
             .on_click(move |_: &ClickEvent, _, cx| {

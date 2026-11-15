@@ -14,12 +14,18 @@ pub(crate) fn scroll(step: Scroll, cx: &mut App) {
     BotChat::get(cx).update(cx, |chat, cx| chat.scroll(step, cx));
 }
 
+pub(super) fn follows<T: PartialEq>(held: &T, current: &T) -> bool {
+    held == current
+}
+
 impl BotChat {
     pub(crate) fn get(cx: &mut App) -> Entity<Self> {
-        if let Some(GlobalBotChat(chat)) = cx.try_global::<GlobalBotChat>() {
+        let store = Store::get(cx);
+        if let Some(GlobalBotChat(chat)) = cx.try_global::<GlobalBotChat>()
+            && follows(&chat.read(cx).store, &store)
+        {
             return chat.clone();
         }
-        let store = Store::get(cx);
         let chat = cx.new(|cx| Self::new(store, cx));
         cx.set_global(GlobalBotChat(chat.clone()));
         chat

@@ -204,10 +204,9 @@ impl Store {
     }
 
     fn list_accounts(&mut self, cx: &mut Context<Self>) {
-        self.list_moves.asked += 1;
-        let asked = self.list_moves.asked;
+        let asked = self.list_moves.next_ask();
         run(cx, args(&["account", "list", "--json"]), move |this, result, cx| {
-            if asked == this.list_moves.asked {
+            if this.list_moves.is_latest(asked) {
                 this.accounts_listed(result, cx);
             }
         });

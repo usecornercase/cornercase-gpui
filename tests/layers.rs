@@ -425,7 +425,7 @@ const CACHED: &[Cached] = &[
 ];
 
 const ALSO_CACHED: &[Cached] = &[Cached {
-    kind: "a bot's chat",
+    kind: "Bot chat",
     files: &["src/panels/bot_chat.rs", "src/panels/bot_chat/"],
     except: &["src/panels/bot_chat/global.rs"],
     clock: &["src/panels/bot_chat.rs"],
