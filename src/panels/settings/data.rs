@@ -27,12 +27,6 @@ pub(super) struct Asked {
     pub view: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Failure {
-    pub asked: Asked,
-    pub why: String,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Sheet<'a> {
     pub open: bool,

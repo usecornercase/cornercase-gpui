@@ -159,7 +159,7 @@ impl SettingsPanel {
             }
         };
         if ok {
-            self.read_again_if_behind(cx);
+            self.read_again(cx);
         }
         cx.notify();
     }

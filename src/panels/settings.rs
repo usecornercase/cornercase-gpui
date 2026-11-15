@@ -60,6 +60,11 @@ enum Role {
     Script(String, Script),
 }
 
+struct Failure {
+    asked: data::Asked,
+    why: String,
+}
+
 struct OpenChoice {
     key: String,
     highlight: Option<usize>,
@@ -67,7 +72,7 @@ struct OpenChoice {
 
 pub(crate) struct SettingsPanel {
     described: Option<Described>,
-    failed: Option<data::Failure>,
+    failed: Option<Failure>,
     loading: bool,
     boot: String,
     page: String,
@@ -176,7 +181,7 @@ impl SettingsPanel {
         if open && !self.was_open {
             self.load(cx);
         } else {
-            self.read_again_if_behind(cx);
+            self.read_again(cx);
         }
         if !open {
             self.choice = None;
@@ -211,7 +216,7 @@ impl SettingsPanel {
                 true
             }
             Err(e) => {
-                self.failed = Some(data::Failure { asked, why: cli::reason(&e) });
+                self.failed = Some(Failure { asked, why: cli::reason(&e) });
                 false
             }
         };
@@ -219,11 +224,11 @@ impl SettingsPanel {
         if let Some(landed) = self.landed.as_mut().filter(|_| answered) {
             landed.take_answer(revision);
         }
-        self.read_again_if_behind(cx);
+        self.read_again(cx);
         cx.notify();
     }
 
-    fn read_again_if_behind(&mut self, cx: &mut Context<Self>) {
+    fn read_again(&mut self, cx: &mut Context<Self>) {
         let store = Store::get(cx).read(cx);
         let sheet = data::Sheet {
             open: store.sheet == Some(PanelKind::Settings),
