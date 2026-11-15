@@ -195,12 +195,18 @@ impl Root {
     }
 
     pub(crate) fn finish_rename(&mut self, save: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.end_rename((save, true), window, cx);
+    }
+
+    fn end_rename(&mut self, (save, keys_back): (bool, bool), window: &mut Window, cx: &mut Context<Self>) {
         let Some(rename) = self.side.rename.take() else { return };
         let text = rename.field.read(cx).text();
         if save && let Some(sent) = renamed(rename.what, &rename.initial, &text) {
             self.send_renamed(sent, cx);
         }
-        window.focus(&self.keys_rest(cx));
+        if keys_back {
+            window.focus(&self.keys_rest(cx));
+        }
         cx.notify();
     }
 
@@ -225,11 +231,8 @@ impl Root {
         let focused = rename.field.read(cx).focus_handle(cx).is_focused(window);
         match gone_end(gone, focused) {
             GoneEnd::Leave => {}
-            GoneEnd::GiveKeysBack => self.finish_rename(false, window, cx),
-            GoneEnd::DropOnly => {
-                self.side.rename = None;
-                cx.notify();
-            }
+            GoneEnd::GiveKeysBack => self.end_rename((false, true), window, cx),
+            GoneEnd::DropOnly => self.end_rename((false, false), window, cx),
         }
     }
 
