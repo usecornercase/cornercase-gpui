@@ -34,6 +34,18 @@ fn page_link(page: String, cx: &mut Context<SettingsPanel>) -> AnyElement {
         .into_any_element()
 }
 
+fn results_heading(query: &str, about: String) -> Div {
+    widgets::heading(Icon::Search, format!("Results for “{query}”"), about)
+}
+
+fn pages_group(pages: Vec<String>, cx: &mut Context<SettingsPanel>) -> Option<Div> {
+    if pages.is_empty() {
+        return None;
+    }
+    let links: Vec<AnyElement> = pages.into_iter().map(|page| page_link(page, cx)).collect();
+    Some(widgets::group("Pages", div().flex().flex_col().gap(px(2.)).children(links)))
+}
+
 impl SettingsPanel {
     pub(super) fn render_search(
         &self,
@@ -46,15 +58,18 @@ impl SettingsPanel {
         let mut pages = data::pages_matching(&self.all_pages(), query);
         pages.retain(|page| data::count(&found, page) == 0);
         let total = found.iter().map(|f| f.section.items.len()).sum();
-        let title = format!("Results for “{query}”");
-        let mut parts = vec![widgets::heading(Icon::Search, title, count_text(total, pages.len()))];
-        if !pages.is_empty() {
-            let links: Vec<AnyElement> = pages.into_iter().map(|page| page_link(page, cx)).collect();
-            parts.push(widgets::group("Pages", div().flex().flex_col().gap(px(2.)).children(links)));
-        }
+        let mut parts = vec![results_heading(query, count_text(total, pages.len()))];
+        parts.extend(pages_group(pages, cx));
         for f in &found {
             parts.push(widgets::group(caption_of(f), self.section_body(described, &f.section.items, window, cx)));
         }
+        parts
+    }
+
+    pub(super) fn render_search_unread(&self, query: &str, state: Vec<Div>, cx: &mut Context<Self>) -> Vec<Div> {
+        let mut parts = vec![results_heading(query, String::new())];
+        parts.extend(state);
+        parts.extend(pages_group(data::pages_matching(&self.all_pages(), query), cx));
         parts
     }
 }

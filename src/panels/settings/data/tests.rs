@@ -707,3 +707,118 @@ fn with_no_session_nothing_is_read() {
 fn a_read_that_failed_asks_nothing_more_by_itself() {
     assert!(!behind(None, seen("b1", 8)));
 }
+
+fn described() -> Described {
+    Described::default()
+}
+
+const FIVE: [&str; 5] = [APPEARANCE, LINKS, "Worktrees", PROJECTS, SHARE];
+
+#[test]
+fn the_appearance_page_shows_with_no_query_whatever_the_settings() {
+    let d = described();
+    for answer in [Answer::Held(&d), Answer::Reading, Answer::Failed("why")] {
+        assert_eq!(shown(APPEARANCE, false, answer), Shown::Appearance);
+    }
+}
+
+#[test]
+fn a_search_typed_on_the_appearance_page_shows_the_results() {
+    let d = described();
+    assert_eq!(shown(APPEARANCE, true, Answer::Held(&d)), Shown::Results(&d));
+}
+
+#[test]
+fn the_links_page_shows_from_the_answer_once_it_is_held() {
+    let d = described();
+    assert_eq!(shown(LINKS, false, Answer::Held(&d)), Shown::Page(&d));
+}
+
+#[test]
+fn the_links_page_works_with_no_answer() {
+    assert_eq!(shown(LINKS, false, Answer::Reading), Shown::OwnLinks);
+    assert_eq!(shown(LINKS, false, Answer::Failed("why")), Shown::OwnLinks);
+}
+
+#[test]
+fn a_page_of_cornercase_shows_from_the_answer() {
+    let d = described();
+    for page in ["Worktrees", PROJECTS, SHARE] {
+        assert_eq!(shown(page, false, Answer::Held(&d)), Shown::Page(&d));
+    }
+}
+
+#[test]
+fn a_page_of_cornercase_says_its_settings_are_being_read() {
+    for page in ["Worktrees", PROJECTS, SHARE] {
+        assert_eq!(shown(page, false, Answer::Reading), Shown::Reading);
+    }
+}
+
+#[test]
+fn a_page_of_cornercase_says_why_its_settings_could_not_be_read() {
+    for page in ["Worktrees", PROJECTS, SHARE] {
+        assert_eq!(shown(page, false, Answer::Failed("why")), Shown::Failed("why"));
+    }
+}
+
+#[test]
+fn a_search_shows_the_same_results_whichever_page_was_open() {
+    let d = described();
+    for page in FIVE {
+        assert_eq!(shown(page, true, Answer::Held(&d)), Shown::Results(&d), "{page}");
+    }
+}
+
+#[test]
+fn a_search_while_the_settings_are_read_offers_the_pages_that_match() {
+    for page in FIVE {
+        assert_eq!(shown(page, true, Answer::Reading), Shown::ResultsReading, "{page}");
+    }
+}
+
+#[test]
+fn a_search_with_the_settings_failed_says_why_and_offers_the_pages_that_match() {
+    for page in FIVE {
+        assert_eq!(shown(page, true, Answer::Failed("why")), Shown::ResultsFailed("why"), "{page}");
+    }
+}
+
+#[test]
+fn an_answer_older_than_what_the_sheet_holds_is_not_applied() {
+    assert!(older(Some(seen("b1", 9)), seen("b1", 8)));
+}
+
+#[test]
+fn an_answer_level_with_what_the_sheet_holds_is_applied() {
+    assert!(!older(Some(seen("b1", 9)), seen("b1", 9)));
+}
+
+#[test]
+fn an_answer_newer_than_what_the_sheet_holds_is_applied() {
+    assert!(!older(Some(seen("b1", 8)), seen("b1", 9)));
+}
+
+#[test]
+fn an_answer_asked_under_another_boot_is_applied_whatever_its_revision() {
+    assert!(!older(Some(seen("b1", 9)), seen("b2", 1)));
+}
+
+#[test]
+fn an_answer_with_no_revision_is_older_than_anything_held() {
+    assert!(older(Some(seen("b1", 1)), seen("b1", 0)));
+}
+
+#[test]
+fn with_nothing_held_every_answer_is_applied() {
+    assert!(!older(None, seen("b1", 3)));
+}
+
+#[test]
+fn settings_search_finds_the_appearance_page_by_every_word_the_global_search_finds_it_by() {
+    let pages = [APPEARANCE.to_string()];
+    for query in ["theme", "dark", "Gruvbox", "nord", "rosé pine", "contrast", "colours", "blur", "color"] {
+        assert!(crate::panels::settings::appearance_found(query, "Nord").is_some(), "{query}");
+        assert_eq!(pages_matching(&pages, query), [APPEARANCE], "{query}");
+    }
+}

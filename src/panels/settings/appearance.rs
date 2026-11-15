@@ -78,9 +78,6 @@ impl Snap {
     }
 }
 
-pub(super) const KEYWORDS: &str = "appearance theme themes colour colours color colors palette light dark system \
-    transparency opacity glass blur contrast terminal presets import export";
-
 impl SettingsPanel {
     pub(super) fn appearance_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let snap = Snap::read(cx);
@@ -117,16 +114,8 @@ impl SettingsPanel {
     }
 }
 
-fn haystack() -> String {
-    let presets =
-        crate::theme::presets::PRESETS.iter().filter_map(|(_, text)| crate::theme::file::parse(text).ok()?.name);
-    let labels = crate::theme::tokens::TOKENS.iter().map(|token| token.label.to_string());
-    let words: Vec<String> = presets.chain(labels).chain([KEYWORDS.to_string()]).collect();
-    words.join(" ").to_lowercase()
-}
-
 pub(crate) fn found_for(query: &str, shown: &str) -> Option<super::FoundSetting> {
-    let text = haystack();
+    let text = super::data::appearance_words();
     let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     let matched = !words.is_empty() && words.iter().all(|word| text.contains(word.as_str()));
     matched.then(|| super::FoundSetting {
