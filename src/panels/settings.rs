@@ -77,8 +77,7 @@ pub(crate) struct SettingsPanel {
     import: Option<import::Import>,
     was_open: bool,
     first_project: Option<u64>,
-    agents_room: Rc<Cell<f32>>,
-    gallery_room: Rc<Cell<f32>>,
+    card_room: Rc<Cell<f32>>,
     nav_width: Split,
     search: Entity<TextField>,
     scroll: ScrollHandle,
@@ -112,8 +111,7 @@ impl SettingsPanel {
             import: None,
             was_open: true,
             first_project: None,
-            agents_room: Rc::new(Cell::new(widgets::WIDEST_CARD)),
-            gallery_room: Rc::new(Cell::new(widgets::WIDEST_CARD)),
+            card_room: Rc::new(Cell::new(widgets::WIDEST_CARD)),
             nav_width: NAV,
             search,
             scroll: ScrollHandle::new(),
@@ -191,7 +189,7 @@ impl SettingsPanel {
         }
         self.loading = true;
         cx.notify();
-        self.boot = Store::get(cx).read(cx).session.as_ref().map(|s| s.boot.clone()).unwrap_or_default();
+        seen_of(Store::get(cx).read(cx)).boot.clone_into(&mut self.boot);
         store::run(cx, args(&["config", "--json"]), Self::read_ended);
     }
 
@@ -208,6 +206,9 @@ impl SettingsPanel {
                 false
             }
         };
+        if let Some(landed) = self.landed.as_mut().filter(|_| answered) {
+            landed.take_answer(self.described.as_ref().map_or(0, |d| d.revision));
+        }
         self.read_again_if_behind(answered, cx);
         cx.notify();
     }

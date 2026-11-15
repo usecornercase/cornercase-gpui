@@ -7,13 +7,15 @@ use super::{Role, SettingsPanel, widgets};
 use crate::notify::tip;
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
-use crate::ui::split;
 
 const MODE: f32 = 150.;
 const NAME: f32 = 120.;
 const LEAST: f32 = 120.;
 const GAP: f32 = 14.;
 const NAME_LEAST: f32 = 72.;
+const AGENT_CAPTION: &str = "AGENT";
+const MODE_CAPTION: &str = "MODE";
+const ARGUMENTS_CAPTION: &str = "EXTRA ARGUMENTS";
 const COLUMNS_LEAST: f32 = NAME_LEAST + MODE + LEAST + widgets::SLOT + 3. * GAP;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +36,22 @@ pub(super) struct AgentItem<'d> {
     pub extra: Option<&'d Setting>,
 }
 
+fn name_box(d: Div) -> Div {
+    d.flex_grow().flex_basis(px(NAME)).min_w(px(NAME_LEAST))
+}
+
+fn mode_box(d: Div) -> Div {
+    d.w(px(MODE)).flex_none()
+}
+
+fn arguments_box(d: Div) -> Div {
+    d.w(px(Look::ARGUMENTS.width)).min_w(px(LEAST))
+}
+
+fn slot_box(d: Div) -> Div {
+    d.w(px(widgets::SLOT)).flex_none()
+}
+
 fn head(text: &'static str) -> Div {
     div().text_size(px(10.5)).font_weight(FontWeight::SEMIBOLD).text_color(colours::faint()).child(text)
 }
@@ -47,10 +65,10 @@ fn columns() -> Div {
         .pb(px(8.))
         .border_b_1()
         .border_color(colours::border())
-        .child(head("AGENT").flex_grow().flex_basis(px(NAME)).min_w(px(NAME_LEAST)))
-        .child(head("MODE").w(px(MODE)).flex_none())
-        .child(head("EXTRA ARGUMENTS").w(px(Look::ARGUMENTS.width)).min_w(px(LEAST)))
-        .child(div().w(px(widgets::SLOT)).flex_none())
+        .child(name_box(head(AGENT_CAPTION)))
+        .child(mode_box(head(MODE_CAPTION)))
+        .child(arguments_box(head(ARGUMENTS_CAPTION)))
+        .child(slot_box(div()))
 }
 
 fn agent_label(agent: &AgentItem<'_>) -> Div {
@@ -63,10 +81,7 @@ fn agent_label(agent: &AgentItem<'_>) -> Div {
             let ink = if c.dangerous { colours::failed() } else { colours::muted() };
             div().flex().font_family(FONT_FAMILY).text_size(px(11.)).text_color(ink).child(ui::one_line(c.note.clone()))
         });
-    div()
-        .flex_grow()
-        .flex_basis(px(NAME))
-        .min_w(px(NAME_LEAST))
+    name_box(div())
         .flex()
         .flex_col()
         .gap(px(2.))
@@ -83,7 +98,7 @@ fn columns_row(agent: &AgentItem<'_>, mode: Div, extra: Option<Div>, saving: Div
         .py(px(8.))
         .child(agent_label(agent))
         .child(mode)
-        .child(div().w(px(Look::ARGUMENTS.width)).min_w(px(LEAST)).flex().children(extra))
+        .child(arguments_box(div()).flex().children(extra))
         .child(saving)
 }
 
@@ -103,21 +118,15 @@ fn stacked_row(agent: &AgentItem<'_>, mode: Div, extra: Option<Div>, saving: Div
                 .flex_wrap()
                 .gap_x(px(GAP))
                 .gap_y(px(8.))
-                .child(part("MODE", mode))
-                .child(part("EXTRA ARGUMENTS", arguments).flex_basis(px(Look::ARGUMENTS.width)).min_w_0()),
+                .child(part(MODE_CAPTION, mode))
+                .child(part(ARGUMENTS_CAPTION, arguments).flex_basis(px(Look::ARGUMENTS.width)).min_w_0()),
         )
 }
 
 impl SettingsPanel {
     pub(super) fn agents_card(&self, d: &Described, items: &[Item], window: &Window, cx: &mut Context<Self>) -> Div {
-        let header = (Shape::of(self.agents_room.get()) == Shape::Columns).then(columns);
-        let table = div()
-            .relative()
-            .flex()
-            .flex_col()
-            .child(split::measure(self.agents_room.clone()))
-            .children(header)
-            .children(self.item_rows(d, items, window, cx));
+        let header = (Shape::of(self.card_room.get()) == Shape::Columns).then(columns);
+        let table = widgets::measured(&self.card_room).children(header).children(self.item_rows(d, items, window, cx));
         widgets::card().child(table)
     }
 
@@ -127,9 +136,9 @@ impl SettingsPanel {
         let hint = agent.extra.and_then(|e| self.hint_of(&Role::Setting(e.key.clone()), e.hint(), slot.window, cx));
         let roles: Vec<Role> =
             [agent.mode, agent.extra].into_iter().flatten().map(|s| Role::Setting(s.key.clone())).collect();
-        let mode = div().w(px(MODE)).flex_none().flex().child(self.mode_control(agent, cx));
-        let saving = div().w(px(widgets::SLOT)).flex_none().flex().justify_center().children(self.mode_saving(agent));
-        let row = match Shape::of(self.agents_room.get()) {
+        let mode = mode_box(div()).flex().child(self.mode_control(agent, cx));
+        let saving = slot_box(div()).flex().justify_center().children(self.mode_saving(agent));
+        let row = match Shape::of(self.card_room.get()) {
             Shape::Columns => columns_row(agent, mode, extra, saving),
             Shape::Stacked => stacked_row(agent, mode, extra, saving),
         };

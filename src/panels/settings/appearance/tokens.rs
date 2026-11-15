@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use gpui::{
     AnyElement, Context, Div, IntoElement as _, ParentElement as _, Rgba, SharedString,
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
@@ -96,7 +98,7 @@ impl SettingsPanel {
         div().flex().gap(px(6.)).children(swatches)
     }
 
-    fn ansi_half(&self, range: std::ops::Range<usize>, snap: &Snap, cx: &mut Context<Self>) -> Div {
+    fn ansi_half(&self, range: Range<usize>, snap: &Snap, cx: &mut Context<Self>) -> Div {
         let (normal, bright) = ANSI_NAMES.split_at(8);
         div()
             .flex()

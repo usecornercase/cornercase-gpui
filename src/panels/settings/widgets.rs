@@ -1,6 +1,10 @@
+use std::cell::Cell;
+use std::rc::Rc;
+
 use gpui::{Div, ElementId, FontWeight, IntoElement, Rgba, ScrollHandle, SharedString, Stateful, div, prelude::*, px};
 
 use crate::theme::{colours, radius};
+use crate::ui::split;
 use crate::ui::{self, Icon, glass};
 
 pub(crate) const SLOT: f32 = ui::ROW_ACTION;
@@ -10,6 +14,10 @@ const PAGE_SIDES: f32 = 28.;
 const CARD_SIDES: f32 = 16.;
 const CARD_EDGE: f32 = 1.;
 pub(crate) const WIDEST_CARD: f32 = CONTENT - 2. * PAGE_SIDES - 2. * (CARD_SIDES + CARD_EDGE);
+
+pub(crate) fn measured(room: &Rc<Cell<f32>>) -> Div {
+    div().relative().flex().flex_col().child(split::measure(room.clone()))
+}
 
 pub(crate) fn nav(width: f32) -> Div {
     div()

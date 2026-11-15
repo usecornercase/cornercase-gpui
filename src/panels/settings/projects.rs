@@ -5,7 +5,7 @@ use super::data::{self, Described, ProjectEntry, Script};
 use super::{Role, SettingsPanel, role_id, widgets};
 use crate::notify::tip;
 use crate::platform::paths::Style;
-use crate::theme::{FONT_FAMILY, colours, radius};
+use crate::theme::{FONT_FAMILY, colours};
 use crate::ui::{self, Icon};
 
 fn folder_name(project: &ProjectEntry) -> Stateful<Div> {
@@ -48,18 +48,8 @@ fn project_header(project: &ProjectEntry) -> Div {
 }
 
 fn script_lines(text: &str) -> Div {
-    div()
-        .w(px(Look::SCRIPT.width))
-        .min_w_0()
-        .px(px(10.))
-        .py(px(6.))
-        .rounded(px(radius::control()))
-        .bg(colours::field())
-        .border_1()
-        .border_color(colours::edge())
-        .font_family(FONT_FAMILY)
-        .text_size(px(12.))
-        .children(text.lines().map(|l| div().child(l.to_string())))
+    let lines = div().children(text.lines().map(|l| div().child(l.to_string())));
+    ui::input_box(lines, false).w(px(Look::SCRIPT.width)).min_w_0().font_family(FONT_FAMILY).text_size(px(12.))
 }
 
 fn script_label(script: Script) -> Div {

@@ -455,6 +455,10 @@ fn here() -> String {
     cli::host().unwrap_or_else(|| THIS_COMPUTER.to_string())
 }
 
+fn status_box(status: Option<String>) -> Div {
+    div().flex_1().min_w_0().flex().justify_end().children(status.map(|text| ui::dim(ui::one_line(text)).flex()))
+}
+
 fn header_bar() -> Div {
     div().flex_none().px(px(20.)).py(px(12.)).border_b_1().border_color(colours::border())
 }
@@ -484,7 +488,3 @@ fn run_json<T: serde::de::DeserializeOwned + 'static>(
 
 #[cfg(test)]
 mod tests;
-
-fn status_box(status: Option<String>) -> Div {
-    div().flex_1().min_w_0().flex().justify_end().children(status.map(|text| ui::dim(ui::one_line(text)).flex()))
-}

@@ -265,3 +265,13 @@ fn the_landings_revision_comes_from_the_first_answer_read_after_it() {
     assert_eq!(landed_at(None, false, 8), Some(8));
     assert_eq!(landed_at(Some(8), false, 9), Some(8));
 }
+
+#[test]
+fn an_answer_that_is_read_again_at_once_still_gives_the_landing_its_revision() {
+    let found = found(fixture!("settings/search/phone-app.json"), "Remote › pair a phone app");
+    let mut landed = Landed { found, serial: 1, revision: None, row: Rc::default(), scrolled: false };
+    landed.take_answer(7);
+    assert_eq!(landed.revision, Some(7));
+    landed.take_answer(8);
+    assert_eq!(landed.revision, Some(7));
+}
