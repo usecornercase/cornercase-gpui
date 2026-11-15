@@ -182,3 +182,15 @@ fn a_toast_that_copies_the_same_text_counts_as_a_repeat() {
     push_toast(&mut toasts, copying(2, "brew update"));
     assert_eq!((ids(&toasts), toasts[0].count), (vec![2], 2));
 }
+
+#[test]
+fn a_removed_bots_answer_toasts_go_and_the_others_stay() {
+    let on = |id: u64, go: Option<ToastGo>| Toast {
+        action: go.map(|go| ("Show".to_string(), go)),
+        ..toast_of(id, "x", ToastKind::Done)
+    };
+    let bot = |id: &str| Some(ToastGo::Bot(id.to_string(), "name".to_string()));
+    let toasts = [on(1, bot("notes")), on(2, bot("ops")), on(3, None), on(4, Some(ToastGo::Run(vec!["x".into()])))];
+    let gone: Vec<u64> = toasts.iter().filter(|t| super::shows_bot(t, "notes")).map(|t| t.id).collect();
+    assert_eq!(gone, [1]);
+}

@@ -124,6 +124,10 @@ fn making_way(older: &[Toast]) -> usize {
         .unwrap_or(0)
 }
 
+pub(crate) fn shows_bot(toast: &Toast, id: &str) -> bool {
+    matches!(&toast.action, Some((_, ToastGo::Bot(bot, _))) if bot == id)
+}
+
 pub(crate) fn push_toast(toasts: &mut Vec<Toast>, mut toast: Toast) {
     if let Some(at) = toasts.iter().position(|t| t.repeats(&toast)) {
         toast.count += toasts.remove(at).count;
@@ -136,6 +140,14 @@ pub(crate) fn push_toast(toasts: &mut Vec<Toast>, mut toast: Toast) {
 }
 
 impl Store {
+    pub(crate) fn drop_bot_toasts(&mut self, id: &str, cx: &mut Context<Self>) {
+        let before = self.toasts.len();
+        self.toasts.retain(|toast| !shows_bot(toast, id));
+        if self.toasts.len() != before {
+            cx.notify();
+        }
+    }
+
     pub(crate) fn copy(&mut self, clip: &Clip, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(clip.text.clone()));
         self.toast(clip.said.clone(), ToastKind::Info, cx);

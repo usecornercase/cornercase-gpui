@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.117
+
+- **Know when a bot answers.** With cornercase 0.13.77 or newer, when a bot answers (or fails) in a chat you are not looking at, a toast shows the bot's name and the first words of its answer, and **Show** opens its chat. While the window is in the background, a desktop notification tells you too; on macOS a click on it opens the chat. An answer you already read in cornercase's own window, or that a script waited for, is not told again.
+- **⇧⌘I takes you to your bots** (Ctrl+Alt+Shift+I on Linux and Windows): to a bot whose answer you have not read, else back to the bot you looked at last; press it again for the next one.
+
 ## 0.1.116
 
 - **Searching Settings while Appearance is open shows the results.** Typing in Settings' search field on the Appearance page used to leave the page as it was. Now the matching settings show, as on every other page, and clearing the search brings Appearance back. A theme's name, such as Nord, also finds the Appearance page in Settings' search.

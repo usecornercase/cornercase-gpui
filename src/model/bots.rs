@@ -16,10 +16,12 @@ pub(crate) use self::manage::{
 pub(crate) use self::talk::{
     Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
 };
+pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, read_since, tells};
 
 mod form;
 mod manage;
 mod talk;
+mod told;
 
 pub(crate) const KEPT: usize = 1_000;
 
@@ -170,6 +172,10 @@ pub(crate) enum Heard {
 }
 
 impl BotEvent {
+    pub(crate) fn of_run(&self) -> bool {
+        self.line.as_ref().and_then(|line| present(line, "routine")).is_some()
+    }
+
     pub(crate) fn heard(&self) -> Heard {
         let bot = self.bot.clone();
         if let Some(line) = self.line.as_ref() {
@@ -311,6 +317,47 @@ pub(crate) enum Offer {
     Lacks(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum KeyGoes {
+    Show(String),
+    Say(String),
+    NoBot,
+    Nothing,
+}
+
+fn after_shown<'a>(list: &'a [Bot], shown: Option<&str>) -> impl Iterator<Item = &'a Bot> {
+    let start = shown.and_then(|id| list.iter().position(|bot| bot.id == id)).map_or(0, |at| at + 1);
+    list.iter().cycle().skip(start).take(list.len())
+}
+
+pub(crate) fn key_goes(
+    (offer, making): (&Offer, Option<&Making>),
+    bots: &[Bot],
+    (open, last): (Option<&str>, Option<&str>),
+) -> KeyGoes {
+    match (offer, making) {
+        (Offer::Lacks(words), _) | (Offer::Hidden, Some(Making::Here(words) | Making::Server(words))) => {
+            KeyGoes::Say(words.clone())
+        }
+        (Offer::Hidden, None) => KeyGoes::Nothing,
+        (Offer::Hidden, Some(Making::Offered)) => KeyGoes::NoBot,
+        (Offer::Rows, _) => {
+            let unread = after_shown(bots, open).find(|bot| bot.unread > 0 && Some(bot.id.as_str()) != open);
+            let next = || open.and_then(|_| after_shown(bots, open).next());
+            let back = || last.and_then(|id| bots.iter().find(|bot| bot.id == id)).or(bots.first());
+            unread.or_else(next).or_else(back).map_or(KeyGoes::Nothing, |bot| KeyGoes::Show(bot.id.clone()))
+        }
+    }
+}
+
+pub(crate) fn no_bot_words(new_bot_keys: &str) -> String {
+    format!("No bot yet: {new_bot_keys} makes one")
+}
+
+pub(crate) fn keys_go_to_chat(dialog: bool, sheet: bool) -> bool {
+    !dialog && !sheet
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Bots {
     pub list: Vec<Bot>,
@@ -320,6 +367,9 @@ pub(crate) struct Bots {
     pub seen: Option<(String, usize)>,
     pub drafts: Drafts,
     pub manage: Managing,
+    pub answers: Answers,
+    pub to_tell: Vec<Told>,
+    pub last_shown: Option<String>,
     stopping: HashSet<String>,
     revision: u64,
     asked: u64,
@@ -358,6 +408,10 @@ impl Bots {
         self.list.iter().any(Bot::thinking)
     }
 
+    pub(crate) fn unread_of(&self) -> Vec<(String, usize)> {
+        self.list.iter().map(|bot| (bot.id.clone(), bot.unread)).collect()
+    }
+
     pub(crate) fn unread(&self) -> usize {
         self.list.iter().map(|bot| bot.unread).sum()
     }
@@ -384,6 +438,7 @@ impl Bots {
         let listed: Vec<String> = self.list.iter().map(|bot| bot.id.clone()).collect();
         self.drafts.keep_only(&listed);
         self.manage.keep_listed(&listed);
+        self.answers.keep_listed(&listed);
         let thinking: HashSet<String> =
             self.list.iter().filter(|bot| bot.thinking()).map(|bot| bot.id.clone()).collect();
         self.stopping.retain(|id| thinking.contains(id));

@@ -36,6 +36,7 @@ pub(crate) enum Command {
     NextProject,
     PreviousProject,
     AgentNeedingYou,
+    Bots,
     Mark,
     ZoomIn,
     ZoomOut,
@@ -112,6 +113,7 @@ pub(crate) const SHORTCUTS: &[Shortcut] = &[
     key(&["y"], false, Command::NextProject),
     key(&["y"], true, Command::PreviousProject),
     key(&["b"], false, Command::AgentNeedingYou),
+    key(&["i"], true, Command::Bots),
     key(&["r"], false, Command::Mark),
     key(&["t"], false, Command::NewTab),
     key(&["w"], true, Command::CloseTab),
@@ -344,6 +346,7 @@ impl Command {
             Self::NextProject => "Next project",
             Self::PreviousProject => "Previous project",
             Self::AgentNeedingYou => "The agent that needs you",
+            Self::Bots => "A bot that answered, else your bots in turn",
             Self::Mark => "Mark for review, or as reviewed",
             _ => self.describe_browser(),
         }
@@ -377,6 +380,7 @@ impl Command {
             | Self::NextProject
             | Self::PreviousProject
             | Self::AgentNeedingYou
+            | Self::Bots
             | Self::Mark => Group::GettingAround,
             Self::Copy | Self::Paste | Self::ZoomIn | Self::ZoomOut | Self::ZoomReset => Group::Terminal,
             Self::Back | Self::Forward | Self::Reload | Self::FocusAddress | Self::Cut => Group::Browser,

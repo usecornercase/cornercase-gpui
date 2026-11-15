@@ -40,6 +40,7 @@ pub(crate) fn in_chat(command: Command) -> InChat {
         | Command::StartAgent
         | Command::OpenProject
         | Command::NewBot
+        | Command::Bots
         | Command::Connect
         | Command::PullRequest
         | Command::ZoomIn

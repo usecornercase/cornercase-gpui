@@ -1,0 +1,4 @@
+{"bot":"notes","event":"bot","line":{"at":1794756259,"conversation":"fake-1","id":3,"kind":"bot","model":"claude-fake-1","text":"One line (fake)","tokens":{"cache_read":0,"cache_write":0,"input":1,"output":1}},"time":"2026-11-15T15:24:19.342Z"}
+{"bot":"notes","event":"bot","line":{"at":1794756268,"id":12,"kind":"error","text":"Not logged in (fake)"},"time":"2026-11-15T15:24:28.364Z"}
+{"bot":"prs","event":"bot","line":{"at":1794756359,"conversation":"fake-1","id":3,"kind":"bot","model":"claude-fake-1","routine":1,"text":"One line (fake)","tokens":{"cache_read":0,"cache_write":0,"input":1,"output":1}},"time":"2026-11-15T15:25:59.040Z"}
+{"bot":"prs","event":"bot","line":{"at":1794756363,"id":6,"kind":"error","routine":2,"text":"Not logged in (fake)"},"time":"2026-11-15T15:26:03.124Z"}
