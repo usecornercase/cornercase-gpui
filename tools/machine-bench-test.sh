@@ -1266,17 +1266,28 @@ down_keeps_the_folder_when_the_bench_ran_until_the_last_second() {
   runb up "$t/b9" --here "$t/new/cornercase"
   check "up: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
   mkdir -p "$t/b9/here/bin"
-  printf '#!/bin/sh\nsleep 9.5\n' > "$t/b9/here/bin/brief"
-  chmod 755 "$t/b9/here/bin/brief"
+  printf '#!/bin/sh\nwhile [ ! -e %s/control/brief-stop ]; do /bin/sleep 0.1; done\n' "$t" > "$t/b9/here/bin/brief"
+  cat > "$t/bin/sleep" <<EOF
+#!/bin/sh
+n=\$(cat $t/control/sleep-count 2> /dev/null || echo 0)
+n=\$((n + 1))
+echo "\$n" > $t/control/sleep-count
+[ "\$n" = 10 ] && : > $t/control/brief-stop
+exec /bin/sleep "\$@"
+EOF
+  chmod 755 "$t/b9/here/bin/brief" "$t/bin/sleep"
+  rm -f "$t/control/sleep-count" "$t/control/brief-stop"
   "$t/b9/here/bin/brief" > /dev/null 2>&1 &
   bpid=$!
   track "$bpid"
   runb down "$t/b9"
   rc1=$rc
+  rm -f "$t/bin/sleep" "$t/control/sleep-count"
   check "exit $rc1, not 1: the folder went after less than 3 s of quiet" [ "$rc1" = 1 ] || return 1
   check "the message names nothing to end: $(cat "$t/err")" contains "$t/err" "nothing runs now, but something of the bench ran in the last 3 s" || return 1
   check "the folder was removed" [ -d "$t/b9" ] || return 1
   wait "$bpid" 2> /dev/null
+  rm -f "$t/control/brief-stop"
   runb down "$t/b9"
   check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
 }
