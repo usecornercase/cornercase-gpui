@@ -9,6 +9,10 @@ pub(crate) enum InChat {
     Field,
 }
 
+pub(crate) fn swallowed_in_chat(command: Command) -> bool {
+    matches!(in_chat(command), InChat::Rests | InChat::Field)
+}
+
 pub(crate) fn in_chat(command: Command) -> InChat {
     match command {
         Command::Mark

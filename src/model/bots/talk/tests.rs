@@ -123,3 +123,25 @@ fn each_job_of_a_bot_has_a_key_of_its_own() {
         assert!(keys.iter().skip(i + 1).all(|other| other != key), "{key}");
     }
 }
+
+#[test]
+fn a_chat_that_shows_another_bot_fills_the_field_from_its_draft() {
+    assert_eq!(refill(Some("prs"), Some("ops"), true, 3, 3), Refill::Fill);
+    assert_eq!(refill(None, Some("prs"), true, 0, 0), Refill::Fill);
+}
+
+#[test]
+fn a_chat_that_shows_the_same_bot_again_keeps_the_field_and_its_caret() {
+    assert_eq!(refill(Some("prs"), Some("prs"), true, 3, 3), Refill::Keep);
+    assert_eq!(refill(Some("prs"), None, true, 3, 3), Refill::Keep);
+}
+
+#[test]
+fn a_draft_the_window_put_in_asks_the_field_to_fill_again() {
+    assert_eq!(refill(Some("prs"), Some("prs"), true, 3, 4), Refill::Fill);
+}
+
+#[test]
+fn a_removed_bots_text_is_forgotten_so_a_bot_made_again_with_its_id_starts_empty() {
+    assert_eq!(refill(Some("prs"), None, false, 3, 3), Refill::Forget);
+}

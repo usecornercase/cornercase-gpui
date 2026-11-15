@@ -5,7 +5,7 @@ use gpui::{
 
 use super::entries::{Control, send_control};
 use super::words::{SEND, SENDING, placeholder};
-use crate::model::bots::{Said, on_return, say_key, sendable};
+use crate::model::bots::{Refill, Said, on_return, refill, say_key, sendable};
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent, Tone};
@@ -38,18 +38,23 @@ impl ChatField {
 
     fn follow(&mut self, cx: &mut Context<Self>) {
         let store = self.store.read(cx);
-        let Some(shown) = store.shown_bot().map(str::to_string) else { return };
+        let Some(shown) = store.shown_bot().map(str::to_string) else {
+            let listed = self.owner.as_deref().is_some_and(|owner| store.bots.find(owner).is_some());
+            if refill(self.owner.as_deref(), None, listed, self.seen.1, 0) == Refill::Forget {
+                self.owner = None;
+            }
+            return;
+        };
         let name = store.bots.find(&shown).map_or_else(|| shown.clone(), |bot| bot.name.clone());
         let revision = store.bots.drafts.revision();
         let draft = store.bots.drafts.text(&shown).to_string();
-        let changed_bot = self.owner.as_deref() != Some(shown.as_str());
-        let again = !changed_bot && self.seen.1 != revision;
+        let fill = refill(self.owner.as_deref(), Some(&shown), true, self.seen.1, revision) == Refill::Fill;
         if self.seen.0 != name {
             let label = placeholder(&name);
             self.field.update(cx, |field, cx| field.set_placeholder(label, cx));
         }
         self.seen = (name, revision);
-        if changed_bot || again {
+        if fill {
             self.owner = Some(shown);
             self.field.update(cx, |field, cx| field.fill(draft, cx));
         }

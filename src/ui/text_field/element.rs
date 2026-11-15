@@ -271,7 +271,7 @@ impl TextElement {
         let (text, runs, font_size, shown) = self.shaping(window, cx);
         let input = self.input.read(cx);
         let wraps = input.options.wraps;
-        let wrap_width = wraps.then_some(bounds.size.width);
+        let wrap_width = (wraps && !input.content.is_empty()).then_some(bounds.size.width);
         let mut lines = window.text_system().shape_text(text, font_size, &runs, wrap_width, None).ok()?.into_vec();
         if !wraps {
             lines.truncate(1);

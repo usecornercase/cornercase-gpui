@@ -28,3 +28,6 @@ pub(super) fn submits(enter: Enter, composing: bool) -> bool {
 pub(super) fn passes_arrows(enter: Enter, empty: bool, several_rows: bool) -> bool {
     enter == Enter::Sends && (empty || !several_rows)
 }
+
+#[cfg(test)]
+mod tests;

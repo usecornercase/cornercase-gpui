@@ -332,3 +332,22 @@ fn the_placeholder_names_the_bot() {
 fn a_resting_new_conversation_says_why() {
     assert_eq!(super::words::answering("PRs"), "PRs is answering: stop it first");
 }
+
+#[test]
+fn a_chat_at_its_end_keeps_following_when_its_viewport_shrinks() {
+    use super::after_layout;
+    assert_eq!(after_layout(true, true, false), (true, true));
+}
+
+#[test]
+fn a_chat_read_higher_up_stays_where_it_is_when_its_viewport_shrinks() {
+    use super::after_layout;
+    assert_eq!(after_layout(false, true, false), (false, false));
+}
+
+#[test]
+fn a_chat_follows_what_the_reader_did_when_the_viewport_is_unchanged() {
+    use super::after_layout;
+    assert_eq!(after_layout(true, false, false), (false, false));
+    assert_eq!(after_layout(false, false, true), (true, false));
+}

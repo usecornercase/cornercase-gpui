@@ -53,6 +53,21 @@ pub(crate) fn refused_goes(said: Said, listed: bool) -> Goes {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Refill {
+    Keep,
+    Forget,
+    Fill,
+}
+
+pub(crate) fn refill(owner: Option<&str>, shown: Option<&str>, listed: bool, seen: u64, revision: u64) -> Refill {
+    match shown {
+        None if owner.is_some() && !listed => Refill::Forget,
+        Some(shown) if owner != Some(shown) || seen != revision => Refill::Fill,
+        _ => Refill::Keep,
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Drafts {
     texts: HashMap<String, String>,

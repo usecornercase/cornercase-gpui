@@ -106,6 +106,7 @@ impl Root {
         }
         if self.chat_shown() {
             Self::scroll_chat(ks, cx);
+            cx.stop_propagation();
             return;
         }
         if let Some(event) = keys::key_event(ks, Os::CURRENT) {
@@ -119,17 +120,17 @@ impl Root {
         if !typing || self.overlay_open(cx) || self.store.read(cx).shows_file_full_screen() {
             return;
         }
-        if let Some(step) = bot_chat::scroll_of(&ks.key) {
-            bot_chat::scroll(step, cx);
+        if Self::scroll_chat(ks, cx) {
             cx.stop_propagation();
         }
     }
 
-    fn scroll_chat(ks: &Keystroke, cx: &mut Context<Self>) {
-        if let Some(step) = bot_chat::scroll_of(&ks.key) {
+    fn scroll_chat(ks: &Keystroke, cx: &mut Context<Self>) -> bool {
+        let step = bot_chat::scroll_of(&ks.key);
+        if let Some(step) = step {
             bot_chat::scroll(step, cx);
         }
-        cx.stop_propagation();
+        step.is_some()
     }
 
     fn key_shortcut(&mut self, ks: &Keystroke, terminal: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -159,7 +160,7 @@ impl Root {
             .filter(|popup| self.machine.is_none() && !self.chat_shown() && popup.read(cx).is_open())
     }
 
-    fn overlay_open(&self, cx: &App) -> bool {
+    pub(crate) fn overlay_open(&self, cx: &App) -> bool {
         let s = self.store.read(cx);
         s.dialog.is_some() || s.sheet.is_some()
     }
@@ -194,7 +195,7 @@ impl Root {
         if chord.focus == Focus::Browser && self.browser_command(command, window, cx) {
             return true;
         }
-        if self.chat_shown() && matches!(keymap::in_chat(command), keymap::InChat::Rests | keymap::InChat::Field) {
+        if self.chat_shown() && keymap::swallowed_in_chat(command) {
             return true;
         }
         match command {

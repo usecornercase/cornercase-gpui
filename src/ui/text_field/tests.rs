@@ -1,7 +1,6 @@
 use gpui::{KeyBinding, KeyContext};
 
-use super::enter::{Enter, passes_arrows, submits};
-use super::rows::pasted;
+use super::enter::Enter;
 use super::{
     Escaped, NewLine, Submit, bindings, composed_selection, escaped, handed, prompt_keys, send_key, shared, word_end,
     word_start,
@@ -150,48 +149,4 @@ fn the_other_fields_read_return_as_before() {
         assert!(first_action(os, "shift-enter", several).is_some_and(|a| a.partial_eq(&NewLine)), "{os:?}");
         assert!(first_action(os, send_key(os).0, several).is_some_and(|a| a.partial_eq(&Submit)), "{os:?}");
     }
-}
-
-#[test]
-fn a_chat_field_answers_to_its_own_key_context() {
-    let context = KeyContext::parse(Enter::Sends.key_context()).expect("context");
-    assert!(context.contains("TextField") && context.contains("Chat") && !context.contains("Multiline"));
-}
-
-#[test]
-fn a_chat_field_sends_nothing_while_the_input_method_composes() {
-    assert!(!submits(Enter::Sends, true));
-}
-
-#[test]
-fn a_chat_field_sends_when_nothing_is_composed() {
-    assert!(submits(Enter::Sends, false));
-}
-
-#[test]
-fn the_other_fields_submit_whatever_the_input_method_does() {
-    assert!(submits(Enter::Breaks, true) && submits(Enter::Breaks, false));
-}
-
-#[test]
-fn a_chat_field_of_one_row_or_none_passes_the_arrows_on() {
-    assert!(passes_arrows(Enter::Sends, true, true));
-    assert!(passes_arrows(Enter::Sends, false, false));
-}
-
-#[test]
-fn a_chat_field_of_several_rows_keeps_the_arrows() {
-    assert!(!passes_arrows(Enter::Sends, false, true));
-}
-
-#[test]
-fn a_prompt_keeps_the_arrows_whatever_its_rows() {
-    assert!(!passes_arrows(Enter::Breaks, true, false));
-    assert!(!passes_arrows(Enter::Breaks, false, false));
-}
-
-#[test]
-fn a_paste_into_a_field_of_several_lines_keeps_its_line_breaks() {
-    assert_eq!(pasted("a\r\nb", true), "a\nb");
-    assert_eq!(pasted("a\nb", false), "a b");
 }

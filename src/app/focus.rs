@@ -1,4 +1,4 @@
-use gpui::{App, Context, FocusHandle, Window};
+use gpui::{App, Context, Div, FocusHandle, InteractiveElement as _, MouseDownEvent, Window};
 
 use super::Root;
 use crate::panels::{PanelKind, bot_chat};
@@ -7,6 +7,10 @@ use crate::panels::{PanelKind, bot_chat};
 pub(crate) enum Rest {
     Terminal,
     Field,
+}
+
+pub(crate) fn press_goes_to_rest(chat_shown: bool, overlay_open: bool, prevented: bool) -> bool {
+    chat_shown && !overlay_open && !prevented
 }
 
 pub(crate) fn rest_of(chat_shown: bool) -> Rest {
@@ -151,6 +155,19 @@ impl Root {
             Rest::Field => bot_chat::field_focus(cx),
             Rest::Terminal => self.focus.clone(),
         }
+    }
+
+    pub(super) fn press_rests(&mut self, _: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if press_goes_to_rest(self.chat_shown(), self.overlay_open(cx), window.default_prevented()) {
+            window.focus(&self.keys_rest(cx));
+            window.prevent_default();
+        }
+    }
+
+    pub(super) fn keys_on(&self, root: Div, cx: &mut Context<Self>) -> Div {
+        root.track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::on_key))
+            .on_any_mouse_down(cx.listener(Self::press_rests))
     }
 
     pub(super) fn keys_follow(&self, rested: &FocusHandle, window: &mut Window, cx: &mut App) {

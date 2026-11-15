@@ -1,11 +1,15 @@
 use super::*;
-use crate::cli::QueueTap;
+use crate::cli::{Queue, QueueTap};
 use crate::model::bots::say_args;
+
+fn put(queue: &Queue, call: Call) {
+    drop(reply_of(queue, call.args, call.stdin));
+}
 
 fn said(text: &str) -> Vec<(Vec<String>, Option<Vec<u8>>)> {
     let (queue, tap) = QueueTap::new();
-    put_on(&queue, say_args("prs"), Some(text.as_bytes().to_vec()), |_| {});
-    tap.fed()
+    put(&queue, Call::say("prs", text));
+    tap.with_stdin()
 }
 
 fn whole(text: &str) {
@@ -41,9 +45,9 @@ fn a_message_never_appears_among_the_arguments() {
 #[test]
 fn stop_and_new_conversation_go_on_the_queue_with_nothing_on_standard_input() {
     let (queue, tap) = QueueTap::new();
-    put_on(&queue, ["bot", "stop", "prs"].map(str::to_string).to_vec(), None, |_| {});
-    put_on(&queue, ["bot", "reset", "prs"].map(str::to_string).to_vec(), None, |_| {});
-    let sent = tap.fed();
+    put(&queue, Call::of(&["bot", "stop", "prs"]));
+    put(&queue, Call::of(&["bot", "reset", "prs"]));
+    let sent = tap.with_stdin();
     assert_eq!(sent.len(), 2);
     assert!(sent.iter().all(|(_, stdin)| stdin.is_none()));
     assert_eq!(sent[1].0, ["bot", "reset", "prs"]);
@@ -53,9 +57,9 @@ fn stop_and_new_conversation_go_on_the_queue_with_nothing_on_standard_input() {
 fn two_messages_sent_one_after_the_other_arrive_in_that_order() {
     let (queue, tap) = QueueTap::new();
     for text in ["first", "second"] {
-        put_on(&queue, say_args("prs"), Some(text.as_bytes().to_vec()), |_| {});
+        put(&queue, Call::say("prs", text));
     }
-    let texts: Vec<_> = tap.fed().into_iter().map(|(_, stdin)| stdin.expect("text")).collect();
+    let texts: Vec<_> = tap.with_stdin().into_iter().map(|(_, stdin)| stdin.expect("text")).collect();
     assert_eq!(texts, [b"first".to_vec(), b"second".to_vec()]);
 }
 

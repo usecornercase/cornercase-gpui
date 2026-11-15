@@ -1,7 +1,7 @@
 use gpui::px;
 
 use super::{
-    Rows, Span, clamp_scroll, line_breaks, one_line, previous_grapheme, rows_shown, scroll_to_show,
+    Rows, Span, clamp_scroll, line_breaks, one_line, pasted, previous_grapheme, rows_shown, scroll_to_show,
     scroll_to_show_with_margins, sideways, thumb,
 };
 
@@ -223,4 +223,10 @@ fn a_narrower_field_scrolls_until_the_caret_shows() {
 #[test]
 fn a_scroll_within_what_the_caret_allows_stays_where_it_was() {
     assert_eq!(sideways(px(100.), (px(150.), px(5000.)), px(118.)), px(100.));
+}
+
+#[test]
+fn a_paste_into_a_field_of_several_lines_keeps_its_line_breaks() {
+    assert_eq!(pasted("a\r\nb", true), "a\nb");
+    assert_eq!(pasted("a\nb", false), "a b");
 }

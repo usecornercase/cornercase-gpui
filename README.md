@@ -119,7 +119,7 @@ Every key goes to the program in the active pane, except ⌘ shortcuts. ⌘/ lis
 | **Panes** | ⌘D split right · ⇧⌘D split down · ⌘[ ⌘] previous, next · ⌘W close what is on top, else the pane |
 | **Getting around** | ⌘J ⇧⌘J next, previous workspace · ⌘Y ⇧⌘Y next, previous project · ⌘B the agent that needs you · ⌘R mark for review, or as reviewed |
 | **Projects** | ⌘O open a project · ⌘N new workspace · ⌘G start an agent · ⌘P the workspace's pull request · ⇧⌘P go to a file · ⇧⌘K connect to another server |
-| **In a bot's chat** | Type in its field; ↑ ↓ (with one line in the field) PgUp PgDn scroll it |
+| **In a bot's chat** | Type in its field: ↩ sends and ⇧↩ breaks the line; PgUp PgDn scroll it, and so do ↑ ↓ while the field holds one line |
 | **Panels** | ⇧⌘C Changes · ⇧⌘E Files · ⇧⌘L TODO · ⇧⌘H Recap · ⇧⌘B Browser · ⇧⌘F Flow (in a flow's workspace) |
 | **Sheets** | ⌘F Search · ⌘I Issues · ⇧⌘S Queue · ⇧⌘G Flows · ⌘U Usage · ⇧⌘A Accounts · ⇧⌘N Machines · ⇧⌘M Processes · ⇧⌘O Ports · ⇧⌘T Worktrees · ⇧⌘X Plugins · ⌘, Settings |
 | **Terminal** | ⌘C copy · ⌘V paste (an image as a file the agent can open) · ⌘+ ⌘- ⌘0 text size |

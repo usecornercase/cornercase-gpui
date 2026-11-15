@@ -554,7 +554,7 @@ impl Queue {
         self.send(Cmd { args, coalesce: None, reply: Some(Box::new(reply)), stdin: None });
     }
 
-    pub(crate) fn cmd_fed_then(
+    pub(crate) fn cmd_with_stdin_then(
         &self,
         args: Vec<String>,
         stdin: Vec<u8>,
@@ -793,7 +793,7 @@ impl QueueTap {
         jobs.filter_map(|job| if let Job::Cmd(cmd) = job { Some(cmd.args) } else { None }).collect()
     }
 
-    pub(crate) fn fed(&self) -> Vec<(Vec<String>, Option<Vec<u8>>)> {
+    pub(crate) fn with_stdin(&self) -> Vec<(Vec<String>, Option<Vec<u8>>)> {
         let jobs = self.0.try_iter();
         jobs.filter_map(|job| if let Job::Cmd(cmd) = job { Some((cmd.args, cmd.stdin)) } else { None }).collect()
     }

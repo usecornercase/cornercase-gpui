@@ -157,3 +157,15 @@ fn the_keys_rest_in_the_chats_field_while_a_chat_shows() {
 fn the_keys_rest_in_the_terminal_without_a_chat() {
     assert_eq!(rest_of(false), Rest::Terminal);
 }
+
+#[test]
+fn a_press_anywhere_gives_the_keys_to_the_chats_field_unless_something_took_it() {
+    assert!(press_goes_to_rest(true, false, false));
+    assert!(!press_goes_to_rest(true, false, true));
+}
+
+#[test]
+fn a_press_leaves_the_keys_alone_without_a_chat_or_under_an_overlay() {
+    assert!(!press_goes_to_rest(false, false, false));
+    assert!(!press_goes_to_rest(true, true, false));
+}

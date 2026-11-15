@@ -1,23 +1,10 @@
-use futures::channel::oneshot;
 use gpui::Context;
 
-use super::super::{Busy, Clip, Store, ToastAction, ToastGo, ToastKind};
-use crate::cli::{self, Queue};
+use super::super::{Busy, Clip, Store, ToastAction, ToastGo, ToastKind, reply_of};
+use crate::cli;
 use crate::model::bots::{Goes, Said, refused_goes, reset_key, say_args, say_key, sendable, stop_key};
 
 pub(crate) const COPY_MESSAGE: &str = "Copy message";
-
-pub(super) fn put_on(
-    queue: &Queue,
-    args: Vec<String>,
-    stdin: Option<Vec<u8>>,
-    reply: impl FnOnce(anyhow::Result<String>) + Send + 'static,
-) {
-    match stdin {
-        Some(stdin) => queue.cmd_fed_then(args, stdin, reply),
-        None => queue.cmd_then(args, reply),
-    }
-}
 
 pub(super) fn copy_action(text: &str) -> ToastAction {
     sendable(text).then(|| {
@@ -33,6 +20,10 @@ struct Call {
 }
 
 impl Call {
+    fn say(bot: &str, text: &str) -> Self {
+        Self { args: say_args(bot), stdin: Some(text.as_bytes().to_vec()) }
+    }
+
     fn of(words: &[&str]) -> Self {
         Self { args: words.iter().map(|word| (*word).to_string()).collect(), stdin: None }
     }
@@ -52,10 +43,7 @@ impl Store {
 
     fn bot_job(&mut self, busy: Busy, call: Call, then: Then, cx: &mut Context<Self>) {
         let id = self.start_job(busy, cx);
-        let (tx, rx) = oneshot::channel();
-        put_on(&self.queue, call.args, call.stdin, move |result| {
-            let _ = tx.send(result);
-        });
+        let rx = reply_of(&self.queue, call.args, call.stdin);
         cx.spawn(async move |this, cx| {
             let result = rx.await.unwrap_or_else(|_| Err(anyhow::anyhow!("no answer came")));
             let _ = this.update(cx, |this, cx| {
@@ -72,7 +60,7 @@ impl Store {
         }
         let name = self.bot_name(bot);
         let busy = Busy::new(say_key(bot), format!("Sending to {name}…"));
-        let call = Call { args: say_args(bot), stdin: Some(text.clone().into_bytes()) };
+        let call = Call::say(bot, &text);
         let sent = Sent { bot: bot.to_string(), name, text, said };
         let then: Then = Box::new(move |this, result, cx| {
             if let Err(error) = result {

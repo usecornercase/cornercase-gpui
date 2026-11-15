@@ -706,6 +706,7 @@ impl TextField {
             cx.emit(TextFieldEvent::Submit);
         } else {
             self.marked_range = None;
+            cx.emit(TextFieldEvent::Changed);
             cx.notify();
         }
     }

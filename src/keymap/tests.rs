@@ -610,3 +610,14 @@ fn a_paste_while_a_chat_shows_belongs_to_the_chats_field_and_to_no_pane() {
     use super::in_chat;
     assert_eq!(in_chat(Command::Paste), InChat::Field);
 }
+
+#[test]
+fn a_paste_and_every_command_that_rests_is_swallowed_while_a_chat_shows() {
+    use super::{in_chat, swallowed_in_chat};
+    assert!(swallowed_in_chat(Command::Paste));
+    for shortcut in SHORTCUTS {
+        let rests = matches!(in_chat(shortcut.command), InChat::Rests | InChat::Field);
+        assert_eq!(swallowed_in_chat(shortcut.command), rests, "{:?}", shortcut.command);
+    }
+    assert!(!swallowed_in_chat(Command::FindFile) && !swallowed_in_chat(Command::NewTab));
+}

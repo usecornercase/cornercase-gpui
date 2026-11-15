@@ -7,7 +7,7 @@ use crate::cli::{Feature, Lacks, newer_here};
 use crate::platform::Os;
 
 pub(crate) use self::talk::{
-    Drafts, Goes, Said, on_return, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
+    Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
 };
 
 mod talk;

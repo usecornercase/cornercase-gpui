@@ -68,6 +68,8 @@ pub(crate) struct BotChat {
     earlier: bool,
     opened: HashSet<u64>,
     news: bool,
+    following: bool,
+    viewport: gpui::Pixels,
     blocks: Blocks,
     counting: Counting,
     mark: Option<Stamp>,
@@ -85,6 +87,10 @@ pub(crate) type Controls = (bool, bool, bool);
 
 pub(crate) fn is_fresh(shown: Option<&str>, mark: Option<&Stamp>, stamp: &Stamp) -> bool {
     shown != Some(stamp.0.as_str()) || mark.is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1))
+}
+
+pub(crate) fn after_layout(following: bool, viewport_changed: bool, at_end: bool) -> (bool, bool) {
+    if viewport_changed { (following, following) } else { (at_end, false) }
 }
 
 fn at_end(list: &ListState) -> bool {
@@ -116,6 +122,8 @@ impl BotChat {
             earlier: false,
             opened: HashSet::new(),
             news: false,
+            following: true,
+            viewport: px(0.),
             blocks: Rc::new(RefCell::new(HashMap::new())),
             counting: Counting::default(),
             mark: None,
@@ -142,7 +150,15 @@ impl BotChat {
     }
 
     fn reached_the_end(&mut self, cx: &mut Context<Self>) {
-        if at_end(&self.list) && std::mem::take(&mut self.news) {
+        let height = self.list.viewport_bounds().size.height;
+        let (following, to_end) = after_layout(self.following, height != self.viewport, at_end(&self.list));
+        self.viewport = height;
+        self.following = following;
+        if to_end {
+            self.scroll_to_end(cx);
+            return;
+        }
+        if self.following && std::mem::take(&mut self.news) {
             cx.notify();
         }
     }
@@ -150,13 +166,15 @@ impl BotChat {
     fn scroll_to_end(&mut self, cx: &mut Context<Self>) {
         self.list.scroll_to(ListOffset { item_ix: self.rows.len(), offset_in_item: px(0.) });
         self.news = false;
+        self.following = true;
         cx.notify();
     }
 
     fn scroll(&mut self, step: Scroll, cx: &mut Context<Self>) {
         let viewport = f32::from(self.list.viewport_bounds().size.height);
         self.list.scroll_by(px(scroll_distance(step, viewport)));
-        if at_end(&self.list) {
+        self.following = at_end(&self.list);
+        if self.following {
             self.news = false;
         }
         cx.notify();
@@ -197,8 +215,9 @@ impl BotChat {
             self.list.reset(rows.len());
             self.list.scroll_to(ListOffset { item_ix: rows.len(), offset_in_item: px(0.) });
             self.news = false;
+            self.following = true;
         } else if keys != self.keys || earlier != self.earlier {
-            let following = at_end(&self.list);
+            let following = self.following;
             for (range, count) in entries::row_splices((self.earlier, &self.keys), (earlier, &keys)) {
                 self.list.splice(range, count);
             }
