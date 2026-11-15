@@ -97,11 +97,16 @@ impl Root {
             cx.stop_propagation();
             return;
         }
+        if self.chat_shown() && !terminal {
+            self.chat_key(ks, window, cx);
+            return;
+        }
         if !terminal || self.overlay_open(cx) || self.store.read(cx).shows_file_full_screen() {
             return;
         }
         if self.chat_shown() {
             Self::scroll_chat(ks, cx);
+            cx.stop_propagation();
             return;
         }
         if let Some(event) = keys::key_event(ks, Os::CURRENT) {
@@ -110,11 +115,22 @@ impl Root {
         }
     }
 
-    fn scroll_chat(ks: &Keystroke, cx: &mut Context<Self>) {
-        if let Some(step) = bot_chat::scroll_of(&ks.key) {
+    fn chat_key(&mut self, ks: &Keystroke, window: &Window, cx: &mut Context<Self>) {
+        let typing = bot_chat::field_focus(cx).is_focused(window);
+        if !typing || self.overlay_open(cx) || self.store.read(cx).shows_file_full_screen() {
+            return;
+        }
+        if Self::scroll_chat(ks, cx) {
+            cx.stop_propagation();
+        }
+    }
+
+    fn scroll_chat(ks: &Keystroke, cx: &mut Context<Self>) -> bool {
+        let step = bot_chat::scroll_of(&ks.key);
+        if let Some(step) = step {
             bot_chat::scroll(step, cx);
         }
-        cx.stop_propagation();
+        step.is_some()
     }
 
     fn key_shortcut(&mut self, ks: &Keystroke, terminal: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -144,7 +160,7 @@ impl Root {
             .filter(|popup| self.machine.is_none() && !self.chat_shown() && popup.read(cx).is_open())
     }
 
-    fn overlay_open(&self, cx: &App) -> bool {
+    pub(crate) fn overlay_open(&self, cx: &App) -> bool {
         let s = self.store.read(cx);
         s.dialog.is_some() || s.sheet.is_some()
     }
@@ -179,7 +195,7 @@ impl Root {
         if chord.focus == Focus::Browser && self.browser_command(command, window, cx) {
             return true;
         }
-        if self.chat_shown() && keymap::in_chat(command) == keymap::InChat::Rests {
+        if self.chat_shown() && keymap::swallowed_in_chat(command) {
             return true;
         }
         match command {
@@ -260,7 +276,7 @@ impl Root {
         }
         let dock_first = self.dock_focused(window, cx) || self.store.read(cx).shows_file_full_screen();
         if dock_first && self.store.update(cx, Store::close_dock) {
-            window.focus(&self.focus);
+            window.focus(&self.keys_rest(cx));
             return;
         }
         if self.machine.is_some() {

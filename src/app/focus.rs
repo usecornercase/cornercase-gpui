@@ -1,7 +1,21 @@
-use gpui::{App, Context, Window};
+use gpui::{App, Context, Div, FocusHandle, InteractiveElement as _, MouseDownEvent, Window};
 
 use super::Root;
-use crate::panels::PanelKind;
+use crate::panels::{PanelKind, bot_chat};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Rest {
+    Terminal,
+    Field,
+}
+
+pub(crate) fn press_goes_to_rest(chat_shown: bool, overlay_open: bool, prevented: bool) -> bool {
+    chat_shown && !overlay_open && !prevented
+}
+
+pub(crate) fn rest_of(chat_shown: bool) -> Rest {
+    if chat_shown { Rest::Field } else { Rest::Terminal }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Place {
@@ -113,7 +127,7 @@ impl Root {
         self.held.home.note(dialog, noted);
     }
 
-    fn place_of(&self, focused: &gpui::FocusHandle, window: &Window, cx: &App) -> Place {
+    fn place_of(&self, focused: &FocusHandle, window: &Window, cx: &App) -> Place {
         let s = self.store.read(cx);
         if *focused == self.focus {
             return Place::Terminal;
@@ -127,13 +141,39 @@ impl Root {
         }
     }
 
-    fn way_back(&mut self, ended: bool, window: &Window) -> Option<(Place, gpui::FocusHandle)> {
+    fn way_back(&mut self, ended: bool, window: &Window) -> Option<(Place, FocusHandle)> {
         if !ended {
             return None;
         }
         let (place, weak) = self.held.home.take()?;
         let handle = weak.upgrade()?;
         self.focus.contains(&handle, window).then_some((place, handle))
+    }
+
+    pub(crate) fn keys_rest(&self, cx: &mut App) -> FocusHandle {
+        match rest_of(self.chat_shown()) {
+            Rest::Field => bot_chat::field_focus(cx),
+            Rest::Terminal => self.focus.clone(),
+        }
+    }
+
+    pub(super) fn press_rests(&mut self, _: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if press_goes_to_rest(self.chat_shown(), self.overlay_open(cx), window.default_prevented()) {
+            window.focus(&self.keys_rest(cx));
+            window.prevent_default();
+        }
+    }
+
+    pub(super) fn keys_on(&self, root: Div, cx: &mut Context<Self>) -> Div {
+        root.track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::on_key))
+            .on_any_mouse_down(cx.listener(Self::press_rests))
+    }
+
+    pub(super) fn keys_follow(&self, rested: &FocusHandle, window: &mut Window, cx: &mut App) {
+        if rested.is_focused(window) {
+            window.focus(&self.keys_rest(cx));
+        }
     }
 
     pub(super) fn keys_changed(
@@ -149,8 +189,8 @@ impl Root {
         let way = self.way_back(before.ended_into(now), window);
         let change = Change { before, now, dock, in_dock, to_terminal, back: way.as_ref().map(|(place, _)| *place) };
         match (keys_after(&change), way) {
+            (Keys::Back, Some((Place::Terminal, _))) | (Keys::Root, _) => window.focus(&self.keys_rest(cx)),
             (Keys::Back, Some((_, handle))) => window.focus(&handle),
-            (Keys::Root, _) => window.focus(&self.focus),
             (Keys::DockCard, _) => window.focus(&self.dock_focus),
             _ => {}
         }

@@ -554,6 +554,15 @@ impl Queue {
         self.send(Cmd { args, coalesce: None, reply: Some(Box::new(reply)), stdin: None });
     }
 
+    pub(crate) fn cmd_with_stdin_then(
+        &self,
+        args: Vec<String>,
+        stdin: Vec<u8>,
+        reply: impl FnOnce(Result<String>) + Send + 'static,
+    ) {
+        self.send(Cmd { args, coalesce: None, reply: Some(Box::new(reply)), stdin: Some(stdin) });
+    }
+
     pub(crate) fn reconnect(&self) {
         let _ = self.tx.send(Job::Reconnect);
     }
@@ -782,6 +791,11 @@ impl QueueTap {
     pub(crate) fn commands(&self) -> Vec<Vec<String>> {
         let jobs = self.0.try_iter();
         jobs.filter_map(|job| if let Job::Cmd(cmd) = job { Some(cmd.args) } else { None }).collect()
+    }
+
+    pub(crate) fn with_stdin(&self) -> Vec<(Vec<String>, Option<Vec<u8>>)> {
+        let jobs = self.0.try_iter();
+        jobs.filter_map(|job| if let Job::Cmd(cmd) = job { Some((cmd.args, cmd.stdin)) } else { None }).collect()
     }
 }
 

@@ -8,18 +8,21 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 
-use self::entries::{Entry, EntryKey};
-pub(crate) use self::global::{scroll, view};
+use self::controls::{header, turn_row};
+use self::entries::{Entry, EntryKey, Retry};
+pub(crate) use self::global::{field_focus, scroll, view};
 use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
-use self::words::{EMPTY_LINES, footer, read_failed, turn_label};
-use crate::model::bots::{Bot, Chat, Read};
+use self::words::{EMPTY_LINES, EXAMPLES, read_failed};
+use crate::model::bots::{Bot, Chat, Read, reset_key, say_key};
 use crate::panels::queue;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::counting::Counting;
 use crate::ui::{self, Icon};
 
+mod controls;
 mod entries;
+mod field;
 mod global;
 mod rows;
 mod words;
@@ -65,20 +68,28 @@ pub(crate) struct BotChat {
     earlier: bool,
     opened: HashSet<u64>,
     news: bool,
+    following: bool,
     blocks: Blocks,
     counting: Counting,
     mark: Option<Stamp>,
-    heard: (Option<String>, u64),
+    heard: (Option<String>, u64, Controls),
+    retry: Option<Rc<Retry>>,
 }
 
 fn counting(chat: &mut BotChat) -> &mut Counting {
     &mut chat.counting
 }
 
-pub(crate) type Stamp = (String, u64, u64);
+pub(crate) type Stamp = (String, u64, u64, Option<u64>);
+
+pub(crate) type Controls = (bool, bool, bool);
 
 pub(crate) fn is_fresh(shown: Option<&str>, mark: Option<&Stamp>, stamp: &Stamp) -> bool {
     shown != Some(stamp.0.as_str()) || mark.is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1))
+}
+
+pub(crate) fn re_anchor(following: bool, rows: usize) -> Option<usize> {
+    following.then_some(rows)
 }
 
 fn at_end(list: &ListState) -> bool {
@@ -110,15 +121,21 @@ impl BotChat {
             earlier: false,
             opened: HashSet::new(),
             news: false,
+            following: true,
             blocks: Rc::new(RefCell::new(HashMap::new())),
             counting: Counting::default(),
             mark: None,
-            heard: (None, 0),
+            heard: (None, 0, (false, false, false)),
+            retry: None,
         }
     }
 
     fn moved(&mut self, store: &Store) -> bool {
-        let now = (store.shown_bot().map(str::to_string), store.bots_revision());
+        let shown = store.shown_bot();
+        let controls = shown.map_or((false, false, false), |id| {
+            (store.bots.stopping(id), store.busy(&say_key(id)), store.busy(&reset_key(id)))
+        });
+        let now = (shown.map(str::to_string), store.bots_revision(), controls);
         (std::mem::replace(&mut self.heard, now.clone()) != now) || self.bot.is_some() && now.0.is_none()
     }
 
@@ -131,7 +148,8 @@ impl BotChat {
     }
 
     fn reached_the_end(&mut self, cx: &mut Context<Self>) {
-        if at_end(&self.list) && std::mem::take(&mut self.news) {
+        self.following = at_end(&self.list);
+        if self.following && std::mem::take(&mut self.news) {
             cx.notify();
         }
     }
@@ -139,13 +157,15 @@ impl BotChat {
     fn scroll_to_end(&mut self, cx: &mut Context<Self>) {
         self.list.scroll_to(ListOffset { item_ix: self.rows.len(), offset_in_item: px(0.) });
         self.news = false;
+        self.following = true;
         cx.notify();
     }
 
     fn scroll(&mut self, step: Scroll, cx: &mut Context<Self>) {
         let viewport = f32::from(self.list.viewport_bounds().size.height);
         self.list.scroll_by(px(scroll_distance(step, viewport)));
-        if at_end(&self.list) {
+        self.following = at_end(&self.list);
+        if self.following {
             self.news = false;
         }
         cx.notify();
@@ -158,7 +178,9 @@ impl BotChat {
             self.bot = None;
             return;
         };
-        let stamp = (chat.bot.clone(), chat.born, chat.revision());
+        let thinking = store.bots.find(&chat.bot).is_some_and(Bot::thinking);
+        let retry = entries::retry(&chat.lines, thinking);
+        let stamp = (chat.bot.clone(), chat.born, chat.revision(), retry.as_ref().map(|retry| retry.error));
         let fresh = is_fresh(self.bot.as_deref(), self.mark.as_ref(), &stamp);
         if !fresh && self.mark.as_ref() == Some(&stamp) {
             return;
@@ -172,7 +194,8 @@ impl BotChat {
             self.blocks.borrow_mut().clear();
         }
         self.blocks.borrow_mut().retain(|id, _| *id >= first);
-        let keys = entries::keys(&entries, &self.opened);
+        self.retry = retry.map(Rc::new);
+        let keys = entries::keys(&entries, &self.opened, self.retry.as_ref().map(|retry| retry.error));
         let rows: Vec<Row> =
             earlier.then_some(Row::Earlier).into_iter().chain(entries.into_iter().map(Row::Entry)).collect();
         self.apply(fresh, (earlier, keys), rows);
@@ -183,8 +206,9 @@ impl BotChat {
             self.list.reset(rows.len());
             self.list.scroll_to(ListOffset { item_ix: rows.len(), offset_in_item: px(0.) });
             self.news = false;
+            self.following = true;
         } else if keys != self.keys || earlier != self.earlier {
-            let following = at_end(&self.list);
+            let following = self.following;
             for (range, count) in entries::row_splices((self.earlier, &self.keys), (earlier, &keys)) {
                 self.list.splice(range, count);
             }
@@ -206,6 +230,9 @@ impl BotChat {
             chat: cx.entity().downgrade(),
             opened: Rc::new(self.opened.clone()),
             blocks: self.blocks.clone(),
+            retry: self.retry.clone(),
+            bot: bot.id.clone(),
+            sending: self.store.read(cx).busy(&say_key(&bot.id)),
         }
     }
 
@@ -258,89 +285,57 @@ impl BotChat {
 
 fn empty_page(bot: &Bot) -> impl IntoElement + use<> {
     let [what, when] = EMPTY_LINES;
+    let examples = EXAMPLES.iter().enumerate().map(|(at, text)| example_row(&bot.id, at, text));
     div().id("bot-empty").flex_1().min_h_0().overflow_y_scroll().child(
-        ui::emblem_page(Icon::Message, bot.name.clone()).child(ui::emblem_line(what)).child(ui::emblem_line(when)),
+        ui::emblem_page(Icon::Message, bot.name.clone())
+            .child(ui::emblem_line(what))
+            .child(ui::emblem_line(when))
+            .child(div().w_full().max_w(px(470.)).flex().flex_col().gap(px(8.)).children(examples)),
     )
 }
 
-fn header(bot: &Bot) -> impl IntoElement + use<> {
+fn example_row(bot: &str, at: usize, text: &'static str) -> impl IntoElement + use<> {
+    let bot = bot.to_string();
     div()
-        .flex_none()
-        .flex()
-        .items_center()
-        .gap(px(10.))
-        .px(px(16.))
-        .py(px(10.))
-        .border_b_1()
+        .id(("bot-example", at))
+        .px(px(12.))
+        .py(px(9.))
+        .rounded(px(radius::card()))
+        .bg(colours::panel())
+        .border_1()
         .border_color(colours::border())
-        .child(
-            div()
-                .min_w_0()
-                .max_w(gpui::relative(0.6))
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(colours::text())
-                .child(ui::one_line(bot.name.clone())),
-        )
-        .child(div().min_w_0().text_size(px(11.5)).text_color(colours::faint()).child(ui::one_line(bot.facts())))
-}
-
-fn turn_row(bot: &Bot, chat: &Chat, now: i64) -> Option<impl IntoElement + use<>> {
-    let turn = entries::turn(&chat.lines, bot.thinking())
-        .or_else(|| bot.thinking().then_some(entries::Turn { since: now, steps: 0 }))?;
-    Some(
-        div()
-            .flex_none()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .px(px(16.))
-            .py(px(6.))
-            .text_size(px(12.))
-            .text_color(colours::muted())
-            .child(ui::spinner("bot-thinking", 12., colours::working()))
-            .child(turn_label(turn, now)),
-    )
-}
-
-fn footer_row(bot: &Bot) -> impl IntoElement + use<> {
-    div()
-        .flex_none()
-        .px(px(16.))
-        .py(px(10.))
-        .border_t_1()
-        .border_color(colours::border())
-        .text_size(px(12.))
-        .text_color(colours::faint())
-        .child(footer(&bot.name, &bot.id))
+        .text_size(px(12.5))
+        .text_color(colours::soft())
+        .cursor_pointer()
+        .hover(|s| s.bg(colours::hover()))
+        .child(text)
+        .on_click(move |_, _, cx| Store::get(cx).update(cx, |store, cx| store.add_example(&bot, text, cx)))
 }
 
 impl Render for BotChat {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync(cx);
+        if let Some(item_ix) = re_anchor(self.following, self.rows.len()) {
+            self.list.scroll_to(ListOffset { item_ix, offset_in_item: px(0.) });
+        }
         let store = self.store.read(cx);
         let found = store.shown_bot().and_then(|id| store.bots.find(id).zip(store.bots.chat.as_ref()));
         let Some((bot, chat)) = found.map(|(bot, chat)| (bot.clone(), chat.clone())) else { return div() };
+        let stopping = store.bots.stopping(&bot.id);
+        let starting = store.busy(&reset_key(&bot.id));
         let now = queue::now();
         if bot.thinking() {
             self.counting.drawn();
         }
         self.counting.keep(counting, cx);
         let body = self.body(&bot, &chat, cx);
-        div().size_full().child(
-            div()
-                .size_full()
-                .flex()
-                .flex_col()
-                .overflow_hidden()
-                .rounded(px(radius::card()))
-                .bg(colours::pane())
-                .border_1()
-                .border_color(colours::border())
-                .child(header(&bot))
-                .child(body)
-                .children(turn_row(&bot, &chat, now))
-                .child(footer_row(&bot)),
-        )
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .child(header(&bot, starting))
+            .child(body)
+            .children(turn_row(&bot, &chat, now, stopping))
     }
 }
 

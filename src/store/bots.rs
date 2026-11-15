@@ -7,6 +7,8 @@ use crate::model::bots::{self, BotEvent, CatchUp, Chat, Heard, Offer, Read};
 use crate::model::place::Moved;
 use crate::platform::Os;
 
+mod talk;
+
 impl Store {
     pub(crate) fn bots_offer(&self) -> Offer {
         self.bots.offer(self.releases().lacks(Feature::Bots), Os::CURRENT)
@@ -18,11 +20,12 @@ impl Store {
 
     pub(super) fn take_bots(&mut self, app: &Value, cx: &mut Context<Self>) {
         let shown = self.shown_bot().and_then(|id| self.bots.find(id)).map(|bot| (bot.id.clone(), bot.name.clone()));
+        let draft = shown.as_ref().map(|(id, _)| self.bots.drafts.text(id).to_string()).unwrap_or_default();
         let moved = self.bots.take_app(app);
         self.place(Moved::Listed(moved.listed));
         match shown {
             Some((_, name)) if self.shown_bot().is_none() => {
-                self.toast(format!("{name} was removed"), ToastKind::Info, cx);
+                self.toast_with(format!("{name} was removed"), ToastKind::Info, talk::copy_action(&draft), cx);
             }
             _ if moved.boot_changed && self.bots.chat.is_some() => self.read_chat(None, cx),
             _ => self.heal_chat(&moved.settled, cx),
@@ -82,9 +85,10 @@ impl Store {
     fn bot_removed(&mut self, bot: &str, cx: &mut Context<Self>) {
         let shown = self.shown_bot() == Some(bot);
         let name = self.bots.find(bot).map_or_else(|| bot.to_string(), |found| found.name.clone());
+        let draft = self.bots.drafts.take(bot).unwrap_or_default();
         self.place(Moved::Removed(bot.to_string()));
         if shown {
-            self.toast(format!("{name} was removed"), ToastKind::Info, cx);
+            self.toast_with(format!("{name} was removed"), ToastKind::Info, talk::copy_action(&draft), cx);
         }
         cx.notify();
     }

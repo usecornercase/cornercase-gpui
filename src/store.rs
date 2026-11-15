@@ -281,7 +281,7 @@ impl Store {
 
     pub(crate) fn cmd_busy_on(&mut self, queue: &Queue, busy: Busy, args: Vec<String>, cx: &mut Context<Self>) {
         let id = self.start_job(busy, cx);
-        let (reply, queue) = (reply_of(queue, args), queue.clone());
+        let (reply, queue) = (reply_of(queue, args, None), queue.clone());
         cx.spawn(async move |this, cx| {
             let result = reply.await;
             let _ = this.update(cx, |s, cx| s.answered(id, &queue, result.ok(), cx));
@@ -760,11 +760,15 @@ fn run_with<T: 'static, R: Send + 'static>(
     .detach();
 }
 
-fn reply_of(queue: &Queue, args: Vec<String>) -> oneshot::Receiver<anyhow::Result<String>> {
+fn reply_of(queue: &Queue, args: Vec<String>, stdin: Option<Vec<u8>>) -> oneshot::Receiver<anyhow::Result<String>> {
     let (tx, rx) = oneshot::channel();
-    queue.cmd_then(args, move |result| {
+    let reply = move |result| {
         let _ = tx.send(result);
-    });
+    };
+    match stdin {
+        Some(stdin) => queue.cmd_with_stdin_then(args, stdin, reply),
+        None => queue.cmd_then(args, reply),
+    }
     rx
 }
 

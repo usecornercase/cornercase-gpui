@@ -1,10 +1,16 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::cli::{Feature, Lacks, newer_here};
 use crate::platform::Os;
+
+pub(crate) use self::talk::{
+    Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
+};
+
+mod talk;
 
 pub(crate) const KEPT: usize = 1_000;
 
@@ -292,6 +298,8 @@ pub(crate) struct Bots {
     pub chat: Option<Chat>,
     pub active: bool,
     pub seen: Option<(String, usize)>,
+    pub drafts: Drafts,
+    stopping: HashSet<String>,
     revision: u64,
     asked: u64,
 }
@@ -352,18 +360,38 @@ impl Bots {
         if self.seen.as_ref().is_some_and(|(id, _)| !unread(id)) {
             self.seen = None;
         }
-        AppMoved { boot_changed, listed: self.list.iter().map(|bot| bot.id.clone()).collect(), settled }
+        let listed: Vec<String> = self.list.iter().map(|bot| bot.id.clone()).collect();
+        self.drafts.keep_only(&listed);
+        let thinking: HashSet<String> =
+            self.list.iter().filter(|bot| bot.thinking()).map(|bot| bot.id.clone()).collect();
+        self.stopping.retain(|id| thinking.contains(id));
+        AppMoved { boot_changed, listed, settled }
     }
 
     pub(crate) fn state_heard(&mut self, id: &str, thinking: bool) -> bool {
         let Some(bot) = self.list.iter_mut().find(|bot| bot.id == id) else { return false };
         let state = if thinking { "thinking" } else { "idle" };
         let changed = bot.state != state;
+        if !thinking {
+            self.stopping.remove(id);
+        }
         if changed {
             bot.state = state.to_string();
             self.revision += 1;
         }
         changed
+    }
+
+    pub(crate) fn stop_asked(&mut self, id: &str) {
+        self.stopping.insert(id.to_string());
+    }
+
+    pub(crate) fn stopping(&self, id: &str) -> bool {
+        self.stopping.contains(id) && self.find(id).is_some_and(Bot::thinking)
+    }
+
+    pub(crate) fn stop_failed(&mut self, id: &str) {
+        self.stopping.remove(id);
     }
 
     pub(crate) fn heard(&mut self, bot: &str, line: Line) -> Option<Added> {

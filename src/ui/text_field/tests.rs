@@ -1,8 +1,9 @@
 use gpui::{KeyBinding, KeyContext};
 
+use super::enter::Enter;
 use super::{
-    Escaped, LINES_CONTEXT, NewLine, Submit, bindings, composed_selection, escaped, handed, prompt_keys, send_key,
-    shared, word_end, word_start,
+    Escaped, NewLine, Submit, bindings, composed_selection, escaped, handed, prompt_keys, send_key, shared, word_end,
+    word_start,
 };
 use crate::platform::Os;
 
@@ -74,7 +75,7 @@ fn enter_breaks_the_line_before_it_can_submit() {
 
 #[test]
 fn a_field_of_several_lines_answers_to_both_key_contexts() {
-    let context = KeyContext::parse(LINES_CONTEXT).expect("context");
+    let context = KeyContext::parse(Enter::Breaks.key_context()).expect("context");
     assert!(context.contains("TextField") && context.contains("Multiline"));
 }
 
@@ -112,4 +113,40 @@ fn a_plain_field_hands_the_input_method_its_text_as_before() {
     assert_eq!(handed(content, &(1..2), false), Some(("\u{f1}".to_string(), 1..2)));
     assert_eq!(handed(content, &(3..4), false), Some((String::new(), 4..4)));
     assert_eq!(handed(content, &(4..9), false), Some(("b".to_string(), 4..5)));
+}
+
+fn first_action(os: Os, key: &str, context: &str) -> Option<Box<dyn gpui::Action>> {
+    let keymap = gpui::Keymap::new(bindings(os));
+    let stroke = gpui::Keystroke::parse(key).expect("keystroke");
+    let (found, _) = keymap.bindings_for_input(&[stroke], &[KeyContext::parse(context).expect("context")]);
+    found.first().map(|binding| binding.action().boxed_clone())
+}
+
+#[test]
+fn a_chat_field_sends_on_return_and_breaks_the_line_on_shift_return() {
+    for os in [Os::Mac, Os::Linux, Os::Windows] {
+        let context = Enter::Sends.key_context();
+        assert!(first_action(os, "enter", context).is_some_and(|a| a.partial_eq(&Submit)), "{os:?}");
+        assert!(first_action(os, "shift-enter", context).is_some_and(|a| a.partial_eq(&NewLine)), "{os:?}");
+    }
+}
+
+#[test]
+fn a_chat_field_also_sends_with_the_key_that_sends_a_prompt() {
+    for os in [Os::Mac, Os::Linux, Os::Windows] {
+        let action = first_action(os, send_key(os).0, Enter::Sends.key_context());
+        assert!(action.is_some_and(|a| a.partial_eq(&Submit)), "{os:?}");
+    }
+}
+
+#[test]
+fn the_other_fields_read_return_as_before() {
+    for os in [Os::Mac, Os::Linux, Os::Windows] {
+        let one = first_action(os, "enter", "TextField");
+        assert!(one.is_some_and(|a| a.partial_eq(&Submit)), "{os:?}");
+        let several = Enter::Breaks.key_context();
+        assert!(first_action(os, "enter", several).is_some_and(|a| a.partial_eq(&NewLine)), "{os:?}");
+        assert!(first_action(os, "shift-enter", several).is_some_and(|a| a.partial_eq(&NewLine)), "{os:?}");
+        assert!(first_action(os, send_key(os).0, several).is_some_and(|a| a.partial_eq(&Submit)), "{os:?}");
+    }
 }

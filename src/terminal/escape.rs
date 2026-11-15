@@ -99,7 +99,7 @@ impl Root {
                 }
             }
             Step::ToProgram => return false,
-            Step::KeysBack => window.focus(&self.focus),
+            Step::KeysBack => window.focus(&self.keys_rest(cx)),
         }
         true
     }
