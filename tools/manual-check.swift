@@ -21,9 +21,15 @@ let positionNames = [
 ]
 let keyGrammar = "a…z 0…9 " + (symbolNames + positionNames).joined(separator: " ")
 
+let countWords: [(word: String, count: Int)] = [("double", 2), ("triple", 3)]
+let pressWords = ["right"] + countWords.map { $0.word }
+let pressGrammar = pressWords.joined(separator: "|")
+let pressListed = pressWords.dropLast().joined(separator: ", ") + " or " + (pressWords.last ?? "")
+let pressHint = countWords.map { "\($0.word) for \($0.count)" }.joined(separator: " and ")
+
 let usage =
     "usage: manual-check window|covers|front|size|key|hold|text|paste|copy|press|drag|scroll PID … | self-test "
-    + "(key: KEY [cmd] [shift] [alt] [ctrl]; hold: KEY [MS]; KEY: \(keyGrammar); paste: TEXT; copy: TEXT MS [KEY [cmd] [shift] [alt] [ctrl]]; press: x y [right|double|triple]; drag: x0 y0 x1 y1 [right] [hold MS])"
+    + "(key: KEY [cmd] [shift] [alt] [ctrl]; hold: KEY [MS]; KEY: \(keyGrammar); paste: TEXT; copy: TEXT MS [KEY [cmd] [shift] [alt] [ctrl]]; press: x y [\(pressGrammar)]; drag: x0 y0 x1 y1 [right] [hold MS])"
 
 let characterNames: [String: Character] = {
     var names: [String: Character] = [
@@ -265,34 +271,11 @@ func target(_ pid: pid_t, _ x: String, _ y: String) throws -> CGPoint {
     return point
 }
 
-func post(_ type: CGEventType, at point: CGPoint, button: CGMouseButton = .left) {
-    CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: button)?
-        .post(tap: .cghidEventTap)
-}
-
-func hover(_ pid: pid_t, at point: CGPoint, _ x: String, _ y: String) throws {
-    post(.mouseMoved, at: point)
-    usleep(useconds_t(hoverWait * 1_000))
-    try clear(pid, at: point, x, y)
-}
-
-func keepingPointer(
-    read: () -> CGPoint? = { CGEvent(source: nil)?.location },
-    warp: (CGPoint) -> Void = { _ = CGWarpMouseCursorPosition($0) },
-    _ body: () throws -> Void
-) throws {
-    let saved = read()
-    defer { if let saved { warp(saved) } }
-    try body()
-}
-
 let hoverWait = 150
 let pressHold = 50
 let pressGap = 50
 let pressAfter = 100
 let askRoom = 50
-let countWords = ["double": 2, "triple": 3]
-
 struct MouseEvent: Equatable {
     let type: CGEventType
     let button: CGMouseButton
@@ -305,12 +288,37 @@ enum PressStep: Equatable {
     case ask
 }
 
-struct Effects {
+func pointerNow() -> CGPoint? { CGEvent(source: nil)?.location }
+
+func putPointer(_ point: CGPoint) { _ = CGWarpMouseCursorPosition(point) }
+
+struct PressEffects {
     let ask: () throws -> Void
     let post: (MouseEvent) -> Void
-    let wait: (Int) -> Void
-    let read: () -> CGPoint?
-    let warp: (CGPoint) -> Void
+    var wait: (Int) -> Void = { usleep(useconds_t($0 * 1_000)) }
+    var read: () -> CGPoint? = pointerNow
+    var warp: (CGPoint) -> Void = putPointer
+}
+
+func post(_ type: CGEventType, at point: CGPoint, button: CGMouseButton = .left) {
+    CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: button)?
+        .post(tap: .cghidEventTap)
+}
+
+func hover(_ pid: pid_t, at point: CGPoint, _ x: String, _ y: String) throws {
+    post(.mouseMoved, at: point)
+    usleep(useconds_t(hoverWait * 1_000))
+    try clear(pid, at: point, x, y)
+}
+
+func keepingPointer(
+    read: () -> CGPoint? = pointerNow,
+    warp: (CGPoint) -> Void = putPointer,
+    _ body: () throws -> Void
+) throws {
+    let saved = read()
+    defer { if let saved { warp(saved) } }
+    try body()
 }
 
 func pressSteps(_ button: CGMouseButton, count: Int, interval: Int) throws -> [PressStep] {
@@ -319,11 +327,11 @@ func pressSteps(_ button: CGMouseButton, count: Int, interval: Int) throws -> [P
     }
     let least = pressHold + pressGap + askRoom
     if count >= 2, interval < least {
-        let word = count == 2 ? "double" : "triple"
+        let word = countWords.first { $0.count == count }?.word ?? ""
         throw Failure(
             message: "a \(word) press needs a double-click interval of \(least) ms or more (its presses are posted "
-                + "\(pressHold + pressGap) ms apart, each checked first), and this Mac's is \(interval) ms: nothing was posted, "
-                + "and the interval is the person's own setting, never a check's to change",
+                + "\(pressHold + pressGap) ms apart, each checked first), and this Mac's is \(interval) ms: a \(word) press cannot be posted on this Mac, and two presses in its place would act as "
+                + "single ones; the interval is the person's own setting, never a check's to change: nothing was posted",
             status: 1)
     }
     let right = button == .right
@@ -345,7 +353,7 @@ func mouseEvent(_ event: MouseEvent, at point: CGPoint) -> CGEvent? {
     return built
 }
 
-func halfWay(_ posted: Int, of total: Int, at place: String, _ why: Failure) -> Failure {
+func halfWayRefusal(_ posted: Int, of total: Int, at place: String, _ why: Failure) -> Failure {
     let tail = ": nothing was posted"
     let reason = why.message.hasSuffix(tail) ? String(why.message.dropLast(tail.count)) : why.message
     let done = posted == 1 ? "one press was" : "two presses were"
@@ -355,7 +363,7 @@ func halfWay(_ posted: Int, of total: Int, at place: String, _ why: Failure) -> 
     return Failure(message: message, status: why.status)
 }
 
-func walk(_ steps: [PressStep], at place: String, with effects: Effects) throws {
+func walkPress(_ steps: [PressStep], at place: String, with effects: PressEffects) throws {
     let total = steps.filter { if case .ask = $0 { true } else { false } }.count
     var pressed = 0
     try keepingPointer(read: effects.read, warp: effects.warp) {
@@ -367,7 +375,7 @@ func walk(_ steps: [PressStep], at place: String, with effects: Effects) throws 
             case .wait(let ms): effects.wait(ms)
             case .ask:
                 do { try effects.ask() } catch let failure as Failure where pressed > 0 {
-                    throw halfWay(pressed, of: total, at: place, failure)
+                    throw halfWayRefusal(pressed, of: total, at: place, failure)
                 }
             }
         }
@@ -377,12 +385,9 @@ func walk(_ steps: [PressStep], at place: String, with effects: Effects) throws 
 func press(_ pid: pid_t, _ x: String, _ y: String, button: CGMouseButton, count: Int) throws {
     let steps = try pressSteps(button, count: count, interval: Int(NSEvent.doubleClickInterval * 1_000))
     let point = try target(pid, x, y)
-    try walk(steps, at: "\(x),\(y)", with: Effects(
+    try walkPress(steps, at: "\(x),\(y)", with: PressEffects(
         ask: { try clear(pid, at: point, x, y) },
-        post: { mouseEvent($0, at: point)?.post(tap: .cghidEventTap) },
-        wait: { usleep(useconds_t($0 * 1_000)) },
-        read: { CGEvent(source: nil)?.location },
-        warp: { _ = CGWarpMouseCursorPosition($0) }))
+        post: { mouseEvent($0, at: point)?.post(tap: .cghidEventTap) }))
 }
 
 func drag(_ pid: pid_t, from start: (String, String), to end: (String, String), right: Bool, hold: Int) throws {
@@ -898,15 +903,15 @@ func pressOptions(_ words: [String]) throws -> (button: CGMouseButton, count: In
     case ["right"]: return (.right, 1)
     default: break
     }
-    if words.count == 1, let count = countWords[words[0]] { return (.left, count) }
+    if words.count == 1, let found = countWords.first(where: { $0.word == words[0] }) { return (.left, found.count) }
     let named = Set(words)
-    if words.count == 2, named.contains("right"), !named.isDisjoint(with: countWords.keys) {
+    if words.count == 2, named.contains("right"), !named.isDisjoint(with: countWords.map { $0.word }) {
         throw Failure(
             message: "a right press takes no count: double and triple post left presses only, and press PID X Y right posts one right press: nothing was posted",
             status: 2)
     }
-    let said = "press takes at most one word after the point (right, double or triple), not '\(words.joined(separator: " "))'"
-    let hint = words.count == 1 && Int(words[0]) != nil ? ": a count is a word, double for 2 and triple for 3 (there is no other)" : ""
+    let said = "press takes at most one word after the point (\(pressListed)), not '\(words.joined(separator: " "))'"
+    let hint = words.count == 1 && Int(words[0]) != nil ? ": a count is a word, \(pressHint) (there is no other)" : ""
     throw Failure(message: said + hint + ": nothing was posted", status: 2)
 }
 
@@ -925,6 +930,7 @@ func dragOptions(_ words: [String]) throws -> (right: Bool, hold: Int) {
 
 enum SelfTest {
     static let testDebug: pid_t = 4242
+    static let cover = "Screenshot (pid 69680, screencaptureui, layer 24)"
     static let testDisplay = CGRect(x: 0, y: 0, width: 1512, height: 982)
     static let testVisible = CGRect(x: 0, y: 34, width: 1512, height: 912)
     static let testScreen = Screen(displays: [testDisplay], visible: [testVisible])
@@ -1024,7 +1030,7 @@ enum SelfTest {
 
     static func wordTests() -> [(String, () -> String?)] {
         let w = made(11, 69680, "Screenshot", 24, wide)
-        let name = "Screenshot (pid 69680, screencaptureui, layer 24)"
+        let name = cover
         let second = "Notes (pid 5, layer 3)"
         return [
             ("the_name_has_owner_pid_process_and_layer", { expect(named(w, "screencaptureui"), name) }),
@@ -1496,19 +1502,18 @@ enum SelfTest {
         (try? pressSteps(button, count: count, interval: interval)) ?? []
     }
 
-    static let cover = "Screenshot (pid 69680, screencaptureui, layer 24)"
 
     static func walked(_ count: Int, failingAt ask: Int?) -> (posted: [MouseEvent], warps: [CGPoint], failure: String) {
         var posted: [MouseEvent] = []
         var warps: [CGPoint] = []
         var asked = 0
-        let effects = Effects(
+        let effects = PressEffects(
             ask: {
                 asked += 1
                 if asked == ask { throw Failure(message: coverRefusal("200", "200", [cover]), status: 3) }
             },
             post: { posted.append($0) }, wait: { _ in }, read: { CGPoint(x: 7, y: 9) }, warp: { warps.append($0) })
-        let failure = refusal { try walk(steps(.left, count), at: "200,200", with: effects) }
+        let failure = refusal { try walkPress(steps(.left, count), at: "200,200", with: effects) }
         return (posted, warps, failure)
     }
 
@@ -1534,7 +1539,7 @@ enum SelfTest {
     static func pressTests() -> [(String, () -> String?)] {
         let moved = CGEventType.mouseMoved.rawValue
         let first = "one press was posted at 200,200, the second was not: another window covers 200,200: \(cover): look at what it did before the next press"
-        return pressStepTests() + [
+        return [
             ("a_single_press_needs_no_interval", { expect(steps(.left, 1, 0), single(.left, .leftMouseDown, .leftMouseUp)) }),
             ("a_count_outside_one_to_three_is_refused", {
                 expect([0, 4, -1].map { count in refusal { _ = try pressSteps(.left, count: count, interval: 500) } },
@@ -1548,7 +1553,7 @@ enum SelfTest {
                 let front = Failure(message: "process 4242 is not in front: nothing was posted", status: 3)
                 let none = Failure(message: "no window of process 4242 is at 200,200: nothing was posted", status: 3)
                 return expect(
-                    [halfWay(1, of: 2, at: "200,200", covered), halfWay(1, of: 3, at: "200,200", front), halfWay(2, of: 3, at: "200,200", none)]
+                    [halfWayRefusal(1, of: 2, at: "200,200", covered), halfWayRefusal(1, of: 3, at: "200,200", front), halfWayRefusal(2, of: 3, at: "200,200", none)]
                         .map { "\($0.status): \($0.message)" },
                     ["3: " + first,
                      "3: one press was posted at 200,200, the second and the third were not: process 4242 is not in front: look at what it did before the next press",
@@ -1592,7 +1597,7 @@ enum SelfTest {
         let down = CGEventType.leftMouseDown.rawValue, up = CGEventType.leftMouseUp.rawValue
         let moved = CGEventType.mouseMoved.rawValue
         return [
-            ("a_single_press_posts_the_events_of_main_in_their_order_with_their_waits", {
+            ("a_single_press_posts_a_move_then_one_down_and_up_with_their_waits", {
                 expect(steps(.left, 1), single(.left, .leftMouseDown, .leftMouseUp))
             }),
             ("a_single_right_press_posts_right_events_after_a_left_move", {
@@ -1640,7 +1645,7 @@ enum SelfTest {
             }),
             ("an_interval_too_short_for_a_double_or_a_triple_press_is_refused_with_its_words", {
                 let words = { (word: String, interval: Int) in
-                    "1: a \(word) press needs a double-click interval of 150 ms or more (its presses are posted 100 ms apart, each checked first), and this Mac's is \(interval) ms: nothing was posted, and the interval is the person's own setting, never a check's to change"
+                    "1: a \(word) press needs a double-click interval of 150 ms or more (its presses are posted 100 ms apart, each checked first), and this Mac's is \(interval) ms: a \(word) press cannot be posted on this Mac, and two presses in its place would act as single ones; the interval is the person's own setting, never a check's to change: nothing was posted"
                 }
                 return expect(
                     [2, 3, 2].map { count in refusal { _ = try pressSteps(.left, count: count, interval: 149) } } + [String(steps(.left, 2, 150).count)],
@@ -1650,7 +1655,7 @@ enum SelfTest {
     }
 
     static func run() throws {
-        let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests() + keyTests() + clipboardTests() + pressTests()
+        let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests() + keyTests() + clipboardTests() + pressStepTests() + pressTests()
         var failed = 0
         for (name, body) in cases {
             if let why = body() {
