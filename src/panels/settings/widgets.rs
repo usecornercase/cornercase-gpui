@@ -104,7 +104,7 @@ pub(crate) fn row(first: bool, label: impl IntoElement, control: impl IntoElemen
         .py(px(10.))
         .when(!first, |d| d.border_t_1().border_color(colours::border()))
         .child(div().flex_grow().flex_basis(px(LABEL)).min_w_0().child(label))
-        .child(div().flex_none().flex().items_center().gap(px(8.)).child(control))
+        .child(div().min_w_0().flex().items_center().gap(px(8.)).child(control))
         .child(div().w(px(SLOT)).flex_none().flex().justify_center().child(slot))
 }
 

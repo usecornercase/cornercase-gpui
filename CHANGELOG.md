@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.109
+
+- **In a narrow window the Issues sheet's filters stay whole.** When the window is too narrow to hold the filter, **Include closed** and both people filters on one row (under about 730 px with the usual trackers), **Include closed** moves up beside the trackers' tabs. The filter keeps room for what you type and both people filters keep saying which filter they are and what they are set to. A chosen person with a long name ends in "…", and pointing at the filter shows it whole. In a usual window nothing changes.
+- **In a narrow window a token's button stays inside its card in Settings.** A token's field (Telegram, Discord and the trackers' tokens) narrows so **Connect**, **Replace** or **Checking…** stays whole beside it, and a text field narrows to its card instead of running past it. **UI › Sidebar**'s choices wrap onto a second line and the transparency sliders narrow. In a usual window nothing changes.
+
 ## 0.1.107
 
 - **After a dialog closes, the keys are back where they were.** In the Issues sheet, after you close **Start work on an issue** with Escape or Cancel, ↓ and ↑ move through the issues again, Return opens it again and typing goes into the filter, in a narrow window and a wide one. The same holds for a dialog opened over Search or another sheet, over a docked panel, or while you rename something in the sidebar: the keys go back to the field or panel you were in, and to the terminal when that is gone.
