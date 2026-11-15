@@ -517,14 +517,30 @@ fn show(id: &str) -> KeyGoes {
     KeyGoes::Show(id.to_string())
 }
 
+fn answers() -> Vec<BotEvent> {
+    fixture!("bots/answers.jsonl").lines().map(|l| serde_json::from_str(l).expect("event")).collect()
+}
+
+fn told_of(event: &BotEvent) -> Option<Answer> {
+    let Heard::Line(bot, line) = event.heard() else { return None };
+    answer_of(&bot, &line, event.of_run())
+}
+
 #[test]
 fn a_line_of_a_routines_run_is_a_run() {
+    let found: Vec<bool> = answers().iter().map(BotEvent::of_run).collect();
+    assert_eq!(found, [false, false, true, true]);
     let run = |line: Value| BotEvent { bot: "prs".into(), line: Some(line), ..BotEvent::default() };
-    assert!(run(json!({"id": 1, "kind": "bot", "routine": "PRs"})).of_run());
-    assert!(run(json!({"id": 1, "kind": "bot", "routine": {"label": "x"}})).of_run());
     assert!(!run(json!({"id": 1, "kind": "bot", "routine": null})).of_run());
     assert!(!run(json!({"id": 1, "kind": "bot"})).of_run());
     assert!(!BotEvent { bot: "prs".into(), ..BotEvent::default() }.of_run());
+}
+
+#[test]
+fn cornercases_own_lines_are_answers_and_a_runs_error_is_left_to_its_message() {
+    let told: Vec<(bool, bool, bool)> =
+        answers().iter().filter_map(told_of).map(|a| (a.failed, a.run, tells(&a, None, false))).collect();
+    assert_eq!(told, [(false, false, true), (true, false, true), (false, true, true), (true, true, false)]);
 }
 
 #[test]
