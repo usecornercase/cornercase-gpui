@@ -31,8 +31,13 @@ impl Store {
         }
     }
 
-    pub(crate) fn show_local(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn forget_awaited(&mut self) {
         self.placing.awaited = None;
+        self.bots.manage.made = None;
+    }
+
+    pub(crate) fn show_local(&mut self, cx: &mut Context<Self>) {
+        self.forget_awaited();
         if !self.shows_local() {
             self.place(Moved::Local);
             self.file_full_screen = false;

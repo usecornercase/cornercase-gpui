@@ -46,7 +46,7 @@ struct CloneJob {
     name: String,
 }
 
-fn start_key(dialog: u64) -> String {
+pub(super) fn start_key(dialog: u64) -> String {
     format!("dialog-start:{dialog}")
 }
 
@@ -91,7 +91,7 @@ impl Store {
         self.jobs.busy(&start_key(dialog))
     }
 
-    fn shown_dialog(&self) -> Option<u64> {
+    pub(super) fn shown_dialog(&self) -> Option<u64> {
         self.dialog.as_ref().map(|dialog| dialog.entity_id().as_u64())
     }
 
@@ -152,7 +152,7 @@ impl Store {
         });
     }
 
-    fn close_started(&mut self, dialog: Option<u64>, select: bool, cx: &mut Context<Self>) {
+    pub(super) fn close_started(&mut self, dialog: Option<u64>, select: bool, cx: &mut Context<Self>) {
         if dialog.is_some() && self.shown_dialog() == dialog {
             self.close_dialog(cx);
             if select {

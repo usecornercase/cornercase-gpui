@@ -1,6 +1,7 @@
 mod actions;
 mod agents;
 mod arrange;
+mod bot_menu;
 mod bots;
 mod folds;
 mod forms;
@@ -31,6 +32,7 @@ use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::{Aim, MachinePlace};
 use crate::platform::Os;
+use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, TextField};
 
@@ -267,12 +269,13 @@ fn sidebar_header(cx: &mut Context<Root>) -> Div {
     section_head(
         "Projects",
         ui::tool_button("sidebar-new", Icon::Plus, 24., false)
-            .tooltip(tip("Open a project or add a group"))
+            .tooltip(|window, cx| tip(menus::projects_tip(Store::get(cx).read(cx).making().as_ref()))(window, cx))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, e: &MouseDownEvent, window, cx| {
                     cx.stop_propagation();
-                    this.open_menu(e.position, menus::projects_menu(), window, cx);
+                    let making = this.store.read(cx).making();
+                    this.open_menu(e.position, menus::projects_menu(making.as_ref()), window, cx);
                 }),
             ),
     )

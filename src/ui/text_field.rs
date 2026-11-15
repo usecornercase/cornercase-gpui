@@ -8,6 +8,7 @@ use gpui::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
+pub(crate) use self::element::show_box;
 use self::element::{Below, Head, Layout, TextElement};
 use self::enter::{Enter, passes_arrows, submits};
 use self::rows::{clamp_scroll, pasted, previous_grapheme};

@@ -414,6 +414,10 @@ fn show_in_scroller(
     }
 }
 
+pub(crate) fn show_box(scroller: &ScrollHandle, (top, height): (Pixels, Pixels), window: &Window) {
+    show_in_scroller(scroller, (top, height), (Reveal::Caret, Below::Margin, false), window);
+}
+
 fn row_starts(line: &WrappedLine) -> Vec<usize> {
     let runs = &line.unwrapped_layout.runs;
     let wraps = line.wrap_boundaries().iter().map(|wrap| runs[wrap.run_ix].glyphs[wrap.glyph_ix].index);

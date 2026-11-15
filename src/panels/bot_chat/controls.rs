@@ -1,4 +1,4 @@
-use gpui::{IntoElement, ParentElement as _, StatefulInteractiveElement as _, Styled as _, div, px};
+use gpui::{App, IntoElement, ParentElement as _, StatefulInteractiveElement as _, Styled as _, Window, div, px};
 
 use super::entries::{self, Control, new_conversation_control, stop_control};
 use super::words::{
@@ -45,19 +45,23 @@ fn new_conversation(bot: &Bot, starting: bool) -> impl IntoElement + use<> {
         ),
         Control::Ready => {
             let (id, name) = (bot.id.clone(), bot.name.clone());
-            slot.child(ui::button("bot-new-conversation", NEW_CONVERSATION).on_click(move |_, window, cx| {
-                let id = id.clone();
-                let question = Question::new(
-                    new_conversation_title(&name),
-                    new_conversation_message(&name),
-                    NEW_CONVERSATION,
-                    Vec::new(),
-                )
-                .on_yes(move |cx| Store::get(cx).update(cx, |s, cx| s.new_conversation(&id, cx)));
-                dialogs::confirm(question, window, cx);
-            }))
+            slot.child(
+                ui::button("bot-new-conversation", NEW_CONVERSATION)
+                    .on_click(move |_, window, cx| ask_new_conversation(&id, &name, window, cx)),
+            )
         }
     }
+}
+
+pub(crate) fn ask_new_conversation(id: &str, name: &str, window: &mut Window, cx: &mut App) {
+    let bot = id.to_string();
+    let question =
+        Question::new(new_conversation_title(name), new_conversation_message(name), NEW_CONVERSATION, Vec::new())
+            .on_yes({
+                let bot = bot.clone();
+                move |cx| Store::get(cx).update(cx, |s, cx| s.new_conversation(&bot, cx))
+            });
+    dialogs::confirm_naming(&bot, question, window, cx);
 }
 
 pub(super) fn turn_row(bot: &Bot, chat: &Chat, now: i64, stopping: bool) -> Option<impl IntoElement + use<>> {

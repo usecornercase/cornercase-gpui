@@ -12,9 +12,9 @@ pub(super) fn copy_action(text: &str) -> ToastAction {
     })
 }
 
-type Then = Box<dyn FnOnce(&mut Store, anyhow::Result<String>, &mut Context<Store>)>;
+pub(super) type Then = Box<dyn FnOnce(&mut Store, anyhow::Result<String>, &mut Context<Store>)>;
 
-struct Call {
+pub(super) struct Call {
     args: Vec<String>,
     stdin: Option<Vec<u8>>,
 }
@@ -24,7 +24,11 @@ impl Call {
         (!on_its_way).then(|| Self { args: say_args(bot), stdin: Some(text.as_bytes().to_vec()) })
     }
 
-    fn of(words: &[&str]) -> Self {
+    pub(super) fn args(args: Vec<String>) -> Self {
+        Self { args, stdin: None }
+    }
+
+    pub(super) fn of(words: &[&str]) -> Self {
         Self { args: words.iter().map(|word| (*word).to_string()).collect(), stdin: None }
     }
 
@@ -45,11 +49,11 @@ struct Sent {
 }
 
 impl Store {
-    fn bot_name(&self, bot: &str) -> String {
+    pub(super) fn bot_name(&self, bot: &str) -> String {
         self.bots.find(bot).map_or_else(|| bot.to_string(), |found| found.name.clone())
     }
 
-    fn bot_job(&mut self, busy: Busy, call: Call, then: Then, cx: &mut Context<Self>) {
+    pub(super) fn bot_job(&mut self, busy: Busy, call: Call, then: Then, cx: &mut Context<Self>) {
         let id = self.start_job(busy, cx);
         let rx = reply_of(&self.queue, call.args, call.stdin);
         cx.spawn(async move |this, cx| {

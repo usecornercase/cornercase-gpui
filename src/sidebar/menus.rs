@@ -6,8 +6,9 @@ use super::workspace::plural;
 use super::{Fold, Target, cmd, forms};
 use crate::app::Root;
 use crate::cli;
-use crate::context_menu::{Entry, act, act_busy, danger, item, submenu};
+use crate::context_menu::{Entry, act, act_busy, danger, item, resting, submenu};
 use crate::dialogs;
+use crate::model::bots::Making;
 use crate::model::{PaneInfo, Project, PullRequest, Reopen, Session, Workspace};
 use crate::panels::PanelKind;
 use crate::panels::files::open::{self, Found, Opening};
@@ -85,13 +86,30 @@ fn start_flow_item(project: Option<u64>) -> Entry {
     item("Start a flow…", move |_, window, cx| start_flow(FlowStart::in_project(project), window, cx))
 }
 
-pub(super) fn projects_menu() -> Vec<Entry> {
-    vec![
+pub(super) const NEW_BOT_ENTRY: &str = "New bot…";
+
+pub(super) fn projects_menu(making: Option<&Making>) -> Vec<Entry> {
+    let mut entries = vec![
         item("Open project…", Root::open_project),
         item("New group…", |_, window, cx| forms::new_group(None, window, cx)),
+    ];
+    match making {
+        Some(Making::Offered) => entries.push(item(NEW_BOT_ENTRY, |_, window, cx| dialogs::new_bot(window, cx))),
+        Some(Making::Here(why)) => entries.extend([resting(why.clone()), resting(NEW_BOT_ENTRY)]),
+        Some(Making::Server(_)) | None => {}
+    }
+    entries.extend([
         Entry::Separator,
         item(IMPORT_VS_CODE, |_, window, cx| Root::import_code_workspace(None, window, cx)),
-    ]
+    ]);
+    entries
+}
+
+pub(super) fn projects_tip(making: Option<&Making>) -> &'static str {
+    match making {
+        Some(Making::Offered) => "Open a project, add a group or make a bot",
+        _ => "Open a project or add a group",
+    }
 }
 
 pub(super) fn run_item(run: Run) -> Entry {

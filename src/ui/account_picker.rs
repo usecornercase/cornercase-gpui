@@ -8,7 +8,7 @@ use gpui::{
 };
 
 use super::motion::{self, Way};
-use super::{Icon, glass, menu};
+use super::{Icon, glass, menu, text_field};
 use crate::model::accounts::pick::{AccountPick, AgentChoices, PickRow, Picking};
 use crate::theme::colours;
 
@@ -26,6 +26,18 @@ struct AccountPicker {
     focus: FocusHandle,
     scroll: ScrollHandle,
     before: Option<FocusHandle>,
+    scroller: Option<ScrollHandle>,
+    was_focused: bool,
+}
+
+fn reveal_first(scroller: &ScrollHandle, bounds: &[gpui::Bounds<gpui::Pixels>], window: &Window) {
+    if let Some(first) = bounds.first() {
+        text_field::show_box(scroller, (first.top(), first.size.height), window);
+    }
+}
+
+pub(crate) fn reveals(focused: bool, was_focused: bool, open: bool) -> bool {
+    focused && !was_focused && !open
 }
 
 impl EventEmitter<AccountPicked> for AccountPicker {}
@@ -39,6 +51,8 @@ impl AccountPicker {
             focus: cx.focus_handle().tab_stop(true),
             scroll: ScrollHandle::new(),
             before: None,
+            scroller: None,
+            was_focused: false,
         }
     }
 
@@ -146,6 +160,12 @@ impl AccountPicker {
             )
     }
 
+    fn revealing(trigger: Stateful<Div>, scroller: Option<ScrollHandle>) -> Div {
+        div().child(trigger).when_some(scroller, |d, scroller| {
+            d.on_children_prepainted(move |bounds, window, _| reveal_first(&scroller, &bounds, window))
+        })
+    }
+
     fn row(&self, index: usize, row: PickRow, cx: &mut Context<Self>) -> Stateful<Div> {
         let lit = self.highlight == Some(index);
         let inks = menu::inks(lit, false);
@@ -189,12 +209,15 @@ impl Render for AccountPicker {
             self.before = None;
         }
         let close = cx.listener(|this, _: &MouseDownEvent, window, cx| this.close_menu(window, cx));
+        let focused = self.focus.is_focused(window);
+        let reveal = self.scroller.clone().filter(|_| reveals(focused, self.was_focused, self.open));
+        self.was_focused = focused;
         let control = div()
             .relative()
             .flex()
             .flex_col()
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| this.key(event, window, cx)))
-            .child(self.trigger(window, cx))
+            .child(Self::revealing(self.trigger(window, cx), reveal))
             .when(self.open, |d| d.child(menu::backdrop(self.id("backdrop"), window, close)).child(self.popover(cx)));
         div().flex().flex_col().gap(px(6.)).child(control).children(self.picking.gone().map(super::error_line))
     }
@@ -204,11 +227,17 @@ impl Render for AccountPicker {
 pub(crate) struct AccountPickers {
     saved: BTreeMap<String, String>,
     pickers: Vec<Entity<AccountPicker>>,
+    scroller: Option<ScrollHandle>,
 }
 
 impl AccountPickers {
     pub(crate) fn keeping(saved: BTreeMap<String, String>) -> Self {
-        Self { saved, pickers: Vec::new() }
+        Self { saved, pickers: Vec::new(), scroller: None }
+    }
+
+    pub(crate) fn inside(mut self, scroller: ScrollHandle) -> Self {
+        self.scroller = Some(scroller);
+        self
     }
 
     pub(crate) fn follow<T: 'static>(
@@ -234,7 +263,12 @@ impl AccountPickers {
         }
         let saved = self.saved.get(&choices.agent).map(String::as_str);
         let picking = Picking::new(choices, saved);
-        let picker = cx.new(|cx| AccountPicker::new(picking, cx));
+        let scroller = self.scroller.clone();
+        let picker = cx.new(|cx| {
+            let mut picker = AccountPicker::new(picking, cx);
+            picker.scroller = scroller;
+            picker
+        });
         cx.subscribe(&picker, move |this, _, _: &AccountPicked, cx| on_pick(this, cx)).detach();
         picker
     }
@@ -262,3 +296,6 @@ impl AccountPickers {
         (!fields.is_empty()).then(|| div().flex().flex_wrap().gap(px(10.)).children(fields))
     }
 }
+
+#[cfg(test)]
+mod tests;

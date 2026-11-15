@@ -1,5 +1,9 @@
-use super::{context_item, group_menu, open_in_item, plugin_items, projects_menu, setup_args, spot_of, workspace_menu};
-use crate::context_menu::Entry;
+use super::{
+    context_item, group_menu, open_in_item, plugin_items, projects_menu, projects_tip, setup_args, spot_of,
+    workspace_menu,
+};
+use crate::context_menu::{Entry, read_entries};
+use crate::model::bots::Making;
 use crate::model::{PaneInfo, Session};
 use crate::panels::files::open::{Found, Launch, Opener};
 use crate::panels::plugins::{Offers, Spot, listed_offers};
@@ -106,7 +110,36 @@ fn running_a_setup_shows_its_tab_and_names_the_workspace() {
 
 #[test]
 fn the_projects_menu_offers_importing_a_vs_code_workspace() {
-    assert_eq!(chosen(&projects_menu()), ["Open project…", "New group…", IMPORT]);
+    assert_eq!(chosen(&projects_menu(None)), ["Open project…", "New group…", IMPORT]);
+}
+
+#[test]
+fn the_projects_menu_offers_a_new_bot_after_a_new_group() {
+    let labels = chosen(&projects_menu(Some(&Making::Offered)));
+    assert_eq!(labels, ["Open project…", "New group…", "New bot…", IMPORT]);
+}
+
+#[test]
+fn an_older_cornercase_here_rests_new_bot_and_says_why() {
+    let here = Making::Here("Making a bot needs cornercase 0.13.77 or newer on this Mac (it has 0.13.73).".into());
+    let entries = projects_menu(Some(&here));
+    let rested: Vec<String> =
+        read_entries(&entries).into_iter().filter(|(kind, _)| *kind == "resting").map(|(_, l)| l).collect();
+    assert_eq!(rested, ["Making a bot needs cornercase 0.13.77 or newer on this Mac (it has 0.13.73).", "New bot…"]);
+    assert_eq!(chosen(&entries), ["Open project…", "New group…", IMPORT]);
+}
+
+#[test]
+fn an_older_server_leaves_new_bot_out_of_the_projects_menu() {
+    let server = Making::Server("Making a bot needs cornercase 0.13.77 or newer: the server runs 0.13.73.".into());
+    assert_eq!(chosen(&projects_menu(Some(&server))), ["Open project…", "New group…", IMPORT]);
+}
+
+#[test]
+fn the_projects_tooltip_names_bots_only_when_one_can_be_made() {
+    assert_eq!(projects_tip(Some(&Making::Offered)), "Open a project, add a group or make a bot");
+    assert_eq!(projects_tip(Some(&Making::Server(String::new()))), "Open a project or add a group");
+    assert_eq!(projects_tip(None), "Open a project or add a group");
 }
 
 #[test]

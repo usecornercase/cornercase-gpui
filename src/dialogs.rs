@@ -14,6 +14,7 @@ use crate::theme::{colours, radius};
 use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
+mod bot_form;
 mod closing;
 mod context;
 mod merge_check;
@@ -23,6 +24,7 @@ mod remote;
 mod run_on;
 mod shortcuts;
 
+pub(crate) use bot_form::new_bot;
 pub(crate) use closing::{CloseWords, agent_doing, agent_title, closes_line, on_machine};
 pub(crate) use context::{ContextThere, VIEW_CONTEXT, context_choices, view_context, view_context_there};
 pub(crate) use merge_check::merge_check;
@@ -422,6 +424,11 @@ impl Question {
 pub(crate) struct Confirm {
     question: Question,
     focus: FocusHandle,
+}
+
+pub(crate) fn confirm_naming(bot: &str, question: Question, window: &mut Window, cx: &mut App) {
+    confirm(question, window, cx);
+    Store::get(cx).update(cx, |s, _| s.names_bot(bot));
 }
 
 pub(crate) fn confirm(question: Question, window: &mut Window, cx: &mut App) {

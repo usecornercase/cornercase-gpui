@@ -8,10 +8,12 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 
+pub(crate) use self::controls::ask_new_conversation;
 use self::controls::{header, turn_row};
 use self::entries::{Entry, EntryKey, Retry};
 pub(crate) use self::global::{field_focus, scroll, view};
 use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
+pub(crate) use self::words::answering;
 use self::words::{EMPTY_LINES, EXAMPLES, read_failed};
 use crate::model::bots::{Bot, Chat, Read, reset_key, say_key};
 use crate::panels::queue;

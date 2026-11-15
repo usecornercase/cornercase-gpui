@@ -65,6 +65,15 @@ fn no_shortcut_takes_a_key_macos_or_the_app_menu_keeps() {
 }
 
 #[test]
+fn e_makes_a_bot_on_every_platform() {
+    assert_eq!(command("e", false), Some(Command::NewBot));
+    assert_eq!(keys_of(Command::NewBot, Os::Mac).as_deref(), Some("⌘E"));
+    assert_eq!(keys_of(Command::NewBot, Os::Linux).as_deref(), Some("Ctrl+Shift+E"));
+    assert_eq!(keys_of(Command::NewBot, Os::Windows).as_deref(), Some("Ctrl+Shift+E"));
+    assert_eq!(on_linux("e", CTRL_SHIFT), Some(Command::NewBot));
+}
+
+#[test]
 fn n_with_shift_lists_the_machines_and_without_it_makes_a_workspace() {
     assert_eq!(command("n", true), Some(Command::Panel(PanelKind::Machines)));
     assert_eq!(command("n", false), Some(Command::NewWorkspace));
@@ -547,6 +556,7 @@ fn chat_table() -> Vec<(Command, InChat)> {
         (Command::NewWorkspace, InChat::Acts),
         (Command::StartAgent, InChat::Acts),
         (Command::OpenProject, InChat::Acts),
+        (Command::NewBot, InChat::Acts),
         (Command::Connect, InChat::Acts),
         (Command::PullRequest, InChat::Acts),
         (Command::SplitRight, InChat::Rests),
