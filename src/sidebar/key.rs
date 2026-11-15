@@ -19,6 +19,7 @@ pub(crate) struct SidebarKey {
     place: Option<MachinePlace>,
     bots: u64,
     bot: Option<String>,
+    bots_folded: bool,
 }
 
 pub(crate) struct KeyParts<'a> {
@@ -33,6 +34,7 @@ pub(crate) struct KeyParts<'a> {
     pub(crate) place: Option<&'a MachinePlace>,
     pub(crate) bots: u64,
     pub(crate) bot: Option<&'a str>,
+    pub(crate) bots_folded: bool,
 }
 
 impl SidebarKey {
@@ -49,6 +51,7 @@ impl SidebarKey {
             place: parts.place.cloned(),
             bots: parts.bots,
             bot: parts.bot.map(str::to_string),
+            bots_folded: parts.bots_folded,
         }
     }
 }
@@ -67,6 +70,7 @@ impl Root {
             place: self.side.machine_place.as_ref(),
             bots: self.store.read(cx).bots_revision(),
             bot: self.side.bot.as_deref(),
+            bots_folded: self.side.bots_folded,
         })
     }
 }

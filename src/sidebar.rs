@@ -142,6 +142,7 @@ pub(crate) struct SideState {
     pub strip: crate::tabs::TabStrip,
     pub machine_place: Option<MachinePlace>,
     pub bot: Option<String>,
+    pub bots_folded: bool,
     pub aside: bool,
 }
 
@@ -244,16 +245,21 @@ fn title_strip(os: Os) -> Div {
 }
 
 fn section_head(title: &'static str, button: impl IntoElement) -> Div {
+    head_row(20., div(), title, button)
+}
+
+fn head_row(left: f32, lead: impl IntoElement, title: &'static str, button: impl IntoElement) -> Div {
+    let title = div().text_size(px(11.)).font_weight(FontWeight::SEMIBOLD).text_color(colours::muted()).child(title);
     div()
         .flex()
         .flex_none()
         .items_center()
         .justify_between()
-        .pl(px(20.))
+        .pl(px(left))
         .pr(px(12.))
         .pt(px(8.))
         .pb(px(6.))
-        .child(div().text_size(px(11.)).font_weight(FontWeight::SEMIBOLD).text_color(colours::muted()).child(title))
+        .child(div().flex().items_center().child(lead).child(title))
         .child(button)
 }
 

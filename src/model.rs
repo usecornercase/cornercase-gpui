@@ -14,6 +14,7 @@ mod grid;
 pub(crate) mod link;
 pub(crate) mod machines;
 mod owner;
+pub(crate) mod place;
 mod pull_request;
 mod reopen;
 mod shared;

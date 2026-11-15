@@ -1,4 +1,4 @@
-use crate::model::bots::entries::Turn;
+use super::entries::Turn;
 use crate::panels::flows::model::{age, plural};
 use crate::panels::queue;
 

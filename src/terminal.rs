@@ -176,10 +176,10 @@ impl Root {
         if self.store.read(cx).dialog.is_some() && !over_dialogs {
             return true;
         }
-        if self.chat_shown() && keymap::in_chat(command) == keymap::InChat::Rests {
+        if chord.focus == Focus::Browser && self.browser_command(command, window, cx) {
             return true;
         }
-        if chord.focus == Focus::Browser && self.browser_command(command, window, cx) {
+        if self.chat_shown() && keymap::in_chat(command) == keymap::InChat::Rests {
             return true;
         }
         match command {

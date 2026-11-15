@@ -3,6 +3,9 @@ use gpui::{Keystroke, Modifiers, Window};
 use crate::panels::PanelKind;
 use crate::platform::Os;
 
+mod chat;
+pub(crate) use chat::{InChat, in_chat};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Command {
     Panel(PanelKind),
@@ -531,9 +534,6 @@ pub(crate) fn tab_index(key: &str, tabs: usize) -> Option<usize> {
     let at = DIGITS.iter().position(|d| *d == key)?;
     if at == DIGITS.len() - 1 { tabs.checked_sub(1) } else { (at < tabs).then_some(at) }
 }
-
-mod chat;
-pub(crate) use chat::{InChat, in_chat};
 
 #[cfg(test)]
 mod tests;

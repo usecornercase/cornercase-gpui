@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::ops::Range;
 
-use super::{Kind, Line};
+use crate::model::bots::{Kind, Line};
 
 pub(crate) const STEPS_SHOWN: usize = 3;
 
@@ -110,10 +110,6 @@ pub(crate) struct EntryKey {
     open: bool,
 }
 
-pub(crate) fn earlier_key() -> EntryKey {
-    EntryKey { kind: 9, first: 0, last: 0, held: false, open: false }
-}
-
 pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>) -> Vec<EntryKey> {
     entries
         .iter()
@@ -121,7 +117,7 @@ pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>) -> Vec<EntryKey> {
             let (kind, last, held) = match entry {
                 Entry::You { id, held, .. } => (0, *id, *held),
                 Entry::Answer { id, .. } => (1, *id, false),
-                Entry::Steps { first, texts } => (2, *first + texts.len() as u64, false),
+                Entry::Steps { first, texts } => (2, *first + texts.len() as u64 - 1, false),
                 Entry::Failed { id, .. } => (3, *id, false),
                 Entry::Notice { id, .. } => (4, *id, false),
                 Entry::Other { id, .. } => (5, *id, false),
@@ -131,20 +127,55 @@ pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>) -> Vec<EntryKey> {
         .collect()
 }
 
-pub(crate) fn spliced(old: &[EntryKey], new: &[EntryKey]) -> Vec<(Range<usize>, usize)> {
+impl EntryKey {
+    fn overlaps(&self, other: &Self) -> bool {
+        self.first <= other.last && other.first <= self.last
+    }
+}
+
+pub(crate) type Splices = Vec<(Range<usize>, usize)>;
+
+pub(crate) fn spliced(old: &[EntryKey], new: &[EntryKey]) -> Splices {
     if old == new {
         return Vec::new();
     }
-    let dropped = (1..old.len()).find(|&d| new.starts_with(&old[d..]));
-    if let (true, Some(d)) = (old.first() != new.first(), dropped) {
-        let mut out = vec![(0..d, 0)];
-        let kept = old.len() - d;
-        if new.len() > kept {
-            out.push((kept..kept, new.len() - kept));
-        }
-        return out;
+    let dropped =
+        new.first().map_or(old.len(), |first| old.iter().position(|key| key.overlaps(first)).unwrap_or(old.len()));
+    let kept = &old[dropped..];
+    let mut out: Splices = Vec::new();
+    if dropped > 0 {
+        out.push((0..dropped, 0));
     }
-    let prefix = old.iter().zip(new).take_while(|(a, b)| a == b).count();
-    let suffix = old[prefix..].iter().rev().zip(new[prefix..].iter().rev()).take_while(|(a, b)| a == b).count();
-    vec![(prefix..old.len() - suffix, new.len() - suffix - prefix)]
+    let common = kept.len().min(new.len());
+    let mut at = 0;
+    while at < common {
+        if kept[at] == new[at] {
+            at += 1;
+            continue;
+        }
+        let start = at;
+        while at < common && kept[at] != new[at] {
+            at += 1;
+        }
+        out.push((start..at, at - start));
+    }
+    match new.len().cmp(&kept.len()) {
+        std::cmp::Ordering::Greater => out.push((kept.len()..kept.len(), new.len() - kept.len())),
+        std::cmp::Ordering::Less => out.push((new.len()..kept.len(), 0)),
+        std::cmp::Ordering::Equal => {}
+    }
+    out
+}
+
+pub(crate) fn row_splices(old: (bool, &[EntryKey]), new: (bool, &[EntryKey])) -> Splices {
+    let (had, now) = (old.0, new.0);
+    let note = match (had, now) {
+        (false, true) => vec![(0..0, 1)],
+        (true, false) => vec![(0..1, 0)],
+        _ => Vec::new(),
+    };
+    let shift = usize::from(now);
+    let entries =
+        spliced(old.1, new.1).into_iter().map(|(range, count)| (range.start + shift..range.end + shift, count));
+    note.into_iter().chain(entries).collect()
 }

@@ -22,6 +22,7 @@ struct Inputs {
     place: Option<MachinePlace>,
     bots: u64,
     bot: Option<String>,
+    bots_folded: bool,
 }
 
 impl Inputs {
@@ -38,6 +39,7 @@ impl Inputs {
             place: self.place.as_ref(),
             bots: self.bots,
             bot: self.bot.as_deref(),
+            bots_folded: self.bots_folded,
         })
     }
 }
@@ -49,6 +51,7 @@ fn seen() -> MachineSeen {
 const CHANGES: &[Change<Inputs>] = &[
     ("the bots' revision", |i| i.bots += 1),
     ("the shown bot", |i| i.bot = Some("prs".into())),
+    ("the fold of the bots", |i| i.bots_folded = true),
     ("the session", |i| i.session += 1),
     ("the store", |i| i.store += 1),
     ("the hovered row", |i| i.hovered = Some("row-3".into())),

@@ -6,9 +6,6 @@ use serde_json::Value;
 use crate::cli::{Feature, Lacks, newer_here};
 use crate::platform::Os;
 
-pub(crate) mod entries;
-pub(crate) mod places;
-
 pub(crate) const KEPT: usize = 1_000;
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -26,6 +23,10 @@ pub(crate) struct Bot {
 }
 
 impl Bot {
+    fn settled_by(&self, newer: &Bot) -> bool {
+        (self.thinking() && !newer.thinking()) || newer.unread > self.unread
+    }
+
     fn shown_alike(&self, other: &Bot) -> bool {
         let same = |a: &Option<String>, b: &Option<String>| a == b;
         self.id == other.id
@@ -207,7 +208,8 @@ impl Chat {
 
     pub(crate) fn heard(&mut self, line: Line) -> Added {
         let read = self.read == Read::Done;
-        let gap = self.last().filter(|last| read && line.id > last + 1);
+        let after = self.last().unwrap_or(0);
+        let gap = (read && line.id > after + 1).then_some(after);
         let new = self.lines.binary_search_by_key(&line.id, |l| l.id).is_err();
         self.merge(vec![line]);
         self.revision += u64::from(new);
@@ -245,7 +247,6 @@ pub(crate) struct Bots {
     pub chat: Option<Chat>,
     pub active: bool,
     pub seen: Option<(String, usize)>,
-    pub folded: bool,
     revision: u64,
     asked: u64,
 }
@@ -254,6 +255,7 @@ pub(crate) struct Bots {
 pub(crate) struct AppMoved {
     pub boot_changed: bool,
     pub listed: Vec<String>,
+    pub settled: Vec<String>,
 }
 
 impl Bots {
@@ -288,6 +290,11 @@ impl Bots {
 
     pub(crate) fn take_app(&mut self, app: &Value) -> AppMoved {
         let list = in_app(app);
+        let settled = list
+            .iter()
+            .filter(|new| self.find(&new.id).is_some_and(|old| old.settled_by(new)))
+            .map(|bot| bot.id.clone())
+            .collect();
         let boot = app.get("boot").and_then(Value::as_str).map(str::to_string);
         let boot_changed = self.boot.is_some() && boot != self.boot;
         self.boot = boot;
@@ -300,7 +307,7 @@ impl Bots {
         if self.seen.as_ref().is_some_and(|(id, _)| !unread(id)) {
             self.seen = None;
         }
-        AppMoved { boot_changed, listed: self.list.iter().map(|bot| bot.id.clone()).collect() }
+        AppMoved { boot_changed, listed: self.list.iter().map(|bot| bot.id.clone()).collect(), settled }
     }
 
     pub(crate) fn state_heard(&mut self, id: &str, thinking: bool) -> bool {
@@ -312,6 +319,20 @@ impl Bots {
             self.revision += 1;
         }
         changed
+    }
+
+    pub(crate) fn heard(&mut self, bot: &str, line: Line) -> Option<Added> {
+        if self.chat.as_ref().is_none_or(|chat| chat.bot != bot) {
+            return None;
+        }
+        if matches!(line.kind, Kind::Bot | Kind::Error) {
+            self.seen = None;
+        }
+        self.chat.as_mut().map(|chat| chat.heard(line))
+    }
+
+    pub(crate) fn forget_seen(&mut self) {
+        self.seen = None;
     }
 
     pub(crate) fn seen_due(&self, shown: Option<&str>) -> Option<String> {

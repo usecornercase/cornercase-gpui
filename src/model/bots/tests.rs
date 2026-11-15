@@ -1,7 +1,5 @@
 use serde_json::{Value, json};
 
-use super::entries::{Entry, EntryKey, STEPS_SHOWN, entries, folded, held, keys, spliced, turn};
-use super::places::{Moved, Showing};
 use super::*;
 use crate::cli::{Lacks, Version};
 use crate::test_util::fixture;
@@ -201,135 +199,6 @@ fn a_new_server_run_reads_the_chat_again() {
     assert!(bots.take_app(&value).boot_changed);
 }
 
-fn steps(n: usize) -> Vec<String> {
-    (0..n).map(|i| format!("s{i}")).collect()
-}
-
-#[test]
-fn three_steps_or_fewer_stay_in_view() {
-    for n in 1..=STEPS_SHOWN {
-        assert_eq!(folded(&steps(n), false), (0, &steps(n)[..]));
-    }
-}
-
-#[test]
-fn more_than_three_steps_fold_to_the_last_three() {
-    let all = steps(5);
-    assert_eq!(folded(&all, false), (2, &all[2..]));
-}
-
-#[test]
-fn each_run_of_steps_folds_on_its_own() {
-    let mut lines = plain(&[(1, "you")]);
-    lines.extend((2..=6).map(|id| line(id, "step", "a", false)));
-    lines.push(line(7, "bot", "r", false));
-    lines.extend((8..=9).map(|id| line(id, "step", "b", false)));
-    let runs: Vec<usize> = entries(&lines)
-        .iter()
-        .filter_map(|e| if let Entry::Steps { texts, .. } = e { Some(texts.len()) } else { None })
-        .collect();
-    assert_eq!(runs, [5, 2]);
-}
-
-#[test]
-fn an_opened_run_shows_every_step() {
-    let all = steps(6);
-    assert_eq!(folded(&all, true), (0, &all[..]));
-}
-
-#[test]
-fn a_message_sent_during_a_turn_is_held_until_that_turn_ends() {
-    let lines = vec![line(1, "you", "go", false), line(2, "step", "s", false), line(3, "you", "more", true)];
-    assert!(held(&lines).contains(&3));
-    let mut ended = lines;
-    ended.push(line(4, "bot", "done", false));
-    assert!(held(&ended).is_empty());
-}
-
-#[test]
-fn messages_dropped_by_a_stop_are_no_longer_held() {
-    let lines = vec![line(1, "you", "go", false), line(2, "you", "more", true), line(3, "notice", "stopped", false)];
-    assert!(held(&lines).is_empty());
-    let many = vec![line(1, "you", "m", true), line(2, "notice", "3 held messages dropped", false)];
-    assert!(held(&many).is_empty());
-}
-
-#[test]
-fn a_message_held_while_a_stop_was_on_its_way_is_not_held() {
-    let lines = vec![
-        line(1, "you", "go", false),
-        line(2, "notice", "stopped", false),
-        line(3, "you", "late", true),
-        line(4, "bot", "answer", false),
-    ];
-    assert!(held(&lines).is_empty());
-}
-
-#[test]
-fn a_thinking_bot_has_a_turn_from_its_message_with_the_steps_since() {
-    let lines = vec![
-        line(1, "bot", "old", false),
-        line(2, "you", "go", false),
-        line(3, "step", "a", false),
-        line(4, "step", "b", false),
-    ];
-    assert_eq!(turn(&lines, true), Some(entries::Turn { since: 1002, steps: 2 }));
-}
-
-#[test]
-fn a_turn_started_by_held_messages_starts_at_the_answer_before_it() {
-    let lines = vec![
-        line(1, "you", "go", false),
-        line(2, "you", "more", true),
-        line(3, "bot", "a", false),
-        line(4, "step", "b", false),
-    ];
-    assert_eq!(turn(&lines, true), Some(entries::Turn { since: 1003, steps: 1 }));
-}
-
-#[test]
-fn an_idle_bot_has_no_turn() {
-    assert_eq!(turn(&plain(&[(1, "you")]), false), None);
-}
-
-fn place() -> crate::model::MachinePlace {
-    let seen = crate::model::MachineSeen::default();
-    crate::model::MachinePlace::at(&seen, &crate::model::ThereWorkspace::default(), None)
-}
-
-#[test]
-fn showing_a_bot_leaves_a_machines_place() {
-    let shown = Showing::Machine(place()).after(Moved::Bot("prs".into()));
-    assert_eq!((shown.bot(), shown.machine()), (Some("prs"), None));
-}
-
-#[test]
-fn picking_a_machines_place_leaves_the_chat() {
-    assert_eq!(Showing::Bot("prs".into()).after(Moved::Machine(place())).bot(), None);
-}
-
-#[test]
-fn a_move_to_a_local_place_leaves_the_chat() {
-    assert_eq!(Showing::Bot("prs".into()).after(Moved::Local), Showing::Local);
-}
-
-#[test]
-fn the_removal_of_the_shown_bot_leaves_its_chat() {
-    assert_eq!(Showing::Bot("prs".into()).after(Moved::Removed("prs".into())), Showing::Local);
-}
-
-#[test]
-fn the_removal_of_another_bot_keeps_the_chat() {
-    assert_eq!(Showing::Bot("prs".into()).after(Moved::Removed("ops".into())).bot(), Some("prs"));
-}
-
-#[test]
-fn a_list_without_the_shown_bot_leaves_its_chat() {
-    let shown = Showing::Bot("prs".into());
-    assert_eq!(shown.clone().after(Moved::Listed(vec!["ops".into()])), Showing::Local);
-    assert_eq!(shown.after(Moved::Listed(vec!["prs".into()])).bot(), Some("prs"));
-}
-
 #[test]
 fn seen_is_due_for_the_shown_chat_with_unread_answers_in_the_active_window() {
     assert_eq!(two().seen_due(Some("prs")), Some("prs".to_string()));
@@ -442,35 +311,48 @@ fn a_command_line_release_that_could_not_be_read_counts_as_older() {
     );
 }
 
-fn key_of(entries: &[Entry]) -> Vec<EntryKey> {
-    keys(entries, &std::collections::HashSet::new())
+#[test]
+fn an_empty_chat_asks_for_everything_before_a_line_that_is_not_the_first() {
+    let mut chat = read_chat(Vec::new());
+    assert_eq!(chat.heard(line(4, "bot", "late", false)), Added::Gap(0));
+    let mut fresh = read_chat(Vec::new());
+    assert_eq!(fresh.heard(line(1, "you", "first", false)), Added::Yes);
 }
 
 #[test]
-fn the_list_splices_only_the_entries_that_changed() {
-    let old = key_of(&entries(&plain(&[(1, "you"), (2, "bot"), (3, "you")])));
-    let new = key_of(&entries(&plain(&[(1, "you"), (2, "bot"), (3, "you"), (4, "bot")])));
-    assert_eq!(spliced(&old, &new), vec![(3..3, 1)]);
-    assert_eq!(spliced(&old, &old), Vec::new());
+fn a_bot_that_stops_thinking_or_gets_an_answer_is_settled() {
+    let mut bots = two();
+    let mut value = app(fixture!("bots/app-two.json"));
+    value["bots"][1]["state"] = json!("idle");
+    assert_eq!(bots.take_app(&value).settled, vec!["ops".to_string()]);
+    value["bots"][0]["unread"] = json!(3);
+    assert_eq!(bots.take_app(&value).settled, vec!["prs".to_string()]);
+    assert_eq!(bots.take_app(&value).settled, Vec::<String>::new());
 }
 
 #[test]
-fn a_step_joining_a_run_splices_the_run_alone() {
-    let old = key_of(&entries(&plain(&[(1, "you"), (2, "step")])));
-    let new = key_of(&entries(&plain(&[(1, "you"), (2, "step"), (3, "step")])));
-    assert_eq!(spliced(&old, &new), vec![(1..2, 1)]);
+fn each_new_answer_asks_for_seen_again_even_at_the_same_count() {
+    let mut bots = two();
+    bots.chat = Some(read_chat(plain(&[(1, "you")])));
+    bots.seen = Some(("prs".into(), 2));
+    assert_eq!(bots.seen_due(Some("prs")), None);
+    bots.heard("prs", line(2, "step", "s", false));
+    assert_eq!(bots.seen_due(Some("prs")), None);
+    bots.heard("prs", line(3, "bot", "answer", false));
+    assert_eq!(bots.seen_due(Some("prs")), Some("prs".to_string()));
 }
 
 #[test]
-fn lines_dropped_at_the_front_splice_the_front() {
-    let old = key_of(&entries(&plain(&[(1, "you"), (2, "bot"), (3, "you")])));
-    let new = key_of(&entries(&plain(&[(2, "bot"), (3, "you"), (4, "bot")])));
-    assert_eq!(spliced(&old, &new), vec![(0..1, 0), (2..2, 1)]);
+fn showing_a_chat_again_asks_for_seen_again() {
+    let mut bots = two();
+    bots.seen = Some(("prs".into(), 2));
+    bots.forget_seen();
+    assert_eq!(bots.seen_due(Some("prs")), Some("prs".to_string()));
 }
 
 #[test]
-fn a_held_bubble_that_stops_being_held_is_measured_again() {
-    let old = key_of(&entries(&[line(1, "you", "a", false), line(2, "you", "b", true)]));
-    let new = key_of(&entries(&[line(1, "you", "a", false), line(2, "you", "b", false), line(3, "bot", "c", false)]));
-    assert_eq!(spliced(&old, &new), vec![(1..2, 2)]);
+fn a_line_for_a_chat_that_is_not_shown_changes_nothing() {
+    let mut bots = two();
+    bots.chat = Some(read_chat(plain(&[(1, "you")])));
+    assert_eq!(bots.heard("ops", line(2, "bot", "x", false)), None);
 }

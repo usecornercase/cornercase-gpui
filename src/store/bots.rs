@@ -3,38 +3,17 @@ use serde_json::Value;
 
 use super::{Busy, Store, ToastKind, args, run_job};
 use crate::cli::{self, Feature};
-use crate::model::bots::places::{Moved, Showing};
 use crate::model::bots::{self, BotEvent, Chat, Heard, Offer, Read};
+use crate::model::place::Moved;
 use crate::platform::Os;
 
 impl Store {
-    pub(crate) fn machine_place(&self) -> Option<&crate::model::MachinePlace> {
-        self.placing.showing.machine()
-    }
-
-    pub(crate) fn shows_local(&self) -> bool {
-        self.placing.showing == Showing::Local
-    }
-
-    pub(crate) fn shown_bot(&self) -> Option<&str> {
-        self.placing.showing.bot()
-    }
-
     pub(crate) fn bots_offer(&self) -> Offer {
         self.bots.offer(self.releases().lacks(Feature::Bots), Os::CURRENT)
     }
 
     pub(crate) fn bots_revision(&self) -> u64 {
         self.bots.revision()
-    }
-
-    pub(super) fn place(&mut self, moved: Moved) {
-        let before = self.placing.showing.bot().map(str::to_string);
-        self.placing.showing = std::mem::take(&mut self.placing.showing).after(moved);
-        if before.as_deref() != self.placing.showing.bot() {
-            self.bots.chat = None;
-            self.bots.bump();
-        }
     }
 
     pub(super) fn take_bots(&mut self, app: &Value, cx: &mut Context<Self>) {
@@ -46,9 +25,16 @@ impl Store {
                 self.toast(format!("{name} was removed"), ToastKind::Info, cx);
             }
             _ if moved.boot_changed && self.bots.chat.is_some() => self.read_chat(None, cx),
-            _ => {}
+            _ => self.heal_chat(&moved.settled, cx),
         }
         self.mind_seen(cx);
+    }
+
+    fn heal_chat(&mut self, settled: &[String], cx: &mut Context<Self>) {
+        let Some(chat) = self.bots.chat.as_ref().filter(|chat| settled.contains(&chat.bot)) else { return };
+        if chat.read == Read::Done {
+            self.read_chat(Some(chat.last().unwrap_or(0)), cx);
+        }
     }
 
     pub(crate) fn show_bot(&mut self, id: &str, cx: &mut Context<Self>) {
@@ -57,6 +43,7 @@ impl Store {
         }
         if self.shown_bot() != Some(id) {
             self.placing.awaited = None;
+            self.bots.forget_seen();
             self.place(Moved::Bot(id.to_string()));
             let asked = self.bots.next_ask();
             self.bots.chat = Some(Chat::new(id, asked));
@@ -81,11 +68,10 @@ impl Store {
     }
 
     fn line_heard(&mut self, bot: &str, line: bots::Line, cx: &mut Context<Self>) {
-        let Some(chat) = self.bots.chat.as_mut().filter(|chat| chat.bot == bot) else { return };
-        match chat.heard(line) {
-            bots::Added::No => {}
-            bots::Added::Yes => cx.notify(),
-            bots::Added::Gap(last) => self.read_chat(Some(last), cx),
+        match self.bots.heard(bot, line) {
+            Some(bots::Added::Yes) => cx.notify(),
+            Some(bots::Added::Gap(last)) => self.read_chat(Some(last), cx),
+            Some(bots::Added::No) | None => {}
         }
     }
 
@@ -103,7 +89,7 @@ impl Store {
         let Some(chat) = &self.bots.chat else { return };
         match (&chat.read, chat.last()) {
             (Read::Done, Some(last)) => self.read_chat(Some(last), cx),
-            (Read::Failed(_), _) => self.read_chat(None, cx),
+            (Read::Done, None) | (Read::Failed(_), _) => self.read_chat(None, cx),
             _ => {}
         }
     }
@@ -113,12 +99,6 @@ impl Store {
             self.bots.active = active;
             self.mind_seen(cx);
         }
-    }
-
-    pub(crate) fn toggle_bots_fold(&mut self, cx: &mut Context<Self>) {
-        self.bots.folded = !self.bots.folded;
-        self.bots.bump();
-        cx.notify();
     }
 
     fn read_chat(&mut self, after: Option<u64>, cx: &mut Context<Self>) {
@@ -161,7 +141,7 @@ impl Store {
     }
 
     pub(super) fn mind_seen(&mut self, _cx: &mut Context<Self>) {
-        let Some(id) = self.bots.seen_due(self.placing.showing.bot()) else { return };
+        let Some(id) = self.bots.seen_due(self.places.showing.bot()) else { return };
         let unread = self.bots.find(&id).map_or(0, |bot| bot.unread);
         self.bots.seen = Some((id.clone(), unread));
         self.cmd(args(&["bot", "seen", &id]));

@@ -3,14 +3,15 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, Context, Entity, Global, IntoElement, ListAlignment, ListOffset,
-    ListState, ParentElement as _, Render, StyleRefinement, Styled as _, Window, div, list,
+    AnyElement, Context, Entity, InteractiveElement as _, IntoElement, ListAlignment, ListOffset, ListState,
+    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Window, div, list,
     prelude::FluentBuilder as _, px,
 };
 
+use self::entries::{Entry, EntryKey};
+pub(crate) use self::global::{scroll, view};
 use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
 use self::words::{EMPTY_LINES, footer, turn_label};
-use crate::model::bots::entries::{self, Entry, EntryKey};
 use crate::model::bots::{Bot, Chat, Read};
 use crate::panels::queue;
 use crate::store::Store;
@@ -18,6 +19,8 @@ use crate::theme::{colours, radius};
 use crate::ui::counting::Counting;
 use crate::ui::{self, Icon};
 
+mod entries;
+mod global;
 mod rows;
 mod words;
 
@@ -53,34 +56,19 @@ enum Row {
     Entry(Entry),
 }
 
-pub(crate) fn row_keys(earlier: bool, entries: &[Entry], opened: &HashSet<u64>) -> Vec<EntryKey> {
-    let keys = entries::keys(entries, opened);
-    if earlier { std::iter::once(entries::earlier_key()).chain(keys).collect() } else { keys }
-}
-
 pub(crate) struct BotChat {
     store: Entity<Store>,
     list: ListState,
     bot: Option<String>,
     rows: Rc<Vec<Row>>,
     keys: Vec<EntryKey>,
+    earlier: bool,
     opened: HashSet<u64>,
     news: bool,
     blocks: Blocks,
     counting: Counting,
     mark: Option<(String, u64)>,
     heard: (Option<String>, u64),
-}
-
-struct GlobalBotChat(Entity<BotChat>);
-impl Global for GlobalBotChat {}
-
-pub(crate) fn view(cx: &mut App) -> AnyView {
-    AnyView::from(BotChat::get(cx)).cached(StyleRefinement::default().size_full())
-}
-
-pub(crate) fn scroll(step: Scroll, cx: &mut App) {
-    BotChat::get(cx).update(cx, |chat, cx| chat.scroll(step, cx));
 }
 
 fn counting(chat: &mut BotChat) -> &mut Counting {
@@ -92,16 +80,6 @@ fn at_end(list: &ListState) -> bool {
 }
 
 impl BotChat {
-    pub(crate) fn get(cx: &mut App) -> Entity<Self> {
-        if let Some(GlobalBotChat(chat)) = cx.try_global::<GlobalBotChat>() {
-            return chat.clone();
-        }
-        let store = Store::get(cx);
-        let chat = cx.new(|cx| Self::new(store, cx));
-        cx.set_global(GlobalBotChat(chat.clone()));
-        chat
-    }
-
     fn new(store: Entity<Store>, cx: &mut Context<Self>) -> Self {
         cx.observe(&store, |this, store, cx| {
             if this.moved(store.read(cx)) {
@@ -122,6 +100,7 @@ impl BotChat {
             bot: None,
             rows: Rc::new(Vec::new()),
             keys: Vec::new(),
+            earlier: false,
             opened: HashSet::new(),
             news: false,
             blocks: Rc::new(RefCell::new(HashMap::new())),
@@ -186,20 +165,20 @@ impl BotChat {
             self.blocks.borrow_mut().clear();
         }
         self.blocks.borrow_mut().retain(|id, _| *id >= first);
-        let keys = row_keys(earlier, &entries, &self.opened);
+        let keys = entries::keys(&entries, &self.opened);
         let rows: Vec<Row> =
             earlier.then_some(Row::Earlier).into_iter().chain(entries.into_iter().map(Row::Entry)).collect();
-        self.apply(fresh, keys, rows);
+        self.apply(fresh, (earlier, keys), rows);
     }
 
-    fn apply(&mut self, fresh: bool, keys: Vec<EntryKey>, rows: Vec<Row>) {
+    fn apply(&mut self, fresh: bool, (earlier, keys): (bool, Vec<EntryKey>), rows: Vec<Row>) {
         if fresh {
             self.list.reset(rows.len());
             self.list.scroll_to(ListOffset { item_ix: rows.len(), offset_in_item: px(0.) });
             self.news = false;
-        } else if keys != self.keys {
+        } else if keys != self.keys || earlier != self.earlier {
             let following = at_end(&self.list);
-            for (range, count) in entries::spliced(&self.keys, &keys) {
+            for (range, count) in entries::row_splices((self.earlier, &self.keys), (earlier, &keys)) {
                 self.list.splice(range, count);
             }
             if following {
@@ -209,6 +188,7 @@ impl BotChat {
             }
         }
         self.keys = keys;
+        self.earlier = earlier;
         self.rows = Rc::new(rows);
     }
 
@@ -253,7 +233,7 @@ impl BotChat {
 
 fn empty_page(bot: &Bot) -> impl IntoElement + use<> {
     let [what, when] = EMPTY_LINES;
-    div().flex_1().child(
+    div().id("bot-empty").flex_1().min_h_0().overflow_y_scroll().child(
         ui::emblem_page(Icon::Message, bot.name.clone()).child(ui::emblem_line(what)).child(ui::emblem_line(when)),
     )
 }
@@ -268,7 +248,14 @@ fn header(bot: &Bot) -> impl IntoElement + use<> {
         .py(px(10.))
         .border_b_1()
         .border_color(colours::border())
-        .child(div().font_weight(gpui::FontWeight::SEMIBOLD).text_color(colours::text()).child(bot.name.clone()))
+        .child(
+            div()
+                .min_w_0()
+                .max_w(gpui::relative(0.6))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(colours::text())
+                .child(ui::one_line(bot.name.clone())),
+        )
         .child(div().min_w_0().text_size(px(11.5)).text_color(colours::faint()).child(ui::one_line(bot.facts())))
 }
 
@@ -314,7 +301,7 @@ impl Render for BotChat {
         }
         self.counting.keep(counting, cx);
         let body = self.body(&bot, &chat, cx);
-        div().size_full().p(px(8.)).child(
+        div().size_full().child(
             div()
                 .size_full()
                 .flex()

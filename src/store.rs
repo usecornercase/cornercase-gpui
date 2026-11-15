@@ -26,6 +26,7 @@ mod browse;
 mod jobs;
 mod machine_read;
 mod machines_there;
+mod place;
 mod run_on;
 mod toasts;
 mod tunnels;
@@ -65,6 +66,7 @@ pub(crate) struct Store {
     pub app: Option<Value>,
     pub machines: Vec<Machine>,
     pub bots: Bots,
+    places: place::Places,
     placing: run_on::Placing,
     tunnels: tunnels::Tunnels,
     there: ThereState,
@@ -92,7 +94,6 @@ pub(crate) struct Store {
     pub selection: Selection,
     pub account_settings: AccountSettings,
     pub accounts_changes: u64,
-    accounts_asked: u64,
     list_moves: ListMoves,
     next_toast: u64,
     app_stream: Option<Stream>,
@@ -128,6 +129,7 @@ impl Store {
             app: None,
             machines: Vec::new(),
             bots: Bots::new(),
+            places: place::Places::default(),
             placing: run_on::Placing::default(),
             tunnels: tunnels::Tunnels::default(),
             there: ThereState::default(),
@@ -155,7 +157,6 @@ impl Store {
             selection: Selection::default(),
             account_settings: AccountSettings::default(),
             accounts_changes: 0,
-            accounts_asked: 0,
             list_moves: ListMoves::default(),
             next_toast: 1,
             app_stream: None,
@@ -203,10 +204,10 @@ impl Store {
     }
 
     fn list_accounts(&mut self, cx: &mut Context<Self>) {
-        self.accounts_asked += 1;
-        let asked = self.accounts_asked;
+        self.list_moves.asked += 1;
+        let asked = self.list_moves.asked;
         run(cx, args(&["account", "list", "--json"]), move |this, result, cx| {
-            if asked == this.accounts_asked {
+            if asked == this.list_moves.asked {
                 this.accounts_listed(result, cx);
             }
         });

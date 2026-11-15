@@ -102,6 +102,7 @@ impl Selection {
 pub(crate) struct ListMoves {
     accounts: Option<u64>,
     config: Option<u64>,
+    pub(crate) asked: u64,
 }
 
 impl ListMoves {

@@ -43,3 +43,6 @@ impl Showing {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -6,10 +6,10 @@ use super::jobs::{folding_key, renaming_key};
 use super::machine_read::{Listing, Reach, reach};
 use super::{Busy, Store, ToastKind, run_job_on, run_with};
 use crate::cli::{self, Release, Target, Version};
-use crate::model::bots::places::{Moved, Showing};
 use crate::model::machines::hide_destination;
 use crate::model::machines::run_on::server_release;
 use crate::model::machines::seen::{ReadReleases, sighted, sighted_pane};
+use crate::model::place::Moved;
 use crate::model::{Aim, MachinePlace, MachineSeen, PaneAim, Session, ThereId};
 
 const NOTHING_SENT: &str = "nothing was sent";
@@ -146,18 +146,9 @@ impl Store {
         self.give_keys_back(cx);
     }
 
-    pub(crate) fn show_local(&mut self, cx: &mut Context<Self>) {
-        self.placing.awaited = None;
-        if self.placing.showing != Showing::Local {
-            self.place(Moved::Local);
-            self.file_full_screen = false;
-            cx.notify();
-        }
-    }
-
     pub(crate) fn follow_machines(&mut self, cx: &mut Context<Self>) {
         let Some(session) = &self.session else { return };
-        let current = self.placing.showing.machine().cloned();
+        let current = self.places.showing.machine().cloned();
         let followed = current.as_ref().and_then(|place| place.followed(&session.machines));
         let gone = current
             .as_ref()

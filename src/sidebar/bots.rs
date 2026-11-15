@@ -4,12 +4,12 @@ use gpui::{
 };
 
 use super::arrange::divider;
+use super::head_row;
 use super::rail::count_disc;
 use super::rows::{chevron, list_text};
 use super::workspace::agent_text;
 use crate::app::Root;
 use crate::model::bots::{Bot, Offer};
-use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, Icon, icon, orbits};
 
@@ -20,7 +20,7 @@ impl Root {
         if offer == Offer::Hidden {
             return None;
         }
-        let folded = store.bots.folded;
+        let folded = self.side.bots_folded;
         let (thinking, unread) = (store.bots.thinking(), store.bots.unread() as u64);
         let body = match offer {
             Offer::Lacks(text) => Some(ui::note(text).into_any_element()),
@@ -40,36 +40,19 @@ impl Root {
     }
 
     fn bots_head(folded: bool, thinking: bool, unread: u64, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let still = folded.then(|| {
-            div()
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .when(thinking, |d| d.child(ui::spinner("bots-thinking", 11., colours::working())))
-                .children(count_disc(unread))
-        });
-        div()
-            .id("sidebar-bots-head")
+        let still = div()
             .flex()
-            .flex_none()
             .items_center()
-            .justify_between()
-            .cursor_pointer()
-            .pl(px(12.))
-            .pr(px(12.))
-            .pt(px(8.))
-            .pb(px(6.))
-            .child(
-                div().flex().items_center().child(chevron(SharedString::from("bots-chevron"), !folded)).child(
-                    div()
-                        .text_size(px(11.))
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .text_color(colours::muted())
-                        .child("Bots"),
-                ),
-            )
-            .children(still)
-            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.store.update(cx, Store::toggle_bots_fold)))
+            .gap(px(6.))
+            .when(folded && thinking, |d| d.child(ui::spinner("bots-thinking", 11., colours::working())))
+            .children(count_disc(unread).filter(|_| folded));
+        let chevron = chevron(SharedString::from("bots-chevron"), !folded);
+        head_row(6., chevron, "Bots", still).id("sidebar-bots-head").cursor_pointer().on_click(cx.listener(
+            |this, _: &ClickEvent, _, cx| {
+                this.side.bots_folded = !this.side.bots_folded;
+                cx.notify();
+            },
+        ))
     }
 
     fn bot_rows(&self, cx: &mut Context<Self>) -> AnyElement {
