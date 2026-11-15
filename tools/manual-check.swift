@@ -507,11 +507,11 @@ func shiftAddsNothing(_ name: String, _ text: String, _ layout: String, command:
         status: 2)
 }
 
-func typedShiftFailure(_ name: String, _ wanted: Character, _ layout: Layout) -> Failure {
+func typedShiftFailure(_ name: String, _ wanted: Character, _ layout: Layout, _ words: [String]) -> Failure {
     guard let types = layout.types, let id = layout.name, let found = typingKey(types, String(wanted)), found.state & shiftState != 0 else {
         return shiftRefusal(name, String(wanted), nil)
     }
-    return Failure(message: "shift adds nothing to \(name) on \(id): the layout types it with shift already: post \(name), nothing was posted", status: 2)
+    return Failure(message: "shift adds nothing to \(name) on \(id): the layout types it with shift already: post \(([name] + words).joined(separator: " ")), nothing was posted", status: 2)
 }
 
 func shiftFailure(_ name: String, _ wanted: Character, _ layout: Layout, command: Bool, _ words: [String]) -> Failure {
@@ -538,7 +538,7 @@ func resolve(_ name: String, _ held: [String], layout: () -> Layout) throws -> P
     if asked.contains(.maskShift) && !wanted.isLetter {
         throw shortcut
             ? shiftFailure(name, wanted, found, command: asked.contains(.maskCommand), held.filter { $0 != "shift" })
-            : typedShiftFailure(name, wanted, found)
+            : typedShiftFailure(name, wanted, found, held.filter { $0 != "shift" })
     }
     return try resolveCharacter(name, wanted, asked, layout: found)
 }
@@ -959,8 +959,9 @@ enum SelfTest {
                     "2: shift with slash is another character: the window reads shift and / as ?, so name it: question: nothing was posted")
             }),
             ("shift_adds_nothing_to_a_typed_symbol_whose_key_already_takes_it", {
-                expect([refused("slash", ["shift"], spanish), refused("slash", ["cmd", "alt", "shift"], spanish)], [
+                expect([refused("slash", ["shift"], spanish), refused("slash", ["alt", "shift"], spanish), refused("slash", ["cmd", "alt", "shift"], spanish)], [
                     "2: shift adds nothing to slash on test.Spanish-ISO: the layout types it with shift already: post slash, nothing was posted",
+                    "2: shift adds nothing to slash on test.Spanish-ISO: the layout types it with shift already: post slash alt, nothing was posted",
                     "2: shift adds nothing to slash on test.Spanish-ISO: the window reads it as cmd-/ with or without it: post slash cmd alt, nothing was posted",
                 ])
             }),
