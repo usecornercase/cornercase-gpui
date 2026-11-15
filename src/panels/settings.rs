@@ -16,7 +16,9 @@ mod share;
 mod sources;
 pub(crate) mod widgets;
 
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
@@ -36,6 +38,13 @@ use crate::ui::{TextField, TextFieldEvent};
 const NAV: Split = Split::new(204., 168., 420.);
 const PAGE_KEEP: f32 = 420.;
 const SAVED_FOR: Duration = Duration::from_millis(1600);
+
+fn seen_of(store: &Store) -> data::Seen<'_> {
+    store
+        .session
+        .as_ref()
+        .map_or(data::Seen { boot: "", revision: 0 }, |s| data::Seen { boot: &s.boot, revision: s.config.revision })
+}
 
 struct NavGrip;
 
@@ -68,6 +77,8 @@ pub(crate) struct SettingsPanel {
     import: Option<import::Import>,
     was_open: bool,
     first_project: Option<u64>,
+    agents_room: Rc<Cell<f32>>,
+    gallery_room: Rc<Cell<f32>>,
     nav_width: Split,
     search: Entity<TextField>,
     scroll: ScrollHandle,
@@ -101,6 +112,8 @@ impl SettingsPanel {
             import: None,
             was_open: true,
             first_project: None,
+            agents_room: Rc::new(Cell::new(widgets::WIDEST_CARD)),
+            gallery_room: Rc::new(Cell::new(widgets::WIDEST_CARD)),
             nav_width: NAV,
             search,
             scroll: ScrollHandle::new(),
@@ -145,9 +158,7 @@ impl SettingsPanel {
     fn store_changed(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {
         let s = store.read(cx);
         let open = s.sheet == Some(PanelKind::Settings);
-        let (boot, revision) = s.session.as_ref().map(|s| (s.boot.clone(), s.config.revision)).unwrap_or_default();
-        let loaded = self.described.as_ref().map_or(0, |d| d.revision);
-        let newer = revision != 0 && (boot != self.boot || revision > loaded);
+        let newer = data::behind(Some(self.held()), seen_of(s));
         if open && !self.was_open {
             self.opened(window, cx);
         }
@@ -181,17 +192,37 @@ impl SettingsPanel {
         self.loading = true;
         cx.notify();
         self.boot = Store::get(cx).read(cx).session.as_ref().map(|s| s.boot.clone()).unwrap_or_default();
-        store::run(cx, args(&["config", "--json"]), |this, result, cx| {
-            this.loading = false;
-            match result.and_then(|out| data::parse(&out)) {
-                Ok(described) => {
-                    this.load_error = None;
-                    this.apply(described, cx);
-                }
-                Err(e) => this.load_error = Some(cli::reason(&e)),
+        store::run(cx, args(&["config", "--json"]), Self::read_ended);
+    }
+
+    fn read_ended(&mut self, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+        self.loading = false;
+        let answered = match result.and_then(|out| data::parse(&out)) {
+            Ok(described) => {
+                self.load_error = None;
+                self.apply(described, cx);
+                true
             }
-            cx.notify();
-        });
+            Err(e) => {
+                self.load_error = Some(cli::reason(&e));
+                false
+            }
+        };
+        self.read_again_if_behind(answered, cx);
+        cx.notify();
+    }
+
+    fn read_again_if_behind(&mut self, answered: bool, cx: &mut Context<Self>) {
+        let store = Store::get(cx).read(cx);
+        let again =
+            store.sheet == Some(PanelKind::Settings) && data::behind(answered.then(|| self.held()), seen_of(store));
+        if again {
+            self.load(cx);
+        }
+    }
+
+    fn held(&self) -> data::Seen<'_> {
+        data::Seen { boot: &self.boot, revision: self.described.as_ref().map_or(0, |d| d.revision) }
     }
 
     fn apply(&mut self, mut described: Described, cx: &mut Context<Self>) {

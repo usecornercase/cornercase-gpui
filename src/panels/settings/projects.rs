@@ -50,6 +50,7 @@ fn project_header(project: &ProjectEntry) -> Div {
 fn script_lines(text: &str) -> Div {
     div()
         .w(px(Look::SCRIPT.width))
+        .min_w_0()
         .px(px(10.))
         .py(px(6.))
         .rounded(px(radius::control()))

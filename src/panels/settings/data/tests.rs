@@ -673,3 +673,37 @@ fn search_finds_the_number_a_row_of_two_alike_apps_shows() {
     assert!(items.contains(&&Item::Connection(at[0])));
     assert!(!items.contains(&&Item::Connection(at[1])));
 }
+
+fn seen(boot: &str, revision: u64) -> Seen<'_> {
+    Seen { boot, revision }
+}
+
+#[test]
+fn a_revision_that_comes_while_the_settings_load_is_read_once_that_load_ends() {
+    assert!(behind(Some(seen("b1", 7)), seen("b1", 8)));
+}
+
+#[test]
+fn an_answer_level_with_the_session_reads_nothing_more() {
+    assert!(!behind(Some(seen("b1", 8)), seen("b1", 8)));
+}
+
+#[test]
+fn an_answer_ahead_of_the_session_reads_nothing() {
+    assert!(!behind(Some(seen("b1", 9)), seen("b1", 8)));
+}
+
+#[test]
+fn an_answer_from_another_boot_is_read_again() {
+    assert!(behind(Some(seen("b1", 9)), seen("b2", 3)));
+}
+
+#[test]
+fn with_no_session_nothing_is_read() {
+    assert!(!behind(Some(seen("b1", 7)), seen("", 0)));
+}
+
+#[test]
+fn a_read_that_failed_asks_nothing_more_by_itself() {
+    assert!(!behind(None, seen("b1", 8)));
+}

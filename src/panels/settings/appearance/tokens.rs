@@ -15,6 +15,8 @@ use crate::theme::tokens::{ANSI_NAMES, Group, TOKENS, Token};
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui::{self, Icon};
 
+const HALVES_APART: f32 = 12.;
+
 struct Row<'a> {
     label: &'a str,
     note: &'a str,
@@ -83,18 +85,35 @@ impl SettingsPanel {
         widgets::group("Terminal", div().flex().flex_col().children(note).child(body))
     }
 
-    fn ansi_rows(&self, snap: &Snap, cx: &mut Context<Self>) -> Div {
-        let line = |names: &[&str], cx: &mut Context<Self>| {
-            let swatches: Vec<Div> = names
-                .iter()
-                .filter_map(|key| {
-                    let colour = terminal_colour(&snap.theme, key)?;
-                    Some(self.swatch_button(&Spot { key, part: Part::Terminal, colour, size: 26. }, snap, cx))
-                })
-                .collect();
-            div().flex().gap(px(6.)).children(swatches)
-        };
+    fn swatch_line(&self, names: &[&str], snap: &Snap, cx: &mut Context<Self>) -> Div {
+        let swatches: Vec<Div> = names
+            .iter()
+            .filter_map(|key| {
+                let colour = terminal_colour(&snap.theme, key)?;
+                Some(self.swatch_button(&Spot { key, part: Part::Terminal, colour, size: 26. }, snap, cx))
+            })
+            .collect();
+        div().flex().gap(px(6.)).children(swatches)
+    }
+
+    fn ansi_half(&self, range: std::ops::Range<usize>, snap: &Snap, cx: &mut Context<Self>) -> Div {
         let (normal, bright) = ANSI_NAMES.split_at(8);
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            .child(self.swatch_line(&normal[range.clone()], snap, cx))
+            .child(self.swatch_line(&bright[range], snap, cx))
+    }
+
+    fn ansi_rows(&self, snap: &Snap, cx: &mut Context<Self>) -> Div {
+        let halves = div()
+            .flex()
+            .flex_wrap()
+            .gap_x(px(6.))
+            .gap_y(px(HALVES_APART))
+            .child(self.ansi_half(0..4, snap, cx))
+            .child(self.ansi_half(4..8, snap, cx));
         div()
             .py(px(12.))
             .border_t_1()
@@ -106,8 +125,7 @@ impl SettingsPanel {
                 "The 16 colours",
                 "What programs draw with: Claude Code, Neovim and delta follow them.",
             ))
-            .child(line(normal, cx))
-            .child(line(bright, cx))
+            .child(halves)
     }
 
     fn colour_row(&self, first: bool, row: &Row<'_>, snap: &Snap, cx: &mut Context<Self>) -> AnyElement {

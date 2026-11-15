@@ -2,6 +2,13 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.114
+
+- **In a narrow window, Settings shows each agent's settings whole.** Below about 860 px wide, each agent's mode and extra arguments go under its name, each under its own label, instead of squeezing the name to a few letters a line. In a usual window nothing changes.
+- **Every theme and the terminal's 16 colours stay inside their card.** The theme previews go as many on a line as fit: two at 900 px wide, one at the least width. Below about 670 px the 16 colours show in two halves, each colour above its bright version. A project's command of several lines wraps inside its card.
+- **Usage's Refresh and Copy card link stay whole in a narrow window.** The "updated…" words shorten first.
+- **A setting changed elsewhere while Settings was reading shows by itself**, instead of waiting for something else to happen.
+
 ## 0.1.113
 
 - **Make and remove your bots from the window.** With cornercase 0.13.77 or newer, **New bot…** (in the sidebar's Projects `+`, the Bots section's `+`, or ⌘E, Ctrl+Shift+E on Linux and Windows) opens a form for the bot's name, agent, model, effort, account, access and what it is for. Type a name and press Return and the bot's chat opens, ready for your first message (with the keyboard alone this needs an agent that can run through cornercase; Codex can only have full access, which you pick with the mouse). **Remove bot…** in a bot's `⋯` or right-click menu asks first; while the bot answers, stop it first. Editing and renaming a bot, and opening its folder, still happen in cornercase's own window or with `cornercase bot edit`.

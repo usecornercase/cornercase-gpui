@@ -7,10 +7,26 @@ use super::{Role, SettingsPanel, widgets};
 use crate::notify::tip;
 use crate::theme::{FONT_FAMILY, colours};
 use crate::ui;
+use crate::ui::split;
 
 const MODE: f32 = 150.;
 const NAME: f32 = 120.;
 const LEAST: f32 = 120.;
+const GAP: f32 = 14.;
+const NAME_LEAST: f32 = 72.;
+const COLUMNS_LEAST: f32 = NAME_LEAST + MODE + LEAST + widgets::SLOT + 3. * GAP;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Shape {
+    Columns,
+    Stacked,
+}
+
+impl Shape {
+    fn of(room: f32) -> Self {
+        if room >= COLUMNS_LEAST { Self::Columns } else { Self::Stacked }
+    }
+}
 
 pub(super) struct AgentItem<'d> {
     pub kind: &'d str,
@@ -26,12 +42,12 @@ fn columns() -> Div {
     div()
         .flex()
         .items_center()
-        .gap(px(14.))
+        .gap(px(GAP))
         .pt(px(12.))
         .pb(px(8.))
         .border_b_1()
         .border_color(colours::border())
-        .child(head("AGENT").flex_grow().flex_basis(px(NAME)).min_w_0())
+        .child(head("AGENT").flex_grow().flex_basis(px(NAME)).min_w(px(NAME_LEAST)))
         .child(head("MODE").w(px(MODE)).flex_none())
         .child(head("EXTRA ARGUMENTS").w(px(Look::ARGUMENTS.width)).min_w(px(LEAST)))
         .child(div().w(px(widgets::SLOT)).flex_none())
@@ -50,7 +66,7 @@ fn agent_label(agent: &AgentItem<'_>) -> Div {
     div()
         .flex_grow()
         .flex_basis(px(NAME))
-        .min_w_0()
+        .min_w(px(NAME_LEAST))
         .flex()
         .flex_col()
         .gap(px(2.))
@@ -58,9 +74,51 @@ fn agent_label(agent: &AgentItem<'_>) -> Div {
         .children(arguments)
 }
 
+fn columns_row(agent: &AgentItem<'_>, mode: Div, extra: Option<Div>, saving: Div) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(GAP))
+        .min_h(px(50.))
+        .py(px(8.))
+        .child(agent_label(agent))
+        .child(mode)
+        .child(div().w(px(Look::ARGUMENTS.width)).min_w(px(LEAST)).flex().children(extra))
+        .child(saving)
+}
+
+fn stacked_row(agent: &AgentItem<'_>, mode: Div, extra: Option<Div>, saving: Div) -> Div {
+    let part =
+        |title: &'static str, control: Div| div().flex().flex_col().gap(px(4.)).child(head(title)).child(control);
+    let arguments = div().flex().min_w_0().children(extra);
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .py(px(10.))
+        .child(div().flex().items_center().gap(px(GAP)).child(agent_label(agent)).child(saving))
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap_x(px(GAP))
+                .gap_y(px(8.))
+                .child(part("MODE", mode))
+                .child(part("EXTRA ARGUMENTS", arguments).flex_basis(px(Look::ARGUMENTS.width)).min_w_0()),
+        )
+}
+
 impl SettingsPanel {
     pub(super) fn agents_card(&self, d: &Described, items: &[Item], window: &Window, cx: &mut Context<Self>) -> Div {
-        widgets::card().child(columns()).children(self.item_rows(d, items, window, cx))
+        let header = (Shape::of(self.agents_room.get()) == Shape::Columns).then(columns);
+        let table = div()
+            .relative()
+            .flex()
+            .flex_col()
+            .child(split::measure(self.agents_room.clone()))
+            .children(header)
+            .children(self.item_rows(d, items, window, cx));
+        widgets::card().child(table)
     }
 
     pub(super) fn render_agent(&self, agent: &AgentItem<'_>, slot: Slot<'_>, cx: &mut Context<Self>) -> AnyElement {
@@ -69,21 +127,16 @@ impl SettingsPanel {
         let hint = agent.extra.and_then(|e| self.hint_of(&Role::Setting(e.key.clone()), e.hint(), slot.window, cx));
         let roles: Vec<Role> =
             [agent.mode, agent.extra].into_iter().flatten().map(|s| Role::Setting(s.key.clone())).collect();
-        let row = div()
-            .flex()
-            .items_center()
-            .gap(px(14.))
-            .min_h(px(50.))
-            .py(px(8.))
-            .when(!slot.first, |d| d.border_t_1().border_color(colours::border()))
-            .child(agent_label(agent))
-            .child(div().w(px(MODE)).flex_none().flex().child(self.mode_control(agent, cx)))
-            .child(div().w(px(Look::ARGUMENTS.width)).min_w(px(LEAST)).flex().children(extra))
-            .child(div().w(px(widgets::SLOT)).flex_none().flex().justify_center().children(self.mode_saving(agent)));
+        let mode = div().w(px(MODE)).flex_none().flex().child(self.mode_control(agent, cx));
+        let saving = div().w(px(widgets::SLOT)).flex_none().flex().justify_center().children(self.mode_saving(agent));
+        let row = match Shape::of(self.agents_room.get()) {
+            Shape::Columns => columns_row(agent, mode, extra, saving),
+            Shape::Stacked => stacked_row(agent, mode, extra, saving),
+        };
         div()
             .flex()
             .flex_col()
-            .child(row)
+            .child(row.when(!slot.first, |d| d.border_t_1().border_color(colours::border())))
             .children(hint)
             .children(roles.iter().filter_map(|r| self.error_of(r)))
             .into_any_element()
@@ -109,3 +162,6 @@ impl SettingsPanel {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

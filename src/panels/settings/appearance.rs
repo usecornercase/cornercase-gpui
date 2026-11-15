@@ -88,7 +88,7 @@ impl SettingsPanel {
         widgets::column()
             .child(Self::appearance_heading(cx))
             .children(problem)
-            .child(Self::theme_group(&snap, cx))
+            .child(Self::theme_group(&snap, self.gallery_room.clone(), cx))
             .children(self.colour_groups(&snap, window, cx))
             .child(Self::transparency_group(&snap, cx))
             .child(Self::shape_group(&snap, cx))

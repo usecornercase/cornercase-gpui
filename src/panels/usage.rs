@@ -308,9 +308,8 @@ impl UsagePanel {
             .flex()
             .items_center()
             .gap(px(10.))
-            .child(ui::segments(tabs))
-            .child(div().flex_1())
-            .when(!loading, |d| d.child(ui::dim(status)))
+            .child(ui::segments(tabs).flex_none())
+            .child(status_box((!loading).then_some(status)))
             .when(can_share, |d| d.child(self.share_button(cx)))
             .child(if loading {
                 ui::busy_button("usage-refresh", "Refreshing…", ui::Tone::Plain)
@@ -485,3 +484,7 @@ fn run_json<T: serde::de::DeserializeOwned + 'static>(
 
 #[cfg(test)]
 mod tests;
+
+fn status_box(status: Option<String>) -> Div {
+    div().flex_1().min_w_0().flex().justify_end().children(status.map(|text| ui::dim(ui::one_line(text)).flex()))
+}

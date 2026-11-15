@@ -4,6 +4,16 @@ use serde_json::Value;
 use crate::platform::Os;
 use crate::store::args;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Seen<'a> {
+    pub boot: &'a str,
+    pub revision: u64,
+}
+
+pub(super) fn behind(held: Option<Seen<'_>>, session: Seen<'_>) -> bool {
+    held.is_some_and(|held| session.revision != 0 && (session.boot != held.boot || session.revision > held.revision))
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub(super) struct Described {
