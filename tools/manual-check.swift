@@ -495,27 +495,33 @@ func resolveCharacter(_ name: String, _ wanted: Character, _ asked: CGEventFlags
         return Posting(code: found.code, flags: asked.union(found.shift ? .maskShift : []))
     }
     let typedText = shift ? String(wanted).uppercased() : String(wanted)
-    let plain = asked.contains(.maskAlternate) ? typingKey(types, typedText, states: [0, shiftState]) : nil
-    guard let found = plain ?? typingKey(types, typedText) else {
+    guard let found = typingKey(types, typedText) else {
         throw typingKey(types, typedText, dead: true) == nil ? missingRefusal(name, id) : deadRefusal(name, id)
     }
     return Posting(code: found.code, flags: asked.union(stateFlags(found.state)))
 }
 
-func shiftAddsNothing(_ name: String, _ text: String, _ layout: String, _ held: String) -> Failure {
+func shiftAddsNothing(_ name: String, _ text: String, _ layout: String, command: Bool, _ words: [String]) -> Failure {
     Failure(
-        message: "shift adds nothing to \(name) on \(layout): the window reads it as \(held)-\(text) with or without it: post \(name) \(held), nothing was posted",
+        message: "shift adds nothing to \(name) on \(layout): the window reads it as \(command ? "cmd" : "ctrl")-\(text) with or without it: post \(([name] + words).joined(separator: " ")), nothing was posted",
         status: 2)
 }
 
-func shiftFailure(_ name: String, _ wanted: Character, _ layout: Layout, command: Bool) -> Failure {
+func typedShiftFailure(_ name: String, _ wanted: Character, _ layout: Layout) -> Failure {
+    guard let types = layout.types, let id = layout.name, let found = typingKey(types, String(wanted)), found.state & shiftState != 0 else {
+        return shiftRefusal(name, String(wanted), nil)
+    }
+    return Failure(message: "shift adds nothing to \(name) on \(id): the layout types it with shift already: post \(name), nothing was posted", status: 2)
+}
+
+func shiftFailure(_ name: String, _ wanted: Character, _ layout: Layout, command: Bool, _ words: [String]) -> Failure {
     guard let types = layout.types, let id = layout.name else { return shiftRefusal(name, String(wanted), nil) }
     let text = String(wanted)
     guard let found = shortcutKey(types, text, command: command, shift: false) else {
         return whyNoShortcut(types, text, name, id, command: command)
     }
     let reading = windowKey(types, code: found.code, command: command, shift: true).key
-    if found.shift || reading == text { return shiftAddsNothing(name, text, id, command ? "cmd" : "ctrl") }
+    if reading == text { return shiftAddsNothing(name, text, id, command: command, words) }
     return shiftRefusal(name, text, reading)
 }
 
@@ -530,7 +536,9 @@ func resolve(_ name: String, _ held: [String], layout: () -> Layout) throws -> P
     let shortcut = asked.contains(.maskCommand) || asked.contains(.maskControl)
     let found = layout()
     if asked.contains(.maskShift) && !wanted.isLetter {
-        throw shortcut ? shiftFailure(name, wanted, found, command: asked.contains(.maskCommand)) : shiftRefusal(name, String(wanted), nil)
+        throw shortcut
+            ? shiftFailure(name, wanted, found, command: asked.contains(.maskCommand), held.filter { $0 != "shift" })
+            : typedShiftFailure(name, wanted, found)
     }
     return try resolveCharacter(name, wanted, asked, layout: found)
 }
@@ -950,6 +958,12 @@ enum SelfTest {
                 expect(refused("slash", ["cmd", "shift"], us),
                     "2: shift with slash is another character: the window reads shift and / as ?, so name it: question: nothing was posted")
             }),
+            ("shift_adds_nothing_to_a_typed_symbol_whose_key_already_takes_it", {
+                expect([refused("slash", ["shift"], spanish), refused("slash", ["cmd", "alt", "shift"], spanish)], [
+                    "2: shift adds nothing to slash on test.Spanish-ISO: the layout types it with shift already: post slash, nothing was posted",
+                    "2: shift adds nothing to slash on test.Spanish-ISO: the window reads it as cmd-/ with or without it: post slash cmd alt, nothing was posted",
+                ])
+            }),
             ("shift_with_a_symbol_and_no_cmd_is_refused_without_a_reading", {
                 expect(refused("slash", ["shift"], us),
                     "2: shift with slash is another character: the window reads shift and / as the character they type: nothing was posted")
@@ -992,7 +1006,7 @@ enum SelfTest {
             ("an_empty_name_is_unknown_and_posts_nothing", { expect(refused("", ["cmd"], us), "2: unknown key '' (an empty name): the keys are \(keyGrammar)") }),
             ("every_refusal_says_its_words", {
                 let all = [
-                    refused("a", [], nothing), refused("a", [], noData), refused("t", ["cmd"], dvorakCommand),
+                    refused("a", [], nothing), refused("a", [], noData), refused("slash", ["cmd", "shift"], noData), refused("t", ["cmd"], dvorakCommand),
                     refused("slash", ["cmd"], madeLayout("test.Bare", [0: [0: "a"]])),
                     refused("slash", [], madeLayout("test.Bare", [0: [0: "a"]])),
                     refused("leftbracket", ["cmd"], madeLayout("test.Dead", [33: [0: "~["]])),
@@ -1001,6 +1015,7 @@ enum SelfTest {
                 return expect(all, [
                     "1: no keyboard layout is in use, so no key can be found for a: named keys still work, nothing was posted",
                     "1: the keyboard layout in use (test.Input-Method) has no key data, as an input method's may not, so no key can be found for a: named keys still work, nothing was posted",
+                    "2: shift with slash is another character: the window reads shift and / as the character they type: nothing was posted",
                     "1: no key of test.Dvorak-QWERTY makes the window read t with these modifiers: nothing was posted",
                     "1: no key of test.Bare types slash: this shortcut cannot reach the window on this layout, nothing was posted",
                     "1: no key of test.Bare types slash: `text` types it, nothing was posted",
