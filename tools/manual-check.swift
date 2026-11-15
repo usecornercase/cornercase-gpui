@@ -219,8 +219,11 @@ struct Grant: Equatable {
     let capture: Bool
 }
 
+let postingCommands = ["front", "size", "key", "hold", "text", "paste", "copy", "press", "drag", "scroll"]
+let postingListed = postingCommands.map { $0 == "copy" ? "copy with a key" : $0 }.dropLast().joined(separator: ", ") + " and " + (postingCommands.last ?? "")
+
 let postYes =
-    "Accessibility and event posting are allowed to this process, so front, size, key, hold, text, paste, copy with a key, press, drag and scroll may post; ask again at the start of each round (design/manual-check.md, What this shell may do)"
+    "Accessibility and event posting are allowed to this process, so \(postingListed) may post; ask again at the start of each round (design/manual-check.md, What this shell may do)"
 let captureYes =
     "Screen Recording is allowed to this process, so screencapture -x -o -l <window id> may capture a window (design/manual-check.md, Captures); the helper's own commands read no window's title and need none"
 let captureNo =
@@ -234,7 +237,7 @@ func postRefusal(_ grant: Grant) -> String? {
     guard !(grant.accessibility && grant.posting) else { return nil }
     let yesNo = { (allowed: Bool) in allowed ? "yes" : "no" }
     return "this process may not post events (Accessibility: \(yesNo(grant.accessibility)), event posting: \(yesNo(grant.posting))): "
-        + "front, size, key, hold, text, paste, copy with a key, press, drag and scroll refuse with status 1 and post nothing; "
+        + "\(postingListed) refuse with status 1 and post nothing; "
         + "the grant is the person's at this Mac and only they give it, so a check never opens System Settings, never runs tccutil, never asks for it "
         + "and never posts through another process (System Events, osascript or any other tool): plan without keys and presses "
         + "(design/manual-check.md, What needs no press) and put what needs them under Not checked with this reason; manual-check may asks this with no pid"
@@ -255,11 +258,15 @@ func mayWords(_ words: [String]) throws {
     throw Failure(message: "may takes no pid and no words: it answers for the process that runs it, so ask it from the shell the check runs in; not '\(first)'", status: 2)
 }
 
+func mayOutcome(_ grant: Grant) throws -> [String] {
+    let answer = mayAnswer(grant)
+    guard answer.status != 0 else { return answer.lines }
+    throw Failure(message: answer.lines.joined(separator: "\n"), status: answer.status)
+}
+
 func may(_ words: [String]) throws {
     try mayWords(words)
-    let answer = mayAnswer(readGrant())
-    guard answer.status != 0 else { return answer.lines.forEach { say($0) } }
-    throw Failure(message: answer.lines.joined(separator: "\n"), status: answer.status)
+    try mayOutcome(readGrant()).forEach { say($0) }
 }
 
 func isFront(_ pid: pid_t) -> Bool {
@@ -2019,6 +2026,11 @@ enum SelfTest {
                 }
                 return expect(got, allGrants.map { $0.accessibility && $0.posting ? "no refusal" : "[true, true]" })
             }),
+            ("may_chains_only_when_it_may_post", {
+                let got = allGrants.map { g in refusal { _ = try mayOutcome(g) } }
+                let want = allGrants.map { g in g.accessibility && g.posting ? "no refusal" : "1: " + mayAnswer(g).lines.joined(separator: "\n") }
+                return expect(got, want)
+            }),
             ("captures_change_a_line_and_never_the_status", {
                 let on = mayAnswer(Grant(accessibility: true, posting: true, capture: true))
                 let off = mayAnswer(Grant(accessibility: true, posting: true, capture: false))
@@ -2063,7 +2075,7 @@ func run(_ args: [String]) throws {
     if args.first == "may" { return try may(Array(args.dropFirst())) }
     if args.first == "displays" { return try listDisplays(Array(args.dropFirst())) }
     guard args.count >= 2, let pid = pid_t(args[1]) else { throw Failure(message: usage, status: 2) }
-    if ["front", "size", "key", "hold", "text", "paste", "copy", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
+    if postingCommands.contains(args[0]) { try checkedPid(pid) }
     switch (args[0], args.count) {
     case ("window", 2): try describe(pid)
     case ("covers", 2): try covers(pid)

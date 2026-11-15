@@ -745,16 +745,18 @@ scan() {
     }'
 }
 
+is_window() {
+  first=$(ps -o args= -p "$1" 2> /dev/null | awk '{ print $1 }')
+  [ "${first##*/}" = cornercase-gpui ]
+}
+
 window_pid() {
   pidfile=$folder/window.pid
   [ -f "$pidfile" ] || return 0
   wp=$(cat "$pidfile")
   case $wp in '' | *[!0-9]*) return 0 ;; esac
   kill -0 "$wp" 2> /dev/null || return 0
-  first=$(ps -o args= -p "$wp" 2> /dev/null | awk '{ print $1 }')
-  case ${first##*/} in
-    cornercase-gpui) printf '%s\n' "$wp" ;;
-  esac
+  if is_window "$wp"; then printf '%s\n' "$wp"; fi
 }
 
 cwd_windows() {
@@ -763,8 +765,7 @@ cwd_windows() {
     /^p/ { p = substr($0, 2) }
     /^n/ { n = substr($0, 2) "/"; if (index(n, f) == 1 || index(n, "/private" f) == 1) print p }' |
     while read -r p; do
-      first=$(ps -o args= -p "$p" 2> /dev/null | awk '{ print $1 }')
-      case ${first##*/} in cornercase-gpui) printf '%s\n' "$p" ;; esac
+      if is_window "$p"; then printf '%s\n' "$p"; fi
     done
 }
 
@@ -797,7 +798,7 @@ wait_gone() {
     n=$((n + 1))
     sleep 1
   done
-  [ -z "$(scan left "$1")" ]
+  [ "$quiet" -ge 3 ] && [ -z "$(scan left "$1")" ]
 }
 
 down() {
@@ -812,7 +813,7 @@ down() {
   snapshot=$(scan pids | tr '\n' ' ')$(socket_holders)
   stop_servers
   if ! wait_gone "$snapshot"; then
-    printf 'still running:\n' >&2
+    printf 'still running, or running as late as the last 3 s:\n' >&2
     scan left "$snapshot" >&2
     fail "end them by pid, then run down again; $folder is kept"
   fi

@@ -64,7 +64,7 @@ case $cmd in
     [ -e "$(dirname "$sock")/../ssh/there.invalid.held" ] && held_there=yes
     printf '%s held=%s\n' "$sock" "$held,$held_there" >> "$t/killed"
     rm -f "$sock" "$state"-agent "$state"-child
-    [ -f "$t/comes-back" ] && mv "$t/comes-back" "$t/came-back" && exec sh -c 'sleep 1.5; exec "$0"' "$(cat "$t/came-back")" > /dev/null 2>&1 & ;;
+    [ -f "$t/control/comes-back" ] && mv "$t/control/comes-back" "$t/control/came-back" && exec sh -c 'sleep 1.5; exec "$0"' "$(cat "$t/control/came-back")" > /dev/null 2>&1 & ;;
   status)
     needs_up
     if [ "${2-}" = --panes ]; then
@@ -1240,10 +1240,10 @@ down_waits_until_nothing_of_the_bench_runs_for_three_seconds() {
   runb up "$t/b8" --here "$t/new/cornercase"
   check "up: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
   lingers "$t/b8"
-  printf '%s\n' "$t/b8/here/bin/lingers" > "$t/comes-back"
+  printf '%s\n' "$t/b8/here/bin/lingers" > "$t/control/comes-back"
   runb down "$t/b8"
   rc1=$rc
-  rm -f "$t/comes-back" "$t/came-back"
+  rm -f "$t/control/comes-back" "$t/control/came-back"
   sleep 1
   lpid=$(cat "$t/b8/lingers.pid" 2> /dev/null)
   [ -z "$lpid" ] || track "$lpid"
@@ -1253,6 +1253,31 @@ down_waits_until_nothing_of_the_bench_runs_for_three_seconds() {
   sleep 1
   runb down "$t/b8"
   check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+down_keeps_the_folder_when_the_bench_ran_until_the_last_second() {
+  runb up "$t/b9" --here "$t/new/cornercase"
+  check "up: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  mkdir -p "$t/b9/here/bin"
+  printf '#!/bin/sh\nsleep 9.5\n' > "$t/b9/here/bin/brief"
+  chmod 755 "$t/b9/here/bin/brief"
+  "$t/b9/here/bin/brief" > /dev/null 2>&1 &
+  bpid=$!
+  track "$bpid"
+  runb down "$t/b9"
+  rc1=$rc
+  check "exit $rc1, not 1: the folder went after less than 3 s of quiet" [ "$rc1" = 1 ] || return 1
+  check "the folder was removed" [ -d "$t/b9" ] || return 1
+  wait "$bpid" 2> /dev/null
+  runb down "$t/b9"
+  check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+the_helper_names_only_sections_the_note_has() {
+  for h in "What this shell may do" "What needs no press" "Captures"; do
+    check "the helper names '$h' and the note has no such heading" grep -qx "## $h" "$repo/design/manual-check.md" || return 1
+    check "the helper no longer names '$h'" grep -qF "$h" "$repo/tools/manual-check.swift" || return 1
+  done
 }
 
 down_stops_here_then_there_and_removes_the_folder() {
@@ -1430,6 +1455,8 @@ run_test down_refuses_while_a_window_runs
 run_test down_refuses_a_window_started_in_a_bench_folder
 run_test down_takes_no_other_program_in_a_bench_folder_for_a_window
 run_test down_waits_until_nothing_of_the_bench_runs_for_three_seconds
+run_test down_keeps_the_folder_when_the_bench_ran_until_the_last_second
+run_test the_helper_names_only_sections_the_note_has
 run_test down_stops_here_then_there_and_removes_the_folder
 run_test down_keeps_the_folder_while_bench_processes_remain
 run_test down_lists_a_forward_left_running
