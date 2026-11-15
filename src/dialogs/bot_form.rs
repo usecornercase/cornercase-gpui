@@ -181,9 +181,17 @@ impl BotForm {
         let hint = self.agent().map(AgentInfo::model_hint).unwrap_or_default();
         self.effort.clone_from(&before.effort);
         self.access.clone_from(&before.access);
+        self.reset_model(hint, false, cx);
+    }
+
+    fn reset_model(&mut self, hint: String, clear: bool, cx: &mut Context<Self>) {
         self.error = None;
-        self.model
-            .update(cx, |model, cx| model.set_placeholder(if hint.is_empty() { OWN.to_string() } else { hint }, cx));
+        self.model.update(cx, |model, cx| {
+            if clear {
+                model.clear(cx);
+            }
+            model.set_placeholder(if hint.is_empty() { OWN.to_string() } else { hint }, cx);
+        });
         Self::forget_refusal(cx);
     }
 
@@ -198,12 +206,7 @@ impl BotForm {
         let (hint, access) = self.agent().map(|a| (a.model_hint(), a.first_access())).unwrap_or_default();
         self.effort = None;
         self.access = access;
-        self.error = None;
-        self.model.update(cx, |model, cx| {
-            model.clear(cx);
-            model.set_placeholder(if hint.is_empty() { OWN.to_string() } else { hint }, cx);
-        });
-        Self::forget_refusal(cx);
+        self.reset_model(hint, true, cx);
     }
 
     fn forget_refusal(cx: &mut Context<Self>) {

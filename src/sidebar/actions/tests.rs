@@ -49,3 +49,11 @@ fn a_bots_rename_is_gone_once_the_list_drops_the_bot() {
     assert!(!rename_gone(&what, &[bot("ops"), bot("prs")]));
     assert!(!rename_gone(&Renaming::Here(Target::Tab(1)), &[]));
 }
+
+#[test]
+fn a_rename_ended_by_its_bot_leaving_takes_the_keys_only_if_its_field_had_them() {
+    assert_eq!(gone_end(true, true), GoneEnd::GiveKeysBack);
+    assert_eq!(gone_end(true, false), GoneEnd::DropOnly);
+    assert_eq!(gone_end(false, true), GoneEnd::Leave);
+    assert_eq!(gone_end(false, false), GoneEnd::Leave);
+}

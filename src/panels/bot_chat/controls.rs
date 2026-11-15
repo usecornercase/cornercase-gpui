@@ -42,13 +42,15 @@ pub(super) fn header(bot: &Bot, starting: bool) -> impl IntoElement + use<> {
 
 fn menu_button(bot: &Bot) -> impl IntoElement + use<> {
     let id = bot.id.clone();
-    div().flex_none().child(ui::icon_button("bot-menu", "⋯").tooltip(notify::tip(menu_tip(&bot.name))).on_mouse_down(
-        MouseButton::Left,
-        move |e: &MouseDownEvent, _, cx| {
-            cx.stop_propagation();
-            Store::get(cx).update(cx, |s, cx| s.ask_bot_menu(&id, e.position, cx));
-        },
-    ))
+    div().flex_none().child(
+        ui::icon_button("bot-menu", "⋯")
+            .text_color(colours::muted())
+            .tooltip(notify::tip(menu_tip(&bot.name)))
+            .on_mouse_down(MouseButton::Left, move |e: &MouseDownEvent, _, cx| {
+                cx.stop_propagation();
+                Store::get(cx).update(cx, |s, cx| s.ask_bot_menu(&id, e.position, cx));
+            }),
+    )
 }
 
 fn new_conversation(bot: &Bot, starting: bool) -> impl IntoElement + use<> {

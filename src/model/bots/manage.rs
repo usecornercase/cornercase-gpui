@@ -155,6 +155,10 @@ pub(crate) fn create_failed(name: &str, words: &str) -> String {
     format!("Could not create the bot {name}: {words}")
 }
 
+pub(crate) fn remove_failed(name: &str, words: &str) -> String {
+    format!("Could not remove {name}: {words}")
+}
+
 pub(crate) fn save_failed(name: &str, words: &str) -> String {
     format!("Could not save {name}: {words}")
 }

@@ -7,12 +7,16 @@ use super::super::{Busy, Store, ToastKind};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
 use crate::model::bots::{
-    Arrival, Creating, Making, create_failed, id_of, making, rename_args, rename_failed, save_failed,
+    Arrival, Creating, Making, create_failed, id_of, making, remove_failed, rename_args, rename_failed, save_failed,
 };
 use crate::platform::Os;
 
 fn remove_key(id: &str) -> String {
     format!("bot-remove:{id}")
+}
+
+fn rename_key(id: &str) -> String {
+    format!("bot-rename:{id}")
 }
 
 impl Store {
@@ -49,7 +53,7 @@ impl Store {
 
     pub(crate) fn rename_bot(&mut self, id: &str, name: &str, cx: &mut Context<Self>) {
         let was = self.bot_name(id);
-        let busy = Busy::new(format!("bot-rename:{id}"), format!("Renaming {was}…"));
+        let busy = Busy::new(rename_key(id), format!("Renaming {was}…"));
         let then: Then = Box::new(move |this, result, cx| {
             if let Err(error) = result {
                 this.toast(rename_failed(&was, &cli::reason(&error)), ToastKind::Error, cx);
@@ -115,7 +119,7 @@ impl Store {
         let then: Then = Box::new(move |this, result, cx| {
             if let Err(error) = result {
                 this.bots.manage.removal_failed(&bot);
-                this.toast(format!("Could not remove {name}: {}", cli::reason(&error)), ToastKind::Error, cx);
+                this.toast(remove_failed(&name, &cli::reason(&error)), ToastKind::Error, cx);
             }
         });
         self.bot_job(busy, Call::of(&["bot", "remove", id]), then, cx);

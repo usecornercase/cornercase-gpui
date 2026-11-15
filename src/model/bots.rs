@@ -11,7 +11,7 @@ pub(crate) use self::form::{
     new_args, rename_args,
 };
 pub(crate) use self::manage::{
-    Arrival, Creating, Making, Managing, MenuAsk, create_failed, making, rename_failed, save_failed,
+    Arrival, Creating, Making, Managing, MenuAsk, create_failed, making, remove_failed, rename_failed, save_failed,
 };
 pub(crate) use self::talk::{
     Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
@@ -41,6 +41,10 @@ pub(crate) struct Bot {
     pub access: String,
 }
 
+fn set(value: Option<&String>) -> Option<String> {
+    value.filter(|value| !value.is_empty()).cloned()
+}
+
 fn text_or_empty<'de, D: serde::Deserializer<'de>>(found: D) -> Result<String, D::Error> {
     Ok(Value::deserialize(found)?.as_str().map(str::to_string).unwrap_or_default())
 }
@@ -67,19 +71,18 @@ impl Bot {
     }
 
     pub(crate) fn detail(&self) -> String {
-        match self.model.as_deref().filter(|model| !model.is_empty()) {
+        match set(self.model.as_ref()) {
             Some(model) => format!("{} · {model}", self.agent),
             None => self.agent.clone(),
         }
     }
 
     pub(crate) fn facts(&self) -> String {
-        let set = |value: &Option<String>| value.clone().filter(|value| !value.is_empty());
         [
             Some(self.agent.clone()).filter(|agent| !agent.is_empty()),
-            set(&self.model),
-            set(&self.effort),
-            set(&self.account),
+            set(self.model.as_ref()),
+            set(self.effort.as_ref()),
+            set(self.account.as_ref()),
         ]
         .into_iter()
         .flatten()

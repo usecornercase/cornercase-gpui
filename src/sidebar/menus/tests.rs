@@ -1,6 +1,6 @@
 use super::{
-    context_item, group_menu, open_in_item, plugin_items, projects_menu, projects_tip, setup_args, spot_of,
-    workspace_menu,
+    context_item, folder_items, group_menu, open_in_item, plugin_items, projects_menu, projects_tip, setup_args,
+    spot_of, workspace_menu,
 };
 use crate::context_menu::{Entry, read_entries};
 use crate::model::bots::Making;
@@ -9,7 +9,6 @@ use crate::panels::files::open::{Found, Launch, Opener};
 use crate::panels::plugins::{Offers, Spot, listed_offers};
 use crate::sidebar::Target;
 use crate::sidebar::look::parse;
-use crate::sidebar::menus::folder_items;
 
 const PROJECT: &str = r#"{"groups":[{"id":7,"name":"team"}],"projects":[{"id":1,"name":"shop","path":"/home/ana/code/shop","workspaces":[
     {"id":2,"name":"plain","path":"/home/ana/notes"},

@@ -4,7 +4,7 @@ use anyhow::bail;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::Bot;
+use super::{Bot, set};
 use crate::cli::flag;
 
 pub(crate) const CORNERCASE: &str = "cornercase";
@@ -142,10 +142,6 @@ pub(crate) enum Save {
 
 fn edit_head(id: &str) -> Vec<String> {
     ["bot", "edit", id, "--json"].iter().map(ToString::to_string).collect()
-}
-
-fn set(value: Option<&String>) -> Option<String> {
-    value.filter(|value| !value.is_empty()).cloned()
 }
 
 impl Editing {

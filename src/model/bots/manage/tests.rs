@@ -189,4 +189,5 @@ fn a_refusal_names_the_bot_and_gives_cornercases_words() {
     assert_eq!(create_failed("PRs", words), "Could not create the bot PRs: there is a bot called notes already");
     assert_eq!(save_failed("PRs", words), "Could not save PRs: there is a bot called notes already");
     assert_eq!(rename_failed("PRs", words), "Could not rename PRs: there is a bot called notes already");
+    assert_eq!(remove_failed("PRs", words), "Could not remove PRs: there is a bot called notes already");
 }

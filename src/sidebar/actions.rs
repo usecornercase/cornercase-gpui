@@ -118,6 +118,21 @@ pub(super) fn renamed(what: Renaming, initial: &str, text: &str) -> Option<Renam
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum GoneEnd {
+    Leave,
+    GiveKeysBack,
+    DropOnly,
+}
+
+pub(super) fn gone_end(gone: bool, field_has_keys: bool) -> GoneEnd {
+    match (gone, field_has_keys) {
+        (false, _) => GoneEnd::Leave,
+        (true, true) => GoneEnd::GiveKeysBack,
+        (true, false) => GoneEnd::DropOnly,
+    }
+}
+
 pub(crate) fn rename_gone(what: &Renaming, list: &[Bot]) -> bool {
     matches!(what, Renaming::Bot(id) if !list.iter().any(|bot| bot.id == *id))
 }
@@ -205,9 +220,16 @@ impl Root {
     }
 
     pub(crate) fn end_gone_rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let gone = self.side.rename.as_ref().is_some_and(|r| rename_gone(&r.what, &self.store.read(cx).bots.list));
-        if gone {
-            self.finish_rename(false, window, cx);
+        let Some(rename) = self.side.rename.as_ref() else { return };
+        let gone = rename_gone(&rename.what, &self.store.read(cx).bots.list);
+        let focused = rename.field.read(cx).focus_handle(cx).is_focused(window);
+        match gone_end(gone, focused) {
+            GoneEnd::Leave => {}
+            GoneEnd::GiveKeysBack => self.finish_rename(false, window, cx),
+            GoneEnd::DropOnly => {
+                self.side.rename = None;
+                cx.notify();
+            }
         }
     }
 
