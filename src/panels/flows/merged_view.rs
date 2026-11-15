@@ -75,7 +75,7 @@ pub(super) fn free_offered(the_box: impl IntoElement) -> Div {
 }
 
 fn nested(body: Div) -> Div {
-    body.ml(px(ui::TICK_BOX + 8.))
+    body.ml(px(ui::TICK_BOX + ui::TICK_GAP))
 }
 
 #[derive(Clone)]

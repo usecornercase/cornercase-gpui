@@ -57,9 +57,13 @@ fn caret_in(cut: Option<Cut>, len: usize, x: Pixels, closest: usize) -> usize {
     }
 }
 
-pub(crate) fn one_line(text: impl Into<SharedString>) -> OneLine {
+pub(crate) fn flattened(text: impl Into<SharedString>) -> SharedString {
     let text: SharedString = text.into();
-    let text = if text.contains(BREAKS) { text.replace(BREAKS, " ").into() } else { text };
+    if text.contains(BREAKS) { text.replace(BREAKS, " ").into() } else { text }
+}
+
+pub(crate) fn one_line(text: impl Into<SharedString>) -> OneLine {
+    let text = flattened(text);
     OneLine { text, highlights: Vec::new(), on_laid: None, widest: None }
 }
 

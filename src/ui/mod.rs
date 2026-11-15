@@ -29,7 +29,7 @@ use gpui::{
 
 pub(crate) use cued::{Cued, Seat, cued};
 pub(crate) use icons::{Icon, icon};
-pub(crate) use one_line::{OneLine, one_line};
+pub(crate) use one_line::{OneLine, flattened, one_line};
 pub(crate) use separated::{Separator, dotted, facts, separated, wrapped_fact};
 pub(crate) use signs::{
     ROW_ACTION, accent_chip, callout, copy_button, done_line, dot, error_line, field_action, quiet_chip,
@@ -41,11 +41,16 @@ pub(crate) use text_field::{TextField, TextFieldEvent};
 use crate::platform::Os;
 use crate::theme::{colours, radius};
 
+pub(crate) const BUTTON_SIDES: f32 = 12.;
+pub(crate) const BUTTON_FRAME: f32 = 2. * (BUTTON_SIDES + 1.);
+pub(crate) const ICON_GAP: f32 = 6.;
+pub(crate) const TICK_GAP: f32 = 8.;
+
 fn button_base(id: impl Into<ElementId>) -> Stateful<Div> {
     div()
         .id(id)
         .flex_none()
-        .px(px(12.))
+        .px(px(BUTTON_SIDES))
         .py(px(4.))
         .rounded(px(radius::control()))
         .text_size(px(12.))
@@ -131,7 +136,7 @@ pub(crate) fn spinner(id: impl Into<ElementId>, size: f32, colour: Rgba) -> Anim
 }
 
 fn busy_frame(el: Stateful<Div>, tone: Tone) -> Stateful<Div> {
-    filled(el.flex().items_center().gap(px(6.)).text_color(ink(tone)).cursor_default(), tone).child(spinner(
+    filled(el.flex().items_center().gap(px(ICON_GAP)).text_color(ink(tone)).cursor_default(), tone).child(spinner(
         "spinner",
         12.,
         ink(tone),
@@ -148,7 +153,7 @@ fn cut_label(el: Stateful<Div>, label: SharedString) -> Stateful<Div> {
 }
 
 pub(crate) fn cut_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Stateful<Div> {
-    let el = button_base(id).flex().items_center().gap(px(6.)).text_color(ink(Tone::Plain));
+    let el = button_base(id).flex().items_center().gap(px(ICON_GAP)).text_color(ink(Tone::Plain));
     cut_label(pressable(el, Tone::Plain), label.into())
 }
 
@@ -433,7 +438,7 @@ fn box_slot(tick: Div) -> Div {
 }
 
 fn labelled(tick: Div, label: SharedString) -> Div {
-    div().flex().items_start().gap(px(8.)).child(box_slot(tick)).child(div().flex_1().min_w_0().child(label))
+    div().flex().items_start().gap(px(TICK_GAP)).child(box_slot(tick)).child(div().flex_1().min_w_0().child(label))
 }
 
 pub(crate) fn checkbox(id: impl Into<ElementId>, checked: bool, label: impl Into<SharedString>) -> Stateful<Div> {

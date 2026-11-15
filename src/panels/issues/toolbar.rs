@@ -1,7 +1,7 @@
 use gpui::{
     AnyElement, ClickEvent, Context, Div, Focusable as _, InteractiveElement as _, IntoElement, MouseButton,
-    MouseDownEvent, ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, TextRun,
-    Window, div, prelude::FluentBuilder as _, px,
+    MouseDownEvent, ParentElement as _, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window,
+    div, prelude::FluentBuilder as _, px,
 };
 
 use super::data::{SourceInfo, SourceState, Sources, Who, capitalise};
@@ -15,8 +15,8 @@ const GAP: f32 = 8.;
 const FILTER_LEAST: f32 = 160.;
 const TEXT: f32 = 12.;
 const CHEVRON: f32 = 12.;
-const PEOPLE_FRAME: f32 = 26. + 6. + CHEVRON;
-const CLOSED_FRAME: f32 = ui::TICK_BOX + 8.;
+const PEOPLE_FRAME: f32 = ui::BUTTON_FRAME + ui::ICON_GAP + CHEVRON;
+const CLOSED_FRAME: f32 = ui::TICK_BOX + ui::TICK_GAP;
 const CLOSED: &str = "Include closed";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,16 +50,9 @@ fn who_label(field: &str, who: &Who) -> String {
 }
 
 fn text_width(text: &str, window: &Window) -> f32 {
-    let style = window.text_style();
-    let run = TextRun {
-        len: text.len(),
-        font: style.font(),
-        color: style.color,
-        background_color: None,
-        underline: None,
-        strikethrough: None,
-    };
-    let line = window.text_system().shape_line(SharedString::from(text.to_string()), px(TEXT), &[run], None);
+    let text = ui::flattened(text.to_string());
+    let run = window.text_style().to_run(text.len());
+    let line = window.text_system().shape_line(text, px(TEXT), &[run], None);
     f32::from(line.width).ceil()
 }
 
@@ -202,7 +195,7 @@ impl IssuesPanel {
         let button = if who.is_person() {
             ui::cut_button(id, label).text_color(colour).min_w(px(PEOPLE_FRAME + least))
         } else {
-            ui::button_coloured(id, label, colour).flex().items_center().gap(px(6.))
+            ui::button_coloured(id, label, colour).flex().items_center().gap(px(ui::ICON_GAP))
         };
         button
             .child(ui::icon(Icon::ChevronDown, CHEVRON).text_color(colour))
