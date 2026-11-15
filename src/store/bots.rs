@@ -1,9 +1,11 @@
+use std::time::Instant;
+
 use gpui::Context;
 use serde_json::Value;
 
 use super::{Busy, Store, ToastKind, args, run_job};
 use crate::cli::{self, Feature};
-use crate::model::bots::{self, BotEvent, CatchUp, Chat, Heard, Offer, Read};
+use crate::model::bots::{self, Answer, BotEvent, CatchUp, Chat, Heard, Offer, Read, Told};
 use crate::model::place::Moved;
 use crate::platform::Os;
 
@@ -23,6 +25,7 @@ impl Store {
         let shown = self.shown_bot().and_then(|id| self.bots.find(id)).map(|bot| (bot.id.clone(), bot.name.clone()));
         let draft = shown.as_ref().map(|(id, _)| self.bots.drafts.text(id).to_string()).unwrap_or_default();
         let asked = shown.as_ref().is_some_and(|(id, _)| self.bots.manage.asked(id));
+        let before = self.bots.unread_of();
         let moved = self.bots.take_app(app);
         self.place(Moved::Listed(moved.listed.clone()));
         self.close_dialog_if_gone(&moved.listed, cx);
@@ -35,8 +38,56 @@ impl Store {
             _ if moved.boot_changed && self.bots.chat.is_some() => self.read_chat(None, cx),
             _ => self.heal_chat(&moved.settled, cx),
         }
+        self.answers_counted(&before, moved.boot_changed, cx);
         self.mind_seen(cx);
         self.follow_made(cx);
+    }
+
+    fn answers_counted(&mut self, before: &[(String, usize)], boot: bool, cx: &mut Context<Self>) {
+        if boot {
+            self.bots.answers.forget();
+            return;
+        }
+        let now = Instant::now();
+        let mut due = Vec::new();
+        for (id, was) in before {
+            match self.bots.find(id).map(|bot| bot.unread) {
+                None => self.drop_bot_toasts(id, cx),
+                Some(is) => due.extend(self.bots.answers.counted(id, (*was, is), now)),
+            }
+        }
+        self.tell_answers(&due, cx);
+    }
+
+    fn answer_heard(&mut self, bot: &str, line: &bots::Line, run: bool, cx: &mut Context<Self>) {
+        let Some(answer) = bots::answer_of(bot, line, run) else { return };
+        if let Some(due) = self.bots.answers.heard(answer, Instant::now()) {
+            self.tell_answers(&[due], cx);
+        }
+    }
+
+    fn tell_answers(&mut self, answers: &[Answer], cx: &mut Context<Self>) {
+        if answers.is_empty() || self.bots_offer() != Offer::Rows {
+            return;
+        }
+        let told: Vec<Told> = answers
+            .iter()
+            .filter(|answer| bots::tells(answer, self.shown_bot(), self.bots.active))
+            .map(|answer| {
+                let name = self.bots.find(&answer.bot).map_or_else(|| answer.bot.clone(), |bot| bot.name.clone());
+                Told::new(answer, &name)
+            })
+            .collect();
+        self.bots.to_tell.extend(told);
+        cx.notify();
+    }
+
+    pub(crate) fn go_to_bot(&mut self, id: &str, name: &str, cx: &mut Context<Self>) {
+        if self.bots.find(id).is_some() {
+            self.show_bot(id, cx);
+        } else {
+            self.toast(bots::gone(name), ToastKind::Info, cx);
+        }
     }
 
     fn heal_chat(&mut self, settled: &[String], cx: &mut Context<Self>) {
@@ -49,6 +100,7 @@ impl Store {
         if !self.bots.can_show(id, &self.bots_offer()) {
             return;
         }
+        self.bots.last_shown = Some(id.to_string());
         if self.shown_bot() != Some(id) {
             self.forget_awaited();
             self.bots.forget_seen();
@@ -58,14 +110,20 @@ impl Store {
             self.read_chat(None, cx);
         }
         self.catch_up_chat(cx);
-        self.give_keys_back(cx);
+        self.file_full_screen = false;
+        if bots::keys_go_to_chat(self.dialog.is_some(), self.sheet.is_some()) {
+            self.ask_for_the_terminal(cx);
+        }
         self.mind_seen(cx);
         cx.notify();
     }
 
     pub(crate) fn bot_heard(&mut self, event: &BotEvent, cx: &mut Context<Self>) {
         match event.heard() {
-            Heard::Line(bot, line) => self.line_heard(&bot, line, cx),
+            Heard::Line(bot, line) => {
+                self.answer_heard(&bot, &line, event.of_run(), cx);
+                self.line_heard(&bot, line, cx);
+            }
             Heard::State(bot, thinking) => {
                 if self.bots.state_heard(&bot, thinking) {
                     cx.notify();
@@ -92,6 +150,8 @@ impl Store {
         let shown = self.shown_bot() == Some(bot);
         let name = self.bots.find(bot).map_or_else(|| bot.to_string(), |found| found.name.clone());
         let draft = self.bots.drafts.take(bot).unwrap_or_default();
+        self.bots.answers.forget_bot(bot);
+        self.drop_bot_toasts(bot, cx);
         self.place(Moved::Removed(bot.to_string()));
         if self.bots.manage.told(bot, shown) {
             self.toast_with(format!("{name} was removed"), ToastKind::Info, talk::copy_action(&draft), cx);

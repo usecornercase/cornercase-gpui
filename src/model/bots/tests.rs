@@ -499,3 +499,110 @@ fn a_change_of_folder_or_access_alone_draws_nothing_again() {
     bots.take_app(&with("/b", "full"));
     assert_eq!(bots.revision(), revision);
 }
+
+fn listed(unread: &[(&str, usize)]) -> Vec<Bot> {
+    unread.iter().map(|(id, unread)| Bot { id: (*id).to_string(), unread: *unread, ..Bot::default() }).collect()
+}
+
+fn rows() -> (Offer, Option<Making>) {
+    (Offer::Rows, Some(Making::Offered))
+}
+
+fn goes(bots: &[Bot], open: Option<&str>, last: Option<&str>) -> KeyGoes {
+    let (offer, making) = rows();
+    key_goes((&offer, making.as_ref()), bots, (open, last))
+}
+
+fn show(id: &str) -> KeyGoes {
+    KeyGoes::Show(id.to_string())
+}
+
+#[test]
+fn a_line_of_a_routines_run_is_a_run() {
+    let run = |line: Value| BotEvent { bot: "prs".into(), line: Some(line), ..BotEvent::default() };
+    assert!(run(json!({"id": 1, "kind": "bot", "routine": "PRs"})).of_run());
+    assert!(run(json!({"id": 1, "kind": "bot", "routine": {"label": "x"}})).of_run());
+    assert!(!run(json!({"id": 1, "kind": "bot", "routine": null})).of_run());
+    assert!(!run(json!({"id": 1, "kind": "bot"})).of_run());
+    assert!(!BotEvent { bot: "prs".into(), ..BotEvent::default() }.of_run());
+}
+
+#[test]
+fn the_key_goes_to_a_bot_with_an_unread_answer() {
+    assert_eq!(goes(&listed(&[("prs", 0), ("notes", 1), ("ops", 0)]), None, None), show("notes"));
+}
+
+#[test]
+fn with_several_unread_the_key_goes_to_the_next_after_the_shown_chat_and_wraps() {
+    let list = listed(&[("prs", 1), ("notes", 1), ("ops", 1)]);
+    assert_eq!(goes(&list, Some("notes"), None), show("ops"));
+    assert_eq!(goes(&list, Some("ops"), None), show("prs"));
+    assert_eq!(goes(&list, None, None), show("prs"));
+}
+
+#[test]
+fn the_shown_chat_is_not_the_unread_one_the_key_goes_to() {
+    let list = listed(&[("prs", 2), ("notes", 0), ("ops", 1)]);
+    assert_eq!(goes(&list, Some("prs"), None), show("ops"));
+}
+
+#[test]
+fn with_none_unread_and_no_chat_the_key_goes_to_the_bot_shown_last() {
+    assert_eq!(goes(&listed(&[("prs", 0), ("notes", 0), ("ops", 0)]), None, Some("notes")), show("notes"));
+}
+
+#[test]
+fn with_none_unread_and_nothing_shown_before_the_key_goes_to_the_first_bot() {
+    assert_eq!(goes(&listed(&[("prs", 0), ("notes", 0)]), None, None), show("prs"));
+}
+
+#[test]
+fn a_bot_shown_last_that_left_the_list_gives_way_to_the_first() {
+    assert_eq!(goes(&listed(&[("prs", 0), ("notes", 0)]), None, Some("gone")), show("prs"));
+}
+
+#[test]
+fn while_a_chat_shows_with_none_unread_the_key_goes_to_the_next_bot_and_wraps() {
+    let list = listed(&[("prs", 0), ("notes", 0), ("ops", 0)]);
+    assert_eq!(goes(&list, Some("prs"), Some("prs")), show("notes"));
+    assert_eq!(goes(&list, Some("ops"), Some("ops")), show("prs"));
+}
+
+#[test]
+fn with_one_bot_the_key_stays_on_it() {
+    assert_eq!(goes(&listed(&[("prs", 0)]), Some("prs"), Some("prs")), show("prs"));
+}
+
+#[test]
+fn with_no_bot_the_key_says_how_to_make_one() {
+    let (offer, making) = (Offer::Hidden, Some(Making::Offered));
+    assert_eq!(key_goes((&offer, making.as_ref()), &[], (None, None)), KeyGoes::NoBot);
+    assert_eq!(no_bot_words("⌘E"), "No bot yet: ⌘E makes one");
+}
+
+#[test]
+fn below_the_gate_the_key_says_the_sections_sentence() {
+    let offer = Offer::Lacks("Showing your bots needs cornercase 0.13.77.".into());
+    let list = listed(&[("prs", 1)]);
+    let said = key_goes((&offer, Some(&Making::Here("x".into()))), &list, (None, None));
+    assert_eq!(said, KeyGoes::Say("Showing your bots needs cornercase 0.13.77.".into()));
+}
+
+#[test]
+fn on_a_server_without_bots_the_key_says_new_bots_sentence() {
+    let offer = Offer::Hidden;
+    let said = key_goes((&offer, Some(&Making::Server("Making a bot needs 0.13.77.".into()))), &[], (None, None));
+    assert_eq!(said, KeyGoes::Say("Making a bot needs 0.13.77.".into()));
+}
+
+#[test]
+fn without_a_session_the_key_does_nothing() {
+    assert_eq!(key_goes((&Offer::Hidden, None), &[], (None, None)), KeyGoes::Nothing);
+}
+
+#[test]
+fn the_chat_takes_the_keys_only_when_no_dialog_or_sheet_has_them() {
+    assert!(keys_go_to_chat(false, false));
+    assert!(!keys_go_to_chat(true, false));
+    assert!(!keys_go_to_chat(false, true));
+}

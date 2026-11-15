@@ -27,7 +27,6 @@ fn a_shifted_key_needs_shift() {
 
 #[test]
 fn an_unshifted_key_also_answers_with_shift_when_nothing_else_does() {
-    assert_eq!(command("i", true), Some(Command::Panel(PanelKind::Issues)));
     assert_eq!(command("=", true), Some(Command::ZoomIn));
     assert_eq!(command("?", true), Some(Command::Shortcuts));
     assert_eq!(command("k", false), None);
@@ -297,7 +296,6 @@ fn on_linux_other_keys_are_left_to_the_program() {
     assert_eq!(on_linux("b", ALT), None);
     assert_eq!(on_linux("t", CTRL_ALT), None);
     assert_eq!(on_linux("z", CTRL_SHIFT), None);
-    assert_eq!(on_linux("i", CTRL_ALT_SHIFT), None);
     assert_eq!(on_linux("v", SUPER), None);
     assert_eq!(on_linux("1", SUPER), None);
     assert_eq!(chord(&pressed("t", CTRL_SHIFT), true, Os::Mac, false), None);
@@ -557,6 +555,7 @@ fn chat_table() -> Vec<(Command, InChat)> {
         (Command::StartAgent, InChat::Acts),
         (Command::OpenProject, InChat::Acts),
         (Command::NewBot, InChat::Acts),
+        (Command::Bots, InChat::Acts),
         (Command::Connect, InChat::Acts),
         (Command::PullRequest, InChat::Acts),
         (Command::SplitRight, InChat::Rests),
@@ -630,4 +629,14 @@ fn a_paste_and_every_command_that_rests_is_swallowed_while_a_chat_shows() {
         assert_eq!(swallowed_in_chat(shortcut.command), rests, "{:?}", shortcut.command);
     }
     assert!(!swallowed_in_chat(Command::FindFile) && !swallowed_in_chat(Command::NewTab));
+}
+
+#[test]
+fn the_bots_key_is_shift_command_i_and_ctrl_alt_shift_i_on_linux_and_windows() {
+    assert_eq!(command("i", true), Some(Command::Bots));
+    assert_eq!(keys_of(Command::Bots, Os::Mac).as_deref(), Some("⇧⌘I"));
+    assert_eq!(keys_of(Command::Bots, Os::Linux).as_deref(), Some("Ctrl+Alt+Shift+I"));
+    assert_eq!(keys_of(Command::Bots, Os::Windows).as_deref(), Some("Ctrl+Alt+Shift+I"));
+    assert_eq!(on_linux("i", CTRL_ALT_SHIFT), Some(Command::Bots));
+    assert_eq!(on_linux("i", CTRL_SHIFT), Some(Command::Panel(PanelKind::Issues)));
 }

@@ -1,5 +1,6 @@
 use super::feed::{Message, Notice};
 use crate::model::Session;
+use crate::model::bots::Told;
 use crate::panels::PanelKind;
 use crate::store::{Busy, NoticeThere, ToastAction, ToastGo, ToastKind, args, setup_key};
 
@@ -69,6 +70,7 @@ pub(super) struct Telling {
     pub kind: ToastKind,
     pub button: ToastAction,
     pub headline: Option<String>,
+    pub body: Option<String>,
     pub sound: Option<String>,
 }
 
@@ -79,6 +81,7 @@ impl Telling {
             kind: notice.toast_kind(),
             button: Some((GO.to_string(), notice.go(there))),
             headline: Some(notice.headline()),
+            body: None,
             sound: notice.sound.clone(),
         }
     }
@@ -90,6 +93,18 @@ impl Telling {
             kind: kind.toast(message.failed),
             button: button(message, kind, session),
             headline: kind.headline().map(str::to_string),
+            body: None,
+            sound: None,
+        }
+    }
+
+    pub(super) fn of_bot(told: &Told) -> Telling {
+        Telling {
+            text: told.text(),
+            kind: if told.failed { ToastKind::NeedsYou } else { ToastKind::Done },
+            button: Some((SHOW.to_string(), ToastGo::Bot(told.bot.clone(), told.name.clone()))),
+            headline: Some(told.headline()),
+            body: told.body(),
             sound: None,
         }
     }

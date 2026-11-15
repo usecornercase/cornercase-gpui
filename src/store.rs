@@ -116,6 +116,7 @@ pub(crate) enum ToastGo {
     Job(Busy, Vec<String>),
     Open(PanelKind),
     Copy(Clip),
+    Bot(String, String),
 }
 
 struct GlobalStore(Entity<Store>);
@@ -368,6 +369,7 @@ impl Store {
             ToastGo::Job(busy, args) => self.run_aside_once(busy.clone(), args.clone(), cx),
             ToastGo::Open(kind) => self.open(*kind, cx),
             ToastGo::Copy(clip) => self.copy(clip, cx),
+            ToastGo::Bot(id, name) => self.go_to_bot(id, name, cx),
             ToastGo::Update(updating) => {
                 self.asks.open_update = Some(*updating);
                 cx.notify();

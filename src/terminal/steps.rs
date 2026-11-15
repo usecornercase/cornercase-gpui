@@ -5,8 +5,10 @@ use crate::app::Root;
 use crate::app::machine::MachineTab;
 use crate::app::machine::acts::MARKING;
 use crate::cli;
-use crate::keymap::Command;
+use crate::keymap::{Command, keys_of};
+use crate::model::bots::{self, KeyGoes};
 use crate::model::{PaneInfo, Session};
+use crate::platform::Os;
 use crate::sidebar::cmd;
 use crate::store::{self, Store, ToastKind};
 
@@ -53,6 +55,7 @@ impl Root {
             Command::NextProject => self.step_project(1),
             Command::PreviousProject => self.step_project(-1),
             Command::AgentNeedingYou => self.go_to_agent_needing_you(cx),
+            Command::Bots => self.go_to_a_bot(cx),
             Command::Mark => self.mark_active_pane(cx),
             _ => {}
         }
@@ -77,6 +80,23 @@ impl Root {
         match self.session.as_ref().and_then(|s| s.agent_needing_you(here)) {
             Some(pane) => self.focus_item("pane", pane),
             None => self.tell(NO_AGENT_WAITS, cx),
+        }
+    }
+
+    fn go_to_a_bot(&mut self, cx: &mut Context<Self>) {
+        let goes = {
+            let s = self.store.read(cx);
+            let (offer, making) = (s.bots_offer(), s.making());
+            bots::key_goes((&offer, making.as_ref()), &s.bots.list, (s.shown_bot(), s.bots.last_shown.as_deref()))
+        };
+        match goes {
+            KeyGoes::Show(id) => self.store.update(cx, |s, cx| s.show_bot(&id, cx)),
+            KeyGoes::Say(words) => self.tell(&words, cx),
+            KeyGoes::NoBot => {
+                let keys = keys_of(Command::NewBot, Os::CURRENT).unwrap_or_default();
+                self.tell(&bots::no_bot_words(&keys), cx);
+            }
+            KeyGoes::Nothing => {}
         }
     }
 

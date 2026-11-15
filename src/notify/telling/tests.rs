@@ -321,3 +321,43 @@ fn a_merged_run_that_freed_is_told_as_done_with_its_sentence_as_it_comes() {
     assert_eq!(telling.text, "pull request merged in fa258: 5 agents closed, 100 KB of builds freed");
     assert!(!message.failed);
 }
+
+fn told(failed: bool, first: &str) -> Told {
+    Told { bot: "n1".into(), name: "notes".into(), failed, first: first.into() }
+}
+
+#[test]
+fn an_answer_is_a_done_toast_with_show_and_no_sound() {
+    let telling = Telling::of_bot(&told(false, "Answer"));
+    assert_eq!((telling.kind, telling.text.as_str(), telling.sound), (ToastKind::Done, "notes: Answer", None));
+    assert_eq!(telling.button.map(|(label, _)| label).as_deref(), Some(SHOW));
+}
+
+#[test]
+fn an_error_is_a_needs_you_toast_with_show() {
+    let telling = Telling::of_bot(&told(true, "Not logged in"));
+    assert_eq!((telling.kind, telling.text.as_str()), (ToastKind::NeedsYou, "notes could not answer: Not logged in"));
+    assert!(telling.button.is_some());
+}
+
+#[test]
+fn shows_button_names_the_bot_by_its_id_and_keeps_its_name() {
+    let button = Telling::of_bot(&told(false, "Answer")).button;
+    assert_eq!(button.map(|(_, go)| go), Some(ToastGo::Bot("n1".into(), "notes".into())));
+}
+
+#[test]
+fn an_answers_notification_has_its_headline_and_its_first_line_as_body() {
+    let telling = Telling::of_bot(&told(false, "Answer"));
+    assert_eq!((telling.headline.as_deref(), telling.body.as_deref()), (Some("notes answered"), Some("Answer")));
+    assert_eq!(Telling::of_bot(&told(true, "")).body, None);
+}
+
+#[test]
+fn an_answer_posts_only_behind_with_desktop_notifications_on() {
+    let telling = Telling::of_bot(&told(false, "Answer"));
+    assert!(telling.posts(true, true));
+    assert!(!telling.posts(false, true));
+    assert!(!telling.posts(true, false));
+    assert!(!telling.needs_config(false));
+}
