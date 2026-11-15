@@ -391,8 +391,10 @@ func shortcutKey(_ types: (Int, UInt32) -> Typed, _ wanted: String, command: Boo
     return nil
 }
 
-func typingKey(_ types: (Int, UInt32) -> Typed, _ wanted: String, dead: Bool = false) -> (code: Int, state: UInt32)? {
-    for state in [0, shiftState, optionState, shiftState | optionState] {
+func typingKey(
+    _ types: (Int, UInt32) -> Typed, _ wanted: String, dead: Bool = false, states: [UInt32] = [0, shiftState, optionState, shiftState | optionState]
+) -> (code: Int, state: UInt32)? {
+    for state in states {
         for code in mainBlock {
             let typed = types(code, state)
             if typed.text == wanted && typed.dead == dead { return (code, state) }
@@ -410,7 +412,7 @@ func stateFlags(_ state: UInt32) -> CGEventFlags {
 
 func unknownKey(_ name: String) -> Failure {
     var hint = ""
-    if let stands = characterNames.first(where: { $0.value == Character(name) && name.count == 1 })?.key {
+    if let stands = characterNames.first(where: { name.count == 1 && $0.value == Character(name) })?.key {
         hint = "its name is \(stands); "
     } else if name == "quote" {
         hint = "quote is now us-quote, the key where a US keyboard has ' (a dead key on Spanish ISO); "
@@ -422,16 +424,18 @@ func unknownModifier(_ word: String) -> Failure {
     Failure(message: "unknown modifier \(word): the modifiers are cmd, shift, alt and ctrl", status: 2)
 }
 
-func shiftRefusal(_ name: String) -> Failure {
-    Failure(
-        message: "shift with \(name) is another character: the window reads shift and a digit or a symbol as the character they type, so name the character you want: nothing was posted",
-        status: 2)
+func nameOf(_ reading: String) -> String? {
+    guard reading.count == 1 else { return nil }
+    return characterNames.first(where: { $0.value == Character(reading) })?.key
 }
 
-func altWithoutCommandRefusal(_ name: String) -> Failure {
-    Failure(
-        message: "alt with \(name) needs cmd or ctrl: without them the name is the character typed, and `text` types characters: nothing was posted",
-        status: 2)
+func shiftRefusal(_ name: String, _ character: String, _ reading: String?) -> Failure {
+    let head = "shift with \(name) is another character: the window reads shift and \(character)"
+    guard let reading else {
+        return Failure(message: head + " as the character they type: nothing was posted", status: 2)
+    }
+    let tail = nameOf(reading).map { "so name it: \($0)" } ?? "which no name posts and no shortcut takes"
+    return Failure(message: "\(head) as \(reading), \(tail): nothing was posted", status: 2)
 }
 
 func noLayoutRefusal(_ name: String) -> Failure {
@@ -450,12 +454,16 @@ func altOnlyRefusal(_ name: String, _ layout: String, _ reading: String) -> Fail
         status: 1)
 }
 
-func deadRefusal(_ name: String, _ layout: String) -> Failure {
-    Failure(message: "\(name) is behind a dead key on \(layout): `text` types it, nothing was posted", status: 1)
+func advice(_ shortcut: Bool) -> String {
+    shortcut ? "this shortcut cannot reach the window on this layout" : "`text` types it"
 }
 
-func missingRefusal(_ name: String, _ layout: String) -> Failure {
-    Failure(message: "no key of \(layout) types \(name): `text` types it, nothing was posted", status: 1)
+func deadRefusal(_ name: String, _ layout: String, shortcut: Bool = false) -> Failure {
+    Failure(message: "\(name) is behind a dead key on \(layout): \(advice(shortcut)), nothing was posted", status: 1)
+}
+
+func missingRefusal(_ name: String, _ layout: String, shortcut: Bool = false) -> Failure {
+    Failure(message: "no key of \(layout) types \(name): \(advice(shortcut)), nothing was posted", status: 1)
 }
 
 func noShortcutRefusal(_ name: String, _ layout: String) -> Failure {
@@ -466,9 +474,10 @@ func whyNoShortcut(_ types: (Int, UInt32) -> Typed, _ wanted: String, _ name: St
     if let typed = typingKey(types, wanted) {
         guard typed.state & optionState != 0 else { return noShortcutRefusal(name, layout) }
         let read = windowKey(types, code: typed.code, command: command, shift: typed.state & shiftState != 0)
-        return altOnlyRefusal(name, layout, read.key)
+        return altOnlyRefusal(name, layout, "\(command ? "cmd" : "ctrl")-\(read.key)")
     }
-    return typingKey(types, wanted, dead: true) == nil ? missingRefusal(name, layout) : deadRefusal(name, layout)
+    return typingKey(types, wanted, dead: true) == nil
+        ? missingRefusal(name, layout, shortcut: true) : deadRefusal(name, layout, shortcut: true)
 }
 
 func resolveCharacter(_ name: String, _ wanted: Character, _ asked: CGEventFlags, layout: Layout) throws -> Posting {
@@ -485,10 +494,18 @@ func resolveCharacter(_ name: String, _ wanted: Character, _ asked: CGEventFlags
         return Posting(code: found.code, flags: asked.union(found.shift ? .maskShift : []))
     }
     let typedText = shift ? String(wanted).uppercased() : String(wanted)
-    guard let found = typingKey(types, typedText) else {
+    let states = asked.contains(.maskAlternate) ? [0, shiftState] : [0, shiftState, optionState, shiftState | optionState]
+    guard let found = typingKey(types, typedText, states: states) else {
         throw typingKey(types, typedText, dead: true) == nil ? missingRefusal(name, id) : deadRefusal(name, id)
     }
     return Posting(code: found.code, flags: asked.union(stateFlags(found.state)))
+}
+
+func shiftReading(_ layout: Layout, _ wanted: Character, command: Bool) -> String? {
+    guard let types = layout.types else { return nil }
+    let text = String(wanted)
+    guard let code = shortcutKey(types, text, command: command, shift: false)?.code ?? typingKey(types, text)?.code else { return nil }
+    return windowKey(types, code: code, command: command, shift: true).key
 }
 
 func resolve(_ name: String, _ held: [String], layout: () -> Layout) throws -> Posting {
@@ -500,9 +517,11 @@ func resolve(_ name: String, _ held: [String], layout: () -> Layout) throws -> P
     if let code = namedKeys[name] { return Posting(code: code, flags: asked) }
     guard let wanted = characterNames[name] else { throw unknownKey(name) }
     let shortcut = asked.contains(.maskCommand) || asked.contains(.maskControl)
-    if asked.contains(.maskShift) && !wanted.isLetter { throw shiftRefusal(name) }
-    if asked.contains(.maskAlternate) && !shortcut { throw altWithoutCommandRefusal(name) }
-    return try resolveCharacter(name, wanted, asked, layout: layout())
+    let found = layout()
+    if asked.contains(.maskShift) && !wanted.isLetter {
+        throw shiftRefusal(name, String(wanted), shortcut ? shiftReading(found, wanted, command: asked.contains(.maskCommand)) : nil)
+    }
+    return try resolveCharacter(name, wanted, asked, layout: found)
 }
 
 func translate(_ data: Data, _ code: Int, _ state: UInt32) -> Typed {
@@ -541,8 +560,7 @@ func layoutInUse() -> Layout {
     }
 }
 
-func key(_ pid: pid_t, _ name: String, _ held: [String]) throws {
-    let posting = try resolve(name, held, layout: layoutInUse)
+func postKey(_ pid: pid_t, _ posting: Posting) throws {
     try allowed()
     for down in [true, false] {
         let event = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(posting.code), keyDown: down)
@@ -552,14 +570,24 @@ func key(_ pid: pid_t, _ name: String, _ held: [String]) throws {
     }
 }
 
-func hold(_ pid: pid_t, _ name: String, _ duration: String?) throws {
+func key(_ pid: pid_t, _ name: String, _ held: [String]) throws {
+    try postKey(pid, try resolve(name, held, layout: layoutInUse))
+}
+
+func holdRefusal(_ word: String) -> Failure {
+    Failure(message: "hold takes no modifiers (\(word)): hold PID KEY [MS]; key posts a key with modifiers", status: 2)
+}
+
+func hold(_ pid: pid_t, _ name: String, _ rest: [String]) throws {
+    if let word = rest.first(where: { modifiers[$0] != nil }) { throw holdRefusal(word) }
+    guard rest.count <= 1 else { throw Failure(message: usage, status: 2) }
     let posting = try resolve(name, [], layout: layoutInUse)
-    let ms = try duration.map { Int(try wholeNumber($0, "ms")) } ?? 800
+    let ms = try rest.first.map { Int(try wholeNumber($0, "ms")) } ?? 800
     guard (0...10_000).contains(ms) else { throw Failure(message: "ms must be 0 to 10000", status: 2) }
     try allowed()
     func post(_ down: Bool, repeating: Bool) {
         let event = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(posting.code), keyDown: down)
-        event?.flags = posting.flags
+        if !posting.flags.isEmpty { event?.flags = posting.flags }
         if repeating { event?.setIntegerValueField(.keyboardEventAutorepeat, value: 1) }
         event?.postToPid(pid)
     }
@@ -589,6 +617,7 @@ func restore(_ items: [[(NSPasteboard.PasteboardType, Data)]], to board: NSPaste
 
 func paste(_ pid: pid_t, _ typed: String) throws {
     try allowed()
+    let posting = try resolve("v", ["cmd"], layout: layoutInUse)
     let board = NSPasteboard.general
     let kept = saved(board)
     let held = (board.pasteboardItems ?? []).map { $0.types.count }
@@ -598,7 +627,7 @@ func paste(_ pid: pid_t, _ typed: String) throws {
     board.clearContents()
     board.setString(typed, forType: .string)
     board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
-    try key(pid, "v", ["cmd"])
+    try postKey(pid, posting)
     usleep(300_000)
     try restore(kept, to: board)
     let back = saved(board)
@@ -795,9 +824,13 @@ enum SelfTest {
         })
     }
 
-    static let letterRows: [Int: [UInt32: String]] = [
-        0: [0: "a", 2: "A"], 8: [0: "c", 2: "C"], 9: [0: "v", 2: "V"], 12: [0: "q", 2: "Q"], 40: [0: "k", 2: "K"],
+    static let qwerty: [String: Int] = [
+        "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14,
+        "r": 15, "y": 16, "t": 17, "o": 31, "u": 32, "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, "n": 45, "m": 46,
     ]
+
+    static let letterRows: [Int: [UInt32: String]] = Dictionary(
+        uniqueKeysWithValues: qwerty.map { ($0.value, [0: $0.key, 2: $0.key.uppercased()]) })
 
     static let digitRows: [Int: [UInt32: String]] = [
         18: [0: "1", 2: "!"], 19: [0: "2", 2: "@"], 20: [0: "3", 2: "#"], 21: [0: "4", 2: "$"], 23: [0: "5", 2: "%"],
@@ -824,6 +857,10 @@ enum SelfTest {
     ])
 
     static let cyrillic = madeLayout("test.Russian", [0: [0: "ф", 2: "Ф", 1: "a", 3: "A"], 8: [0: "с", 2: "С", 1: "c", 3: "C"]])
+
+    static let ruLike = madeLayout("test.Ru-Like", [44: [0: ".", 2: ",", 1: "/", 3: "?"]])
+
+    static let orderLike = madeLayout("test.Order", [20: [0: "a", 2: "x"], 5: [0: "b", 8: "x"]])
 
     static let plusTwice = madeLayout("test.Plus", [30: [0: "+"], 24: [0: "=", 2: "+"]])
 
@@ -868,8 +905,8 @@ enum SelfTest {
                 return expect(windowKey(types, code: 26, command: true, shift: true), Reading(key: "/", shift: false, dead: false))
             }),
             ("a_character_needing_alt_is_refused_with_cmd", {
-                let got = refused("leftbracket", ["cmd"], spanish)
-                return expect(got.hasPrefix("1: ") && got.contains("only with alt") && got.contains("as `"), true)
+                expect(refused("leftbracket", ["cmd"], spanish),
+                    "1: leftbracket is typed only with alt on test.Spanish-ISO, and with cmd or ctrl held the window reads that key without alt, as cmd-`: this shortcut cannot reach the window on this layout, nothing was posted")
             }),
             ("a_character_needing_alt_is_typed_with_it", { expect(posted("leftbracket", [], spanish), "33 A") }),
             ("a_character_behind_a_dead_key_is_refused", {
@@ -889,11 +926,65 @@ enum SelfTest {
                 expect(posted("c", ["ctrl"], cyrillic), "8 K") ?? expect(refused("a", [], cyrillic).hasPrefix("1: "), true)
             }),
             ("shift_stays_with_a_letter", { expect(posted("k", ["cmd", "shift"], us), "40 SC") }),
-            ("shift_with_a_symbol_is_refused", {
-                let got = refused("leftbracket", ["cmd", "shift"], us)
-                return expect(got.hasPrefix("2: shift with leftbracket is another character"), true)
+            ("shift_with_a_symbol_without_a_name_is_refused_with_its_reading", {
+                expect(refused("leftbracket", ["cmd", "shift"], us),
+                    "2: shift with leftbracket is another character: the window reads shift and [ as {, which no name posts and no shortcut takes: nothing was posted")
             }),
-            ("alt_without_cmd_or_ctrl_is_refused", { expect(refused("a", ["alt"], us).hasPrefix("2: alt with a needs cmd or ctrl"), true) }),
+            ("shift_with_a_symbol_that_has_a_name_says_it", {
+                expect(refused("slash", ["cmd", "shift"], us),
+                    "2: shift with slash is another character: the window reads shift and / as ?, so name it: question: nothing was posted")
+            }),
+            ("shift_with_a_symbol_and_no_cmd_is_refused_without_a_reading", {
+                expect(refused("slash", ["shift"], us),
+                    "2: shift with slash is another character: the window reads shift and / as the character they type: nothing was posted")
+            }),
+            ("alt_with_a_character_is_posted_on_the_key_that_types_it_plain", {
+                expect([posted("2", ["alt"], spanish), refused("leftbracket", ["alt"], spanish).prefix(2).description], ["19 A", "1:"])
+            }),
+            ("the_shifted_command_table_decides_when_it_differs", {
+                expect([posted("question", ["cmd"], ruLike), posted("slash", ["cmd"], ruLike)], ["44 SC", "44 C"])
+            }),
+            ("the_typing_search_tries_no_modifier_then_shift_before_alt_and_states_before_codes", {
+                expect([posted("plus", [], plusTwice), posted("x", [], orderLike)], ["30 ", "20 S"])
+            }),
+            ("every_character_name_posts_its_key_on_a_us_layout", {
+                var want: [String] = []
+                var got: [String] = []
+                for (name, code) in qwerty { want.append("\(code) C"); got.append(posted(name, ["cmd"], us)) }
+                for (index, name) in digits.enumerated() {
+                    want.append("\([29, 18, 19, 20, 21, 23, 22, 26, 28, 25][index]) C")
+                    got.append(posted(name, ["cmd"], us))
+                }
+                return expect(got, want)
+            }),
+            ("every_named_key_posts_its_position", {
+                let want = ["return": 36, "escape": 53, "tab": 48, "space": 49, "delete": 51, "left": 123, "right": 124, "up": 126,
+                    "down": 125, "pageup": 116, "pagedown": 121, "home": 115, "end": 119, "us-quote": 39]
+                return expect(Dictionary(uniqueKeysWithValues: positionNames.map { ($0, posted($0, [], us)) }),
+                    Dictionary(uniqueKeysWithValues: want.map { ($0.key, "\($0.value) ") }))
+            }),
+            ("an_empty_name_is_unknown_and_posts_nothing", { expect(refused("", ["cmd"], us), "2: unknown key : the keys are \(keyGrammar)") }),
+            ("every_refusal_says_its_words", {
+                let all = [
+                    refused("a", [], nothing), refused("a", [], noData), refused("t", ["cmd"], dvorakCommand),
+                    refused("slash", ["cmd"], madeLayout("test.Bare", [0: [0: "a"]])),
+                    refused("slash", [], madeLayout("test.Bare", [0: [0: "a"]])),
+                    refused("leftbracket", ["cmd"], madeLayout("test.Dead", [33: [0: "~["]])),
+                    refused("leftbracket", [], madeLayout("test.Dead", [33: [0: "~["]])),
+                ]
+                return expect(all, [
+                    "1: no keyboard layout is in use, so no key can be found for a: named keys still work, nothing was posted",
+                    "1: the keyboard layout in use (test.Input-Method) has no key data, as an input method's may not, so no key can be found for a: named keys still work, nothing was posted",
+                    "1: no key of test.Dvorak-QWERTY makes the window read t with these modifiers: nothing was posted",
+                    "1: no key of test.Bare types slash: this shortcut cannot reach the window on this layout, nothing was posted",
+                    "1: no key of test.Bare types slash: `text` types it, nothing was posted",
+                    "1: leftbracket is behind a dead key on test.Dead: this shortcut cannot reach the window on this layout, nothing was posted",
+                    "1: leftbracket is behind a dead key on test.Dead: `text` types it, nothing was posted",
+                ])
+            }),
+            ("hold_says_it_takes_no_modifiers", {
+                expect(holdRefusal("cmd").message, "hold takes no modifiers (cmd): hold PID KEY [MS]; key posts a key with modifiers")
+            }),
             ("alt_with_cmd_is_passed_on", { expect(posted("plus", ["cmd", "alt"], spanish), "30 CA") }),
             ("a_layout_without_key_data_refuses_a_character", {
                 let got = refused("slash", ["cmd"], noData)
@@ -916,7 +1007,7 @@ enum SelfTest {
             ("the_usage_line_holds_every_key", { expect(usage.contains(keyGrammar) && usage.contains("hold: KEY [MS]"), true) }),
             ("the_layout_in_use_gives_a_key_or_says_why", {
                 let got = posted("slash", ["cmd"], layoutInUse())
-                return expect(got.hasPrefix("1: ") || got.first?.isNumber == true, true)
+                return expect(got.hasPrefix("1: ") || !got.contains(":"), true)
             }),
         ]
     }
@@ -947,7 +1038,7 @@ func run(_ args: [String]) throws {
     case ("front", 2): try front(pid)
     case ("size", 4): try size(pid, args[2], args[3])
     case ("key", 3...): try key(pid, args[2], Array(args.dropFirst(3)))
-    case ("hold", 3...4): try hold(pid, args[2], args.count == 4 ? args[3] : nil)
+    case ("hold", 3...): try hold(pid, args[2], Array(args.dropFirst(3)))
     case ("text", 3): try text(pid, args[2])
     case ("paste", 3): try paste(pid, args[2])
     case ("press", 4...5): try press(pid, args[2], args[3], right: try button(args, after: 4))
