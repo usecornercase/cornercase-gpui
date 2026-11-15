@@ -50,8 +50,21 @@ pub(crate) fn making(lacks: Option<Lacks<'_>>, os: Os) -> Making {
     }
 }
 
-pub(crate) fn made_when(dialog_shown: bool, id: &str, boot: Option<&str>, now: Instant) -> Option<Made> {
-    dialog_shown.then(|| Made::new(id, boot, now))
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Creating {
+    pub dialog: u64,
+    pub name: String,
+    boot: Option<String>,
+}
+
+impl Creating {
+    pub(crate) fn new(dialog: u64, name: &str, boot: Option<&str>) -> Self {
+        Self { dialog, name: name.to_string(), boot: boot.map(str::to_string) }
+    }
+
+    pub(crate) fn made(&self, dialog_shown: bool, id: &str, now: Instant) -> Option<Made> {
+        dialog_shown.then(|| Made::new(id, self.boot.as_deref(), now))
+    }
 }
 
 #[derive(Debug, Clone, Default)]

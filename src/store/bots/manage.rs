@@ -6,7 +6,7 @@ use super::super::run_on::start_key;
 use super::super::{Busy, Store, ToastKind};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
-use crate::model::bots::{Arrival, Making, id_of, made_when, making};
+use crate::model::bots::{Arrival, Creating, Making, id_of, making};
 use crate::platform::Os;
 
 fn remove_key(id: &str) -> String {
@@ -27,27 +27,27 @@ impl Store {
         if self.busy(&start_key(dialog)) {
             return;
         }
-        let name = name.to_string();
+        let creating = Creating::new(dialog, name, self.bots.boot.as_deref());
         let busy = Busy::new(start_key(dialog), format!("Creating the bot {name}…"));
-        let then: Then = Box::new(move |this, result, cx| this.bot_created(dialog, &name, result, cx));
+        let then: Then = Box::new(move |this, result, cx| this.bot_created(&creating, result, cx));
         self.bot_job(busy, Call::args(args), then, cx);
     }
 
-    fn bot_created(&mut self, dialog: u64, name: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn bot_created(&mut self, creating: &Creating, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+        let dialog = creating.dialog;
         match result {
             Ok(answer) => {
                 let shown = self.shown_dialog() == Some(dialog);
                 self.close_started(Some(dialog), false, cx);
                 match id_of(&answer) {
                     Some(id) => {
-                        let boot = self.bots.boot.as_deref();
-                        self.bots.manage.made = made_when(shown, &id, boot, Instant::now());
+                        self.bots.manage.made = creating.made(shown, &id, Instant::now());
                         self.follow_made(cx);
                     }
                     None => self.toast("cornercase bot new printed no id", ToastKind::Error, cx),
                 }
             }
-            Err(error) => self.create_refused(dialog, create_failed(name, &cli::reason(&error)), cx),
+            Err(error) => self.create_refused(dialog, create_failed(&creating.name, &cli::reason(&error)), cx),
         }
     }
 

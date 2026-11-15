@@ -145,8 +145,17 @@ fn a_move_of_the_person_drops_the_wait_for_a_new_bot() {
 #[test]
 fn a_form_closed_before_the_answer_awaits_no_chat() {
     let now = Instant::now();
-    assert!(made_when(false, "prs", None, now).is_none());
-    assert_eq!(made_when(true, "prs", None, now).map(|made| made.id), Some("prs".to_string()));
+    let creating = Creating::new(7, "prs", None);
+    assert!(creating.made(false, "prs", now).is_none());
+    assert_eq!(creating.made(true, "prs", now).map(|made| made.id), Some("prs".to_string()));
+}
+
+#[test]
+fn a_reply_from_another_server_run_drops_the_wait_for_the_new_bot() {
+    let now = Instant::now();
+    let made = Creating::new(7, "prs", Some("run-a")).made(true, "prs", now).expect("shown");
+    assert_eq!(made.arrival(&[bot("prs")], Some("run-b"), now), Arrival::Gone);
+    assert_eq!(made.arrival(&[bot("prs")], Some("run-a"), now), Arrival::Listed);
 }
 
 #[test]
