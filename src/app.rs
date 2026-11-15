@@ -271,6 +271,7 @@ impl Root {
         if let Some(updating) = store.update(cx, |s, _| s.asks.open_update.take()) {
             self.open_update(updating, window, cx);
         }
+        self.take_bot_menu(window, cx);
     }
 
     fn store_changed(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {

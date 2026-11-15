@@ -129,5 +129,39 @@ impl Managing {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MenuAsk<P> {
+    asked: Option<(String, P)>,
+}
+
+impl<P> Default for MenuAsk<P> {
+    fn default() -> Self {
+        Self { asked: None }
+    }
+}
+
+impl<P> MenuAsk<P> {
+    pub(crate) fn ask(&mut self, bot: &str, at: P) {
+        self.asked = Some((bot.to_string(), at));
+    }
+
+    pub(crate) fn take(&mut self, list: &[Bot]) -> Option<(Bot, P)> {
+        let (id, at) = self.asked.take()?;
+        list.iter().find(|bot| bot.id == id).map(|bot| (bot.clone(), at))
+    }
+}
+
+pub(crate) fn create_failed(name: &str, words: &str) -> String {
+    format!("Could not create the bot {name}: {words}")
+}
+
+pub(crate) fn save_failed(name: &str, words: &str) -> String {
+    format!("Could not save {name}: {words}")
+}
+
+pub(crate) fn rename_failed(name: &str, words: &str) -> String {
+    format!("Could not rename {name}: {words}")
+}
+
 #[cfg(test)]
 mod tests;

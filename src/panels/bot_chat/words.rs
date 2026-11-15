@@ -49,6 +49,10 @@ pub(crate) fn placeholder(name: &str) -> String {
     format!("Message {name}…")
 }
 
+pub(crate) fn menu_tip(name: &str) -> String {
+    format!("More for {name}")
+}
+
 pub(crate) fn answering(name: &str) -> String {
     format!("{name} is answering: stop it first")
 }

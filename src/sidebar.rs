@@ -124,6 +124,7 @@ pub(crate) fn tip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut Ap
 pub(crate) enum Renaming {
     Here(Target),
     There(Aim),
+    Bot(String),
 }
 
 pub(crate) struct Rename {

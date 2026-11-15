@@ -24,7 +24,7 @@ mod remote;
 mod run_on;
 mod shortcuts;
 
-pub(crate) use bot_form::new_bot;
+pub(crate) use bot_form::{edit_bot, new_bot};
 pub(crate) use closing::{CloseWords, agent_doing, agent_title, closes_line, on_machine};
 pub(crate) use context::{ContextThere, VIEW_CONTEXT, context_choices, view_context, view_context_there};
 pub(crate) use merge_check::merge_check;

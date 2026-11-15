@@ -381,15 +381,21 @@ fn agent_fold(row: &AgentRow<'_>, scope: &str, cx: &mut Context<Root>) -> Statef
     }))
 }
 
+pub(super) fn name_line(title: String, selected: bool) -> Div {
+    div().child(ui::one_line(title)).text_size(px(12.)).text_color(if selected {
+        colours::text()
+    } else {
+        colours::soft()
+    })
+}
+
+pub(super) fn agent_lines(first: impl IntoElement, details: String) -> Div {
+    let line = div().child(ui::one_line(details)).text_size(px(10.5)).text_color(colours::faint());
+    div().flex_1().min_w(px(0.)).flex().flex_col().child(first).child(line)
+}
+
 pub(super) fn agent_text(title: String, details: String, selected: bool) -> Div {
-    let line = |text: String| div().child(ui::one_line(text));
-    div()
-        .flex_1()
-        .min_w(px(0.))
-        .flex()
-        .flex_col()
-        .child(line(title).text_size(px(12.)).text_color(if selected { colours::text() } else { colours::soft() }))
-        .child(line(details).text_size(px(10.5)).text_color(colours::faint()))
+    agent_lines(name_line(title, selected), details)
 }
 
 #[cfg(test)]

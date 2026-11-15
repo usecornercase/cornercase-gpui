@@ -6,8 +6,13 @@ use serde_json::Value;
 use crate::cli::{Feature, Lacks, newer_here};
 use crate::platform::Os;
 
-pub(crate) use self::form::{AgentInfo, CORNERCASE, FULL, NotSent, Typed, agents_of, chosen_at_open, id_of, new_args};
-pub(crate) use self::manage::{Arrival, Creating, Making, Managing, making};
+pub(crate) use self::form::{
+    AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, agents_of, chosen_at_open, id_of, kept_accounts,
+    new_args, rename_args,
+};
+pub(crate) use self::manage::{
+    Arrival, Creating, Making, Managing, MenuAsk, create_failed, making, rename_failed, save_failed,
+};
 pub(crate) use self::talk::{
     Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
 };
@@ -30,6 +35,14 @@ pub(crate) struct Bot {
     pub state: String,
     pub unread: usize,
     pub held: usize,
+    #[serde(deserialize_with = "text_or_empty")]
+    pub folder: String,
+    #[serde(deserialize_with = "text_or_empty")]
+    pub access: String,
+}
+
+fn text_or_empty<'de, D: serde::Deserializer<'de>>(found: D) -> Result<String, D::Error> {
+    Ok(Value::deserialize(found)?.as_str().map(str::to_string).unwrap_or_default())
 }
 
 impl Bot {

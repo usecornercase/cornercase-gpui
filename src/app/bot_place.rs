@@ -20,6 +20,7 @@ impl Root {
             self.chat_place_changed(was, window, cx);
             self.keys_follow(&rested, window, cx);
         }
+        self.end_gone_rename(window, cx);
     }
 
     fn chat_place_changed(&mut self, was: bool, window: &Window, cx: &mut Context<Self>) {

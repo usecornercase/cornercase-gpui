@@ -159,6 +159,7 @@ impl Root {
 
     pub(super) fn press_rests(&mut self, _: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if press_goes_to_rest(self.chat_shown(), self.overlay_open(cx), window.default_prevented()) {
+            self.finish_rename(false, window, cx);
             window.focus(&self.keys_rest(cx));
             window.prevent_default();
         }
