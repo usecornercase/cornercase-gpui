@@ -178,6 +178,13 @@ pub(crate) struct Chat {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CatchUp {
+    Nothing,
+    Whole,
+    After(u64),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Added {
     No,
     Yes,
@@ -199,6 +206,18 @@ impl Chat {
 
     pub(crate) fn revision(&self) -> u64 {
         self.revision
+    }
+
+    pub(crate) fn failed(&self) -> bool {
+        matches!(self.read, Read::Failed(_))
+    }
+
+    pub(crate) fn catch_up(&self) -> CatchUp {
+        match (&self.read, self.last()) {
+            (Read::Done, Some(last)) => CatchUp::After(last),
+            (Read::Done, None) | (Read::Failed(_), _) => CatchUp::Whole,
+            (Read::Asking, _) => CatchUp::Nothing,
+        }
     }
 
     pub(crate) fn defer(&mut self, after: u64) {
@@ -367,8 +386,8 @@ impl Bots {
         due.then(|| bot.id.clone())
     }
 
-    pub(crate) fn can_show(&self, id: &str, lacks: Option<Lacks<'_>>, os: Os) -> bool {
-        self.offer(lacks, os) == Offer::Rows && self.find(id).is_some()
+    pub(crate) fn can_show(&self, id: &str, offer: &Offer) -> bool {
+        *offer == Offer::Rows && self.find(id).is_some()
     }
 
     pub(crate) fn offer(&self, lacks: Option<Lacks<'_>>, os: Os) -> Offer {

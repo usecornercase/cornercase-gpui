@@ -235,3 +235,13 @@ fn a_step_run_keeps_its_real_last_id_so_a_capped_front_keeps_the_reader() {
     assert!(splices.iter().all(|(range, _)| range.len() <= 1), "{splices:?}");
     assert!(!splices.contains(&(0..3, 0)));
 }
+
+#[test]
+fn a_chat_is_fresh_for_another_bot_or_a_new_generation_but_not_a_new_revision() {
+    use super::is_fresh;
+    let mark = ("prs".to_string(), 1, 3);
+    assert!(is_fresh(None, None, &mark));
+    assert!(is_fresh(Some("ops"), Some(&mark), &mark));
+    assert!(is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 5, 3)));
+    assert!(!is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 1, 4)));
+}

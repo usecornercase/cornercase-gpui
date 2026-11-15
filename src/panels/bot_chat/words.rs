@@ -31,6 +31,10 @@ pub(super) const EMPTY_LINES: [&str; 2] = [
     "It runs only when you write to it, and answers here.",
 ];
 
+pub(super) fn read_failed(name: &str, why: &str) -> String {
+    format!("Could not read the chat of {name}: {why}")
+}
+
 pub(super) fn footer(name: &str, id: &str) -> String {
     format!("Write to {name} in cornercase's own window, or with cornercase bot say {id}.")
 }

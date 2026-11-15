@@ -374,10 +374,23 @@ fn an_answer_to_an_earlier_ask_or_another_bot_is_not_awaited() {
 #[test]
 fn a_chat_is_shown_only_when_rows_are_offered_and_the_bot_is_listed() {
     let bots = two();
-    assert!(bots.can_show("prs", None, Os::Mac));
-    assert!(!bots.can_show("nobody", None, Os::Mac));
-    assert!(!bots.can_show("prs", Some(lacking(73)), Os::Mac));
-    assert!(!Bots::new().can_show("prs", None, Os::Mac));
+    assert!(bots.can_show("prs", &Offer::Rows));
+    assert!(!bots.can_show("nobody", &Offer::Rows));
+    assert!(!bots.can_show("prs", &bots.offer(Some(lacking(73)), Os::Mac)));
+    assert!(!Bots::new().can_show("prs", &Bots::new().offer(None, Os::Mac)));
+}
+
+#[test]
+fn a_chat_catches_up_by_what_it_has_read() {
+    let mut chat = Chat::new("prs", 1);
+    assert_eq!(chat.catch_up(), CatchUp::Nothing);
+    chat.take(Vec::new());
+    assert_eq!(chat.catch_up(), CatchUp::Whole);
+    chat.take(plain(&[(1, "you"), (4, "bot")]));
+    assert_eq!(chat.catch_up(), CatchUp::After(4));
+    chat.fail("down".into());
+    assert_eq!(chat.catch_up(), CatchUp::Whole);
+    assert!(chat.failed());
 }
 
 #[test]
@@ -404,16 +417,4 @@ fn a_catch_up_asked_while_one_runs_is_kept_from_its_earliest_cursor() {
     chat.defer(7);
     assert_eq!(chat.take_pending(), Some(4));
     assert_eq!(chat.take_pending(), None);
-}
-
-#[test]
-fn a_chat_shown_again_is_a_new_generation_even_at_the_same_revision() {
-    let mut first = Chat::new("prs", 1);
-    first.take(plain(&[(1, "you")]));
-    let mut again = Chat::new("prs", 5);
-    again.take(plain(&[(1, "you")]));
-    assert_eq!(first.revision(), again.revision());
-    assert_ne!(first.born, again.born);
-    again.asked = 9;
-    assert_eq!(again.born, 5);
 }

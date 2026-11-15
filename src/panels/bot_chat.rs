@@ -11,7 +11,7 @@ use gpui::{
 use self::entries::{Entry, EntryKey};
 pub(crate) use self::global::{scroll, view};
 use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
-use self::words::{EMPTY_LINES, footer, turn_label};
+use self::words::{EMPTY_LINES, footer, read_failed, turn_label};
 use crate::model::bots::{Bot, Chat, Read};
 use crate::panels::queue;
 use crate::store::Store;
@@ -67,12 +67,18 @@ pub(crate) struct BotChat {
     news: bool,
     blocks: Blocks,
     counting: Counting,
-    mark: Option<(String, u64, u64)>,
+    mark: Option<Stamp>,
     heard: (Option<String>, u64),
 }
 
 fn counting(chat: &mut BotChat) -> &mut Counting {
     &mut chat.counting
+}
+
+pub(crate) type Stamp = (String, u64, u64);
+
+pub(crate) fn is_fresh(shown: Option<&str>, mark: Option<&Stamp>, stamp: &Stamp) -> bool {
+    shown != Some(stamp.0.as_str()) || mark.is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1))
 }
 
 fn at_end(list: &ListState) -> bool {
@@ -153,8 +159,7 @@ impl BotChat {
             return;
         };
         let stamp = (chat.bot.clone(), chat.born, chat.revision());
-        let fresh = self.bot.as_deref() != Some(chat.bot.as_str())
-            || self.mark.as_ref().is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1));
+        let fresh = is_fresh(self.bot.as_deref(), self.mark.as_ref(), &stamp);
         if !fresh && self.mark.as_ref() == Some(&stamp) {
             return;
         }
@@ -206,29 +211,29 @@ impl BotChat {
 
     fn body(&mut self, bot: &Bot, chat: &Chat, cx: &mut Context<Self>) -> AnyElement {
         match &chat.read {
-            Read::Failed(why) if chat.lines.is_empty() => {
-                ui::note(format!("Could not read the chat of {}: {why}", bot.name)).into_any_element()
-            }
-            Read::Failed(why) => div()
-                .flex_1()
-                .min_h_0()
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .flex_none()
-                        .px(px(16.))
-                        .py(px(4.))
-                        .text_size(px(11.5))
-                        .text_color(colours::failed())
-                        .child(format!("Could not read the chat of {}: {why}", bot.name)),
-                )
-                .child(self.lines(bot, cx))
-                .into_any_element(),
+            Read::Failed(why) if chat.lines.is_empty() => ui::note(read_failed(&bot.name, why)).into_any_element(),
+            Read::Failed(why) => self.failed_above_lines(bot, why, cx),
             Read::Asking if chat.lines.is_empty() => ui::loading("Reading the chat…").into_any_element(),
             _ if chat.lines.is_empty() && !bot.thinking() => empty_page(bot).into_any_element(),
             _ => self.lines(bot, cx),
         }
+    }
+
+    fn failed_above_lines(&mut self, bot: &Bot, why: &str, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex_none()
+                    .px(px(16.))
+                    .py(px(4.))
+                    .child(ui::error_line(read_failed(&bot.name, why)).text_size(px(11.5))),
+            )
+            .child(self.lines(bot, cx))
+            .into_any_element()
     }
 
     fn lines(&mut self, bot: &Bot, cx: &mut Context<Self>) -> AnyElement {

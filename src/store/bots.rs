@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use super::{Busy, Store, ToastKind, args, run_job};
 use crate::cli::{self, Feature};
-use crate::model::bots::{self, BotEvent, Chat, Heard, Offer, Read};
+use crate::model::bots::{self, BotEvent, CatchUp, Chat, Heard, Offer, Read};
 use crate::model::place::Moved;
 use crate::platform::Os;
 
@@ -31,16 +31,13 @@ impl Store {
     }
 
     fn heal_chat(&mut self, settled: &[String], cx: &mut Context<Self>) {
-        let Some(chat) = self.bots.chat.as_ref().filter(|chat| settled.contains(&chat.bot)) else { return };
-        match chat.read {
-            Read::Done => self.read_chat(Some(chat.last().unwrap_or(0)), cx),
-            Read::Failed(_) => self.read_chat(None, cx),
-            Read::Asking => {}
+        if self.bots.chat.as_ref().is_some_and(|chat| settled.contains(&chat.bot)) {
+            self.catch_up_chat(cx);
         }
     }
 
     pub(crate) fn show_bot(&mut self, id: &str, cx: &mut Context<Self>) {
-        if !self.bots.can_show(id, self.releases().lacks(Feature::Bots), Os::CURRENT) {
+        if !self.bots.can_show(id, &self.bots_offer()) {
             return;
         }
         if self.shown_bot() != Some(id) {
@@ -51,9 +48,7 @@ impl Store {
             self.bots.chat = Some(Chat::new(id, asked));
             self.read_chat(None, cx);
         }
-        if self.bots.chat.as_ref().is_some_and(|chat| matches!(chat.read, Read::Failed(_))) {
-            self.read_chat(None, cx);
-        }
+        self.catch_up_chat(cx);
         self.give_keys_back(cx);
         self.mind_seen(cx);
         cx.notify();
@@ -78,8 +73,8 @@ impl Store {
             Some(bots::Added::Gap(last)) => self.read_chat(Some(last), cx),
             Some(bots::Added::No) | None => {}
         }
-        if self.bots.chat.as_ref().is_some_and(|chat| chat.bot == bot && matches!(chat.read, Read::Failed(_))) {
-            self.read_chat(None, cx);
+        if self.bots.chat.as_ref().is_some_and(|chat| chat.bot == bot && chat.failed()) {
+            self.catch_up_chat(cx);
         }
         self.mind_seen(cx);
     }
@@ -95,11 +90,14 @@ impl Store {
     }
 
     pub(crate) fn bot_stream_started(&mut self, cx: &mut Context<Self>) {
-        let Some(chat) = &self.bots.chat else { return };
-        match (&chat.read, chat.last()) {
-            (Read::Done, Some(last)) => self.read_chat(Some(last), cx),
-            (Read::Done, None) | (Read::Failed(_), _) => self.read_chat(None, cx),
-            _ => {}
+        self.catch_up_chat(cx);
+    }
+
+    fn catch_up_chat(&mut self, cx: &mut Context<Self>) {
+        match self.bots.chat.as_ref().map(Chat::catch_up) {
+            Some(CatchUp::After(last)) => self.read_chat(Some(last), cx),
+            Some(CatchUp::Whole) => self.read_chat(None, cx),
+            Some(CatchUp::Nothing) | None => {}
         }
     }
 
