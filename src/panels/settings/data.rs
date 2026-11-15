@@ -14,6 +14,42 @@ pub(super) fn behind(held: Option<Seen<'_>>, session: Seen<'_>) -> bool {
     held.is_some_and(|held| session.revision != 0 && (session.boot != held.boot || session.revision > held.revision))
 }
 
+pub(super) fn older(held: Option<Seen<'_>>, answer: Seen<'_>) -> bool {
+    held.is_some_and(|held| answer.boot == held.boot && answer.revision < held.revision)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum Answer<'a> {
+    Held(&'a Described),
+    Reading,
+    Failed(&'a str),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum Shown<'a> {
+    Appearance,
+    OwnLinks,
+    Page(&'a Described),
+    Reading,
+    Failed(&'a str),
+    Results(&'a Described),
+    ResultsReading,
+    ResultsFailed(&'a str),
+}
+
+pub(super) fn shown<'a>(page: &str, searching: bool, answer: Answer<'a>) -> Shown<'a> {
+    match (searching, answer) {
+        (true, Answer::Held(described)) => Shown::Results(described),
+        (true, Answer::Reading) => Shown::ResultsReading,
+        (true, Answer::Failed(why)) => Shown::ResultsFailed(why),
+        (false, _) if page == APPEARANCE => Shown::Appearance,
+        (false, Answer::Held(described)) => Shown::Page(described),
+        (false, _) if page == LINKS => Shown::OwnLinks,
+        (false, Answer::Reading) => Shown::Reading,
+        (false, Answer::Failed(why)) => Shown::Failed(why),
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(default)]
 pub(super) struct Described {
@@ -645,9 +681,14 @@ pub(super) fn search(described: &Described, query: &str) -> Vec<Found> {
 
 pub(super) fn pages_matching(pages: &[String], query: &str) -> Vec<String> {
     let words = words(query);
-    let text = |page: &str| format!("{page} {}", about(page)).to_lowercase();
+    let text = |page: &str| page_words(page).to_lowercase();
     let matching = |page: &&String| !words.is_empty() && words.iter().all(|w| text(page).contains(w.as_str()));
     pages.iter().filter(matching).cloned().collect()
+}
+
+fn page_words(page: &str) -> String {
+    let own = if page == APPEARANCE { super::appearance::words() } else { "" };
+    format!("{page} {} {own}", about(page))
 }
 
 pub(super) fn count(found: &[Found], page: &str) -> usize {

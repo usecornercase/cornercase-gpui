@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context as _;
-use gpui::{AppContext as _, ClipboardItem, Context, Window};
+use gpui::{AppContext as _, ClipboardItem, Context, Entity, Window};
 
 use super::data::{self, Connection, ConnectionKind, Kind, Script, Setting};
 use super::{Role, SettingsPanel, links, widgets};
@@ -17,6 +17,26 @@ struct Ask {
     title: String,
     message: String,
     button: &'static str,
+}
+
+struct Sent {
+    boot: String,
+    text: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FieldShows {
+    Typed,
+    Answer,
+    Held,
+}
+
+pub(super) fn field_shows(sent: &str, now: &str, applied: bool) -> FieldShows {
+    match (now == sent, applied) {
+        (false, _) => FieldShows::Typed,
+        (true, true) => FieldShows::Answer,
+        (true, false) => FieldShows::Held,
+    }
 }
 
 impl SettingsPanel {
@@ -122,34 +142,55 @@ impl SettingsPanel {
         }
         self.errors.remove(&role);
         cx.notify();
+        let sent = Sent {
+            boot: super::seen_of(Store::get(cx).read(cx)).boot.to_string(),
+            text: self.fields.get(&role).map(|f| f.read(cx).text()),
+        };
         let task = cx.background_spawn(async move { cli::run_with_stdin(&command, stdin.as_deref()) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
-            let _ = this.update(cx, |this, cx| this.answered(role, result, cx));
+            let _ = this.update(cx, |this, cx| this.answered(role, &sent, result, cx));
         })
         .detach();
     }
 
-    fn answered(&mut self, role: Role, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn answered(&mut self, role: Role, sent: &Sent, result: anyhow::Result<String>, cx: &mut Context<Self>) {
         self.busy.remove(&role);
-        match result.and_then(|out| data::parse(&out)) {
+        let ok = match result.and_then(|out| data::parse(&out)) {
             Ok(described) => {
-                let notices = described.notices.clone();
-                let field = self.fields.get(&role).filter(|_| !matches!(role, Role::Secret(_))).cloned();
-                if let Some(field) = &field {
-                    field.update(cx, |f, cx| f.keep_saved(f.text(), cx));
-                    self.mark_saved(role, cx);
-                }
-                self.apply(described, cx);
-                if !notices.is_empty() {
-                    Store::get(cx).update(cx, |s, cx| s.toast(notices.join("\n"), ToastKind::Info, cx));
-                }
+                self.took(role, sent, described, cx);
+                true
             }
             Err(e) => {
                 self.errors.insert(role, cli::reason(&e));
+                false
             }
-        }
+        };
+        self.read_again_if_behind(ok, cx);
         cx.notify();
+    }
+
+    fn took(&mut self, role: Role, sent: &Sent, described: data::Described, cx: &mut Context<Self>) {
+        let notices = described.notices.clone();
+        let applied = !self.older(&sent.boot, described.revision);
+        let field = self.fields.get(&role).filter(|_| !matches!(role, Role::Secret(_))).cloned();
+        if let Some(field) = field {
+            Self::settle_field(&field, sent.text.as_deref(), applied, cx);
+            self.mark_saved(role, cx);
+        }
+        self.take(&sent.boot, described, cx);
+        if !notices.is_empty() {
+            Store::get(cx).update(cx, |s, cx| s.toast(notices.join("\n"), ToastKind::Info, cx));
+        }
+    }
+
+    fn settle_field(field: &Entity<TextField>, sent: Option<&str>, applied: bool, cx: &mut Context<Self>) {
+        let Some(sent) = sent else { return };
+        match field_shows(sent, &field.read(cx).text(), applied) {
+            FieldShows::Typed => {}
+            FieldShows::Answer => field.update(cx, |f, cx| f.keep_saved(f.text(), cx)),
+            FieldShows::Held => field.update(cx, TextField::revert),
+        }
     }
 
     pub(super) fn export(to: Option<PathBuf>, cx: &mut Context<Self>) {

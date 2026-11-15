@@ -33,3 +33,12 @@ fn every_page_of_the_sheet_says_what_it_holds() {
         assert!(!data::about(page).is_empty(), "{page}");
     }
 }
+
+#[test]
+fn settings_search_finds_the_appearance_page_by_every_word_the_global_search_finds_it_by() {
+    let pages = [data::APPEARANCE.to_string()];
+    for query in ["theme", "dark", "Gruvbox", "nord", "rosé pine", "contrast", "colours", "blur", "color"] {
+        assert!(found_for(query, "Nord").is_some(), "{query}");
+        assert_eq!(data::pages_matching(&pages, query), [data::APPEARANCE], "{query}");
+    }
+}

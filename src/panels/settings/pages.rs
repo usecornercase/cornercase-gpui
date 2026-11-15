@@ -1,7 +1,7 @@
 use gpui::{AnyElement, Context, Div, Focusable as _, IntoElement, SharedString, Window, div, prelude::*, px};
 
 use super::agents::AgentItem;
-use super::data::{self, Described, Item, Kind, Setting};
+use super::data::{self, Described, Item, Kind, Setting, Shown};
 use super::{Role, SettingsPanel, widgets};
 use crate::notify::tip;
 use crate::prefs;
@@ -46,6 +46,16 @@ fn setting_label(setting: &Setting) -> Div {
     widgets::labelled(title, setting.note.clone())
 }
 
+fn reading() -> Div {
+    ui::loading("Reading the settings…")
+}
+
+fn problem(described: &Described) -> Option<Div> {
+    described.problem.as_deref().map(|p| {
+        ui::callout(colours::failed(), "config.json cannot be read", format!("Nothing is saved until it is fixed: {p}"))
+    })
+}
+
 impl SettingsPanel {
     pub(super) fn all_pages(&self) -> Vec<String> {
         let mut pages = self.described.as_ref().map(data::pages).unwrap_or_default();
@@ -77,7 +87,7 @@ impl SettingsPanel {
             .child(self.search_box(window, cx))
             .children(items)
             .child(div().flex_1())
-            .children(self.config_path())
+            .children(self.config_path(cx))
     }
 
     fn nav_mark(&self, page: &str, query: &str, found: &[data::Found], matching: &[String]) -> Mark {
@@ -114,11 +124,13 @@ impl SettingsPanel {
         div().flex().flex_col().pb(px(10.)).child(ui::search_field(self.search.clone(), focused, clear))
     }
 
-    fn config_path(&self) -> Option<impl IntoElement + use<>> {
-        let path = match self.page.as_str() {
-            data::LINKS => prefs::path().display().to_string(),
-            data::APPEARANCE => prefs::path().with_file_name("theme.json").display().to_string(),
-            _ => self.described.as_ref()?.path.clone(),
+    fn config_path(&self, cx: &Context<Self>) -> Option<impl IntoElement + use<>> {
+        let path = match self.shown(cx) {
+            Shown::Appearance => prefs::path().with_file_name("theme.json").display().to_string(),
+            Shown::OwnLinks => prefs::path().display().to_string(),
+            Shown::Page(_) if self.page == data::LINKS => prefs::path().display().to_string(),
+            Shown::Page(d) | Shown::Results(d) => d.path.clone(),
+            _ => return None,
         };
         let shown = ui::home_relative(&path);
         Some(
@@ -138,25 +150,25 @@ impl SettingsPanel {
     }
 
     pub(super) fn render_page(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
-        if self.page == data::APPEARANCE {
-            return self.appearance_page(window, cx);
+        match self.shown(cx) {
+            Shown::Appearance => self.appearance_page(window, cx),
+            Shown::OwnLinks => self.own_page(window, cx),
+            Shown::Page(described) => self.open_page(described, window, cx),
+            Shown::Reading => widgets::column().child(reading()).into_any_element(),
+            Shown::Failed(why) => widgets::column().children(self.failed(why, cx)).into_any_element(),
+            Shown::Results(described) => {
+                let query = self.query(cx);
+                let parts = self.render_search(described, &query, window, cx);
+                widgets::column().children(problem(described)).children(parts).into_any_element()
+            }
+            Shown::ResultsReading => self.results_unread(vec![reading()], cx),
+            Shown::ResultsFailed(why) => self.results_unread(self.failed(why, cx), cx),
         }
-        let Some(described) = &self.described else {
-            return if self.page == data::LINKS { self.own_page(window, cx) } else { self.not_loaded(cx) };
-        };
-        let query = self.query(cx);
-        let problem = described.problem.as_deref().map(|p| {
-            ui::callout(
-                colours::failed(),
-                "config.json cannot be read",
-                format!("Nothing is saved until it is fixed: {p}"),
-            )
-        });
-        let column = widgets::column().children(problem);
-        if !query.is_empty() {
-            return column.children(self.render_search(described, &query, window, cx)).into_any_element();
-        }
-        let column = column
+    }
+
+    fn open_page(&self, described: &Described, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let column = widgets::column()
+            .children(problem(described))
             .child(widgets::heading(page_icon(&self.page), self.page.clone(), data::about(&self.page)))
             .children(self.page_notice());
         match self.page.as_str() {
@@ -167,19 +179,18 @@ impl SettingsPanel {
         .into_any_element()
     }
 
-    fn not_loaded(&self, cx: &mut Context<Self>) -> AnyElement {
-        let Some(error) = &self.load_error else {
-            return widgets::column().child(ui::loading("Reading the settings…")).into_any_element();
-        };
+    fn results_unread(&self, state: Vec<Div>, cx: &mut Context<Self>) -> AnyElement {
+        let query = self.query(cx);
+        widgets::column().children(self.render_search_unread(&query, state, cx)).into_any_element()
+    }
+
+    fn failed(&self, why: &str, cx: &mut Context<Self>) -> Vec<Div> {
         let retry = if self.loading {
             ui::busy_button("settings-retry", "Reading…", ui::Tone::Plain)
         } else {
             ui::button("settings-retry", "Try again").on_click(cx.listener(|this, _, _, cx| this.load(cx)))
         };
-        widgets::column()
-            .child(ui::callout(colours::failed(), "Could not read the settings", error.clone()))
-            .child(div().flex().child(retry))
-            .into_any_element()
+        vec![ui::callout(colours::failed(), "Could not read the settings", why.to_string()), div().flex().child(retry)]
     }
 
     pub(super) fn settings_sections(

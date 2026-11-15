@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.116
+
+- **Searching Settings while Appearance is open shows the results.** Typing in Settings' search field on the Appearance page used to leave the page as it was. Now the matching settings show, as on every other page, and clearing the search brings Appearance back. A theme's name, such as Nord, also finds the Appearance page in Settings' search.
+- **While Settings cannot read cornercase's settings, a search says so** and lists the pages of the window that match.
+- **A setting no longer shows an older value when two changes answer out of order**, and what you type in a field while its change is being saved is kept.
+
 ## 0.1.115
 
 - **Edit and rename your bots, and open their folders, from the window.** A bot's `⋯` (on its row, with a right click, or in its chat's header) now offers **Edit bot…**: the New bot form with the bot's name, model, effort, account and access, which sends only what you change, from the bot's next message on. **Rename bot** renames it right in the sidebar, and so does a double click on its row. **Open in…** and **Copy path** reach the bot's folder. What a bot is for (its `bot.md`) is not shown in the form yet: it needs usecornercase/cornercase-terminal#876.

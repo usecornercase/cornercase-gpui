@@ -7,7 +7,7 @@ mod tokens;
 mod transparency;
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use gpui::{
     AnyElement, App, Context, Div, InteractiveElement as _, IntoElement as _, MouseButton, ParentElement as _,
@@ -125,8 +125,14 @@ fn haystack() -> String {
     words.join(" ").to_lowercase()
 }
 
+static WORDS: LazyLock<String> = LazyLock::new(haystack);
+
+pub(super) fn words() -> &'static str {
+    &WORDS
+}
+
 pub(crate) fn found_for(query: &str, shown: &str) -> Option<super::FoundSetting> {
-    let text = haystack();
+    let text = words();
     let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     let matched = !words.is_empty() && words.iter().all(|word| text.contains(word.as_str()));
     matched.then(|| super::FoundSetting {

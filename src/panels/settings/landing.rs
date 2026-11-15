@@ -151,7 +151,7 @@ impl SettingsPanel {
     pub(super) fn take_landing(&mut self, cx: &mut Context<Self>) {
         let Some(found) = Store::get(cx).update(cx, |s, _| s.landing.take()) else { return };
         self.landings += 1;
-        self.choice = None;
+        self.close_floating();
         self.search.update(cx, TextField::clear);
         self.to_top();
         if found.page == data::APPEARANCE

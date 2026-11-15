@@ -144,8 +144,13 @@ impl SettingsPanel {
         field
     }
 
-    fn search_changed(&mut self, cx: &mut Context<Self>) {
+    fn close_floating(&mut self) {
         self.choice = None;
+        self.look.picker = None;
+    }
+
+    fn search_changed(&mut self, cx: &mut Context<Self>) {
+        self.close_floating();
         self.to_top();
         if !self.query(cx).is_empty() {
             self.landed = None;
@@ -174,8 +179,7 @@ impl SettingsPanel {
     }
 
     fn opened(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.choice = None;
-        self.look.picker = None;
+        self.close_floating();
         self.landed = None;
         self.first_project = None;
         self.search.update(cx, TextField::clear);
@@ -189,16 +193,16 @@ impl SettingsPanel {
         }
         self.loading = true;
         cx.notify();
-        seen_of(Store::get(cx).read(cx)).boot.clone_into(&mut self.boot);
-        store::run(cx, args(&["config", "--json"]), Self::read_ended);
+        let asked = seen_of(Store::get(cx).read(cx)).boot.to_string();
+        store::run(cx, args(&["config", "--json"]), move |this, result, cx| this.read_ended(&asked, result, cx));
     }
 
-    fn read_ended(&mut self, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn read_ended(&mut self, asked: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
         self.loading = false;
         let answered = match result.and_then(|out| data::parse(&out)) {
             Ok(described) => {
                 self.load_error = None;
-                self.apply(described, cx);
+                self.take(asked, described, cx);
                 true
             }
             Err(e) => {
@@ -221,6 +225,31 @@ impl SettingsPanel {
         if again {
             self.load(cx);
         }
+    }
+
+    fn older(&self, asked: &str, revision: u64) -> bool {
+        let held = self.described.as_ref().map(|_| self.held());
+        data::older(held, data::Seen { boot: asked, revision })
+    }
+
+    fn take(&mut self, asked: &str, described: Described, cx: &mut Context<Self>) {
+        if self.older(asked, described.revision) {
+            return;
+        }
+        asked.clone_into(&mut self.boot);
+        self.apply(described, cx);
+    }
+
+    fn answer(&self) -> data::Answer<'_> {
+        match (&self.described, &self.load_error) {
+            (Some(described), _) => data::Answer::Held(described),
+            (None, Some(why)) => data::Answer::Failed(why),
+            (None, None) => data::Answer::Reading,
+        }
+    }
+
+    fn shown(&self, cx: &App) -> data::Shown<'_> {
+        data::shown(&self.page, !self.query(cx).is_empty(), self.answer())
     }
 
     fn held(&self) -> data::Seen<'_> {
@@ -327,7 +356,7 @@ impl SettingsPanel {
 
     fn go_to(&mut self, page: String, cx: &mut Context<Self>) {
         self.page = page;
-        self.choice = None;
+        self.close_floating();
         self.landed = None;
         self.search.update(cx, TextField::clear);
         self.to_top();

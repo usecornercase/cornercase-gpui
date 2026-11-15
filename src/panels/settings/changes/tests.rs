@@ -102,3 +102,19 @@ fn the_question_for_an_app_with_no_note_keeps_only_what_happens_next() {
         assert_eq!(ask.message, "It is disconnected at once and has to be paired again to reach this computer.");
     }
 }
+
+#[test]
+fn a_field_typed_in_while_its_change_ran_keeps_what_was_typed() {
+    assert_eq!(field_shows("cc-{key}", "cc-{key}z", true), FieldShows::Typed);
+    assert_eq!(field_shows("cc-{key}", "cc-{key}z", false), FieldShows::Typed);
+}
+
+#[test]
+fn a_field_left_as_it_was_sent_takes_its_answer() {
+    assert_eq!(field_shows("a", "a", true), FieldShows::Answer);
+}
+
+#[test]
+fn a_field_left_as_it_was_sent_shows_what_the_sheet_holds_when_its_answer_is_older() {
+    assert_eq!(field_shows("a", "a", false), FieldShows::Held);
+}
