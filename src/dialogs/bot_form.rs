@@ -203,18 +203,6 @@ impl BotForm {
     }
 }
 
-fn chip(id: (&'static str, usize), label: String, chosen: bool) -> Stateful<Div> {
-    ui::segment(id, label, chosen).border_1().border_color(if chosen { colours::accent() } else { colours::border() })
-}
-
-fn resting_chip(id: (&'static str, usize), label: String, chosen: bool) -> Stateful<Div> {
-    ui::resting_segment(id, label, chosen).border_1().border_color(colours::border())
-}
-
-fn chips(items: Vec<Stateful<Div>>) -> Div {
-    div().flex().flex_wrap().gap(px(4.)).children(items)
-}
-
 impl BotForm {
     fn name_field(&self, window: &Window, cx: &App) -> Div {
         ui::field("Name", ui::boxed(&self.name, window, cx))
@@ -244,14 +232,14 @@ impl BotForm {
         let items = list.iter().enumerate().map(|(at, agent)| {
             let is = self.chosen == Some(at);
             if agent.bot {
-                chip(("bot-agent", at), agent.label(), is)
+                ui::chip(("bot-agent", at), agent.label(), is)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_agent(at, cx)))
             } else {
-                resting_chip(("bot-agent", at), agent.label(), false)
+                ui::resting_chip(("bot-agent", at), agent.label(), false)
             }
         });
         let none = (self.chosen.is_none()).then(|| ui::dim(NO_AGENT));
-        div().flex().flex_col().gap(px(6.)).child(chips(items.collect())).children(none).into_any_element()
+        div().flex().flex_col().gap(px(6.)).child(ui::chips(items.collect())).children(none).into_any_element()
     }
 
     fn model_field(&self, agent: &AgentInfo, window: &Window, cx: &mut Context<Self>) -> Div {
@@ -262,26 +250,26 @@ impl BotForm {
             .enumerate()
             .map(|(at, model)| {
                 let value = model.clone();
-                chip(("bot-model", at), model.clone(), typed.trim() == model)
+                ui::chip(("bot-model", at), model.clone(), typed.trim() == model)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.fill_model(&value, cx)))
             })
             .collect();
         let column = div().flex().flex_col().gap(px(6.)).child(ui::boxed(&self.model, window, cx));
-        ui::field("Model", column.when(!items.is_empty(), |d| d.child(chips(items))))
+        ui::field("Model", column.when(!items.is_empty(), |d| d.child(ui::chips(items))))
     }
 
     fn effort_field(&self, agent: &AgentInfo, cx: &mut Context<Self>) -> Option<Div> {
         if !agent.takes_effort() {
             return None;
         }
-        let own = chip(("bot-effort", 0), OWN.to_string(), self.effort.is_none())
+        let own = ui::chip(("bot-effort", 0_usize), OWN.to_string(), self.effort.is_none())
             .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.pick_effort(None, cx)));
         let levels = agent.efforts.iter().enumerate().map(|(at, level)| {
             let value = level.clone();
-            chip(("bot-effort", at + 1), level.clone(), self.effort.as_deref() == Some(level))
+            ui::chip(("bot-effort", at + 1), level.clone(), self.effort.as_deref() == Some(level))
                 .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_effort(Some(value.clone()), cx)))
         });
-        Some(ui::field("Effort", chips(std::iter::once(own).chain(levels).collect())))
+        Some(ui::field("Effort", ui::chips(std::iter::once(own).chain(levels).collect())))
     }
 
     fn access_field(&self, agent: &AgentInfo, cx: &mut Context<Self>) -> Div {
@@ -298,12 +286,15 @@ impl BotForm {
             one("bot-access-cornercase", THROUGH, CORNERCASE, cx).into_any_element(),
             one("bot-access-full", FULL_ACCESS, FULL, cx).into_any_element(),
         ]);
-        let note = match self.access.as_deref() {
-            Some(FULL) => div().text_size(px(11.)).text_color(colours::failed()).child(FULL_NOTE),
-            Some(_) => ui::dim(THROUGH_NOTE),
-            None => ui::dim(agent.full_only_line().unwrap_or_default()),
-        };
-        let column = div().flex().flex_col().gap(px(6.)).child(div().flex().child(pair)).child(note);
+        let full = div().text_size(px(11.)).text_color(colours::failed()).child(FULL_NOTE);
+        let column = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            .child(div().flex().child(pair))
+            .child(ui::dim(THROUGH_NOTE))
+            .child(full)
+            .children(agent.full_only_line().map(ui::dim));
         ui::field("Access", column)
     }
 

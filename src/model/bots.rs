@@ -6,14 +6,14 @@ use serde_json::Value;
 use crate::cli::{Feature, Lacks, newer_here};
 use crate::platform::Os;
 
-pub(crate) use self::form::{AgentInfo, CORNERCASE, FULL, NotSent, Typed, agents_of, chosen_at_open, new_args};
-pub(crate) use self::making::{Arrival, Made, Making, Managing, making};
+pub(crate) use self::form::{AgentInfo, CORNERCASE, FULL, NotSent, Typed, agents_of, chosen_at_open, id_of, new_args};
+pub(crate) use self::manage::{Arrival, Making, Managing, made_when, making};
 pub(crate) use self::talk::{
     Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
 };
 
 mod form;
-mod making;
+mod manage;
 mod talk;
 
 pub(crate) const KEPT: usize = 1_000;

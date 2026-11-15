@@ -13,7 +13,7 @@ use super::workspace::agent_text;
 use crate::app::Root;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
-use crate::model::bots::{Bot, Offer};
+use crate::model::bots::{Bot, Making, Offer};
 use crate::theme::colours;
 use crate::ui::{self, Icon, icon, orbits};
 
@@ -26,7 +26,7 @@ impl Root {
         }
         let folded = self.side.bots_folded;
         let (thinking, unread) = (store.bots.thinking(), store.bots.unread() as u64);
-        let rows = offer == Offer::Rows;
+        let plus = offer == Offer::Rows && store.making() == Some(Making::Offered);
         let body = match offer {
             Offer::Lacks(text) => Some(ui::note(text).into_any_element()),
             _ if folded => None,
@@ -39,7 +39,7 @@ impl Root {
                 .flex()
                 .flex_col()
                 .child(divider())
-                .child(Self::bots_head(folded, (thinking, unread), rows, cx))
+                .child(Self::bots_head(folded, (thinking, unread), plus, cx))
                 .children(body),
         )
     }
@@ -47,7 +47,7 @@ impl Root {
     fn bots_head(
         folded: bool,
         (thinking, unread): (bool, u64),
-        rows: bool,
+        plus: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let still = div()
@@ -56,7 +56,7 @@ impl Root {
             .gap(px(6.))
             .when(folded && thinking, |d| d.child(ui::spinner("bots-thinking", 11., colours::working())))
             .children(count_disc(unread).filter(|_| folded))
-            .when(rows, |d| d.child(new_bot_button()));
+            .when(plus, |d| d.child(new_bot_button()));
         let chevron = chevron(SharedString::from("bots-chevron"), !folded);
         head_row(6., chevron, "Bots", still).id("sidebar-bots-head").cursor_pointer().on_click(cx.listener(
             |this, _: &ClickEvent, _, cx| {

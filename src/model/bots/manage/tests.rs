@@ -29,8 +29,8 @@ fn a_new_bot_waits_for_the_line_that_lists_it() {
 fn a_new_bot_the_list_never_names_is_dropped_after_thirty_seconds() {
     let now = Instant::now();
     let made = Made::new("prs", Some("a"), now);
-    assert_eq!(made.arrival(&[], Some("a"), now + MADE_FOR / 2), Arrival::NotYet);
-    assert_eq!(made.arrival(&[], Some("a"), now + MADE_FOR), Arrival::Gone);
+    assert_eq!(made.arrival(&[], Some("a"), now + AWAITED_FOR / 2), Arrival::NotYet);
+    assert_eq!(made.arrival(&[], Some("a"), now + AWAITED_FOR), Arrival::Gone);
 }
 
 #[test]
@@ -138,6 +138,22 @@ fn a_refusal_belongs_to_its_dialog_and_goes_on_the_next_change() {
 #[test]
 fn a_move_of_the_person_drops_the_wait_for_a_new_bot() {
     let mut manage = Managing { made: Some(Made::new("prs", None, Instant::now())), ..Managing::default() };
-    manage.made = None;
+    manage.person_moved();
     assert!(manage.made.is_none());
+}
+
+#[test]
+fn a_form_closed_before_the_answer_awaits_no_chat() {
+    let now = Instant::now();
+    assert!(made_when(false, "prs", None, now).is_none());
+    assert_eq!(made_when(true, "prs", None, now).map(|made| made.id), Some("prs".to_string()));
+}
+
+#[test]
+fn a_dialog_naming_a_bot_the_list_dropped_closes() {
+    let mut manage = Managing::default();
+    manage.name_dialog("prs", 7);
+    assert!(manage.named_gone(&["ops".to_string()], Some(7)));
+    assert!(!manage.named_gone(&["prs".to_string()], Some(7)));
+    assert!(!manage.named_gone(&[], Some(8)));
 }

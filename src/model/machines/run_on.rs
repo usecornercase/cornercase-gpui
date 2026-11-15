@@ -17,7 +17,7 @@ use clone::Cloned;
 pub(crate) const NO_REMOTE: &str = "This project has no git remote, so it runs on this computer only: a remote is how a machine finds the same project.";
 const ANSWER_UNREAD: &str = "its answer could not be read";
 const FROM_ANOTHER_SERVER: &str = "Its address means nothing from this computer";
-const AWAITED_FOR: Duration = Duration::from_secs(30);
+pub(crate) const AWAITED_FOR: Duration = Duration::from_secs(30);
 
 pub(crate) fn server_release(machine: Option<&str>, here: Option<&Session>, list: &[Machine]) -> Option<Version> {
     let text = match machine {

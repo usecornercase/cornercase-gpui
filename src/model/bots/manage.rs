@@ -1,11 +1,10 @@
 use std::collections::HashSet;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use super::Bot;
-use crate::cli::{Feature, Lacks, newer_here};
+use crate::cli::{Feature, Lacks, newer};
+use crate::model::machines::run_on::AWAITED_FOR;
 use crate::platform::Os;
-
-pub(crate) const MADE_FOR: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Made {
@@ -23,7 +22,7 @@ pub(crate) enum Arrival {
 
 impl Made {
     pub(crate) fn new(id: &str, boot: Option<&str>, now: Instant) -> Self {
-        Self { id: id.to_string(), boot: boot.map(str::to_string), until: now + MADE_FOR }
+        Self { id: id.to_string(), boot: boot.map(str::to_string), until: now + AWAITED_FOR }
     }
 
     pub(crate) fn arrival(&self, list: &[Bot], boot: Option<&str>, now: Instant) -> Arrival {
@@ -43,15 +42,16 @@ pub(crate) enum Making {
 }
 
 pub(crate) fn making(lacks: Option<Lacks<'_>>, os: Os) -> Making {
-    let since = Feature::Bots.since();
+    let Some(lacks) = lacks else { return Making::Offered };
+    let words = format!("Making a bot needs {}.", newer(Feature::Bots.since(), lacks, os));
     match lacks {
-        None => Making::Offered,
-        Some(Lacks::ThisComputer(has)) => Making::Here(format!("Making a bot needs {}.", newer_here(since, has, os))),
-        Some(Lacks::Server(release) | Lacks::Machine(_, release)) => {
-            let runs = release.map(|release| format!(": the server runs {release}")).unwrap_or_default();
-            Making::Server(format!("Making a bot needs cornercase {since} or newer{runs}."))
-        }
+        Lacks::ThisComputer(_) => Making::Here(words),
+        Lacks::Server(_) | Lacks::Machine(..) => Making::Server(words),
     }
+}
+
+pub(crate) fn made_when(dialog_shown: bool, id: &str, boot: Option<&str>, now: Instant) -> Option<Made> {
+    dialog_shown.then(|| Made::new(id, boot, now))
 }
 
 #[derive(Debug, Clone, Default)]
@@ -77,6 +77,14 @@ impl Managing {
 
     pub(crate) fn told(&self, id: &str, shown: bool) -> bool {
         shown && !self.asked(id)
+    }
+
+    pub(crate) fn person_moved(&mut self) {
+        self.made = None;
+    }
+
+    pub(crate) fn named_gone(&self, listed: &[String], shown: Option<u64>) -> bool {
+        self.named.as_ref().is_some_and(|(bot, dialog)| !listed.contains(bot) && Some(*dialog) == shown)
     }
 
     pub(crate) fn keep_listed(&mut self, listed: &[String]) {

@@ -33,7 +33,7 @@ impl Store {
 
     pub(super) fn forget_awaited(&mut self) {
         self.placing.awaited = None;
-        self.bots.manage.made = None;
+        self.bots.manage.person_moved();
     }
 
     pub(crate) fn show_local(&mut self, cx: &mut Context<Self>) {

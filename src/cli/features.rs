@@ -76,6 +76,16 @@ pub(crate) fn it_has(release: Option<Version>) -> String {
     release.map(|release| format!(" (it has {release})")).unwrap_or_default()
 }
 
+pub(crate) fn newer(since: Version, lacks: Lacks<'_>, os: Os) -> String {
+    let (place, who, release) = match lacks {
+        Lacks::ThisComputer(release) => return newer_here(since, release, os),
+        Lacks::Server(release) => (String::new(), "the server", release),
+        Lacks::Machine(machine, release) => (format!(" on {machine}"), "it", release),
+    };
+    let runs = release.map(|release| format!(": {who} runs {release}")).unwrap_or_default();
+    format!("cornercase {since} or newer{place}{runs}")
+}
+
 pub(crate) fn newer_here(since: Version, release: Option<Version>, os: Os) -> String {
     format!("cornercase {since} or newer on this {}{}", desktop::machine(os), it_has(release))
 }

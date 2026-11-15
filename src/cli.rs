@@ -24,7 +24,7 @@ use anyhow::{Context as _, Result, anyhow, bail};
 use locate::{Inputs, Probe as _, System};
 use parking_lot::Mutex;
 
-pub(crate) use features::{Feature, Has, Lacks, Release, Releases, it_has, newer_here};
+pub(crate) use features::{Feature, Has, Lacks, Release, Releases, it_has, newer, newer_here};
 #[cfg(test)]
 pub(crate) use holds::ended_after;
 pub(crate) use holds::{Ended, Holding, end_hold, end_holds, hold};
@@ -758,6 +758,10 @@ fn coalesce(rx: &mpsc::Receiver<Job>, key: &'static str, mut cmd: Cmd) -> (Cmd, 
             Err(_) => return (cmd, None),
         }
     }
+}
+
+pub(crate) fn flag(name: &str, value: &str) -> String {
+    format!("--{name}={value}")
 }
 
 pub(crate) fn reason(error: &anyhow::Error) -> String {

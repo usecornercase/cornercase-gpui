@@ -33,14 +33,7 @@ fn too_old(feature: Feature, releases: &Releases<'_>) -> Option<String> {
 }
 
 fn needs(feature: Feature, lacks: Lacks<'_>, os: Os) -> String {
-    let since = feature.since();
-    let (place, who, release) = match lacks {
-        Lacks::ThisComputer(release) => return format!("Needs {}.", cli::newer_here(since, release, os)),
-        Lacks::Server(release) => (String::new(), "the server", release),
-        Lacks::Machine(machine, release) => (format!(" on {machine}"), "it", release),
-    };
-    let runs = release.map(|release| format!(": {who} runs {release}")).unwrap_or_default();
-    format!("Needs cornercase {since} or newer{place}{runs}.")
+    format!("Needs {}.", cli::newer(feature.since(), lacks, os))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

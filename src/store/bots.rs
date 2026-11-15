@@ -25,6 +25,7 @@ impl Store {
         let asked = shown.as_ref().is_some_and(|(id, _)| self.bots.manage.asked(id));
         let moved = self.bots.take_app(app);
         self.place(Moved::Listed(moved.listed.clone()));
+        self.close_dialog_if_gone(&moved.listed, cx);
         match shown {
             Some((_, name)) if self.shown_bot().is_none() => {
                 if !asked {

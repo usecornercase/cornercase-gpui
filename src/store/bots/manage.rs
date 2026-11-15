@@ -1,22 +1,15 @@
 use std::time::Instant;
 
-use gpui::Context;
-use serde_json::Value;
-
 use super::super::run_on::start_key;
 use super::super::{Busy, Store, ToastKind};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
-use crate::model::bots::{Arrival, Made, Making, making};
+use crate::model::bots::{Arrival, Making, id_of, made_when, making};
 use crate::platform::Os;
+use gpui::Context;
 
 fn remove_key(id: &str) -> String {
     format!("bot-remove:{id}")
-}
-
-pub(crate) fn id_of(answer: &str) -> Option<String> {
-    let value: Value = serde_json::from_str(answer).ok()?;
-    value.get("id")?.as_str().filter(|id| !id.is_empty()).map(str::to_string)
 }
 
 pub(crate) fn create_failed(name: &str, words: &str) -> String {
@@ -42,10 +35,12 @@ impl Store {
     fn bot_created(&mut self, dialog: u64, name: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
         match result {
             Ok(answer) => {
+                let shown = self.shown_dialog() == Some(dialog);
                 self.close_started(Some(dialog), false, cx);
                 match id_of(&answer) {
                     Some(id) => {
-                        self.bots.manage.made = Some(Made::new(&id, self.bots.boot.as_deref(), Instant::now()));
+                        let boot = self.bots.boot.as_deref();
+                        self.bots.manage.made = made_when(shown, &id, boot, Instant::now());
                         self.follow_made(cx);
                     }
                     None => self.toast("cornercase bot new printed no id", ToastKind::Error, cx),
@@ -98,6 +93,12 @@ impl Store {
     pub(crate) fn names_bot(&mut self, id: &str) {
         if let Some(dialog) = self.shown_dialog() {
             self.bots.manage.name_dialog(id, dialog);
+        }
+    }
+
+    pub(super) fn close_dialog_if_gone(&mut self, listed: &[String], cx: &mut Context<Self>) {
+        if self.bots.manage.named_gone(listed, self.shown_dialog()) {
+            self.close_dialog(cx);
         }
     }
 

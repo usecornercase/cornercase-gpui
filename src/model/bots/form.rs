@@ -2,6 +2,8 @@ use anyhow::bail;
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::cli::flag;
+
 pub(crate) const CORNERCASE: &str = "cornercase";
 pub(crate) const FULL: &str = "full";
 
@@ -24,8 +26,14 @@ pub(crate) fn agents_of(text: &str) -> anyhow::Result<Vec<AgentInfo>> {
 }
 
 pub(crate) fn chosen_at_open(agents: &[AgentInfo], default: Option<&str>) -> Option<usize> {
-    let default = default.and_then(|name| agents.iter().position(|a| a.agent == name && a.bot));
-    default.or_else(|| agents.iter().position(|a| a.bot))
+    let through = |a: &AgentInfo| a.bot && a.offers(CORNERCASE);
+    let default = default.and_then(|name| agents.iter().position(|a| a.agent == name && through(a)));
+    default.or_else(|| agents.iter().position(through)).or_else(|| agents.iter().position(|a| a.bot))
+}
+
+pub(crate) fn id_of(answer: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(answer).ok()?;
+    value.get("id")?.as_str().filter(|id| !id.is_empty()).map(str::to_string)
 }
 
 impl AgentInfo {
@@ -83,10 +91,6 @@ pub(crate) enum NotSent {
     Blank,
     Access,
     NotABot(String),
-}
-
-fn flag(name: &str, value: &str) -> String {
-    format!("--{name}={value}")
 }
 
 pub(crate) fn new_args(agent: &AgentInfo, typed: &Typed) -> Result<Vec<String>, NotSent> {

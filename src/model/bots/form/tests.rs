@@ -77,9 +77,29 @@ fn an_entry_that_does_not_read_is_left_out() {
 }
 
 #[test]
-fn the_servers_default_agent_is_chosen_when_it_can_be_a_bot() {
+fn the_servers_default_agent_is_chosen_when_it_can_be_a_bot_through_cornercase() {
+    let list = agents_of(r#"{"agents":[{"agent":"a","bot":true,"accesses":["cornercase"]},{"agent":"b","bot":true,"accesses":["cornercase","full"]}]}"#).expect("inline");
+    assert_eq!(chosen_at_open(&list, Some("b")), Some(1));
+}
+
+#[test]
+fn a_default_agent_with_full_access_only_gives_way_to_one_that_offers_cornercase() {
     let list = agents_of(fixture!("bots/agents-codex.json")).expect("fixture");
-    assert_eq!(chosen_at_open(&list, Some("codex")), Some(1));
+    assert_eq!(chosen_at_open(&list, Some("codex")), Some(0));
+}
+
+#[test]
+fn full_access_only_agents_are_chosen_when_nothing_else_can_be_a_bot() {
+    let list = agents_of(r#"{"agents":[{"agent":"codex","bot":true,"accesses":["full"]}]}"#).expect("inline");
+    assert_eq!(chosen_at_open(&list, Some("codex")), Some(0));
+}
+
+#[test]
+fn the_id_of_a_new_bot_is_read_from_its_answer() {
+    assert_eq!(id_of(r#"{"id":"prs","name":"PRs"}"#).as_deref(), Some("prs"));
+    assert_eq!(id_of(r#"{"name":"PRs"}"#), None);
+    assert_eq!(id_of(r#"{"id":""}"#), None);
+    assert_eq!(id_of("not json"), None);
 }
 
 #[test]
