@@ -31,6 +31,10 @@ pub(crate) fn tells(answer: &Answer, (shown, active): (Option<&str>, bool), offe
     offered && !run_failed && !on_screen
 }
 
+pub(crate) fn read_since(was: usize, is: usize) -> bool {
+    was > 0 && is == 0
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Answers {
     heard: Vec<(Answer, Instant)>,

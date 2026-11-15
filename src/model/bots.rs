@@ -16,7 +16,7 @@ pub(crate) use self::manage::{
 pub(crate) use self::talk::{
     Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
 };
-pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, tells};
+pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, read_since, tells};
 
 mod form;
 mod manage;

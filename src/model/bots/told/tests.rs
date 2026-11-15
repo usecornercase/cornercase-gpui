@@ -134,6 +134,15 @@ fn a_bot_that_leaves_the_list_forgets_what_was_heard_for_it() {
 }
 
 #[test]
+fn a_count_that_falls_to_none_means_the_answers_were_read() {
+    assert!(read_since(2, 0));
+    assert!(read_since(1, 0));
+    assert!(!read_since(0, 0));
+    assert!(!read_since(2, 1));
+    assert!(!read_since(0, 1));
+}
+
+#[test]
 fn a_new_server_run_forgets_everything() {
     let (mut answers, base) = (Answers::default(), Instant::now());
     answers.heard(answer("notes", 9), base);

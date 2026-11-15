@@ -51,9 +51,12 @@ impl Store {
         let now = Instant::now();
         let mut due = Vec::new();
         for (id, was) in before {
-            match self.bots.find(id).map(|bot| bot.unread) {
-                None => self.drop_bot_toasts(id, cx),
-                Some(is) => due.extend(self.bots.answers.counted(id, (*was, is), now)),
+            let is = self.bots.find(id).map(|bot| bot.unread);
+            if is.is_none_or(|is| bots::read_since(*was, is)) {
+                self.drop_bot_toasts(id, cx);
+            }
+            if let Some(is) = is {
+                due.extend(self.bots.answers.counted(id, (*was, is), now));
             }
         }
         self.tell_answers(&due, cx);
