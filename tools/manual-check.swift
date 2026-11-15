@@ -707,11 +707,16 @@ func copyPlan(_ args: [String], layout: () -> Layout) throws -> CopyPlan {
 }
 
 func awaitCopy(
-    of text: String, on board: NSPasteboard, within ms: Int, act: () throws -> Void, beforeGivingBack: () -> Void = {}
+    of text: String, on board: NSPasteboard, within ms: Int, act: () throws -> Void,
+    whileSaving: () -> Void = {}, beforeGivingBack: () -> Void = {}
 ) throws -> Arrival {
+    let before = board.changeCount
+    whileSaving()
     let kept = saved(board)
     guard readsBack(board, kept) else { throw unreadable() }
-    let before = board.changeCount
+    guard board.changeCount == before else {
+        throw Failure(message: "the clipboard changed while it was read: nothing was done, try again", status: 1)
+    }
     try act()
     let deadline = Date(timeIntervalSinceNow: Double(ms) / 1000)
     while board.changeCount == before && Date() < deadline { usleep(10_000) }
@@ -733,7 +738,7 @@ func copyAnswer(_ arrival: Arrival, ms: Int) -> (status: Int32, words: String) {
     case .other:
         return (
             5,
-            "something else arrived on the clipboard (another text, a second copy, or the person's own): it is left as it is and none "
+            "something else arrived on the clipboard (another text, a second copy, or the person's own; the text given must be the copy's exact bytes, with no newline added): it is left as it is and none "
                 + "of it is printed; what it held before was not given back: say so to the person whose clipboard it is"
         )
     }
@@ -1285,6 +1290,21 @@ enum SelfTest {
                     } catch { return "\(error)" }
                 }
             }),
+            ("a_copy_while_the_clipboard_is_read_is_never_written_over", {
+                onABoard { board in
+                    theUsersClipboard(on: board)
+                    var posted = false
+                    do {
+                        _ = try awaitCopy(
+                            of: thing, on: board, within: 30, act: { posted = true; windowWrites(thing, on: board) },
+                            whileSaving: { windowWrites("copied while it was read", on: board) })
+                        return "no refusal"
+                    } catch let failure as Failure {
+                        return expect(posted, false) ?? expect(board.string(forType: .string), "copied while it was read")
+                            ?? expect(failure.status, 1)
+                    } catch { return "\(error)" }
+                }
+            }),
             ("a_clipboard_that_differs_after_it_was_given_back_is_told", {
                 onABoard { board in
                     theUsersClipboard(on: board)
@@ -1304,7 +1324,7 @@ enum SelfTest {
                     ?? expect(answers[0].words, "the copy arrived: 2 items given back")
                     ?? expect(answers[1].words, "the copy arrived: 1 item given back")
                     ?? expect(answers[2].words, "nothing arrived on the clipboard in 500 ms: it was not touched")
-                    ?? expect(answers[3].words.hasPrefix("something else arrived on the clipboard (another text, a second copy, or the person's own): it is left as it is and none of it is printed;"), true)
+                    ?? expect(answers[3].words.hasPrefix("something else arrived on the clipboard (another text, a second copy, or the person's own; the text given must be the copy's exact bytes, with no newline added): it is left as it is and none of it is printed;"), true)
             }),
             ("copy_reads_its_wait_and_its_key", {
                 func read(_ args: [String], _ layout: Layout = us) -> String {

@@ -5,6 +5,8 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 script=$repo/tools/machine-bench.sh
 sh_cmd=${SH:-sh}
 bench_only_exports=PATH
+there_leaves_out="CORNERCASE_GPUI_SETTINGS CORNERCASE_GPUI_BROWSER_PROFILE CODEX_HOME GEMINI_CLI_HOME CORNERCASE_BIN"
+there_adds="HOME USER LOGNAME SHELL LANG TERM PATH"
 total=0
 failed=0
 
@@ -75,6 +77,14 @@ case $cmd in
     case $sock in */here/server.sock) side=here ;; esac
     if [ -e "$t/control/fail-config-$side" ]; then
       exit 1
+    fi
+    if [ -e "$t/control/garbage-config-$side" ]; then
+      echo 'not json'
+      exit 0
+    fi
+    if [ -e "$t/control/null-agents-$side" ]; then
+      echo '{"agents": null}'
+      exit 0
     fi
     if [ -e "$t/control/bad-agents-$side" ]; then
       echo '{"agents": [{"name": 5}]}'
@@ -623,20 +633,29 @@ down_removes_the_folders_a_failed_up_kept() {
   check "down of f2: $(cat "$t/err")" [ "$rc" = 0 ]
 }
 
+side_calls() {
+  calls
+  grep -F "socket=$b/$1/" "$t/calls.norm" > "$t/$1.calls"
+  if [ "$1" = here ]; then
+    grep -v 'args=--version$' "$t/here.calls" > "$t/here.calls.new"
+    mv "$t/here.calls.new" "$t/here.calls"
+  fi
+  check "no call on $1" test -s "$t/$1.calls"
+}
+
 every_server_of_the_bench_listens_for_a_phone_on_loopback_only() {
   for side in here there; do
-    grep -F "socket=$b/$side/" "$t/calls.norm" | grep -v 'args=--version$' > "$t/$side.calls"
-    check "no call on $side" test -s "$t/$side.calls" || return 1
+    side_calls "$side" || return 1
     bad=$(grep -v -F -e '|phone=127.0.0.1|' "$t/$side.calls" | head -1)
     check "a $side call that listens for a phone elsewhere: $bad" [ -z "$bad" ] || return 1
   done
 }
 
 each_side_has_a_temporary_folder_of_its_own() {
-  grep -F "socket=$b/here/" "$t/calls.norm" | grep -v 'args=--version$' > "$t/here.calls"
+  side_calls here || return 1
   bad=$(grep -v -F -e "|tmp=$b/tmp|" "$t/here.calls" | head -1)
   check "a here call with another temporary folder: $bad" [ -z "$bad" ] || return 1
-  grep -F "socket=$b/there/" "$t/calls.norm" > "$t/there.calls"
+  side_calls there || return 1
   bad=$(grep -v -F -e "|tmp=$b/there/tmp|" "$t/there.calls" | head -1)
   check "a there call with another temporary folder: $bad" [ -z "$bad" ] || return 1
   for d in "$b/tmp" "$b/there/tmp"; do
@@ -647,20 +666,47 @@ each_side_has_a_temporary_folder_of_its_own() {
   done
 }
 
-the_note_counts_agents() {
-  grep -F -e 'config --json | python3 -I -c' "$repo/design/manual-check.md" > "$t/note.counter"
-  check "the note has not one line that counts the agents" test "$(wc -l < "$t/note.counter")" -eq 1 || return 1
+the_note_makes_the_folder_its_tmpdir_names() {
+  block_of_the_note env || return 1
+  dir=$(sed -n 's/^ *export TMPDIR=//p' "$t/note.env")
+  check "the note's env exports no TMPDIR" test -n "$dir" || return 1
+  sed -n "/mkdir -m 700 \\/tmp\\/cc-check/,/cat > \\/tmp\\/cc-check\\/env/p" "$repo/design/manual-check.md" > "$t/note.before"
+  check "the note makes no $dir before it writes env" grep -q -e "mkdir .*$dir" "$t/note.before"
+}
+
+there_run_sets_what_the_note_exports_except_what_it_leaves_out() {
+  block_of_the_note env || return 1
+  python3 -I -c '
+import re, sys
+note, run, leaves, adds = sys.argv[1:5]
+exports = {m.group(1) for m in re.finditer(r"^\s*export ([A-Za-z_][A-Za-z0-9_]*)=", open(note).read(), re.M)}
+line = open(run).read().split("env -i", 1)[1].split("\"$@\"", 1)[0]
+names = set(re.findall(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=", line))
+want = exports - set(leaves.split())
+have = names - set(adds.split())
+bad = sorted((want - have) | (have - want))
+print(" ".join(bad))
+sys.exit(1 if bad else 0)
+' "$t/note.env" "$b/there/run" "$there_leaves_out" "$there_adds" > "$t/differs" 2>&1 ||
+    { printf "there/run and the note's env differ in: %s\n" "$(cat "$t/differs")" > "$t/why"; return 1; }
+}
+
+counted_by_the_note() {
+  awk -v q="'" '/config --json \| python3 -I -c/ { f = 1; n++ } f { print } f && $0 ~ "^ *" q "$" { exit } END { exit n != 1 }' \
+    "$repo/design/manual-check.md" > "$t/note.counter"
+  check "the note has not one counter of the agents" test -s "$t/note.counter" || return 1
   sed -e "s#/tmp/cc-check/env#$1/env#" -e "s#/tmp/cc-check/config.json#$1/here/config.json#" "$t/note.counter" > "$t/counter.sh"
   "$sh_cmd" "$t/counter.sh" > "$t/counted" 2> "$t/counted.err" || return 1
-  check "the counter prints a path: $(cat "$t/counted")" test "$(grep -c / "$t/counted")" -eq 0
+  check "the counter prints a path or a traceback: $(cat "$t/counted" "$t/counted.err")" \
+    test "$(cat "$t/counted" "$t/counted.err" | grep -c /)" -eq 0
 }
 
 the_notes_counter_and_up_agree_on_the_agents_a_release_knows() {
-  the_note_counts_agents "$b" || return 1
+  counted_by_the_note "$b" || return 1
   check "the counter does not say all pinned: $(cat "$t/counted")" contains "$t/counted" "16 agents known, all pinned" || return 1
   printf 'junie\n' > "$t/control/knows-here"
   runb up "$t/c1" --here "$t/new/cornercase"
-  the_note_counts_agents "$t/c1"
+  counted_by_the_note "$t/c1"
   counted=$?
   rm -f "$t/control/knows-here"
   check "up did not stop on junie: $(cat "$t/err")" contains "$t/err" "knows junie" || return 1
@@ -668,14 +714,14 @@ the_notes_counter_and_up_agree_on_the_agents_a_release_knows() {
   check "the counter did not say 17 and junie: $(cat "$t/counted")" contains "$t/counted" "17 agents known, not pinned: junie" || return 1
   runb down "$t/c1"
   check "down of c1: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
-  for control in no-agents fail-config; do
+  for control in no-agents fail-config garbage-config null-agents; do
     : > "$t/control/$control-here"
     runb up "$t/c2" --here "$t/new/cornercase"
-    the_note_counts_agents "$t/c2"
+    counted_by_the_note "$t/c2"
     counted=$?
     rm -f "$t/control/$control-here"
     check "up ($control) exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
-    check "the counter ($control) did not say it compared nothing: $(cat "$t/counted" 2> /dev/null)" [ "$counted" = 0 ] || return 1
+    check "the counter ($control) did not say it compared nothing: $(cat "$t/counted" "$t/counted.err" 2> /dev/null)" [ "$counted" = 0 ] || return 1
     check "the counter ($control) did not say not compared: $(cat "$t/counted")" contains "$t/counted" "not compared" || return 1
     runb down "$t/c2"
     check "down of c2: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
@@ -1300,6 +1346,8 @@ run_test down_removes_the_folders_a_failed_up_kept
 run_test the_env_aims_the_shell_at_here
 run_test every_server_of_the_bench_listens_for_a_phone_on_loopback_only
 run_test each_side_has_a_temporary_folder_of_its_own
+run_test the_note_makes_the_folder_its_tmpdir_names
+run_test there_run_sets_what_the_note_exports_except_what_it_leaves_out
 run_test the_notes_counter_and_up_agree_on_the_agents_a_release_knows
 run_test there_cannot_reach_here
 run_test the_stand_in_runs_a_link_against_there
