@@ -219,3 +219,24 @@ fn an_agent_with_full_access_only_says_so() {
     assert_eq!(line.as_deref(), Some("Codex can be a bot with full access only: its sandbox cannot reach cornercase."));
     assert_eq!(by(&agents(), "claude").full_only_line(), None);
 }
+
+#[test]
+fn an_agent_offering_neither_access_has_no_full_only_line() {
+    let none = AgentInfo { agent: "x".into(), bot: true, ..AgentInfo::default() };
+    assert_eq!(none.full_only_line(), None);
+}
+
+#[test]
+fn an_empty_account_is_not_sent() {
+    let list = agents();
+    let t = Typed { account: Some(String::new()), ..typed("PRs") };
+    let args = new_args(by(&list, "claude"), &t).expect("sent");
+    assert!(!args.iter().any(|a| a.starts_with("--account")));
+}
+
+#[test]
+fn without_a_default_the_first_agent_through_cornercase_is_chosen_before_a_full_only_one() {
+    let text = r#"{"agents":[{"agent":"a","bot":true,"accesses":["full"]},{"agent":"b","bot":true,"accesses":["cornercase","full"]}]}"#;
+    let list = agents_of(text).expect("inline");
+    assert_eq!(chosen_at_open(&list, None), Some(1));
+}
