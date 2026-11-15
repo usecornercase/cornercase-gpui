@@ -354,6 +354,16 @@ fn an_answers_notification_has_its_headline_and_its_first_line_as_body() {
 }
 
 #[test]
+fn a_banner_says_the_first_line_for_a_bot_and_the_sentence_for_the_rest() {
+    let bot = Telling::of_bot(&told(false, "Answer"));
+    assert_eq!((bot.text.as_str(), bot.banner_body()), ("notes: Answer", "Answer"));
+    let empty = Telling::of_bot(&told(true, ""));
+    assert_eq!(empty.banner_body(), "notes could not answer");
+    let message = telling("notify");
+    assert_eq!(message.banner_body(), message.text);
+}
+
+#[test]
 fn an_answer_posts_only_behind_with_desktop_notifications_on() {
     let telling = Telling::of_bot(&told(false, "Answer"));
     assert!(telling.posts(true, true));

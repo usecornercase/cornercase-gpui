@@ -143,6 +143,34 @@ fn a_count_that_falls_to_none_means_the_answers_were_read() {
 }
 
 #[test]
+fn a_line_heard_twice_before_a_rise_of_two_is_one_answer() {
+    let (mut answers, base) = (Answers::default(), Instant::now());
+    answers.heard(answer("notes", 4), base);
+    answers.heard(answer("notes", 4), later(base, 10));
+    assert_eq!(ids(&answers.counted("notes", (0, 2), later(base, 300))), [4]);
+}
+
+#[test]
+fn a_bot_made_again_with_a_reused_id_tells_its_first_answer_after_it_left_the_list() {
+    let (mut answers, base) = (Answers::default(), Instant::now());
+    answers.heard(answer("notes", 9), base);
+    answers.counted("notes", (0, 1), later(base, 100));
+    answers.keep_listed(&["ops".to_string()]);
+    answers.heard(answer("notes", 1), later(base, 200));
+    assert_eq!(ids(&answers.counted("notes", (0, 1), later(base, 300))), [1]);
+}
+
+#[test]
+fn a_bot_made_again_with_a_reused_id_tells_its_first_answer_after_it_was_removed() {
+    let (mut answers, base) = (Answers::default(), Instant::now());
+    answers.heard(answer("notes", 9), base);
+    answers.counted("notes", (0, 1), later(base, 100));
+    answers.forget_bot("notes");
+    answers.heard(answer("notes", 1), later(base, 200));
+    assert_eq!(ids(&answers.counted("notes", (0, 1), later(base, 300))), [1]);
+}
+
+#[test]
 fn a_new_server_run_forgets_everything() {
     let (mut answers, base) = (Answers::default(), Instant::now());
     answers.heard(answer("notes", 9), base);

@@ -291,8 +291,7 @@ impl Notifier {
         let Some(headline) = &telling.headline else { return };
         let go = telling.button.as_ref().map(|(_, go)| go.clone());
         let id = center::available().then(|| self.store.update(cx, |s, _| s.posted.remember(go)));
-        let body = telling.body.as_deref().unwrap_or(&telling.text);
-        let helper = alert::notification(Os::CURRENT, id, (headline, body), &desktop::on_path);
+        let helper = alert::notification(Os::CURRENT, id, (headline, telling.banner_body()), &desktop::on_path);
         self.run_or_tell(helper.map(|helper| vec![helper]), alert::NOTIFICATION_FAILED, cx);
     }
 

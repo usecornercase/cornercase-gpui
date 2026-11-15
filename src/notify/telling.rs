@@ -109,6 +109,10 @@ impl Telling {
         }
     }
 
+    pub(super) fn banner_body(&self) -> &str {
+        self.body.as_deref().unwrap_or(&self.text)
+    }
+
     pub(super) fn waits(&self, active: bool) -> bool {
         !active && self.headline.is_none()
     }
