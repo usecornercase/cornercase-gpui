@@ -20,12 +20,20 @@ struct Call {
 }
 
 impl Call {
-    fn say(bot: &str, text: &str) -> Self {
-        Self { args: say_args(bot), stdin: Some(text.as_bytes().to_vec()) }
+    fn say(on_its_way: bool, bot: &str, text: &str) -> Option<Self> {
+        (!on_its_way).then(|| Self { args: say_args(bot), stdin: Some(text.as_bytes().to_vec()) })
     }
 
     fn of(words: &[&str]) -> Self {
         Self { args: words.iter().map(|word| (*word).to_string()).collect(), stdin: None }
+    }
+
+    fn stop(bot: &str) -> Self {
+        Self::of(&["bot", "stop", bot])
+    }
+
+    fn reset(bot: &str) -> Self {
+        Self::of(&["bot", "reset", bot])
     }
 }
 
@@ -55,12 +63,9 @@ impl Store {
     }
 
     pub(crate) fn say_to_bot(&mut self, bot: &str, text: String, said: Said, cx: &mut Context<Self>) {
-        if self.busy(&say_key(bot)) {
-            return;
-        }
+        let Some(call) = Call::say(self.busy(&say_key(bot)), bot, &text) else { return };
         let name = self.bot_name(bot);
         let busy = Busy::new(say_key(bot), format!("Sending to {name}…"));
-        let call = Call::say(bot, &text);
         let sent = Sent { bot: bot.to_string(), name, text, said };
         let then: Then = Box::new(move |this, result, cx| {
             if let Err(error) = result {
@@ -106,7 +111,7 @@ impl Store {
             }
             cx.notify();
         });
-        self.bot_job(busy, Call::of(&["bot", "stop", bot]), then, cx);
+        self.bot_job(busy, Call::stop(bot), then, cx);
         cx.notify();
     }
 
@@ -119,7 +124,7 @@ impl Store {
                 this.toast(words, ToastKind::Error, cx);
             }
         });
-        self.bot_job(busy, Call::of(&["bot", "reset", bot]), then, cx);
+        self.bot_job(busy, Call::reset(bot), then, cx);
     }
 }
 

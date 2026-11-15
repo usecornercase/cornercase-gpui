@@ -344,3 +344,13 @@ fn a_chat_the_reader_scrolled_up_is_left_where_it_is() {
     use super::re_anchor;
     assert_eq!(re_anchor(false, 12), None);
 }
+
+#[test]
+fn retry_sends_the_last_message_not_the_steps_between_it_and_the_error() {
+    let lines = [
+        line(1, "you", "ask", false),
+        line(2, "step", "cornercase status --json", false),
+        line(3, "error", "x", false),
+    ];
+    assert_eq!(retry(&lines, false).map(|retry| retry.text), Some("ask".to_string()));
+}
