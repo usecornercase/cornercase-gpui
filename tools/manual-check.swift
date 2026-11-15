@@ -39,6 +39,7 @@ let mainBlock: [Int] = Array(0...35) + Array(37...47) + [50, 93, 94]
 let commandState = UInt32(cmdKey >> 8) & 0xFF
 let shiftState = UInt32(shiftKey >> 8) & 0xFF
 let optionState = UInt32(optionKey >> 8) & 0xFF
+let typingStates: [UInt32] = [0, shiftState, optionState, shiftState | optionState]
 
 let modifiers: [String: CGEventFlags] = [
     "cmd": .maskCommand, "shift": .maskShift, "alt": .maskAlternate, "ctrl": .maskControl,
@@ -392,7 +393,7 @@ func shortcutKey(_ types: (Int, UInt32) -> Typed, _ wanted: String, command: Boo
 }
 
 func typingKey(
-    _ types: (Int, UInt32) -> Typed, _ wanted: String, dead: Bool = false, states: [UInt32] = [0, shiftState, optionState, shiftState | optionState]
+    _ types: (Int, UInt32) -> Typed, _ wanted: String, dead: Bool = false, states: [UInt32] = typingStates
 ) -> (code: Int, state: UInt32)? {
     for state in states {
         for code in mainBlock {
@@ -412,12 +413,12 @@ func stateFlags(_ state: UInt32) -> CGEventFlags {
 
 func unknownKey(_ name: String) -> Failure {
     var hint = ""
-    if let stands = characterNames.first(where: { name.count == 1 && $0.value == Character(name) })?.key {
+    if let stands = nameOf(name) {
         hint = "its name is \(stands); "
     } else if name == "quote" {
         hint = "quote is now us-quote, the key where a US keyboard has ' (a dead key on Spanish ISO); "
     }
-    return Failure(message: "unknown key \(name): \(hint)the keys are \(keyGrammar)", status: 2)
+    return Failure(message: "unknown key \(name.isEmpty ? "'' (an empty name)" : name): \(hint)the keys are \(keyGrammar)", status: 2)
 }
 
 func unknownModifier(_ word: String) -> Failure {
@@ -494,18 +495,28 @@ func resolveCharacter(_ name: String, _ wanted: Character, _ asked: CGEventFlags
         return Posting(code: found.code, flags: asked.union(found.shift ? .maskShift : []))
     }
     let typedText = shift ? String(wanted).uppercased() : String(wanted)
-    let states = asked.contains(.maskAlternate) ? [0, shiftState] : [0, shiftState, optionState, shiftState | optionState]
-    guard let found = typingKey(types, typedText, states: states) else {
+    let plain = asked.contains(.maskAlternate) ? typingKey(types, typedText, states: [0, shiftState]) : nil
+    guard let found = plain ?? typingKey(types, typedText) else {
         throw typingKey(types, typedText, dead: true) == nil ? missingRefusal(name, id) : deadRefusal(name, id)
     }
     return Posting(code: found.code, flags: asked.union(stateFlags(found.state)))
 }
 
-func shiftReading(_ layout: Layout, _ wanted: Character, command: Bool) -> String? {
-    guard let types = layout.types else { return nil }
+func shiftAddsNothing(_ name: String, _ text: String, _ layout: String, _ held: String) -> Failure {
+    Failure(
+        message: "shift adds nothing to \(name) on \(layout): the window reads it as \(held)-\(text) with or without it: post \(name) \(held), nothing was posted",
+        status: 2)
+}
+
+func shiftFailure(_ name: String, _ wanted: Character, _ layout: Layout, command: Bool) -> Failure {
+    guard let types = layout.types, let id = layout.name else { return shiftRefusal(name, String(wanted), nil) }
     let text = String(wanted)
-    guard let code = shortcutKey(types, text, command: command, shift: false)?.code ?? typingKey(types, text)?.code else { return nil }
-    return windowKey(types, code: code, command: command, shift: true).key
+    guard let found = shortcutKey(types, text, command: command, shift: false) else {
+        return whyNoShortcut(types, text, name, id, command: command)
+    }
+    let reading = windowKey(types, code: found.code, command: command, shift: true).key
+    if found.shift || reading == text { return shiftAddsNothing(name, text, id, command ? "cmd" : "ctrl") }
+    return shiftRefusal(name, text, reading)
 }
 
 func resolve(_ name: String, _ held: [String], layout: () -> Layout) throws -> Posting {
@@ -519,7 +530,7 @@ func resolve(_ name: String, _ held: [String], layout: () -> Layout) throws -> P
     let shortcut = asked.contains(.maskCommand) || asked.contains(.maskControl)
     let found = layout()
     if asked.contains(.maskShift) && !wanted.isLetter {
-        throw shiftRefusal(name, String(wanted), shortcut ? shiftReading(found, wanted, command: asked.contains(.maskCommand)) : nil)
+        throw shortcut ? shiftFailure(name, wanted, found, command: asked.contains(.maskCommand)) : shiftRefusal(name, String(wanted), nil)
     }
     return try resolveCharacter(name, wanted, asked, layout: found)
 }
@@ -578,12 +589,17 @@ func holdRefusal(_ word: String) -> Failure {
     Failure(message: "hold takes no modifiers (\(word)): hold PID KEY [MS]; key posts a key with modifiers", status: 2)
 }
 
-func hold(_ pid: pid_t, _ name: String, _ rest: [String]) throws {
+func holdDuration(_ rest: [String]) throws -> Int {
     if let word = rest.first(where: { modifiers[$0] != nil }) { throw holdRefusal(word) }
     guard rest.count <= 1 else { throw Failure(message: usage, status: 2) }
-    let posting = try resolve(name, [], layout: layoutInUse)
     let ms = try rest.first.map { Int(try wholeNumber($0, "ms")) } ?? 800
     guard (0...10_000).contains(ms) else { throw Failure(message: "ms must be 0 to 10000", status: 2) }
+    return ms
+}
+
+func hold(_ pid: pid_t, _ name: String, _ rest: [String]) throws {
+    let ms = try holdDuration(rest)
+    let posting = try resolve(name, [], layout: layoutInUse)
     try allowed()
     func post(_ down: Bool, repeating: Bool) {
         let event = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(posting.code), keyDown: down)
@@ -939,7 +955,17 @@ enum SelfTest {
                     "2: shift with slash is another character: the window reads shift and / as the character they type: nothing was posted")
             }),
             ("alt_with_a_character_is_posted_on_the_key_that_types_it_plain", {
-                expect([posted("2", ["alt"], spanish), refused("leftbracket", ["alt"], spanish).prefix(2).description], ["19 A", "1:"])
+                expect([posted("2", ["alt"], spanish), posted("leftbracket", ["alt"], spanish)], ["19 A", "33 A"])
+            }),
+            ("shift_adds_nothing_to_a_symbol_whose_key_already_takes_it", {
+                expect([refused("slash", ["cmd", "shift"], spanish), refused("question", ["cmd", "shift"], us)], [
+                    "2: shift adds nothing to slash on test.Spanish-ISO: the window reads it as cmd-/ with or without it: post slash cmd, nothing was posted",
+                    "2: shift adds nothing to question on test.US: the window reads it as cmd-? with or without it: post question cmd, nothing was posted",
+                ])
+            }),
+            ("shift_with_a_symbol_that_needs_alt_says_the_true_thing", {
+                expect(refused("leftbracket", ["cmd", "shift"], spanish),
+                    "1: leftbracket is typed only with alt on test.Spanish-ISO, and with cmd or ctrl held the window reads that key without alt, as cmd-`: this shortcut cannot reach the window on this layout, nothing was posted")
             }),
             ("the_shifted_command_table_decides_when_it_differs", {
                 expect([posted("question", ["cmd"], ruLike), posted("slash", ["cmd"], ruLike)], ["44 SC", "44 C"])
@@ -963,7 +989,7 @@ enum SelfTest {
                 return expect(Dictionary(uniqueKeysWithValues: positionNames.map { ($0, posted($0, [], us)) }),
                     Dictionary(uniqueKeysWithValues: want.map { ($0.key, "\($0.value) ") }))
             }),
-            ("an_empty_name_is_unknown_and_posts_nothing", { expect(refused("", ["cmd"], us), "2: unknown key : the keys are \(keyGrammar)") }),
+            ("an_empty_name_is_unknown_and_posts_nothing", { expect(refused("", ["cmd"], us), "2: unknown key '' (an empty name): the keys are \(keyGrammar)") }),
             ("every_refusal_says_its_words", {
                 let all = [
                     refused("a", [], nothing), refused("a", [], noData), refused("t", ["cmd"], dvorakCommand),
@@ -984,6 +1010,12 @@ enum SelfTest {
             }),
             ("hold_says_it_takes_no_modifiers", {
                 expect(holdRefusal("cmd").message, "hold takes no modifiers (cmd): hold PID KEY [MS]; key posts a key with modifiers")
+            }),
+            ("hold_reads_its_duration_and_refuses_a_modifier_word", {
+                let words = [["cmd"], ["500", "cmd"], ["500", "600"], ["abc"], ["20000"], []].map { rest -> String in
+                    do { return "\(try holdDuration(rest))" } catch let failure as Failure { return failure.message.hasPrefix("hold takes") ? "m" : "\(failure.status)" } catch { return "?" }
+                }
+                return expect(words, ["m", "m", "2", "2", "2", "800"])
             }),
             ("alt_with_cmd_is_passed_on", { expect(posted("plus", ["cmd", "alt"], spanish), "30 CA") }),
             ("a_layout_without_key_data_refuses_a_character", {
