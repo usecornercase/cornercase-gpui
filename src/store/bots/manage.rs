@@ -1,12 +1,13 @@
 use std::time::Instant;
 
+use gpui::Context;
+
 use super::super::run_on::start_key;
 use super::super::{Busy, Store, ToastKind};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
 use crate::model::bots::{Arrival, Making, id_of, made_when, making};
 use crate::platform::Os;
-use gpui::Context;
 
 fn remove_key(id: &str) -> String {
     format!("bot-remove:{id}")

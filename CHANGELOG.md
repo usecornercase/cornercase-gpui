@@ -4,7 +4,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 ## 0.1.113
 
-- **Make and remove your bots from the window.** With cornercase 0.13.77 or newer, **New bot…** (in the sidebar's Projects `+`, the Bots section's `+`, or ⌘E, Ctrl+Shift+E on Linux and Windows) opens a form for the bot's name, agent, model, effort, account, access and what it is for. Type a name and press Return and the bot's chat opens, ready for your first message. **Remove bot…** in a bot's `⋯` or right-click menu asks first; while the bot answers, stop it first. Editing and renaming a bot, and opening its folder, still happen in cornercase's own window or with `cornercase bot edit`.
+- **Make and remove your bots from the window.** With cornercase 0.13.77 or newer, **New bot…** (in the sidebar's Projects `+`, the Bots section's `+`, or ⌘E, Ctrl+Shift+E on Linux and Windows) opens a form for the bot's name, agent, model, effort, account, access and what it is for. Type a name and press Return and the bot's chat opens, ready for your first message (with the keyboard alone this needs an agent that can run through cornercase; Codex can only have full access, which you pick with the mouse). **Remove bot…** in a bot's `⋯` or right-click menu asks first; while the bot answers, stop it first. Editing and renaming a bot, and opening its folder, still happen in cornercase's own window or with `cornercase bot edit`.
 
 ## 0.1.112
 
