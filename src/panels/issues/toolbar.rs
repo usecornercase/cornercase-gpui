@@ -10,19 +10,77 @@ use crate::notify::tip;
 use crate::theme::colours;
 use crate::ui::{self, Icon};
 
+const SIDES: f32 = 16.;
+const GAP: f32 = 8.;
+const FILTER_LEAST: f32 = 160.;
+const TEXT: f32 = 12.;
+const CHEVRON: f32 = 12.;
+const PEOPLE_FRAME: f32 = ui::BUTTON_FRAME + ui::ICON_GAP + CHEVRON;
+const CLOSED_FRAME: f32 = ui::TICK_BOX + ui::TICK_GAP;
+const CLOSED: &str = "Include closed";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Shape {
+    OneRow,
+    ClosedBesideTabs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Label {
+    whole: f32,
+    anyone: f32,
+}
+
+impl Label {
+    fn least(self) -> f32 {
+        self.whole.min(self.anyone)
+    }
+}
+
+impl Shape {
+    fn of(sheet: f32, closed: f32, people: [Label; 2]) -> Self {
+        let buttons: f32 = people.iter().map(|label| PEOPLE_FRAME + label.least()).sum();
+        let row = FILTER_LEAST + CLOSED_FRAME + closed + buttons + 3. * GAP;
+        if sheet - 2. * SIDES >= row { Self::OneRow } else { Self::ClosedBesideTabs }
+    }
+}
+
+fn who_label(field: &str, who: &Who) -> String {
+    format!("{}: {}", capitalise(field), who.label())
+}
+
+fn text_width(text: &str, window: &Window) -> f32 {
+    let text = ui::flattened(text.to_string());
+    let run = window.text_style().to_run(text.len());
+    let line = window.text_system().shape_line(text, px(TEXT), &[run], None);
+    f32::from(line.width).ceil()
+}
+
+fn frame() -> Div {
+    div()
+        .flex_none()
+        .flex()
+        .flex_col()
+        .gap(px(10.))
+        .px(px(SIDES))
+        .pt(px(12.))
+        .pb(px(12.))
+        .border_b_1()
+        .border_color(colours::border())
+}
+
 impl IssuesPanel {
     pub(super) fn toolbar(&self, cx: &mut Context<Self>) -> Div {
-        div()
-            .flex_none()
-            .flex()
-            .flex_col()
-            .gap(px(10.))
-            .px(px(16.))
-            .pt(px(12.))
-            .pb(px(12.))
-            .border_b_1()
-            .border_color(colours::border())
-            .child(self.tabs_row(cx))
+        frame().child(self.tabs_row(None, cx))
+    }
+
+    fn labels(&self, window: &Window) -> [Label; 2] {
+        let who = self.who(&self.tab);
+        let fields = self.fields();
+        std::array::from_fn(|i| Label {
+            whole: text_width(&who_label(&fields[i], &who[i]), window),
+            anyone: text_width(&who_label(&fields[i], &Who::Anyone), window),
+        })
     }
 
     pub(super) fn toolbar_with_filters(
@@ -32,10 +90,28 @@ impl IssuesPanel {
         cx: &mut Context<Self>,
     ) -> Div {
         let failing = source.filter(|s| s.state == SourceState::Failing).and_then(|s| s.reason.clone());
-        self.toolbar(cx).child(self.filters_row(window, cx)).children(failing.map(error_note))
+        let labels = self.labels(window);
+        let shape = Shape::of(self.sheet.get(), text_width(CLOSED, window), labels);
+        let closed = self.closed_box(cx);
+        let (beside, within) = match shape {
+            Shape::ClosedBesideTabs => (Some(closed), None),
+            Shape::OneRow => (None, Some(closed)),
+        };
+        frame()
+            .child(self.tabs_row(beside, cx))
+            .child(self.filters_row(within, labels, window, cx))
+            .children(failing.map(error_note))
     }
 
-    fn tabs_row(&self, cx: &mut Context<Self>) -> Div {
+    fn closed_box(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        ui::checkbox("issues-closed", self.closed, CLOSED)
+            .flex_none()
+            .text_size(px(TEXT))
+            .text_color(colours::muted())
+            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.toggle_closed(cx)))
+    }
+
+    fn tabs_row(&self, closed: Option<Stateful<Div>>, cx: &mut Context<Self>) -> Div {
         let any = self.sources.as_ref().is_some_and(Sources::any_connected);
         let mut items: Vec<AnyElement> = vec![
             ui::segment("tab-all", "All", self.tab == Tab::All)
@@ -53,6 +129,7 @@ impl IssuesPanel {
             .gap(px(10.))
             .child(ui::segments(items).flex_wrap())
             .child(div().flex_1())
+            .children(closed)
             .child(self.refresh_button(cx))
     }
 
@@ -73,17 +150,21 @@ impl IssuesPanel {
             .into_any_element()
     }
 
-    fn filters_row(&self, window: &Window, cx: &mut Context<Self>) -> Div {
-        let mut row =
-            div().flex().items_center().gap(px(8.)).child(self.search_box(window, cx).flex_1().min_w(px(160.))).child(
-                ui::checkbox("issues-closed", self.closed, "Include closed")
-                    .flex_none()
-                    .text_size(px(12.))
-                    .text_color(colours::muted())
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.toggle_closed(cx))),
-            );
+    fn filters_row(
+        &self,
+        closed: Option<Stateful<Div>>,
+        labels: [Label; 2],
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let mut row = div()
+            .flex()
+            .items_center()
+            .gap(px(GAP))
+            .child(self.search_box(window, cx).flex_1().min_w(px(FILTER_LEAST)))
+            .children(closed);
         for (index, field) in self.fields().iter().enumerate() {
-            row = row.child(self.who_slot(index, field, window, cx));
+            row = row.child(self.who_slot((index, labels[index].least()), field, window, cx));
         }
         row
     }
@@ -97,24 +178,27 @@ impl IssuesPanel {
         ui::search_field(self.search.clone(), focused, clear)
     }
 
-    fn who_slot(&self, index: usize, field: &str, window: &Window, cx: &mut Context<Self>) -> Div {
+    fn who_slot(&self, (index, least): (usize, f32), field: &str, window: &Window, cx: &mut Context<Self>) -> Div {
         let open = self.picker == Some(index);
         div()
             .relative()
-            .flex_none()
-            .child(self.who_button(index, field, cx))
+            .flex()
+            .child(self.who_button(index, field, least, cx))
             .when(open, |d| d.child(self.picker_popover(index, field, window, cx)))
     }
 
-    fn who_button(&self, index: usize, field: &str, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn who_button(&self, index: usize, field: &str, least: f32, cx: &mut Context<Self>) -> Stateful<Div> {
         let who = self.who(&self.tab)[index].clone();
         let active = who != Who::Anyone;
         let colour = if active { colours::accent() } else { colours::soft() };
-        ui::button_coloured(("issues-who", index), format!("{}: {}", capitalise(field), who.label()), colour)
-            .flex()
-            .items_center()
-            .gap(px(6.))
-            .child(ui::icon(Icon::ChevronDown, 12.).text_color(colour))
+        let (label, id) = (who_label(field, &who), ("issues-who", index));
+        let button = if who.is_person() {
+            ui::cut_button(id, label).text_color(colour).min_w(px(PEOPLE_FRAME + least))
+        } else {
+            ui::button_coloured(id, label, colour).flex().items_center().gap(px(ui::ICON_GAP))
+        };
+        button
+            .child(ui::icon(Icon::ChevronDown, CHEVRON).text_color(colour))
             .when(active || self.picker == Some(index), |d| d.border_color(colours::accent()))
             .on_mouse_down(
                 MouseButton::Left,
@@ -138,3 +222,6 @@ fn tab_segment(source: &SourceInfo, selected: bool, cx: &mut Context<IssuesPanel
         .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.set_tab(tab.clone(), cx)))
         .into_any_element()
 }
+
+#[cfg(test)]
+mod tests;

@@ -86,11 +86,12 @@ impl SettingsPanel {
             Appearance::get(cx).update(cx, |appearance, cx| appearance.set_opacity(key, Some(chosen), cx));
         });
         div()
+            .min_w_0()
             .flex()
             .items_center()
             .gap(px(10.))
             .child(bar)
-            .child(div().w(px(38.)).text_size(px(11.5)).text_color(colours::muted()).child(percent(value)))
+            .child(div().w(px(38.)).flex_none().text_size(px(11.5)).text_color(colours::muted()).child(percent(value)))
     }
 
     fn opacity_reset(key: &'static str, value: f32, snap: &Snap, cx: &mut Context<Self>) -> AnyElement {

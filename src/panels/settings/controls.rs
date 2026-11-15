@@ -103,7 +103,7 @@ impl SettingsPanel {
                     .into_any_element()
             })
             .collect();
-        ui::segments(items).when(busy, |d| d.opacity(0.5))
+        ui::segments(items).flex_wrap().when(busy, |d| d.opacity(0.5))
     }
 
     pub(super) fn render_text(&self, role: &Role, look: Look, window: &Window, cx: &mut Context<Self>) -> Div {
