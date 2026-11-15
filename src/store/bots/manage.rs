@@ -1,20 +1,22 @@
 use std::time::Instant;
 
-use gpui::Context;
+use gpui::{Context, Pixels, Point};
 
 use super::super::run_on::start_key;
 use super::super::{Busy, Store, ToastKind};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
-use crate::model::bots::{Arrival, Creating, Making, id_of, making};
+use crate::model::bots::{
+    Arrival, Creating, Making, create_failed, id_of, making, remove_failed, rename_args, rename_failed, save_failed,
+};
 use crate::platform::Os;
 
 fn remove_key(id: &str) -> String {
     format!("bot-remove:{id}")
 }
 
-pub(crate) fn create_failed(name: &str, words: &str) -> String {
-    format!("Could not create the bot {name}: {words}")
+fn rename_key(id: &str) -> String {
+    format!("bot-rename:{id}")
 }
 
 impl Store {
@@ -23,14 +25,46 @@ impl Store {
         Some(making(self.releases().lacks(Feature::Bots), Os::CURRENT))
     }
 
-    pub(crate) fn create_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
+    fn dialog_job(&mut self, (dialog, doing): (u64, String), args: Vec<String>, then: Then, cx: &mut Context<Self>) {
         if self.busy(&start_key(dialog)) {
             return;
         }
+        self.bot_job(Busy::new(start_key(dialog), doing), Call::args(args), then, cx);
+    }
+
+    pub(crate) fn create_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
         let creating = Creating::new(dialog, name, self.bots.boot.as_deref());
-        let busy = Busy::new(start_key(dialog), format!("Creating the bot {name}…"));
         let then: Then = Box::new(move |this, result, cx| this.bot_created(&creating, result, cx));
-        self.bot_job(busy, Call::args(args), then, cx);
+        self.dialog_job((dialog, format!("Creating the bot {name}…")), args, then, cx);
+    }
+
+    pub(crate) fn save_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
+        let name_of = name.to_string();
+        let then: Then = Box::new(move |this, result, cx| this.bot_saved(dialog, &name_of, result, cx));
+        self.dialog_job((dialog, format!("Saving {name}…")), args, then, cx);
+    }
+
+    fn bot_saved(&mut self, dialog: u64, name: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+        match result {
+            Ok(_) => self.close_started(Some(dialog), false, cx),
+            Err(error) => self.refused_here(dialog, save_failed(name, &cli::reason(&error)), cx),
+        }
+    }
+
+    pub(crate) fn rename_bot(&mut self, id: &str, name: &str, cx: &mut Context<Self>) {
+        let was = self.bot_name(id);
+        let busy = Busy::new(rename_key(id), format!("Renaming {was}…"));
+        let then: Then = Box::new(move |this, result, cx| {
+            if let Err(error) = result {
+                this.toast(rename_failed(&was, &cli::reason(&error)), ToastKind::Error, cx);
+            }
+        });
+        self.bot_job(busy, Call::args(rename_args(id, name)), then, cx);
+    }
+
+    pub(crate) fn ask_bot_menu(&mut self, id: &str, at: Point<Pixels>, cx: &mut Context<Self>) {
+        self.asks.bot_menu.ask(id, at);
+        cx.notify();
     }
 
     fn bot_created(&mut self, creating: &Creating, result: anyhow::Result<String>, cx: &mut Context<Self>) {
@@ -47,11 +81,11 @@ impl Store {
                     None => self.toast("cornercase bot new printed no id", ToastKind::Error, cx),
                 }
             }
-            Err(error) => self.create_refused(dialog, create_failed(&creating.name, &cli::reason(&error)), cx),
+            Err(error) => self.refused_here(dialog, create_failed(&creating.name, &cli::reason(&error)), cx),
         }
     }
 
-    fn create_refused(&mut self, dialog: u64, words: String, cx: &mut Context<Self>) {
+    fn refused_here(&mut self, dialog: u64, words: String, cx: &mut Context<Self>) {
         if self.shown_dialog() == Some(dialog) {
             self.bots.manage.refuse(dialog, words);
             cx.notify();
@@ -85,7 +119,7 @@ impl Store {
         let then: Then = Box::new(move |this, result, cx| {
             if let Err(error) = result {
                 this.bots.manage.removal_failed(&bot);
-                this.toast(format!("Could not remove {name}: {}", cli::reason(&error)), ToastKind::Error, cx);
+                this.toast(remove_failed(&name, &cli::reason(&error)), ToastKind::Error, cx);
             }
         });
         self.bot_job(busy, Call::of(&["bot", "remove", id]), then, cx);

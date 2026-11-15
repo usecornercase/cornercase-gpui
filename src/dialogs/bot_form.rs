@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, IntoElement,
     ParentElement as _, Render, ScrollHandle, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _,
@@ -7,13 +5,21 @@ use gpui::{
 };
 
 use super::{body_height, cancel_and, close, dialog_starts, fitted, frame, show, within};
-use crate::model::bots::{AgentInfo, CORNERCASE, FULL, NotSent, Typed, agents_of, chosen_at_open, new_args};
+use crate::model::bots::{
+    AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, agents_of, chosen_at_open, kept_accounts, new_args,
+};
 use crate::store::{Store, args};
 use crate::theme::colours;
 use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, TextField, TextFieldEvent, Tone};
 
 const TITLE: &str = "New bot";
+const SAVE: &str = "Save";
+const SAVING: &str = "Saving…";
+const KEEPS_AGENT: &str = "A bot keeps its agent: another one cannot continue its conversation.";
+const ABOUT_WAITS: &str = "Stays as it is: it is bot.md, in the bot's folder. Showing and changing it here needs usecornercase/cornercase-terminal#876.";
+const FROM_NEXT: &str =
+    "Only what you change is sent, from the bot's next message on: an answer it is writing keeps what it had.";
 const READING: &str = "Reading the agents…";
 const NO_AGENT: &str = "No agent here can be a bot yet.";
 const CHOOSE_ACCESS: &str = "Choose its access.";
@@ -23,6 +29,10 @@ const THROUGH_NOTE: &str = "Through cornercase, it reads anything and writes onl
 const FULL_NOTE: &str = "Full access lets it change any file and run anything, unattended.";
 const ABOUT_HINT: &str = "what it is for (optional)";
 const OWN: &str = "the agent's own";
+
+fn edit_title(name: &str) -> String {
+    format!("Edit the bot {name}")
+}
 
 pub(crate) fn read_failed(words: &str) -> String {
     format!("Could not read the agents: {words}")
@@ -34,7 +44,13 @@ enum Listing {
     Failed(String),
 }
 
+enum Mode {
+    New,
+    Edit(Editing),
+}
+
 pub(crate) struct BotForm {
+    mode: Mode,
     listing: Listing,
     chosen: Option<usize>,
     name: Entity<TextField>,
@@ -63,19 +79,47 @@ fn field(
     field
 }
 
-pub(crate) fn new_bot(window: &mut Window, cx: &mut App) {
+fn open_form(mode: Mode, window: &mut Window, cx: &mut App) -> bool {
     if Store::get(cx).read(cx).session.is_none() {
-        return;
+        return false;
     }
-    let view = cx.new(|cx| {
+    let view = cx.new(|cx| BotForm::new(mode, window, cx));
+    let focus = view.read(cx).name.read(cx).focus_handle(cx);
+    show(view.into(), &focus, window, cx);
+    true
+}
+
+pub(crate) fn new_bot(window: &mut Window, cx: &mut App) {
+    open_form(Mode::New, window, cx);
+}
+
+pub(crate) fn edit_bot(id: &str, window: &mut Window, cx: &mut App) {
+    let Some(bot) = Store::get(cx).read(cx).bots.find(id).cloned() else { return };
+    if open_form(Mode::Edit(Editing::of(&bot)), window, cx) {
+        Store::get(cx).update(cx, |s, _| s.names_bot(id));
+    }
+}
+
+impl BotForm {
+    fn new(mode: Mode, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let scroller = ScrollHandle::new();
         let plain = || within(&scroller, |f| f);
-        let name = field("PRs", plain(), cx, window);
+        let (placeholder, own) = match &mode {
+            Mode::New => ("PRs".to_string(), String::new()),
+            Mode::Edit(editing) => (editing.before.name.clone(), editing.before.model.clone()),
+        };
+        let name = field(&placeholder, plain(), cx, window);
         let model = field(OWN, plain(), cx, window);
         let about = field(ABOUT_HINT, within(&scroller, TextField::prompt), cx, window);
-        about.update(cx, |about, _| about.set_ends_form(true));
+        let ends = if matches!(mode, Mode::New) { &about } else { &model };
+        ends.update(cx, |last, _| last.set_ends_form(true));
+        if let Mode::Edit(editing) = &mode {
+            name.update(cx, |name, cx| name.set_text(editing.before.name.clone(), cx));
+            model.update(cx, |model, cx| model.set_text(own, cx));
+        }
         cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
-        let mut form = BotForm {
+        let mut form = Self {
+            mode,
             listing: Listing::Reading,
             chosen: None,
             name,
@@ -89,12 +133,15 @@ pub(crate) fn new_bot(window: &mut Window, cx: &mut App) {
         };
         form.read_agents(cx);
         form
-    });
-    let focus = view.read(cx).name.read(cx).focus_handle(cx);
-    show(view.into(), &focus, window, cx);
-}
+    }
 
-impl BotForm {
+    fn editing(&self) -> Option<&Editing> {
+        match &self.mode {
+            Mode::Edit(editing) => Some(editing),
+            Mode::New => None,
+        }
+    }
+
     fn read_agents(&mut self, cx: &mut Context<Self>) {
         self.listing = Listing::Reading;
         crate::store::run(cx, args(&["bot", "agents", "--json"]), Self::agents_read);
@@ -104,16 +151,48 @@ impl BotForm {
     fn agents_read(&mut self, result: anyhow::Result<String>, cx: &mut Context<Self>) {
         match result.and_then(|out| agents_of(&out)) {
             Ok(list) => {
-                let default = Store::get(cx).read(cx).account_settings.default_agent.clone();
-                self.chosen = chosen_at_open(&list, default.as_deref());
-                let saved: BTreeMap<String, String> = list.iter().map(|a| (a.agent.clone(), String::new())).collect();
-                self.accounts = AccountPickers::keeping(saved).inside(self.scroller.clone());
+                self.chosen = self.first_chosen(&list, cx);
+                let kept = kept_accounts(&list, self.editing());
+                self.accounts = AccountPickers::keeping(kept).inside(self.scroller.clone());
                 self.listing = Listing::Read(list);
-                self.fit_agent(cx);
+                self.fit(cx);
             }
             Err(error) => self.listing = Listing::Failed(crate::cli::reason(&error)),
         }
         cx.notify();
+    }
+
+    fn first_chosen(&self, list: &[AgentInfo], cx: &App) -> Option<usize> {
+        if let Some(editing) = self.editing() {
+            return list.iter().position(|a| a.agent == editing.agent);
+        }
+        let default = Store::get(cx).read(cx).account_settings.default_agent.clone();
+        chosen_at_open(list, default.as_deref())
+    }
+
+    fn fit(&mut self, cx: &mut Context<Self>) {
+        match self.editing().map(|editing| editing.before.clone()) {
+            Some(before) => self.fit_edit(&before, cx),
+            None => self.fit_agent(cx),
+        }
+    }
+
+    fn fit_edit(&mut self, before: &Typed, cx: &mut Context<Self>) {
+        let hint = self.agent().map(AgentInfo::model_hint).unwrap_or_default();
+        self.effort.clone_from(&before.effort);
+        self.access.clone_from(&before.access);
+        self.reset_model(hint, false, cx);
+    }
+
+    fn reset_model(&mut self, hint: String, clear: bool, cx: &mut Context<Self>) {
+        self.error = None;
+        self.model.update(cx, |model, cx| {
+            if clear {
+                model.clear(cx);
+            }
+            model.set_placeholder(if hint.is_empty() { OWN.to_string() } else { hint }, cx);
+        });
+        Self::forget_refusal(cx);
     }
 
     fn agent(&self) -> Option<&AgentInfo> {
@@ -127,12 +206,7 @@ impl BotForm {
         let (hint, access) = self.agent().map(|a| (a.model_hint(), a.first_access())).unwrap_or_default();
         self.effort = None;
         self.access = access;
-        self.error = None;
-        self.model.update(cx, |model, cx| {
-            model.clear(cx);
-            model.set_placeholder(if hint.is_empty() { OWN.to_string() } else { hint }, cx);
-        });
-        Self::forget_refusal(cx);
+        self.reset_model(hint, true, cx);
     }
 
     fn forget_refusal(cx: &mut Context<Self>) {
@@ -183,14 +257,25 @@ impl BotForm {
     }
 
     fn submit(&mut self, cx: &mut Context<Self>) {
+        let Some(agent) = self.agent().cloned() else { return };
+        let typed = self.typed(&agent, cx);
+        let dialog = cx.entity_id().as_u64();
+        if let Some(editing) = self.editing() {
+            match editing.save(dialog_starts(cx), &agent, &typed) {
+                Save::Waits => {}
+                Save::Closes => close(cx),
+                Save::Sends(command) => {
+                    let name = editing.before.name.clone();
+                    Store::get(cx).update(cx, |s, cx| s.save_bot(command, &name, dialog, cx));
+                }
+            }
+            return;
+        }
         if dialog_starts(cx) {
             return;
         }
-        let Some(agent) = self.agent() else { return };
-        let typed = self.typed(agent, cx);
-        match new_args(agent, &typed) {
+        match new_args(&agent, &typed) {
             Ok(command) => {
-                let dialog = cx.entity_id().as_u64();
                 let name = typed.name.trim().to_string();
                 Store::get(cx).update(cx, |s, cx| s.create_bot(command, &name, dialog, cx));
             }
@@ -223,9 +308,18 @@ impl BotForm {
                     ),
                 )
                 .into_any_element(),
-            Listing::Read(list) => self.agent_chips(list, cx),
+            Listing::Read(list) => self.agent_body(list, cx),
         };
         ui::field("Agent", body)
+    }
+
+    fn agent_body(&self, list: &[AgentInfo], cx: &mut Context<Self>) -> AnyElement {
+        let Some(editing) = self.editing() else { return self.agent_chips(list, cx) };
+        let label =
+            list.iter().find(|a| a.agent == editing.agent).map_or_else(|| editing.agent.clone(), AgentInfo::label);
+        let chip = ui::resting_chip(("bot-agent", 0_usize), label, true);
+        let chips = ui::chips(vec![chip]);
+        div().flex().flex_col().gap(px(6.)).child(chips).child(ui::dim(KEEPS_AGENT)).into_any_element()
     }
 
     fn agent_chips(&self, list: &[AgentInfo], cx: &mut Context<Self>) -> AnyElement {
@@ -299,7 +393,10 @@ impl BotForm {
     }
 
     fn about_field(&self, window: &Window, cx: &App) -> Div {
-        ui::field("What it's for", ui::prompt_box(&self.about, "create", window, cx))
+        match self.mode {
+            Mode::New => ui::field("What it's for", ui::prompt_box(&self.about, "create", window, cx)),
+            Mode::Edit(_) => ui::field("What it's for", ui::dim(ABOUT_WAITS)),
+        }
     }
 
     fn fields(&self, window: &Window, cx: &mut Context<Self>) -> Div {
@@ -313,6 +410,7 @@ impl BotForm {
             .children(accounts)
             .child(self.access_field(&agent, cx))
             .child(self.about_field(window, cx))
+            .children(self.editing().map(|_| ui::dim(FROM_NEXT)))
     }
 
     fn refusal(&self, dialog: u64, cx: &App) -> Option<Div> {
@@ -321,14 +419,19 @@ impl BotForm {
         words.map(|words| div().text_size(px(12.)).text_color(colours::failed()).child(words))
     }
 
-    fn create_button(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn submit_button(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let (ready, doing) = if self.editing().is_some() { (SAVE, SAVING) } else { ("Create", "Creating…") };
         if dialog_starts(cx) {
-            return ui::busy_button("create", "Creating…", Tone::Primary);
+            return ui::busy_button("create", doing, Tone::Primary);
         }
         if self.agent().is_none() {
-            return ui::resting_button("create", "Create", Tone::Primary);
+            return ui::resting_button("create", ready, Tone::Primary);
         }
-        ui::primary_button("create", "Create").on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
+        ui::primary_button("create", ready).on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx)))
+    }
+
+    fn title(&self) -> String {
+        self.editing().map_or_else(|| TITLE.to_string(), |editing| edit_title(&editing.before.name))
     }
 }
 
@@ -352,6 +455,6 @@ impl Render for BotForm {
             .max_h(px(height))
             .child(scrolled)
             .children(self.refusal(cx.entity_id().as_u64(), cx));
-        frame(TITLE, column, cancel_and(self.create_button(cx))).w(px(520.))
+        frame(self.title(), column, cancel_and(self.submit_button(cx))).w(px(520.))
     }
 }

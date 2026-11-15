@@ -240,3 +240,209 @@ fn without_a_default_the_first_agent_through_cornercase_is_chosen_before_a_full_
     let list = agents_of(text).expect("inline");
     assert_eq!(chosen_at_open(&list, None), Some(1));
 }
+
+fn full_bot() -> Bot {
+    Bot {
+        id: "prs".into(),
+        name: "PRs".into(),
+        agent: "claude".into(),
+        model: Some("opus".into()),
+        effort: Some("high".into()),
+        account: Some("made-up-1".into()),
+        access: "full".into(),
+        ..Bot::default()
+    }
+}
+
+fn bare_bot() -> Bot {
+    Bot { id: "prs".into(), name: "PRs".into(), agent: "claude".into(), access: "cornercase".into(), ..Bot::default() }
+}
+
+fn claude() -> AgentInfo {
+    by(&agents(), "claude").clone()
+}
+
+fn plain_agent() -> AgentInfo {
+    AgentInfo { agent: "x".into(), bot: true, ..AgentInfo::default() }
+}
+
+fn edit_of(bot: &Bot) -> (Editing, Typed) {
+    let editing = Editing::of(bot);
+    let now = editing.before.clone();
+    (editing, now)
+}
+
+#[test]
+fn an_edited_bot_opens_with_every_option_it_has() {
+    let before = Editing::of(&full_bot()).before;
+    assert_eq!(before.name, "PRs");
+    assert_eq!(before.model, "opus");
+    assert_eq!(before.effort.as_deref(), Some("high"));
+    assert_eq!(before.account.as_deref(), Some("made-up-1"));
+    assert_eq!(before.access.as_deref(), Some("full"));
+}
+
+#[test]
+fn an_edited_bot_with_no_option_opens_on_the_agents_own() {
+    let before = Editing::of(&bare_bot()).before;
+    assert_eq!((before.model.as_str(), before.effort, before.account), ("", None, None));
+    assert_eq!(before.access.as_deref(), Some("cornercase"));
+}
+
+#[test]
+fn an_access_the_form_does_not_know_opens_with_none_chosen() {
+    for access in ["", "sandbox"] {
+        let bot = Bot { access: access.into(), ..bare_bot() };
+        assert_eq!(Editing::of(&bot).before.access, None);
+    }
+}
+
+#[test]
+fn nothing_changed_sends_nothing() {
+    let (editing, now) = edit_of(&full_bot());
+    assert_eq!(editing.args(&claude(), &now), None);
+    assert_eq!(editing.save(false, &claude(), &now), Save::Closes);
+}
+
+#[test]
+fn a_new_name_is_sent_trimmed_as_the_only_option() {
+    let (editing, mut now) = edit_of(&full_bot());
+    now.name = "  PR reviews ".into();
+    assert_eq!(editing.args(&claude(), &now), Some(strs(&["bot", "edit", "prs", "--json", "--name=PR reviews"])));
+}
+
+#[test]
+fn a_blank_name_is_no_change() {
+    let (editing, mut now) = edit_of(&full_bot());
+    now.name = "   ".into();
+    assert_eq!(editing.args(&claude(), &now), None);
+}
+
+#[test]
+fn a_name_that_starts_with_a_dash_arrives_whole() {
+    let (editing, mut now) = edit_of(&full_bot());
+    now.name = "-x".into();
+    assert_eq!(editing.args(&claude(), &now).map(|args| args[4].clone()), Some("--name=-x".to_string()));
+}
+
+#[test]
+fn a_model_set_or_put_back_to_the_agents_own_is_sent() {
+    let (editing, mut now) = edit_of(&bare_bot());
+    now.model = "sonnet".into();
+    assert_eq!(editing.args(&claude(), &now).map(|a| a[4].clone()), Some("--model=sonnet".to_string()));
+    let (editing, mut now) = edit_of(&full_bot());
+    now.model = " ".into();
+    assert_eq!(editing.args(&claude(), &now).map(|a| a[4].clone()), Some("--model=".to_string()));
+}
+
+#[test]
+fn an_effort_set_or_put_back_to_the_agents_own_is_sent() {
+    let (editing, mut now) = edit_of(&bare_bot());
+    now.effort = Some("low".into());
+    assert_eq!(editing.args(&claude(), &now).map(|a| a[4].clone()), Some("--effort=low".to_string()));
+    let (editing, mut now) = edit_of(&full_bot());
+    now.effort = None;
+    assert_eq!(editing.args(&claude(), &now).map(|a| a[4].clone()), Some("--effort=".to_string()));
+}
+
+#[test]
+fn an_effort_is_never_sent_for_an_agent_without_efforts() {
+    let (editing, mut now) = edit_of(&full_bot());
+    now.effort = None;
+    assert_eq!(editing.args(&plain_agent(), &now), None);
+}
+
+#[test]
+fn an_account_is_sent_only_when_another_was_picked() {
+    let (editing, mut now) = edit_of(&full_bot());
+    now.account = None;
+    assert_eq!(editing.args(&claude(), &now), None);
+    now.account = Some("made-up-2".into());
+    assert_eq!(editing.args(&claude(), &now).map(|a| a[4].clone()), Some("--account=made-up-2".to_string()));
+    now.account = Some(String::new());
+    assert_eq!(editing.args(&claude(), &now).map(|a| a[4].clone()), Some("--account=".to_string()));
+    now.account = Some("made-up-1".into());
+    assert_eq!(editing.args(&claude(), &now), None);
+}
+
+#[test]
+fn an_access_is_sent_only_when_it_changed() {
+    let (editing, mut now) = edit_of(&full_bot());
+    now.access = Some("cornercase".into());
+    assert_eq!(editing.args(&claude(), &now).map(|a| a[4].clone()), Some("--access=cornercase".to_string()));
+    now.access = Some("full".into());
+    assert_eq!(editing.args(&claude(), &now), None);
+    let unknown = Bot { access: String::new(), ..full_bot() };
+    let (editing, mut now) = edit_of(&unknown);
+    assert_eq!(editing.args(&claude(), &now), None);
+    now.access = Some("full".into());
+    assert_eq!(editing.args(&claude(), &now).map(|a| a[4].clone()), Some("--access=full".to_string()));
+}
+
+#[test]
+fn two_changes_go_in_one_command_in_a_fixed_order() {
+    let (editing, mut now) = edit_of(&bare_bot());
+    now.model = "sonnet".into();
+    now.name = "x".into();
+    let want = strs(&["bot", "edit", "prs", "--json", "--name=x", "--model=sonnet"]);
+    assert_eq!(editing.args(&claude(), &now), Some(want));
+}
+
+#[test]
+fn an_edit_never_sends_the_agent_or_what_the_bot_is_for() {
+    let (editing, _) = edit_of(&bare_bot());
+    let now = Typed {
+        name: "x".into(),
+        model: "sonnet".into(),
+        effort: Some("low".into()),
+        account: Some("made-up-2".into()),
+        access: Some("full".into()),
+        about: "x".into(),
+    };
+    let args = editing.args(&claude(), &now).expect("changes");
+    assert!(args.iter().all(|word| !word.starts_with("--agent") && !word.starts_with("--about")), "{args:?}");
+    assert_eq!(args.len(), 9);
+}
+
+#[test]
+fn an_edit_made_elsewhere_is_not_undone_by_a_field_nobody_touched() {
+    let (editing, mut now) = edit_of(&full_bot());
+    now.name = "x".into();
+    assert_eq!(editing.args(&claude(), &now), Some(strs(&["bot", "edit", "prs", "--json", "--name=x"])));
+}
+
+#[test]
+fn a_second_save_while_the_first_runs_sends_nothing() {
+    let (editing, mut now) = edit_of(&full_bot());
+    now.name = "x".into();
+    assert_eq!(editing.save(true, &claude(), &now), Save::Waits);
+}
+
+#[test]
+fn a_save_with_a_change_sends_it() {
+    let (editing, mut now) = edit_of(&full_bot());
+    now.name = "x".into();
+    let want = Save::Sends(strs(&["bot", "edit", "prs", "--json", "--name=x"]));
+    assert_eq!(editing.save(false, &claude(), &now), want);
+}
+
+#[test]
+fn a_rename_is_one_name_through_bot_edit() {
+    assert_eq!(rename_args("prs", "PR reviews"), strs(&["bot", "edit", "prs", "--json", "--name=PR reviews"]));
+    assert_eq!(rename_args("prs", "-x"), strs(&["bot", "edit", "prs", "--json", "--name=-x"]));
+}
+
+#[test]
+fn a_new_bot_starts_every_agent_on_its_own_login() {
+    let kept = kept_accounts(&agents(), None);
+    assert_eq!(kept.len(), 8);
+    assert!(kept.values().all(String::is_empty));
+}
+
+#[test]
+fn an_edited_bots_picker_starts_on_its_account() {
+    let editing = Editing::of(&full_bot());
+    let kept = kept_accounts(&agents(), Some(&editing));
+    assert_eq!(kept.get("claude").map(String::as_str), Some("made-up-1"));
+    assert_eq!(kept.iter().filter(|(_, account)| !account.is_empty()).count(), 1);
+}

@@ -53,10 +53,14 @@ fn copy_item(label: &'static str, text: String, toast: String) -> Entry {
     })
 }
 
-pub(crate) fn path_items(path: &str, openers: &[Found]) -> Vec<Entry> {
+pub(super) fn folder_items(path: &str, openers: &[Found], here: bool) -> Vec<Entry> {
     let copy = copy_item("Copy path", path.to_string(), format!("Copied {}", ui::home_relative(path)));
-    let open_in = open_in_item(path, openers).filter(|_| cli::host().is_none());
+    let open_in = open_in_item(path, openers).filter(|_| here);
     open_in.into_iter().chain([copy]).collect()
+}
+
+pub(crate) fn path_items(path: &str, openers: &[Found]) -> Vec<Entry> {
+    folder_items(path, openers, cli::host().is_none())
 }
 
 fn panel_item(label: &'static str, kind: PanelKind, focus: Option<(&'static str, u64)>) -> Entry {

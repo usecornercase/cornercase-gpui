@@ -166,3 +166,28 @@ fn a_dialog_naming_a_bot_the_list_dropped_closes() {
     assert!(!manage.named_gone(&["prs".to_string()], Some(7)));
     assert!(!manage.named_gone(&[], Some(8)));
 }
+
+#[test]
+fn a_menu_asked_for_is_taken_once() {
+    let mut ask = MenuAsk::default();
+    ask.ask("prs", 7);
+    assert_eq!(ask.take(&[bot("prs")]), Some((bot("prs"), 7)));
+    assert_eq!(ask.take(&[bot("prs")]), None);
+}
+
+#[test]
+fn a_menu_asked_for_a_bot_that_left_the_list_opens_nothing() {
+    let mut ask = MenuAsk::default();
+    ask.ask("prs", 7);
+    assert_eq!(ask.take(&[bot("ops")]), None);
+    assert_eq!(ask.take(&[bot("prs")]), None);
+}
+
+#[test]
+fn a_refusal_names_the_bot_and_gives_cornercases_words() {
+    let words = "there is a bot called notes already";
+    assert_eq!(create_failed("PRs", words), "Could not create the bot PRs: there is a bot called notes already");
+    assert_eq!(save_failed("PRs", words), "Could not save PRs: there is a bot called notes already");
+    assert_eq!(rename_failed("PRs", words), "Could not rename PRs: there is a bot called notes already");
+    assert_eq!(remove_failed("PRs", words), "Could not remove PRs: there is a bot called notes already");
+}

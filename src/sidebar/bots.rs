@@ -7,9 +7,9 @@ use gpui::{
 use super::arrange::divider;
 use super::head_row;
 use super::rail::count_disc;
-use super::rows::{End, chevron, hover_button, hover_listener, list_text, trailing};
-use super::tip;
-use super::workspace::agent_text;
+use super::rows::{End, chevron, hover_button, hover_listener, list_text, rename_box, trailing};
+use super::workspace::{agent_lines, name_line};
+use super::{Renaming, tip};
 use crate::app::Root;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
@@ -103,7 +103,7 @@ impl Root {
             .px(px(6.))
             .py(px(3.))
             .child(lead)
-            .child(agent_text(bot.name.clone(), bot.detail(), shown))
+            .child(self.bot_text(bot, shown))
             .child(end)
             .on_hover(hover_listener(gid, cx))
             .on_mouse_down(
@@ -112,10 +112,22 @@ impl Root {
                     this.open_bot_menu(&press, e.position, window, cx);
                 }),
             )
-            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                this.store.update(cx, |s, cx| s.show_bot(&click, cx));
+            .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
+                if e.click_count() == 2 {
+                    this.start_bot_rename(&click, window, cx);
+                } else {
+                    this.store.update(cx, |s, cx| s.show_bot(&click, cx));
+                }
             }))
             .into_any_element()
+    }
+
+    fn bot_text(&self, bot: &Bot, shown: bool) -> impl IntoElement + use<> {
+        let first = match self.rename_field(&Renaming::Bot(bot.id.clone())) {
+            Some(field) => rename_box(field).py(px(1.)).into_any_element(),
+            None => name_line(bot.name.clone(), shown).into_any_element(),
+        };
+        agent_lines(first, bot.detail())
     }
 
     fn bot_menu_button(id: &str, gid: &SharedString, cx: &mut Context<Self>) -> impl IntoElement + use<> {

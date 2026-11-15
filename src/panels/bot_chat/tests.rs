@@ -354,3 +354,8 @@ fn retry_sends_the_last_message_not_the_steps_between_it_and_the_error() {
     ];
     assert_eq!(retry(&lines, false).map(|retry| retry.text), Some("ask".to_string()));
 }
+
+#[test]
+fn the_headers_menu_button_names_whose_menu_it_opens() {
+    assert_eq!(super::words::menu_tip("PRs"), "More for PRs");
+}

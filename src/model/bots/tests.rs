@@ -468,3 +468,34 @@ fn a_removed_bots_draft_goes_with_it() {
     bots.take_app(&without);
     assert_eq!((bots.drafts.text("prs"), bots.drafts.text("ops")), ("", "two"));
 }
+
+#[test]
+fn a_bots_folder_and_access_are_read() {
+    let bots = two();
+    let prs = bots.find("prs").expect("prs");
+    assert_eq!(prs.folder, "/tmp/cc266/server.bots/prs");
+    assert_eq!(prs.access, "cornercase");
+}
+
+#[test]
+fn a_bot_without_a_folder_or_an_access_reads_them_empty() {
+    let found = in_app(&json!({"bots": [{"id": "prs", "name": "prs"}]}));
+    assert_eq!((found[0].folder.as_str(), found[0].access.as_str()), ("", ""));
+}
+
+#[test]
+fn a_folder_or_an_access_of_another_type_reads_empty_and_the_bot_stays() {
+    let found = in_app(&json!({"bots": [{"id": "prs", "name": "prs", "folder": 3, "access": ["full"]}]}));
+    assert_eq!(found.len(), 1);
+    assert_eq!((found[0].folder.as_str(), found[0].access.as_str()), ("", ""));
+}
+
+#[test]
+fn a_change_of_folder_or_access_alone_draws_nothing_again() {
+    let mut bots = Bots::new();
+    let with = |folder: &str, access: &str| json!({"bots": [{"id": "prs", "name": "prs", "folder": folder, "access": access}]});
+    bots.take_app(&with("/a", "cornercase"));
+    let revision = bots.revision();
+    bots.take_app(&with("/b", "full"));
+    assert_eq!(bots.revision(), revision);
+}

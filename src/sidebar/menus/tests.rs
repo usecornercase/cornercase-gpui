@@ -1,6 +1,6 @@
 use super::{
-    context_item, group_menu, open_in_item, plugin_items, projects_menu, projects_tip, setup_args, spot_of,
-    workspace_menu,
+    context_item, folder_items, group_menu, open_in_item, plugin_items, projects_menu, projects_tip, setup_args,
+    spot_of, workspace_menu,
 };
 use crate::context_menu::{Entry, read_entries};
 use crate::model::bots::Making;
@@ -246,4 +246,13 @@ fn a_workspace_with_nothing_to_reopen_has_no_reopen_item() {
     for workspace in [2, 3, 4] {
         assert!(!labels(workspace).iter().any(|l| l.starts_with("Reopen")), "{workspace}");
     }
+}
+
+#[test]
+fn a_folder_is_opened_here_and_only_copied_through_remote() {
+    let only = [(Opener::VsCode, Launch::Command("/bin/code".into()))];
+    let kinds = |here| read_entries(&folder_items("/work/shop", &only, here));
+    let want = |rows: &[(&'static str, &str)]| rows.iter().map(|(k, l)| (*k, l.to_string())).collect::<Vec<_>>();
+    assert_eq!(kinds(true), want(&[("item", "Open in VS Code"), ("item", "Copy path")]));
+    assert_eq!(kinds(false), want(&[("item", "Copy path")]));
 }

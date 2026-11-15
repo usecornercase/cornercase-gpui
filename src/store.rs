@@ -10,7 +10,7 @@ use crate::cli::{self, Feature, Has, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, ListMoves, Selection, Switch, switching_key};
-use crate::model::bots::Bots;
+use crate::model::bots::{Bots, MenuAsk};
 use crate::model::machines::{self, Machine};
 use crate::model::{Owner, Session};
 use crate::notify::Posted;
@@ -103,6 +103,7 @@ pub(crate) struct Store {
 pub(crate) struct Asks {
     pub refocus: Option<FocusHandle>,
     pub open_update: Option<Updating>,
+    pub bot_menu: MenuAsk<gpui::Point<gpui::Pixels>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

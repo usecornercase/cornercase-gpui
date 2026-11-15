@@ -242,11 +242,15 @@ impl Root {
         self.name_or_field(&Renaming::Here(target), label)
     }
 
+    pub(super) fn rename_field(&self, what: &Renaming) -> Option<&Entity<ui::TextField>> {
+        self.side.rename.as_ref().filter(|r| r.what == *what).map(|r| &r.field)
+    }
+
     pub(super) fn name_or_field(&self, what: &Renaming, label: Div) -> AnyElement {
-        let Some(rename) = self.side.rename.as_ref().filter(|r| r.what == *what) else {
+        let Some(field) = self.rename_field(what) else {
             return label.into_any_element();
         };
-        div().flex_1().min_w(px(0.)).child(rename_box(&rename.field).py(px(1.))).into_any_element()
+        div().flex_1().min_w(px(0.)).child(rename_box(field).py(px(1.))).into_any_element()
     }
 
     pub(super) fn section_rows(

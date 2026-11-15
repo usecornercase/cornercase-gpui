@@ -1,8 +1,12 @@
-use gpui::{App, IntoElement, ParentElement as _, StatefulInteractiveElement as _, Styled as _, Window, div, px};
+use gpui::{
+    App, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, ParentElement as _,
+    StatefulInteractiveElement as _, Styled as _, Window, div, px,
+};
 
 use super::entries::{self, Control, new_conversation_control, stop_control};
 use super::words::{
-    NEW_CONVERSATION, STARTING, STOP, STOPPING, answering, new_conversation_message, new_conversation_title, turn_label,
+    NEW_CONVERSATION, STARTING, STOP, STOPPING, answering, menu_tip, new_conversation_message, new_conversation_title,
+    turn_label,
 };
 use crate::dialogs::{self, Question};
 use crate::model::bots::{Bot, Chat};
@@ -33,6 +37,20 @@ pub(super) fn header(bot: &Bot, starting: bool) -> impl IntoElement + use<> {
             div().flex_1().min_w_0().text_size(px(11.5)).text_color(colours::faint()).child(ui::one_line(bot.facts())),
         )
         .child(new_conversation(bot, starting))
+        .child(menu_button(bot))
+}
+
+fn menu_button(bot: &Bot) -> impl IntoElement + use<> {
+    let id = bot.id.clone();
+    div().flex_none().child(
+        ui::icon_button("bot-menu", "⋯")
+            .text_color(colours::muted())
+            .tooltip(notify::tip(menu_tip(&bot.name)))
+            .on_mouse_down(MouseButton::Left, move |e: &MouseDownEvent, _, cx| {
+                cx.stop_propagation();
+                Store::get(cx).update(cx, |s, cx| s.ask_bot_menu(&id, e.position, cx));
+            }),
+    )
 }
 
 fn new_conversation(bot: &Bot, starting: bool) -> impl IntoElement + use<> {

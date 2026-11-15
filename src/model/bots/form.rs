@@ -1,7 +1,10 @@
+use std::collections::BTreeMap;
+
 use anyhow::bail;
 use serde::Deserialize;
 use serde_json::Value;
 
+use super::{Bot, set};
 use crate::cli::flag;
 
 pub(crate) const CORNERCASE: &str = "cornercase";
@@ -121,6 +124,83 @@ pub(crate) fn new_args(agent: &AgentInfo, typed: &Typed) -> Result<Vec<String>, 
     }
     args.extend(["--".to_string(), name.to_string()]);
     Ok(args)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Editing {
+    pub id: String,
+    pub agent: String,
+    pub before: Typed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Save {
+    Sends(Vec<String>),
+    Closes,
+    Waits,
+}
+
+fn edit_head(id: &str) -> Vec<String> {
+    ["bot", "edit", id, "--json"].iter().map(ToString::to_string).collect()
+}
+
+impl Editing {
+    pub(crate) fn of(bot: &Bot) -> Self {
+        let access = [CORNERCASE, FULL].contains(&bot.access.as_str()).then(|| bot.access.clone());
+        let before = Typed {
+            name: bot.name.clone(),
+            model: bot.model.clone().unwrap_or_default(),
+            effort: set(bot.effort.as_ref()),
+            account: set(bot.account.as_ref()),
+            access,
+            about: String::new(),
+        };
+        Self { id: bot.id.clone(), agent: bot.agent.clone(), before }
+    }
+
+    pub(crate) fn args(&self, agent: &AgentInfo, now: &Typed) -> Option<Vec<String>> {
+        let before = &self.before;
+        let mut changes = Vec::new();
+        let name = now.name.trim();
+        if !name.is_empty() && name != before.name.trim() {
+            changes.push(flag("name", name));
+        }
+        let model = now.model.trim();
+        if model != before.model.trim() {
+            changes.push(flag("model", model));
+        }
+        if agent.takes_effort() && now.effort != before.effort {
+            changes.push(flag("effort", now.effort.as_deref().unwrap_or("")));
+        }
+        if let Some(account) = now.account.as_deref().filter(|a| *a != before.account.as_deref().unwrap_or("")) {
+            changes.push(flag("account", account));
+        }
+        if let Some(access) = now.access.as_deref().filter(|a| Some(*a) != before.access.as_deref()) {
+            changes.push(flag("access", access));
+        }
+        (!changes.is_empty()).then(|| [edit_head(&self.id), changes].concat())
+    }
+
+    pub(crate) fn save(&self, starting: bool, agent: &AgentInfo, now: &Typed) -> Save {
+        if starting {
+            return Save::Waits;
+        }
+        self.args(agent, now).map_or(Save::Closes, Save::Sends)
+    }
+}
+
+pub(crate) fn kept_accounts(agents: &[AgentInfo], editing: Option<&Editing>) -> BTreeMap<String, String> {
+    let mut kept: BTreeMap<String, String> = agents.iter().map(|a| (a.agent.clone(), String::new())).collect();
+    if let Some(editing) = editing {
+        kept.insert(editing.agent.clone(), editing.before.account.clone().unwrap_or_default());
+    }
+    kept
+}
+
+pub(crate) fn rename_args(id: &str, name: &str) -> Vec<String> {
+    let mut args = edit_head(id);
+    args.push(flag("name", name));
+    args
 }
 
 #[cfg(test)]
