@@ -29,7 +29,7 @@ let pressCounted = countWords.map { $0.word }.joined(separator: " and ")
 let pressHint = countWords.map { "\($0.word) for \($0.count)" }.joined(separator: " and ")
 
 let usage =
-    "usage: manual-check window|covers|front|size|key|hold|text|paste|copy|press|drag|scroll PID … | self-test "
+    "usage: manual-check window|covers|front|size|key|hold|text|paste|copy|press|drag|scroll PID … | displays [x y width height] | self-test "
     + "(key: KEY [cmd] [shift] [alt] [ctrl]; hold: KEY [MS]; KEY: \(keyGrammar); paste: TEXT; copy: TEXT MS [KEY [cmd] [shift] [alt] [ctrl]]; press: x y [\(pressGrammar)]; drag: x0 y0 x1 y1 [right] [hold MS])"
 
 let characterNames: [String: Character] = {
@@ -101,20 +101,28 @@ func window(of pid: pid_t) throws -> Window {
     return Window(id: found.id, frame: found.frame)
 }
 
-func displayFrames() -> [CGRect] {
-    var ids = [CGDirectDisplayID](repeating: 0, count: 16)
+func activeDisplays() -> [CGDirectDisplayID]? {
+    var ids = [CGDirectDisplayID](repeating: 0, count: 32)
     var count: UInt32 = 0
-    CGGetActiveDisplayList(16, &ids, &count)
-    return ids.prefix(Int(count)).map { CGDisplayBounds($0) }
+    guard CGGetActiveDisplayList(32, &ids, &count) == .success else { return nil }
+    return Array(ids.prefix(Int(count)))
+}
+
+func displayFrames() -> [CGRect] {
+    (activeDisplays() ?? []).map { CGDisplayBounds($0) }
+}
+
+func screenNumber(_ screen: NSScreen) -> CGDirectDisplayID? {
+    (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+}
+
+func topLeft(_ visible: CGRect, mainTop: CGFloat) -> CGRect {
+    CGRect(x: visible.minX, y: mainTop - visible.maxY, width: visible.width, height: visible.height)
 }
 
 func visibleAreas() -> [CGRect] {
     guard let main = NSScreen.screens.first else { return [] }
-    return NSScreen.screens.map { screen in
-        let visible = screen.visibleFrame
-        let top = main.frame.maxY - visible.maxY
-        return CGRect(x: visible.minX, y: top, width: visible.width, height: visible.height)
-    }
+    return NSScreen.screens.map { topLeft($0.visibleFrame, mainTop: main.frame.maxY) }
 }
 
 func screen() -> Screen {
@@ -146,7 +154,7 @@ func visiblePart(of window: CGRect, over frame: CGRect, on screen: Screen) -> CG
     return joined.offsetBy(dx: -frame.minX, dy: -frame.minY)
 }
 
-func coversBeforeFront(of pid: pid_t, frame: CGRect, in list: [Shown], on screen: Screen) -> [(window: Shown, part: CGRect)] {
+func coversBeforeFront(of pid: pid_t?, frame: CGRect, in list: [Shown], on screen: Screen) -> [(window: Shown, part: CGRect)] {
     list.compactMap { window in
         guard window.layer > 0, window.pid != pid, !isPassedOver(window, on: screen),
             let part = visiblePart(of: window.frame, over: frame, on: screen)
@@ -171,20 +179,20 @@ func coverRefusal(_ x: String, _ y: String, _ names: [String]) -> String {
     return "other windows cover \(x),\(y), front to back: \(names.joined(separator: "; ")): nothing was posted"
 }
 
+func partText(_ part: CGRect) -> String {
+    "\(Int(part.minX)),\(Int(part.minY)) \(Int(part.width))×\(Int(part.height))"
+}
+
 func coverLines(_ found: [(name: String, part: CGRect)]) -> String {
-    found.map { name, part in
-        let size = "\(Int(part.minX)),\(Int(part.minY)) \(Int(part.width))×\(Int(part.height))"
-        return "\(name) covers \(size) of the window: a press or a scroll there is refused"
-    }.joined(separator: "\n")
+    found.map { name, part in "\(name) covers \(partText(part)) of the window: a press or a scroll there is refused" }
+        .joined(separator: "\n")
 }
 
 func scale(of frame: CGRect) -> CGFloat {
     var id: CGDirectDisplayID = 0
     var count: UInt32 = 0
     CGGetDisplaysWithRect(frame, 1, &id, &count)
-    let screen = NSScreen.screens.first {
-        ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
-    }
+    let screen = NSScreen.screens.first { screenNumber($0) == id }
     return (count > 0 ? screen : NSScreen.main)?.backingScaleFactor ?? 1
 }
 
@@ -897,6 +905,90 @@ func covers(_ pid: pid_t) throws {
         let lines = found.map { (name: named($0.window, processName($0.window.pid)), part: $0.part) }
         throw Failure(message: coverLines(lines), status: 3)
     }
+}
+
+struct Display: Equatable {
+    let uuid: String?
+    let frame: CGRect
+    let main: Bool
+}
+
+let displaysNone = "the system lists no active display (CGGetActiveDisplayList), so there is none to name"
+let displaysNoneFree =
+    "no display is free: on each a window of a higher layer covers all or part of it (the lines above say which and where); a place clear of a cover can be asked with displays X Y WIDTH HEIGHT"
+
+func displaysNoneFreeAt(_ place: CGRect) -> String {
+    "no display is free at \(partText(place)): on each a window of a higher layer covers that place or the place is not inside it (the lines above say which)"
+}
+
+func uuidText(_ bytes: CFUUIDBytes) -> String {
+    let hex = withUnsafeBytes(of: bytes) { $0.map { String(format: "%02x", $0) } }
+    return [hex[0..<4], hex[4..<6], hex[6..<8], hex[8..<10], hex[10..<16]].map { $0.joined() }.joined(separator: "-")
+}
+
+func displayUUID(_ id: CGDirectDisplayID) -> String? {
+    guard let made = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue() else { return nil }
+    return uuidText(CFUUIDGetUUIDBytes(made))
+}
+
+func readDisplays() -> [Display] {
+    let mainNumber = NSScreen.screens.first.flatMap(screenNumber)
+    return (activeDisplays() ?? []).map { Display(uuid: displayUUID($0), frame: CGDisplayBounds($0), main: $0 == mainNumber) }
+}
+
+func coversOf(_ display: Display, place: CGRect?, in list: [Shown], on screen: Screen) -> [(window: Shown, part: CGRect)]? {
+    let own = CGRect(origin: .zero, size: display.frame.size)
+    let local = place ?? own
+    guard own.contains(local) else { return nil }
+    let there = local.offsetBy(dx: display.frame.minX, dy: display.frame.minY)
+    return coversBeforeFront(of: nil, frame: there, in: list, on: screen)
+}
+
+func displayLine(_ display: Display, place: CGRect?, found: [(window: Shown, part: CGRect)]?, naming: (Shown) -> String) -> String {
+    let frame = display.frame
+    let numbers = [frame.minX, frame.minY, frame.width, frame.height].map { String(Int($0)) }
+    let head = ([display.uuid ?? "-"] + numbers + [display.main ? "main" : "other"]).joined(separator: " ")
+    guard let found else { return "\(head) outside: \(partText(place ?? .zero)) is not inside it" }
+    guard !found.isEmpty else { return "\(head) free" }
+    let of = place == nil ? "of the display" : "of the place"
+    return "\(head) covered: " + found.map { "\(naming($0.window)) covers \(partText($0.part)) \(of)" }.joined(separator: "; ")
+}
+
+func displaysAnswer(
+    _ displays: [Display], place: CGRect?, in list: [Shown], on screen: Screen, naming: (Shown) -> String
+) -> (lines: [String], status: Int32, words: String?) {
+    guard !displays.isEmpty else { return ([], 1, displaysNone) }
+    let found = displays.map { coversOf($0, place: place, in: list, on: screen) }
+    let lines = zip(displays, found).map { displayLine($0, place: place, found: $1, naming: naming) }
+    if found.contains(where: { $0?.isEmpty == true }) { return (lines, 0, nil) }
+    return (lines, 3, place.map(displaysNoneFreeAt) ?? displaysNoneFree)
+}
+
+func askedPlace(_ words: [String]) throws -> CGRect? {
+    guard !words.isEmpty else { return nil }
+    guard words.count == 4 else {
+        throw Failure(
+            message: "displays takes nothing, or a place as x y width height in a display's own points from its top-left (as layout.json's bounds), and no pid; not '\(words.joined(separator: " "))'",
+            status: 2)
+    }
+    let numbers = try zip(["x", "y", "width", "height"], words).map { CGFloat(try wholeNumber($1, $0)) }
+    guard numbers[0] >= 0, numbers[1] >= 0 else {
+        throw Failure(
+            message: "a place is in a display's own points from its top-left (as layout.json's bounds), so its x and y are 0 or more, not \(words[0]),\(words[1]): the numbers on displays' own lines are global, a window's place is not",
+            status: 2)
+    }
+    guard numbers[2] > 0, numbers[3] > 0 else {
+        throw Failure(message: "a place's width and height are more than 0, not \(words[2])×\(words[3])", status: 2)
+    }
+    return CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
+}
+
+func listDisplays(_ words: [String]) throws {
+    let place = try askedPlace(words)
+    let answer = displaysAnswer(
+        readDisplays(), place: place, in: onScreen(), on: screen(), naming: { named($0, processName($0.pid)) })
+    answer.lines.forEach(say)
+    if let message = answer.words { throw Failure(message: message, status: answer.status) }
 }
 
 func pressOptions(_ words: [String]) throws -> (button: CGMouseButton, count: Int) {
@@ -1655,8 +1747,197 @@ enum SelfTest {
         ]
     }
 
+    static let firstUUID = "00000000-0000-4000-8000-000000000001"
+    static let secondUUID = "00000000-0000-4000-8000-000000000002"
+    static let mainFrame = CGRect(x: 0, y: 0, width: 1000, height: 800)
+    static let besideFrame = CGRect(x: 1000, y: 0, width: 1000, height: 800)
+    static let aboveLeftFrame = CGRect(x: -1000, y: -200, width: 1000, height: 800)
+    static let mainVisible = CGRect(x: 0, y: 25, width: 1000, height: 700)
+    static let besideVisible = CGRect(x: 1000, y: 25, width: 1000, height: 775)
+    static let aboveLeftVisible = CGRect(x: -1000, y: -175, width: 1000, height: 775)
+    static let pair = Screen(displays: [mainFrame, besideFrame], visible: [mainVisible, besideVisible])
+    static let aside = Screen(displays: [mainFrame, aboveLeftFrame], visible: [mainVisible, aboveLeftVisible])
+    static let single = Screen(displays: [mainFrame], visible: [mainVisible])
+    static let firstDisplay = Display(uuid: firstUUID, frame: mainFrame, main: true)
+    static let secondDisplay = Display(uuid: secondUUID, frame: besideFrame, main: false)
+    static let leftDisplay = Display(uuid: secondUUID, frame: aboveLeftFrame, main: false)
+    static let firstHead = "\(firstUUID) 0 0 1000 800 main"
+    static let secondHead = "\(secondUUID) 1000 0 1000 800 other"
+    static let leftHead = "\(secondUUID) -1000 -200 1000 800 other"
+    static let screenshot = "Screenshot (pid 69680, layer 24)"
+
+    static func fill(_ frame: CGRect) -> Shown { made(11, 69680, "Screenshot", 24, frame) }
+
+    static func gpui(_ id: Int, _ pid: pid_t) -> Shown { made(id, pid, "cornercase-gpui", 0, CGRect(x: 1060, y: 85, width: 600, height: 400)) }
+
+    static func answer(_ displays: [Display], _ list: [Shown], on screen: Screen, place: CGRect? = nil) -> String {
+        let found = displaysAnswer(displays, place: place, in: list, on: screen, naming: { named($0, nil) })
+        return "\(found.status) \(found.lines.joined(separator: " | ")) \(found.words ?? "-")"
+    }
+
+    static func answered(_ displays: [Display], _ list: [Shown], on screen: Screen, place: CGRect? = nil) -> (lines: [String], status: Int32) {
+        let found = displaysAnswer(displays, place: place, in: list, on: screen, naming: { named($0, nil) })
+        return (found.lines, found.status)
+    }
+
+    static func parts(_ list: [Shown], at frame: CGRect, on screen: Screen) -> [String] {
+        coversBeforeFront(of: testDebug, frame: frame, in: list + [made(100, testDebug, "cornercase-gpui", 0, frame)], on: screen)
+            .map { partText($0.part) }
+    }
+
+    static func uuidTests() -> [(String, () -> String?)] {
+        let text = "00000000-0000-4000-8000-00000000abcd"
+        let bytes = CFUUIDBytes(
+            byte0: 0, byte1: 0, byte2: 0, byte3: 0, byte4: 0, byte5: 0, byte6: 0x40, byte7: 0, byte8: 0x80, byte9: 0, byte10: 0,
+            byte11: 0, byte12: 0, byte13: 0, byte14: 0xab, byte15: 0xcd)
+        return [
+            ("a_displays_uuid_is_written_in_lower_case_with_its_hyphens", { expect(uuidText(bytes), text) }),
+            ("the_uuids_text_is_core_foundations_own_in_lower_case", {
+                guard let made = CFUUIDCreateFromString(nil, text as CFString), let own = CFUUIDCreateString(nil, made) as String? else {
+                    return "no uuid made"
+                }
+                return expect([uuidText(CFUUIDGetUUIDBytes(made)) == own.lowercased(), uuidText(CFUUIDGetUUIDBytes(made)) != own], [true, true])
+            }),
+        ]
+    }
+
+    static func coverOfDisplayTests() -> [(String, () -> String?)] {
+        let one = fill(mainFrame)
+        let panel = made(21, 30, "Panel", 1000, CGRect(x: 1700, y: 600, width: 200, height: 100))
+        let notes = made(22, 31, "Notes", 3, CGRect(x: 1100, y: 100, width: 100, height: 100))
+        let both = [firstDisplay, secondDisplay]
+        return [
+            ("a_cover_filling_one_display_covers_a_debug_window_there_and_not_on_the_other", {
+                expect([parts([one], at: CGRect(x: 60, y: 85, width: 600, height: 400), on: pair),
+                    parts([one], at: CGRect(x: 1060, y: 85, width: 600, height: 400), on: pair)], [["0,0 600×400"], []])
+            }),
+            ("displays_calls_the_covered_display_covered_and_the_other_free", {
+                expect(answer(both, [one], on: pair),
+                    "0 \(firstHead) covered: \(screenshot) covers 0,25 1000×700 of the display | \(secondHead) free -")
+            }),
+            ("a_place_is_asked_in_each_displays_own_points", {
+                expect(answered(both, [one], on: pair, place: CGRect(x: 60, y: 60, width: 600, height: 400)).lines,
+                    ["\(firstHead) covered: \(screenshot) covers 0,0 600×400 of the place", "\(secondHead) free"])
+            }),
+            ("covers_over_part_of_a_display_are_named_front_to_back_with_their_parts", {
+                expect(answered(both, [panel, notes], on: pair).lines[1],
+                    "\(secondHead) covered: Panel (pid 30, layer 1000) covers 700,600 200×100 of the display; Notes (pid 31, layer 3) covers 100,100 100×100 of the display")
+            }),
+            ("a_place_clear_of_a_cover_is_free_and_one_under_it_is_not", {
+                expect([CGRect(x: 60, y: 60, width: 500, height: 400), CGRect(x: 600, y: 500, width: 400, height: 300)].map {
+                    answered(both, [panel], on: pair, place: $0).lines[1]
+                }, ["\(secondHead) free", "\(secondHead) covered: Panel (pid 30, layer 1000) covers 100,100 200×100 of the place"])
+            }),
+            ("a_place_not_inside_a_display_is_outside_there", {
+                let place = CGRect(x: 60, y: 60, width: 1280, height: 800)
+                let found = answered(both, [], on: pair, place: place)
+                let words = "no display is free at 60,60 1280×800: on each a window of a higher layer covers that place or the place is not inside it (the lines above say which)"
+                return expect("\(found.status) \(found.lines) \(answer(both, [], on: pair, place: place).hasSuffix(words))",
+                    "3 [\"\(firstHead) outside: 60,60 1280×800 is not inside it\", \"\(secondHead) outside: 60,60 1280×800 is not inside it\"] true")
+            }),
+        ]
+    }
+
+    static func everyMacTests() -> [(String, () -> String?)] {
+        let dock = made(31, 22, "Dock", 20, besideFrame)
+        let hidden = made(32, 10, "X", 24, besideFrame, alpha: 0)
+        let control = made(33, 20, "Control Center", 25, CGRect(x: 1900, y: 0, width: 40, height: 25))
+        let bar = made(34, 21, "Window Server", 24, CGRect(x: 0, y: 0, width: 1000, height: 25))
+        let dockBar = made(35, 22, "Dock", 20, CGRect(x: 0, y: 725, width: 1000, height: 75))
+        let ordinary = made(36, 23, "Google Chrome", 0, CGRect(x: 100, y: 100, width: 500, height: 400))
+        return [
+            ("the_docks_backdrop_alpha_0_and_the_menu_bar_are_passed_over_on_a_second_display", {
+                let list = [dock, hidden, control]
+                return expect([answered([firstDisplay, secondDisplay], list, on: pair).lines[1],
+                    String(parts(list, at: CGRect(x: 1060, y: 85, width: 600, height: 400), on: pair).count)], ["\(secondHead) free", "0"])
+            }),
+            ("a_display_with_only_what_every_mac_has_is_free", {
+                expect(answer([firstDisplay], [control, bar, made(37, 22, "Dock", 20, mainFrame), dockBar, ordinary], on: single), "0 \(firstHead) free -")
+            }),
+        ]
+    }
+
+    static func negativeDisplayTests() -> [(String, () -> String?)] {
+        return [
+            ("a_display_left_of_and_above_the_main_one_is_read_in_its_own_points", {
+                let list = [fill(aboveLeftFrame)]
+                return expect([answered([firstDisplay, leftDisplay], list, on: aside).lines,
+                    parts(list, at: CGRect(x: -940, y: -140, width: 600, height: 400), on: aside)],
+                    [["\(firstHead) free", "\(leftHead) covered: \(screenshot) covers 0,25 1000×775 of the display"], ["0,0 600×400"]])
+            }),
+            ("a_visible_area_above_and_left_of_the_main_display_reads_at_negative_points", {
+                expect(topLeft(CGRect(x: -1000, y: 200, width: 1000, height: 775), mainTop: 800), aboveLeftVisible)
+            }),
+        ]
+    }
+
+    static func twoCheckTests() -> [(String, () -> String?)] {
+        let a = gpui(41, 4242)
+        let b = gpui(42, 4343)
+        let at = CGPoint(x: 1200, y: 200)
+        let both = [firstDisplay, secondDisplay]
+        return [
+            ("before_the_front_another_debug_window_is_no_cover_in_either_order", {
+                expect([[b, a], [a, b]].map { coversBeforeFront(of: 4242, frame: a.frame, in: $0, on: pair).count }, [0, 0])
+            }),
+            ("at_a_point_the_debug_window_above_is_the_one_in_the_way_in_either_order", {
+                expect([[b, a], [a, b]].map { ids(inTheWay(at: at, of: 4242, in: $0, on: pair)) }, ["42", ""])
+            }),
+            ("a_press_refusal_names_the_other_debug_window_in_the_way", {
+                expect(coverRefusal("140", "115", [named(b, "cornercase-gpui")]),
+                    "another window covers 140,115: cornercase-gpui (pid 4343, cornercase-gpui, layer 0): nothing was posted")
+            }),
+            ("displays_calls_a_display_with_two_debug_windows_free_in_either_order", {
+                expect([[b, a], [a, b]].map { answered(both, $0, on: pair).lines[1] }, ["\(secondHead) free", "\(secondHead) free"])
+            }),
+        ]
+    }
+
+    static func answerTests() -> [(String, () -> String?)] {
+        let none = "no display is free: on each a window of a higher layer covers all or part of it (the lines above say which and where); a place clear of a cover can be asked with displays X Y WIDTH HEIGHT"
+        return [
+            ("with_one_covered_display_none_is_free", {
+                expect(answer([firstDisplay], [fill(mainFrame)], on: single),
+                    "3 \(firstHead) covered: \(screenshot) covers 0,25 1000×700 of the display \(none)")
+            }),
+            ("no_display_listed_is_an_error_with_its_words", {
+                expect(answer([], [], on: single), "1  the system lists no active display (CGGetActiveDisplayList), so there is none to name")
+            }),
+            ("a_display_whose_uuid_cannot_be_read_is_written_with_a_dash", {
+                expect(answered([Display(uuid: nil, frame: mainFrame, main: true)], [], on: single).lines, ["- 0 0 1000 800 main free"])
+            }),
+            ("a_display_that_is_not_the_main_one_is_written_as_other", {
+                expect(answered([Display(uuid: firstUUID, frame: mainFrame, main: false)], [], on: single).lines, ["\(firstUUID) 0 0 1000 800 other free"])
+            }),
+        ]
+    }
+
+    static func placeTests() -> [(String, () -> String?)] {
+        let say = "displays takes nothing, or a place as x y width height in a display's own points from its top-left (as layout.json's bounds), and no pid; not "
+        let words = { (list: [String]) in refusal { _ = try askedPlace(list) } }
+        return [
+            ("displays_reads_nothing_or_a_place", {
+                let none = try? askedPlace([])
+                let asked = try? askedPlace(["60", "60", "1280", "800"])
+                return expect([none == .some(nil), asked == .some(CGRect(x: 60, y: 60, width: 1280, height: 800))], [true, true])
+            }),
+            ("displays_refuses_what_it_does_not_take_and_says_why", {
+                expect(["12345"].map { words([$0]) } + [words(["1", "2", "3"]), words(["a", "0", "10", "10"]), words(["0", "0", "0", "800"]), words(["-1000", "60", "100", "100"])],
+                    ["2: \(say)'12345'", "2: \(say)'1 2 3'", "2: x must be a whole number, not 'a'", "2: a place's width and height are more than 0, not 0×800",
+                        "2: a place is in a display's own points from its top-left (as layout.json's bounds), so its x and y are 0 or more, not -1000,60: the numbers on displays' own lines are global, a window's place is not"])
+            }),
+            ("the_usage_line_holds_the_displays_grammar", { expect(usage.contains("scroll PID … | displays [x y width height] | self-test "), true) }),
+            ("this_macs_displays_are_answered_whatever_they_are", {
+                let found = displaysAnswer(readDisplays(), place: nil, in: onScreen(), on: screen(), naming: { named($0, nil) })
+                let shapes = found.lines.map { $0.split(separator: " ").first.map { $0 == "-" || ($0.count == 36 && $0 == $0.lowercased()) } ?? false }
+                return expect([[0, 1, 3].contains(found.status), shapes.allSatisfy { $0 }, (found.status == 1) == found.lines.isEmpty], [true, true, true])
+            }),
+        ]
+    }
+
     static func run() throws {
         let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests() + keyTests() + clipboardTests() + pressStepTests() + pressTests()
+            + uuidTests() + coverOfDisplayTests() + everyMacTests() + negativeDisplayTests() + twoCheckTests() + answerTests() + placeTests()
         var failed = 0
         for (name, body) in cases {
             if let why = body() {
@@ -1673,6 +1954,7 @@ enum SelfTest {
 
 func run(_ args: [String]) throws {
     if args == ["self-test"] { return try SelfTest.run() }
+    if args.first == "displays" { return try listDisplays(Array(args.dropFirst())) }
     guard args.count >= 2, let pid = pid_t(args[1]) else { throw Failure(message: usage, status: 2) }
     if ["front", "size", "key", "hold", "text", "paste", "copy", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
     switch (args[0], args.count) {
