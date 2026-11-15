@@ -70,18 +70,24 @@ impl Answers {
         if is == 0 {
             self.owed.retain(|(owed, _)| owed != bot);
         }
+        if read_since(was, is) {
+            self.heard.retain(|(answer, _)| answer.bot != bot);
+        }
         let rise = is.saturating_sub(was);
         if rise == 0 {
             return Vec::new();
         }
-        let (mine, others): (Vec<_>, Vec<_>) =
-            std::mem::take(&mut self.heard).into_iter().partition(|(a, _)| a.bot == bot);
-        self.heard = others;
-        let mut due: Vec<Answer> = mine.into_iter().map(|(answer, _)| answer).collect();
+        let mut mine: Vec<u64> = self.heard.iter().filter(|(a, _)| a.bot == bot).map(|(a, _)| a.id).collect();
+        mine.sort_unstable();
+        let taken = mine.split_off(mine.len().saturating_sub(rise));
+        let (due, kept): (Vec<_>, Vec<_>) =
+            std::mem::take(&mut self.heard).into_iter().partition(|(a, _)| a.bot == bot && taken.contains(&a.id));
+        self.heard = kept;
+        let mut due: Vec<Answer> = due.into_iter().map(|(answer, _)| answer).collect();
         due.sort_by_key(|answer| answer.id);
-        due.drain(..due.len().saturating_sub(rise));
         if let Some(newest) = due.last() {
-            self.told.insert(bot.to_string(), newest.id);
+            let last = self.told.entry(bot.to_string()).or_insert(0);
+            *last = (*last).max(newest.id);
         }
         for _ in due.len()..rise {
             self.owed.push((bot.to_string(), now));

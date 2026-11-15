@@ -83,12 +83,33 @@ fn two_answers_of_one_bot_counted_in_one_app_line_are_both_told_oldest_first() {
 }
 
 #[test]
-fn a_count_that_rises_by_one_tells_the_newest_answer_and_drops_the_older() {
+fn a_count_that_rises_by_one_tells_the_newest_answer_and_keeps_the_older_for_the_next_rise() {
     let (mut answers, base) = (Answers::default(), Instant::now());
     answers.heard(answer("notes", 4), base);
     answers.heard(answer("notes", 6), later(base, 50));
     assert_eq!(ids(&answers.counted("notes", (0, 1), later(base, 300))), [6]);
-    assert_eq!(answers.counted("notes", (1, 2), later(base, 400)), []);
+    assert_eq!(ids(&answers.counted("notes", (1, 2), later(base, 800))), [4]);
+    assert_eq!(answers.counted("notes", (2, 3), later(base, 900)), []);
+}
+
+#[test]
+fn an_answer_kept_across_a_rise_still_expires_after_two_seconds() {
+    let (mut answers, base) = (Answers::default(), Instant::now());
+    answers.heard(answer("notes", 4), base);
+    answers.heard(answer("notes", 6), later(base, 50));
+    answers.counted("notes", (0, 1), later(base, 300));
+    assert_eq!(answers.counted("notes", (1, 2), later(base, 2_500)), []);
+}
+
+#[test]
+fn an_answer_that_was_read_is_not_told_for_the_next_count() {
+    let (mut answers, base) = (Answers::default(), Instant::now());
+    answers.heard(answer("notes", 4), base);
+    answers.heard(answer("ops", 2), later(base, 20));
+    answers.counted("notes", (1, 0), later(base, 100));
+    assert_eq!(answers.counted("notes", (0, 1), later(base, 400)), []);
+    assert_eq!(answers.heard(answer("notes", 6), later(base, 500)), Some(answer("notes", 6)));
+    assert_eq!(ids(&answers.counted("ops", (0, 1), later(base, 600))), [2]);
 }
 
 #[test]
