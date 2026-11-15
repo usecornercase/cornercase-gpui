@@ -38,9 +38,10 @@ make_stub() {
 #!/bin/sh
 t=@T@
 sock=${CORNERCASE_SOCKET-unset}
-printf 'bin=%s|socket=%s|remote=%s|pane=%s|server=%s|home=%s|pwd=%s|path1=%s|claude=%s|args=%s\n' \
+printf 'bin=%s|socket=%s|remote=%s|pane=%s|server=%s|home=%s|pwd=%s|path1=%s|claude=%s|codex=%s|gemini=%s|args=%s\n' \
   "$0" "$sock" "${CORNERCASE_REMOTE-unset}" "${CORNERCASE_PANE-unset}" "${CORNERCASE_SERVER-unset}" \
-  "${HOME-unset}" "$(pwd -P)" "${PATH%%:*}" "${CLAUDE_CONFIG_DIR-unset}" "$*" >> "$t/calls"
+  "${HOME-unset}" "$(pwd -P)" "${PATH%%:*}" "${CLAUDE_CONFIG_DIR-unset}" "${CODEX_HOME-unset}" \
+  "${GEMINI_CLI_HOME-unset}" "$*" >> "$t/calls"
 cmd=${1-}
 state=$sock.stub
 [ "$sock" = unset ] && state=$t/control/unset
@@ -67,6 +68,23 @@ case $cmd in
       [ -e "$state-agent" ] && printf '3\t1\tclaude\t-\n'
       [ -e "$state-child" ] && printf '4\t1\tclaude\t3\n'
     fi
+    exit 0 ;;
+  config)
+    side=there
+    case $sock in */here/server.sock) side=here ;; esac
+    if [ -e "$t/control/no-agents-$side" ]; then
+      echo '{"settings": []}'
+      exit 0
+    fi
+    names=$(sed -n 's/^    "\([a-z0-9-]*\)": .*/\1/p' "$(dirname "$sock")/config.json")
+    [ -f "$t/control/knows-$side" ] && names="$names $(cat "$t/control/knows-$side")"
+    out=
+    sep=
+    for n in $names; do
+      out="$out$sep{\"name\": \"$n\"}"
+      sep=", "
+    done
+    printf '{"agents": [%s]}\n' "$out"
     exit 0 ;;
   open) echo 1 ;;
   start) : > "$state-agent"; echo 3 ;;
@@ -254,7 +272,8 @@ up_refuses_the_callers_socket_inside_the_folder() {
 b=$t/b
 
 make_main_bench() {
-  runb_env "CORNERCASE_SOCKET=$t/caller.sock" CORNERCASE_REMOTE=devbox CORNERCASE_PANE=7 CORNERCASE_SERVER=x up "$b" --here "$t/new/cornercase" --agent --log
+  runb_env "CORNERCASE_SOCKET=$t/caller.sock" CORNERCASE_REMOTE=devbox CORNERCASE_PANE=7 CORNERCASE_SERVER=x \
+    "CODEX_HOME=$t/home/.codex" "GEMINI_CLI_HOME=$t/home" MBT_TEST_TOKEN=made-up up "$b" --here "$t/new/cornercase" --agent --log
   [ "$rc" = 0 ] || { cat "$t/err" >&2; return 1; }
   calls
 }
@@ -318,12 +337,64 @@ up_copies_each_release() {
 config_pins_ok() {
   for s in here there; do
     c=$b/$s/config.json
-    contains "$c" "\"worktrees_dir\": \"$b/$s/worktrees\"" || return 1
-    contains "$c" "\"claude\": \"$b/$s/agent/claude\"" || return 1
-    for a in codex gemini opencode grok cursor copilot vibe; do
-      contains "$c" "\"$a\": \"/nonexistent/$a\"" || return 1
-    done
+    python3 -I -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+pins = d["agent_commands"]
+want = {n: "/nonexistent/" + n for n in pins}
+want["claude"] = sys.argv[2]
+ok = d["worktrees_dir"] == sys.argv[3] and len(pins) > 1 and pins == want
+sys.exit(0 if ok else 1)
+' "$c" "$b/$s/agent/claude" "$b/$s/worktrees" || return 1
   done
+}
+
+note_block() {
+  sed -n "/cat > \\/tmp\\/cc-check\\/$1 <<'EOF'/,/^ *EOF\$/{p;/^ *EOF\$/q;}" "$repo/design/manual-check.md" | sed '1d;$d'
+}
+
+block_of_the_note() {
+  note_block "$1" > "$t/note.$1"
+  check "the note has no $1 block" test -s "$t/note.$1"
+}
+
+differs_from_the_note() {
+  python3 -I -c '
+import json, sys
+kind, note, bench = sys.argv[1:4]
+if kind == "config":
+    def flat(path):
+        d = json.load(open(path))
+        d.pop("worktrees_dir", None)
+        out = {}
+        for k, v in d.items():
+            if isinstance(v, dict):
+                out.update({k + "." + n: p for n, p in v.items()})
+            else:
+                out[k] = v
+        return out
+    a, b = flat(note), flat(bench)
+    bad = sorted(k for k in set(a) | set(b) if a.get(k, "-") != b.get(k, "-"))
+else:
+    def names(path):
+        exported, unset = set(), set()
+        for line in open(path):
+            words = line.split()
+            if words[:1] == ["export"] and len(words) > 1:
+                exported.add(words[1].split("=")[0])
+            elif words[:1] == ["unset"]:
+                unset.update(words[1:])
+        return exported, unset
+    (ae, au), (be, bu) = names(note), names(bench)
+    bad = sorted((ae - be) | (au - bu))
+    if not (ae and au):
+        bad.append("the note block exports or unsets nothing")
+print(" ".join(bad))
+sys.exit(1 if bad else 0)
+' "$1" "$t/note.$2" "$3" > "$t/differs" 2>&1
+  r=$?
+  [ "$r" = 0 ] || printf '%s differs from the note: %s\n' "$3" "$(cat "$t/differs")" > "$t/why"
+  return "$r"
 }
 
 up_pins_every_agent_and_keeps_worktrees_inside() {
@@ -333,6 +404,55 @@ up_pins_every_agent_and_keeps_worktrees_inside() {
 up_turns_on_the_agents_section_on_here_only() {
   check "here lacks the agents section" contains "$b/here/config.json" '"agents_section": true' || return 1
   check "there has the agents section" test ! "$(grep -c agents_section "$b/there/config.json")" -gt 0
+}
+
+the_bench_writes_the_config_the_note_writes() {
+  block_of_the_note config.json || return 1
+  runb up "$t/p1" --here "$t/new/cornercase"
+  check "a plain up failed: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  differs_from_the_note config config.json "$t/p1/here/config.json" || { runb down "$t/p1"; return 1; }
+  differs_from_the_note config config.json "$t/p1/there/config.json" || { runb down "$t/p1"; return 1; }
+  runb down "$t/p1"
+  check "down of p1: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+the_bench_env_names_what_the_note_env_names() {
+  block_of_the_note env || return 1
+  differs_from_the_note env env "$b/env"
+}
+
+up_turns_cornercases_own_update_check_off() {
+  check "here may check for updates" contains "$b/here/config.json" '"check_updates": false' || return 1
+  check "there may check for updates" contains "$b/there/config.json" '"check_updates": false'
+}
+
+up_with_check_updates_checks_on_here_only() {
+  runb up "$t/u1" --here "$t/new/cornercase" --check-updates
+  check "exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  check "here does not check" contains "$t/u1/here/config.json" '"check_updates": true' || return 1
+  check "there checks" contains "$t/u1/there/config.json" '"check_updates": false' || return 1
+  check "the summary does not say it" contains "$t/out" "--check-updates" || return 1
+  runb down "$t/u1"
+  check "down of u1: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+the_env_keeps_no_token_value() {
+  check "the token is not unset" contains "$b/env" "unset MBT_TEST_TOKEN" || return 1
+  check "the token's value is in env" test ! "$(grep -c made-up "$b/env")" -gt 0
+}
+
+up_gives_here_the_homes_of_the_bench() {
+  grep -F "socket=$b/here/" "$t/calls.norm" | grep -v 'args=--version$' > "$t/here.calls"
+  check "no call on here" test -s "$t/here.calls" || return 1
+  bad=$(grep -v -F -e "|codex=$b/here/codex|gemini=$b/here/gemini|" "$t/here.calls" | head -1)
+  check "a here call with another home: $bad" [ -z "$bad" ]
+}
+
+the_callers_homes_never_reach_there() {
+  grep -F "socket=$b/there/" "$t/calls.norm" > "$t/there.calls"
+  check "no call on there" test -s "$t/there.calls" || return 1
+  bad=$(grep -v -F -e "|codex=unset|gemini=unset|" "$t/there.calls" | head -1)
+  check "a there call with the caller's home: $bad" [ -z "$bad" ]
 }
 
 up_without_agent_pins_claude_and_leaves_the_section_off() {
@@ -399,6 +519,47 @@ up_says_why_an_unreachable_machine_failed() {
   check "the error is not in the message" contains "$t/err" "Connection refused"
 }
 
+up_stops_when_there_knows_an_agent_it_does_not_pin() {
+  : > "$t/killed"
+  printf 'junie\n' > "$t/control/knows-there"
+  snap
+  runb up "$t/k1" --here "$t/new/cornercase" --agent
+  rm -f "$t/control/knows-there"
+  check "exit $rc, not 1" [ "$rc" = 1 ] || return 1
+  check "the agent is not named: $(cat "$t/err")" contains "$t/err" "knows junie" || return 1
+  check "the side is not named" contains "$t/err" "on there" || return 1
+  check "there was not stopped" contains "$t/killed" "$t/k1/there/server.sock" || return 1
+  check "no agent started on there" test ! "$(new_calls | grep -c -F -e 'args=start ')" -gt 0 || return 1
+  check "the folder or its mark is gone" [ -f "$t/k1/.machine-bench" ] || return 1
+  runb down "$t/k1"
+  check "down of k1: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+up_stops_when_here_knows_an_agent_it_does_not_pin() {
+  : > "$t/killed"
+  printf 'junie\n' > "$t/control/knows-here"
+  runb up "$t/k2" --here "$t/new/cornercase"
+  rm -f "$t/control/knows-here"
+  check "exit $rc, not 1" [ "$rc" = 1 ] || return 1
+  check "the agent is not named: $(cat "$t/err")" contains "$t/err" "knows junie" || return 1
+  check "the side is not named" contains "$t/err" "on here" || return 1
+  check "here was not stopped" contains "$t/killed" "$t/k2/here/server.sock" || return 1
+  check "there was not stopped" contains "$t/killed" "$t/k2/there/server.sock" || return 1
+  check "the folder or its mark is gone" [ -f "$t/k2/.machine-bench" ] || return 1
+  runb down "$t/k2"
+  check "down of k2: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+up_says_when_a_release_lists_no_agents() {
+  : > "$t/control/no-agents-here"
+  runb up "$t/n1" --here "$t/new/cornercase"
+  rm -f "$t/control/no-agents-here"
+  check "exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  check "it does not say it compared nothing" contains "$t/err" "lists no agents" || return 1
+  runb down "$t/n1"
+  check "down of n1: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
 down_removes_the_folders_a_failed_up_kept() {
   runb down "$t/f1"
   check "down of f1: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
@@ -410,9 +571,10 @@ shell_env() {
   cat > "$t/readenv.sh" <<'EOF'
 . "$1"
 printf '%s\n' "$CORNERCASE_SOCKET" "${CORNERCASE_PANE-unset}${CORNERCASE_SERVER-unset}${CORNERCASE_REMOTE-unset}" \
-  "$PATH" "$CORNERCASE_BIN" "$CORNERCASE_GPUI_SETTINGS" "$CORNERCASE_GPUI_BROWSER_PROFILE"
+  "$PATH" "$CORNERCASE_BIN" "$CORNERCASE_GPUI_SETTINGS" "$CORNERCASE_GPUI_BROWSER_PROFILE" \
+  "$CODEX_HOME" "$GEMINI_CLI_HOME" "${MBT_TEST_TOKEN-unset}"
 EOF
-  env CORNERCASE_PANE=3 CORNERCASE_SERVER=x CORNERCASE_REMOTE=devbox CORNERCASE_SOCKET=elsewhere "$1" "$t/readenv.sh" "$b/env"
+  env CORNERCASE_PANE=3 CORNERCASE_SERVER=x CORNERCASE_REMOTE=devbox CORNERCASE_SOCKET=elsewhere MBT_TEST_TOKEN=x "$1" "$t/readenv.sh" "$b/env"
 }
 
 env_reads_right_in() {
@@ -422,7 +584,10 @@ unsetunsetunset
 $b/bin:$b/here/bin:$PATH
 $b/here/cornercase-logged
 $b/window/settings.json
-$b/window/browser"
+$b/window/browser
+$b/here/codex
+$b/here/gemini
+unset"
   [ "$out" = "$want" ] || { printf 'under %s: %s\n' "$1" "$out" > "$t/why"; return 1; }
 }
 
@@ -988,6 +1153,13 @@ run_test up_touches_nothing_outside_its_folder
 run_test up_makes_its_folders_private
 run_test up_copies_each_release
 run_test up_pins_every_agent_and_keeps_worktrees_inside
+run_test the_bench_writes_the_config_the_note_writes
+run_test the_bench_env_names_what_the_note_env_names
+run_test up_turns_cornercases_own_update_check_off
+run_test up_with_check_updates_checks_on_here_only
+run_test the_env_keeps_no_token_value
+run_test up_gives_here_the_homes_of_the_bench
+run_test the_callers_homes_never_reach_there
 run_test up_turns_on_the_agents_section_on_here_only
 run_test up_without_agent_pins_claude_and_leaves_the_section_off
 run_test up_refuses_an_empty_release
@@ -998,6 +1170,9 @@ run_test up_says_how_to_send_the_window_there
 run_test up_accepts_an_older_there
 run_test up_stops_its_servers_when_it_fails_and_keeps_its_folder
 run_test up_says_why_an_unreachable_machine_failed
+run_test up_stops_when_there_knows_an_agent_it_does_not_pin
+run_test up_stops_when_here_knows_an_agent_it_does_not_pin
+run_test up_says_when_a_release_lists_no_agents
 run_test down_removes_the_folders_a_failed_up_kept
 run_test the_env_aims_the_shell_at_here
 run_test there_cannot_reach_here

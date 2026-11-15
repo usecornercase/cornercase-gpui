@@ -5,13 +5,14 @@ umask 077
 name=vps
 dest=vps.invalid
 second=there.invalid
-agents="claude codex gemini opencode grok cursor copilot vibe"
+agents="claude codex gemini opencode grok cursor copilot vibe amp droid pi qwen kimi cline goose aider"
 repo=$(cd "$(dirname "$0")/.." && pwd)
 me=$(basename "$0")
 folder=
 side=
 window_bin=
 agent=0
+updates=0
 log=0
 here_src=
 there_src=
@@ -41,13 +42,16 @@ step() {
 
 usage() {
   cat <<'EOF'
-usage: tools/machine-bench.sh up FOLDER [--here BIN] [--there BIN] [--agent] [--log]
+usage: tools/machine-bench.sh up FOLDER [--here BIN] [--there BIN] [--agent] [--check-updates] [--log]
        tools/machine-bench.sh status FOLDER
        tools/machine-bench.sh down FOLDER
        tools/machine-bench.sh -h | --help
 
 FOLDER is a folder under /tmp: up makes it, so it must not exist yet.
 --here and --there are cornercase releases, copied into the bench; --there defaults to --here, and --here to cornercase on the PATH.
+Each side's config.json pins every agent to a path that does not exist (claude to a fake with --agent)
+and turns cornercase's own update check off; --check-updates leaves it on for here.
+up stops when a side's cornercase knows an agent the bench does not pin.
 Exit 0 done, 1 failed on the way, 2 wrong usage or refused, nothing done.
 See design/manual-check.md, Another machine.
 EOF
@@ -116,6 +120,7 @@ release() {
 fresh_folder() {
   need git
   need cp
+  need python3
   if [ -e "$folder" ] || [ -L "$folder" ]; then
     refuse "$folder exists already"
   fi
@@ -149,11 +154,14 @@ write_env() {
 export PATH="@F@/bin:@F@/here/bin:$PATH"
 export CORNERCASE_SOCKET=@F@/here/server.sock
 export CLAUDE_CONFIG_DIR=@F@/here/claude
+export CODEX_HOME=@F@/here/codex
+export GEMINI_CLI_HOME=@F@/here/gemini
 export CORNERCASE_BIN=@B@
 export CORNERCASE_GPUI_SETTINGS=@F@/window/settings.json
 export CORNERCASE_GPUI_BROWSER_PROFILE=@F@/window/browser
 unset CORNERCASE_PANE CORNERCASE_SERVER CORNERCASE_REMOTE
 EOF
+  env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -E 'TOKEN|API_KEY|_KEY$|SECRET' | sed 's/^/unset /' >> "$folder/env" || true
 }
 
 write_commands() {
@@ -446,6 +454,11 @@ write_config() {
   fi
   {
     printf '{\n  "worktrees_dir": "%s/%s/worktrees",\n' "$folder" "$side"
+    if [ "$side" = here ] && [ "$updates" = 1 ]; then
+      printf '  "check_updates": true,\n'
+    else
+      printf '  "check_updates": false,\n'
+    fi
     if [ "$side" = here ] && [ "$agent" = 1 ]; then
       printf '  "agents_section": true,\n'
     fi
@@ -468,7 +481,7 @@ make_project() {
 make_folders() {
   mkdir "$folder/bin" "$folder/ssh" "$folder/window" "$folder/here" "$folder/there"
   : > "$folder/ssh/calls.log"
-  mkdir "$folder/here/bin" "$folder/here/claude" "$folder/here/worktrees"
+  mkdir "$folder/here/bin" "$folder/here/claude" "$folder/here/codex" "$folder/here/gemini" "$folder/here/worktrees"
   mkdir "$folder/there/bin" "$folder/there/claude" "$folder/there/worktrees" "$folder/there/home"
   cp -- "$here_src" "$folder/here/bin/cornercase"
   cp -- "$there_src" "$folder/there/bin/cornercase"
@@ -592,6 +605,9 @@ summary() {
   if [ "$agent" = 1 ]; then
     printf '  agent  claude on there: pane %s, its child pane %s\n' "$parent_pane" "$child_pane"
   fi
+  if [ "$updates" = 1 ]; then
+    printf '  updates here checks for a newer cornercase at its start and every hour (--check-updates); there does not\n'
+  fi
   if [ "$log" = 1 ]; then
     printf '  log    %s/commands.log\n' "$folder"
   fi
@@ -606,6 +622,33 @@ summary() {
   printf 'vps elsewhere      here machines edit %s --destination %s points it at the same server by its other name (--destination %s puts it back)\n' \
     "$name" "$second" "$dest"
   printf 'take it down       kill "%s(cat %s/window.pid)"; %s/tools/%s down %s\n' '$' "$folder" "$repo" "$me" "$folder"
+}
+
+check_agents() {
+  step "checking the agents $1 knows"
+  ver=$here_ver
+  [ "$1" = there ] && ver=$there_ver
+  if ! json=$("$folder/bin/$1" config --json 2> /dev/null); then
+    say "config --json failed on $1, so its agents were not compared with the bench's pins"
+    return 0
+  fi
+  rc=0
+  unpinned=$(printf '%s' "$json" | python3 -I -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    names = [a["name"] for a in data["agents"]]
+except (ValueError, KeyError, TypeError):
+    sys.exit(3)
+pinned = sys.argv[1].split()
+print(" and ".join(n for n in names if n not in pinned))
+' "$agents") || rc=$?
+  if [ "$rc" != 0 ]; then
+    say "cornercase $ver on $1 lists no agents (config --json lists them from 0.13.43), so they were not compared with the bench's pins"
+    return 0
+  fi
+  [ -z "$unpinned" ] ||
+    fail "cornercase $ver on $1 knows $unpinned, which this bench does not pin, so a start of it would run this computer's own: add it to agents in tools/$me and to the config.json block of design/manual-check.md (A server of its own), then up again"
 }
 
 up() {
@@ -627,12 +670,14 @@ up() {
   make_files
   step "starting there"
   run_start there
+  check_agents there
   open_project there "$folder/there/home/there-proj"
   if [ "$agent" = 1 ]; then
     start_agent
   fi
   step "starting here"
   run_start here
+  check_agents here
   open_project here "$folder/here/here-proj"
   link_there
   finished=1
@@ -647,6 +692,7 @@ parse_up() {
         if [ "$1" = --here ]; then here_arg=$2; else there_arg=$2; fi
         shift 2 ;;
       --agent) agent=1; shift ;;
+      --check-updates) updates=1; shift ;;
       --log) log=1; shift ;;
       -*) usage_fail "unknown option $1" ;;
       *)
