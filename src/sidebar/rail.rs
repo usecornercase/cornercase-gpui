@@ -206,6 +206,24 @@ fn count_text(files: u64) -> Option<String> {
     }
 }
 
+pub(super) fn count_disc(count: u64) -> Option<Div> {
+    count_text(count).map(|text| {
+        div()
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded_full()
+            .min_w(px(COUNT))
+            .h(px(COUNT))
+            .px(px(2.))
+            .bg(colours::raised_hover())
+            .text_size(px(9.))
+            .line_height(px(COUNT))
+            .text_color(colours::text())
+            .child(text)
+    })
+}
+
 fn corner() -> Div {
     div().absolute().right(px(2.)).bottom(px(2.)).flex().items_center().justify_center().rounded_full()
 }
@@ -221,17 +239,7 @@ impl Notes {
 
     fn mark(self, kind: PanelKind) -> Option<Div> {
         match kind {
-            PanelKind::Changes => count_text(self.changed).map(|text| {
-                corner()
-                    .min_w(px(COUNT))
-                    .h(px(COUNT))
-                    .px(px(2.))
-                    .bg(colours::raised_hover())
-                    .text_size(px(9.))
-                    .line_height(px(COUNT))
-                    .text_color(colours::text())
-                    .child(text)
-            }),
+            PanelKind::Changes => count_disc(self.changed).map(|disc| disc.absolute().right(px(2.)).bottom(px(2.))),
             PanelKind::Todo if self.todo => Some(corner().size(px(DOT)).m(px(2.)).bg(colours::muted())),
             _ => None,
         }

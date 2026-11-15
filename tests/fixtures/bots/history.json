@@ -1,0 +1,125 @@
+{
+  "bot": "prs",
+  "lines": [
+    {
+      "at": 1794702236,
+      "id": 33,
+      "kind": "you",
+      "text": "hold zzhold"
+    },
+    {
+      "at": 1794702236,
+      "id": 34,
+      "kind": "step",
+      "text": "cornercase status --json",
+      "tool": "Bash"
+    },
+    {
+      "at": 1794702237,
+      "held": true,
+      "id": 35,
+      "kind": "you",
+      "text": "held one"
+    },
+    {
+      "at": 1794702237,
+      "id": 36,
+      "kind": "notice",
+      "text": "stopped"
+    },
+    {
+      "at": 1794702237,
+      "id": 37,
+      "kind": "notice",
+      "text": "1 held message dropped"
+    },
+    {
+      "at": 1794702238,
+      "id": 38,
+      "kind": "you",
+      "text": "boom zzfail"
+    },
+    {
+      "at": 1794702238,
+      "id": 39,
+      "kind": "step",
+      "text": "cornercase status --json",
+      "tool": "Bash"
+    },
+    {
+      "at": 1794702238,
+      "id": 40,
+      "kind": "error",
+      "text": "Not logged in (fake)"
+    },
+    {
+      "at": 1794702240,
+      "id": 41,
+      "kind": "you",
+      "text": "go zzsteps"
+    },
+    {
+      "at": 1794702240,
+      "id": 42,
+      "kind": "step",
+      "text": "cornercase step 1",
+      "tool": "Bash"
+    },
+    {
+      "at": 1794702241,
+      "id": 43,
+      "kind": "step",
+      "text": "cornercase step 2",
+      "tool": "Bash"
+    },
+    {
+      "at": 1794702242,
+      "id": 44,
+      "kind": "step",
+      "text": "cornercase step 3",
+      "tool": "Bash"
+    },
+    {
+      "at": 1794702243,
+      "id": 45,
+      "kind": "step",
+      "text": "cornercase step 4",
+      "tool": "Bash"
+    },
+    {
+      "at": 1794702244,
+      "id": 46,
+      "kind": "step",
+      "text": "cornercase step 5",
+      "tool": "Bash"
+    },
+    {
+      "at": 1794702245,
+      "id": 47,
+      "kind": "step",
+      "text": "cornercase step 6",
+      "tool": "Bash"
+    },
+    {
+      "at": 1794702246,
+      "conversation": "fake-1",
+      "id": 48,
+      "kind": "bot",
+      "model": "claude-fake-1",
+      "text": "## Open PRs (fake)\n\nTwo are **blocked**:\n\n- #12 waits for review\n- #15 has a failing check\n\nSee https://example.com/pr/12\n\n```sh\ngh pr list\n```",
+      "tokens": {
+        "cache_read": 0,
+        "cache_write": 0,
+        "input": 1,
+        "output": 1
+      }
+    },
+    {
+      "at": 1794702249,
+      "id": 49,
+      "kind": "notice",
+      "text": "new conversation"
+    }
+  ],
+  "name": "prs"
+}

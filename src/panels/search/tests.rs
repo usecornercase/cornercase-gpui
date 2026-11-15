@@ -1,9 +1,10 @@
 use std::ops::Range;
 
-use super::candidates::candidates;
+use super::candidates::{bot_candidates, candidates};
 use super::found::{Found, Hit, ago_from, by_pane, parse_time, row_of_match};
 use super::names::{
-    Candidate, Goto, Kind, Ranked, context_top, find, key_rank, listing_status, no_project, rank, shown_row,
+    Candidate, Goto, Kind, Ranked, context_top, find, key_rank, listing_status, no_project, rank, shown_bot_row,
+    shown_row,
 };
 use crate::model::{Session, Shown};
 use crate::platform::Os;
@@ -47,8 +48,8 @@ fn names(query: &str) -> Vec<String> {
     found(query).into_iter().map(|r| r.candidate.name).collect()
 }
 
-fn candidate(goto: Goto) -> Candidate {
-    candidates(&session()).into_iter().find(|c| c.goto == goto).expect("a candidate going there")
+fn candidate(goto: &Goto) -> Candidate {
+    candidates(&session()).into_iter().find(|c| c.goto == *goto).expect("a candidate going there")
 }
 
 fn marked<'a>(text: &'a str, ranges: &[Range<usize>]) -> Vec<&'a str> {
@@ -60,7 +61,7 @@ const REVIEW: Goto = Goto::Agent { pane: 8, tab: 1002 };
 
 #[test]
 fn the_empty_query_lists_the_session_in_the_sidebars_order() {
-    let listed: Vec<(Kind, Goto)> = found("  ").iter().map(|r| (r.candidate.kind, r.candidate.goto)).collect();
+    let listed: Vec<(Kind, Goto)> = found("  ").iter().map(|r| (r.candidate.kind, r.candidate.goto.clone())).collect();
     assert_eq!(
         listed,
         [
@@ -116,7 +117,7 @@ fn an_agent_is_named_by_its_conversation_and_found_by_it() {
 
 #[test]
 fn an_agent_without_a_conversation_takes_its_tabs_name() {
-    let review = candidate(REVIEW);
+    let review = candidate(&REVIEW);
     assert_eq!((review.name.as_str(), review.detail.as_str()), ("review", "codex · reviewer"));
     assert_eq!(review.place, "cornercase-terminal › fix-login");
 }
@@ -153,12 +154,12 @@ fn a_shell_tab_is_found_by_its_program() {
     let hit = &found("node")[0];
     assert_eq!(hit.candidate.goto, Goto::Tab(1004));
     assert_eq!(marked(&hit.candidate.detail, &hit.marks.detail), ["node"]);
-    assert_eq!(candidate(Goto::Tab(1000)).detail, "");
+    assert_eq!(candidate(&Goto::Tab(1000)).detail, "");
 }
 
 #[test]
 fn a_workspace_is_found_by_its_pull_request() {
-    let ws = candidate(Goto::Workspace(101));
+    let ws = candidate(&Goto::Workspace(101));
     assert_eq!((ws.name.as_str(), ws.detail.as_str()), ("⎇ fix-login", "fix/login · #485 Dark mode"));
     assert_eq!(found("#485")[0].candidate.goto, Goto::Workspace(101));
     assert_eq!(found("dark mode")[0].candidate.goto, Goto::Workspace(101));
@@ -304,4 +305,49 @@ fn an_agent_match_is_revealed_where_the_pane_last_shows_it() {
     let hit =
         Hit { pane: 5, source: "reply".into(), written: Some("2026-10-23T17:48:54Z".into()), ..Default::default() };
     assert_eq!(hit.reveal_args("-v"), ["focus", "--pane", "5", "--reveal=-v"]);
+}
+
+fn bots() -> Vec<crate::model::bots::Bot> {
+    crate::model::bots::in_app(&serde_json::json!({"bots": [
+        {"id": "prs", "name": "PRs", "agent": "claude", "state": "idle"},
+        {"id": "ops", "name": "ops", "agent": "claude", "model": "opus", "state": "thinking"}
+    ]}))
+}
+
+fn with_bots(query: &str) -> Vec<Ranked> {
+    let mut all = candidates(&session());
+    all.extend(bot_candidates(&bots()));
+    rank(all, query)
+}
+
+#[test]
+fn bots_are_listed_after_the_sessions_rows() {
+    let listed = with_bots("");
+    let first_bot = listed.iter().position(|r| r.candidate.kind == Kind::Bot).expect("a bot row");
+    assert_eq!(first_bot, listed.len() - 2);
+}
+
+#[test]
+fn a_bot_is_found_by_its_name_and_by_its_model() {
+    assert_eq!(with_bots("prs")[0].candidate.goto, Goto::Bot("prs".into()));
+    assert_eq!(with_bots("opus")[0].candidate.goto, Goto::Bot("ops".into()));
+}
+
+#[test]
+fn a_bots_row_goes_to_its_chat() {
+    let row = &with_bots("ops")[0].candidate;
+    assert_eq!((row.goto.clone(), row.goto.focus()), (Goto::Bot("ops".into()), None));
+    assert_eq!(row.status.as_deref(), Some("working"));
+}
+
+#[test]
+fn search_opens_on_the_row_of_the_shown_bot() {
+    let listed = with_bots("");
+    assert_eq!(shown_bot_row(&listed, "ops"), Some(listed.len() - 1));
+    assert_eq!(shown_bot_row(&listed, "nobody"), None);
+}
+
+#[test]
+fn no_bot_is_listed_when_nothing_is_offered() {
+    assert!(found("prs").iter().all(|r| r.candidate.kind != Kind::Bot));
 }

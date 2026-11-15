@@ -6,6 +6,7 @@ use super::jobs::{folding_key, renaming_key};
 use super::machine_read::{Listing, Reach, reach};
 use super::{Busy, Store, ToastKind, run_job_on, run_with};
 use crate::cli::{self, Release, Target, Version};
+use crate::model::bots::places::{Moved, Showing};
 use crate::model::machines::hide_destination;
 use crate::model::machines::run_on::server_release;
 use crate::model::machines::seen::{ReadReleases, sighted, sighted_pane};
@@ -139,15 +140,16 @@ impl Store {
     pub(super) fn select_there(&mut self, place: MachinePlace, cx: &mut Context<Self>) {
         let machine = place.machine.clone();
         self.recheck_there(&machine, cx);
-        self.machine_place = Some(place);
+        self.place(Moved::Machine(place));
         self.ask_machine_home(&machine, cx);
         self.file_full_screen = false;
         self.give_keys_back(cx);
     }
 
-    pub(crate) fn leave_machine_place(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn show_local(&mut self, cx: &mut Context<Self>) {
         self.placing.awaited = None;
-        if self.machine_place.take().is_some() {
+        if self.placing.showing != Showing::Local {
+            self.place(Moved::Local);
             self.file_full_screen = false;
             cx.notify();
         }
@@ -155,13 +157,15 @@ impl Store {
 
     pub(crate) fn follow_machines(&mut self, cx: &mut Context<Self>) {
         let Some(session) = &self.session else { return };
-        let followed = self.machine_place.as_ref().and_then(|place| place.followed(&session.machines));
-        let gone = self
-            .machine_place
+        let current = self.placing.showing.machine().cloned();
+        let followed = current.as_ref().and_then(|place| place.followed(&session.machines));
+        let gone = current
             .as_ref()
             .filter(|_| followed.is_none())
             .map(|place| (!self.machine_leaving(&place.aim())).then(|| place.gone_note()));
-        self.machine_place = followed;
+        if current.is_some() {
+            self.place(followed.map_or(Moved::Local, Moved::Machine));
+        }
         if let Some(session) = &self.session {
             self.jobs.keep_leaving_there(|aim| sighted(&session.machines, aim).is_ok());
         }
@@ -182,7 +186,7 @@ impl Store {
     }
 
     pub(crate) fn shows_notice(&self, there: &NoticeThere) -> bool {
-        let shown = self.machine_place.as_ref();
+        let shown = self.machine_place();
         shown.zip(self.place_of_notice(there)).is_some_and(|(shown, place)| shown.same_workspace(&place))
     }
 

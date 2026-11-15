@@ -35,7 +35,7 @@ use data::{Body, Entry, entries};
 use detail::Detail;
 use form::{FlowChoices, Form, Spot};
 use rows::Snapshot;
-pub(crate) use time::{days, now};
+pub(crate) use time::{days, local, now, when_label};
 use undo::{Removal, UNDO_FOR};
 
 const SIDE: Split = Split::new(420., 360., 760.);

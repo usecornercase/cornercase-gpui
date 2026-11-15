@@ -20,6 +20,8 @@ struct Inputs {
     sizes: Sizes,
     widths: (f32, f32),
     place: Option<MachinePlace>,
+    bots: u64,
+    bot: Option<String>,
 }
 
 impl Inputs {
@@ -34,6 +36,8 @@ impl Inputs {
             sizes: &self.sizes,
             widths: self.widths,
             place: self.place.as_ref(),
+            bots: self.bots,
+            bot: self.bot.as_deref(),
         })
     }
 }
@@ -43,6 +47,8 @@ fn seen() -> MachineSeen {
 }
 
 const CHANGES: &[Change<Inputs>] = &[
+    ("the bots' revision", |i| i.bots += 1),
+    ("the shown bot", |i| i.bot = Some("prs".into())),
     ("the session", |i| i.session += 1),
     ("the store", |i| i.store += 1),
     ("the hovered row", |i| i.hovered = Some("row-3".into())),

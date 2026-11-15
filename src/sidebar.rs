@@ -1,6 +1,7 @@
 mod actions;
 mod agents;
 mod arrange;
+mod bots;
 mod folds;
 mod forms;
 pub(crate) mod key;
@@ -140,6 +141,7 @@ pub(crate) struct SideState {
     pub hovered: Option<SharedString>,
     pub strip: crate::tabs::TabStrip,
     pub machine_place: Option<MachinePlace>,
+    pub bot: Option<String>,
     pub aside: bool,
 }
 

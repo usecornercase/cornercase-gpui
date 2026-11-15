@@ -1,4 +1,4 @@
-use gpui::SharedString;
+use gpui::{App, SharedString};
 
 use super::arrange::Sizes;
 use super::machine_rows::ThereFolds;
@@ -17,6 +17,8 @@ pub(crate) struct SidebarKey {
     sizes: Sizes,
     widths: (f32, f32),
     place: Option<MachinePlace>,
+    bots: u64,
+    bot: Option<String>,
 }
 
 pub(crate) struct KeyParts<'a> {
@@ -29,6 +31,8 @@ pub(crate) struct KeyParts<'a> {
     pub(crate) sizes: &'a Sizes,
     pub(crate) widths: (f32, f32),
     pub(crate) place: Option<&'a MachinePlace>,
+    pub(crate) bots: u64,
+    pub(crate) bot: Option<&'a str>,
 }
 
 impl SidebarKey {
@@ -43,12 +47,14 @@ impl SidebarKey {
             sizes: *parts.sizes,
             widths: parts.widths,
             place: parts.place.cloned(),
+            bots: parts.bots,
+            bot: parts.bot.map(str::to_string),
         }
     }
 }
 
 impl Root {
-    pub(crate) fn sidebar_key(&self) -> SidebarKey {
+    pub(crate) fn sidebar_key(&self, cx: &App) -> SidebarKey {
         SidebarKey::of(&KeyParts {
             session: self.session.revision(),
             store: self.parts.store_seen,
@@ -59,6 +65,8 @@ impl Root {
             sizes: &self.side.sizes,
             widths: (self.sidebar_width.size(), self.pair_width.size()),
             place: self.side.machine_place.as_ref(),
+            bots: self.store.read(cx).bots_revision(),
+            bot: self.side.bot.as_deref(),
         })
     }
 }

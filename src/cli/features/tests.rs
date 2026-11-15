@@ -15,6 +15,7 @@ fn a_server_has_each_gated_feature_from_the_release_that_brought_it() {
         (Feature::FlowCloseWhenMerged, 33),
         (Feature::QueueResults, 51),
         (Feature::FlowFreeBuilds, 64),
+        (Feature::Bots, 77),
     ];
     for (feature, patch) in features {
         let before = Version::new(0, 13, patch - 1);
@@ -88,4 +89,14 @@ fn this_computers_command_line_has_a_feature_from_the_release_that_brought_it() 
         assert_eq!(lacks(read(13, patch)), None, "{feature:?}");
         assert_eq!(lacks(read(14, 0)), None, "{feature:?}");
     }
+}
+
+#[test]
+fn an_older_command_line_lacks_bots_on_a_newer_server() {
+    let releases = Releases {
+        server: Some(Version::new(0, 13, 80)),
+        here: Release::Read(Some(Version::new(0, 13, 73))),
+        machine: None,
+    };
+    assert_eq!(releases.lacks(Feature::Bots), Some(Lacks::ThisComputer(Some(Version::new(0, 13, 73)))));
 }

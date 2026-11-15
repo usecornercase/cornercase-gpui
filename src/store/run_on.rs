@@ -4,12 +4,14 @@ use gpui::{AnyView, Context, FocusHandle};
 
 use super::{Busy, Store, ToastKind, failed_there, run_job, run_job_on, run_with};
 use crate::cli::{self, Target};
+use crate::model::bots::places::Showing;
 use crate::model::machines::run_on::clone::{Cloned, Unwritten, clone_args, cloned_note, parse_clone};
 use crate::model::machines::run_on::{self, Answer, Awaited, Look, Looking, Offer, Starting, There, parse_answer};
 use crate::model::{Project, Spot, ThereId};
 
 #[derive(Default)]
 pub(super) struct Placing {
+    pub(super) showing: Showing,
     pub(super) awaited: Option<Awaited>,
     pub(super) cloned: Vec<Cloned>,
 }
@@ -144,7 +146,7 @@ impl Store {
         let command = self.with_view(command);
         run_job(cx, id, command, move |this: &mut Self, result, cx| match result {
             Ok(_) => {
-                this.leave_machine_place(cx);
+                this.show_local(cx);
                 this.close_started(dialog, true, cx);
                 this.toast(done, ToastKind::Done, cx);
             }

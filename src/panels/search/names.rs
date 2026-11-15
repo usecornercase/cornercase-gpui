@@ -14,25 +14,28 @@ pub(super) enum Kind {
     Workspace,
     Agent,
     Tab,
+    Bot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Goto {
     Group { id: u64, first: Option<u64> },
     Project(u64),
     Workspace(u64),
     Tab(u64),
     Agent { pane: u64, tab: u64 },
+    Bot(String),
 }
 
 impl Goto {
-    pub(super) fn focus(self) -> Option<(&'static str, u64)> {
-        match self {
+    pub(super) fn focus(&self) -> Option<(&'static str, u64)> {
+        match *self {
             Self::Group { first, .. } => first.map(|id| ("project", id)),
             Self::Project(id) => Some(("project", id)),
             Self::Workspace(id) => Some(("workspace", id)),
             Self::Tab(id) => Some(("tab", id)),
             Self::Agent { pane, .. } => Some(("pane", pane)),
+            Self::Bot(_) => None,
         }
     }
 }
@@ -105,8 +108,12 @@ pub(super) fn rank(candidates: Vec<Candidate>, query: &str) -> Vec<Ranked> {
     hits.into_iter().map(|(_, _, r)| r).collect()
 }
 
+pub(super) fn shown_bot_row(ranked: &[Ranked], id: &str) -> Option<usize> {
+    ranked.iter().position(|r| matches!(&r.candidate.goto, Goto::Bot(bot) if bot == id))
+}
+
 pub(super) fn shown_row(ranked: &[Ranked], shown: Shown) -> Option<usize> {
-    let at = |wanted: &dyn Fn(Goto) -> bool| ranked.iter().position(|r| wanted(r.candidate.goto));
+    let at = |wanted: &dyn Fn(Goto) -> bool| ranked.iter().position(|r| wanted(r.candidate.goto.clone()));
     let agent = |pane: u64| at(&|goto| matches!(goto, Goto::Agent { pane: p, .. } if p == pane));
     let tab = |tab: u64| at(&|goto| matches!(goto, Goto::Tab(t) | Goto::Agent { tab: t, .. } if t == tab));
     shown

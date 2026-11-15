@@ -108,6 +108,8 @@ impl Notifier {
     fn follow_window(window: &mut Window, cx: &mut Context<Self>) {
         cx.observe_window_activation(window, |this, window, cx| {
             this.active = window.is_window_active();
+            let active = this.active;
+            this.store.update(cx, |s, cx| s.bots_window_active(active, cx));
             if this.active {
                 this.read_disk(cx);
                 this.tell_held(cx);
@@ -192,6 +194,7 @@ impl Notifier {
             |this, line, cx| this.on_line(&line, cx),
             move |this, err, cx| this.ended(generation, &err, cx),
         );
+        self.store.update(cx, Store::bot_stream_started);
     }
 
     fn ended(&mut self, generation: u64, err: &str, cx: &mut Context<Self>) {
@@ -224,6 +227,7 @@ impl Notifier {
             Some(Event::Clipboard { text, pane }) => self.clipboard(text, pane, cx),
             Some(Event::Bell { tab, pane, .. }) => self.bell(tab, pane, cx),
             Some(Event::Message(message)) => self.message(&message, cx),
+            Some(Event::Bot(event)) => self.store.update(cx, |s, cx| s.bot_heard(&event, cx)),
             Some(Event::Other) | None => {}
         }
     }
@@ -341,7 +345,7 @@ impl Notifier {
     fn bell(&mut self, tab: Option<u64>, pane: Option<u64>, cx: &mut Context<Self>) {
         let store = self.store.read(cx);
         let session = store.session.as_ref();
-        let shown = session.and_then(|s| s.shown().tab).filter(|_| store.machine_place.is_none());
+        let shown = session.and_then(|s| s.shown().tab).filter(|_| store.shows_local());
         if tab.is_some() && tab == shown {
             self.flash(cx);
             return;

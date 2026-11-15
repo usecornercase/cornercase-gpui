@@ -224,7 +224,7 @@ impl Browser {
             }
             Owner::There(_) => {
                 let (seen, ws) = self.machine_view(session)?;
-                let tab = store.machine_place.as_ref().and_then(|place| ws.tab(place.tab));
+                let tab = store.machine_place().and_then(|place| ws.tab(place.tab));
                 let key = pick_there(&there_choices(ws), remembered, tab)?;
                 let AgentKey::There(pane) = key else { return None };
                 Some(Agent::There(PaneThere { machine: seen.name.clone(), boot: seen.boot.clone(), pane }))

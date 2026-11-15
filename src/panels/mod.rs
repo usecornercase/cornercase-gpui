@@ -1,4 +1,5 @@
 pub(crate) mod accounts;
+pub(crate) mod bot_chat;
 pub(crate) mod browser;
 pub(crate) mod changes;
 pub(crate) mod files;

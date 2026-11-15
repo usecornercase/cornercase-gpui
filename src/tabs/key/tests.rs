@@ -12,6 +12,7 @@ struct Inputs {
     renaming: Option<Renaming>,
     place: Option<MachinePlace>,
     machine: bool,
+    bot: bool,
     aside: bool,
 }
 
@@ -24,12 +25,14 @@ impl Inputs {
             renaming: self.renaming.as_ref(),
             place: self.place.as_ref(),
             machine: self.machine,
+            bot: self.bot,
             aside: self.aside,
         })
     }
 }
 
 const CHANGES: &[Change<Inputs>] = &[
+    ("a bot's chat", |i| i.bot = true),
     ("the session", |i| i.session += 1),
     ("the store", |i| i.store += 1),
     ("the look", |i| i.look.model = !i.look.model),

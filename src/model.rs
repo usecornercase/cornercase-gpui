@@ -8,6 +8,7 @@ use crate::platform::paths;
 pub(crate) mod accounts;
 mod agent_context;
 pub(crate) mod agent_settings;
+pub(crate) mod bots;
 mod details;
 mod grid;
 pub(crate) mod link;

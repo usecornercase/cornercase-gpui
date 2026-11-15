@@ -195,6 +195,7 @@ const MAC_OTHER_KEYS: &[(&str, &str)] = &[
     ("↑ ↓ ↩", "Choose in a menu"),
     ("⇧← ⇧→ ⇧↑ ⇧↓", "Select in Files or Changes"),
     ("⌘↩", "Send a prompt, where ↩ breaks the line"),
+    ("↑ ↓ PgUp PgDn", "Scroll a bot's chat"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("⌘-click", "Open a link or a path with macOS"),
 ];
@@ -206,6 +207,7 @@ const LINUX_OTHER_KEYS: &[(&str, &str)] = &[
     ("Shift+arrows", "Select in Files or Changes"),
     ("Ctrl+Enter", "Send a prompt, where Enter breaks the line"),
     ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
+    ("↑ ↓ PageUp PageDown", "Scroll a bot's chat"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("Ctrl+click", "Open a link or a path with its default app"),
     ("Middle click", "Paste what is selected, Shift+middle click where a program takes the mouse"),
@@ -218,6 +220,7 @@ const WINDOWS_OTHER_KEYS: &[(&str, &str)] = &[
     ("Shift+arrows", "Select in Files or Changes"),
     ("Ctrl+Enter", "Send a prompt, where Enter breaks the line"),
     ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
+    ("↑ ↓ PageUp PageDown", "Scroll a bot's chat"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("Ctrl+click", "Open a link or a path with its default app"),
 ];
@@ -528,6 +531,9 @@ pub(crate) fn tab_index(key: &str, tabs: usize) -> Option<usize> {
     let at = DIGITS.iter().position(|d| *d == key)?;
     if at == DIGITS.len() - 1 { tabs.checked_sub(1) } else { (at < tabs).then_some(at) }
 }
+
+mod chat;
+pub(crate) use chat::{InChat, in_chat};
 
 #[cfg(test)]
 mod tests;
