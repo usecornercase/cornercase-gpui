@@ -9,8 +9,8 @@ use gpui::{
 use super::TextField;
 use super::handler::Handler;
 use super::rows::{
-    CARET_WIDTH, Row, Rows, clamp_scroll, measured_rows, rows_shown, scroll_to_show, scroll_to_show_with_margins,
-    sideways, thumb,
+    CARET_WIDTH, Row, Rows, clamp_scroll, measured_rows, rows_shown, scroll_from_top, scroll_to_show,
+    scroll_to_show_with_margins, sideways, thumb,
 };
 use super::shown::Shown;
 use crate::theme::colours;
@@ -21,8 +21,63 @@ const THUMB_GAP: Pixels = px(4.);
 const SCROLLER_MARGIN: Pixels = px(12.);
 const PROMPT_MARGIN: Pixels = px(32.);
 
-fn reveal_room(room: Option<Pixels>, prompt: bool) -> Pixels {
-    room.unwrap_or(if prompt { PROMPT_MARGIN } else { SCROLLER_MARGIN })
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum Head {
+    #[default]
+    No,
+    Opening,
+    Yes,
+}
+
+impl Head {
+    fn painted(self) -> Self {
+        if self == Self::Opening { Self::Yes } else { self }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum Below {
+    #[default]
+    Margin,
+    ToEnd,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Reveal {
+    Still,
+    Caret,
+    Form,
+}
+
+fn reveal_of(moved: bool, first_focus: bool, head: Head) -> Reveal {
+    match (moved, first_focus, head) {
+        (true, _, _) | (false, true, Head::No) => Reveal::Caret,
+        (false, true, Head::Yes) => Reveal::Form,
+        (false, true, Head::Opening) | (false, false, _) => Reveal::Still,
+    }
+}
+
+fn room_below(below: Below, prompt: bool, to_end: Pixels) -> Pixels {
+    let margin = if prompt { PROMPT_MARGIN } else { SCROLLER_MARGIN };
+    match below {
+        Below::Margin => margin,
+        Below::ToEnd => to_end.max(margin),
+    }
+}
+
+fn next_scroll(
+    why: Reveal,
+    scroll: Pixels,
+    caret: (Pixels, Pixels),
+    margins: (Pixels, Pixels),
+    height: Pixels,
+) -> Pixels {
+    let next = match why {
+        Reveal::Still => scroll,
+        Reveal::Caret => scroll_to_show_with_margins(scroll, caret, margins, height),
+        Reveal::Form => scroll_from_top(scroll, caret, margins, height),
+    };
+    next.max(px(0.))
 }
 
 pub(super) struct Layout {
@@ -287,7 +342,8 @@ impl TextElement {
     fn settled(&self, mut layout: Layout, window: &Window, cx: &mut App) -> Layout {
         let input = self.input.read(cx);
         let focused = input.focus_handle.is_focused(window);
-        let reveal = input.view.reveal || (focused && !input.view.was_focused);
+        let first_focus = focused && !input.view.was_focused;
+        let reveal = input.view.reveal || first_focus;
         let caret = layout.position(input.cursor_offset()).y;
         let height = layout.bounds.size.height;
         let shown = if reveal {
@@ -301,9 +357,10 @@ impl TextElement {
             layout.scroll_left =
                 sideways(input.view.scroll_left, (caret, layout.text_width()), layout.bounds.size.width);
         }
-        if let Some(scroller) = input.options.scroller.as_ref().filter(|_| reveal && focused) {
-            let below = reveal_room(input.options.room_below, input.options.rows.is_some());
-            show_in_scroller(scroller, (layout.text_top() + caret, layout.line_height, below), window);
+        let why = reveal_of(input.view.reveal, first_focus, input.view.head);
+        if let Some(scroller) = input.options.scroller.as_ref().filter(|_| focused && why != Reveal::Still) {
+            let shape = (why, input.options.below, input.options.rows.is_some());
+            show_in_scroller(scroller, (layout.text_top() + caret, layout.line_height), shape, window);
         }
         let (scroll_top, scroll_left) = (layout.scroll_top, layout.scroll_left);
         self.input.update(cx, |input, _| {
@@ -311,6 +368,7 @@ impl TextElement {
             input.view.scroll_left = scroll_left;
             input.view.reveal = false;
             input.view.was_focused = focused;
+            input.view.head = input.view.head.painted();
         });
         layout
     }
@@ -332,13 +390,19 @@ impl TextElement {
     }
 }
 
-fn show_in_scroller(scroller: &ScrollHandle, (caret, line_height, below): (Pixels, Pixels, Pixels), window: &Window) {
+fn show_in_scroller(
+    scroller: &ScrollHandle,
+    (caret, line_height): (Pixels, Pixels),
+    (why, below, prompt): (Reveal, Below, bool),
+    window: &Window,
+) {
     let view = scroller.bounds();
     let offset = scroller.offset();
     let scroll = -offset.y;
     let top = caret - view.top() + scroll;
-    let margins = (SCROLLER_MARGIN, below);
-    let next = scroll_to_show_with_margins(scroll, (top, line_height), margins, view.size.height).max(px(0.));
+    let to_end = view.size.height + scroller.max_offset().height - top - line_height;
+    let margins = (SCROLLER_MARGIN, room_below(below, prompt, to_end));
+    let next = next_scroll(why, scroll, (top, line_height), margins, view.size.height);
     if next != scroll {
         scroller.set_offset(point(offset.x, -next));
         window.request_animation_frame();

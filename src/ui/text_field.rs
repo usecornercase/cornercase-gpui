@@ -8,7 +8,7 @@ use gpui::{
 };
 use unicode_segmentation::UnicodeSegmentation;
 
-use self::element::{Layout, TextElement};
+use self::element::{Below, Head, Layout, TextElement};
 use self::enter::{Enter, passes_arrows, submits};
 use self::rows::{clamp_scroll, pasted, previous_grapheme};
 use self::secure::Secure;
@@ -85,7 +85,7 @@ struct Options {
     wraps: bool,
     rows: Option<RangeInclusive<usize>>,
     scroller: Option<ScrollHandle>,
-    room_below: Option<Pixels>,
+    below: Below,
     on_down: Option<DownHook>,
     enter: Enter,
 }
@@ -96,6 +96,7 @@ struct View {
     scroll_left: Pixels,
     reveal: bool,
     was_focused: bool,
+    head: Head,
     goal_x: Option<Pixels>,
 }
 
@@ -724,9 +725,13 @@ impl TextField {
         self
     }
 
-    pub(crate) fn room_below(mut self, room: f32) -> Self {
-        self.options.room_below = Some(px(room));
-        self
+    pub(crate) fn focus_at_top(&mut self, window: &mut Window) {
+        self.view.head = Head::Opening;
+        window.focus(&self.focus_handle);
+    }
+
+    pub(crate) fn set_ends_form(&mut self, ends: bool) {
+        self.options.below = if ends { Below::ToEnd } else { Below::Margin };
     }
 
     pub(crate) fn reverts_on_escape(mut self) -> Self {

@@ -1,7 +1,7 @@
 use gpui::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, ScrollHandle, StatefulInteractiveElement as _, Styled as _, WeakEntity,
-    Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, IntoElement,
+    ParentElement as _, Render, ScrollHandle, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::IssuesPanel;
@@ -78,21 +78,17 @@ pub(super) struct StartForm {
 }
 
 pub(super) fn open(setup: Setup, window: &mut Window, cx: &mut Context<IssuesPanel>) {
-    let store = Store::get(cx);
     let form = cx.new(|cx| StartForm::new(setup, cx));
-    let focus = {
+    let field = {
         let form = form.read(cx);
-        if form.schedule { &form.at } else { &form.model }.read(cx).focus_handle(cx)
+        if form.schedule { form.at.clone() } else { form.model.clone() }
     };
-    store.update(cx, |s, cx| s.show_dialog(form.into(), cx));
-    window.focus(&focus);
+    dialogs::show_at_top(form.into(), &field, window, cx);
 }
 
 fn close(cx: &mut App) {
     Store::get(cx).update(cx, Store::close_dialog);
 }
-
-const FOOTNOTE_ROOM: f32 = 74.;
 
 fn text_field(
     (placeholder, text): (&str, &str),
@@ -168,6 +164,23 @@ fn mode_chips(modes: &Modes, picked: Option<&str>, cx: &mut Context<StartForm>) 
     }))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Last {
+    Model,
+    Effort,
+    Name,
+}
+
+fn last_field(schedule: bool, worktree: bool, effort: bool) -> Last {
+    if schedule || worktree {
+        Last::Name
+    } else if effort {
+        Last::Effort
+    } else {
+        Last::Model
+    }
+}
+
 impl StartForm {
     fn new(setup: Setup, cx: &mut Context<Self>) -> Self {
         let Setup { issue, sources, repository, agents, schedule, project_name, panel } = setup;
@@ -179,12 +192,11 @@ impl StartForm {
         let run_on = run_on_of(&issue, &places, cx);
         let scroller = ScrollHandle::new();
         let plain = || within(&scroller, |field| field);
-        let roomy = within(&scroller, |field| field.room_below(FOOTNOTE_ROOM));
         Self {
             model: text_field(("the agent's own, such as opus", ""), true, plain(), cx),
             effort: text_field(("the agent's own, such as high", ""), true, plain(), cx),
             branch: text_field((&branch_hint(None), &issue.branch), true, plain(), cx),
-            name: text_field((&name_hint, ""), true, roomy, cx),
+            name: text_field((&name_hint, ""), true, plain(), cx),
             at: text_field((When::At.placeholder().unwrap_or_default(), ""), true, plain(), cx),
             places,
             issue,
@@ -464,6 +476,13 @@ impl StartForm {
             .into_any_element()
     }
 
+    fn mark_last(&self, cx: &mut App) {
+        let last = last_field(self.schedule, self.worktree(), EFFORT_AGENTS.contains(&self.agent.as_str()));
+        for (field, is) in [(&self.model, Last::Model), (&self.effort, Last::Effort), (&self.name, Last::Name)] {
+            field.update(cx, |field, _| field.set_ends_form(last == is));
+        }
+    }
+
     fn naming_fields(&self, window: &Window, cx: &App) -> Vec<Div> {
         let worktree = self.worktree();
         let name = if self.schedule { "Name" } else { "Workspace name" };
@@ -511,6 +530,7 @@ impl Render for StartForm {
         let choices = self.run_on.read(cx).account_choices(cx);
         self.accounts.follow(choices, Self::clear_error, cx);
         let schedule = self.schedule;
+        self.mark_last(cx);
         let body = div()
             .flex()
             .flex_col()
@@ -525,9 +545,12 @@ impl Render for StartForm {
             .children(self.naming_fields(window, cx))
             .child(self.footnote(cx));
         let height = dialogs::body_height(f32::from(window.viewport_size().height));
-        let fields = div().id("start-form").min_h_0().overflow_y_scroll().track_scroll(&self.scroller).child(body);
+        let fields = dialogs::fitted("start-form", window, body).min_h_0().track_scroll(&self.scroller);
         let column = div().flex().flex_col().gap(px(12.)).max_h(px(height)).child(fields).children(self.error_line());
         let title = if schedule { "Schedule work on an issue" } else { "Start work on an issue" };
         dialogs::frame(title, column, self.buttons(cx)).w(px(580.))
     }
 }
+
+#[cfg(test)]
+mod tests;

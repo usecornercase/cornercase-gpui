@@ -2,7 +2,7 @@ use gpui::px;
 
 use super::{
     Rows, Span, clamp_scroll, line_breaks, measured_rows, one_line, pasted, previous_grapheme, rows_shown,
-    scroll_to_show, scroll_to_show_with_margins, sideways, thumb,
+    scroll_from_top, scroll_to_show, scroll_to_show_with_margins, sideways, thumb,
 };
 
 fn wrapped() -> Rows {
@@ -235,4 +235,21 @@ fn a_paste_into_a_field_of_several_lines_keeps_its_line_breaks() {
 fn an_empty_field_is_one_row_whatever_its_placeholder_wraps_to() {
     assert_eq!(measured_rows(true, 3), 1);
     assert_eq!(measured_rows(false, 3), 3);
+}
+
+#[test]
+fn a_field_that_fits_with_the_top_of_its_form_shows_the_form_from_its_top() {
+    assert_eq!(scroll_from_top(px(178.), (px(294.), px(20.)), (px(12.), px(12.)), px(326.)), px(0.));
+}
+
+#[test]
+fn a_field_one_pixel_too_low_for_that_moves_the_form_as_little_as_it_takes() {
+    let (caret, margins) = ((px(294.), px(20.)), (px(12.), px(12.)));
+    assert_eq!(scroll_from_top(px(178.), caret, margins, px(325.)), px(178.));
+    assert_eq!(scroll_from_top(px(0.), caret, margins, px(325.)), px(1.));
+}
+
+#[test]
+fn a_room_larger_than_the_body_keeps_the_caret_s_line_in_view() {
+    assert_eq!(scroll_to_show_with_margins(px(0.), (px(290.), px(20.)), (px(12.), px(400.)), px(212.)), px(278.));
 }

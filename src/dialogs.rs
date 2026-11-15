@@ -50,17 +50,9 @@ pub(crate) fn body_height(window: f32) -> f32 {
 
 const RING_ROOM: f32 = 6.;
 
-pub(crate) fn scrolled_body(id: &'static str, window: &Window, body: impl IntoElement) -> Stateful<Div> {
-    sized_body(id, window, body, 0.)
-}
-
 pub(crate) fn fitted(id: &'static str, window: &Window, body: impl IntoElement) -> Stateful<Div> {
-    sized_body(id, window, body, RING_ROOM)
-}
-
-fn sized_body(id: &'static str, window: &Window, body: impl IntoElement, room: f32) -> Stateful<Div> {
     let height = body_height(f32::from(window.viewport_size().height));
-    div().id(id).max_h(px(height + 2. * room)).p(px(room)).m(px(-room)).overflow_y_scroll().child(body)
+    div().id(id).max_h(px(height + 2. * RING_ROOM)).p(px(RING_ROOM)).m(px(-RING_ROOM)).overflow_y_scroll().child(body)
 }
 
 pub(crate) fn cancel_and(action: Stateful<Div>) -> Div {
@@ -100,6 +92,11 @@ fn ask_button(workspace: u64, text: String, label: String) -> Stateful<Div> {
 pub(crate) fn show(view: AnyView, focus: &FocusHandle, window: &mut Window, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.show_dialog(view, cx));
     window.focus(focus);
+}
+
+pub(crate) fn show_at_top(view: AnyView, field: &Entity<TextField>, window: &mut Window, cx: &mut App) {
+    Store::get(cx).update(cx, |s, cx| s.show_dialog(view, cx));
+    field.update(cx, |field, _| field.focus_at_top(window));
 }
 
 fn text_field<T: 'static>(
@@ -343,7 +340,7 @@ impl Render for StartAgent {
         self.accounts.follow(choices, |_, _| {}, cx);
         frame(
             "Start an agent in a new tab",
-            scrolled_body("start-agent-form", window, self.fields(window, cx)).track_scroll(&self.scroller),
+            fitted("start-agent-form", window, self.fields(window, cx)).track_scroll(&self.scroller),
             cancel_and(
                 ui::primary_button("start", "Start")
                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.submit(cx))),
@@ -454,7 +451,7 @@ impl Confirm {
 
     fn scrolled(&self, window: &Window, tick: Option<impl IntoElement>) -> impl IntoElement {
         let body = div().flex().flex_col().gap(px(12.)).child(self.said()).children(tick);
-        scrolled_body("question-body", window, body)
+        fitted("question-body", window, body)
     }
 
     fn tick_box(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {

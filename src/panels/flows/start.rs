@@ -93,9 +93,8 @@ fn open(preset: FlowStart, known: Option<Known>, window: &mut Window, cx: &mut A
     let projects = preset.choices(&open);
     let project = preset.chosen(&projects, session.shown().project);
     let view = cx.new(|cx| StartFlow::new(preset, (projects, project), known, window, cx));
-    let focus = view.read(cx).fields.prompt.read(cx).focus_handle(cx);
-    store.update(cx, |s, cx| s.show_dialog(view.into(), cx));
-    window.focus(&focus);
+    let prompt = view.read(cx).fields.prompt.clone();
+    dialogs::show_at_top(view.into(), &prompt, window, cx);
 }
 
 impl Fields {
@@ -532,8 +531,7 @@ impl Render for StartFlow {
         let title = if self.issue.is_some() { "Start a flow on an issue" } else { "Start a flow" };
         dialogs::frame(
             title,
-            dialogs::scrolled_body("start-flow-form", window, self.form(window, cx))
-                .track_scroll(&self.fields.scroller),
+            dialogs::fitted("start-flow-form", window, self.form(window, cx)).track_scroll(&self.fields.scroller),
             buttons(("start-cancel", "start-run"), (Icon::Play, "Start"), busy, cx),
         )
         .w(px(580.))
