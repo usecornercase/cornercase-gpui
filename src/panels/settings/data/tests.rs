@@ -815,7 +815,10 @@ fn with_nothing_held_every_answer_is_applied() {
 }
 
 #[test]
-fn pages_matching_offers_appearance_for_a_preset_s_name() {
-    let pages = [APPEARANCE.to_string(), "Worktrees".to_string()];
-    assert_eq!(pages_matching(&pages, "nord"), [APPEARANCE]);
+fn settings_search_finds_the_appearance_page_by_every_word_the_global_search_finds_it_by() {
+    let pages = [APPEARANCE.to_string()];
+    for query in ["theme", "dark", "Gruvbox", "nord", "rosé pine", "contrast", "colours", "blur", "color"] {
+        assert!(crate::panels::settings::appearance_found(query, "Nord").is_some(), "{query}");
+        assert_eq!(pages_matching(&pages, query), [APPEARANCE], "{query}");
+    }
 }

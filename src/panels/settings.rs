@@ -144,13 +144,13 @@ impl SettingsPanel {
         field
     }
 
-    fn close_floating(&mut self) {
-        self.choice = None;
-        self.look.picker = None;
+    fn close_floating(&mut self, cx: &mut Context<Self>) {
+        self.close_choice(cx);
+        self.close_picker(cx);
     }
 
     fn search_changed(&mut self, cx: &mut Context<Self>) {
-        self.close_floating();
+        self.close_floating(cx);
         self.to_top();
         if !self.query(cx).is_empty() {
             self.landed = None;
@@ -179,7 +179,7 @@ impl SettingsPanel {
     }
 
     fn opened(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.close_floating();
+        self.close_floating(cx);
         self.landed = None;
         self.first_project = None;
         self.search.update(cx, TextField::clear);
@@ -356,7 +356,7 @@ impl SettingsPanel {
 
     fn go_to(&mut self, page: String, cx: &mut Context<Self>) {
         self.page = page;
-        self.close_floating();
+        self.close_floating(cx);
         self.landed = None;
         self.search.update(cx, TextField::clear);
         self.to_top();
@@ -400,13 +400,7 @@ impl Render for SettingsPanel {
             .size_full()
             .relative()
             .flex()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, _: &MouseDownEvent, _, cx| {
-                    this.close_choice(cx);
-                    this.close_picker(cx);
-                }),
-            )
+            .on_mouse_down(MouseButton::Left, cx.listener(|this, _: &MouseDownEvent, _, cx| this.close_floating(cx)))
             .on_drag_move(split::follow::<_, NavGrip>(Edge::Right, PAGE_KEEP, nav_width, cx))
             .child(self.render_nav(window, cx))
             .child(widgets::page("settings-page", &self.scroll).child(self.render_page(window, cx)))

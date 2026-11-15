@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -686,8 +688,23 @@ pub(super) fn pages_matching(pages: &[String], query: &str) -> Vec<String> {
     pages.iter().filter(matching).cloned().collect()
 }
 
+const APPEARANCE_KEYWORDS: &str = "appearance theme themes colour colours color colors palette light dark system \
+    transparency opacity glass blur contrast terminal presets import export";
+
+static APPEARANCE_WORDS: LazyLock<String> = LazyLock::new(|| {
+    let presets =
+        crate::theme::presets::PRESETS.iter().filter_map(|(_, text)| crate::theme::file::parse(text).ok()?.name);
+    let labels = crate::theme::tokens::TOKENS.iter().map(|token| token.label.to_string());
+    let words: Vec<String> = presets.chain(labels).chain([APPEARANCE_KEYWORDS.to_string()]).collect();
+    words.join(" ").to_lowercase()
+});
+
+pub(super) fn appearance_words() -> &'static str {
+    &APPEARANCE_WORDS
+}
+
 fn page_words(page: &str) -> String {
-    let own = if page == APPEARANCE { super::appearance::words() } else { "" };
+    let own = if page == APPEARANCE { appearance_words() } else { "" };
     format!("{page} {} {own}", about(page))
 }
 

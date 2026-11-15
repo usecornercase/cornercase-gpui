@@ -5,7 +5,7 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.1.116
 
 - **Searching Settings while Appearance is open shows the results.** Typing in Settings' search field on the Appearance page used to leave the page as it was. Now the matching settings show, as on every other page, and clearing the search brings Appearance back. A theme's name, such as Nord, also finds the Appearance page in Settings' search.
-- **While Settings cannot read cornercase's settings, a search says so** and lists the pages of the window that match.
+- **While Settings cannot read cornercase's settings, a search says so** and lists Settings' own pages that match.
 - **A setting no longer shows an older value when two changes answer out of order**, and what you type in a field while its change is being saved is kept.
 
 ## 0.1.115

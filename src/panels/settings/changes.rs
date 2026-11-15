@@ -25,18 +25,10 @@ struct Sent {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum FieldShows {
+enum FieldShows {
     Typed,
     Answer,
     Held,
-}
-
-pub(super) fn field_shows(sent: &str, now: &str, applied: bool) -> FieldShows {
-    match (now == sent, applied) {
-        (false, _) => FieldShows::Typed,
-        (true, true) => FieldShows::Answer,
-        (true, false) => FieldShows::Held,
-    }
 }
 
 impl SettingsPanel {
@@ -235,6 +227,14 @@ impl SettingsPanel {
             }
         })
         .detach();
+    }
+}
+
+fn field_shows(sent: &str, now: &str, applied: bool) -> FieldShows {
+    match (now == sent, applied) {
+        (false, _) => FieldShows::Typed,
+        (true, true) => FieldShows::Answer,
+        (true, false) => FieldShows::Held,
     }
 }
 
