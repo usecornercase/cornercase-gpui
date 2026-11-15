@@ -708,7 +708,8 @@ func copyPlan(_ args: [String], layout: () -> Layout) throws -> CopyPlan {
 
 func awaitCopy(
     of text: String, on board: NSPasteboard, within ms: Int, act: () throws -> Void,
-    whileSaving: () -> Void = {}, beforeGivingBack: () -> Void = {}
+    whileSaving: () -> Void = {}, beforeGivingBack: () -> Void = {},
+    giving give: ([[(NSPasteboard.PasteboardType, Data)]], NSPasteboard) throws -> Void = { try restore($0, to: $1) }
 ) throws -> Arrival {
     let before = board.changeCount
     whileSaving()
@@ -725,7 +726,7 @@ func awaitCopy(
     guard after == before + 1, board.data(forType: .string) == Data(text.utf8) else { return .other }
     beforeGivingBack()
     guard board.changeCount == after else { return .other }
-    try giveBack(kept, to: board)
+    try giveBack(kept, to: board, using: give)
     return .arrived(items: kept.count)
 }
 
@@ -1305,6 +1306,27 @@ enum SelfTest {
                     } catch { return "\(error)" }
                 }
             }),
+            ("a_copy_that_arrived_is_given_back_through_the_check", {
+                onABoard { board in
+                    theUsersClipboard(on: board)
+                    do {
+                        _ = try awaitCopy(
+                            of: thing, on: board, within: 2000, act: { windowWrites(thing, on: board) },
+                            giving: { _, board in windowWrites("not what was there", on: board) })
+                        return "no refusal"
+                    } catch let failure as Failure {
+                        return expect(failure.status, 1) ?? expect(failure.message.hasPrefix("the clipboard differs after it was given back"), true)
+                    } catch { return "\(error)" }
+                }
+            }),
+            ("a_giving_back_is_told_apart_by_data_and_by_count", {
+                let kept = [[(kind, Data([1, 2])), (other, Data([3]))], [(NSPasteboard.PasteboardType.string, Data([4]))]]
+                let sameData = kept
+                let otherData = [[(kind, Data([1, 9])), (other, Data([3]))], [(NSPasteboard.PasteboardType.string, Data([4]))]]
+                let fewer = [kept[0]]
+                let more = kept + [[(kind, Data([5]))]]
+                return expect([holds(sameData, kept), holds(otherData, kept), holds(fewer, kept), holds(more, kept)], [true, false, false, false])
+            }),
             ("a_clipboard_that_differs_after_it_was_given_back_is_told", {
                 onABoard { board in
                     theUsersClipboard(on: board)
@@ -1339,7 +1361,9 @@ enum SelfTest {
                      read(["t", "5000", "c", "cmd"]), read(["t", "5000", "c", "cmd"], noData), read(["t", "5000", "nope"])],
                     ["t 5000 no key", "2", "2", "2", "2", "2", "t 5000 8 C", "1", "2"])
             }),
-            ("the_usage_line_holds_the_copy_grammar", { expect(usage.contains("copy: TEXT MS [KEY [cmd] [shift] [alt] [ctrl]]"), true) }),
+            ("the_usage_line_holds_the_copy_grammar", {
+                expect(usage.contains("copy: TEXT MS [KEY [cmd] [shift] [alt] [ctrl]]") && usage.contains("|paste|copy|press|"), true)
+            }),
         ]
     }
 

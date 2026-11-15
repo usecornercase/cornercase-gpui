@@ -677,6 +677,14 @@ the_note_makes_the_folder_its_tmpdir_names() {
   check "the note makes no $dir before it writes env" grep -q -e "mkdir .*$dir" "$t/note.before"
 }
 
+the_note_listens_for_a_phone_on_loopback_only() {
+  block_of_the_note env || return 1
+  check "the note's env does not export CORNERCASE_PHONE_ADDRESSES=127.0.0.1 and nothing else" \
+    test "$(grep -c -e '^ *export CORNERCASE_PHONE_ADDRESSES=' "$t/note.env")" -eq 1 || return 1
+  check "the note's env gives the phone app another address" \
+    grep -q -e '^ *export CORNERCASE_PHONE_ADDRESSES=127\.0\.0\.1$' "$t/note.env"
+}
+
 there_run_sets_what_the_note_exports_except_what_it_leaves_out() {
   block_of_the_note env || return 1
   differs_from_the_note run env "$b/there/run"
@@ -1340,6 +1348,7 @@ run_test the_env_aims_the_shell_at_here
 run_test every_server_of_the_bench_listens_for_a_phone_on_loopback_only
 run_test each_side_has_a_temporary_folder_of_its_own
 run_test the_note_makes_the_folder_its_tmpdir_names
+run_test the_note_listens_for_a_phone_on_loopback_only
 run_test there_run_sets_what_the_note_exports_except_what_it_leaves_out
 run_test the_notes_counter_and_up_agree_on_the_agents_a_release_knows
 run_test there_cannot_reach_here
