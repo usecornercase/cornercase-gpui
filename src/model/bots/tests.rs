@@ -418,3 +418,53 @@ fn a_catch_up_asked_while_one_runs_is_kept_from_its_earliest_cursor() {
     assert_eq!(chat.take_pending(), Some(4));
     assert_eq!(chat.take_pending(), None);
 }
+
+#[test]
+fn a_line_with_a_null_text_time_or_held_reads_as_if_they_were_left_out() {
+    let nulls = line_of(&json!({"id": 5, "kind": "step", "text": null, "at": null, "held": null})).expect("a line");
+    let bare = line_of(&json!({"id": 5, "kind": "step"})).expect("a line");
+    assert_eq!(nulls, bare);
+    assert_eq!((nulls.text.as_str(), nulls.at, nulls.held), ("", 0, false));
+}
+
+#[test]
+fn a_bot_asked_to_stop_reads_stopping_until_it_is_idle() {
+    let mut bots = two();
+    assert!(!bots.stopping("ops"));
+    bots.stop_asked("ops");
+    assert!(bots.stopping("ops"));
+    bots.state_heard("ops", false);
+    assert!(!bots.stopping("ops"));
+    bots.state_heard("ops", true);
+    assert!(!bots.stopping("ops"), "a stop asked of an earlier turn is not asked of this one");
+}
+
+#[test]
+fn a_bot_asked_to_stop_stops_stopping_when_a_frame_says_it_is_idle() {
+    let mut bots = two();
+    bots.stop_asked("ops");
+    let mut idle = app(fixture!("bots/app-two.json"));
+    idle["bots"][1]["state"] = json!("idle");
+    bots.take_app(&idle);
+    bots.state_heard("ops", true);
+    assert!(!bots.stopping("ops"));
+}
+
+#[test]
+fn a_failed_stop_reads_stop_again() {
+    let mut bots = two();
+    bots.stop_asked("ops");
+    bots.stop_failed("ops");
+    assert!(!bots.stopping("ops"));
+}
+
+#[test]
+fn a_removed_bots_draft_goes_with_it() {
+    let mut bots = two();
+    bots.drafts.keep("prs", "one".into());
+    bots.drafts.keep("ops", "two".into());
+    let mut without = app(fixture!("bots/app-two.json"));
+    without["bots"].as_array_mut().expect("bots").remove(0);
+    bots.take_app(&without);
+    assert_eq!((bots.drafts.text("prs"), bots.drafts.text("ops")), ("", "two"));
+}

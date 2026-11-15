@@ -159,7 +159,7 @@ impl Root {
         if save && text != rename.initial {
             self.send_rename(rename.what, text, cx);
         }
-        window.focus(&self.focus);
+        window.focus(&self.keys_rest(cx));
         cx.notify();
     }
 

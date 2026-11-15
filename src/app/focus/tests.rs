@@ -147,3 +147,13 @@ fn an_answer_asking_for_the_terminal_with_no_dialog_or_sheet_change_takes_the_ke
     let change = Change { to_terminal: true, ..change(over(false, Some(ISSUES)), over(false, Some(ISSUES)), None) };
     assert_eq!(keys_after(&change), Keys::Root);
 }
+
+#[test]
+fn the_keys_rest_in_the_chats_field_while_a_chat_shows() {
+    assert_eq!(rest_of(true), Rest::Field);
+}
+
+#[test]
+fn the_keys_rest_in_the_terminal_without_a_chat() {
+    assert_eq!(rest_of(false), Rest::Terminal);
+}

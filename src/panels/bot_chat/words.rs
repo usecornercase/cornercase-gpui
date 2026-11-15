@@ -28,13 +28,41 @@ pub(crate) fn folded_label(hidden: usize) -> String {
 
 pub(super) const EMPTY_LINES: [&str; 2] = [
     "A bot is an agent of your own. It belongs to no project and keeps a memory.",
-    "It runs only when you write to it, and answers here.",
+    "It runs only when you write to it, and answers here. Try one of these:",
 ];
+
+pub(crate) const EXAMPLES: [&str; 3] = [
+    "Which of my open pull requests are blocked, and why?",
+    "What did my agents get done today, in every project?",
+    "Which issues labelled bug came in today, in every project?",
+];
+
+pub(crate) const SEND: &str = "Send";
+pub(crate) const SENDING: &str = "Sending…";
+pub(crate) const STOP: &str = "Stop";
+pub(crate) const STOPPING: &str = "Stopping…";
+pub(crate) const RETRY: &str = "Retry";
+pub(crate) const NEW_CONVERSATION: &str = "New conversation";
+pub(crate) const STARTING: &str = "Starting…";
+
+pub(crate) fn placeholder(name: &str) -> String {
+    format!("Message {name}…")
+}
+
+pub(crate) fn answering(name: &str) -> String {
+    format!("{name} is answering: stop it first")
+}
+
+pub(crate) fn new_conversation_title(name: &str) -> String {
+    format!("Start a new conversation with {name}?")
+}
+
+pub(crate) fn new_conversation_message(name: &str) -> String {
+    format!(
+        "{name} forgets this conversation, and your next message starts a new one. Its chat stays, and so do what it is for and its memory (bot.md and memory.md), which the new conversation reads."
+    )
+}
 
 pub(super) fn read_failed(name: &str, why: &str) -> String {
     format!("Could not read the chat of {name}: {why}")
-}
-
-pub(super) fn footer(name: &str, id: &str) -> String {
-    format!("Write to {name} in cornercase's own window, or with cornercase bot say {id}.")
 }

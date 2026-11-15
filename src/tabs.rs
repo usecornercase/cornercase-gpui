@@ -202,7 +202,7 @@ impl Root {
             .gap(px(8.))
             .pr(px(window_frame.title_end()))
             .child(self.tab_slot())
-            .child(tools(window_frame, &self.focus, cx));
+            .child(tools(window_frame, &self.keys_rest(cx), cx));
         frame::title_row(row, window_frame)
     }
 
@@ -218,7 +218,8 @@ impl Root {
 
     pub(crate) fn tabs_part(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Drawn {
         self.parts.tab_spots.clear();
-        let group = frame::claimed(self.tab_group(cx), Frame::read(window, Os::CURRENT), &self.focus);
+        let rest = self.keys_rest(cx);
+        let group = frame::claimed(self.tab_group(cx), Frame::read(window, Os::CURRENT), &rest);
         let watched = tabs_in_row(self.side.look.current.tabs_in_sidebar, self.side.aside);
         let root = div().size_full().flex().items_center().child(group);
         let root = root.when(watched, |d| d.child(strip::watcher(&self.side.strip, self.parts.tabs.entity_id())));

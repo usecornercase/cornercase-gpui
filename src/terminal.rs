@@ -97,6 +97,10 @@ impl Root {
             cx.stop_propagation();
             return;
         }
+        if self.chat_shown() && !terminal {
+            self.chat_key(ks, window, cx);
+            return;
+        }
         if !terminal || self.overlay_open(cx) || self.store.read(cx).shows_file_full_screen() {
             return;
         }
@@ -106,6 +110,17 @@ impl Root {
         }
         if let Some(event) = keys::key_event(ks, Os::CURRENT) {
             self.type_in(event, cx);
+            cx.stop_propagation();
+        }
+    }
+
+    fn chat_key(&mut self, ks: &Keystroke, window: &Window, cx: &mut Context<Self>) {
+        let typing = bot_chat::field_focus(cx).is_focused(window);
+        if !typing || self.overlay_open(cx) || self.store.read(cx).shows_file_full_screen() {
+            return;
+        }
+        if let Some(step) = bot_chat::scroll_of(&ks.key) {
+            bot_chat::scroll(step, cx);
             cx.stop_propagation();
         }
     }
@@ -179,7 +194,7 @@ impl Root {
         if chord.focus == Focus::Browser && self.browser_command(command, window, cx) {
             return true;
         }
-        if self.chat_shown() && keymap::in_chat(command) == keymap::InChat::Rests {
+        if self.chat_shown() && matches!(keymap::in_chat(command), keymap::InChat::Rests | keymap::InChat::Field) {
             return true;
         }
         match command {
@@ -260,7 +275,7 @@ impl Root {
         }
         let dock_first = self.dock_focused(window, cx) || self.store.read(cx).shows_file_full_screen();
         if dock_first && self.store.update(cx, Store::close_dock) {
-            window.focus(&self.focus);
+            window.focus(&self.keys_rest(cx));
             return;
         }
         if self.machine.is_some() {

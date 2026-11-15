@@ -542,7 +542,7 @@ fn chat_table() -> Vec<(Command, InChat)> {
         (Command::FindFile, InChat::Acts),
         (Command::FindInFile, InChat::Acts),
         (Command::Copy, InChat::Acts),
-        (Command::Paste, InChat::Rests),
+        (Command::Paste, InChat::Field),
         (Command::NewTab, InChat::Leaves),
         (Command::NewWorkspace, InChat::Acts),
         (Command::StartAgent, InChat::Acts),
@@ -599,9 +599,14 @@ fn no_shortcut_acts_on_a_hidden_pane_while_a_chat_shows() {
         Command::PreviousPane,
         Command::NextPane,
         Command::Mark,
-        Command::Paste,
     ] {
         assert_eq!(in_chat(command), InChat::Rests, "{command:?}");
     }
     assert_eq!(in_chat(Command::Close), InChat::OnTop);
+}
+
+#[test]
+fn a_paste_while_a_chat_shows_belongs_to_the_chats_field_and_to_no_pane() {
+    use super::in_chat;
+    assert_eq!(in_chat(Command::Paste), InChat::Field);
 }

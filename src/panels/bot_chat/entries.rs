@@ -102,6 +102,45 @@ pub(crate) fn turn(lines: &[Line], thinking: bool) -> Option<Turn> {
     Some(Turn { since, steps: tail.iter().filter(|line| line.kind == Kind::Step).count() })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Retry {
+    pub error: u64,
+    pub text: String,
+}
+
+pub(crate) fn retry(lines: &[Line], thinking: bool) -> Option<Retry> {
+    let last = lines.last().filter(|line| !thinking && line.kind == Kind::Error)?;
+    let you = lines[..lines.len() - 1].iter().rev().find(|line| line.kind == Kind::You)?;
+    Some(Retry { error: last.id, text: you.text.clone() })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Control {
+    Ready,
+    Running,
+    Resting,
+}
+
+pub(crate) fn send_control(blank: bool, on_its_way: bool) -> Control {
+    match (on_its_way, blank) {
+        (true, _) => Control::Running,
+        (false, true) => Control::Resting,
+        (false, false) => Control::Ready,
+    }
+}
+
+pub(crate) fn stop_control(stopping: bool) -> Control {
+    if stopping { Control::Running } else { Control::Ready }
+}
+
+pub(crate) fn new_conversation_control(thinking: bool, starting: bool) -> Control {
+    match (starting, thinking) {
+        (true, _) => Control::Running,
+        (false, true) => Control::Resting,
+        (false, false) => Control::Ready,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EntryKey {
     kind: u8,
@@ -109,9 +148,10 @@ pub(crate) struct EntryKey {
     last: u64,
     held: bool,
     open: bool,
+    retry: bool,
 }
 
-pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>) -> Vec<EntryKey> {
+pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>, retry: Option<u64>) -> Vec<EntryKey> {
     entries
         .iter()
         .map(|entry| {
@@ -123,7 +163,8 @@ pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>) -> Vec<EntryKey> {
                 Entry::Notice { id, .. } => (4, *id, false),
                 Entry::Other { id, .. } => (5, *id, false),
             };
-            EntryKey { kind, first: entry.id(), last, held, open: opened.contains(&entry.id()) }
+            let retry = retry == Some(last) && kind == 3;
+            EntryKey { kind, first: entry.id(), last, held, open: opened.contains(&entry.id()), retry }
         })
         .collect()
 }

@@ -82,6 +82,10 @@ pub(super) fn line_breaks(pasted: &str) -> String {
     pasted.replace("\r\n", "\n").replace('\r', "\n")
 }
 
+pub(super) fn pasted(text: &str, several_lines: bool) -> String {
+    if several_lines { line_breaks(text) } else { one_line(text) }
+}
+
 pub(super) fn one_line(pasted: &str) -> String {
     pasted.replace("\r\n", " ").replace(['\r', '\n'], " ")
 }

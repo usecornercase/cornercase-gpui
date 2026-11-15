@@ -1,4 +1,7 @@
-use super::entries::{Entry, EntryKey, STEPS_SHOWN, Turn, entries, folded, held, keys, row_splices, spliced, turn};
+use super::entries::{
+    Control, Entry, EntryKey, Retry, STEPS_SHOWN, Turn, entries, folded, held, keys, new_conversation_control, retry,
+    row_splices, send_control, spliced, stop_control, turn,
+};
 use super::words::{folded_label, time_label, turn_label};
 use super::{Scroll, scroll_distance, scroll_of};
 
@@ -163,7 +166,7 @@ fn an_idle_bot_has_no_turn() {
 }
 
 fn key_of(entries: &[Entry]) -> Vec<EntryKey> {
-    keys(entries, &std::collections::HashSet::new())
+    keys(entries, &std::collections::HashSet::new(), None)
 }
 
 #[test]
@@ -239,9 +242,93 @@ fn a_step_run_keeps_its_real_last_id_so_a_capped_front_keeps_the_reader() {
 #[test]
 fn a_chat_is_fresh_for_another_bot_or_a_new_generation_but_not_a_new_revision() {
     use super::is_fresh;
-    let mark = ("prs".to_string(), 1, 3);
+    let mark = ("prs".to_string(), 1, 3, None);
     assert!(is_fresh(None, None, &mark));
     assert!(is_fresh(Some("ops"), Some(&mark), &mark));
-    assert!(is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 5, 3)));
-    assert!(!is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 1, 4)));
+    assert!(is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 5, 3, None)));
+    assert!(!is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 1, 4, None)));
+}
+
+#[test]
+fn retry_is_offered_on_an_error_that_is_the_last_line_while_no_turn_runs() {
+    let lines = [line(1, "you", "ask", false), line(2, "error", "failed", false)];
+    assert_eq!(retry(&lines, false), Some(Retry { error: 2, text: "ask".into() }));
+}
+
+#[test]
+fn retry_sends_the_last_message_before_the_error() {
+    let lines = [
+        line(1, "you", "old", false),
+        line(2, "bot", "a", false),
+        line(3, "you", "new", false),
+        line(4, "error", "x", false),
+    ];
+    assert_eq!(retry(&lines, false).map(|retry| retry.text), Some("new".to_string()));
+}
+
+#[test]
+fn no_retry_while_a_turn_runs() {
+    let lines = [line(1, "you", "ask", false), line(2, "error", "failed", false)];
+    assert_eq!(retry(&lines, true), None);
+}
+
+#[test]
+fn no_retry_when_the_error_is_not_the_last_line() {
+    let lines = [line(1, "you", "ask", false), line(2, "error", "failed", false), line(3, "notice", "stopped", false)];
+    assert_eq!(retry(&lines, false), None);
+}
+
+#[test]
+fn no_retry_without_a_message_kept_before_the_error() {
+    assert_eq!(retry(&[line(1, "error", "failed", false)], false), None);
+}
+
+#[test]
+fn an_error_that_gains_or_loses_retry_is_measured_again() {
+    let lines = [line(1, "you", "ask", false), line(2, "error", "failed", false)];
+    let entries = entries(&lines);
+    let without = keys(&entries, &std::collections::HashSet::new(), None);
+    let with = keys(&entries, &std::collections::HashSet::new(), Some(2));
+    assert_eq!(spliced(&without, &with), vec![(1..2, 1)]);
+    assert_eq!(spliced(&with, &without), vec![(1..2, 1)]);
+}
+
+#[test]
+fn new_conversation_rests_while_a_turn_runs() {
+    assert_eq!(new_conversation_control(true, false), Control::Resting);
+    assert_eq!(new_conversation_control(false, false), Control::Ready);
+}
+
+#[test]
+fn new_conversation_shows_that_it_runs() {
+    assert_eq!(new_conversation_control(false, true), Control::Running);
+    assert_eq!(new_conversation_control(true, true), Control::Running);
+}
+
+#[test]
+fn send_rests_while_the_field_holds_only_blanks() {
+    assert_eq!(send_control(true, false), Control::Resting);
+    assert_eq!(send_control(false, false), Control::Ready);
+}
+
+#[test]
+fn send_shows_that_a_message_is_on_its_way() {
+    assert_eq!(send_control(false, true), Control::Running);
+    assert_eq!(send_control(true, true), Control::Running);
+}
+
+#[test]
+fn stop_reads_stopping_while_it_runs() {
+    assert_eq!(stop_control(true), Control::Running);
+    assert_eq!(stop_control(false), Control::Ready);
+}
+
+#[test]
+fn the_placeholder_names_the_bot() {
+    assert_eq!(super::words::placeholder("PRs"), "Message PRs…");
+}
+
+#[test]
+fn a_resting_new_conversation_says_why() {
+    assert_eq!(super::words::answering("PRs"), "PRs is answering: stop it first");
 }

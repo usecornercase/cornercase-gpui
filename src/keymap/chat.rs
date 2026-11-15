@@ -6,6 +6,7 @@ pub(crate) enum InChat {
     Leaves,
     OnTop,
     Rests,
+    Field,
 }
 
 pub(crate) fn in_chat(command: Command) -> InChat {
@@ -15,8 +16,8 @@ pub(crate) fn in_chat(command: Command) -> InChat {
         | Command::SplitRight
         | Command::SplitDown
         | Command::PreviousPane
-        | Command::NextPane
-        | Command::Paste => InChat::Rests,
+        | Command::NextPane => InChat::Rests,
+        Command::Paste => InChat::Field,
         Command::Close => InChat::OnTop,
         Command::NextWorkspace
         | Command::PreviousWorkspace

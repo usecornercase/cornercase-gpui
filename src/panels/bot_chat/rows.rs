@@ -8,12 +8,14 @@ use gpui::{
 };
 
 use super::BotChat;
-use super::entries::{Entry, folded};
-use super::words::{EARLIER, HELD, folded_label, time_label};
+use super::entries::{Entry, Retry, folded};
+use super::words::{EARLIER, HELD, RETRY, SENDING, folded_label, time_label};
+use crate::model::bots::Said;
+use crate::store::Store;
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::markdown::text as md;
 use crate::ui::markdown::{self, Block};
-use crate::ui::{self, glass};
+use crate::ui::{self, Tone, glass};
 
 pub(super) type Blocks = Rc<RefCell<HashMap<u64, Rc<Vec<Block>>>>>;
 
@@ -24,6 +26,9 @@ pub(super) struct Meta {
     pub chat: WeakEntity<BotChat>,
     pub opened: Rc<HashSet<u64>>,
     pub blocks: Blocks,
+    pub retry: Option<Rc<Retry>>,
+    pub bot: String,
+    pub sending: bool,
 }
 
 pub(super) fn earlier_row() -> AnyElement {
@@ -39,7 +44,7 @@ pub(super) fn entry_row(entry: &Entry, meta: &Meta) -> AnyElement {
         Entry::You { text, at, held, .. } => you(text, *at, *held, meta),
         Entry::Answer { id, text, at } => answer(*id, text, *at, meta),
         Entry::Steps { first, texts, .. } => steps(*first, texts, meta),
-        Entry::Failed { text, .. } => failed(text),
+        Entry::Failed { id, text } => failed(*id, text, meta),
         Entry::Notice { text, .. } => notice(text),
         Entry::Other { text, .. } => plain(text),
     }
@@ -112,8 +117,23 @@ fn steps(first: u64, texts: &[String], meta: &Meta) -> Div {
     )
 }
 
-fn failed(text: &str) -> Div {
-    line(div().text_color(colours::failed()).child(text.to_string()))
+fn failed(id: u64, text: &str, meta: &Meta) -> Div {
+    let retry = meta.retry.as_ref().filter(|retry| retry.error == id).map(|retry| retry_button(retry, meta));
+    let text = div().text_color(colours::failed()).child(text.to_string());
+    line(div().flex().flex_col().items_start().gap(px(6.)).child(text).children(retry))
+}
+
+fn retry_button(retry: &Retry, meta: &Meta) -> AnyElement {
+    if meta.sending {
+        return ui::busy_button("bot-retry", SENDING, Tone::Plain).into_any_element();
+    }
+    let (bot, text) = (meta.bot.clone(), retry.text.clone());
+    ui::button("bot-retry", RETRY)
+        .on_click(move |_: &ClickEvent, _, cx| {
+            let (bot, text) = (bot.clone(), text.clone());
+            Store::get(cx).update(cx, |store, cx| store.say_to_bot(&bot, text, Said::Again, cx));
+        })
+        .into_any_element()
 }
 
 fn notice(text: &str) -> Div {

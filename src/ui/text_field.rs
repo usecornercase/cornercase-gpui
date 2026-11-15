@@ -9,13 +9,15 @@ use gpui::{
 use unicode_segmentation::UnicodeSegmentation;
 
 use self::element::{Layout, TextElement};
-use self::rows::{clamp_scroll, line_breaks, one_line, previous_grapheme};
+use self::enter::{Enter, passes_arrows, submits};
+use self::rows::{clamp_scroll, pasted, previous_grapheme};
 use self::secure::Secure;
 use self::shown::Shown;
 use crate::desktop;
 use crate::platform::Os;
 
 mod element;
+mod enter;
 mod handler;
 mod rows;
 mod secure;
@@ -72,7 +74,7 @@ pub(crate) struct TextField {
     secure: Secure,
 }
 
-const LINES_CONTEXT: &str = "TextField Multiline";
+const CHAT_ROWS: RangeInclusive<usize> = 1..=6;
 
 type DownHook = Rc<dyn Fn(&mut Window, &mut App) -> bool>;
 
@@ -85,6 +87,7 @@ struct Options {
     scroller: Option<ScrollHandle>,
     room_below: Option<Pixels>,
     on_down: Option<DownHook>,
+    enter: Enter,
 }
 
 #[derive(Default)]
@@ -202,7 +205,7 @@ impl TextField {
     }
 
     fn insert_pasted(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let text = if self.options.rows.is_some() { line_breaks(text) } else { one_line(text) };
+        let text = pasted(text, self.options.rows.is_some());
         self.replace_text_in_range(None, &text, window, cx);
     }
 
@@ -414,7 +417,7 @@ impl Render for TextField {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.watch_keys(window, cx);
         let root = if self.options.rows.is_some() {
-            Self::line_keys(div().key_context(LINES_CONTEXT), cx)
+            Self::line_keys(div().key_context(self.options.enter.key_context()), cx)
         } else {
             div().key_context("TextField")
         };
@@ -438,7 +441,7 @@ impl Render for TextField {
             .on_action(cx.listener(Self::paste))
             .on_action(cx.listener(Self::cut))
             .on_action(cx.listener(Self::copy))
-            .on_action(cx.listener(|_, _: &Submit, _, cx| cx.emit(TextFieldEvent::Submit)))
+            .on_action(cx.listener(Self::submit))
             .on_action(cx.listener(Self::cancel))
             .on_action(cx.listener(Self::focus_next))
             .on_action(cx.listener(Self::focus_previous))
@@ -493,14 +496,18 @@ fn bindings(os: Os) -> Vec<KeyBinding> {
         Os::Mac => mac_bindings(ctx),
         Os::Linux | Os::Windows => control_bindings(ctx),
     });
-    keys.extend(line_bindings(os));
+    keys.extend(line_bindings(os, Enter::Breaks));
+    keys.extend(line_bindings(os, Enter::Sends));
     keys
 }
 
-fn line_bindings(os: Os) -> Vec<KeyBinding> {
-    let ctx = Some("Multiline");
+fn line_bindings(os: Os, enter: Enter) -> Vec<KeyBinding> {
+    let ctx = Some(enter.context());
     let mut keys = vec![
-        KeyBinding::new("enter", NewLine, ctx),
+        match enter {
+            Enter::Breaks => KeyBinding::new("enter", NewLine, ctx),
+            Enter::Sends => KeyBinding::new("enter", Submit, ctx),
+        },
         KeyBinding::new("shift-enter", NewLine, ctx),
         KeyBinding::new("up", Up, ctx),
         KeyBinding::new("down", Down, ctx),
@@ -683,6 +690,34 @@ impl TextField {
         self.multiline(PROMPT_ROWS)
     }
 
+    pub(crate) fn chat(mut self) -> Self {
+        self.options.enter = Enter::Sends;
+        self.clears_on_escape().multiline(CHAT_ROWS)
+    }
+
+    pub(crate) fn fill(&mut self, text: impl Into<SharedString>, cx: &mut Context<Self>) {
+        self.set_text(text, cx);
+        self.move_to(self.content.len(), cx);
+        self.reveal(cx);
+    }
+
+    fn submit(&mut self, _: &Submit, _: &mut Window, cx: &mut Context<Self>) {
+        if submits(self.options.enter, self.marked_range.is_some()) {
+            cx.emit(TextFieldEvent::Submit);
+        } else {
+            self.marked_range = None;
+            cx.notify();
+        }
+    }
+
+    fn several_rows(&self) -> bool {
+        self.last_layout.as_ref().is_some_and(|layout| layout.content_height() > layout.line_height)
+    }
+
+    fn passes_arrows(&self) -> bool {
+        passes_arrows(self.options.enter, self.content.is_empty(), self.several_rows())
+    }
+
     pub(crate) fn inside(mut self, scroller: ScrollHandle) -> Self {
         self.options.scroller = Some(scroller);
         self
@@ -790,7 +825,7 @@ impl TextField {
 impl TextField {
     fn line_keys(root: Div, cx: &mut Context<Self>) -> Div {
         root.on_action(cx.listener(|this, _: &NewLine, window, cx| this.replace_text_in_range(None, "\n", window, cx)))
-            .on_action(cx.listener(|this, _: &Up, _, cx| this.step_row(true, false, cx)))
+            .on_action(cx.listener(Self::up))
             .on_action(cx.listener(Self::down))
             .on_action(cx.listener(|this, _: &SelectUp, _, cx| this.step_row(true, true, cx)))
             .on_action(cx.listener(|this, _: &SelectDown, _, cx| this.step_row(false, true, cx)))
@@ -817,7 +852,19 @@ impl TextField {
         layout.row_ends(self.cursor_offset(), &self.content)
     }
 
+    fn up(&mut self, _: &Up, _: &mut Window, cx: &mut Context<Self>) {
+        if self.passes_arrows() {
+            cx.propagate();
+        } else {
+            self.step_row(true, false, cx);
+        }
+    }
+
     fn down(&mut self, _: &Down, window: &mut Window, cx: &mut Context<Self>) {
+        if self.passes_arrows() {
+            cx.propagate();
+            return;
+        }
         let taken = self.options.on_down.clone().is_some_and(|hook| hook(window, cx));
         if !taken {
             self.step_row(false, false, cx);

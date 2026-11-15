@@ -204,7 +204,7 @@ impl Root {
 
     pub(crate) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.side.menu.take().is_some() {
-            window.focus(&self.focus);
+            window.focus(&self.keys_rest(cx));
             cx.notify();
         }
     }

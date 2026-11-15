@@ -1,7 +1,17 @@
-use gpui::{App, Context, Window};
+use gpui::{App, Context, FocusHandle, Window};
 
 use super::Root;
-use crate::panels::PanelKind;
+use crate::panels::{PanelKind, bot_chat};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Rest {
+    Terminal,
+    Field,
+}
+
+pub(crate) fn rest_of(chat_shown: bool) -> Rest {
+    if chat_shown { Rest::Field } else { Rest::Terminal }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Place {
@@ -113,7 +123,7 @@ impl Root {
         self.held.home.note(dialog, noted);
     }
 
-    fn place_of(&self, focused: &gpui::FocusHandle, window: &Window, cx: &App) -> Place {
+    fn place_of(&self, focused: &FocusHandle, window: &Window, cx: &App) -> Place {
         let s = self.store.read(cx);
         if *focused == self.focus {
             return Place::Terminal;
@@ -127,13 +137,26 @@ impl Root {
         }
     }
 
-    fn way_back(&mut self, ended: bool, window: &Window) -> Option<(Place, gpui::FocusHandle)> {
+    fn way_back(&mut self, ended: bool, window: &Window) -> Option<(Place, FocusHandle)> {
         if !ended {
             return None;
         }
         let (place, weak) = self.held.home.take()?;
         let handle = weak.upgrade()?;
         self.focus.contains(&handle, window).then_some((place, handle))
+    }
+
+    pub(crate) fn keys_rest(&self, cx: &mut App) -> FocusHandle {
+        match rest_of(self.chat_shown()) {
+            Rest::Field => bot_chat::field_focus(cx),
+            Rest::Terminal => self.focus.clone(),
+        }
+    }
+
+    pub(super) fn keys_follow(&self, rested: &FocusHandle, window: &mut Window, cx: &mut App) {
+        if rested.is_focused(window) {
+            window.focus(&self.keys_rest(cx));
+        }
     }
 
     pub(super) fn keys_changed(
@@ -149,8 +172,8 @@ impl Root {
         let way = self.way_back(before.ended_into(now), window);
         let change = Change { before, now, dock, in_dock, to_terminal, back: way.as_ref().map(|(place, _)| *place) };
         match (keys_after(&change), way) {
+            (Keys::Back, Some((Place::Terminal, _))) | (Keys::Root, _) => window.focus(&self.keys_rest(cx)),
             (Keys::Back, Some((_, handle))) => window.focus(&handle),
-            (Keys::Root, _) => window.focus(&self.focus),
             (Keys::DockCard, _) => window.focus(&self.dock_focus),
             _ => {}
         }
