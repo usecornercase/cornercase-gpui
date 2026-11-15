@@ -175,7 +175,7 @@ impl Store {
     }
 
     pub(crate) fn follow_app(&mut self, cx: &mut Context<Self>) {
-        self.list_moves = ListMoves::default();
+        self.list_moves.restart();
         self.app_stream = follow(cx, args(&["status", "--app", "--follow"]), |this, line, cx| {
             if let Ok(value) = serde_json::from_str::<Value>(&line) {
                 this.take_app(value, cx);

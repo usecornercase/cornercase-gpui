@@ -111,6 +111,10 @@ impl ListMoves {
         self.asked
     }
 
+    pub(crate) fn restart(&mut self) {
+        *self = Self { asked: self.asked, ..Self::default() };
+    }
+
     pub(crate) fn is_latest(&self, ask: u64) -> bool {
         self.asked == ask
     }
