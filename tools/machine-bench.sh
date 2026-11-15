@@ -745,20 +745,32 @@ scan() {
     }'
 }
 
+is_window() {
+  first=$(ps -o args= -p "$1" 2> /dev/null | awk '{ print $1 }')
+  [ "${first##*/}" = cornercase-gpui ]
+}
+
 window_pid() {
   pidfile=$folder/window.pid
   [ -f "$pidfile" ] || return 0
   wp=$(cat "$pidfile")
   case $wp in '' | *[!0-9]*) return 0 ;; esac
   kill -0 "$wp" 2> /dev/null || return 0
-  first=$(ps -o args= -p "$wp" 2> /dev/null | awk '{ print $1 }')
-  case ${first##*/} in
-    cornercase-gpui) printf '%s\n' "$wp" ;;
-  esac
+  if is_window "$wp"; then printf '%s\n' "$wp"; fi
+}
+
+cwd_windows() {
+  command -v lsof > /dev/null 2>&1 || return 0
+  lsof -a -d cwd -Fpn 2> /dev/null | awk -v f="$folder/" '
+    /^p/ { p = substr($0, 2) }
+    /^n/ { n = substr($0, 2) "/"; if (index(n, f) == 1 || index(n, "/private" f) == 1) print p }' |
+    while read -r p; do
+      if is_window "$p"; then printf '%s\n' "$p"; fi
+    done
 }
 
 windows_on_bench() {
-  { window_pid; scan windows; } | sort -u | tr '\n' ' ' | sed 's/ *$//'
+  { window_pid; scan windows; cwd_windows; } | sort -u | tr '\n' ' ' | sed 's/ *$//'
 }
 
 refuse_inside() {
@@ -775,12 +787,18 @@ refuse_window() {
 
 wait_gone() {
   n=0
+  quiet=0
   while [ "$n" -lt 10 ]; do
-    [ -n "$(scan left "$1")" ] || return 0
+    if [ -n "$(scan left "$1")" ]; then
+      quiet=0
+    else
+      quiet=$((quiet + 1))
+      [ "$quiet" -lt 4 ] || return 0
+    fi
     n=$((n + 1))
     sleep 1
   done
-  [ -z "$(scan left "$1")" ]
+  [ "$quiet" -ge 3 ] && [ -z "$(scan left "$1")" ]
 }
 
 down() {
@@ -795,9 +813,13 @@ down() {
   snapshot=$(scan pids | tr '\n' ' ')$(socket_holders)
   stop_servers
   if ! wait_gone "$snapshot"; then
-    printf 'still running:\n' >&2
-    scan left "$snapshot" >&2
-    fail "end them by pid, then run down again; $folder is kept"
+    now=$(scan left "$snapshot")
+    if [ -n "$now" ]; then
+      printf 'still running:\n%s\n' "$now" >&2
+    else
+      printf 'nothing runs now, but something of the bench ran in the last 3 s\n' >&2
+    fi
+    fail "end what is listed by pid, if anything, then run down again; $folder is kept"
   fi
   rm -rf -- "$folder"
   printf 'removed %s\n' "$folder"

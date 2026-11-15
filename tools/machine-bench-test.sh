@@ -63,7 +63,8 @@ case $cmd in
     held_there=no
     [ -e "$(dirname "$sock")/../ssh/there.invalid.held" ] && held_there=yes
     printf '%s held=%s\n' "$sock" "$held,$held_there" >> "$t/killed"
-    rm -f "$sock" "$state"-agent "$state"-child ;;
+    rm -f "$sock" "$state"-agent "$state"-child
+    [ -f "$t/control/comes-back" ] && mv "$t/control/comes-back" "$t/control/came-back" && exec sh -c 'sleep 1.5; exec "$0"' "$(cat "$t/control/came-back")" > /dev/null 2>&1 & ;;
   status)
     needs_up
     if [ "${2-}" = --panes ]; then
@@ -702,6 +703,13 @@ counted_by_the_note() {
     test "$(cat "$t/counted" "$t/counted.err" | grep -c /)" -eq 0
 }
 
+the_helper_names_only_sections_the_note_has() {
+  for h in "What this shell may do" "What needs no press" "Captures"; do
+    check "the helper names '$h' and the note has no such heading" grep -qx "## $h" "$repo/design/manual-check.md" || return 1
+    check "the helper no longer names '$h'" grep -qF "$h" "$repo/tools/manual-check.swift" || return 1
+  done
+}
+
 the_notes_counter_and_up_agree_on_the_agents_a_release_knows() {
   counted_by_the_note "$b" || return 1
   check "the counter does not say all pinned: $(cat "$t/counted")" contains "$t/counted" "16 agents known, all pinned" || return 1
@@ -1205,6 +1213,85 @@ down_refuses_while_a_window_runs() {
   check "kill-server ran" [ "$(wc -l < "$t/killed")" = "$lines" ]
 }
 
+down_refuses_a_window_started_in_a_bench_folder() {
+  command -v lsof > /dev/null 2>&1 || { check "lsof is needed for this case" false; return 1; }
+  lines=$(wc -l < "$t/killed")
+  mkdir "$t/w3"
+  ln -s /bin/sleep "$t/w3/cornercase-gpui"
+  ( cd "$b/here/here-proj" && exec "$t/w3/cornercase-gpui" 30 ) > /dev/null 2>&1 &
+  wpid=$!
+  track "$wpid"
+  sleep 1
+  runb down "$b"
+  kill "$wpid" 2> /dev/null
+  check "exit $rc, not 2" [ "$rc" = 2 ] || return 1
+  check "its pid is not named" contains "$t/err" "$wpid" || return 1
+  check "kill-server ran" [ "$(wc -l < "$t/killed")" = "$lines" ]
+}
+
+down_takes_no_other_program_in_a_bench_folder_for_a_window() {
+  command -v lsof > /dev/null 2>&1 || { check "lsof is needed for this case" false; return 1; }
+  runb up "$t/b7" --here "$t/new/cornercase"
+  check "up: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  ( cd "$t/b7/here/here-proj" && exec sleep 30 ) > /dev/null 2>&1 &
+  spid=$!
+  track "$spid"
+  sleep 1
+  runb down "$t/b7"
+  kill "$spid" 2> /dev/null
+  check "exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  check "the folder is still there" [ ! -e "$t/b7" ]
+}
+
+down_waits_until_nothing_of_the_bench_runs_for_three_seconds() {
+  runb up "$t/b8" --here "$t/new/cornercase"
+  check "up: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  lingers "$t/b8"
+  printf '%s\n' "$t/b8/here/bin/lingers" > "$t/control/comes-back"
+  runb down "$t/b8"
+  rc1=$rc
+  rm -f "$t/control/comes-back" "$t/control/came-back"
+  sleep 1
+  lpid=$(cat "$t/b8/lingers.pid" 2> /dev/null)
+  [ -z "$lpid" ] || track "$lpid"
+  [ -z "$lpid" ] || kill "$lpid" 2> /dev/null
+  check "exit $rc1, not 1: a process that started after the stop was not waited for" [ "$rc1" = 1 ] || return 1
+  check "the folder was removed" [ -d "$t/b8" ] || return 1
+  sleep 1
+  runb down "$t/b8"
+  check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
+down_keeps_the_folder_when_the_bench_ran_until_the_last_second() {
+  runb up "$t/b9" --here "$t/new/cornercase"
+  check "up: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  mkdir -p "$t/b9/here/bin"
+  printf '#!/bin/sh\nwhile [ ! -e %s/control/brief-stop ]; do /bin/sleep 0.1; done\n' "$t" > "$t/b9/here/bin/brief"
+  cat > "$t/bin/sleep" <<EOF
+#!/bin/sh
+n=\$(cat $t/control/sleep-count 2> /dev/null || echo 0)
+n=\$((n + 1))
+echo "\$n" > $t/control/sleep-count
+[ "\$n" = 10 ] && : > $t/control/brief-stop
+exec /bin/sleep "\$@"
+EOF
+  chmod 755 "$t/b9/here/bin/brief" "$t/bin/sleep"
+  rm -f "$t/control/sleep-count" "$t/control/brief-stop"
+  "$t/b9/here/bin/brief" > /dev/null 2>&1 &
+  bpid=$!
+  track "$bpid"
+  runb down "$t/b9"
+  rc1=$rc
+  rm -f "$t/bin/sleep" "$t/control/sleep-count"
+  check "exit $rc1, not 1: the folder went after less than 3 s of quiet" [ "$rc1" = 1 ] || return 1
+  check "the message names nothing to end: $(cat "$t/err")" contains "$t/err" "nothing runs now, but something of the bench ran in the last 3 s" || return 1
+  check "the folder was removed" [ -d "$t/b9" ] || return 1
+  wait "$bpid" 2> /dev/null
+  rm -f "$t/control/brief-stop"
+  runb down "$t/b9"
+  check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
 down_stops_here_then_there_and_removes_the_folder() {
   sleep 1
   : > "$t/killed"
@@ -1351,6 +1438,7 @@ run_test the_note_makes_the_folder_its_tmpdir_names
 run_test the_note_listens_for_a_phone_on_loopback_only
 run_test there_run_sets_what_the_note_exports_except_what_it_leaves_out
 run_test the_notes_counter_and_up_agree_on_the_agents_a_release_knows
+run_test the_helper_names_only_sections_the_note_has
 run_test there_cannot_reach_here
 run_test the_stand_in_runs_a_link_against_there
 run_test the_stand_in_refuses_while_held
@@ -1377,6 +1465,10 @@ run_test status_names_both_remembered_lists
 run_test status_and_down_refuse_a_folder_up_did_not_make
 run_test down_refuses_from_inside_the_bench
 run_test down_refuses_while_a_window_runs
+run_test down_refuses_a_window_started_in_a_bench_folder
+run_test down_takes_no_other_program_in_a_bench_folder_for_a_window
+run_test down_waits_until_nothing_of_the_bench_runs_for_three_seconds
+run_test down_keeps_the_folder_when_the_bench_ran_until_the_last_second
 run_test down_stops_here_then_there_and_removes_the_folder
 run_test down_keeps_the_folder_while_bench_processes_remain
 run_test down_lists_a_forward_left_running
