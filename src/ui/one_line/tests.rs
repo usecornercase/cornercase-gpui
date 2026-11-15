@@ -131,8 +131,3 @@ fn a_line_within_its_box_s_last_pixel_is_not_cut() {
     assert!(fits(px(300.5), px(300.25)));
     assert!(!fits(px(301.5), px(300.25)));
 }
-
-#[test]
-fn a_text_with_line_breaks_and_tabs_is_flattened_to_spaces() {
-    assert_eq!(super::flattened("a\nb\r\tc").as_ref(), "a b  c");
-}

@@ -41,7 +41,7 @@ pub(crate) use text_field::{TextField, TextFieldEvent};
 use crate::platform::Os;
 use crate::theme::{colours, radius};
 
-pub(crate) const BUTTON_SIDES: f32 = 12.;
+const BUTTON_SIDES: f32 = 12.;
 pub(crate) const BUTTON_FRAME: f32 = 2. * (BUTTON_SIDES + 1.);
 pub(crate) const ICON_GAP: f32 = 6.;
 pub(crate) const TICK_GAP: f32 = 8.;
@@ -246,7 +246,7 @@ pub(crate) fn icon_text_button(
     let el = button_base(id)
         .flex()
         .items_center()
-        .gap(px(6.))
+        .gap(px(ICON_GAP))
         .text_color(colour)
         .child(icon(glyph, 14.).text_color(colour))
         .child(label.into());
