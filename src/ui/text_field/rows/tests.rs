@@ -1,8 +1,8 @@
 use gpui::px;
 
 use super::{
-    Rows, Span, clamp_scroll, line_breaks, one_line, pasted, previous_grapheme, rows_shown, scroll_to_show,
-    scroll_to_show_with_margins, sideways, thumb,
+    Rows, Span, clamp_scroll, line_breaks, measured_rows, one_line, pasted, previous_grapheme, rows_shown,
+    scroll_to_show, scroll_to_show_with_margins, sideways, thumb,
 };
 
 fn wrapped() -> Rows {
@@ -229,4 +229,10 @@ fn a_scroll_within_what_the_caret_allows_stays_where_it_was() {
 fn a_paste_into_a_field_of_several_lines_keeps_its_line_breaks() {
     assert_eq!(pasted("a\r\nb", true), "a\nb");
     assert_eq!(pasted("a\nb", false), "a b");
+}
+
+#[test]
+fn an_empty_field_is_one_row_whatever_its_placeholder_wraps_to() {
+    assert_eq!(measured_rows(true, 3), 1);
+    assert_eq!(measured_rows(false, 3), 3);
 }

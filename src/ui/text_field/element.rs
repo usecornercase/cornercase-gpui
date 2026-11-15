@@ -9,7 +9,8 @@ use gpui::{
 use super::TextField;
 use super::handler::Handler;
 use super::rows::{
-    CARET_WIDTH, Row, Rows, clamp_scroll, rows_shown, scroll_to_show, scroll_to_show_with_margins, sideways, thumb,
+    CARET_WIDTH, Row, Rows, clamp_scroll, measured_rows, rows_shown, scroll_to_show, scroll_to_show_with_margins,
+    sideways, thumb,
 };
 use super::shown::Shown;
 use crate::theme::colours;
@@ -188,16 +189,18 @@ impl Element for TextElement {
             return (window.request_layout(style, [], cx), ());
         }
         let limits = options.rows.clone();
+        let empty = self.input.read(cx).content.is_empty();
         let (text, runs, font_size, _) = self.shaping(window, cx);
         let layout = window.request_measured_layout(style, move |known, available, window, _| {
             let width = known.width.or(match available.width {
                 AvailableSpace::Definite(width) => Some(width),
                 _ => None,
             });
-            let rows = window
+            let shaped = window
                 .text_system()
                 .shape_text(text.clone(), font_size, &runs, width, None)
                 .map_or(1, |lines| lines.iter().map(|line| line.wrap_boundaries().len() + 1).sum());
+            let rows = measured_rows(empty, shaped);
             Size { width: width.unwrap_or_default(), height: line_height * rows_shown(rows, limits.as_ref()) }
         });
         (layout, ())

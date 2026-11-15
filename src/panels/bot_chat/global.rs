@@ -1,6 +1,6 @@
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, Entity, FocusHandle, Global, InteractiveElement as _, IntoElement as _,
-    ParentElement as _, StyleRefinement, Styled as _, div, px,
+    AnyElement, AnyView, App, AppContext as _, Entity, FocusHandle, Global, IntoElement as _, ParentElement as _,
+    StyleRefinement, Styled as _, div, px,
 };
 
 use super::field::ChatField;
@@ -17,7 +17,6 @@ impl Global for GlobalChatField {}
 pub(crate) fn view(cx: &mut App) -> AnyElement {
     let lines = AnyView::from(BotChat::get(cx)).cached(StyleRefinement::default().flex_1().min_h_0().w_full());
     let field = ChatField::get(cx);
-    let handle = field_focus(cx);
     div()
         .size_full()
         .flex()
@@ -27,10 +26,6 @@ pub(crate) fn view(cx: &mut App) -> AnyElement {
         .bg(colours::pane())
         .border_1()
         .border_color(colours::border())
-        .on_any_mouse_down(move |_, window, _| {
-            window.focus(&handle);
-            window.prevent_default();
-        })
         .child(lines)
         .child(field)
         .into_any_element()

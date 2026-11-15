@@ -334,20 +334,13 @@ fn a_resting_new_conversation_says_why() {
 }
 
 #[test]
-fn a_chat_at_its_end_keeps_following_when_its_viewport_shrinks() {
-    use super::after_layout;
-    assert_eq!(after_layout(true, true, false), (true, true));
+fn a_chat_that_follows_its_end_is_anchored_there_each_time_it_is_drawn() {
+    use super::re_anchor;
+    assert_eq!(re_anchor(true, 12), Some(12));
 }
 
 #[test]
-fn a_chat_read_higher_up_stays_where_it_is_when_its_viewport_shrinks() {
-    use super::after_layout;
-    assert_eq!(after_layout(false, true, false), (false, false));
-}
-
-#[test]
-fn a_chat_follows_what_the_reader_did_when_the_viewport_is_unchanged() {
-    use super::after_layout;
-    assert_eq!(after_layout(true, false, false), (false, false));
-    assert_eq!(after_layout(false, false, true), (true, false));
+fn a_chat_the_reader_scrolled_up_is_left_where_it_is() {
+    use super::re_anchor;
+    assert_eq!(re_anchor(false, 12), None);
 }

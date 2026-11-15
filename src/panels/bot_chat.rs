@@ -69,7 +69,6 @@ pub(crate) struct BotChat {
     opened: HashSet<u64>,
     news: bool,
     following: bool,
-    viewport: gpui::Pixels,
     blocks: Blocks,
     counting: Counting,
     mark: Option<Stamp>,
@@ -89,8 +88,8 @@ pub(crate) fn is_fresh(shown: Option<&str>, mark: Option<&Stamp>, stamp: &Stamp)
     shown != Some(stamp.0.as_str()) || mark.is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1))
 }
 
-pub(crate) fn after_layout(following: bool, viewport_changed: bool, at_end: bool) -> (bool, bool) {
-    if viewport_changed { (following, following) } else { (at_end, false) }
+pub(crate) fn re_anchor(following: bool, rows: usize) -> Option<usize> {
+    following.then_some(rows)
 }
 
 fn at_end(list: &ListState) -> bool {
@@ -123,7 +122,6 @@ impl BotChat {
             opened: HashSet::new(),
             news: false,
             following: true,
-            viewport: px(0.),
             blocks: Rc::new(RefCell::new(HashMap::new())),
             counting: Counting::default(),
             mark: None,
@@ -150,14 +148,7 @@ impl BotChat {
     }
 
     fn reached_the_end(&mut self, cx: &mut Context<Self>) {
-        let height = self.list.viewport_bounds().size.height;
-        let (following, to_end) = after_layout(self.following, height != self.viewport, at_end(&self.list));
-        self.viewport = height;
-        self.following = following;
-        if to_end {
-            self.scroll_to_end(cx);
-            return;
-        }
+        self.following = at_end(&self.list);
         if self.following && std::mem::take(&mut self.news) {
             cx.notify();
         }
@@ -324,6 +315,9 @@ fn example_row(bot: &str, at: usize, text: &'static str) -> impl IntoElement + u
 impl Render for BotChat {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync(cx);
+        if let Some(item_ix) = re_anchor(self.following, self.rows.len()) {
+            self.list.scroll_to(ListOffset { item_ix, offset_in_item: px(0.) });
+        }
         let store = self.store.read(cx);
         let found = store.shown_bot().and_then(|id| store.bots.find(id).zip(store.bots.chat.as_ref()));
         let Some((bot, chat)) = found.map(|(bot, chat)| (bot.clone(), chat.clone())) else { return div() };
