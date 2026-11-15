@@ -4,6 +4,7 @@ set -u
 repo=$(cd "$(dirname "$0")/.." && pwd)
 script=$repo/tools/machine-bench.sh
 sh_cmd=${SH:-sh}
+bench_only_exports=PATH
 total=0
 failed=0
 
@@ -38,10 +39,10 @@ make_stub() {
 #!/bin/sh
 t=@T@
 sock=${CORNERCASE_SOCKET-unset}
-printf 'bin=%s|socket=%s|remote=%s|pane=%s|server=%s|home=%s|pwd=%s|path1=%s|claude=%s|codex=%s|gemini=%s|args=%s\n' \
+printf 'bin=%s|socket=%s|remote=%s|pane=%s|server=%s|home=%s|pwd=%s|path1=%s|claude=%s|codex=%s|gemini=%s|phone=%s|tmp=%s|args=%s\n' \
   "$0" "$sock" "${CORNERCASE_REMOTE-unset}" "${CORNERCASE_PANE-unset}" "${CORNERCASE_SERVER-unset}" \
   "${HOME-unset}" "$(pwd -P)" "${PATH%%:*}" "${CLAUDE_CONFIG_DIR-unset}" "${CODEX_HOME-unset}" \
-  "${GEMINI_CLI_HOME-unset}" "$*" >> "$t/calls"
+  "${GEMINI_CLI_HOME-unset}" "${CORNERCASE_PHONE_ADDRESSES-unset}" "${TMPDIR-unset}" "$*" >> "$t/calls"
 cmd=${1-}
 state=$sock.stub
 [ "$sock" = unset ] && state=$t/control/unset
@@ -80,7 +81,7 @@ case $cmd in
       exit 0
     fi
     if [ -e "$t/control/no-agents-$side" ]; then
-      echo '{"settings": []}'
+      printf '{"path": "%s/config.json", "settings": []}\n' "$(dirname "$sock")"
       exit 0
     fi
     names=$(sed -n 's/^    "\([a-z0-9-]*\)": .*/\1/p' "$(dirname "$sock")/config.json")
@@ -91,7 +92,7 @@ case $cmd in
       out="$out$sep{\"name\": \"$n\"}"
       sep=", "
     done
-    printf '{"agents": [%s]}\n' "$out"
+    printf '{"path": "%s/config.json", "agents": [%s]}\n' "$(dirname "$sock")" "$out"
     exit 0 ;;
   open)
     side=there
@@ -375,7 +376,7 @@ block_of_the_note() {
 differs_from_the_note() {
   python3 -I -c '
 import json, sys
-kind, note, bench = sys.argv[1:4]
+kind, note, bench, only = sys.argv[1:5]
 if kind == "config":
     def flat(path):
         d = json.load(open(path))
@@ -400,12 +401,12 @@ else:
                 unset.update(words[1:])
         return exported, unset
     (ae, au), (be, bu) = names(note), names(bench)
-    bad = sorted((ae - be) | (au - bu))
+    bad = sorted((ae - be) | ((be - ae) - set(only.split())) | (au ^ bu))
     if not (ae and au):
         bad.append("the note block exports or unsets nothing")
 print(" ".join(bad))
 sys.exit(1 if bad else 0)
-' "$1" "$t/note.$2" "$3" > "$t/differs" 2>&1
+' "$1" "$t/note.$2" "$3" "$bench_only_exports" > "$t/differs" 2>&1
   r=$?
   [ "$r" = 0 ] || printf '%s differs from the note: %s\n' "$3" "$(cat "$t/differs")" > "$t/why"
   return "$r"
@@ -436,9 +437,12 @@ the_bench_env_names_what_the_note_env_names() {
 }
 
 the_bench_filters_tokens_as_the_note_does() {
-  grep -F -e '>> /tmp/cc-check/env' "$repo/design/manual-check.md" | sed -e 's/^ *//' -e 's| >> /tmp/cc-check/env$||' > "$t/note.filter"
-  check "the note has no token filter" test -s "$t/note.filter" || return 1
-  check "the bench's filter is not the note's" grep -q -F -f "$t/note.filter" "$script"
+  block_of_the_note env || return 1
+  for f in "$t/note.env" "$b/env"; do
+    grep -v -e '^ *$' -e '^ *export ' -e '^ *unset ' "$f" | sed 's/^ *//' | sort > "$f.filter"
+  done
+  check "the note's env has no line besides its exports and unsets" test -s "$t/note.env.filter" || return 1
+  check "the bench's filter is not the note's: $(diff "$t/note.env.filter" "$b/env.filter" | head -3)" cmp -s "$t/note.env.filter" "$b/env.filter"
 }
 
 up_turns_cornercases_own_update_check_off() {
@@ -456,11 +460,9 @@ up_with_check_updates_checks_on_here_only() {
   check "down of u1: $(cat "$t/err")" [ "$rc" = 0 ]
 }
 
-the_env_keeps_no_token_value() {
-  for v in MBT_TEST_TOKEN MBT_TEST_API_KEY MBT_TEST_KEY MBT_TEST_SECRET; do
-    check "$v is not unset" contains "$b/env" "unset $v" || return 1
-  done
-  check "the token's value is in env" test ! "$(grep -c made-up "$b/env")" -gt 0
+the_env_keeps_no_token_name_or_value() {
+  check "a token's name is in env" test ! "$(grep -c MBT_TEST_ "$b/env")" -gt 0 || return 1
+  check "a token's value is in env" test ! "$(grep -c made-up "$b/env")" -gt 0
 }
 
 up_gives_here_the_homes_of_the_bench() {
@@ -621,14 +623,74 @@ down_removes_the_folders_a_failed_up_kept() {
   check "down of f2: $(cat "$t/err")" [ "$rc" = 0 ]
 }
 
+every_server_of_the_bench_listens_for_a_phone_on_loopback_only() {
+  for side in here there; do
+    grep -F "socket=$b/$side/" "$t/calls.norm" | grep -v 'args=--version$' > "$t/$side.calls"
+    check "no call on $side" test -s "$t/$side.calls" || return 1
+    bad=$(grep -v -F -e '|phone=127.0.0.1|' "$t/$side.calls" | head -1)
+    check "a $side call that listens for a phone elsewhere: $bad" [ -z "$bad" ] || return 1
+  done
+}
+
+each_side_has_a_temporary_folder_of_its_own() {
+  grep -F "socket=$b/here/" "$t/calls.norm" | grep -v 'args=--version$' > "$t/here.calls"
+  bad=$(grep -v -F -e "|tmp=$b/tmp|" "$t/here.calls" | head -1)
+  check "a here call with another temporary folder: $bad" [ -z "$bad" ] || return 1
+  grep -F "socket=$b/there/" "$t/calls.norm" > "$t/there.calls"
+  bad=$(grep -v -F -e "|tmp=$b/there/tmp|" "$t/there.calls" | head -1)
+  check "a there call with another temporary folder: $bad" [ -z "$bad" ] || return 1
+  for d in "$b/tmp" "$b/there/tmp"; do
+    case $(ls -ld "$d" 2> /dev/null) in
+      drwx------*) ;;
+      *) check "$d is missing or not private" false; return 1 ;;
+    esac
+  done
+}
+
+the_note_counts_agents() {
+  grep -F -e 'config --json | python3 -I -c' "$repo/design/manual-check.md" > "$t/note.counter"
+  check "the note has not one line that counts the agents" test "$(wc -l < "$t/note.counter")" -eq 1 || return 1
+  sed -e "s#/tmp/cc-check/env#$1/env#" -e "s#/tmp/cc-check/config.json#$1/here/config.json#" "$t/note.counter" > "$t/counter.sh"
+  "$sh_cmd" "$t/counter.sh" > "$t/counted" 2> "$t/counted.err" || return 1
+  check "the counter prints a path: $(cat "$t/counted")" test "$(grep -c / "$t/counted")" -eq 0
+}
+
+the_notes_counter_and_up_agree_on_the_agents_a_release_knows() {
+  the_note_counts_agents "$b" || return 1
+  check "the counter does not say all pinned: $(cat "$t/counted")" contains "$t/counted" "16 agents known, all pinned" || return 1
+  printf 'junie\n' > "$t/control/knows-here"
+  runb up "$t/c1" --here "$t/new/cornercase"
+  the_note_counts_agents "$t/c1"
+  counted=$?
+  rm -f "$t/control/knows-here"
+  check "up did not stop on junie: $(cat "$t/err")" contains "$t/err" "knows junie" || return 1
+  check "the counter did not name junie: $(cat "$t/counted" 2> /dev/null)" [ "$counted" = 0 ] || return 1
+  check "the counter did not say 17 and junie: $(cat "$t/counted")" contains "$t/counted" "17 agents known, not pinned: junie" || return 1
+  runb down "$t/c1"
+  check "down of c1: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  for control in no-agents fail-config; do
+    : > "$t/control/$control-here"
+    runb up "$t/c2" --here "$t/new/cornercase"
+    the_note_counts_agents "$t/c2"
+    counted=$?
+    rm -f "$t/control/$control-here"
+    check "up ($control) exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+    check "the counter ($control) did not say it compared nothing: $(cat "$t/counted" 2> /dev/null)" [ "$counted" = 0 ] || return 1
+    check "the counter ($control) did not say not compared: $(cat "$t/counted")" contains "$t/counted" "not compared" || return 1
+    runb down "$t/c2"
+    check "down of c2: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  done
+}
+
 shell_env() {
   cat > "$t/readenv.sh" <<'EOF'
 . "$1"
 printf '%s\n' "$CORNERCASE_SOCKET" "${CORNERCASE_PANE-unset}${CORNERCASE_SERVER-unset}${CORNERCASE_REMOTE-unset}" \
   "$PATH" "$CORNERCASE_BIN" "$CORNERCASE_GPUI_SETTINGS" "$CORNERCASE_GPUI_BROWSER_PROFILE" \
-  "$CODEX_HOME" "$GEMINI_CLI_HOME" "${MBT_TEST_TOKEN-unset}"
+  "$CODEX_HOME" "$GEMINI_CLI_HOME" "${MBT_TEST_TOKEN-unset}" "${MBT_LATE_TOKEN-unset}" "$TMPDIR" "${CORNERCASE_PHONE_ADDRESSES-unset}"
 EOF
-  env CORNERCASE_PANE=3 CORNERCASE_SERVER=x CORNERCASE_REMOTE=devbox CORNERCASE_SOCKET=elsewhere MBT_TEST_TOKEN=x "$1" "$t/readenv.sh" "$b/env"
+  env CORNERCASE_PANE=3 CORNERCASE_SERVER=x CORNERCASE_REMOTE=devbox CORNERCASE_SOCKET=elsewhere MBT_TEST_TOKEN=x MBT_LATE_TOKEN=x \
+    "$1" "$t/readenv.sh" "$b/env"
 }
 
 env_reads_right_in() {
@@ -641,7 +703,10 @@ $b/window/settings.json
 $b/window/browser
 $b/here/codex
 $b/here/gemini
-unset"
+unset
+unset
+$b/tmp
+127.0.0.1"
   [ "$out" = "$want" ] || { printf 'under %s: %s\n' "$1" "$out" > "$t/why"; return 1; }
 }
 
@@ -1211,7 +1276,7 @@ run_test the_bench_writes_the_config_the_note_writes
 run_test the_bench_env_names_what_the_note_env_names
 run_test up_turns_cornercases_own_update_check_off
 run_test up_with_check_updates_checks_on_here_only
-run_test the_env_keeps_no_token_value
+run_test the_env_keeps_no_token_name_or_value
 run_test the_bench_filters_tokens_as_the_note_does
 run_test up_gives_here_the_homes_of_the_bench
 run_test the_callers_homes_never_reach_there
@@ -1233,6 +1298,9 @@ run_test up_stops_when_python_cannot_read_the_agents
 run_test up_names_the_stage_a_failed_open_stopped_at
 run_test down_removes_the_folders_a_failed_up_kept
 run_test the_env_aims_the_shell_at_here
+run_test every_server_of_the_bench_listens_for_a_phone_on_loopback_only
+run_test each_side_has_a_temporary_folder_of_its_own
+run_test the_notes_counter_and_up_agree_on_the_agents_a_release_knows
 run_test there_cannot_reach_here
 run_test the_stand_in_runs_a_link_against_there
 run_test the_stand_in_refuses_while_held

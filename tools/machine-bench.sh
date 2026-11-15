@@ -152,6 +152,8 @@ write_env() {
   fi
   emit "$folder/env" 600 <<'EOF'
 export PATH="@F@/bin:@F@/here/bin:$PATH"
+export TMPDIR=@F@/tmp
+export CORNERCASE_PHONE_ADDRESSES=127.0.0.1
 export CORNERCASE_SOCKET=@F@/here/server.sock
 export CLAUDE_CONFIG_DIR=@F@/here/claude
 export CODEX_HOME=@F@/here/codex
@@ -160,8 +162,8 @@ export CORNERCASE_BIN=@B@
 export CORNERCASE_GPUI_SETTINGS=@F@/window/settings.json
 export CORNERCASE_GPUI_BROWSER_PROFILE=@F@/window/browser
 unset CORNERCASE_PANE CORNERCASE_SERVER CORNERCASE_REMOTE
+for _cc in $(env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -E 'TOKEN|API_KEY|_KEY$|SECRET'); do unset "$_cc"; done; unset _cc
 EOF
-  env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -E 'TOKEN|API_KEY|_KEY$|SECRET' | sed 's/^/unset /' >> "$folder/env" || true
 }
 
 write_commands() {
@@ -177,6 +179,7 @@ EOF
 cd @F@/there/home/there-proj || exit 255
 exec env -i HOME=@F@/there/home USER="${USER-}" LOGNAME="${LOGNAME-}" SHELL="${SHELL:-/bin/sh}" \
   LANG="${LANG-}" TERM="${TERM-}" PATH=@F@/there/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+  TMPDIR=@F@/there/tmp CORNERCASE_PHONE_ADDRESSES=127.0.0.1 \
   CORNERCASE_SOCKET=@F@/there/server.sock CLAUDE_CONFIG_DIR=@F@/there/claude "$@"
 EOF
   emit "$folder/bin/there" 700 <<'EOF'
@@ -459,6 +462,7 @@ write_config() {
     else
       printf '  "check_updates": false,\n'
     fi
+    printf '  "phone_app_port": 47692,\n'
     if [ "$side" = here ] && [ "$agent" = 1 ]; then
       printf '  "agents_section": true,\n'
     fi
@@ -479,10 +483,10 @@ make_project() {
 }
 
 make_folders() {
-  mkdir "$folder/bin" "$folder/ssh" "$folder/window" "$folder/here" "$folder/there"
+  mkdir "$folder/bin" "$folder/ssh" "$folder/window" "$folder/tmp" "$folder/here" "$folder/there"
   : > "$folder/ssh/calls.log"
   mkdir "$folder/here/bin" "$folder/here/claude" "$folder/here/codex" "$folder/here/gemini" "$folder/here/worktrees"
-  mkdir "$folder/there/bin" "$folder/there/claude" "$folder/there/worktrees" "$folder/there/home"
+  mkdir "$folder/there/bin" "$folder/there/claude" "$folder/there/worktrees" "$folder/there/home" "$folder/there/tmp"
   cp -- "$here_src" "$folder/here/bin/cornercase"
   cp -- "$there_src" "$folder/there/bin/cornercase"
   chmod 700 "$folder/here/bin/cornercase" "$folder/there/bin/cornercase"

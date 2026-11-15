@@ -22,8 +22,8 @@ let positionNames = [
 let keyGrammar = "a…z 0…9 " + (symbolNames + positionNames).joined(separator: " ")
 
 let usage =
-    "usage: manual-check window|covers|front|size|key|hold|text|paste|press|drag|scroll PID … | self-test "
-    + "(key: KEY [cmd] [shift] [alt] [ctrl]; hold: KEY [MS]; KEY: \(keyGrammar); paste: TEXT; drag: x0 y0 x1 y1 [right] [hold MS])"
+    "usage: manual-check window|covers|front|size|key|hold|text|paste|copy|press|drag|scroll PID … | self-test "
+    + "(key: KEY [cmd] [shift] [alt] [ctrl]; hold: KEY [MS]; KEY: \(keyGrammar); paste: TEXT; copy: TEXT MS [KEY [cmd] [shift] [alt] [ctrl]]; drag: x0 y0 x1 y1 [right] [hold MS])"
 
 let characterNames: [String: Character] = {
     var names: [String: Character] = [
@@ -359,6 +359,10 @@ func asciiUppercased(_ text: String) -> String {
     String(String.UnicodeScalarView(text.unicodeScalars.map { ($0.value >= 97 && $0.value <= 122) ? Unicode.Scalar($0.value - 32)! : $0 }))
 }
 
+func sameText(_ first: String, _ second: String) -> Bool {
+    first.unicodeScalars.elementsEqual(second.unicodeScalars)
+}
+
 func isASCIILowercase(_ text: String) -> Bool {
     text.unicodeScalars.allSatisfy { $0.value >= 97 && $0.value <= 122 }
 }
@@ -370,7 +374,7 @@ func windowKey(_ types: (Int, UInt32) -> Typed, code: Int, command: Bool, shift:
     if command || alwaysCommand {
         let withCommand = types(code, commandState)
         let withBoth = types(code, commandState | shiftState)
-        if withBoth.text != withCommand.text {
+        if !sameText(withBoth.text, withCommand.text) {
             shifted = withBoth
         } else if asciiUppercased(withCommand.text) != withCommand.text {
             shifted = Typed(text: asciiUppercased(withCommand.text), dead: withCommand.dead)
@@ -398,7 +402,7 @@ func typingKey(
     for state in states {
         for code in mainBlock {
             let typed = types(code, state)
-            if typed.text == wanted && typed.dead == dead { return (code, state) }
+            if sameText(typed.text, wanted) && typed.dead == dead { return (code, state) }
         }
     }
     return nil
@@ -627,6 +631,10 @@ func saved(_ board: NSPasteboard) -> [[(NSPasteboard.PasteboardType, Data)]] {
     (board.pasteboardItems ?? []).map { item in item.types.compactMap { type in item.data(forType: type).map { (type, $0) } } }
 }
 
+func readsBack(_ board: NSPasteboard, _ kept: [[(NSPasteboard.PasteboardType, Data)]]) -> Bool {
+    kept.map { $0.count } == (board.pasteboardItems ?? []).map { $0.types.count }
+}
+
 func restore(_ items: [[(NSPasteboard.PasteboardType, Data)]], to board: NSPasteboard) throws {
     board.clearContents()
     let rebuilt = items.map { entries -> NSPasteboardItem in
@@ -639,26 +647,112 @@ func restore(_ items: [[(NSPasteboard.PasteboardType, Data)]], to board: NSPaste
     }
 }
 
+func holds(_ back: [[(NSPasteboard.PasteboardType, Data)]], _ kept: [[(NSPasteboard.PasteboardType, Data)]]) -> Bool {
+    back.count == kept.count
+        && zip(back, kept).allSatisfy { now, was in
+            was.allSatisfy { type, data in now.contains { $0.0 == type && $0.1 == data } }
+        }
+}
+
+func giveBack(
+    _ kept: [[(NSPasteboard.PasteboardType, Data)]], to board: NSPasteboard,
+    using give: ([[(NSPasteboard.PasteboardType, Data)]], NSPasteboard) throws -> Void = { try restore($0, to: $1) }
+) throws {
+    try give(kept, board)
+    guard holds(saved(board), kept) else {
+        throw Failure(message: "the clipboard differs after it was given back: tell the person who runs this check at once", status: 1)
+    }
+}
+
+func unreadable() -> Failure {
+    Failure(message: "the clipboard holds data that cannot be read back: nothing was done", status: 1)
+}
+
 func paste(_ pid: pid_t, _ typed: String) throws {
     try allowed()
     let posting = try resolve("v", ["cmd"], layout: layoutInUse)
     let board = NSPasteboard.general
     let kept = saved(board)
-    let held = (board.pasteboardItems ?? []).map { $0.types.count }
-    guard kept.map({ $0.count }) == held else {
-        throw Failure(message: "the clipboard holds data that cannot be read back: nothing was done", status: 1)
-    }
+    guard readsBack(board, kept) else { throw unreadable() }
     board.clearContents()
     board.setString(typed, forType: .string)
     board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
     try postKey(pid, posting)
     usleep(300_000)
-    try restore(kept, to: board)
-    let back = saved(board)
-    guard back.count == kept.count, zip(back, kept).allSatisfy({ $0.count == $1.count }) else {
-        throw Failure(message: "the clipboard differs after it was given back: tell the person who runs this check at once", status: 1)
-    }
+    try giveBack(kept, to: board)
     print("clipboard: \(kept.count) items, \(kept.reduce(0) { $0 + $1.count }) types, given back")
+}
+
+enum Arrival: Equatable {
+    case arrived(items: Int)
+    case nothing
+    case other
+}
+
+struct CopyPlan: Equatable {
+    let text: String
+    let ms: Int
+    let posting: Posting?
+}
+
+func copyPlan(_ args: [String], layout: () -> Layout) throws -> CopyPlan {
+    guard args.count >= 2 else { throw Failure(message: usage, status: 2) }
+    guard !args[0].isEmpty else {
+        throw Failure(message: "copy needs the made-up text it waits for, not an empty one: nothing was done", status: 2)
+    }
+    let ms = Int(try wholeNumber(args[1], "ms"))
+    guard (1...60_000).contains(ms) else { throw Failure(message: "ms must be 1 to 60000: nothing was done", status: 2) }
+    guard args.count > 2 else { return CopyPlan(text: args[0], ms: ms, posting: nil) }
+    return CopyPlan(text: args[0], ms: ms, posting: try resolve(args[2], Array(args.dropFirst(3)), layout: layout))
+}
+
+func awaitCopy(
+    of text: String, on board: NSPasteboard, within ms: Int, act: () throws -> Void, beforeGivingBack: () -> Void = {}
+) throws -> Arrival {
+    let kept = saved(board)
+    guard readsBack(board, kept) else { throw unreadable() }
+    let before = board.changeCount
+    try act()
+    let deadline = Date(timeIntervalSinceNow: Double(ms) / 1000)
+    while board.changeCount == before && Date() < deadline { usleep(10_000) }
+    let after = board.changeCount
+    if after == before { return .nothing }
+    guard after == before + 1, board.data(forType: .string) == Data(text.utf8) else { return .other }
+    beforeGivingBack()
+    guard board.changeCount == after else { return .other }
+    try giveBack(kept, to: board)
+    return .arrived(items: kept.count)
+}
+
+func copyAnswer(_ arrival: Arrival, ms: Int) -> (status: Int32, words: String) {
+    switch arrival {
+    case .arrived(let items):
+        return (0, "the copy arrived: \(items) \(items == 1 ? "item" : "items") given back")
+    case .nothing:
+        return (4, "nothing arrived on the clipboard in \(ms) ms: it was not touched")
+    case .other:
+        return (
+            5,
+            "something else arrived on the clipboard (another text, a second copy, or the person's own): it is left as it is and none "
+                + "of it is printed; what it held before was not given back: say so to the person whose clipboard it is"
+        )
+    }
+}
+
+func say(_ line: String) {
+    FileHandle.standardOutput.write(Data((line + "\n").utf8))
+}
+
+func copy(_ pid: pid_t, _ args: [String]) throws {
+    let plan = try copyPlan(args, layout: layoutInUse)
+    if plan.posting != nil { try allowed() }
+    let arrival = try awaitCopy(of: plan.text, on: NSPasteboard.general, within: plan.ms) {
+        say("waiting up to \(plan.ms) ms for the copy; the clipboard is kept in memory")
+        if let posting = plan.posting { try postKey(pid, posting) }
+    }
+    let answer = copyAnswer(arrival, ms: plan.ms)
+    guard answer.status == 0 else { throw Failure(message: answer.words, status: answer.status) }
+    say(answer.words)
 }
 
 func text(_ pid: pid_t, _ typed: String) throws {
@@ -892,6 +986,10 @@ enum SelfTest {
 
     static let combining = madeLayout("test.Combining", [44: [0: "x", 2: "/", 1: "a\u{301}", 3: "a\u{301}"]])
 
+    static let canonical = madeLayout("test.Canonical", [44: [0: "x", 2: "X", 1: "e\u{301}", 3: "\u{e9}"]])
+
+    static let kelvin = madeLayout("test.Kelvin", [10: [2: "\u{212A}"], 40: [0: "k", 2: "K"]])
+
     static let noData = Layout(name: "test.Input-Method", types: nil)
     static let nothing = Layout(name: nil, types: nil)
 
@@ -1082,6 +1180,11 @@ enum SelfTest {
                 return expect(windowKey(types, code: 44, command: true, shift: true), Reading(key: "A\u{301}", shift: false, dead: false))
                     ?? expect(refused("slash", ["cmd"], combining), "1: no key of test.Combining makes the window read slash with these modifiers: nothing was posted")
             }),
+            ("a_command_table_whose_shift_text_differs_only_in_scalars_is_read_as_the_window_does", {
+                guard let types = canonical.types else { return "no data" }
+                return expect(Array(windowKey(types, code: 44, command: true, shift: true).key.unicodeScalars.map(\.value)), [0xE9])
+            }),
+            ("a_typed_capital_is_never_its_canonical_twin", { expect(posted("k", ["shift"], kelvin), "40 S") }),
             ("the_layout_in_use_gives_a_key_or_says_why", {
                 let got = posted("slash", ["cmd"], layoutInUse())
                 return expect(got.hasPrefix("1: ") || !got.contains(":"), true)
@@ -1089,8 +1192,139 @@ enum SelfTest {
         ]
     }
 
+    static let silent = Silent()
+
+    final class Silent: NSObject, NSPasteboardItemDataProvider {
+        func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {}
+    }
+
+    static let kind = NSPasteboard.PasteboardType("test.kind")
+    static let other = NSPasteboard.PasteboardType("test.other")
+
+    static func onABoard<T>(_ body: (NSPasteboard) -> T) -> T {
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        return body(board)
+    }
+
+    static func theUsersClipboard(on board: NSPasteboard, empty: Bool = false) {
+        board.clearContents()
+        guard !empty else { return }
+        let first = NSPasteboardItem()
+        first.setString("the user's own words", forType: .string)
+        first.setData(Data([1, 2, 3, 4]), forType: kind)
+        let second = NSPasteboardItem()
+        second.setData(Data([9, 8]), forType: other)
+        board.writeObjects([first, second])
+    }
+
+    static func windowWrites(_ text: String, on board: NSPasteboard) {
+        board.clearContents()
+        board.setString(text, forType: .string)
+    }
+
+    static func waited(
+        _ text: String, ms: Int = 2000, empty: Bool = false, act: (NSPasteboard) -> Void = { _ in },
+        late: (NSPasteboard) -> Void = { _ in }
+    ) -> (arrival: Arrival?, kept: [[(NSPasteboard.PasteboardType, Data)]], now: [[(NSPasteboard.PasteboardType, Data)]], count: Int, string: String?) {
+        onABoard { board in
+            theUsersClipboard(on: board, empty: empty)
+            let kept = saved(board)
+            let count = board.changeCount
+            let arrival = try? awaitCopy(of: text, on: board, within: ms, act: { act(board) }, beforeGivingBack: { late(board) })
+            return (arrival, kept, saved(board), board.changeCount - count, board.string(forType: .string))
+        }
+    }
+
+    static let thing = "cc324 made-up copy"
+
+    static func clipboardTests() -> [(String, () -> String?)] {
+        [
+            ("a_copy_of_the_text_given_is_given_back", {
+                let got = waited(thing, act: { windowWrites(thing, on: $0) })
+                return expect(got.arrival, .arrived(items: 2)) ?? expect(holds(got.now, got.kept), true)
+            }),
+            ("an_empty_clipboard_is_given_back_empty", {
+                let got = waited(thing, empty: true, act: { windowWrites(thing, on: $0) })
+                return expect(got.arrival, .arrived(items: 0)) ?? expect(got.now.count, 0)
+            }),
+            ("nothing_arriving_leaves_the_clipboard_untouched", {
+                let got = waited(thing, ms: 30)
+                return expect(got.arrival, .nothing) ?? expect(got.count, 0) ?? expect(holds(got.now, got.kept), true)
+            }),
+            ("another_text_is_left_as_it_is", {
+                let got = waited(thing, act: { windowWrites("somebody else's words", on: $0) })
+                return expect(got.arrival, .other) ?? expect(got.string, "somebody else's words")
+            }),
+            ("a_second_write_is_left_as_it_is", {
+                let got = waited(thing, act: { windowWrites(thing, on: $0); windowWrites(thing, on: $0) })
+                return expect(got.arrival, .other) ?? expect(got.string, thing) ?? expect(got.now.count, 1)
+            }),
+            ("a_write_while_giving_back_is_not_written_over", {
+                let got = waited(thing, act: { windowWrites(thing, on: $0) }, late: { windowWrites("typed in that moment", on: $0) })
+                return expect(got.arrival, .other) ?? expect(got.string, "typed in that moment")
+            }),
+            ("a_canonically_equal_text_is_another_text", {
+                let got = waited("\u{e9}", act: { windowWrites("e\u{301}", on: $0) })
+                return expect(got.arrival, .other) ?? expect(got.string.map { Array($0.unicodeScalars.map(\.value)) }, [0x65, 0x301])
+            }),
+            ("a_clipboard_that_cannot_be_read_back_posts_nothing", {
+                onABoard { board in
+                    board.clearContents()
+                    let item = NSPasteboardItem()
+                    item.setDataProvider(silent, forTypes: [kind])
+                    board.writeObjects([item])
+                    let count = board.changeCount
+                    var posted = false
+                    do {
+                        _ = try awaitCopy(of: thing, on: board, within: 30, act: { posted = true })
+                        return "no refusal"
+                    } catch let failure as Failure {
+                        return expect([posted, board.changeCount == count], [false, true])
+                            ?? expect(failure.status, 1) ?? expect(failure.message, unreadable().message)
+                    } catch { return "\(error)" }
+                }
+            }),
+            ("a_clipboard_that_differs_after_it_was_given_back_is_told", {
+                onABoard { board in
+                    theUsersClipboard(on: board)
+                    let kept = saved(board)
+                    do {
+                        try giveBack(kept, to: board, using: { _, board in windowWrites("not what was there", on: board) })
+                        return "no refusal"
+                    } catch let failure as Failure {
+                        return expect(failure.status, 1)
+                            ?? expect(failure.message, "the clipboard differs after it was given back: tell the person who runs this check at once")
+                    } catch { return "\(error)" }
+                }
+            }),
+            ("the_copy_answers_say_their_words", {
+                let answers = [Arrival.arrived(items: 2), .arrived(items: 1), .nothing, .other].map { copyAnswer($0, ms: 500) }
+                return expect(answers.map { $0.status }, [0, 0, 4, 5])
+                    ?? expect(answers[0].words, "the copy arrived: 2 items given back")
+                    ?? expect(answers[1].words, "the copy arrived: 1 item given back")
+                    ?? expect(answers[2].words, "nothing arrived on the clipboard in 500 ms: it was not touched")
+                    ?? expect(answers[3].words.hasPrefix("something else arrived on the clipboard (another text, a second copy, or the person's own): it is left as it is and none of it is printed;"), true)
+            }),
+            ("copy_reads_its_wait_and_its_key", {
+                func read(_ args: [String], _ layout: Layout = us) -> String {
+                    do {
+                        let plan = try copyPlan(args, layout: { layout })
+                        let key = plan.posting.map { "\($0.code) \($0.flags.contains(.maskCommand) ? "C" : "")" } ?? "no key"
+                        return "\(plan.text) \(plan.ms) \(key)"
+                    } catch let failure as Failure { return "\(failure.status)" } catch { return "\(error)" }
+                }
+                return expect(
+                    [read(["t", "5000"]), read(["t", "0"]), read(["t", "60001"]), read(["t", "abc"]), read(["", "5000"]), read(["t"]),
+                     read(["t", "5000", "c", "cmd"]), read(["t", "5000", "c", "cmd"], noData), read(["t", "5000", "nope"])],
+                    ["t 5000 no key", "2", "2", "2", "2", "2", "t 5000 8 C", "1", "2"])
+            }),
+            ("the_usage_line_holds_the_copy_grammar", { expect(usage.contains("copy: TEXT MS [KEY [cmd] [shift] [alt] [ctrl]]"), true) }),
+        ]
+    }
+
     static func run() throws {
-        let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests() + keyTests()
+        let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests() + keyTests() + clipboardTests()
         var failed = 0
         for (name, body) in cases {
             if let why = body() {
@@ -1108,7 +1342,7 @@ enum SelfTest {
 func run(_ args: [String]) throws {
     if args == ["self-test"] { return try SelfTest.run() }
     guard args.count >= 2, let pid = pid_t(args[1]) else { throw Failure(message: usage, status: 2) }
-    if ["front", "size", "key", "hold", "text", "paste", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
+    if ["front", "size", "key", "hold", "text", "paste", "copy", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }
     switch (args[0], args.count) {
     case ("window", 2): try describe(pid)
     case ("covers", 2): try covers(pid)
@@ -1118,6 +1352,7 @@ func run(_ args: [String]) throws {
     case ("hold", 3...): try hold(pid, args[2], Array(args.dropFirst(3)))
     case ("text", 3): try text(pid, args[2])
     case ("paste", 3): try paste(pid, args[2])
+    case ("copy", 4...): try copy(pid, Array(args.dropFirst(2)))
     case ("press", 4...5): try press(pid, args[2], args[3], right: try button(args, after: 4))
     case ("drag", 6...9):
         let (right, hold) = try dragOptions(Array(args.dropFirst(6)))
