@@ -356,3 +356,26 @@ fn a_line_for_a_chat_that_is_not_shown_changes_nothing() {
     bots.chat = Some(read_chat(plain(&[(1, "you")])));
     assert_eq!(bots.heard("ops", line(2, "bot", "x", false)), None);
 }
+
+#[test]
+fn a_bot_without_an_id_is_left_out() {
+    let list = in_app(&json!({"bots": [{"id": "", "name": "ghost", "agent": "claude"}, {"id": "ops", "name": "ops"}]}));
+    assert_eq!(list.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(), ["ops"]);
+}
+
+#[test]
+fn an_answer_to_an_earlier_ask_or_another_bot_is_not_awaited() {
+    let chat = Chat::new("prs", 3);
+    assert!(chat.awaits("prs", 3));
+    assert!(!chat.awaits("prs", 2));
+    assert!(!chat.awaits("ops", 3));
+}
+
+#[test]
+fn a_chat_is_shown_only_when_rows_are_offered_and_the_bot_is_listed() {
+    let bots = two();
+    assert!(bots.can_show("prs", None, Os::Mac));
+    assert!(!bots.can_show("nobody", None, Os::Mac));
+    assert!(!bots.can_show("prs", Some(lacking(73)), Os::Mac));
+    assert!(!Bots::new().can_show("prs", None, Os::Mac));
+}

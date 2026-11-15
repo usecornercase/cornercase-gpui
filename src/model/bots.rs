@@ -187,6 +187,10 @@ impl Chat {
         self.revision
     }
 
+    pub(crate) fn awaits(&self, bot: &str, asked: u64) -> bool {
+        self.bot == bot && self.asked == asked
+    }
+
     pub(crate) fn last(&self) -> Option<u64> {
         self.lines.last().map(|line| line.id)
     }
@@ -339,6 +343,10 @@ impl Bots {
         let bot = self.find(shown?)?;
         let due = self.active && bot.unread > 0 && self.seen.as_ref() != Some(&(bot.id.clone(), bot.unread));
         due.then(|| bot.id.clone())
+    }
+
+    pub(crate) fn can_show(&self, id: &str, lacks: Option<Lacks<'_>>, os: Os) -> bool {
+        self.offer(lacks, os) == Offer::Rows && self.find(id).is_some()
     }
 
     pub(crate) fn offer(&self, lacks: Option<Lacks<'_>>, os: Os) -> Offer {

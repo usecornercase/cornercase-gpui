@@ -38,7 +38,7 @@ impl Store {
     }
 
     pub(crate) fn show_bot(&mut self, id: &str, cx: &mut Context<Self>) {
-        if self.bots_offer() != Offer::Rows || self.bots.find(id).is_none() {
+        if !self.bots.can_show(id, self.releases().lacks(Feature::Bots), Os::CURRENT) {
             return;
         }
         if self.shown_bot() != Some(id) {
@@ -127,7 +127,7 @@ impl Store {
 
     fn chat_read(&mut self, (bot, asked): (&str, u64), result: anyhow::Result<String>, cx: &mut Context<Self>) {
         let name = self.bots.find(bot).map_or_else(|| bot.to_string(), |found| found.name.clone());
-        let Some(chat) = self.bots.chat.as_mut().filter(|chat| chat.bot == bot && chat.asked == asked) else { return };
+        let Some(chat) = self.bots.chat.as_mut().filter(|chat| chat.awaits(bot, asked)) else { return };
         match result.and_then(|out| bots::history_of(&out)) {
             Ok(lines) => chat.take(lines),
             Err(error) => {
