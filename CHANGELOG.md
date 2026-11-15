@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.118
+
+- **Settings left open while cornercase's settings cannot be read no longer asks for them again and again.** It used to read them once more each time anything changed in the window, such as an agent at work, a resize or a theme change. Now it reads them again only when cornercase starts again, its settings change or the window connects to it again, so it still shows them by itself once they can be read, and Try again still reads them at once.
+
 ## 0.1.117
 
 - **Know when a bot answers.** With cornercase 0.13.77 or newer, when a bot answers (or fails) in a chat you are not looking at, a toast shows the bot's name and the first words of its answer, and **Show** opens its chat. While the window is in the background, a desktop notification tells you too; on macOS a click on it opens the chat. An answer you already read in cornercase's own window, or that a script waited for, is not told again.

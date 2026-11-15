@@ -704,8 +704,105 @@ fn with_no_session_nothing_is_read() {
 }
 
 #[test]
-fn a_read_that_failed_asks_nothing_more_by_itself() {
+fn with_nothing_held_nothing_is_behind() {
     assert!(!behind(None, seen("b1", 8)));
+}
+
+fn asked(boot: &str, revision: u64, view: Option<u64>) -> Asked {
+    Asked { boot: boot.to_string(), revision, view }
+}
+
+fn sheet<'a>(held: Option<Seen<'a>>, failed: Option<&'a Asked>) -> Sheet<'a> {
+    Sheet { open: true, reading: false, held, failed }
+}
+
+#[test]
+fn a_read_that_failed_asks_nothing_while_the_session_says_what_it_said_when_the_read_was_sent() {
+    let failed = asked("b1", 8, Some(3));
+    assert!(!reads_again(sheet(None, Some(&failed)), seen("b1", 8), Some(3)));
+}
+
+#[test]
+fn a_read_that_failed_asks_again_once_the_server_starts_again() {
+    let failed = asked("b1", 8, Some(3));
+    assert!(reads_again(sheet(None, Some(&failed)), seen("b2", 1), Some(3)));
+}
+
+#[test]
+fn a_read_that_failed_asks_again_once_the_settings_change() {
+    let failed = asked("b1", 8, Some(3));
+    assert!(reads_again(sheet(None, Some(&failed)), seen("b1", 9), Some(3)));
+}
+
+#[test]
+fn a_read_sent_before_the_window_connected_asks_again_once_it_has() {
+    let failed = asked("", 0, None);
+    assert!(reads_again(sheet(None, Some(&failed)), seen("b1", 1), Some(1)));
+}
+
+#[test]
+fn a_read_that_failed_asks_again_once_the_window_connects_again() {
+    let failed = asked("b1", 8, Some(3));
+    assert!(reads_again(sheet(None, Some(&failed)), seen("b1", 8), Some(5)));
+}
+
+#[test]
+fn a_read_that_failed_asks_nothing_while_the_window_is_not_connected() {
+    let failed = asked("b1", 8, Some(3));
+    assert!(!reads_again(sheet(None, Some(&failed)), seen("b1", 8), None));
+}
+
+#[test]
+fn a_read_that_failed_while_an_answer_is_held_waits_for_the_session_to_move() {
+    let failed = asked("b1", 8, Some(3));
+    assert!(!reads_again(sheet(Some(seen("b1", 7)), Some(&failed)), seen("b1", 8), Some(3)));
+}
+
+#[test]
+fn a_read_that_failed_while_an_answer_is_held_asks_again_once_the_session_moves_past_it() {
+    let failed = asked("b1", 8, Some(3));
+    assert!(reads_again(sheet(Some(seen("b1", 7)), Some(&failed)), seen("b1", 9), Some(3)));
+}
+
+#[test]
+fn a_read_that_failed_while_an_answer_is_held_asks_nothing_when_the_answer_is_ahead_of_the_session() {
+    let failed = asked("b1", 7, Some(3));
+    assert!(!reads_again(sheet(Some(seen("b1", 9)), Some(&failed)), seen("b1", 8), Some(5)));
+}
+
+#[test]
+fn nothing_held_and_nothing_failed_asks_nothing_beyond_the_opens_own_read() {
+    assert!(!reads_again(sheet(None, None), seen("b1", 8), Some(3)));
+}
+
+#[test]
+fn a_held_answer_with_no_failure_reads_again_as_behind_says() {
+    let cases = [
+        (seen("b1", 7), seen("b1", 8)),
+        (seen("b1", 8), seen("b1", 8)),
+        (seen("b1", 9), seen("b1", 8)),
+        (seen("b1", 9), seen("b2", 3)),
+        (seen("b1", 7), seen("", 0)),
+    ];
+    let again: Vec<bool> =
+        cases.iter().map(|(held, now)| reads_again(sheet(Some(*held), None), *now, Some(3))).collect();
+    assert_eq!(again, [true, false, false, true, false]);
+}
+
+#[test]
+fn a_read_in_flight_is_never_joined_by_a_second() {
+    let failed = asked("b1", 8, Some(3));
+    let reading = |held, failed| Sheet { reading: true, ..sheet(held, failed) };
+    assert!(!reads_again(reading(Some(seen("b1", 7)), None), seen("b1", 8), Some(3)));
+    assert!(!reads_again(reading(None, Some(&failed)), seen("b2", 1), Some(3)));
+}
+
+#[test]
+fn a_closed_sheet_asks_nothing() {
+    let failed = asked("b1", 8, Some(3));
+    let closed = |held, failed| Sheet { open: false, ..sheet(held, failed) };
+    assert!(!reads_again(closed(Some(seen("b1", 7)), None), seen("b1", 8), Some(3)));
+    assert!(!reads_again(closed(None, Some(&failed)), seen("b2", 1), Some(3)));
 }
 
 fn described() -> Described {
