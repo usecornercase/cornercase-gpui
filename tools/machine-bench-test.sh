@@ -593,13 +593,15 @@ up_stops_when_python_cannot_read_the_agents() {
 }
 
 up_names_the_stage_a_failed_open_stopped_at() {
-  : > "$t/control/fail-open-there"
-  runb up "$t/n4" --here "$t/new/cornercase"
-  rm -f "$t/control/fail-open-there"
-  check "exit $rc, not 1" [ "$rc" = 1 ] || return 1
-  check "the stage is wrong: $(cat "$t/err")" contains "$t/err" "up failed at opening the project of there" || return 1
-  runb down "$t/n4"
-  check "down of n4: $(cat "$t/err")" [ "$rc" = 0 ]
+  for side in there here; do
+    : > "$t/control/fail-open-$side"
+    runb up "$t/o-$side" --here "$t/new/cornercase"
+    rm -f "$t/control/fail-open-$side"
+    check "exit $rc, not 1 ($side)" [ "$rc" = 1 ] || return 1
+    check "the stage is wrong ($side): $(cat "$t/err")" contains "$t/err" "up failed at opening the project of $side" || return 1
+    runb down "$t/o-$side"
+    check "down of o-$side: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  done
 }
 
 up_says_when_a_release_lists_no_agents() {

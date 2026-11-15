@@ -542,8 +542,9 @@ print(" and ".join(n for n in names if n not in pinned))
   [ "$rc" = 0 ] || fail "python3 failed (status $rc) reading the agents of $1's config --json"
   [ -z "$unpinned" ] || {
     which=it
-    case $unpinned in *" and "*) which=one ;; esac
-    fail "cornercase $ver on $1 knows $unpinned, which this bench does not pin, so starting $which would run this computer's own $unpinned: add it to agents= in tools/$me and to the config.json block of design/manual-check.md (A server of its own), then down this folder and up again"
+    add=it
+    case $unpinned in *" and "*) which=one; add=each ;; esac
+    fail "cornercase $ver on $1 knows $unpinned, which this bench does not pin, so starting $which would run this computer's own $unpinned: add $add to agents= in tools/$me and to the config.json block of design/manual-check.md (A server of its own), then down this folder and up again"
   }
 }
 
