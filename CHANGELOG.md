@@ -6,7 +6,7 @@ Every pull request that changes the app adds a section here for its new version.
 
 - **A focused field's outline is whole in every dialog.** In **Start an agent**, **Start a flow** and **Start work on an issue**, the outline of the field you type in was cut off at the dialog's left and right edges, and so was a ticked box's glow there and in the questions of the Worktrees sheet. They now show whole, as in **New workspace**.
 - **In a short window, Start work on an issue opens at the issue.** Its number and title and the **Start now** / **Schedule** switch show first at every window size, so you see which issue you are starting work on before you type. What you type still goes to **Model** (to **When** when scheduling), which then scrolls into view. Start a flow opens at its top too.
-- **Tab to the last field of Start work on an issue shows the rest of the form**: the **Where** line and the note under it, whether the last field is **Workspace name**, **Effort** or **Model**.
+- **In a short window, Tab to the last field of Start work on an issue shows the rest of the form.** When the agent starts in a tab, Tab to **Effort** (or **Model**, for an agent without Effort) now shows the **Where** line and the note under it, as Tab to **Workspace name** already showed its note.
 
 ## 0.1.111
 

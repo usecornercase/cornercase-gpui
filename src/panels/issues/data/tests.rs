@@ -587,3 +587,25 @@ fn a_machine_whose_server_starts_default_offers_it_and_one_behind_rests_it() {
         "default needs cornercase 0.13.28 or newer on lab while its settings choose plan (lab's server runs 0.13.21)"
     );
 }
+
+#[test]
+fn the_workspace_name_ends_the_form_in_a_new_worktree() {
+    assert_eq!(last_field("claude", false, true), Last::Name);
+    assert_eq!(last_field("gemini", false, true), Last::Name);
+}
+
+#[test]
+fn effort_ends_the_form_in_a_tab_for_an_agent_that_takes_it() {
+    assert_eq!(last_field("claude", false, false), Last::Effort);
+}
+
+#[test]
+fn model_ends_the_form_in_a_tab_for_an_agent_without_effort() {
+    assert_eq!(last_field("gemini", false, false), Last::Model);
+}
+
+#[test]
+fn the_name_ends_the_form_when_scheduling() {
+    assert_eq!(last_field("gemini", true, false), Last::Name);
+    assert_eq!(last_field("claude", true, true), Last::Name);
+}

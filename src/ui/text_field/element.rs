@@ -65,6 +65,10 @@ fn room_below(below: Below, prompt: bool, to_end: Pixels) -> Pixels {
     }
 }
 
+fn room_to_end(height: Pixels, max_offset: Pixels, (top, line): (Pixels, Pixels)) -> Pixels {
+    height + max_offset - top - line
+}
+
 fn next_scroll(
     why: Reveal,
     scroll: Pixels,
@@ -305,7 +309,8 @@ impl Element for TextElement {
         let selection = std::mem::take(&mut prepaint.selection);
         let cursor = prepaint.cursor.take();
         let focused = focus_handle.is_focused(window);
-        window.with_content_mask(scrolls.then(|| layout.mask(multi_row)), |window| {
+        let one_row_hint = input.options.wraps && input.content.is_empty();
+        window.with_content_mask((scrolls || one_row_hint).then(|| layout.mask(multi_row)), |window| {
             selection.into_iter().filter(|_| focused).for_each(|quad| window.paint_quad(quad));
             layout.paint_lines(window, cx);
             cursor.into_iter().filter(|_| focused).for_each(|quad| window.paint_quad(quad));
@@ -400,7 +405,7 @@ fn show_in_scroller(
     let offset = scroller.offset();
     let scroll = -offset.y;
     let top = caret - view.top() + scroll;
-    let to_end = view.size.height + scroller.max_offset().height - top - line_height;
+    let to_end = room_to_end(view.size.height, scroller.max_offset().height, (top, line_height));
     let margins = (SCROLLER_MARGIN, room_below(below, prompt, to_end));
     let next = next_scroll(why, scroll, (top, line_height), margins, view.size.height);
     if next != scroll {

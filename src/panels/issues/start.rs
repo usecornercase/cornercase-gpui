@@ -6,7 +6,8 @@ use gpui::{
 
 use super::IssuesPanel;
 use super::data::{
-    EFFORT_AGENTS, Issue, Place, Sources, StartPlan, When, branch_hint, branch_shown, modes_shown, there_footnote,
+    Issue, Last, Place, Sources, StartPlan, When, branch_hint, branch_shown, last_field, modes_shown, named,
+    takes_effort, there_footnote,
 };
 use crate::cli;
 use crate::dialogs::{self, Gate, RunOn, RunOnEvent, accounts_of, agent_line, dialog_starts, follow_field, within};
@@ -164,23 +165,6 @@ fn mode_chips(modes: &Modes, picked: Option<&str>, cx: &mut Context<StartForm>) 
     }))
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Last {
-    Model,
-    Effort,
-    Name,
-}
-
-fn last_field(schedule: bool, worktree: bool, effort: bool) -> Last {
-    if schedule || worktree {
-        Last::Name
-    } else if effort {
-        Last::Effort
-    } else {
-        Last::Model
-    }
-}
-
 impl StartForm {
     fn new(setup: Setup, cx: &mut Context<Self>) -> Self {
         let Setup { issue, sources, repository, agents, schedule, project_name, panel } = setup;
@@ -294,7 +278,7 @@ impl StartForm {
         };
         let worktree = place.worktree;
         let branch = text(&self.branch).filter(|b| worktree && *b != self.branch_prefill);
-        let effort = text(&self.effort).filter(|_| EFFORT_AGENTS.contains(&self.agent.as_str()));
+        let effort = text(&self.effort).filter(|_| takes_effort(&self.agent));
         Ok(StartPlan {
             issue: self.issue.clone(),
             agent: self.agent.clone(),
@@ -303,7 +287,7 @@ impl StartForm {
             effort,
             place: Some(place),
             branch,
-            workspace_name: text(&self.name).filter(|_| worktree || self.schedule),
+            workspace_name: text(&self.name).filter(|_| named(self.schedule, worktree)),
             accounts: self.accounts.picks(std::slice::from_ref(&self.agent), cx),
         })
     }
@@ -429,7 +413,7 @@ impl StartForm {
     }
 
     fn model_fields(&self, window: &Window, cx: &App) -> Div {
-        let effort = EFFORT_AGENTS.contains(&self.agent.as_str());
+        let effort = takes_effort(&self.agent);
         div()
             .flex()
             .gap(px(10.))
@@ -477,7 +461,7 @@ impl StartForm {
     }
 
     fn mark_last(&self, cx: &mut App) {
-        let last = last_field(self.schedule, self.worktree(), EFFORT_AGENTS.contains(&self.agent.as_str()));
+        let last = last_field(&self.agent, self.schedule, self.worktree());
         for (field, is) in [(&self.model, Last::Model), (&self.effort, Last::Effort), (&self.name, Last::Name)] {
             field.update(cx, |field, _| field.set_ends_form(last == is));
         }
@@ -487,7 +471,7 @@ impl StartForm {
         let worktree = self.worktree();
         let name = if self.schedule { "Name" } else { "Workspace name" };
         let branch = worktree.then(|| ui::field("Branch", boxed(&self.branch, window, cx)));
-        let named = (worktree || self.schedule).then(|| ui::field(name, boxed(&self.name, window, cx)));
+        let named = named(self.schedule, worktree).then(|| ui::field(name, boxed(&self.name, window, cx)));
         branch.into_iter().chain(named).collect()
     }
 
@@ -551,6 +535,3 @@ impl Render for StartForm {
         dialogs::frame(title, column, self.buttons(cx)).w(px(580.))
     }
 }
-
-#[cfg(test)]
-mod tests;

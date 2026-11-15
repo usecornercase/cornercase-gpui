@@ -1,6 +1,6 @@
 use gpui::px;
 
-use super::{Below, Head, Reveal, next_scroll, reveal_of, room_below};
+use super::{Below, Head, Reveal, next_scroll, reveal_of, room_below, room_to_end};
 
 const CARET: (gpui::Pixels, gpui::Pixels) = (px(294.), px(20.));
 const MARGINS: (gpui::Pixels, gpui::Pixels) = (px(12.), px(12.));
@@ -65,4 +65,34 @@ fn a_field_asking_for_nothing_keeps_the_margin_of_its_kind() {
 fn a_body_where_everything_fits_does_not_move() {
     assert_eq!(next_scroll(Reveal::Form, px(0.), CARET, MARGINS, px(572.)), px(0.));
     assert_eq!(next_scroll(Reveal::Caret, px(0.), CARET, MARGINS, px(572.)), px(0.));
+}
+
+#[test]
+fn the_field_a_dialog_opened_on_reveals_itself_again_after_its_first_paint() {
+    assert_eq!(Head::Opening.painted(), Head::Yes);
+    assert_eq!(Head::Yes.painted(), Head::Yes);
+    assert_eq!(Head::No.painted(), Head::No);
+    assert_eq!(reveal_of(false, true, Head::Opening.painted()), Reveal::Form);
+}
+
+#[test]
+fn a_key_typed_before_the_dialog_s_first_frame_brings_its_field_into_view() {
+    assert_eq!(reveal_of(true, true, Head::Opening), Reveal::Caret);
+}
+
+#[test]
+fn the_last_field_s_reveal_scrolls_its_form_to_the_end() {
+    let (height, max_offset, line) = (px(212.), px(300.), (px(400.), px(20.)));
+    let room = room_to_end(height, max_offset, line);
+    assert_eq!(room, px(92.));
+    let margins = (px(12.), room_below(Below::ToEnd, false, room));
+    assert_eq!(next_scroll(Reveal::Caret, px(0.), line, margins, height), max_offset);
+}
+
+#[test]
+fn the_last_field_of_a_form_that_fits_does_not_move_it() {
+    let (height, line) = (px(572.), (px(294.), px(20.)));
+    let room = room_to_end(height, px(0.), line);
+    let margins = (px(12.), room_below(Below::ToEnd, false, room));
+    assert_eq!(next_scroll(Reveal::Caret, px(0.), line, margins, height), px(0.));
 }

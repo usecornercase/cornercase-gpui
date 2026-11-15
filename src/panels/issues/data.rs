@@ -490,7 +490,32 @@ pub(super) fn branch_hint(machine: Option<&str>) -> String {
     }
 }
 
-pub(super) const EFFORT_AGENTS: [&str; 4] = ["claude", "codex", "grok", "copilot"];
+const EFFORT_AGENTS: [&str; 4] = ["claude", "codex", "grok", "copilot"];
+
+pub(super) fn takes_effort(agent: &str) -> bool {
+    EFFORT_AGENTS.contains(&agent)
+}
+
+pub(super) fn named(schedule: bool, worktree: bool) -> bool {
+    schedule || worktree
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Last {
+    Model,
+    Effort,
+    Name,
+}
+
+pub(super) fn last_field(agent: &str, schedule: bool, worktree: bool) -> Last {
+    if named(schedule, worktree) {
+        Last::Name
+    } else if takes_effort(agent) {
+        Last::Effort
+    } else {
+        Last::Model
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum When {
