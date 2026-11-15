@@ -25,6 +25,7 @@ let countWords: [(word: String, count: Int)] = [("double", 2), ("triple", 3)]
 let pressWords = ["right"] + countWords.map { $0.word }
 let pressGrammar = pressWords.joined(separator: "|")
 let pressListed = pressWords.dropLast().joined(separator: ", ") + " or " + (pressWords.last ?? "")
+let pressCounted = countWords.map { $0.word }.joined(separator: " and ")
 let pressHint = countWords.map { "\($0.word) for \($0.count)" }.joined(separator: " and ")
 
 let usage =
@@ -276,6 +277,7 @@ let pressHold = 50
 let pressGap = 50
 let pressAfter = 100
 let askRoom = 50
+
 struct MouseEvent: Equatable {
     let type: CGEventType
     let button: CGMouseButton
@@ -330,7 +332,7 @@ func pressSteps(_ button: CGMouseButton, count: Int, interval: Int) throws -> [P
         let word = countWords.first { $0.count == count }?.word ?? ""
         throw Failure(
             message: "a \(word) press needs a double-click interval of \(least) ms or more (its presses are posted "
-                + "\(pressHold + pressGap) ms apart, each checked first), and this Mac's is \(interval) ms: a \(word) press cannot be posted on this Mac, and two presses in its place would act as "
+                + "\(pressHold + pressGap) ms apart, each checked first), and this Mac's is \(interval) ms: a \(word) press cannot be posted on this Mac, and presses posted one by one in its place would act as "
                 + "single ones; the interval is the person's own setting, never a check's to change: nothing was posted",
             status: 1)
     }
@@ -907,7 +909,7 @@ func pressOptions(_ words: [String]) throws -> (button: CGMouseButton, count: In
     let named = Set(words)
     if words.count == 2, named.contains("right"), !named.isDisjoint(with: countWords.map { $0.word }) {
         throw Failure(
-            message: "a right press takes no count: double and triple post left presses only, and press PID X Y right posts one right press: nothing was posted",
+            message: "a right press takes no count: \(pressCounted) post left presses only, and press PID X Y right posts one right press: nothing was posted",
             status: 2)
     }
     let said = "press takes at most one word after the point (\(pressListed)), not '\(words.joined(separator: " "))'"
@@ -1502,7 +1504,6 @@ enum SelfTest {
         (try? pressSteps(button, count: count, interval: interval)) ?? []
     }
 
-
     static func walked(_ count: Int, failingAt ask: Int?) -> (posted: [MouseEvent], warps: [CGPoint], failure: String) {
         var posted: [MouseEvent] = []
         var warps: [CGPoint] = []
@@ -1645,7 +1646,7 @@ enum SelfTest {
             }),
             ("an_interval_too_short_for_a_double_or_a_triple_press_is_refused_with_its_words", {
                 let words = { (word: String, interval: Int) in
-                    "1: a \(word) press needs a double-click interval of 150 ms or more (its presses are posted 100 ms apart, each checked first), and this Mac's is \(interval) ms: a \(word) press cannot be posted on this Mac, and two presses in its place would act as single ones; the interval is the person's own setting, never a check's to change: nothing was posted"
+                    "1: a \(word) press needs a double-click interval of 150 ms or more (its presses are posted 100 ms apart, each checked first), and this Mac's is \(interval) ms: a \(word) press cannot be posted on this Mac, and presses posted one by one in its place would act as single ones; the interval is the person's own setting, never a check's to change: nothing was posted"
                 }
                 return expect(
                     [2, 3, 2].map { count in refusal { _ = try pressSteps(.left, count: count, interval: 149) } } + [String(steps(.left, 2, 150).count)],
