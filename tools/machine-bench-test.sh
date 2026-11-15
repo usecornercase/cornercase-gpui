@@ -211,6 +211,16 @@ has_call() {
   grep -F -- "$1" "$t/calls.norm" | grep -q -F -- "$2"
 }
 
+side_calls() {
+  calls
+  grep -F "socket=$b/$1/" "$t/calls.norm" > "$t/$1.calls"
+  if [ "$1" = here ]; then
+    grep -v 'args=--version$' "$t/here.calls" > "$t/here.calls.new"
+    mv "$t/here.calls.new" "$t/here.calls"
+  fi
+  check "no call on $1" test -s "$t/$1.calls"
+}
+
 nothing_made() {
   check "the folder was made: $1" [ ! -e "$1" ] || return 1
   check "a cornercase ran" no_new_calls || return 1
@@ -329,7 +339,7 @@ up_starts_each_server_from_its_own_project() {
 }
 
 up_gives_there_a_home_and_environment_of_its_own() {
-  grep -F "socket=$b/there/" "$t/calls.norm" > "$t/there.calls"
+  side_calls there || return 1
   bad=$(grep -v -F -e "home=$b/there/home|" "$t/there.calls" | head -1)
   check "a there call with another home: $bad" [ -z "$bad" ] || return 1
   bad=$(grep -v -F -e "|path1=$b/there/bin|claude=$b/there/claude|" "$t/there.calls" | head -1)
@@ -385,9 +395,23 @@ block_of_the_note() {
 
 differs_from_the_note() {
   python3 -I -c '
-import json, sys
-kind, note, bench, only = sys.argv[1:5]
-if kind == "config":
+import json, re, sys
+kind, note, bench, only, leaves, adds = sys.argv[1:7]
+def names(path):
+    exported, unset = set(), set()
+    for line in open(path):
+        words = line.split()
+        if words[:1] == ["export"] and len(words) > 1:
+            exported.add(words[1].split("=")[0])
+        elif words[:1] == ["unset"]:
+            unset.update(words[1:])
+    return exported, unset
+if kind == "run":
+    line = open(bench).read().split("env -i", 1)[1].split("\"$@\"", 1)[0]
+    have = set(re.findall(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=", line)) - set(adds.split())
+    want = names(note)[0] - set(leaves.split())
+    bad = sorted((want - have) | (have - want))
+elif kind == "config":
     def flat(path):
         d = json.load(open(path))
         d.pop("worktrees_dir", None)
@@ -401,22 +425,13 @@ if kind == "config":
     a, b = flat(note), flat(bench)
     bad = sorted(k for k in set(a) | set(b) if a.get(k, "-") != b.get(k, "-"))
 else:
-    def names(path):
-        exported, unset = set(), set()
-        for line in open(path):
-            words = line.split()
-            if words[:1] == ["export"] and len(words) > 1:
-                exported.add(words[1].split("=")[0])
-            elif words[:1] == ["unset"]:
-                unset.update(words[1:])
-        return exported, unset
     (ae, au), (be, bu) = names(note), names(bench)
     bad = sorted((ae - be) | ((be - ae) - set(only.split())) | (au ^ bu))
     if not (ae and au):
         bad.append("the note block exports or unsets nothing")
 print(" ".join(bad))
 sys.exit(1 if bad else 0)
-' "$1" "$t/note.$2" "$3" "$bench_only_exports" > "$t/differs" 2>&1
+' "$1" "$t/note.$2" "$3" "$bench_only_exports" "$there_leaves_out" "$there_adds" > "$t/differs" 2>&1
   r=$?
   [ "$r" = 0 ] || printf '%s differs from the note: %s\n' "$3" "$(cat "$t/differs")" > "$t/why"
   return "$r"
@@ -476,15 +491,13 @@ the_env_keeps_no_token_name_or_value() {
 }
 
 up_gives_here_the_homes_of_the_bench() {
-  grep -F "socket=$b/here/" "$t/calls.norm" | grep -v 'args=--version$' > "$t/here.calls"
-  check "no call on here" test -s "$t/here.calls" || return 1
+  side_calls here || return 1
   bad=$(grep -v -F -e "|codex=$b/here/codex|gemini=$b/here/gemini|" "$t/here.calls" | head -1)
   check "a here call with another home: $bad" [ -z "$bad" ]
 }
 
 the_callers_homes_never_reach_there() {
-  grep -F "socket=$b/there/" "$t/calls.norm" > "$t/there.calls"
-  check "no call on there" test -s "$t/there.calls" || return 1
+  side_calls there || return 1
   bad=$(grep -v -F -e "|codex=unset|gemini=unset|" "$t/there.calls" | head -1)
   check "a there call with the caller's home: $bad" [ -z "$bad" ]
 }
@@ -633,16 +646,6 @@ down_removes_the_folders_a_failed_up_kept() {
   check "down of f2: $(cat "$t/err")" [ "$rc" = 0 ]
 }
 
-side_calls() {
-  calls
-  grep -F "socket=$b/$1/" "$t/calls.norm" > "$t/$1.calls"
-  if [ "$1" = here ]; then
-    grep -v 'args=--version$' "$t/here.calls" > "$t/here.calls.new"
-    mv "$t/here.calls.new" "$t/here.calls"
-  fi
-  check "no call on $1" test -s "$t/$1.calls"
-}
-
 every_server_of_the_bench_listens_for_a_phone_on_loopback_only() {
   for side in here there; do
     side_calls "$side" || return 1
@@ -676,25 +679,15 @@ the_note_makes_the_folder_its_tmpdir_names() {
 
 there_run_sets_what_the_note_exports_except_what_it_leaves_out() {
   block_of_the_note env || return 1
-  python3 -I -c '
-import re, sys
-note, run, leaves, adds = sys.argv[1:5]
-exports = {m.group(1) for m in re.finditer(r"^\s*export ([A-Za-z_][A-Za-z0-9_]*)=", open(note).read(), re.M)}
-line = open(run).read().split("env -i", 1)[1].split("\"$@\"", 1)[0]
-names = set(re.findall(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=", line))
-want = exports - set(leaves.split())
-have = names - set(adds.split())
-bad = sorted((want - have) | (have - want))
-print(" ".join(bad))
-sys.exit(1 if bad else 0)
-' "$t/note.env" "$b/there/run" "$there_leaves_out" "$there_adds" > "$t/differs" 2>&1 ||
-    { printf "there/run and the note's env differ in: %s\n" "$(cat "$t/differs")" > "$t/why"; return 1; }
+  differs_from_the_note run env "$b/there/run"
 }
 
 counted_by_the_note() {
-  awk -v q="'" '/config --json \| python3 -I -c/ { f = 1; n++ } f { print } f && $0 ~ "^ *" q "$" { exit } END { exit n != 1 }' \
+  check "the note has not exactly one counter of the agents" \
+    test "$(grep -c -F -e 'config --json | python3 -I -c' "$repo/design/manual-check.md")" -eq 1 || return 1
+  awk -v q="'" '/config --json \| python3 -I -c/ { f = 1 } f { print } f && $0 ~ "^ *" q "$" { exit }' \
     "$repo/design/manual-check.md" > "$t/note.counter"
-  check "the note has not one counter of the agents" test -s "$t/note.counter" || return 1
+  check "the note's counter has no end" test -s "$t/note.counter" || return 1
   sed -e "s#/tmp/cc-check/env#$1/env#" -e "s#/tmp/cc-check/config.json#$1/here/config.json#" "$t/note.counter" > "$t/counter.sh"
   "$sh_cmd" "$t/counter.sh" > "$t/counted" 2> "$t/counted.err" || return 1
   check "the counter prints a path or a traceback: $(cat "$t/counted" "$t/counted.err")" \
