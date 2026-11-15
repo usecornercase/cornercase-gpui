@@ -757,8 +757,19 @@ window_pid() {
   esac
 }
 
+cwd_windows() {
+  command -v lsof > /dev/null 2>&1 || return 0
+  lsof -a -d cwd -Fpn 2> /dev/null | awk -v f="$folder/" '
+    /^p/ { p = substr($0, 2) }
+    /^n/ { n = substr($0, 2) "/"; if (index(n, f) == 1 || index(n, "/private" f) == 1) print p }' |
+    while read -r p; do
+      first=$(ps -o args= -p "$p" 2> /dev/null | awk '{ print $1 }')
+      case ${first##*/} in cornercase-gpui) printf '%s\n' "$p" ;; esac
+    done
+}
+
 windows_on_bench() {
-  { window_pid; scan windows; } | sort -u | tr '\n' ' ' | sed 's/ *$//'
+  { window_pid; scan windows; cwd_windows; } | sort -u | tr '\n' ' ' | sed 's/ *$//'
 }
 
 refuse_inside() {
@@ -775,8 +786,14 @@ refuse_window() {
 
 wait_gone() {
   n=0
+  quiet=0
   while [ "$n" -lt 10 ]; do
-    [ -n "$(scan left "$1")" ] || return 0
+    if [ -n "$(scan left "$1")" ]; then
+      quiet=0
+    else
+      quiet=$((quiet + 1))
+      [ "$quiet" -lt 4 ] || return 0
+    fi
     n=$((n + 1))
     sleep 1
   done

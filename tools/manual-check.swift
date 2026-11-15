@@ -29,7 +29,7 @@ let pressCounted = countWords.map { $0.word }.joined(separator: " and ")
 let pressHint = countWords.map { "\($0.word) for \($0.count)" }.joined(separator: " and ")
 
 let usage =
-    "usage: manual-check window|covers|front|size|key|hold|text|paste|copy|press|drag|scroll PID … | displays [x y width height] | self-test "
+    "usage: manual-check may | window|covers|front|size|key|hold|text|paste|copy|press|drag|scroll PID … | displays [x y width height] | self-test "
     + "(key: KEY [cmd] [shift] [alt] [ctrl]; hold: KEY [MS]; KEY: \(keyGrammar); paste: TEXT; copy: TEXT MS [KEY [cmd] [shift] [alt] [ctrl]]; press: x y [\(pressGrammar)]; drag: x0 y0 x1 y1 [right] [hold MS])"
 
 let characterNames: [String: Character] = {
@@ -213,12 +213,53 @@ func checkedPid(_ pid: pid_t) throws {
     }
 }
 
-func allowed() throws {
-    guard AXIsProcessTrusted(), CGPreflightPostEventAccess() else {
-        throw Failure(
-            message: "this process may not post events: allow it in System Settings › Privacy & Security › Accessibility",
-            status: 1)
-    }
+struct Grant: Equatable {
+    let accessibility: Bool
+    let posting: Bool
+    let capture: Bool
+}
+
+let postYes =
+    "Accessibility and event posting are allowed to this process, so front, size, key, hold, text, paste, copy with a key, press, drag and scroll may post; ask again at the start of each round (design/manual-check.md, What this shell may do)"
+let captureYes =
+    "Screen Recording is allowed to this process, so screencapture -x -o -l <window id> may capture a window (design/manual-check.md, Captures); the helper's own commands read no window's title and need none"
+let captureNo =
+    "Screen Recording is not allowed to this process, so screencapture -l refuses (could not create image from window): put what needs a capture under Not checked with this reason, and never ask for the grant, which is the person's at this Mac; the helper's own commands read no window's title and need none"
+
+func readGrant() -> Grant {
+    Grant(accessibility: AXIsProcessTrusted(), posting: CGPreflightPostEventAccess(), capture: CGPreflightScreenCaptureAccess())
+}
+
+func postRefusal(_ grant: Grant) -> String? {
+    guard !(grant.accessibility && grant.posting) else { return nil }
+    let yesNo = { (allowed: Bool) in allowed ? "yes" : "no" }
+    return "this process may not post events (Accessibility: \(yesNo(grant.accessibility)), event posting: \(yesNo(grant.posting))): "
+        + "front, size, key, hold, text, paste, copy with a key, press, drag and scroll refuse with status 1 and post nothing; "
+        + "the grant is the person's at this Mac and only they give it, so a check never opens System Settings, never runs tccutil, never asks for it "
+        + "and never posts through another process (System Events, osascript or any other tool): plan without keys and presses "
+        + "(design/manual-check.md, What needs no press) and put what needs them under Not checked with this reason; manual-check may asks this with no pid"
+}
+
+func mayAnswer(_ grant: Grant) -> (lines: [String], status: Int32) {
+    let refusal = postRefusal(grant)
+    return (["post " + (refusal.map { "no: " + $0 } ?? "yes: " + postYes), "capture " + (grant.capture ? "yes: " + captureYes : "no: " + captureNo)],
+        refusal == nil ? 0 : 1)
+}
+
+func allowed(_ grant: Grant = readGrant()) throws {
+    if let refusal = postRefusal(grant) { throw Failure(message: refusal, status: 1) }
+}
+
+func mayWords(_ words: [String]) throws {
+    guard let first = words.first else { return }
+    throw Failure(message: "may takes no pid and no words: it answers for the process that runs it, so ask it from the shell the check runs in; not '\(first)'", status: 2)
+}
+
+func may(_ words: [String]) throws {
+    try mayWords(words)
+    let answer = mayAnswer(readGrant())
+    guard answer.status != 0 else { return answer.lines.forEach { say($0) } }
+    throw Failure(message: answer.lines.joined(separator: "\n"), status: answer.status)
 }
 
 func isFront(_ pid: pid_t) -> Bool {
@@ -1935,9 +1976,74 @@ enum SelfTest {
         ]
     }
 
+    static let allGrants: [Grant] = [false, true].flatMap { a in
+        [false, true].flatMap { p in [false, true].map { c in Grant(accessibility: a, posting: p, capture: c) } }
+    }
+
+    static func grantTests() -> [(String, () -> String?)] {
+        [
+            ("may_says_yes_only_when_accessibility_and_event_posting_are_both_allowed", {
+                let got = allGrants.map { g -> [String] in
+                    let answer = mayAnswer(g)
+                    return ["\(answer.status)", answer.lines[0].hasPrefix("post yes: ") ? "post yes: " : answer.lines[0].hasPrefix("post no: ") ? "post no: " : "?",
+                        String(answer.lines[1].prefix(12))]
+                }
+                let want = allGrants.map { g -> [String] in
+                    [g.accessibility && g.posting ? "0" : "1", g.accessibility && g.posting ? "post yes: " : "post no: ", g.capture ? "capture yes:" : "capture no: "]
+                }
+                return expect(got, want)
+            }),
+            ("the_post_line_says_which_of_the_two_is_missing", {
+                let said = [(false, false), (true, false), (false, true)].map { postRefusal(Grant(accessibility: $0.0, posting: $0.1, capture: true)) ?? "none" }
+                let inside = said.map { text -> String in
+                    let from = text.firstIndex(of: "(").map { text.index(after: $0) } ?? text.startIndex
+                    return String(text[from...].prefix(while: { $0 != ")" }))
+                }
+                return expect(inside, [
+                    "Accessibility: no, event posting: no",
+                    "Accessibility: yes, event posting: no",
+                    "Accessibility: no, event posting: yes",
+                ])
+            }),
+            ("the_refusal_says_whose_the_grant_is_and_what_a_check_does_instead", {
+                let said = postRefusal(Grant(accessibility: false, posting: false, capture: true)) ?? ""
+                let words = ["only they give it", "never opens System Settings", "never runs tccutil", "never asks for it", "never posts through another process",
+                    "What needs no press", "Not checked"]
+                return expect(words.filter { !said.contains($0) }, [])
+            }),
+            ("the_refusal_and_may_say_the_same_words", {
+                let got = allGrants.map { g -> String in
+                    let refused = refusal { try allowed(g) }
+                    guard let text = postRefusal(g) else { return refused }
+                    return [refused == "1: " + text, mayAnswer(g).lines[0] == "post no: " + text].description
+                }
+                return expect(got, allGrants.map { $0.accessibility && $0.posting ? "no refusal" : "[true, true]" })
+            }),
+            ("captures_change_a_line_and_never_the_status", {
+                let on = mayAnswer(Grant(accessibility: true, posting: true, capture: true))
+                let off = mayAnswer(Grant(accessibility: true, posting: true, capture: false))
+                return expect([on.status, off.status, on.lines[0] == off.lines[0] ? 1 : 0, on.lines[1] == off.lines[1] ? 1 : 0], [0, 0, 1, 0])
+            }),
+            ("the_capture_lines_say_the_helper_needs_no_screen_recording", {
+                let tail = "the helper's own commands read no window's title and need none"
+                return expect([captureYes.hasSuffix(tail), captureNo.hasSuffix(tail), captureNo.contains("screencapture -l refuses")], [true, true, true])
+            }),
+            ("may_takes_no_pid_and_no_words", {
+                expect([refusal { try mayWords(["4242"]) }, refusal { try mayWords([]) }],
+                    ["2: may takes no pid and no words: it answers for the process that runs it, so ask it from the shell the check runs in; not '4242'", "no refusal"])
+            }),
+            ("the_usage_line_holds_may_first", { expect(usage.hasPrefix("usage: manual-check may | window|covers|front|"), true) }),
+            ("this_process_grant_is_answered_whatever_it_is", {
+                let answer = mayAnswer(readGrant())
+                let agrees = answer.lines[0].hasPrefix(answer.status == 0 ? "post yes: " : "post no: ")
+                return expect([[0, 1].contains(answer.status), answer.lines.count == 2, agrees, answer.lines[1].hasPrefix("capture ")], [true, true, true, true])
+            }),
+        ]
+    }
+
     static func run() throws {
         let cases = coverTests() + dictionaryTests() + beforeTests() + wordTests() + keyTests() + clipboardTests() + pressStepTests() + pressTests()
-            + uuidTests() + coverOfDisplayTests() + everyMacTests() + negativeDisplayTests() + twoCheckTests() + answerTests() + placeTests()
+            + uuidTests() + coverOfDisplayTests() + everyMacTests() + negativeDisplayTests() + twoCheckTests() + answerTests() + placeTests() + grantTests()
         var failed = 0
         for (name, body) in cases {
             if let why = body() {
@@ -1954,6 +2060,7 @@ enum SelfTest {
 
 func run(_ args: [String]) throws {
     if args == ["self-test"] { return try SelfTest.run() }
+    if args.first == "may" { return try may(Array(args.dropFirst())) }
     if args.first == "displays" { return try listDisplays(Array(args.dropFirst())) }
     guard args.count >= 2, let pid = pid_t(args[1]) else { throw Failure(message: usage, status: 2) }
     if ["front", "size", "key", "hold", "text", "paste", "copy", "press", "drag", "scroll"].contains(args[0]) { try checkedPid(pid) }

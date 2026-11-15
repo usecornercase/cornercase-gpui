@@ -63,7 +63,8 @@ case $cmd in
     held_there=no
     [ -e "$(dirname "$sock")/../ssh/there.invalid.held" ] && held_there=yes
     printf '%s held=%s\n' "$sock" "$held,$held_there" >> "$t/killed"
-    rm -f "$sock" "$state"-agent "$state"-child ;;
+    rm -f "$sock" "$state"-agent "$state"-child
+    [ -f "$t/comes-back" ] && mv "$t/comes-back" "$t/came-back" && exec sh -c 'sleep 1.5; exec "$0"' "$(cat "$t/came-back")" > /dev/null 2>&1 & ;;
   status)
     needs_up
     if [ "${2-}" = --panes ]; then
@@ -1205,6 +1206,55 @@ down_refuses_while_a_window_runs() {
   check "kill-server ran" [ "$(wc -l < "$t/killed")" = "$lines" ]
 }
 
+down_refuses_a_window_started_in_a_bench_folder() {
+  command -v lsof > /dev/null 2>&1 || { check "lsof is needed for this case" false; return 1; }
+  lines=$(wc -l < "$t/killed")
+  mkdir "$t/w3"
+  ln -s /bin/sleep "$t/w3/cornercase-gpui"
+  ( cd "$b/here/here-proj" && exec "$t/w3/cornercase-gpui" 30 ) > /dev/null 2>&1 &
+  wpid=$!
+  track "$wpid"
+  sleep 1
+  runb down "$b"
+  kill "$wpid" 2> /dev/null
+  check "exit $rc, not 2" [ "$rc" = 2 ] || return 1
+  check "its pid is not named" contains "$t/err" "$wpid" || return 1
+  check "kill-server ran" [ "$(wc -l < "$t/killed")" = "$lines" ]
+}
+
+down_takes_no_other_program_in_a_bench_folder_for_a_window() {
+  command -v lsof > /dev/null 2>&1 || { check "lsof is needed for this case" false; return 1; }
+  runb up "$t/b7" --here "$t/new/cornercase"
+  check "up: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  ( cd "$t/b7/here/here-proj" && exec sleep 30 ) > /dev/null 2>&1 &
+  spid=$!
+  track "$spid"
+  sleep 1
+  runb down "$t/b7"
+  kill "$spid" 2> /dev/null
+  check "exit $rc: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  check "the folder is still there" [ ! -e "$t/b7" ]
+}
+
+down_waits_until_nothing_of_the_bench_runs_for_three_seconds() {
+  runb up "$t/b8" --here "$t/new/cornercase"
+  check "up: $(cat "$t/err")" [ "$rc" = 0 ] || return 1
+  lingers "$t/b8"
+  printf '%s\n' "$t/b8/here/bin/lingers" > "$t/comes-back"
+  runb down "$t/b8"
+  rc1=$rc
+  rm -f "$t/comes-back" "$t/came-back"
+  sleep 1
+  lpid=$(cat "$t/b8/lingers.pid" 2> /dev/null)
+  [ -z "$lpid" ] || track "$lpid"
+  [ -z "$lpid" ] || kill "$lpid" 2> /dev/null
+  check "exit $rc1, not 1: a process that started after the stop was not waited for" [ "$rc1" = 1 ] || return 1
+  check "the folder was removed" [ -d "$t/b8" ] || return 1
+  sleep 1
+  runb down "$t/b8"
+  check "second down: exit $rc: $(cat "$t/err")" [ "$rc" = 0 ]
+}
+
 down_stops_here_then_there_and_removes_the_folder() {
   sleep 1
   : > "$t/killed"
@@ -1377,6 +1427,9 @@ run_test status_names_both_remembered_lists
 run_test status_and_down_refuse_a_folder_up_did_not_make
 run_test down_refuses_from_inside_the_bench
 run_test down_refuses_while_a_window_runs
+run_test down_refuses_a_window_started_in_a_bench_folder
+run_test down_takes_no_other_program_in_a_bench_folder_for_a_window
+run_test down_waits_until_nothing_of_the_bench_runs_for_three_seconds
 run_test down_stops_here_then_there_and_removes_the_folder
 run_test down_keeps_the_folder_while_bench_processes_remain
 run_test down_lists_a_forward_left_running
