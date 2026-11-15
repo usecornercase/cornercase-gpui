@@ -120,6 +120,19 @@ pub(super) fn scroll_to_show_with_margins(
     scroll_to_show(scroll, caret - above, caret + line_height + below, height)
 }
 
+pub(super) fn scroll_from_top(
+    scroll: Pixels,
+    caret: (Pixels, Pixels),
+    margins: (Pixels, Pixels),
+    height: Pixels,
+) -> Pixels {
+    if scroll_to_show_with_margins(px(0.), caret, margins, height) <= px(0.) {
+        px(0.)
+    } else {
+        scroll_to_show_with_margins(scroll, caret, margins, height)
+    }
+}
+
 pub(super) fn clamp_scroll(scroll: Pixels, content: Pixels, height: Pixels) -> Pixels {
     scroll.min(content - height).max(px(0.))
 }

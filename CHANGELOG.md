@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.112
+
+- **A focused field's outline is whole in every dialog.** In **Start an agent**, **Start a flow** and **Start work on an issue**, the outline of the field you type in was cut off at the dialog's left and right edges, and so was a ticked box's glow there and in the questions of the Worktrees sheet. They now show whole, as in **New workspace**.
+- **In a short window, Start work on an issue opens at the issue.** Its number and title and the **Start now** / **Schedule** switch show first at every window size, so you see which issue you are starting work on before you type. What you type still goes to **Model** (to **When** when scheduling), which then scrolls into view. Start a flow opens at its top too.
+- **In a short window, Tab to the last field of Start work on an issue shows the rest of the form.** When the agent starts in a tab, Tab to **Effort** (or **Model**, for an agent without Effort) now shows the **Where** line and the note under it, as Tab to **Workspace name** already showed its note.
+
 ## 0.1.111
 
 - **Write to your bots from the window.** With cornercase 0.13.77 or newer, a bot's chat has a field at its bottom: type and press Return to send, ⇧Return for a new line; a paste keeps its lines, and the field grows up to six lines. A message sent while the bot is answering waits, marked `Held`, and goes next. **Stop** on the answer's row ends it, **Retry** under a failed answer sends your message again, and **New conversation**, in the chat's header, asks first and then starts a fresh conversation that keeps the bot's memory. If a message cannot be sent, it goes back into the field with the reason. Each bot keeps what you were writing while the window is open, and an empty chat offers three examples to start from. Stop, Retry and New conversation need a mouse for now. Making, editing and removing a bot still happen in cornercase's own window or with `cornercase bot`.
