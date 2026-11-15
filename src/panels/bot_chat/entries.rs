@@ -9,7 +9,7 @@ pub(crate) const STEPS_SHOWN: usize = 3;
 pub(crate) enum Entry {
     You { id: u64, text: String, at: i64, held: bool },
     Answer { id: u64, text: String, at: i64 },
-    Steps { first: u64, texts: Vec<String> },
+    Steps { first: u64, last: u64, texts: Vec<String> },
     Failed { id: u64, text: String },
     Notice { id: u64, text: String },
     Other { id: u64, text: String },
@@ -51,8 +51,9 @@ pub(crate) fn entries(lines: &[Line]) -> Vec<Entry> {
     let held = held(lines);
     let mut out: Vec<Entry> = Vec::new();
     for line in lines {
-        if let (Kind::Step, Some(Entry::Steps { texts, .. })) = (&line.kind, out.last_mut()) {
+        if let (Kind::Step, Some(Entry::Steps { texts, last, .. })) = (&line.kind, out.last_mut()) {
             texts.push(line.text.clone());
+            *last = line.id;
             continue;
         }
         out.push(entry_of(line, held.contains(&line.id)));
@@ -65,7 +66,7 @@ fn entry_of(line: &Line, held: bool) -> Entry {
     match &line.kind {
         Kind::You => Entry::You { id, text, at, held },
         Kind::Bot => Entry::Answer { id, text, at },
-        Kind::Step => Entry::Steps { first: id, texts: vec![text] },
+        Kind::Step => Entry::Steps { first: id, last: id, texts: vec![text] },
         Kind::Error => Entry::Failed { id, text },
         Kind::Notice => Entry::Notice { id, text },
         Kind::Other(_) => Entry::Other { id, text },
@@ -117,7 +118,7 @@ pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>) -> Vec<EntryKey> {
             let (kind, last, held) = match entry {
                 Entry::You { id, held, .. } => (0, *id, *held),
                 Entry::Answer { id, .. } => (1, *id, false),
-                Entry::Steps { first, texts } => (2, *first + texts.len() as u64 - 1, false),
+                Entry::Steps { last, .. } => (2, *last, false),
                 Entry::Failed { id, .. } => (3, *id, false),
                 Entry::Notice { id, .. } => (4, *id, false),
                 Entry::Other { id, .. } => (5, *id, false),

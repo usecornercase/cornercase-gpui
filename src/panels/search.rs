@@ -13,13 +13,12 @@ use gpui::{
     px,
 };
 
-use crate::model::bots::Offer;
 use crate::panels::PanelKind;
 use crate::panels::queue::open_pane;
 use crate::store::{self, Store, args};
 use crate::theme::{self, colours, radius};
 use crate::ui::{self, Icon, OneLine, TextField, TextFieldEvent};
-use candidates::{bot_candidates, candidates};
+use candidates::all_candidates;
 use found::{Found, Hit, PaneHits, by_pane, row_of_match};
 use names::{Goto, Kind, Ranked, context_top, find, listing_status, rank, shown_bot_row, shown_row};
 use settings::{Asked, SettingRow};
@@ -235,10 +234,7 @@ impl SearchPanel {
     fn names(&self, cx: &App) -> (Vec<Ranked>, usize) {
         let store = Store::get(cx);
         let Some(session) = &store.read(cx).session else { return (Vec::new(), 0) };
-        let mut all = candidates(session);
-        if store.read(cx).bots_offer() == Offer::Rows {
-            all.extend(bot_candidates(&store.read(cx).bots.list));
-        }
+        let all = all_candidates(session, &store.read(cx).bots.list, &store.read(cx).bots_offer());
         let mut ranked = rank(all, &self.query(cx));
         let total = ranked.len();
         ranked.truncate(MAX_NAMES);

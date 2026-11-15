@@ -32,8 +32,10 @@ impl Store {
 
     fn heal_chat(&mut self, settled: &[String], cx: &mut Context<Self>) {
         let Some(chat) = self.bots.chat.as_ref().filter(|chat| settled.contains(&chat.bot)) else { return };
-        if chat.read == Read::Done {
-            self.read_chat(Some(chat.last().unwrap_or(0)), cx);
+        match chat.read {
+            Read::Done => self.read_chat(Some(chat.last().unwrap_or(0)), cx),
+            Read::Failed(_) => self.read_chat(None, cx),
+            Read::Asking => {}
         }
     }
 
@@ -47,6 +49,9 @@ impl Store {
             self.place(Moved::Bot(id.to_string()));
             let asked = self.bots.next_ask();
             self.bots.chat = Some(Chat::new(id, asked));
+            self.read_chat(None, cx);
+        }
+        if self.bots.chat.as_ref().is_some_and(|chat| matches!(chat.read, Read::Failed(_))) {
             self.read_chat(None, cx);
         }
         self.give_keys_back(cx);
@@ -73,6 +78,10 @@ impl Store {
             Some(bots::Added::Gap(last)) => self.read_chat(Some(last), cx),
             Some(bots::Added::No) | None => {}
         }
+        if self.bots.chat.as_ref().is_some_and(|chat| chat.bot == bot && matches!(chat.read, Read::Failed(_))) {
+            self.read_chat(None, cx);
+        }
+        self.mind_seen(cx);
     }
 
     fn bot_removed(&mut self, bot: &str, cx: &mut Context<Self>) {
@@ -105,7 +114,10 @@ impl Store {
         let Some(chat) = self.bots.chat.as_ref() else { return };
         let bot = chat.bot.clone();
         let key = format!("bot-history:{bot}");
-        if after.is_some() && self.busy(&key) {
+        if let (Some(from), true) = (after, self.busy(&key)) {
+            if let Some(chat) = self.bots.chat.as_mut() {
+                chat.defer(from);
+            }
             return;
         }
         let asked = if after.is_none() { self.bots.next_ask() } else { chat.asked };
@@ -135,6 +147,10 @@ impl Store {
                 chat.fail(reason.clone());
                 self.toast(format!("Could not read the chat of {name}: {reason}"), ToastKind::Error, cx);
             }
+        }
+        let pending = self.bots.chat.as_mut().and_then(Chat::take_pending);
+        if let Some(from) = pending {
+            self.read_chat(Some(from), cx);
         }
         self.mind_seen(cx);
         cx.notify();

@@ -226,3 +226,12 @@ fn a_run_of_steps_that_lost_its_oldest_step_is_measured_alone() {
     let splices = spliced(&old, &new);
     assert!(splices.iter().all(|(range, _)| range.len() <= 1), "{splices:?}");
 }
+
+#[test]
+fn a_step_run_keeps_its_real_last_id_so_a_capped_front_keeps_the_reader() {
+    let old = keys_of(&plain(&[(10, "step"), (12, "step"), (13, "bot")]));
+    let new = keys_of(&plain(&[(12, "step"), (13, "bot"), (14, "you")]));
+    let splices = spliced(&old, &new);
+    assert!(splices.iter().all(|(range, _)| range.len() <= 1), "{splices:?}");
+    assert!(!splices.contains(&(0..3, 0)));
+}

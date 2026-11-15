@@ -67,7 +67,7 @@ pub(crate) struct BotChat {
     news: bool,
     blocks: Blocks,
     counting: Counting,
-    mark: Option<(String, u64)>,
+    mark: Option<(String, u64, u64)>,
     heard: (Option<String>, u64),
 }
 
@@ -89,10 +89,11 @@ impl BotChat {
         .detach();
         let list = ListState::new(0, ListAlignment::Top, px(OVERDRAW));
         let chat = cx.entity().downgrade();
-        list.set_scroll_handler(move |event, _, cx| {
-            if event.visible_range.end >= event.count {
+        list.set_scroll_handler(move |_, _, cx| {
+            let chat = chat.clone();
+            cx.defer(move |cx| {
                 let _ = chat.update(cx, BotChat::reached_the_end);
-            }
+            });
         });
         Self {
             store,
@@ -124,7 +125,7 @@ impl BotChat {
     }
 
     fn reached_the_end(&mut self, cx: &mut Context<Self>) {
-        if std::mem::take(&mut self.news) {
+        if at_end(&self.list) && std::mem::take(&mut self.news) {
             cx.notify();
         }
     }
@@ -151,8 +152,9 @@ impl BotChat {
             self.bot = None;
             return;
         };
-        let fresh = self.bot.as_deref() != Some(chat.bot.as_str());
-        let stamp = (chat.bot.clone(), chat.revision());
+        let stamp = (chat.bot.clone(), chat.born, chat.revision());
+        let fresh = self.bot.as_deref() != Some(chat.bot.as_str())
+            || self.mark.as_ref().is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1));
         if !fresh && self.mark.as_ref() == Some(&stamp) {
             return;
         }
@@ -204,7 +206,25 @@ impl BotChat {
 
     fn body(&mut self, bot: &Bot, chat: &Chat, cx: &mut Context<Self>) -> AnyElement {
         match &chat.read {
-            Read::Failed(why) => ui::note(format!("Could not read the chat of {}: {why}", bot.name)).into_any_element(),
+            Read::Failed(why) if chat.lines.is_empty() => {
+                ui::note(format!("Could not read the chat of {}: {why}", bot.name)).into_any_element()
+            }
+            Read::Failed(why) => div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .flex_none()
+                        .px(px(16.))
+                        .py(px(4.))
+                        .text_size(px(11.5))
+                        .text_color(colours::failed())
+                        .child(format!("Could not read the chat of {}: {why}", bot.name)),
+                )
+                .child(self.lines(bot, cx))
+                .into_any_element(),
             Read::Asking if chat.lines.is_empty() => ui::loading("Reading the chat…").into_any_element(),
             _ if chat.lines.is_empty() && !bot.thinking() => empty_page(bot).into_any_element(),
             _ => self.lines(bot, cx),

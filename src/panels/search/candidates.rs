@@ -1,5 +1,5 @@
 use super::names::{Candidate, Goto, Kind};
-use crate::model::bots::Bot;
+use crate::model::bots::{Bot, Offer};
 use crate::model::{Group, PaneInfo, Project, Session, Tab, Workspace, status_rank};
 use crate::platform::paths::{self, Style};
 
@@ -154,4 +154,12 @@ pub(super) fn bot_candidates(bots: &[Bot]) -> Vec<Candidate> {
             status: bot.thinking().then(|| "working".to_string()),
         })
         .collect()
+}
+
+pub(super) fn all_candidates(session: &Session, bots: &[Bot], offer: &Offer) -> Vec<Candidate> {
+    let mut all = candidates(session);
+    if *offer == Offer::Rows {
+        all.extend(bot_candidates(bots));
+    }
+    all
 }

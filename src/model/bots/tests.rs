@@ -379,3 +379,41 @@ fn a_chat_is_shown_only_when_rows_are_offered_and_the_bot_is_listed() {
     assert!(!bots.can_show("prs", Some(lacking(73)), Os::Mac));
     assert!(!Bots::new().can_show("prs", None, Os::Mac));
 }
+
+#[test]
+fn a_line_with_a_field_of_the_wrong_type_is_left_out() {
+    for bad in [
+        json!({"id": 50, "kind": "bot", "text": 42}),
+        json!({"id": 50, "kind": 7, "text": "x"}),
+        json!({"id": 50, "kind": "bot", "at": "now"}),
+        json!({"id": 50, "kind": "you", "held": "yes"}),
+        json!({"id": 50, "text": "no kind"}),
+    ] {
+        assert_eq!(line_of(&bad), None, "{bad}");
+    }
+    let sparse = line_of(&json!({"id": 5, "kind": "step"})).expect("a line without text or time");
+    assert_eq!((sparse.text.as_str(), sparse.at, sparse.held), ("", 0, false));
+}
+
+#[test]
+fn a_catch_up_asked_while_one_runs_is_kept_from_its_earliest_cursor() {
+    let mut chat = read_chat(plain(&[(1, "you")]));
+    assert_eq!(chat.take_pending(), None);
+    chat.defer(9);
+    chat.defer(4);
+    chat.defer(7);
+    assert_eq!(chat.take_pending(), Some(4));
+    assert_eq!(chat.take_pending(), None);
+}
+
+#[test]
+fn a_chat_shown_again_is_a_new_generation_even_at_the_same_revision() {
+    let mut first = Chat::new("prs", 1);
+    first.take(plain(&[(1, "you")]));
+    let mut again = Chat::new("prs", 5);
+    again.take(plain(&[(1, "you")]));
+    assert_eq!(first.revision(), again.revision());
+    assert_ne!(first.born, again.born);
+    again.asked = 9;
+    assert_eq!(again.born, 5);
+}

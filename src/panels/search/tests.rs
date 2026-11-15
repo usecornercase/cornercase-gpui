@@ -1,11 +1,12 @@
 use std::ops::Range;
 
-use super::candidates::{bot_candidates, candidates};
+use super::candidates::{all_candidates, bot_candidates, candidates};
 use super::found::{Found, Hit, ago_from, by_pane, parse_time, row_of_match};
 use super::names::{
     Candidate, Goto, Kind, Ranked, context_top, find, key_rank, listing_status, no_project, rank, shown_bot_row,
     shown_row,
 };
+use crate::model::bots::Offer;
 use crate::model::{Session, Shown};
 use crate::platform::Os;
 
@@ -349,5 +350,11 @@ fn search_opens_on_the_row_of_the_shown_bot() {
 
 #[test]
 fn no_bot_is_listed_when_nothing_is_offered() {
-    assert!(found("prs").iter().all(|r| r.candidate.kind != Kind::Bot));
+    let lacks = Offer::Lacks("needs a newer cornercase".into());
+    for offer in [Offer::Hidden, lacks] {
+        let all = rank(all_candidates(&session(), &bots(), &offer), "prs");
+        assert!(all.iter().all(|r| r.candidate.kind != Kind::Bot), "{offer:?}");
+    }
+    let rows = rank(all_candidates(&session(), &bots(), &Offer::Rows), "prs");
+    assert!(rows.iter().any(|r| r.candidate.kind == Kind::Bot));
 }

@@ -102,16 +102,20 @@ pub(crate) struct Line {
     pub held: bool,
 }
 
+fn present<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
+    value.get(key).filter(|found| !found.is_null())
+}
+
 pub(crate) fn line_of(value: &Value) -> Option<Line> {
     let id = value.get("id")?.as_u64()?;
-    let text = |key: &str| value.get(key).and_then(Value::as_str).unwrap_or_default().to_string();
-    Some(Line {
-        id,
-        at: value.get("at").and_then(Value::as_i64).unwrap_or_default(),
-        kind: Kind::from(text("kind").as_str()),
-        text: text("text"),
-        held: value.get("held").and_then(Value::as_bool).unwrap_or_default(),
-    })
+    let kind = value.get("kind")?.as_str()?;
+    let text = match present(value, "text") {
+        None => String::new(),
+        Some(text) => text.as_str()?.to_string(),
+    };
+    let at = present(value, "at").map_or(Some(0), Value::as_i64)?;
+    let held = present(value, "held").map_or(Some(false), Value::as_bool)?;
+    Some(Line { id, at, kind: Kind::from(kind), text, held })
 }
 
 pub(crate) fn history_of(text: &str) -> anyhow::Result<Vec<Line>> {
@@ -168,6 +172,8 @@ pub(crate) struct Chat {
     pub lines: Vec<Line>,
     pub read: Read,
     pub asked: u64,
+    pub born: u64,
+    pending: Option<u64>,
     revision: u64,
 }
 
@@ -180,11 +186,27 @@ pub(crate) enum Added {
 
 impl Chat {
     pub(crate) fn new(bot: &str, asked: u64) -> Self {
-        Self { bot: bot.to_string(), lines: Vec::new(), read: Read::Asking, asked, revision: 0 }
+        Self {
+            bot: bot.to_string(),
+            lines: Vec::new(),
+            read: Read::Asking,
+            asked,
+            born: asked,
+            pending: None,
+            revision: 0,
+        }
     }
 
     pub(crate) fn revision(&self) -> u64 {
         self.revision
+    }
+
+    pub(crate) fn defer(&mut self, after: u64) {
+        self.pending = Some(self.pending.map_or(after, |earlier| earlier.min(after)));
+    }
+
+    pub(crate) fn take_pending(&mut self) -> Option<u64> {
+        self.pending.take()
     }
 
     pub(crate) fn awaits(&self, bot: &str, asked: u64) -> bool {

@@ -38,7 +38,7 @@ pub(super) fn entry_row(entry: &Entry, meta: &Meta) -> AnyElement {
     match entry {
         Entry::You { text, at, held, .. } => you(text, *at, *held, meta),
         Entry::Answer { id, text, at } => answer(*id, text, *at, meta),
-        Entry::Steps { first, texts } => steps(*first, texts, meta),
+        Entry::Steps { first, texts, .. } => steps(*first, texts, meta),
         Entry::Failed { text, .. } => failed(text),
         Entry::Notice { text, .. } => notice(text),
         Entry::Other { text, .. } => plain(text),
