@@ -6,10 +6,11 @@ How to check a change in the running window on macOS, the way that worked (#113)
 
 ## A server of its own
 
-- **The folder and the environment.** One short folder per change, named after the issue (`/tmp/cc314`), and a folder of each role inside it when several roles of a team run a window at once (`/tmp/cc314/coder`), so that no two share a socket. **Everything the check writes goes inside it**: logs, scripts, captures, a "before" build. A file beside it (`/tmp/cc314-build.log`) outlives the removal below, and ten of them were left under `/tmp` by runs that had ended (#287). These commands say `/tmp/cc-check` for yours. Every later command starts with `. /tmp/cc-check/env`, because an agent's shell keeps no variable from one command to the next. Put the path of the `cornercase` to run on the `CORNERCASE_BIN` line (the next bullet says how to get another release than the installed one). `config.json` is written before anything starts (why, below).
+- **The folder and the environment.** One short folder per change, named after the issue (`/tmp/cc314`), and a folder of each role inside it when several roles of a team run a window at once (`/tmp/cc314/coder`), so that no two share a socket. **Everything the check writes goes inside it**: logs, scripts, captures, a "before" build. A file beside it (`/tmp/cc314-build.log`) outlives the removal below, and ten of them were left under `/tmp` by runs that had ended (#287). These commands say `/tmp/cc-check` for yours. Every later command starts with `. /tmp/cc-check/env`, because an agent's shell keeps no variable from one command to the next. Put the path of the `cornercase` to run on the `CORNERCASE_BIN` line (the next bullet says how to get another release than the installed one). `config.json` is written before anything starts (why, below). **`mkdir -m 700` without `-p`** makes the folder private and fails when the path already exists, as a folder, a link or another check's, so nothing is written before the check knows the folder is its own: another user of the Mac could otherwise have put a link there for `config.json`'s redirection to follow, and an old server's files would be reused. The braces keep every later line from running after that failure. With roles, the first makes the change's folder the same way (`mkdir -m 700 /tmp/cc314`) and the others use it, and each role's folder is made with the block.
 
   ```sh
-  mkdir -p /tmp/cc-check/proj && git -C /tmp/cc-check/proj init -q
+  mkdir -m 700 /tmp/cc-check && {
+  mkdir /tmp/cc-check/proj && git -C /tmp/cc-check/proj init -q
   cat > /tmp/cc-check/env <<'EOF'
   export CORNERCASE_SOCKET=/tmp/cc-check/server.sock
   export CORNERCASE_GPUI_SETTINGS=/tmp/cc-check/settings.json
@@ -36,6 +37,7 @@ How to check a change in the running window on macOS, the way that worked (#113)
   EOF
   chmod 600 /tmp/cc-check/config.json
   env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -E 'TOKEN|API_KEY|_KEY$|SECRET' | sed 's/^/unset /' >> /tmp/cc-check/env
+  }
   ```
 
 
