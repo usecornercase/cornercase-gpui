@@ -888,6 +888,10 @@ enum SelfTest {
 
     static let plusTwice = madeLayout("test.Plus", [30: [0: "+"], 24: [0: "=", 2: "+"]])
 
+    static let turkish = madeLayout("test.Turkish-Q", [34: [0: "ı", 2: "I"], 39: [0: "i", 2: "İ"]])
+
+    static let combining = madeLayout("test.Combining", [44: [0: "x", 2: "/", 1: "a\u{301}", 3: "a\u{301}"]])
+
     static let noData = Layout(name: "test.Input-Method", types: nil)
     static let nothing = Layout(name: nil, types: nil)
 
@@ -1053,6 +1057,31 @@ enum SelfTest {
                 return expect(Set(listed).count, listed.count) ?? expect(Set(listed), Set(namedKeys.keys).union(characterNames.keys))
             }),
             ("the_usage_line_holds_every_key", { expect(usage.contains(keyGrammar) && usage.contains("hold: KEY [MS]"), true) }),
+            ("a_named_key_carries_the_modifiers_asked", {
+                let asked = [("tab", ["shift"]), ("left", ["cmd"]), ("return", ["cmd"]), ("escape", ["ctrl"]), ("pagedown", ["cmd", "shift", "alt", "ctrl"])]
+                return expect(asked.map { posted($0.0, $0.1, us) }, ["48 S", "123 C", "36 C", "53 K", "121 SCAK"])
+                    ?? expect(posted("tab", ["shift"], nothing), "48 S")
+            }),
+            ("the_keys_a_person_reads_name_every_key_in_order", {
+                expect(keyGrammar, "a…z 0…9 comma slash question minus equal plus leftbracket rightbracket return escape tab space delete left right up down pageup pagedown home end us-quote")
+            }),
+            ("shift_adds_nothing_to_a_ctrl_shortcut_and_says_ctrl", {
+                expect([refused("slash", ["ctrl", "shift"], spanish), refused("question", ["ctrl", "shift"], us)], [
+                    "2: shift adds nothing to slash on test.Spanish-ISO: the window reads it as ctrl-/ with or without it: post slash ctrl, nothing was posted",
+                    "2: shift adds nothing to question on test.US: the window reads it as ctrl-? with or without it: post question ctrl, nothing was posted",
+                ])
+            }),
+            ("a_character_needing_alt_is_refused_with_ctrl_and_says_ctrl", {
+                expect(refused("leftbracket", ["ctrl"], spanish),
+                    "1: leftbracket is typed only with alt on test.Spanish-ISO, and with cmd or ctrl held the window reads that key without alt, as ctrl-`: this shortcut cannot reach the window on this layout, nothing was posted")
+            }),
+            ("with_ctrl_the_plain_table_decides", { expect(posted("k", ["ctrl"], dvorakCommand), "9 K") }),
+            ("a_typed_capital_is_the_key_that_types_it", { expect(posted("i", ["shift"], turkish), "34 S") }),
+            ("a_letter_and_a_mark_under_cmd_read_as_their_capital_with_shift", {
+                guard let types = combining.types else { return "no data" }
+                return expect(windowKey(types, code: 44, command: true, shift: true), Reading(key: "A\u{301}", shift: false, dead: false))
+                    ?? expect(refused("slash", ["cmd"], combining), "1: no key of test.Combining makes the window read slash with these modifiers: nothing was posted")
+            }),
             ("the_layout_in_use_gives_a_key_or_says_why", {
                 let got = posted("slash", ["cmd"], layoutInUse())
                 return expect(got.hasPrefix("1: ") || !got.contains(":"), true)
