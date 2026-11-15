@@ -20,6 +20,41 @@ pub(super) fn older(held: Option<Seen<'_>>, answer: Seen<'_>) -> bool {
     held.is_some_and(|held| answer.boot == held.boot && answer.revision < held.revision)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Asked {
+    pub boot: String,
+    pub revision: u64,
+    pub view: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Failure {
+    pub asked: Asked,
+    pub why: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Sheet<'a> {
+    pub open: bool,
+    pub reading: bool,
+    pub held: Option<Seen<'a>>,
+    pub failed: Option<&'a Asked>,
+}
+
+fn moved(asked: &Asked, session: Seen<'_>, view: Option<u64>) -> bool {
+    session.boot != asked.boot || session.revision > asked.revision || view.is_some_and(|view| asked.view != Some(view))
+}
+
+pub(super) fn reads_again(sheet: Sheet<'_>, session: Seen<'_>, view: Option<u64>) -> bool {
+    if !sheet.open || sheet.reading {
+        return false;
+    }
+    match sheet.failed {
+        None => behind(sheet.held, session),
+        Some(asked) => moved(asked, session, view) && sheet.held.is_none_or(|held| behind(Some(held), session)),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) enum Answer<'a> {
     Held(&'a Described),

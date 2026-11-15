@@ -158,7 +158,9 @@ impl SettingsPanel {
                 false
             }
         };
-        self.read_again_if_behind(ok, cx);
+        if ok {
+            self.read_again_if_behind(cx);
+        }
         cx.notify();
     }
 

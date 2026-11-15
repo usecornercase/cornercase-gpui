@@ -46,6 +46,11 @@ fn seen_of(store: &Store) -> data::Seen<'_> {
         .map_or(data::Seen { boot: "", revision: 0 }, |s| data::Seen { boot: &s.boot, revision: s.config.revision })
 }
 
+fn asked_of(store: &Store) -> data::Asked {
+    let seen = seen_of(store);
+    data::Asked { boot: seen.boot.to_string(), revision: seen.revision, view: store.view_id }
+}
+
 struct NavGrip;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -62,7 +67,7 @@ struct OpenChoice {
 
 pub(crate) struct SettingsPanel {
     described: Option<Described>,
-    load_error: Option<String>,
+    failed: Option<data::Failure>,
     loading: bool,
     boot: String,
     page: String,
@@ -96,7 +101,7 @@ impl SettingsPanel {
         window.focus(&search.read(cx).focus_handle(cx));
         let mut this = Self {
             described: None,
-            load_error: None,
+            failed: None,
             loading: false,
             boot: String::new(),
             page: "Worktrees".into(),
@@ -161,7 +166,6 @@ impl SettingsPanel {
     fn store_changed(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {
         let s = store.read(cx);
         let open = s.sheet == Some(PanelKind::Settings);
-        let newer = data::behind(Some(self.held()), seen_of(s));
         if open && !self.was_open {
             self.opened(window, cx);
         }
@@ -169,8 +173,10 @@ impl SettingsPanel {
             self.take_landing(cx);
         }
         self.open_asked_project(store, cx);
-        if open && (!self.was_open || newer) {
+        if open && !self.was_open {
             self.load(cx);
+        } else {
+            self.read_again_if_behind(cx);
         }
         if !open {
             self.choice = None;
@@ -193,46 +199,49 @@ impl SettingsPanel {
         }
         self.loading = true;
         cx.notify();
-        let asked = seen_of(Store::get(cx).read(cx)).boot.to_string();
-        store::run(cx, args(&["config", "--json"]), move |this, result, cx| this.read_ended(&asked, result, cx));
+        let asked = asked_of(Store::get(cx).read(cx));
+        store::run(cx, args(&["config", "--json"]), move |this, result, cx| this.read_ended(asked, result, cx));
     }
 
-    fn read_ended(&mut self, asked: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn read_ended(&mut self, asked: data::Asked, result: anyhow::Result<String>, cx: &mut Context<Self>) {
         self.loading = false;
         let answered = match result.and_then(|out| data::parse(&out)) {
             Ok(described) => {
-                self.load_error = None;
-                self.take(asked, described, cx);
+                self.take(&asked.boot, described, cx);
                 true
             }
             Err(e) => {
-                self.load_error = Some(cli::reason(&e));
+                self.failed = Some(data::Failure { asked, why: cli::reason(&e) });
                 false
             }
         };
-        let revision = self.held().revision;
+        let revision = self.held_answer().map_or(0, |held| held.revision);
         if let Some(landed) = self.landed.as_mut().filter(|_| answered) {
             landed.take_answer(revision);
         }
-        self.read_again_if_behind(answered, cx);
+        self.read_again_if_behind(cx);
         cx.notify();
     }
 
-    fn read_again_if_behind(&mut self, answered: bool, cx: &mut Context<Self>) {
+    fn read_again_if_behind(&mut self, cx: &mut Context<Self>) {
         let store = Store::get(cx).read(cx);
-        let again =
-            store.sheet == Some(PanelKind::Settings) && data::behind(answered.then(|| self.held()), seen_of(store));
-        if again {
+        let sheet = data::Sheet {
+            open: store.sheet == Some(PanelKind::Settings),
+            reading: self.loading,
+            held: self.held_answer(),
+            failed: self.failed.as_ref().map(|failure| &failure.asked),
+        };
+        if data::reads_again(sheet, seen_of(store), store.view_id) {
             self.load(cx);
         }
     }
 
     fn older(&self, asked: &str, revision: u64) -> bool {
-        let held = self.described.as_ref().map(|_| self.held());
-        data::older(held, data::Seen { boot: asked, revision })
+        data::older(self.held_answer(), data::Seen { boot: asked, revision })
     }
 
     fn take(&mut self, asked: &str, described: Described, cx: &mut Context<Self>) {
+        self.failed = None;
         if self.older(asked, described.revision) {
             return;
         }
@@ -241,9 +250,9 @@ impl SettingsPanel {
     }
 
     fn answer(&self) -> data::Answer<'_> {
-        match (&self.described, &self.load_error) {
+        match (&self.described, &self.failed) {
             (Some(described), _) => data::Answer::Held(described),
-            (None, Some(why)) => data::Answer::Failed(why),
+            (None, Some(failure)) => data::Answer::Failed(&failure.why),
             (None, None) => data::Answer::Reading,
         }
     }
@@ -252,8 +261,8 @@ impl SettingsPanel {
         data::shown(&self.page, !self.query(cx).is_empty(), self.answer())
     }
 
-    fn held(&self) -> data::Seen<'_> {
-        data::Seen { boot: &self.boot, revision: self.described.as_ref().map_or(0, |d| d.revision) }
+    fn held_answer(&self) -> Option<data::Seen<'_>> {
+        self.described.as_ref().map(|d| data::Seen { boot: &self.boot, revision: d.revision })
     }
 
     fn apply(&mut self, mut described: Described, cx: &mut Context<Self>) {
