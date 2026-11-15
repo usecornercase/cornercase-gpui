@@ -1,4 +1,5 @@
 use super::names::{Candidate, Goto, Kind};
+use crate::model::bots::{Bot, Offer};
 use crate::model::{Group, PaneInfo, Project, Session, Tab, Workspace, status_rank};
 use crate::platform::paths::{self, Style};
 
@@ -134,4 +135,31 @@ fn agent_candidate(pane: &PaneInfo, tab: &Tab, around: Vec<String>, place: &str)
         place,
         status: pane.status.clone(),
     }
+}
+
+pub(super) fn bot_candidates(bots: &[Bot]) -> Vec<Candidate> {
+    bots.iter()
+        .map(|bot| Candidate {
+            kind: Kind::Bot,
+            goto: Goto::Bot(bot.id.clone()),
+            name: bot.name.clone(),
+            detail: bot.detail(),
+            place: String::new(),
+            keys: distinct(
+                [bot.name.clone(), bot.id.clone(), bot.agent.clone()]
+                    .into_iter()
+                    .chain(bot.model.clone())
+                    .filter(|key| !key.is_empty()),
+            ),
+            status: bot.thinking().then(|| "working".to_string()),
+        })
+        .collect()
+}
+
+pub(super) fn all_candidates(session: &Session, bots: &[Bot], offer: &Offer) -> Vec<Candidate> {
+    let mut all = candidates(session);
+    if *offer == Offer::Rows {
+        all.extend(bot_candidates(bots));
+    }
+    all
 }

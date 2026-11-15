@@ -1,3 +1,4 @@
+mod bot_place;
 mod connection;
 mod dock;
 mod focus;
@@ -279,10 +280,7 @@ impl Root {
         }
         self.take_asks(store, window, cx);
         let to_terminal = store.update(cx, |s, _| std::mem::take(&mut s.keys_to_terminal));
-        let place = store.read(cx).machine_place.clone();
-        if place != self.side.machine_place {
-            self.machine_place_changed(place, window, cx);
-        }
+        self.follow_place(store, window, cx);
         self.follow_link(cx);
         let now = {
             let s = store.read(cx);
@@ -388,7 +386,7 @@ impl Root {
     pub(crate) fn activation_changed(&mut self, active: bool) {
         self.window_active = active;
         self.tell_machine_visible();
-        let visible = active && self.machine.is_none();
+        let visible = active && self.machine.is_none() && self.side.bot.is_none();
         if visible == self.visible {
             return;
         }
@@ -482,7 +480,7 @@ impl Root {
             Msg::Copied(Board::Primary, text) => desktop::write_primary(&text, cx),
             Msg::Elsewhere(path) => self.store.update(cx, |s, cx| s.copy_elsewhere(path, cx)),
             Msg::Folded(fold, collapsed, error) => self.fold_answered(fold, collapsed, error.as_deref(), cx),
-            Msg::ViewMoved => self.store.update(cx, Store::leave_machine_place),
+            Msg::ViewMoved => self.store.update(cx, Store::show_local),
         }
         cx.notify();
     }
@@ -920,7 +918,7 @@ impl Render for Root {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.update_title(window);
         self.mind_the_parts(window, cx);
-        self.keep_beating(window);
+        self.keep_beating(window, cx);
         self.mind_the_focus(window, cx);
         let window_frame = frame::Frame::read(window, Os::CURRENT);
         let (sheet, dialog) = {

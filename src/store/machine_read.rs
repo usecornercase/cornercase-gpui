@@ -361,7 +361,7 @@ impl Store {
     }
 
     pub(crate) fn machine_read(&self) -> Option<MachineRead> {
-        let place = self.machine_place.as_ref()?;
+        let place = self.machine_place()?;
         let seen = self.session.as_ref()?.machine(&place.machine)?;
         let destination = self.listing().find(&seen.name).map_or_else(String::new, |m| m.destination.clone());
         let home = self.machine_home(&place.machine, &place.boot);
@@ -493,7 +493,7 @@ impl Store {
     }
 
     fn picked_machine(&self) -> Option<String> {
-        self.machine_place.as_ref().map(|place| place.machine.clone())
+        self.machine_place().map(|place| place.machine.clone())
     }
 
     pub(super) fn recheck_picked(&mut self, cx: &mut Context<Self>) {

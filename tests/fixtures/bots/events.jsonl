@@ -1,0 +1,3 @@
+{"bot":"ops","event":"bot","line":{"at":1794702257,"id":16,"kind":"step","text":"cornercase step 1","tool":"Bash"},"time":"2026-11-15T00:24:17.870Z"}
+{"bot":"ops","event":"bot","state":"thinking","time":"2026-11-15T00:24:17.867Z"}
+{"bot":"tmp","change":"removed","event":"bot","time":"2026-11-15T00:24:38.330Z"}

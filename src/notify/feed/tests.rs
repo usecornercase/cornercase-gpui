@@ -245,3 +245,10 @@ fn a_message_without_failed_reads_as_not_failed() {
         assert!(!m.failed, "{name}");
     }
 }
+
+#[test]
+fn a_bot_event_is_read_as_a_bot_event() {
+    let line = crate::test_util::fixture!("bots/events.jsonl").lines().next().expect("a line");
+    let Some(Event::Bot(event)) = parse_event(line) else { panic!("not a bot event") };
+    assert_eq!(event.bot, "ops");
+}

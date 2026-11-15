@@ -10,6 +10,7 @@ pub(crate) struct TabsKey {
     renaming: Option<Renaming>,
     place: Option<MachinePlace>,
     machine: bool,
+    bot: bool,
     aside: bool,
 }
 
@@ -20,6 +21,7 @@ pub(crate) struct TabsInputs<'a> {
     pub(crate) renaming: Option<&'a Renaming>,
     pub(crate) place: Option<&'a MachinePlace>,
     pub(crate) machine: bool,
+    pub(crate) bot: bool,
     pub(crate) aside: bool,
 }
 
@@ -32,6 +34,7 @@ impl TabsKey {
             renaming: inputs.renaming.cloned(),
             place: inputs.place.cloned(),
             machine: inputs.machine,
+            bot: inputs.bot,
             aside: inputs.aside,
         }
     }
@@ -46,6 +49,7 @@ impl Root {
             renaming: self.side.rename.as_ref().map(|rename| &rename.what),
             place: self.side.machine_place.as_ref(),
             machine: self.machine.is_some(),
+            bot: self.side.bot.is_some(),
             aside: self.side.aside,
         })
     }

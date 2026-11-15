@@ -35,7 +35,7 @@ impl Store {
     }
 
     pub(crate) fn shown_owner(&self) -> Owner {
-        let Some(place) = &self.machine_place else { return self.local_owner() };
+        let Some(place) = self.machine_place() else { return self.local_owner() };
         let listed = self.machines.iter().find(|machine| machine.name == place.machine);
         let destination = listed.map_or("", |machine| machine.destination.as_str());
         Owner::There(WorkspaceThere::of(place, destination))

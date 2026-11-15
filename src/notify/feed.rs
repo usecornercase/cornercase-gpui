@@ -26,6 +26,7 @@ pub(crate) enum Event {
         pane: Option<u64>,
     },
     Message(Message),
+    Bot(crate::model::bots::BotEvent),
     #[serde(other)]
     Other,
 }

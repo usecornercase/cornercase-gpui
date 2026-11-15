@@ -10,8 +10,9 @@ use crate::cli::{self, Feature, Has, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, ListMoves, Selection, Switch, switching_key};
+use crate::model::bots::Bots;
 use crate::model::machines::{self, Machine};
-use crate::model::{MachinePlace, Owner, Session};
+use crate::model::{Owner, Session};
 use crate::notify::Posted;
 use crate::notify::update::Updating;
 use crate::panels::PanelKind;
@@ -20,10 +21,12 @@ use crate::panels::plugins::Offers;
 use crate::panels::settings::FoundSetting;
 use crate::prefs::{self, Prefs};
 
+mod bots;
 mod browse;
 mod jobs;
 mod machine_read;
 mod machines_there;
+mod place;
 mod run_on;
 mod toasts;
 mod tunnels;
@@ -62,7 +65,8 @@ pub(crate) struct Store {
     pub queue: Queue,
     pub app: Option<Value>,
     pub machines: Vec<Machine>,
-    pub machine_place: Option<MachinePlace>,
+    pub bots: Bots,
+    places: place::Places,
     placing: run_on::Placing,
     tunnels: tunnels::Tunnels,
     there: ThereState,
@@ -90,7 +94,6 @@ pub(crate) struct Store {
     pub selection: Selection,
     pub account_settings: AccountSettings,
     pub accounts_changes: u64,
-    accounts_asked: u64,
     list_moves: ListMoves,
     next_toast: u64,
     app_stream: Option<Stream>,
@@ -125,7 +128,8 @@ impl Store {
             queue,
             app: None,
             machines: Vec::new(),
-            machine_place: None,
+            bots: Bots::new(),
+            places: place::Places::default(),
             placing: run_on::Placing::default(),
             tunnels: tunnels::Tunnels::default(),
             there: ThereState::default(),
@@ -153,7 +157,6 @@ impl Store {
             selection: Selection::default(),
             account_settings: AccountSettings::default(),
             accounts_changes: 0,
-            accounts_asked: 0,
             list_moves: ListMoves::default(),
             next_toast: 1,
             app_stream: None,
@@ -172,7 +175,7 @@ impl Store {
     }
 
     pub(crate) fn follow_app(&mut self, cx: &mut Context<Self>) {
-        self.list_moves = ListMoves::default();
+        self.list_moves.restart();
         self.app_stream = follow(cx, args(&["status", "--app", "--follow"]), |this, line, cx| {
             if let Ok(value) = serde_json::from_str::<Value>(&line) {
                 this.take_app(value, cx);
@@ -186,6 +189,7 @@ impl Store {
         if self.list_moves.app_line(&value) {
             self.list_accounts(cx);
         }
+        self.take_bots(&value, cx);
         self.app = Some(value);
         self.follow_machine_tunnels(cx);
         self.ask_picked_home(cx);
@@ -200,10 +204,9 @@ impl Store {
     }
 
     fn list_accounts(&mut self, cx: &mut Context<Self>) {
-        self.accounts_asked += 1;
-        let asked = self.accounts_asked;
+        let asked = self.list_moves.next_ask();
         run(cx, args(&["account", "list", "--json"]), move |this, result, cx| {
-            if asked == this.accounts_asked {
+            if this.list_moves.is_latest(asked) {
                 this.accounts_listed(result, cx);
             }
         });
@@ -400,7 +403,7 @@ impl Store {
 
     pub(crate) fn run_aside(&mut self, busy: Busy, args: Vec<String>, cx: &mut Context<Self>) {
         if cli::moves_view(&args) {
-            self.leave_machine_place(cx);
+            self.show_local(cx);
         }
         let id = self.start_job(busy, cx);
         run_job(cx, id, args, |this, result, cx| {
@@ -541,7 +544,7 @@ impl Store {
     }
 
     pub(crate) fn read_run_file(&mut self, path: String, cx: &mut Context<Self>) {
-        self.leave_machine_place(cx);
+        self.show_local(cx);
         self.run_file = Some(path);
         self.open(PanelKind::Files, cx);
     }
@@ -645,7 +648,7 @@ pub(crate) fn run_busy<T: 'static>(
 fn start_view_job<T: 'static>(cx: &mut Context<T>, busy: Busy, args: &[String]) -> u64 {
     Store::get(cx).update(cx, |s, cx| {
         if cli::moves_view(args) {
-            s.leave_machine_place(cx);
+            s.show_local(cx);
         }
         s.start_job(busy, cx)
     })

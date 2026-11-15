@@ -18,9 +18,9 @@ use crate::panels::queue::open_pane;
 use crate::store::{self, Store, args};
 use crate::theme::{self, colours, radius};
 use crate::ui::{self, Icon, OneLine, TextField, TextFieldEvent};
-use candidates::candidates;
+use candidates::all_candidates;
 use found::{Found, Hit, PaneHits, by_pane, row_of_match};
-use names::{Goto, Kind, Ranked, context_top, find, listing_status, rank, shown_row};
+use names::{Goto, Kind, Ranked, context_top, find, listing_status, rank, shown_bot_row, shown_row};
 use settings::{Asked, SettingRow};
 
 const MAX_NAMES: usize = 200;
@@ -135,7 +135,8 @@ impl SearchPanel {
         }
         let shown = Store::get(cx).read(cx).session.as_ref().map(crate::model::Session::shown).unwrap_or_default();
         let (names, _) = self.names(cx);
-        let selected = shown_row(&names, shown).unwrap_or(0);
+        let bot = Store::get(cx).read(cx).shown_bot().and_then(|id| shown_bot_row(&names, id));
+        let selected = bot.or_else(|| shown_row(&names, shown)).unwrap_or(0);
         (selected, context_top(&names, selected))
     }
 
@@ -214,7 +215,7 @@ impl SearchPanel {
         let (names, _) = self.names(cx);
         let selected = self.selected.min((names.len() + self.settings.hits().len()).saturating_sub(1));
         match names.get(selected) {
-            Some(hit) => go(hit.candidate.goto, cx),
+            Some(hit) => go(&hit.candidate.goto, cx),
             None => self.submit_setting(selected - names.len(), cx),
         }
     }
@@ -233,7 +234,8 @@ impl SearchPanel {
     fn names(&self, cx: &App) -> (Vec<Ranked>, usize) {
         let store = Store::get(cx);
         let Some(session) = &store.read(cx).session else { return (Vec::new(), 0) };
-        let mut ranked = rank(candidates(session), &self.query(cx));
+        let all = all_candidates(session, &store.read(cx).bots.list, &store.read(cx).bots_offer());
+        let mut ranked = rank(all, &self.query(cx));
         let total = ranked.len();
         ranked.truncate(MAX_NAMES);
         (ranked, total)
@@ -434,7 +436,7 @@ fn footer() -> impl IntoElement {
 
 fn name_row(i: usize, selected: bool, hit: Ranked, cx: &mut Context<SearchPanel>) -> AnyElement {
     let Ranked { candidate: c, marks } = hit;
-    let goto = c.goto;
+    let goto = c.goto.clone();
     let side = |colour: Rgba| div().text_size(px(12.)).text_color(colour);
     ui::row(SharedString::from(format!("name-{i}")), selected)
         .child(kind_chip(c.kind))
@@ -448,7 +450,7 @@ fn name_row(i: usize, selected: bool, hit: Ranked, cx: &mut Context<SearchPanel>
         .child(side(colours::muted()).flex_1().min_w(px(0.)).child(highlighted(c.detail, marks.detail)))
         .child(side(colours::faint()).flex_none().max_w(gpui::relative(0.4)).child(highlighted(c.place, marks.place)))
         .child(ui::badge(c.status.as_deref()))
-        .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| go(goto, cx)))
+        .on_click(cx.listener(move |_, _: &ClickEvent, _, cx| go(&goto, cx)))
         .into_any_element()
 }
 
@@ -530,8 +532,11 @@ fn reveal(command: Vec<String>, cx: &mut App) {
     });
 }
 
-fn go(goto: Goto, cx: &mut App) {
+fn go(goto: &Goto, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| {
+        if let Goto::Bot(id) = goto {
+            s.show_bot(id, cx);
+        }
         if let Goto::Group { id, .. } = goto {
             s.cmd(args(&["expand", "--group", &id.to_string()]));
         }
@@ -557,6 +562,7 @@ fn kind_look(kind: Kind) -> (&'static str, Icon, Hsla) {
         Kind::Workspace => ("workspace", Icon::Branch, colours::done().into()),
         Kind::Agent => ("agent", Icon::Agent, theme::hsla(theme::palette(5))),
         Kind::Tab => ("tab", Icon::Terminal, colours::muted().into()),
+        Kind::Bot => ("bot", Icon::Message, theme::hsla(theme::palette(6))),
     }
 }
 

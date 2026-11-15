@@ -144,7 +144,7 @@ impl Store {
         let command = self.with_view(command);
         run_job(cx, id, command, move |this: &mut Self, result, cx| match result {
             Ok(_) => {
-                this.leave_machine_place(cx);
+                this.show_local(cx);
                 this.close_started(dialog, true, cx);
                 this.toast(done, ToastKind::Done, cx);
             }

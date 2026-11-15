@@ -259,7 +259,7 @@ impl Root {
             return strip.children(self.machine_tabs(cx));
         }
         let Some((_, ws)) = self.shown_workspace() else { return strip };
-        let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab);
+        let shown_tab = self.session.as_ref().and_then(|s| s.shown().tab).filter(|_| self.side.bot.is_none());
         let index = ws.tabs.iter().position(|t| Some(t.id) == shown_tab);
         self.side.strip.show(Some(ws.id), shown_tab, index);
         let siblings: Rc<Vec<u64>> = Rc::new(ws.tabs.iter().map(|t| t.id).collect());

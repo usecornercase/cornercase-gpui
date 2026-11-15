@@ -1,7 +1,7 @@
 use gpui::{Keystroke, Modifiers};
 
 use super::{
-    Command, Focus, Group, SHORTCUTS, chord, find, in_group, keys_label, keys_of, labelled, left_to_system,
+    Command, Focus, Group, InChat, SHORTCUTS, chord, find, in_group, keys_label, keys_of, labelled, left_to_system,
     opens_with_system, other_keys, shortcut, system_keys, tab_index, typed_with_alt_gr,
 };
 use crate::panels::PanelKind;
@@ -534,4 +534,74 @@ fn the_keys_list_says_how_a_prompt_is_sent() {
         let sent = crate::ui::text_field::send_key(os).1;
         assert!(other_keys(os).iter().any(|(keys, _)| *keys == sent), "{os:?} lists no {sent}");
     }
+}
+
+fn chat_table() -> Vec<(Command, InChat)> {
+    vec![
+        (Command::Panel(PanelKind::Changes), InChat::Acts),
+        (Command::FindFile, InChat::Acts),
+        (Command::FindInFile, InChat::Acts),
+        (Command::Copy, InChat::Acts),
+        (Command::Paste, InChat::Rests),
+        (Command::NewTab, InChat::Leaves),
+        (Command::NewWorkspace, InChat::Acts),
+        (Command::StartAgent, InChat::Acts),
+        (Command::OpenProject, InChat::Acts),
+        (Command::Connect, InChat::Acts),
+        (Command::PullRequest, InChat::Acts),
+        (Command::SplitRight, InChat::Rests),
+        (Command::SplitDown, InChat::Rests),
+        (Command::Close, InChat::OnTop),
+        (Command::CloseTab, InChat::Rests),
+        (Command::PreviousTab, InChat::Leaves),
+        (Command::NextTab, InChat::Leaves),
+        (Command::Tab, InChat::Leaves),
+        (Command::PreviousPane, InChat::Rests),
+        (Command::NextPane, InChat::Rests),
+        (Command::NextWorkspace, InChat::Leaves),
+        (Command::PreviousWorkspace, InChat::Leaves),
+        (Command::NextProject, InChat::Leaves),
+        (Command::PreviousProject, InChat::Leaves),
+        (Command::AgentNeedingYou, InChat::Leaves),
+        (Command::Mark, InChat::Rests),
+        (Command::ZoomIn, InChat::Acts),
+        (Command::ZoomOut, InChat::Acts),
+        (Command::ZoomReset, InChat::Acts),
+        (Command::Shortcuts, InChat::Acts),
+        (Command::Back, InChat::Acts),
+        (Command::Forward, InChat::Acts),
+        (Command::Reload, InChat::Acts),
+        (Command::FocusAddress, InChat::Acts),
+        (Command::Cut, InChat::Acts),
+    ]
+}
+
+#[test]
+fn every_shortcut_has_an_answer_while_a_chat_shows() {
+    use super::in_chat;
+    let table = chat_table();
+    for shortcut in SHORTCUTS {
+        let said = table
+            .iter()
+            .find(|(command, _)| std::mem::discriminant(command) == std::mem::discriminant(&shortcut.command));
+        let (_, answer) = said.unwrap_or_else(|| panic!("no answer for {:?}", shortcut.command));
+        assert_eq!(in_chat(shortcut.command), *answer, "{:?}", shortcut.command);
+    }
+}
+
+#[test]
+fn no_shortcut_acts_on_a_hidden_pane_while_a_chat_shows() {
+    use super::in_chat;
+    for command in [
+        Command::CloseTab,
+        Command::SplitRight,
+        Command::SplitDown,
+        Command::PreviousPane,
+        Command::NextPane,
+        Command::Mark,
+        Command::Paste,
+    ] {
+        assert_eq!(in_chat(command), InChat::Rests, "{command:?}");
+    }
+    assert_eq!(in_chat(Command::Close), InChat::OnTop);
 }

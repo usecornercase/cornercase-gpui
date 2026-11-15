@@ -3,6 +3,9 @@ use gpui::{Keystroke, Modifiers, Window};
 use crate::panels::PanelKind;
 use crate::platform::Os;
 
+mod chat;
+pub(crate) use chat::{InChat, in_chat};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Command {
     Panel(PanelKind),
@@ -195,6 +198,7 @@ const MAC_OTHER_KEYS: &[(&str, &str)] = &[
     ("↑ ↓ ↩", "Choose in a menu"),
     ("⇧← ⇧→ ⇧↑ ⇧↓", "Select in Files or Changes"),
     ("⌘↩", "Send a prompt, where ↩ breaks the line"),
+    ("↑ ↓ PgUp PgDn", "Scroll a bot's chat"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("⌘-click", "Open a link or a path with macOS"),
 ];
@@ -206,6 +210,7 @@ const LINUX_OTHER_KEYS: &[(&str, &str)] = &[
     ("Shift+arrows", "Select in Files or Changes"),
     ("Ctrl+Enter", "Send a prompt, where Enter breaks the line"),
     ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
+    ("↑ ↓ PageUp PageDown", "Scroll a bot's chat"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("Ctrl+click", "Open a link or a path with its default app"),
     ("Middle click", "Paste what is selected, Shift+middle click where a program takes the mouse"),
@@ -218,6 +223,7 @@ const WINDOWS_OTHER_KEYS: &[(&str, &str)] = &[
     ("Shift+arrows", "Select in Files or Changes"),
     ("Ctrl+Enter", "Send a prompt, where Enter breaks the line"),
     ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
+    ("↑ ↓ PageUp PageDown", "Scroll a bot's chat"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("Ctrl+click", "Open a link or a path with its default app"),
 ];

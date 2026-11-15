@@ -259,7 +259,7 @@ pub(crate) fn run_action<T: 'static>(
     if run.action.popup() {
         store.update(cx, |s, cx| {
             s.close_sheet(cx);
-            s.leave_machine_place(cx);
+            s.show_local(cx);
         });
     }
     let command = run.command(view);

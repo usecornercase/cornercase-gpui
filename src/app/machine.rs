@@ -198,7 +198,7 @@ fn host_heard(event: Event) -> Option<Heard> {
     match event {
         Event::Clipboard { text, pane } => Some(Heard::Copied(text, pane)),
         Event::Bell { tab, .. } => Some(Heard::Bell(tab)),
-        Event::Notice(_) | Event::Message(_) | Event::Other => None,
+        Event::Notice(_) | Event::Message(_) | Event::Bot(_) | Event::Other => None,
     }
 }
 
@@ -464,7 +464,7 @@ impl Root {
     }
 
     pub(crate) fn takes_input(&self) -> bool {
-        self.frame_shown() && self.machine.as_ref().is_none_or(MachineTab::live)
+        self.frame_shown() && self.side.bot.is_none() && self.machine.as_ref().is_none_or(MachineTab::live)
     }
 
     pub(crate) fn input(&mut self, event: Value, cx: &mut Context<Self>) {
@@ -521,6 +521,10 @@ impl Root {
         self.drop_drags();
         self.take_back_colours();
         self.machine = None;
+        self.back_to_own(cx);
+    }
+
+    pub(super) fn back_to_own(&mut self, cx: &mut Context<Self>) {
         let shown = self.session.as_ref().and_then(|session| session.shown().tab);
         self.own.has_frame = self.own.has_frame && shown == Some(self.own.grid.tab);
         self.resume_surface(shown.is_some(), cx);

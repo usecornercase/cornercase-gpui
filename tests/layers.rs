@@ -324,12 +324,13 @@ const DRAWINGS: &[Drawing] = &[
             "src/sidebar/workspace.rs",
             "src/sidebar/tab_rows.rs",
             "src/sidebar/agents.rs",
+            "src/sidebar/bots.rs",
             "src/sidebar/machine_rows.rs",
             "src/sidebar/machine_agents.rs",
             "src/sidebar/key.rs",
         ],
         root: &["session", "side", "store", "sidebar_width", "pair_width", "parts"],
-        side: &["hovered", "rename", "there_folds", "look", "sizes", "machine_place"],
+        side: &["hovered", "rename", "there_folds", "look", "sizes", "machine_place", "bot", "bots_folded"],
         parts: &["spots", "counted", "store_seen", "sidebar", "orbit_layer"],
     },
     Drawing {
@@ -343,7 +344,7 @@ const DRAWINGS: &[Drawing] = &[
         what: "the tab bar",
         files: &["src/tabs.rs", "src/tabs/key.rs"],
         root: &["session", "side", "store", "machine", "focus", "parts"],
-        side: &["look", "strip", "rename", "machine_place", "aside"],
+        side: &["look", "strip", "rename", "machine_place", "bot", "aside"],
         parts: &["tabs", "tab_orbits", "tab_spots", "store_seen"],
     },
     Drawing {
@@ -423,6 +424,14 @@ const CACHED: &[Cached] = &[
     },
 ];
 
+const ALSO_CACHED: &[Cached] = &[Cached {
+    kind: "Bot chat",
+    files: &["src/panels/bot_chat.rs", "src/panels/bot_chat/"],
+    except: &["src/panels/bot_chat/global.rs"],
+    clock: &["src/panels/bot_chat.rs"],
+    badges: &[],
+}];
+
 fn reads_a_global_but_store(code: &str) -> bool {
     code.match_indices("::get(cx)").any(|(at, _)| !code[..at].ends_with("Store"))
 }
@@ -459,7 +468,7 @@ fn reads_outside_itself(source: &Source, panel: &Cached) -> Option<&'static str>
 
 #[test]
 fn each_cached_panel_draws_from_itself_and_the_store() {
-    for panel in CACHED {
+    for panel in CACHED.iter().chain(ALSO_CACHED) {
         check(&format!("the {} panel reads outside itself", panel.kind), &[], |s| {
             covers(panel, &s.path) && reads_outside_itself(s, panel).is_some()
         });

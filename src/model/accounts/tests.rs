@@ -369,3 +369,16 @@ fn a_local_switch_still_names_only_its_agent() {
     assert_eq!(switch.doing(), "Restarting claude on personal…");
     assert_eq!(switch.doing(), switch.doing_as("claude"));
 }
+
+#[test]
+fn a_restart_forgets_the_revisions_but_never_lets_an_older_ask_count_as_the_latest() {
+    let mut moves = ListMoves::default();
+    let before = moves.next_ask();
+    moves.app_line(&with_revision());
+    moves.restart();
+    assert!(moves.app_line(&with_revision()));
+    let after = moves.next_ask();
+    assert!(after > before);
+    assert!(!moves.is_latest(before));
+    assert!(moves.is_latest(after));
+}

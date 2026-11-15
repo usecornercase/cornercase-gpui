@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.110
+
+- **Your bots in the sidebar, and their chats.** With cornercase 0.13.77 or newer, a **Bots** section lists your bots (the agents of your own that live outside any project) below the projects: each shows its agent and model, a spinner while it thinks, and how many answers you have not read. Click one, or find it by name in Search (⌘F) and press Return, to see its chat in place of the panes: what you wrote (a message that waits for a running turn says `Held`), the steps it takes (past three they fold under `+N steps`; click to see them all), its answers in Markdown with a copy button, errors, and a line with a spinner and the time while it thinks. A chat opens at its newest line and stays there as lines arrive; ↑ ↓ PgUp PgDn scroll it, and a `New messages` button shows when one arrives while you read higher up. Showing a chat marks its answers read, and no key you type there reaches a terminal behind it. ⌘1…9, a project or a workspace takes you back to the panes. Writing to a bot from this window, and making, editing or removing one, come in a later release: until then, use cornercase's own window or `cornercase bot say`, `cornercase bot new` and `cornercase bot remove`. With an older cornercase on this computer the section says what it needs.
+
 ## 0.1.109
 
 - **In a narrow window the Issues sheet's filters stay whole.** When the window is too narrow to hold the filter, **Include closed** and both people filters on one row (under about 730 px with the usual trackers), **Include closed** moves up beside the trackers' tabs. The filter keeps room for what you type and both people filters keep saying which filter they are and what they are set to. A chosen person with a long name ends in "…", and pointing at the filter shows it whole. In a usual window nothing changes.

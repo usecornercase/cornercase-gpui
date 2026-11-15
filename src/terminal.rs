@@ -16,7 +16,7 @@ use crate::keymap::{self, Command, Focus, with_keys};
 use crate::keys;
 use crate::model::Grid;
 use crate::model::link::Hovered;
-use crate::panels::{PanelKind, files};
+use crate::panels::{PanelKind, bot_chat, files};
 use crate::platform::Os;
 use crate::render::layout::{Hit, Layout};
 use crate::render::moving::Moves;
@@ -100,10 +100,21 @@ impl Root {
         if !terminal || self.overlay_open(cx) || self.store.read(cx).shows_file_full_screen() {
             return;
         }
+        if self.chat_shown() {
+            Self::scroll_chat(ks, cx);
+            return;
+        }
         if let Some(event) = keys::key_event(ks, Os::CURRENT) {
             self.type_in(event, cx);
             cx.stop_propagation();
         }
+    }
+
+    fn scroll_chat(ks: &Keystroke, cx: &mut Context<Self>) {
+        if let Some(step) = bot_chat::scroll_of(&ks.key) {
+            bot_chat::scroll(step, cx);
+        }
+        cx.stop_propagation();
     }
 
     fn key_shortcut(&mut self, ks: &Keystroke, terminal: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -129,7 +140,8 @@ impl Root {
     }
 
     fn open_popup(&self, cx: &mut App) -> Option<Entity<Popup>> {
-        Some(Popup::get(&self.focus, cx)).filter(|popup| self.machine.is_none() && popup.read(cx).is_open())
+        Some(Popup::get(&self.focus, cx))
+            .filter(|popup| self.machine.is_none() && !self.chat_shown() && popup.read(cx).is_open())
     }
 
     fn overlay_open(&self, cx: &App) -> bool {
@@ -165,6 +177,9 @@ impl Root {
             return true;
         }
         if chord.focus == Focus::Browser && self.browser_command(command, window, cx) {
+            return true;
+        }
+        if self.chat_shown() && keymap::in_chat(command) == keymap::InChat::Rests {
             return true;
         }
         match command {
@@ -332,7 +347,16 @@ impl Root {
         self.layout.borrow().cell_in(pane, position)
     }
 
-    pub(crate) fn render_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    pub(crate) fn render_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        if self.chat_shown() {
+            return div()
+                .id("terminal")
+                .flex_1()
+                .relative()
+                .overflow_hidden()
+                .child(bot_chat::view(cx))
+                .into_any_element();
+        }
         if self.metrics.is_none() {
             self.metrics = Some(Metrics::measure(FONT_FAMILY, self.font_size, window));
         }
@@ -357,6 +381,7 @@ impl Root {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .on_scroll_wheel(cx.listener(Self::on_scroll))
             .on_drop(cx.listener(Self::drop_paths))
+            .into_any_element()
     }
 
     fn cover(&self, cx: &mut Context<Self>) -> Option<AnyElement> {

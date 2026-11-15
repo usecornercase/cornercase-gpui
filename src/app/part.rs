@@ -147,7 +147,7 @@ impl Root {
     }
 
     fn tell_parts(&mut self, cx: &mut Context<Self>) {
-        let now = (self.sidebar_key(), self.rail_key(cx), self.tabs_key(), self.status_key());
+        let now = (self.sidebar_key(cx), self.rail_key(cx), self.tabs_key(), self.status_key());
         let told_of = &mut self.parts.told;
         let moved = [
             told(&mut told_of.sidebar, now.0),
@@ -186,7 +186,7 @@ impl Root {
     }
 
     pub(super) fn mind_the_parts(&mut self, window: &Window, cx: &mut Context<Self>) {
-        let now = (self.sidebar_key(), self.rail_key(cx), self.tabs_key(), self.status_key());
+        let now = (self.sidebar_key(cx), self.rail_key(cx), self.tabs_key(), self.status_key());
         let told_of = &mut self.parts.told;
         let minded = [
             ("sidebar", minded(&mut told_of.sidebar, now.0)),
@@ -202,9 +202,10 @@ impl Root {
         self.mind_the_dock(window, cx);
     }
 
-    pub(super) fn keep_beating(&mut self, window: &Window) {
+    pub(super) fn keep_beating(&mut self, window: &Window, cx: &App) {
         self.parts.beat.drawing(Instant::now());
-        if self.session.as_ref().is_some_and(Session::anyone_working) && self.parts.beat.start() {
+        let working = self.session.as_ref().is_some_and(Session::anyone_working) || self.store.read(cx).bots.thinking();
+        if working && self.parts.beat.start() {
             follow_frames(window, self.parts.orbit_layer.entity_id(), self.parts.beat.clone());
         }
     }
