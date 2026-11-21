@@ -6,7 +6,9 @@ use gpui::{
 
 use self::chat_apps::ChatRow;
 use self::secrets::SecretsRow;
-use super::{body_height, bot_refusal, cancel_and, close, dialog_starts, fitted, forget_refusal, frame, show, within};
+use super::{
+    body_height, bot_refusal, cancel_and, close, dialog_starts, fitted, forget_refusal, frame, revealed, show, within,
+};
 use crate::cli::Feature;
 use crate::model::bots::{
     AgentInfo, BotKey, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open,
@@ -15,7 +17,7 @@ use crate::model::bots::{
 use crate::store::{Store, args};
 use crate::theme::colours;
 use crate::ui::account_picker::AccountPickers;
-use crate::ui::{self, TextField, TextFieldEvent, Tone, text_field};
+use crate::ui::{self, TextField, TextFieldEvent, Tone};
 
 mod chat_apps;
 mod secrets;
@@ -446,15 +448,6 @@ impl BotForm {
     fn title(&self) -> String {
         self.editing().map_or_else(|| TITLE.to_string(), |editing| edit_title(&editing.before.name))
     }
-}
-
-fn revealed(field: Div, scroller: &ScrollHandle) -> Div {
-    let scroller = scroller.clone();
-    div().child(field).on_children_prepainted(move |bounds, window, _| {
-        if let Some(found) = bounds.first() {
-            text_field::show_box(&scroller, (found.top(), found.size.height), window);
-        }
-    })
 }
 
 impl Focusable for BotForm {

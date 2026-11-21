@@ -584,6 +584,25 @@ fn a_bot_whose_routines_or_next_have_another_type_stays_listed() {
 }
 
 #[test]
+fn a_bot_whose_made_day_is_no_number_stays_listed_without_one() {
+    let mut value = app(fixture!("bots/app-routines.json"));
+    value["bots"][0]["created"] = json!("yesterday");
+    let list = in_app(&value);
+    assert_eq!((list.len(), list[0].created), (1, None));
+}
+
+#[test]
+fn a_changed_made_day_alone_does_not_draw_the_list_again() {
+    let mut bots = Bots::new();
+    let mut value = app(fixture!("bots/app-routines.json"));
+    bots.take_app(&value);
+    let revision = bots.revision();
+    value["bots"][0]["created"] = json!(1_795_268_099);
+    bots.take_app(&value);
+    assert_eq!(bots.revision(), revision);
+}
+
+#[test]
 fn a_changed_next_run_draws_the_list_again_and_a_changed_count_alone_does_not() {
     let mut bots = Bots::new();
     let mut value = app(fixture!("bots/app-routines.json"));

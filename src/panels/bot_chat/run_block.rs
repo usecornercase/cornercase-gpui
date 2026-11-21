@@ -4,6 +4,7 @@ use gpui::{
 };
 
 use super::entries::Block;
+use super::picking::{ERROR_PART, Spot};
 use super::rows::{Meta, answer, error_with, line, steps};
 use super::runs::offers_again;
 use super::words::{ANSWERING, RUN_AGAIN, STARTING};
@@ -56,12 +57,12 @@ fn again_button(run: u64, meta: &Meta) -> Option<AnyElement> {
 fn error(block: &Block, meta: &Meta) -> Option<Div> {
     let text = block.error.as_deref()?;
     let again = offers_again(block, &meta.runs).then(|| again_button(block.run, meta)).flatten();
-    Some(error_with(text, again))
+    Some(error_with((Spot { entry: block.head, part: ERROR_PART }, text), again, meta))
 }
 
 pub(super) fn run(block: &Block, meta: &Meta) -> Div {
     let steps = (!block.steps.is_empty()).then(|| steps(block.head, &block.steps, 0, meta));
-    let answer = block.answer.as_ref().map(|(id, text, at)| answer(*id, text, *at, meta));
+    let answer = block.answer.as_ref().map(|(id, text, at)| answer((block.head, *id), text, *at, meta));
     let column = div()
         .flex()
         .flex_col()

@@ -11,6 +11,10 @@ pub(crate) use self::asks::{
     counted_as, decline_args, fields_after, give_args, give_json, giving, keys_of, on_enter, opens, tells_ask, title,
     what_happens,
 };
+pub(crate) use self::card::{
+    AboutGate, CardRow, ListRow, Tone, about_args, about_failed, about_gate, about_of, card_rows, routine_rows,
+    secrets_words,
+};
 pub(crate) use self::chat_apps::{AWAY, CHOICES, Reach, Row, UNPAIRED, note, platforms, reach, reach_tip, row, sent};
 pub(crate) use self::form::{
     AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, id_of,
@@ -35,6 +39,7 @@ pub(crate) use self::talk::{
 pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, read_since, tells};
 
 mod asks;
+mod card;
 mod chat_apps;
 mod form;
 mod home;
@@ -76,6 +81,8 @@ pub(crate) struct Bot {
     pub next: Option<i64>,
     #[serde(skip)]
     pub home: Home,
+    #[serde(deserialize_with = "time_or_none")]
+    pub created: Option<i64>,
 }
 
 fn set(value: Option<&String>) -> Option<String> {

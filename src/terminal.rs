@@ -232,7 +232,7 @@ impl Root {
     }
 
     fn clipboard_shortcut(&mut self, command: Command, terminal: bool, window: &Window, cx: &mut Context<Self>) {
-        if command == Command::Copy && (self.dock_copy(window, cx) || self.sheet_copy(cx)) {
+        if command == Command::Copy && (self.dock_copy(window, cx) || self.sheet_copy(cx) || self.chat_copy(cx)) {
             return;
         }
         if let Some(popup) = self.open_popup(cx) {

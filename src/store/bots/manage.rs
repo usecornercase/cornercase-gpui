@@ -7,8 +7,8 @@ use super::super::{Busy, Store, ToastKind, args};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
 use crate::model::bots::{
-    Arrival, BotKey, Closes, Creating, Home, Making, create_failed, id_of, making, remove_failed, rename_args,
-    rename_failed, save_failed,
+    AboutGate, Arrival, BotKey, Closes, Creating, Home, Making, about_gate, create_failed, id_of, making,
+    remove_failed, rename_args, rename_failed, save_failed,
 };
 use crate::model::place::awaits;
 use crate::platform::Os;
@@ -22,6 +22,10 @@ fn rename_key(id: &str) -> String {
 }
 
 impl Store {
+    pub(crate) fn about_gate(&self) -> AboutGate {
+        about_gate(self.releases().lacks(Feature::BotAboutRead), Os::CURRENT)
+    }
+
     pub(crate) fn making(&self) -> Option<Making> {
         self.session.as_ref()?;
         Some(making(self.releases().lacks(Feature::Bots), Os::CURRENT))

@@ -36,6 +36,10 @@ impl ChatField {
         self.field.read(cx).focus_handle(cx)
     }
 
+    pub(super) fn drop_selection(&mut self, cx: &mut Context<Self>) {
+        self.field.update(cx, TextField::drop_selection);
+    }
+
     fn follow(&mut self, cx: &mut Context<Self>) {
         let store = self.store.read(cx);
         let Some(shown) = store.shown_bot().cloned() else {

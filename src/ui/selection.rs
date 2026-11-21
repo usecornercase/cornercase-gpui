@@ -1,6 +1,7 @@
 mod caret;
 mod code;
 mod pointer;
+mod prose;
 
 use std::fmt::Display;
 use std::ops::Range;
@@ -12,7 +13,10 @@ use crate::theme::colours;
 
 pub(crate) use caret::{ShownLines, Step};
 pub(crate) use code::{CODE_CELL, CODE_ROW, Fit, code_cell, plain_text, wrap_button};
-pub(crate) use pointer::{Laid, Off, Selecting, Selects, action, action_bar, body, keep_selection, layer, to_primary};
+pub(crate) use pointer::{
+    Laid, Off, Selecting, Selects, action, action_bar, body, keep_selection, layer, listens, to_primary,
+};
+pub(crate) use prose::{Pick, pick};
 
 pub(crate) const BREAK_WIDTH: Pixels = px(6.);
 const BAR_GAP: f32 = 4.;
@@ -51,6 +55,14 @@ impl Lit {
 
     fn drawn_range(&self) -> Option<Range<usize>> {
         match self {
+            Self::Chars { range, .. } if !range.is_empty() => Some(range.clone()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn range_in(&self, len: usize) -> Option<Range<usize>> {
+        match self {
+            Self::Line => Some(0..len),
             Self::Chars { range, .. } if !range.is_empty() => Some(range.clone()),
             _ => None,
         }
@@ -188,6 +200,7 @@ impl Selection<usize> {
 pub(crate) enum Zone {
     Numbers,
     Code,
+    Text,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,21 +210,24 @@ pub(crate) struct Press<S> {
     before: Option<Selection<S>>,
     shift: bool,
     moved: bool,
+    text: bool,
 }
 
 impl<S: Copy + Ord> Press<S> {
     pub(crate) fn down(before: Option<Selection<S>>, from: Caret<S>, zone: Zone, shift: bool) -> Self {
+        let text = zone == Zone::Text;
+        let shift = shift && !text;
         let whole_lines = match (shift, zone) {
             (true, _) => Some(before.map_or(from.spot, Selection::anchor)),
             (false, Zone::Numbers) => Some(from.spot),
-            (false, Zone::Code) => None,
+            (false, Zone::Code | Zone::Text) => None,
         };
-        Self { from, whole_lines, before, shift, moved: false }
+        Self { from, whole_lines, before, shift, moved: false, text }
     }
 
     pub(crate) fn on_word(before: Option<Selection<S>>, spot: S, word: Range<usize>) -> (Self, Selection<S>) {
         let anchor = Caret { spot, at: word.start };
-        let press = Self { from: anchor, whole_lines: None, before, shift: false, moved: true };
+        let press = Self { from: anchor, whole_lines: None, before, shift: false, moved: true, text: false };
         (press, Selection::Chars { anchor, head: Caret { spot, at: word.end } })
     }
 
@@ -230,6 +246,7 @@ impl<S: Copy + Ord> Press<S> {
         self.moved = true;
         match self.whole_lines {
             Some(anchor) => Selection::Lines { anchor, head: to.spot },
+            None if to == self.from && self.text => Selection::Chars { anchor: to, head: to },
             None if to == self.from => Selection::line(to.spot),
             None => Selection::Chars { anchor: self.from, head: to },
         }
@@ -238,6 +255,9 @@ impl<S: Copy + Ord> Press<S> {
     pub(crate) fn released(&self, shown: Option<Selection<S>>) -> Option<Selection<S>> {
         if self.moved || self.shift {
             return shown;
+        }
+        if self.text && self.whole_lines.is_none() {
+            return None;
         }
         let clicked = Selection::line(self.from.spot);
         if self.before == Some(clicked) { None } else { Some(clicked) }
@@ -359,6 +379,13 @@ fn covers(range: &Range<usize>, piece: &Range<usize>) -> bool {
 fn covering<'a, T>(items: &'a [T], range_of: impl Fn(&T) -> &Range<usize>, piece: &Range<usize>) -> Option<&'a T> {
     let at = items.partition_point(|item| range_of(item).end <= piece.start);
     items.get(at).filter(|item| covers(range_of(item), piece))
+}
+
+pub(crate) fn lit_styles(styles: Styles, lit: &Lit, len: usize) -> Styles {
+    match lit.range_in(len) {
+        Some(range) => overlay(styles, &[range], selected_chars()),
+        None => styles,
+    }
 }
 
 pub(crate) fn overlay(styles: Styles, lit: &[Range<usize>], paint: HighlightStyle) -> Styles {

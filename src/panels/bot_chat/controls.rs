@@ -1,17 +1,17 @@
 use gpui::{
-    App, Bounds, ClickEvent, FocusHandle, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement as _, Pixels, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div,
+    AnyElement, App, Bounds, ClickEvent, FocusHandle, InteractiveElement as _, IntoElement, MouseButton,
+    MouseDownEvent, ParentElement as _, Pixels, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
 use super::entries::{self, Control, new_conversation_control, stop_control};
 use super::words::{
-    NEW_CONVERSATION, ROUTINES, STARTING, STOP, STOPPING, answering, menu_tip, new_conversation_message,
-    new_conversation_title, routines_tip, secrets_label, turn_label,
+    NEW_CONVERSATION, ROUTINES, STARTING, STOP, STOPPING, answering, details_tip, menu_tip, new_conversation_message,
+    new_conversation_title, routines_tip, turn_label,
 };
 use super::{BotChat, global, routines_fit};
 use crate::dialogs::{self, Question};
-use crate::model::bots::{Bot, BotKey, Chat, Home};
+use crate::model::bots::{Bot, BotKey, Chat, Home, secrets_words};
 use crate::model::bots::{Reach, reach_tip};
 use crate::notify;
 use crate::store::Store;
@@ -73,14 +73,7 @@ pub(super) fn header(
         .py(px(10.))
         .border_b_1()
         .border_color(colours::border())
-        .child(
-            div()
-                .min_w_0()
-                .max_w(gpui::relative(0.6))
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(colours::text())
-                .child(ui::one_line(bot.name.clone())),
-        )
+        .child(name_button(bot))
         .child(facts(bot))
         .children(reach.map(reach_icon))
         .children(routines)
@@ -92,9 +85,28 @@ pub(super) fn header(
     }
 }
 
+fn name_button(bot: &Bot) -> AnyElement {
+    let name = div()
+        .min_w_0()
+        .max_w(gpui::relative(0.6))
+        .font_weight(gpui::FontWeight::SEMIBOLD)
+        .text_color(colours::text())
+        .child(ui::one_line(bot.name.clone()));
+    if bot.home != Home::Here {
+        return name.into_any_element();
+    }
+    let id = bot.id.clone();
+    name.id("bot-card-name")
+        .cursor_pointer()
+        .hover(|s| s.text_color(colours::brand()))
+        .tooltip(notify::tip(details_tip(&bot.name)))
+        .on_click(move |_: &ClickEvent, window, cx| dialogs::bot_card(&id, window, cx))
+        .into_any_element()
+}
+
 fn facts(bot: &Bot) -> impl IntoElement + use<> {
     let facts = bot.facts();
-    let secrets = secrets_label(bot.secrets, bot.secrets_unreadable).map(|(words, unreadable)| {
+    let secrets = secrets_words(bot.secrets, bot.secrets_unreadable).map(|(words, unreadable)| {
         let colour = if unreadable { colours::failed() } else { colours::faint() };
         let words = if facts.is_empty() { words } else { format!("· {words}") };
         div().flex_none().text_color(colour).child(words)

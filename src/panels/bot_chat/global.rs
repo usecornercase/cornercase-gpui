@@ -48,6 +48,14 @@ pub(super) fn keys_to_field(window: &mut Window, cx: &mut App) {
     window.focus(&field_focus(cx));
 }
 
+pub(crate) fn copy_selection(cx: &mut App) -> bool {
+    BotChat::get(cx).update(cx, BotChat::copy_selection)
+}
+
+pub(super) fn drop_field_selection(cx: &mut App) {
+    ChatField::get(cx).update(cx, ChatField::drop_selection);
+}
+
 impl BotChat {
     pub(crate) fn get(cx: &mut App) -> Entity<Self> {
         let store = Store::get(cx);

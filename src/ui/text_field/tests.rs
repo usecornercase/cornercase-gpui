@@ -2,8 +2,8 @@ use gpui::{KeyBinding, KeyContext};
 
 use super::enter::Enter;
 use super::{
-    Escaped, NewLine, Submit, bindings, composed_selection, escaped, handed, prompt_keys, send_key, shared, word_end,
-    word_start,
+    CopyGoes, Escaped, NewLine, Submit, bindings, composed_selection, copy_goes, escaped, handed, prompt_keys,
+    send_key, shared, word_end, word_start,
 };
 use crate::platform::Os;
 
@@ -149,4 +149,18 @@ fn the_other_fields_read_return_as_before() {
         assert!(first_action(os, "shift-enter", several).is_some_and(|a| a.partial_eq(&NewLine)), "{os:?}");
         assert!(first_action(os, send_key(os).0, several).is_some_and(|a| a.partial_eq(&Submit)), "{os:?}");
     }
+}
+
+#[test]
+fn copy_takes_a_selection_and_only_the_chats_empty_field_passes_it_on() {
+    assert_eq!(copy_goes(false, false, false), CopyGoes::Clipboard);
+    assert_eq!(copy_goes(false, false, true), CopyGoes::Clipboard);
+    assert_eq!(copy_goes(true, false, true), CopyGoes::On);
+    assert_eq!(copy_goes(true, false, false), CopyGoes::Nowhere);
+}
+
+#[test]
+fn a_masked_field_never_passes_copy_on() {
+    assert_eq!(copy_goes(true, true, true), CopyGoes::Nowhere);
+    assert_eq!(copy_goes(false, true, true), CopyGoes::Nowhere);
 }

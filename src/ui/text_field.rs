@@ -117,6 +117,21 @@ fn shared<'a>(content: &'a str, selected: &Range<usize>, masked: bool) -> Option
     content.get(selected.clone()).filter(|text| !masked && !text.is_empty())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CopyGoes {
+    Clipboard,
+    On,
+    Nowhere,
+}
+
+fn copy_goes(selected_empty: bool, masked: bool, chat: bool) -> CopyGoes {
+    match (selected_empty, masked, chat) {
+        (false, false, _) => CopyGoes::Clipboard,
+        (true, false, true) => CopyGoes::On,
+        _ => CopyGoes::Nowhere,
+    }
+}
+
 fn escaped(clears: bool, content: &str, saved: Option<&str>) -> Escaped {
     match saved {
         Some(saved) if content != saved => Escaped::Revert,
@@ -237,8 +252,19 @@ impl TextField {
     }
 
     fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some(text) = shared(&self.content, &self.selected_range, self.options.masked) {
-            cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
+        let text = shared(&self.content, &self.selected_range, false).map(str::to_string);
+        match (copy_goes(text.is_none(), self.options.masked, self.options.enter == Enter::Sends), text) {
+            (CopyGoes::Clipboard, Some(text)) => cx.write_to_clipboard(ClipboardItem::new_string(text)),
+            (CopyGoes::On, _) => cx.propagate(),
+            _ => {}
+        }
+    }
+
+    pub(crate) fn drop_selection(&mut self, cx: &mut Context<Self>) {
+        if !self.selected_range.is_empty() {
+            let caret = self.cursor_offset();
+            self.selected_range = caret..caret;
+            cx.notify();
         }
     }
     fn cut(&mut self, _: &Cut, window: &mut Window, cx: &mut Context<Self>) {

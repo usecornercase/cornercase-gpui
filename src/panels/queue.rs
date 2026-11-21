@@ -87,6 +87,10 @@ fn toast_error(error: &anyhow::Error, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.toast(cli::reason(error), ToastKind::Error, cx));
 }
 
+pub(crate) fn repeat_words(entry: &Entry) -> String {
+    repeat::words(entry.repeat.as_deref().unwrap_or_default())
+}
+
 fn starting(entry: u64) -> String {
     format!("queue-run:{entry}")
 }

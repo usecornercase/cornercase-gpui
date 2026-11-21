@@ -32,6 +32,7 @@ fn an_idle_bots_row_menu_offers_every_entry_in_the_sidebars_order() {
     let rows = want(&[
         ("item", "New conversation…"),
         ("-", ""),
+        ("item", "Details…"),
         ("item", "Rename bot"),
         ("item", "Edit bot…"),
         ("-", ""),
@@ -49,6 +50,7 @@ fn while_a_bot_answers_its_conversation_and_removal_rest_and_say_why() {
         ("resting", "PRs is answering: stop it first"),
         ("resting", "New conversation…"),
         ("-", ""),
+        ("item", "Details…"),
         ("item", "Rename bot"),
         ("item", "Edit bot…"),
         ("-", ""),
@@ -58,6 +60,18 @@ fn while_a_bot_answers_its_conversation_and_removal_rest_and_say_why() {
         ("resting", "Remove bot…"),
     ]);
     assert_eq!(read(&bot("thinking"), MenuFrom::Row, &vs_code(), true), rows);
+}
+
+#[test]
+fn details_come_before_edit_in_both_menus_and_stay_while_the_bot_answers() {
+    for from in [MenuFrom::Row, MenuFrom::Header] {
+        for state in ["idle", "thinking"] {
+            let rows = read(&bot(state), from, &vs_code(), true);
+            let at = |label: &str| rows.iter().position(|(_, found)| found == label);
+            assert!(at("Details…") < at("Edit bot…"), "{from:?} {state}: {rows:?}");
+            assert!(rows.contains(&("item", "Details…".to_string())), "{from:?} {state}: {rows:?}");
+        }
+    }
 }
 
 #[test]
@@ -88,7 +102,7 @@ fn a_bot_without_a_folder_offers_neither_open_in_nor_copy_path() {
     let none = Bot { folder: String::new(), ..bot("idle") };
     let rows = read(&none, MenuFrom::Row, &vs_code(), true);
     let labels: Vec<&str> = rows.iter().map(|(_, label)| label.as_str()).collect();
-    assert_eq!(labels, ["New conversation…", "", "Rename bot", "Edit bot…", "", "Remove bot…"]);
+    assert_eq!(labels, ["New conversation…", "", "Details…", "Rename bot", "Edit bot…", "", "Remove bot…"]);
 }
 
 #[test]

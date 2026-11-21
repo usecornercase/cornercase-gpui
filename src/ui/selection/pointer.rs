@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -17,6 +18,7 @@ use crate::ui::one_line::LaidOut;
 
 use super::caret::{Keyed, extended};
 use super::code::{break_index, break_x, past_the_cut};
+use super::prose::prose_index;
 use super::{
     BREAK_WIDTH, Caret, Edge, Fit, Lit, Press, Selection, ShownLines, Span, Step, Zone, bar_origin, edge_at, host,
     off_centre, off_edge, row_at, row_from, row_near, word_at,
@@ -30,6 +32,7 @@ const SCROLL_EVERY: Duration = Duration::from_millis(50);
 enum DrawnText {
     Line(Box<LaidOut>),
     Wrapped(TextLayout, Option<usize>),
+    Prose(TextLayout),
 }
 
 struct Drawn {
@@ -48,10 +51,10 @@ fn wrapped_index(layout: &TextLayout, at: Point<Pixels>) -> usize {
 
 impl Drawn {
     fn caret(&self, at: Point<Pixels>) -> usize {
-        if at.x < self.bounds.left() {
-            return 0;
-        }
+        let before = at.x < self.bounds.left();
         let index = match &self.text {
+            DrawnText::Prose(layout) => prose_index(layout, at),
+            _ if before => 0,
             DrawnText::Line(line) => line.index_at(at.x),
             DrawnText::Wrapped(layout, kept) => past_the_cut(wrapped_index(layout, at), *kept, self.len),
         };
@@ -67,6 +70,7 @@ impl Drawn {
                 let at = break_index(self.len, *kept, layout.len());
                 (layout.position_for_index(at)?, layout.line_height())
             }
+            DrawnText::Prose(_) => return None,
         };
         Some(Bounds::new(origin, size(BREAK_WIDTH, height)))
     }
@@ -82,6 +86,7 @@ impl Drawn {
                 let at = kept.map_or(at, |kept| at.min(kept));
                 layout.position_for_index(at).map_or(self.bounds.top(), |spot| spot.y)
             }
+            DrawnText::Prose(layout) => layout.position_for_index(at).map_or(self.bounds.top(), |spot| spot.y),
         }
     }
 }
@@ -124,6 +129,10 @@ impl<S: Copy + Ord> Laid<S> {
 
     fn add_wrapped(&self, (spot, len, kept): (S, usize, Option<usize>), bounds: Bounds<Pixels>, layout: TextLayout) {
         self.0.borrow_mut().rows.insert(spot, Drawn { bounds, len, text: DrawnText::Wrapped(layout, kept) });
+    }
+
+    pub(super) fn add_prose(&self, (spot, len): (S, usize), bounds: Bounds<Pixels>, layout: TextLayout) {
+        self.0.borrow_mut().rows.insert(spot, Drawn { bounds, len, text: DrawnText::Prose(layout) });
     }
 
     fn set_body(&self, body: Bounds<Pixels>) {
@@ -276,10 +285,14 @@ impl<S: Copy + Ord> Selecting<S> {
 
 pub(crate) trait Selects: Sized + 'static {
     type Spot: Copy + Ord + 'static;
+    const PROSE: bool = false;
 
     fn selecting(&mut self) -> Option<&mut Selecting<Self::Spot>>;
     fn scroll_a_row(&mut self, edge: Edge);
     fn line_text(&self, spot: Self::Spot) -> Option<&str>;
+    fn word_text(&self, spot: Self::Spot) -> Option<Cow<'_, str>> {
+        self.line_text(spot).map(Cow::Borrowed)
+    }
     fn selected_text(&self) -> Option<String>;
 }
 
@@ -292,8 +305,9 @@ fn start<T: Selects>(
     e: &MouseDownEvent,
 ) -> Started<T::Spot> {
     let shift = e.modifiers.shift;
-    let word = (e.click_count == 2 && zone == Zone::Code && !shift)
-        .then(|| this.line_text(caret.spot).map(|line| word_at(line, caret.at)))
+    let zone = if T::PROSE { Zone::Text } else { zone };
+    let word = (e.click_count == 2 && zone != Zone::Numbers && !shift)
+        .then(|| this.word_text(caret.spot).map(|line| word_at(&line, caret.at)))
         .flatten()
         .filter(|word| !word.is_empty());
     if let Some(word) = word {
@@ -307,12 +321,11 @@ fn start<T: Selects>(
 }
 
 pub(crate) fn body<T: Selects>(cx: &mut Context<T>) -> Div {
-    div()
-        .flex_1()
-        .min_h_0()
-        .relative()
-        .bg(colours::terminal())
-        .on_mouse_down(MouseButton::Left, cx.listener(|this, e: &MouseDownEvent, _, cx| mouse_down(this, e, cx)))
+    listens(div().flex_1().min_h_0().relative().bg(colours::terminal()), cx)
+}
+
+pub(crate) fn listens<T: Selects>(frame: Div, cx: &mut Context<T>) -> Div {
+    frame.on_mouse_down(MouseButton::Left, cx.listener(|this, e: &MouseDownEvent, _, cx| mouse_down(this, e, cx)))
 }
 
 fn mouse_down<T: Selects>(this: &mut T, e: &MouseDownEvent, cx: &mut Context<T>) {
