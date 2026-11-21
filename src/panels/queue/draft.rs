@@ -95,6 +95,7 @@ pub(crate) struct Draft {
     pub cleanup: Option<bool>,
     pub name: Option<String>,
     pub accounts: Vec<AccountPick>,
+    pub bot: Option<String>,
 }
 
 fn push(a: &mut Vec<String>, flag: &str, value: &str) {
@@ -162,8 +163,12 @@ impl Draft {
         };
         self.push_when(&mut a)?;
         self.push_what(&mut a)?;
-        self.push_target(&mut a)?;
-        self.push_choices(&mut a);
+        if let Some(bot) = &self.bot {
+            self.push_bot(&mut a, bot);
+        } else {
+            self.push_target(&mut a)?;
+            self.push_choices(&mut a);
+        }
         a.push("--json".into());
         Ok(a)
     }
@@ -199,7 +204,11 @@ impl Draft {
     }
 
     fn no_prompt(&self) -> &'static str {
-        if self.flow.is_some() { "write the team's task" } else { "write the prompt it starts with" }
+        match (&self.bot, &self.flow) {
+            (Some(_), _) => "write what it should do",
+            (None, Some(_)) => "write the team's task",
+            (None, None) => "write the prompt it starts with",
+        }
     }
 
     fn push_target(&self, a: &mut Vec<String>) -> Result<(), String> {
@@ -219,12 +228,23 @@ impl Draft {
         if let Some(mode) = &self.mode {
             push(a, "--mode", mode);
         }
-        if let Some(name) = self.name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
-            push(a, "--name", name);
-        }
+        self.push_name(a);
         if let Some(cleanup) = self.cleanup {
             a.push(if cleanup { "--cleanup" } else { "--no-cleanup" }.to_string());
         }
         a.extend(account_args(&self.accounts));
+    }
+
+    fn push_bot(&self, a: &mut Vec<String>, bot: &str) {
+        if self.edit.is_none() {
+            push(a, "--bot", bot);
+        }
+        self.push_name(a);
+    }
+
+    fn push_name(&self, a: &mut Vec<String>) {
+        if let Some(name) = self.name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+            push(a, "--name", name);
+        }
     }
 }

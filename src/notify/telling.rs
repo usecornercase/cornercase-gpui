@@ -187,8 +187,8 @@ pub(super) struct Looking {
 }
 
 impl Looking {
-    pub(super) fn of(active: bool, sheet: Option<PanelKind>) -> Looking {
-        Looking { active, queue_open: sheet == Some(PanelKind::Queue) }
+    pub(super) fn of(active: bool, sheet: Option<PanelKind>, scoped: bool) -> Looking {
+        Looking { active, queue_open: sheet == Some(PanelKind::Queue) && !scoped }
     }
 }
 

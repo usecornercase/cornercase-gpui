@@ -248,11 +248,18 @@ fn what_waits_is_forgotten_when_the_server_starts_a_new_run() {
 
 #[test]
 fn the_queue_sheet_is_what_makes_the_window_look_at_the_queue() {
-    assert!(Looking::of(true, Some(PanelKind::Queue)).queue_open);
-    assert!(!Looking::of(true, Some(PanelKind::Settings)).queue_open);
-    assert!(!Looking::of(true, None).queue_open);
-    assert!(Looking::of(true, Some(PanelKind::Queue)).active);
-    assert!(!Looking::of(false, None).active);
+    assert!(Looking::of(true, Some(PanelKind::Queue), false).queue_open);
+    assert!(!Looking::of(true, Some(PanelKind::Settings), false).queue_open);
+    assert!(!Looking::of(true, None, false).queue_open);
+    assert!(Looking::of(true, Some(PanelKind::Queue), false).active);
+    assert!(!Looking::of(false, None, false).active);
+}
+
+#[test]
+fn a_queue_message_is_told_while_a_bots_routines_show() {
+    let failed = of_kind("queue-failed", &[], None);
+    assert!(!dropped(&failed, &Looking::of(true, Some(PanelKind::Queue), true), |_| false));
+    assert!(dropped(&failed, &Looking::of(true, Some(PanelKind::Queue), false), |_| false));
 }
 
 #[test]

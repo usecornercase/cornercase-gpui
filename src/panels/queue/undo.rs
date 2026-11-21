@@ -45,8 +45,18 @@ fn removed_text(entries: &[Entry]) -> String {
     match entries {
         [one] if one.routine.is_some() => format!("Removed a run of “{}”", one.label),
         [one] => format!("Removed “{}”", one.label),
-        many if many.iter().any(|e| e.routine.is_some()) => format!("Removed {} finished entries", many.len()),
-        many => format!("Removed {} started entries", many.len()),
+        many => many_text(many),
+    }
+}
+
+fn many_text(many: &[Entry]) -> String {
+    let kind = if many.iter().any(|e| e.routine.is_some()) { "finished" } else { "started" };
+    let text = format!("Removed {} {kind} entries", many.len());
+    match many.iter().filter(|e| e.of_bot()).count() {
+        0 => text,
+        all if all == many.len() => text,
+        1 => format!("{text}, 1 of them a bot's run"),
+        bots => format!("{text}, {bots} of them your bots' runs"),
     }
 }
 

@@ -6,6 +6,7 @@ use gpui::{
 use serde_json::Value;
 
 use super::QueuePanel;
+use super::bot;
 use super::data::{ModeChip, ROUTINES_NOTE, SOURCES, agent_choices, is_repository, mode_chips, sentence};
 use super::draft::When;
 use super::form::{Form, Spot};
@@ -26,6 +27,7 @@ const CLEANUP: &str = "remove the workspace when it finishes";
 const CLEANUP_NOTE: &str = "Once the agent has been done for 3 minutes, the run's workspace and branch go. The \
                             workspace stays, and the run says why, when anything would be lost: uncommitted or \
                             unpushed work, or a lock. Looking at the run's tab, or a server restart, keeps it too.";
+const BOT_PROMPT: &str = "A run does not see the chat: it starts from the bot's memory and this.";
 const CLEANUP_WAITS: &str = "An agent cornercase cannot read is refused on saving; knowing which beforehand needs \
                              usecornercase/cornercase-terminal#704.";
 
@@ -79,6 +81,9 @@ fn prompt(form: &Form, window: &Window, cx: &App) -> Div {
 }
 
 fn what(form: &Form, window: &Window, cx: &mut Context<QueuePanel>) -> impl IntoElement + use<> {
+    if form.bot.is_some() {
+        return section(Icon::Message, "What", stack().child(prompt(form, window, cx)).child(ui::dim(BOT_PROMPT)));
+    }
     if form.repeats() {
         let note = form.runs_flow().then(|| ui::dim(FLOW_TASK));
         return section(Icon::Message, "What", stack().child(prompt(form, window, cx)).children(note));
@@ -195,6 +200,11 @@ fn keep_or_move(form: &Form, cx: &mut Context<QueuePanel>) -> Div {
         seg("q-place-keep", "unchanged", form.spot == Spot::Keep, cx, |f| f.spot = Spot::Keep),
         seg("q-place-change", "somewhere else", form.spot != Spot::Keep, cx, |f| f.spot = Spot::NewWorktree),
     ]))
+}
+
+fn bot_place(form: &Form, name: &str) -> Div {
+    let chat = div().text_size(px(12.)).text_color(colours::muted()).child(format!("{name}'s chat"));
+    stack().child(chat).child(ui::dim(bot::where_note(form.repeats(), name)))
 }
 
 fn place(form: &Form, session: Option<&Session>, window: &Window, cx: &mut Context<QueuePanel>) -> Div {
@@ -359,17 +369,31 @@ fn agent_section(form: &Form, config: Option<&Value>, flows: Option<&[String]>, 
     section(Icon::Agent, "Agent", controls.children(modes(form, config, cx)))
 }
 
+pub(super) const EDITED_ROUTINE: &str = "Only what you change is sent, and only the runs to come follow it.";
+pub(super) const EDITED_ONCE: &str = "Only what you change is sent; the rest stays as it was.";
+
+fn bot_agent(name: &str) -> Div {
+    let line = format!("Set by the bot: {name}'s own agent, model and account, as they are when it runs.");
+    section(Icon::Agent, "Agent", ui::dim(line))
+}
+
 fn header_text(editing: bool, repeats: bool) -> (&'static str, &'static str) {
     match (editing, repeats) {
-        (true, true) => ("Edit routine", "Only what you change is sent, and only the runs to come follow it."),
-        (true, false) => ("Edit queue entry", "Only what you change is sent; the rest stays as it was."),
+        (true, true) => ("Edit routine", EDITED_ROUTINE),
+        (true, false) => ("Edit queue entry", EDITED_ONCE),
         (false, true) => ("Schedule a routine", "It starts by itself every time, until you pause or remove it."),
         (false, false) => ("Schedule an agent", "It starts by itself at the time you choose."),
     }
 }
 
-fn header(form: &Form) -> Div {
-    let (title, line) = header_text(form.editing(), form.repeats());
+fn header(form: &Form, bot: Option<&str>) -> Div {
+    let (title, line) = bot.map_or_else(
+        || {
+            let (title, line) = header_text(form.editing(), form.repeats());
+            (title, line.to_string())
+        },
+        |name| bot::header_text(form.editing(), form.repeats(), name),
+    );
     div()
         .flex_none()
         .flex()
@@ -432,9 +456,13 @@ fn footer(form: &Form, cx: &mut Context<QueuePanel>) -> Div {
         .py(px(14.))
         .border_t_1()
         .border_color(colours::border())
-        .child(trust_note())
+        .children(form.bot.is_none().then(trust_note))
         .children(form.error.as_deref().map(|e| error_note(sentence(e))))
         .child(div().flex().justify_end().gap(px(8.)).child(cancel).child(save_button(form, cx)))
+}
+
+fn bot_name(id: &str, cx: &App) -> String {
+    Store::get(cx).read(cx).bots.find(id).map_or_else(|| id.to_string(), |bot| bot.name.clone())
 }
 
 pub(super) fn frame(width: f32) -> Div {
@@ -451,10 +479,19 @@ pub(super) fn frame(width: f32) -> Div {
 }
 
 impl QueuePanel {
-    pub(super) fn form_view(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let form = self.form.as_ref()?;
+    fn place_and_agent(&self, form: &Form, bot: Option<&str>, window: &Window, cx: &mut Context<Self>) -> [Div; 2] {
+        if let Some(name) = bot {
+            return [section(Icon::Branch, "Where", bot_place(form, name)), bot_agent(name)];
+        }
         let session = Store::get(cx).read(cx).session.clone();
         let flows = self.flows.names.as_deref();
+        let place = section(Icon::Branch, "Where", place(form, session.as_ref(), window, cx));
+        [place, agent_section(form, self.config.as_ref(), flows, cx)]
+    }
+
+    pub(super) fn form_view(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let form = self.form.as_ref()?;
+        let bot = form.bot.as_deref().map(|id| bot_name(id, cx));
         let fields = div()
             .px(px(20.))
             .pb(px(18.))
@@ -463,11 +500,11 @@ impl QueuePanel {
             .gap(px(20.))
             .child(what(form, window, cx))
             .child(when(form, window, cx))
-            .child(section(Icon::Branch, "Where", place(form, session.as_ref(), window, cx)))
-            .child(agent_section(form, self.config.as_ref(), flows, cx))
+            .children(self.place_and_agent(form, bot.as_deref(), window, cx))
             .child(section(Icon::Pencil, "Name", boxed(&form.name, window, cx)));
         let body =
             div().id("queue-form").flex_1().min_h_0().overflow_y_scroll().track_scroll(&form.scroller).child(fields);
-        Some(frame(self.side_width.size()).child(header(form)).child(body).child(footer(form, cx)).into_any_element())
+        let head = header(form, bot.as_deref());
+        Some(frame(self.side_width.size()).child(head).child(body).child(footer(form, cx)).into_any_element())
     }
 }

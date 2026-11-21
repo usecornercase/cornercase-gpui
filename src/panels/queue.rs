@@ -1,3 +1,4 @@
+mod bot;
 mod data;
 mod detail;
 mod detail_text;
@@ -6,6 +7,7 @@ mod draft;
 mod empty;
 mod form;
 mod form_view;
+mod keys;
 mod lines;
 mod list;
 mod read;
@@ -19,14 +21,15 @@ mod undo;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, AnyView, App, AppContext as _, AsyncApp, ClickEvent, Context, Div, Entity, FocusHandle,
+    AnyElement, AnyView, App, AppContext as _, AsyncApp, ClickEvent, Context, Div, Entity, FocusHandle, Focusable as _,
     InteractiveElement as _, IntoElement, ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _,
     Subscription, WeakEntity, Window, div, px,
 };
 use serde_json::Value;
 
-use crate::cli;
+use crate::cli::{self, Releases};
 use crate::model::Session;
+use crate::panels::PanelKind;
 use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::colours;
 use crate::ui::split::{self, Edge, Split};
@@ -35,7 +38,8 @@ use data::{Body, scoped};
 pub(crate) use data::{Entry, entries};
 use detail::Detail;
 use form::{FlowChoices, Form, Spot};
-use rows::Snapshot;
+use keys::{KeysTo, keys_go};
+use rows::{Around, Snapshot};
 pub(crate) use time::{days, local, now, when_label};
 use undo::{Removal, UNDO_FOR, undo_shown};
 
@@ -56,7 +60,38 @@ pub(crate) struct QueuePanel {
     seqs: read::Counter,
     removal: Option<Removal>,
     scope: Option<String>,
+    first: FocusHandle,
+    wants_keys: bool,
+    was_open: bool,
+    had_form: bool,
     _subscriptions: Vec<Subscription>,
+}
+
+struct Seen {
+    app: Option<Value>,
+    session: Option<Session>,
+    releases: Releases<'static>,
+    scope: Option<(String, String)>,
+    bots: Vec<String>,
+    stops: bool,
+}
+
+impl Seen {
+    fn read(cx: &App) -> Self {
+        let s = Store::get(cx).read(cx);
+        Self {
+            app: s.app.clone(),
+            session: s.session.clone(),
+            releases: s.releases(),
+            scope: s.routines_of().map(|bot| (bot.id.clone(), bot.name.clone())),
+            bots: s.bots.list.iter().map(|bot| bot.id.clone()).collect(),
+            stops: s.sheet == Some(PanelKind::Queue) && s.dialog.is_none(),
+        }
+    }
+}
+
+fn queue_shows(cx: &App) -> bool {
+    Store::get(cx).read(cx).sheet == Some(PanelKind::Queue)
 }
 
 async fn tick(this: WeakEntity<QueuePanel>, cx: &mut AsyncApp) {
@@ -106,8 +141,12 @@ fn scrolled(content: impl IntoElement) -> AnyElement {
 impl QueuePanel {
     pub(crate) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let filter = cx.new(|cx| TextField::new("Filter by label, prompt, agent or place", cx).clears_on_escape());
+        let open = queue_shows(cx);
         let subscriptions = vec![
-            cx.observe(&Store::get(cx), |_, _, cx| cx.notify()),
+            cx.observe(&Store::get(cx), |this: &mut Self, _, cx| {
+                this.sheet_shown(queue_shows(cx));
+                cx.notify();
+            }),
             cx.subscribe_in(&filter, window, |_, _, _: &TextFieldEvent, _, cx| cx.notify()),
         ];
         cx.spawn(async move |this, cx| tick(this, cx).await).detach();
@@ -122,8 +161,38 @@ impl QueuePanel {
             seqs: read::Counter::default(),
             removal: None,
             scope: None,
+            first: cx.focus_handle(),
+            wants_keys: open,
+            was_open: open,
+            had_form: false,
             _subscriptions: subscriptions,
         }
+    }
+
+    fn sheet_shown(&mut self, open: bool) {
+        if open && !self.was_open {
+            self.wants_keys = true;
+        }
+        self.was_open = open;
+    }
+
+    fn take_keys(&mut self, (body, first_drawn): (Body, bool), window: &mut Window, cx: &mut Context<Self>) {
+        if self.had_form && self.form.is_none() {
+            self.wants_keys = true;
+        }
+        self.had_form = self.form.is_some();
+        let to = keys_go(self.form.is_some(), body);
+        if !self.wants_keys || to == KeysTo::Wait {
+            return;
+        }
+        self.wants_keys = false;
+        let handle = match (to, self.form.as_ref()) {
+            (KeysTo::Prompt, Some(form)) => form.prompt.read(cx).focus_handle(cx),
+            (KeysTo::Filter, _) => self.filter.read(cx).focus_handle(cx),
+            (KeysTo::First, _) if first_drawn => self.first.clone(),
+            _ => return,
+        };
+        cx.defer_in(window, move |_, window, _| window.focus(&handle));
     }
 
     fn filter_text(&self, cx: &App) -> String {
@@ -214,6 +283,7 @@ impl QueuePanel {
             return;
         }
         self.scope = bot.map(str::to_string);
+        self.wants_keys = true;
         self.form = None;
         self.detail = None;
         self.removal = None;
@@ -228,6 +298,7 @@ impl QueuePanel {
         }
         if let Some(form) = self.form.as_mut()
             && form.edit.is_none()
+            && form.bot.is_none()
             && form.project.is_none()
             && let Some(shown) = session.map(Session::shown)
         {
@@ -239,15 +310,25 @@ impl QueuePanel {
         }
     }
 
-    fn main(&self, entries: &[Entry], snapshot: &Snapshot, window: &Window, cx: &mut Context<Self>) -> Div {
+    fn body(&self, entries: &[Entry], snapshot: &Snapshot, cx: &App) -> Body {
         let filter = self.filter_text(cx);
         let shown = entries.iter().filter(|e| e.matches(&filter, snapshot.session.as_ref())).count();
-        let body = Body::of(snapshot.loaded, entries.len(), shown);
+        Body::of(snapshot.loaded, entries.len(), shown)
+    }
+
+    fn main(
+        &self,
+        (entries, body): (&[Entry], Body),
+        snapshot: &Snapshot,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let filter = self.filter_text(cx);
         let toolbar = matches!(body, Body::NoMatch | Body::List).then(|| self.toolbar(snapshot, window, cx));
         let content = match (body, snapshot.scope.as_ref()) {
             (Body::Loading, _) => ui::loading("Loading…").into_any_element(),
-            (Body::Empty, Some((_, name))) => empty::no_routines(name),
-            (Body::Empty, None) => self.empty_page(cx),
+            (Body::Empty, Some((_, name))) => self.no_routines(name, snapshot, cx),
+            (Body::Empty, None) => self.empty_page(snapshot, cx),
             (Body::NoMatch, _) => scrolled(ui::note(NO_MATCH)),
             (Body::List, _) => scrolled(self.list(entries, &filter, snapshot, cx)),
         };
@@ -265,19 +346,20 @@ impl QueuePanel {
 
 impl Render for QueuePanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (app, session, releases, scope) = {
-            let s = Store::get(cx).read(cx);
-            let scope = s.routines_of().map(|bot| (bot.id.clone(), bot.name.clone()));
-            (s.app.clone(), s.session.clone(), s.releases(), scope)
-        };
+        let Seen { app, session, releases, scope, bots, stops } = Seen::read(cx);
         self.sync_scope(scope.as_ref().map(|(id, _)| id.as_str()), cx);
-        let entries = scoped(entries(app.as_ref()), self.scope.as_deref());
+        let all = entries(app.as_ref());
+        let around = Around { elsewhere: bot::elsewhere(&all, &bots), clears_bots: bot::cleared_too(&all), stops };
+        let entries = scoped(all, self.scope.as_deref());
         self.sync_form(&entries, session.as_ref());
         self.sync_flows(cx);
         self.sync_accounts(cx);
-        let snapshot = Snapshot::new(app.as_ref(), session, &releases).scoped(scope);
+        self.filter.update(cx, |field, _| field.set_in_tab_order(stops));
+        let snapshot = Snapshot::new(app.as_ref(), session, &releases).scoped(scope, around);
         self.sync_detail(&entries, snapshot.results, window, cx);
-        let main = self.main(&entries, &snapshot, window, cx);
+        let body = self.body(&entries, &snapshot, cx);
+        self.take_keys((body, snapshot.bot_add_note().is_none()), window, cx);
+        let main = self.main((&entries, body), &snapshot, window, cx);
         let at = (Edge::Left, self.side_width.size());
         let side = self.form_view(window, cx).or_else(|| self.detail_view(&entries, &snapshot, cx));
         let handle = side.as_ref().map(|_| split::handle("queue-split", SideGrip, at, side_width, cx));

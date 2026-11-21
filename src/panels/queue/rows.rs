@@ -5,6 +5,7 @@ use gpui::{
 };
 use serde_json::Value;
 
+use super::bot;
 use super::data::{
     Click, Entry, Row, State, bot_click, chat_block, live_pane, notice, offers_result, remove_tip, status_label,
 };
@@ -37,6 +38,16 @@ pub(super) struct Snapshot {
     pub(super) results: bool,
     pub(super) results_note: Option<String>,
     pub(super) scope: Option<(String, String)>,
+    pub(super) elsewhere: Option<String>,
+    pub(super) add_note: Option<String>,
+    pub(super) stops: bool,
+    pub(super) clears_bots: usize,
+}
+
+pub(super) struct Around {
+    pub(super) elsewhere: Option<String>,
+    pub(super) clears_bots: usize,
+    pub(super) stops: bool,
 }
 
 impl Snapshot {
@@ -53,11 +64,20 @@ impl Snapshot {
             results,
             results_note,
             scope: None,
+            elsewhere: None,
+            add_note: bot::add_note(releases, Os::CURRENT),
+            stops: false,
+            clears_bots: 0,
         }
     }
 
-    pub(super) fn scoped(self, scope: Option<(String, String)>) -> Self {
-        Self { scope, ..self }
+    pub(super) fn scoped(self, scope: Option<(String, String)>, around: Around) -> Self {
+        let Around { elsewhere, clears_bots, stops } = around;
+        Self { scope, elsewhere, stops, clears_bots, ..self }
+    }
+
+    pub(super) fn bot_add_note(&self) -> Option<&str> {
+        self.add_note.as_deref().filter(|_| self.scope.is_some())
     }
 }
 
@@ -296,7 +316,7 @@ fn actions(row: &Row, shown: &Shown, group: SharedString, cx: &mut Context<Queue
         .gap(px(4.))
         .children(runnable.then(|| start_button(entry, shown, cx)))
         .children(entry.is_routine().then(|| pause_button(entry, shown, cx)))
-        .children(entry.editable().then(|| edit_button(entry, shown, cx)))
+        .children(runnable.then(|| edit_button(entry, shown, cx)))
         .children(shown.result.then(|| result_button(entry, cx)))
         .children(shown.pane.map(|pane| open_button(entry.id, pane)))
         .children(chat_block(entry, &row.runs).map(|run| chat_button(entry, run)))

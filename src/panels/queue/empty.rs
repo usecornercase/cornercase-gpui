@@ -1,14 +1,18 @@
 use gpui::{
     AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px,
+    Stateful, StatefulInteractiveElement as _, Styled as _, div, px,
 };
 
 use super::QueuePanel;
+use super::rows::Snapshot;
 use crate::panels::PanelKind;
 use crate::panels::bot_chat::EXAMPLES;
 use crate::store::Store;
 use crate::theme::{colours, radius};
-use crate::ui::{self, Icon, Tone, glass};
+use crate::ui::{self, Icon, Tone, glass, press};
+
+pub(super) const FIRST_STOP: &str = "queue-first";
+const ISSUES_STOP: &str = "queue-issues";
 
 const HEADING: &str = "Start agents later, on their own";
 const LEAD: &str = "Nothing is queued yet. Queue a prompt or an issue, and cornercase starts an agent on it when you \
@@ -73,36 +77,68 @@ fn points() -> Div {
         .children(POINTS.into_iter().map(|(glyph, title, text)| point(glyph, title, text)))
 }
 
-fn buttons(cx: &mut Context<QueuePanel>) -> Div {
-    let tall = |button: gpui::Stateful<Div>| button.h(px(32.)).px(px(16.)).text_size(px(13.));
-    div()
-        .flex()
-        .flex_wrap()
-        .justify_center()
-        .gap(px(10.))
-        .pt(px(6.))
-        .child(
-            tall(ui::icon_text_button("queue-first", Icon::Plus, "Schedule an agent…", Tone::Primary))
-                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_form(None, window, cx))),
-        )
-        .child(
-            tall(ui::icon_text_button("queue-issues", Icon::Issues, "Open Issues", Tone::Plain))
-                .on_click(|_: &ClickEvent, _, cx| Store::get(cx).update(cx, |s, cx| s.open(PanelKind::Issues, cx))),
-        )
+fn tall(button: Stateful<Div>) -> Stateful<Div> {
+    button.h(px(32.)).px(px(16.)).text_size(px(13.))
+}
+
+fn row_of_buttons() -> Div {
+    div().flex().flex_wrap().justify_center().gap(px(10.)).pt(px(6.))
+}
+
+fn page_line(line: &str) -> Div {
+    ui::dim(line.to_string()).max_w(px(470.)).text_center()
+}
+
+fn issues_button(stops: bool) -> Stateful<Div> {
+    let button = tall(ui::icon_text_button(ISSUES_STOP, Icon::Issues, "Open Issues", Tone::Plain));
+    press::stop(button, ISSUES_STOP, stops).on_click(|event: &ClickEvent, _, cx| {
+        if press::pressed(event, ISSUES_STOP) {
+            Store::get(cx).update(cx, |s, cx| s.open(PanelKind::Issues, cx));
+        }
+    })
+}
+
+pub(super) fn no_routines_line(name: &str, here: bool) -> String {
+    let example = EXAMPLES[EXAMPLES.len() - 1];
+    let ask = if here { "Schedule one here, or ask it" } else { "Ask it" };
+    format!("{name} has no routines yet. {ask} in its chat, such as “{example}”")
 }
 
 impl QueuePanel {
-    pub(super) fn empty_page(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn first_button(&self, label: &'static str, stops: bool, cx: &mut Context<Self>) -> Stateful<Div> {
+        let button = tall(ui::icon_text_button(FIRST_STOP, Icon::Plus, label, Tone::Primary));
+        press::stop_at(button, &self.first, FIRST_STOP, stops).on_click(cx.listener(
+            |this, event: &ClickEvent, window, cx| {
+                if press::pressed(event, FIRST_STOP) {
+                    this.open_form(None, window, cx);
+                }
+            },
+        ))
+    }
+
+    pub(super) fn empty_page(&self, snapshot: &Snapshot, cx: &mut Context<Self>) -> AnyElement {
+        let buttons = self.form.is_none().then(|| {
+            row_of_buttons()
+                .child(self.first_button("Schedule an agent…", snapshot.stops, cx))
+                .child(issues_button(snapshot.stops))
+        });
         let page = ui::emblem_page(Icon::Queue, HEADING)
             .child(ui::emblem_line(LEAD))
-            .when(self.form.is_none(), |d| d.child(buttons(cx)))
+            .children(buttons)
+            .children(snapshot.elsewhere.as_deref().map(page_line))
             .child(div().w_full().mt(px(8.)).flex().justify_center().child(points()));
         div().id("queue-empty").flex_1().min_h_0().overflow_y_scroll().child(page).into_any_element()
     }
-}
 
-pub(super) fn no_routines(name: &str) -> AnyElement {
-    let line = format!("{name} has no routines yet. Ask it in its chat, such as “{}”", EXAMPLES[EXAMPLES.len() - 1]);
-    let page = ui::emblem_page(Icon::Repeat, "No routines yet").child(ui::emblem_line(line));
-    div().id("queue-no-routines").flex_1().min_h_0().overflow_y_scroll().child(page).into_any_element()
+    pub(super) fn no_routines(&self, name: &str, snapshot: &Snapshot, cx: &mut Context<Self>) -> AnyElement {
+        let gate = snapshot.bot_add_note().map(page_line);
+        let line = no_routines_line(name, gate.is_none());
+        let button = (gate.is_none() && self.form.is_none())
+            .then(|| row_of_buttons().child(self.first_button("Schedule a routine…", snapshot.stops, cx)));
+        let page = ui::emblem_page(Icon::Repeat, "No routines yet")
+            .child(ui::emblem_line(line))
+            .children(button)
+            .children(gate);
+        div().id("queue-no-routines").flex_1().min_h_0().overflow_y_scroll().child(page).into_any_element()
+    }
 }

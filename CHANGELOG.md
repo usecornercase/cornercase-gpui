@@ -2,6 +2,15 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.143
+
+- **Schedule a bot's routine or reminder from the window.** With cornercase 0.13.85 or newer, a bot's **Routines** (in its chat's header, or **Routines…** in its `⋯`) has **Schedule…**, and its empty page **Schedule a routine…**: the form opens on every day at 09:00 with the keys in its prompt, and asks only what a bot needs, what it should do, when and a name. The bot answers in its chat with its own agent, model and account. Choose a one-off time instead and it is a reminder.
+- **Edit a bot's routines and reminders.** The pencil on one that can still run opens the same form with its values, and sends only what you change.
+- **The Queue lists your projects' entries only.** A bot's routines, reminders and runs are in that bot's Routines, and the Queue's last line says how many there are, such as `2 bot routines: in each bot's chat, under Routines`.
+- **Clear started says when it takes your bots' runs too.** It still clears them (cornercase has no way yet to leave them), and its tooltip and the line that offers Undo say how many were your bots'.
+- **The Queue takes the keys when it opens**: typing filters at once, Tab reaches **Schedule…** (and the empty page's buttons), Return or Space presses the one with the ring, and the keys come back after the form closes.
+- A failed or missed run of a project's entry is told while a bot's Routines shows, since that list does not show it.
+
 ## 0.1.142
 
 - **A bot's details in one place.** Press the bot's name at the top of its chat, or choose **Details…** in its menu (its row's `⋯` or the chat's `⋯`), to see everything about it: its folder with **Copy path**, its agent, model, effort and account, its access (full access in red), how many secrets it keeps, the secrets it is waiting for, the day it was made, what it is for, and its routines with their next run or `paused`. It follows changes while it is open. **Routines…** opens what it does on a schedule and **Edit bot…** its form; Tab reaches every button and Escape closes it. What it is for needs cornercase 0.13.96 or newer. A linked machine's bot has no details yet, as it has no menu.
