@@ -48,7 +48,7 @@ The Recap panel shows what `cornercase recap` answers: a summary of what your ag
 
 ## Left out
 
-- Tokens in the heading, and copying a recap: gpui's text cannot be selected, so the TUI's terminal selection has no equal here, and `cornercase recap` prints the same text. Not asked for on 2026-11-06; a small button when someone wants it.
+- Tokens in the heading, and copying a recap: rendered Markdown is selectable only where its caller passes picks (`picked_blocks`, today only a bot's chat; a recap's is #394), so the TUI's terminal selection has no equal here yet, and `cornercase recap` prints the same text. Not asked for on 2026-11-06; a small button when someone wants it.
 - A notice when a run ends while the panel is closed: the status bar's job goes, and the text is there on coming back.
 
 ## Checked live
