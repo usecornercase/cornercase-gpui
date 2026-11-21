@@ -38,6 +38,16 @@ fn ends_a_turn(line: &Line) -> bool {
     }
 }
 
+const SETTING_UP: &str = "setting up";
+
+fn is_setup(line: &Line) -> bool {
+    line.kind == Kind::Notice && line.text == SETTING_UP
+}
+
+fn opens_a_turn(line: &Line) -> bool {
+    (line.kind == Kind::You && !line.held) || is_setup(line)
+}
+
 fn after_the_last_end(lines: &[Line]) -> &[Line] {
     let from = lines.iter().rposition(ends_a_turn).map_or(0, |at| at + 1);
     &lines[from..]
@@ -90,7 +100,7 @@ impl Walk {
         }
         match line.kind {
             Kind::You if line.held => self.waiting.push(line.id),
-            Kind::You => self.turn = vec![line.id],
+            _ if opens_a_turn(line) => self.turn = vec![line.id],
             Kind::Bot | Kind::Error => self.end(),
             Kind::Notice if ENDS.contains(&line.text.as_str()) => self.end(),
             _ => {}
@@ -155,7 +165,7 @@ pub(crate) fn turn(lines: &[Line], thinking: bool) -> Option<Turn> {
     let ended = lines.len() - tail.len();
     let since = tail
         .iter()
-        .find(|line| line.kind == Kind::You && !line.held)
+        .find(|line| opens_a_turn(line))
         .map(|line| line.at)
         .or_else(|| ended.checked_sub(1).map(|at| lines[at].at))
         .or_else(|| lines.iter().find(|line| line.kind == Kind::You).map(|line| line.at))?;
@@ -163,17 +173,33 @@ pub(crate) fn turn(lines: &[Line], thinking: bool) -> Option<Turn> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Retry {
-    pub error: u64,
-    pub text: String,
+pub(crate) enum Again {
+    Say(String),
+    Setup,
 }
 
-pub(crate) fn retry(lines: &[Line], thinking: bool) -> Option<Retry> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Retry {
+    pub error: u64,
+    pub again: Again,
+}
+
+fn again_of(asked: &[&Line], setup: bool) -> Option<Again> {
+    match asked {
+        [] => None,
+        [only] if is_setup(only) => setup.then_some(Again::Setup),
+        _ => {
+            let texts: Vec<&str> = asked.iter().map(|line| line.text.as_str()).collect();
+            Some(Again::Say(texts.join("\n\n")))
+        }
+    }
+}
+
+pub(crate) fn retry(lines: &[Line], thinking: bool, setup: bool) -> Option<Retry> {
     let last = lines.last().filter(|line| !thinking && line.kind == Kind::Error)?;
     let ended = asked(lines).ended;
-    let texts: Vec<&str> =
-        ended.iter().filter_map(|id| lines.iter().find(|line| line.id == *id)).map(|line| line.text.as_str()).collect();
-    (!texts.is_empty()).then(|| Retry { error: last.id, text: texts.join("\n\n") })
+    let asked: Vec<&Line> = ended.iter().filter_map(|id| lines.iter().find(|line| line.id == *id)).collect();
+    again_of(&asked, setup).map(|again| Retry { error: last.id, again })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

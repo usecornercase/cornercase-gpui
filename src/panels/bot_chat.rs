@@ -90,7 +90,7 @@ fn counting(chat: &mut BotChat) -> &mut Counting {
 
 pub(crate) type Stamp = (String, u64, u64, Option<u64>);
 
-pub(crate) type Controls = (bool, bool, bool, bool);
+pub(crate) type Controls = (bool, bool, bool, bool, bool);
 
 pub(crate) fn is_fresh(shown: Option<&str>, mark: Option<&Stamp>, stamp: &Stamp) -> bool {
     shown != Some(stamp.0.as_str()) || mark.is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1))
@@ -137,7 +137,7 @@ impl BotChat {
             blocks: Rc::new(RefCell::new(HashMap::new())),
             counting: Counting::default(),
             mark: None,
-            heard: (None, 0, (false, false, false, false)),
+            heard: (None, 0, (false, false, false, false, false)),
             retry: None,
             examples: std::array::from_fn(|_| cx.focus_handle()),
             retry_stop: cx.focus_handle(),
@@ -149,8 +149,9 @@ impl BotChat {
 
     fn moved(&mut self, store: &Store) -> bool {
         let shown = store.shown_bot();
-        let controls = shown.map_or((false, false, false, false), |id| {
-            (store.bots.stopping(id), store.busy(&say_key(id)), store.busy(&reset_key(id)), store.chat_takes_keys())
+        let controls = shown.map_or((false, false, false, false, false), |id| {
+            let busy = (store.busy(&say_key(id)), store.busy(&reset_key(id)));
+            (store.bots.stopping(id), busy.0, busy.1, store.chat_takes_keys(), store.bot_setup_offered())
         });
         let now = (shown.map(str::to_string), store.bots_revision(), controls);
         (std::mem::replace(&mut self.heard, now.clone()) != now) || self.bot.is_some() && now.0.is_none()
@@ -196,7 +197,7 @@ impl BotChat {
             return;
         };
         let thinking = store.bots.find(&chat.bot).is_some_and(Bot::thinking);
-        let retry = entries::retry(&chat.lines, thinking);
+        let retry = entries::retry(&chat.lines, thinking, store.bot_setup_offered());
         let stamp = (chat.bot.clone(), chat.born, chat.revision(), retry.as_ref().map(|retry| retry.error));
         let fresh = is_fresh(self.bot.as_deref(), self.mark.as_ref(), &stamp);
         if !fresh && self.mark.as_ref() == Some(&stamp) {

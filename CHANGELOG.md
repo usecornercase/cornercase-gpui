@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.133
+
+- **A new bot's setup shows in its chat.** With cornercase 0.13.89 or newer, a bot made with what it is for sets itself up at once. Its chat opens on `setting up`, and the row under it now says how long the bot has been at it and how many steps it took, where it only said `Thinking`.
+- **Retry runs a failed setup again.** When the setup fails, Retry under the error sets the bot up again (`Setting up…` while it is on its way), instead of offering nothing.
+- **The New bot form says what filling in What it's for starts**: once made, the bot sets itself up from it at once, and left empty it starts nothing and spends no tokens until you write to it.
+
 ## 0.1.130
 
 - **New bot and Edit bot… say what a Gemini CLI or GitHub Copilot CLI bot can read.** With access through cornercase, a bot of these two agents reads and writes only in its own folder, and the note under Access said it reads anything. With cornercase 0.13.86 or newer the note follows the agent you choose; for the other agents it reads as before.

@@ -3,13 +3,13 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Div, FocusHandle, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, WeakEntity, div, px, relative,
+    AnyElement, App, ClickEvent, Div, FocusHandle, FontWeight, InteractiveElement as _, IntoElement,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, WeakEntity, div, px, relative,
 };
 
 use super::BotChat;
-use super::entries::{Entry, Retry, folded};
-use super::words::{DROPPED_STAMP, EARLIER, HELD, RETRY, SENDING, folded_label, time_label};
+use super::entries::{Again, Entry, Retry, folded};
+use super::words::{DROPPED_STAMP, EARLIER, HELD, RETRY, SENDING, SETTING_UP, folded_label, time_label};
 use crate::model::bots::Said;
 use crate::store::Store;
 use crate::theme::{FONT_FAMILY, colours, radius};
@@ -134,17 +134,24 @@ fn failed(id: u64, text: &str, meta: &Meta) -> Div {
 
 fn retry_button(retry: &Retry, meta: &Meta) -> AnyElement {
     if meta.sending {
-        return ui::busy_button("bot-retry", SENDING, Tone::Plain).into_any_element();
+        let busy = if retry.again == Again::Setup { SETTING_UP } else { SENDING };
+        return ui::busy_button("bot-retry", busy, Tone::Plain).into_any_element();
     }
-    let (bot, text) = (meta.bot.clone(), retry.text.clone());
+    let (bot, again) = (meta.bot.clone(), retry.again.clone());
     press::stop_at(ui::button(RETRY_STOP, RETRY), &meta.retry_stop, RETRY_STOP, meta.stops)
         .on_click(move |event: &ClickEvent, _, cx| {
             if press::pressed(event, RETRY_STOP) {
-                let (bot, text) = (bot.clone(), text.clone());
-                Store::get(cx).update(cx, |store, cx| store.say_to_bot(&bot, text, Said::Again, cx));
+                send_again(&bot, &again, cx);
             }
         })
         .into_any_element()
+}
+
+fn send_again(bot: &str, again: &Again, cx: &mut App) {
+    Store::get(cx).update(cx, |store, cx| match again {
+        Again::Say(text) => store.say_to_bot(bot, text.clone(), Said::Again, cx),
+        Again::Setup => store.set_up_bot(bot, cx),
+    });
 }
 
 fn notice(text: &str) -> Div {

@@ -40,6 +40,7 @@ pub(crate) const EXAMPLES: [&str; 3] = [
 
 pub(crate) const SEND: &str = "Send";
 pub(crate) const SENDING: &str = "Sending…";
+pub(crate) const SETTING_UP: &str = "Setting up…";
 pub(crate) const STOP: &str = "Stop";
 pub(crate) const STOPPING: &str = "Stopping…";
 pub(crate) const RETRY: &str = "Retry";

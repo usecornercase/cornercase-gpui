@@ -12,6 +12,10 @@ pub(crate) fn say_args(bot: &str) -> Vec<String> {
     ["bot", "say", bot, "--json", "-"].map(str::to_string).to_vec()
 }
 
+pub(crate) fn setup_args(bot: &str) -> Vec<String> {
+    ["bot", "setup", bot, "--json"].map(str::to_string).to_vec()
+}
+
 pub(crate) fn say_key(bot: &str) -> String {
     format!("bot-say:{bot}")
 }

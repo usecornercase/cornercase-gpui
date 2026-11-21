@@ -5,8 +5,10 @@ use gpui::{
 };
 
 use super::{body_height, cancel_and, close, dialog_starts, fitted, frame, show, within};
+use crate::cli::Feature;
 use crate::model::bots::{
-    AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, agents_of, chosen_at_open, kept_accounts, new_args,
+    AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, kept_accounts,
+    new_args,
 };
 use crate::store::{Store, args};
 use crate::theme::colours;
@@ -393,7 +395,12 @@ impl BotForm {
 
     fn about_field(&self, window: &Window, cx: &App) -> Div {
         match self.mode {
-            Mode::New => ui::field("What it's for", ui::prompt_box(&self.about, "create", window, cx)),
+            Mode::New => {
+                let note = about_note(Store::get(cx).read(cx).server_has(Feature::BotSetup));
+                let column =
+                    div().flex().flex_col().gap(px(6.)).child(ui::prompt_box(&self.about, "create", window, cx));
+                ui::field("What it's for", column.children(note.map(ui::dim)))
+            }
             Mode::Edit(_) => ui::field("What it's for", ui::dim(ABOUT_WAITS)),
         }
     }

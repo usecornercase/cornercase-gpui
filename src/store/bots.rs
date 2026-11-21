@@ -17,6 +17,10 @@ impl Store {
         self.bots.offer(self.releases().lacks(Feature::Bots), Os::CURRENT)
     }
 
+    pub(crate) fn bot_setup_offered(&self) -> bool {
+        self.releases().lacks(Feature::BotSetup).is_none()
+    }
+
     pub(crate) fn bots_revision(&self) -> u64 {
         self.bots.revision()
     }
