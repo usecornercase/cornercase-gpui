@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::{Clip, Shown, Toast, ToastKind, drawn, push_toast};
+use super::{Clip, Shown, Toast, ToastKind, drawn, newest_meant, push_toast};
 use crate::store::ToastGo;
 
 fn toast(id: u64, text: &str) -> Toast {
@@ -193,4 +193,51 @@ fn a_removed_bots_answer_toasts_go_and_the_others_stay() {
     let toasts = [on(1, bot("notes")), on(2, bot("ops")), on(3, None), on(4, Some(ToastGo::Run(vec!["x".into()])))];
     let gone: Vec<u64> = toasts.iter().filter(|t| super::shows_bot(t, "notes")).map(|t| t.id).collect();
     assert_eq!(gone, [1]);
+}
+
+fn ms(n: u64) -> Duration {
+    Duration::from_millis(n)
+}
+
+fn drawn_at(toasts: &mut [Toast], ids: &[u64], ago: Duration, now: Instant) {
+    drawn(toasts, ids, now.checked_sub(ago).expect("a moment ago"));
+}
+
+#[test]
+fn the_key_takes_the_newest_toast_that_is_drawn() {
+    let now = Instant::now();
+    let mut v = vec![toast(1, "a"), toast(2, "b")];
+    drawn_at(&mut v, &[1, 2], secs(1), now);
+    assert_eq!(newest_meant(&v, now), Some(2));
+}
+
+#[test]
+fn a_toast_that_waits_is_never_taken() {
+    let now = Instant::now();
+    let mut v = vec![toast(1, "a"), toast(2, "b")];
+    drawn_at(&mut v, &[1], secs(1), now);
+    assert_eq!(newest_meant(&v, now), Some(1));
+}
+
+#[test]
+fn a_toast_drawn_for_less_than_a_moment_is_passed_over() {
+    let now = Instant::now();
+    let mut v = vec![toast(1, "a"), toast(2, "b")];
+    drawn_at(&mut v, &[1], secs(1), now);
+    drawn_at(&mut v, &[1, 2], ms(100), now);
+    assert_eq!(newest_meant(&v, now), Some(1));
+    assert_eq!(newest_meant(&v[1..], now), None);
+}
+
+#[test]
+fn an_expired_toast_is_not_taken() {
+    let now = Instant::now();
+    let mut v = vec![toast(1, "a")];
+    drawn_at(&mut v, &[1], secs(60), now);
+    assert_eq!(newest_meant(&v, now), None);
+}
+
+#[test]
+fn with_no_toast_the_key_takes_nothing() {
+    assert_eq!(newest_meant(&[], Instant::now()), None);
 }

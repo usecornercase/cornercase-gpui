@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.126
+
+- **⌘. takes the newest toast away** (Ctrl+Shift+. on Linux and Windows), from anywhere in the window, also under a dialog. Until now only a click on its ✕ did, or waiting 4 to 15 seconds. It only takes the toast away: an agent that needs you keeps its mark in the sidebar and ⌘B still goes to it, and a bot's unread count stays, so ⇧⌘I still goes to it. Esc leaves toasts alone, since it belongs to the program in the pane.
+- **Toasts no longer stand over the field you are typing in.** They stay at the bottom right, but while the field that has the keys is under them (a bot's chat's field and Send, the TODO panel's New TODO, the Browser's "What should change?") they stand at the top right, and a tall stack stops short of a search or filter field you type in at the top.
+
 ## 0.1.125
 
 - **A bot's chat works with keys alone.** Tab and ⇧Tab (Shift+Tab on Linux and Windows) go from the chat's field to its buttons: New conversation, the `⋯` menu, the examples of an empty chat, Retry and Stop. The one you are on has a ring, and Return or Space presses it. The `⋯` menu opens with its first entry lit, so ↓, ↑ and Return go on from there. Tab never reaches the chat behind an open dialog or panel.

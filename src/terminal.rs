@@ -190,11 +190,7 @@ impl Root {
         let Some(command) = keymap::find(chord.key, chord.shift, chord.focus, Os::CURRENT).map(|s| s.command) else {
             return false;
         };
-        let over_dialogs = matches!(
-            command,
-            Command::Close | Command::Copy | Command::Paste | Command::FindFile | Command::PullRequest
-        );
-        if self.store.read(cx).dialog.is_some() && !over_dialogs {
+        if self.store.read(cx).dialog.is_some() && !over_dialogs(command) {
             return true;
         }
         if chord.focus == Focus::Browser && self.browser_command(command, window, cx) {
@@ -268,6 +264,7 @@ impl Root {
             Command::ZoomIn => self.zoom(1., cx),
             Command::ZoomOut => self.zoom(-1., cx),
             Command::ZoomReset => self.set_font_size(DEFAULT_FONT_SIZE, cx),
+            Command::TakeToast => self.store.update(cx, Store::take_newest_toast),
             _ => self.step_shortcut(command, cx),
         }
     }
@@ -611,6 +608,13 @@ fn split_args(pane: u64, down: bool) -> Vec<String> {
         args.push("--down".into());
     }
     args
+}
+
+fn over_dialogs(command: Command) -> bool {
+    matches!(
+        command,
+        Command::Close | Command::Copy | Command::Paste | Command::FindFile | Command::PullRequest | Command::TakeToast
+    )
 }
 
 #[cfg(test)]

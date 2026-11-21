@@ -13,6 +13,7 @@ use super::rows::{
     scroll_to_show_with_margins, sideways, thumb,
 };
 use super::shown::Shown;
+use super::typing;
 use crate::theme::colours;
 use crate::ui::selection::BREAK_WIDTH;
 
@@ -274,6 +275,7 @@ impl Element for TextElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
+        typing::note(&self.input.read(cx).focus_handle, bounds, window);
         let Some(layout) = self.layout(bounds, window, cx) else { return PrepaintState::default() };
         let layout = self.settled(layout, window, cx);
         let input = self.input.read(cx);

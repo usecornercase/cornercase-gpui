@@ -42,6 +42,7 @@ pub(crate) enum Command {
     ZoomOut,
     ZoomReset,
     Shortcuts,
+    TakeToast,
     Back,
     Forward,
     Reload,
@@ -108,6 +109,7 @@ pub(crate) const SHORTCUTS: &[Shortcut] = &[
     key(&["g"], false, Command::StartAgent),
     key(&["w"], false, Command::Close),
     key(&["/", "?"], false, Command::Shortcuts),
+    key(&["."], false, Command::TakeToast),
     key(&["j"], false, Command::NextWorkspace),
     key(&["j"], true, Command::PreviousWorkspace),
     key(&["y"], false, Command::NextProject),
@@ -338,6 +340,7 @@ impl Command {
             Self::ZoomIn => "Bigger text",
             Self::ZoomOut => "Smaller text",
             Self::ZoomReset => "Text back to its size",
+            Self::TakeToast => "Take the newest toast away",
             _ => self.describe_getting_around(),
         }
     }

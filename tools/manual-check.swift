@@ -15,7 +15,7 @@ let namedKeys: [String: Int] = [
 
 let letters = "abcdefghijklmnopqrstuvwxyz".map { String($0) }
 let digits = "0123456789".map { String($0) }
-let symbolNames = ["comma", "slash", "question", "minus", "equal", "plus", "leftbracket", "rightbracket"]
+let symbolNames = ["comma", "period", "slash", "question", "minus", "equal", "plus", "leftbracket", "rightbracket"]
 let positionNames = [
     "return", "escape", "tab", "space", "delete", "left", "right", "up", "down", "pageup", "pagedown", "home", "end", "us-quote",
 ]
@@ -34,7 +34,7 @@ let usage =
 
 let characterNames: [String: Character] = {
     var names: [String: Character] = [
-        "comma": ",", "slash": "/", "question": "?", "minus": "-", "equal": "=", "plus": "+", "leftbracket": "[",
+        "comma": ",", "period": ".", "slash": "/", "question": "?", "minus": "-", "equal": "=", "plus": "+", "leftbracket": "[",
         "rightbracket": "]",
     ]
     for name in letters + digits { names[name] = Character(name) }
@@ -1212,13 +1212,13 @@ enum SelfTest {
 
     static let us = madeLayout("test.US", letterRows.merging(digitRows) { $1 }.merging([
         27: [0: "-", 2: "_"], 24: [0: "=", 2: "+"], 33: [0: "[", 2: "{"], 30: [0: "]", 2: "}"],
-        43: [0: ",", 2: "<"], 44: [0: "/", 2: "?"],
+        43: [0: ",", 2: "<"], 47: [0: ".", 2: ">"], 44: [0: "/", 2: "?"],
     ]) { $1 })
 
     static let spanish = madeLayout("test.Spanish-ISO", letterRows.merging(digitRows) { $1 }.merging([
         26: [0: "7", 2: "/", 8: "÷"], 29: [0: "0", 2: "=", 8: "≠"], 27: [0: "'", 2: "?", 8: "´"], 24: [0: "¡", 2: "¿"],
         30: [0: "+", 2: "*", 8: "]", 10: "±"], 33: [0: "~`", 2: "~^", 8: "["], 39: [0: "~´", 2: "~¨", 8: "{"],
-        43: [0: ",", 2: ";"], 44: [0: "-", 2: "_"], 75: [0: "/"],
+        43: [0: ",", 2: ";"], 47: [0: ".", 2: ":"], 44: [0: "-", 2: "_"], 75: [0: "/"],
     ]) { $1 })
 
     static let azerty = madeLayout("test.French", [
@@ -1265,12 +1265,12 @@ enum SelfTest {
     static func keyTests() -> [(String, () -> String?)] {
         [
             ("every_name_posts_its_key_on_a_us_layout", {
-                let want = [("comma", 43, "C"), ("slash", 44, "C"), ("question", 44, "SC"), ("minus", 27, "C"), ("equal", 24, "C"),
+                let want = [("comma", 43, "C"), ("period", 47, "C"), ("slash", 44, "C"), ("question", 44, "SC"), ("minus", 27, "C"), ("equal", 24, "C"),
                     ("plus", 24, "SC"), ("leftbracket", 33, "C"), ("rightbracket", 30, "C"), ("1", 18, "C"), ("9", 25, "C"), ("0", 29, "C")]
                 return expect(want.map { posted($0.0, ["cmd"], us) }, want.map { "\($0.1) \($0.2)" })
             }),
             ("every_name_posts_its_key_or_says_why_on_spanish_iso", {
-                let want = [("comma", "43 C"), ("slash", "26 SC"), ("question", "27 SC"), ("minus", "44 C"), ("equal", "29 SC"),
+                let want = [("comma", "43 C"), ("period", "47 C"), ("slash", "26 SC"), ("question", "27 SC"), ("minus", "44 C"), ("equal", "29 SC"),
                     ("plus", "30 C"), ("1", "18 C"), ("0", "29 C")]
                 let seen = want.map { posted($0.0, ["cmd"], spanish) }
                 return expect(seen, want.map { $0.1 })
@@ -1416,7 +1416,7 @@ enum SelfTest {
                     ?? expect(posted("tab", ["shift"], nothing), "48 S")
             }),
             ("the_keys_a_person_reads_name_every_key_in_order", {
-                expect(keyGrammar, "a…z 0…9 comma slash question minus equal plus leftbracket rightbracket return escape tab space delete left right up down pageup pagedown home end us-quote")
+                expect(keyGrammar, "a…z 0…9 comma period slash question minus equal plus leftbracket rightbracket return escape tab space delete left right up down pageup pagedown home end us-quote")
             }),
             ("shift_adds_nothing_to_a_ctrl_shortcut_and_says_ctrl", {
                 expect([refused("slash", ["ctrl", "shift"], spanish), refused("question", ["ctrl", "shift"], us)], [

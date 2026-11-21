@@ -19,6 +19,8 @@ const WIDTH: f32 = 348.;
 const RIGHT: f32 = 16.;
 const BOTTOM: f32 = 40.;
 const FADE: f32 = 18.;
+const CLEAR: f32 = 16.;
+const LEAST_ROOM: f32 = 80.;
 
 fn top(frame: Frame) -> f32 {
     frame.title_bottom() + GAP
@@ -39,6 +41,7 @@ impl Root {
             .into_iter()
             .fold(ui::stack(GAP), |stack, toast| stack.item(card(&store, toast)))
             .more(waiting)
+            .clear_of(ui::text_field::typing_at, CLEAR, LEAST_ROOM)
             .on_drawn(move |drawn, cx| {
                 if !ids.is_empty() {
                     tell.update(cx, |s, cx| s.toasts_drawn(&ids[drawn], cx));

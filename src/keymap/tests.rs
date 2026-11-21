@@ -577,6 +577,7 @@ fn chat_table() -> Vec<(Command, InChat)> {
         (Command::ZoomOut, InChat::Acts),
         (Command::ZoomReset, InChat::Acts),
         (Command::Shortcuts, InChat::Acts),
+        (Command::TakeToast, InChat::Acts),
         (Command::Back, InChat::Acts),
         (Command::Forward, InChat::Acts),
         (Command::Reload, InChat::Acts),
@@ -639,4 +640,14 @@ fn the_bots_key_is_shift_command_i_and_ctrl_alt_shift_i_on_linux_and_windows() {
     assert_eq!(keys_of(Command::Bots, Os::Windows).as_deref(), Some("Ctrl+Alt+Shift+I"));
     assert_eq!(on_linux("i", CTRL_ALT_SHIFT), Some(Command::Bots));
     assert_eq!(on_linux("i", CTRL_SHIFT), Some(Command::Panel(PanelKind::Issues)));
+}
+
+#[test]
+fn command_period_takes_a_toast_away_on_every_platform() {
+    assert_eq!(command(".", false), Some(Command::TakeToast));
+    assert_eq!(keys_of(Command::TakeToast, Os::Mac).as_deref(), Some("⌘."));
+    assert_eq!(keys_of(Command::TakeToast, Os::Linux).as_deref(), Some("Ctrl+Shift+."));
+    assert_eq!(keys_of(Command::TakeToast, Os::Windows).as_deref(), Some("Ctrl+Shift+."));
+    assert_eq!(shift_held(">", CTRL), Some(Command::TakeToast));
+    assert_eq!(on_linux(".", CTRL), None);
 }
