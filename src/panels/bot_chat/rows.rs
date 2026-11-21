@@ -11,7 +11,7 @@ use super::BotChat;
 use super::entries::{Again, Entry, Retry, folded};
 use super::words::{DROPPED_STAMP, EARLIER, HELD, RETRY, SENDING, SETTING_UP, folded_label, time_label};
 use crate::model::bots::Said;
-use crate::store::Store;
+use crate::store::{Clip, Store};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::markdown::text as md;
 use crate::ui::markdown::{self, Block};
@@ -87,7 +87,7 @@ fn answer(id: u64, text: &str, at: i64, meta: &Meta) -> Div {
         .text_size(px(11.))
         .text_color(colours::faint())
         .child(div().font_weight(FontWeight::SEMIBOLD).child(format!("{} · {}", meta.name, time_label(at, meta.now))))
-        .child(ui::copy_button(("bot-answer", id), text.to_string()));
+        .child(ui::copy_button(("bot-answer", id), Clip::of(text.to_string(), "the answer")));
     let body = div().flex().flex_col().gap(px(6.)).text_color(colours::soft()).children(md::linked_blocks(
         &format!("bot-{id}"),
         &blocks,

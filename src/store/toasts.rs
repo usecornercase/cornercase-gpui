@@ -81,6 +81,10 @@ impl Clip {
         };
         Self { text: command, said }
     }
+
+    pub(crate) fn of(text: String, what: &str) -> Self {
+        Self { text, said: format!("Copied {what}") }
+    }
 }
 
 impl Toast {

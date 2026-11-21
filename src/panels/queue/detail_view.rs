@@ -19,7 +19,7 @@ use crate::dialogs::pull_tag;
 use crate::model::PullRequest;
 use crate::model::link::is_web;
 use crate::notify::tip;
-use crate::store::Store;
+use crate::store::{Clip, Store};
 use crate::theme::{colours, radius};
 use crate::ui::markdown::text::{self, OnLink, opens_web_addresses};
 use crate::ui::{self, Icon, Tone};
@@ -265,7 +265,9 @@ fn message_card(ix: usize, said: &Spoken, link: &OnLink) -> Option<AnyElement> {
         .text_size(px(12.))
         .text_color(colours::muted())
         .child(div().flex_1().min_w(px(0.)).child(said_heading(message, today)))
-        .when(!message.text.is_empty(), |d| d.child(ui::copy_button(("queue-said-copy", ix), message.text.clone())));
+        .when(!message.text.is_empty(), |d| {
+            d.child(ui::copy_button(("queue-said-copy", ix), Clip::of(message.text.clone(), "the message")))
+        });
     let card = div()
         .flex()
         .flex_col()

@@ -1,10 +1,11 @@
 use gpui::{
-    ClickEvent, ClipboardItem, Div, ElementId, InteractiveElement as _, ParentElement as _, Rgba, SharedString,
-    Stateful, StatefulInteractiveElement as _, Styled as _, div, px,
+    ClickEvent, Div, ElementId, InteractiveElement as _, ParentElement as _, Rgba, SharedString, Stateful,
+    StatefulInteractiveElement as _, Styled as _, div, px,
 };
 
 use super::{Icon, glass, icon};
 use crate::notify::tip;
+use crate::store::{Clip, Store};
 use crate::theme::{colours, radius};
 
 pub(crate) const ROW_ACTION: f32 = 26.;
@@ -142,7 +143,7 @@ pub(crate) fn field_action(id: impl Into<ElementId>, glyph: Icon, hint: &'static
         .child(icon(glyph, 12.).text_color(ink))
 }
 
-pub(crate) fn copy_button(id: impl Into<ElementId>, text: String) -> Stateful<Div> {
+pub(crate) fn copy_button(id: impl Into<ElementId>, clip: Clip) -> Stateful<Div> {
     div()
         .id(id)
         .flex_none()
@@ -153,6 +154,6 @@ pub(crate) fn copy_button(id: impl Into<ElementId>, text: String) -> Stateful<Di
         .child(icon(Icon::Copy, 12.).text_color(colours::faint()))
         .on_click(move |_: &ClickEvent, _, cx| {
             cx.stop_propagation();
-            cx.write_to_clipboard(ClipboardItem::new_string(text.clone()));
+            Store::get(cx).update(cx, |store, cx| store.copy(&clip, cx));
         })
 }

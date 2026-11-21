@@ -241,3 +241,9 @@ fn an_expired_toast_is_not_taken() {
 fn with_no_toast_the_key_takes_nothing() {
     assert_eq!(newest_meant(&[], Instant::now()), None);
 }
+
+#[test]
+fn a_copied_text_says_what_it_was() {
+    let clip = Clip::of("# Title\n\n- one".into(), "the answer");
+    assert_eq!(clip, Clip { text: "# Title\n\n- one".into(), said: "Copied the answer".into() });
+}
