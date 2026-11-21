@@ -44,5 +44,9 @@ impl Showing {
     }
 }
 
+pub(crate) fn awaits(select: bool, asked: Option<u64>, shown: Option<u64>) -> bool {
+    select && asked.is_some() && asked == shown
+}
+
 #[cfg(test)]
 mod tests;

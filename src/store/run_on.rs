@@ -6,6 +6,7 @@ use super::{Busy, Store, ToastKind, failed_there, run_job, run_job_on, run_with}
 use crate::cli::{self, Target};
 use crate::model::machines::run_on::clone::{Cloned, Unwritten, clone_args, cloned_note, parse_clone};
 use crate::model::machines::run_on::{self, Answer, Awaited, Look, Looking, Offer, Starting, There, parse_answer};
+use crate::model::place::awaits;
 use crate::model::{Project, Spot, ThereId};
 
 #[derive(Default)]
@@ -120,6 +121,7 @@ impl Store {
         let machine = &start.spot.machine;
         match answer {
             Ok(answer) => {
+                let awaits = awaits(start.select, dialog, self.shown_dialog());
                 self.close_started(dialog, start.select, cx);
                 if let Some(note) = answer.note.as_deref() {
                     self.toast(note, ToastKind::Info, cx);
@@ -128,7 +130,7 @@ impl Store {
                 if let Some(text) = start.starting.left_open(machine, &answer) {
                     self.toast(text, ToastKind::Error, cx);
                 }
-                if start.select {
+                if awaits {
                     self.placing.awaited = Awaited::answered(&start.spot, &answer, Instant::now());
                     self.follow_awaited(cx);
                 }

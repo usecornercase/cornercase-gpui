@@ -9,6 +9,7 @@ use crate::cli::{self, Feature};
 use crate::model::bots::{
     Arrival, Creating, Making, create_failed, id_of, making, remove_failed, rename_args, rename_failed, save_failed,
 };
+use crate::model::place::awaits;
 use crate::platform::Os;
 
 fn remove_key(id: &str) -> String {
@@ -71,7 +72,7 @@ impl Store {
         let dialog = creating.dialog;
         match result {
             Ok(answer) => {
-                let shown = self.shown_dialog() == Some(dialog);
+                let shown = awaits(true, Some(dialog), self.shown_dialog());
                 self.close_started(Some(dialog), false, cx);
                 match id_of(&answer) {
                     Some(id) => {
