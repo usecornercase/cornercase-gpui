@@ -1,6 +1,6 @@
 use gpui::{
-    App, Bounds, ClickEvent, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, ParentElement as _,
-    Pixels, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div, px,
+    App, Bounds, ClickEvent, FocusHandle, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement as _, Pixels, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div, px,
 };
 
 use super::entries::{self, Control, new_conversation_control, stop_control};
@@ -8,7 +8,7 @@ use super::words::{
     NEW_CONVERSATION, ROUTINES, STARTING, STOP, STOPPING, answering, menu_tip, new_conversation_message,
     new_conversation_title, routines_tip, secrets_label, turn_label,
 };
-use super::{BotChat, routines_fit};
+use super::{BotChat, global, routines_fit};
 use crate::dialogs::{self, Question};
 use crate::model::bots::{Bot, Chat};
 use crate::model::bots::{Reach, reach_tip};
@@ -27,15 +27,19 @@ pub(super) struct Fit {
     pub chat: WeakEntity<BotChat>,
     pub drawn: bool,
     pub width: f32,
+    pub stop: FocusHandle,
 }
 
-fn measured(fit: &Fit, (bounds, at): (&[Bounds<Pixels>], usize), cx: &mut App) {
+fn measured(fit: &Fit, (bounds, at): (&[Bounds<Pixels>], usize), window: &mut Window, cx: &mut App) {
     let (Some(name), Some(first)) = (bounds.first(), bounds.get(2)) else { return };
     let room = f32::from(first.left() - name.left());
     let width = fit.drawn.then(|| bounds.get(at)).flatten().map(|button| f32::from(button.size.width));
     let fits = routines_fit(room, fit.drawn, width.unwrap_or(fit.width));
     if fits == fit.drawn && width.is_none_or(|width| (width - fit.width).abs() < 0.5) {
         return;
+    }
+    if !fits && fit.drawn && fit.stop.is_focused(window) {
+        window.defer(cx, global::keys_to_field);
     }
     let chat = fit.chat.clone();
     cx.defer(move |cx| {
@@ -49,7 +53,7 @@ pub(super) fn header(
     (stops, fit): (bool, Option<Fit>),
     reach: Option<&Reach>,
 ) -> impl IntoElement + use<> {
-    let drawn = fit.as_ref().is_some_and(|fit| fit.drawn);
+    let routines = fit.as_ref().filter(|fit| fit.drawn).map(|fit| routines_button(bot, &fit.stop, stops));
     let at = 2 + usize::from(reach.is_some());
     let row = div()
         .flex_none()
@@ -70,11 +74,11 @@ pub(super) fn header(
         )
         .child(facts(bot))
         .children(reach.map(reach_icon))
-        .children(drawn.then(|| routines_button(bot, stops)))
+        .children(routines)
         .child(new_conversation(bot, starting, stops))
         .child(menu_button(bot, stops));
     match fit {
-        Some(fit) => row.on_children_prepainted(move |bounds, _, cx| measured(&fit, (&bounds, at), cx)),
+        Some(fit) => row.on_children_prepainted(move |bounds, window, cx| measured(&fit, (&bounds, at), window, cx)),
         None => row,
     }
 }
@@ -105,10 +109,10 @@ fn reach_icon(reach: &Reach) -> impl IntoElement + use<> {
         .tooltip(notify::tip(reach_tip(reach)))
 }
 
-fn routines_button(bot: &Bot, stops: bool) -> impl IntoElement + use<> {
+fn routines_button(bot: &Bot, stop: &FocusHandle, stops: bool) -> impl IntoElement + use<> {
     let id = bot.id.clone();
     div().flex_none().child(
-        press::stop(ui::button(ROUTINES_STOP, ROUTINES), ROUTINES_STOP, stops)
+        press::stop_at(ui::button(ROUTINES_STOP, ROUTINES), stop, ROUTINES_STOP, stops)
             .tooltip(notify::tip(routines_tip(&bot.name)))
             .on_click(move |event: &ClickEvent, _, cx| {
                 if press::pressed(event, ROUTINES_STOP) {

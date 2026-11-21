@@ -93,6 +93,7 @@ pub(crate) struct BotChat {
     again_stops: HashMap<u64, FocusHandle>,
     aimed: u64,
     routines: (bool, f32),
+    routines_stop: FocusHandle,
 }
 
 fn counting(chat: &mut BotChat) -> &mut Counting {
@@ -183,6 +184,7 @@ impl BotChat {
             again_stops: HashMap::new(),
             aimed: 0,
             routines: (true, ROUTINES_WIDTH),
+            routines_stop: cx.focus_handle(),
         }
     }
 
@@ -366,7 +368,7 @@ impl BotChat {
     fn fit(&self, routines: bool, cx: &Context<Self>) -> Option<Fit> {
         let chat = cx.entity().downgrade();
         let (drawn, width) = self.routines;
-        routines.then_some(Fit { chat, drawn, width })
+        routines.then(|| Fit { chat, drawn, width, stop: self.routines_stop.clone() })
     }
 
     fn meta(&self, bot: &Bot, cx: &mut Context<Self>) -> Meta {
