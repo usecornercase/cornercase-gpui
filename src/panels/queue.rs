@@ -178,12 +178,17 @@ impl QueuePanel {
         self.was_open = open;
     }
 
-    fn take_keys(&mut self, (body, first_drawn): (Body, bool), window: &mut Window, cx: &mut Context<Self>) {
+    fn take_keys(
+        &mut self,
+        (body, first_drawn, on_top): (Body, bool, bool),
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.had_form && self.form.is_none() {
             self.wants_keys = true;
         }
         self.had_form = self.form.is_some();
-        let to = keys_go(self.form.is_some(), body);
+        let to = keys_go(on_top, self.form.is_some(), body);
         let before = std::mem::replace(&mut self.went, to);
         if follows(before, to) && self.handle_of(before, true, cx).is_some_and(|had| had.is_focused(window)) {
             self.wants_keys = true;
@@ -368,7 +373,7 @@ impl Render for QueuePanel {
         let snapshot = Snapshot::new(app.as_ref(), session, &releases).scoped(scope, around);
         self.sync_detail(&entries, snapshot.results, window, cx);
         let body = self.body(&entries, &snapshot, cx);
-        self.take_keys((body, snapshot.bot_add_note().is_none()), window, cx);
+        self.take_keys((body, snapshot.bot_add_note().is_none(), snapshot.stops), window, cx);
         let main = self.main((&entries, body), &snapshot, window, cx);
         let at = (Edge::Left, self.side_width.size());
         let side = self.form_view(window, cx).or_else(|| self.detail_view(&entries, &snapshot, cx));

@@ -8,7 +8,10 @@ pub(super) enum KeysTo {
     Wait,
 }
 
-pub(super) fn keys_go(form: bool, body: Body) -> KeysTo {
+pub(super) fn keys_go(on_top: bool, form: bool, body: Body) -> KeysTo {
+    if !on_top {
+        return KeysTo::Wait;
+    }
     if form {
         return KeysTo::Prompt;
     }
