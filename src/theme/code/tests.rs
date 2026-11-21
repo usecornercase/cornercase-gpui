@@ -63,3 +63,34 @@ fn a_colour_no_lightness_saves_becomes_the_text() {
     let inks = inks(&theme, 0.);
     assert_eq!(inks.ansi[4], theme.chrome.text);
 }
+
+#[test]
+fn the_inks_are_kept_while_the_theme_and_the_opacity_stay() {
+    let theme = Arc::new(fallback());
+    let mut kept = None;
+    let first = kept_inks(&mut kept, theme.clone(), 0.8);
+    let held = kept.as_ref().map(|k: &Kept| Arc::as_ptr(&k.theme));
+    assert_eq!(kept_inks(&mut kept, theme.clone(), 0.8), first);
+    assert_eq!(kept.as_ref().map(|k| Arc::as_ptr(&k.theme)), held);
+    assert_eq!(first, inks(&theme, 0.8));
+}
+
+#[test]
+fn another_theme_or_opacity_makes_the_inks_again() {
+    let mut kept = None;
+    let dark = Arc::new(fallback());
+    kept_inks(&mut kept, dark.clone(), 1.);
+    let latte = Arc::new(preset("catppuccin-latte"));
+    assert_eq!(kept_inks(&mut kept, latte.clone(), 1.), inks(&latte, 1.));
+    assert_eq!(kept_inks(&mut kept, latte.clone(), 0.3), inks(&latte, 0.3));
+    assert_ne!(inks(&latte, 1.), inks(&dark, 1.));
+}
+
+#[test]
+fn only_the_colours_a_kind_takes_are_moved() {
+    let theme = preset("catppuccin-latte");
+    let inks = inks(&theme, theme.opacity.panes);
+    for index in [0u8, 7] {
+        assert_eq!(inks.ansi[usize::from(index)], from_bytes(theme.terminal.palette(index)), "{index}");
+    }
+}

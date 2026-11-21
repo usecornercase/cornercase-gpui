@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{Hsla, Rgba};
+use parking_lot::Mutex;
 
 use crate::model::{Colour, Colours, Style};
 use crate::platform::Os;
@@ -173,8 +174,9 @@ pub(crate) fn palette_rgba(index: u8) -> Rgba {
 }
 
 pub(crate) fn code_inks() -> code::Inks {
+    static KEPT: Mutex<Option<code::Kept>> = Mutex::new(None);
     let panes = terminal_opacity();
-    current::read(|t| code::inks(t, panes))
+    code::kept_inks(&mut KEPT.lock(), current(), panes)
 }
 
 pub(crate) fn terminal_opacity() -> f32 {
