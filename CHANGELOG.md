@@ -7,7 +7,7 @@ Every pull request that changes the app adds a section here for its new version.
 - **Schedule a bot's routine or reminder from the window.** With cornercase 0.13.85 or newer, a bot's **Routines** (in its chat's header, or **Routines…** in its `⋯`) has **Schedule…**, and its empty page **Schedule a routine…**: the form opens on every day at 09:00 with the keys in its prompt, and asks only what a bot needs, what it should do, when and a name. The bot answers in its chat with its own agent, model and account. Choose a one-off time instead and it is a reminder.
 - **Edit a bot's routines and reminders.** The pencil on one that can still run opens the same form with its values, and sends only what you change.
 - **The Queue lists your projects' entries only.** A bot's routines, reminders and runs are in that bot's Routines, and the Queue's last line says how many there are, such as `2 bot routines: in each bot's chat, under Routines`.
-- **Clear started says when it takes your bots' runs too.** It still clears them (cornercase has no way yet to leave them), and its tooltip and the line that offers Undo say how many were your bots'.
+- **Clear started says when it takes your bots' runs too.** It still clears them (cornercase has no way yet to leave them), its tooltip says so, and the line that offers Undo says how many were your bots'.
 - **The Queue takes the keys when it opens**: typing filters at once, Tab reaches **Schedule…** (and the empty page's buttons), Return or Space presses the one with the ring, and the keys come back after the form closes.
 - A failed or missed run of a project's entry is told while a bot's Routines shows, since that list does not show it.
 
