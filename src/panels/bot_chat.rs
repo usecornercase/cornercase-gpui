@@ -15,6 +15,7 @@ pub(crate) use self::global::{field_focus, scroll, view};
 use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
 pub(crate) use self::words::answering;
 use self::words::{EMPTY_LINES, EXAMPLES, read_failed};
+use crate::model::bots::Give as Giving;
 use crate::model::bots::{Bot, Chat, Read, reset_key, say_key};
 use crate::panels::queue;
 use crate::store::Store;
@@ -77,6 +78,8 @@ pub(crate) struct BotChat {
     mark: Option<Stamp>,
     heard: (Option<String>, u64, Controls),
     retry: Option<Rc<Retry>>,
+    givable: Rc<HashMap<u64, u64>>,
+    giving: Giving,
     examples: [FocusHandle; EXAMPLES.len()],
     retry_stop: FocusHandle,
     empty: ScrollHandle,
@@ -88,7 +91,7 @@ fn counting(chat: &mut BotChat) -> &mut Counting {
     &mut chat.counting
 }
 
-pub(crate) type Stamp = (String, u64, u64, Option<u64>);
+pub(crate) type Stamp = (String, u64, u64, Option<u64>, Vec<u64>, entries::Give);
 
 pub(crate) type Controls = (bool, bool, bool, bool, bool);
 
@@ -102,6 +105,19 @@ pub(crate) fn example_to_reveal(now: Option<usize>, was: Option<usize>) -> Optio
 
 pub(crate) fn re_anchor(following: bool, rows: usize) -> Option<usize> {
     following.then_some(rows)
+}
+
+fn asks_of(store: &Store, bot: &str) -> (Vec<u64>, Giving) {
+    let waiting = store.bots.find(bot).map(|bot| bot.asks.iter().map(|ask| ask.id).collect()).unwrap_or_default();
+    (waiting, store.asks_offer())
+}
+
+pub(crate) fn give_key(giving: &Giving) -> entries::Give {
+    match giving {
+        Giving::Offered => entries::Give::Button,
+        Giving::Here(_) => entries::Give::Needs,
+        Giving::No => entries::Give::No,
+    }
 }
 
 fn at_end(list: &ListState) -> bool {
@@ -139,6 +155,8 @@ impl BotChat {
             mark: None,
             heard: (None, 0, (false, false, false, false, false)),
             retry: None,
+            givable: Rc::default(),
+            giving: Giving::No,
             examples: std::array::from_fn(|_| cx.focus_handle()),
             retry_stop: cx.focus_handle(),
             empty: ScrollHandle::new(),
@@ -198,7 +216,10 @@ impl BotChat {
         };
         let thinking = store.bots.find(&chat.bot).is_some_and(Bot::thinking);
         let retry = entries::retry(&chat.lines, thinking, store.bot_setup_offered());
-        let stamp = (chat.bot.clone(), chat.born, chat.revision(), retry.as_ref().map(|retry| retry.error));
+        let (waiting, giving) = asks_of(store, &chat.bot);
+        let give = give_key(&giving);
+        let stamp =
+            (chat.bot.clone(), chat.born, chat.revision(), retry.as_ref().map(|retry| retry.error), waiting, give);
         let fresh = is_fresh(self.bot.as_deref(), self.mark.as_ref(), &stamp);
         if !fresh && self.mark.as_ref() == Some(&stamp) {
             return;
@@ -213,7 +234,10 @@ impl BotChat {
         }
         self.blocks.borrow_mut().retain(|id, _| *id >= first);
         self.retry = retry.map(Rc::new);
-        let keys = entries::keys(&entries, &self.opened, self.retry.as_ref().map(|retry| retry.error));
+        self.givable = Rc::new(entries::givable(&chat.lines, self.mark.as_ref().map_or(&[][..], |mark| &mark.4)));
+        self.giving = giving;
+        let retried = self.retry.as_ref().map(|retry| retry.error);
+        let keys = entries::keys(&entries, &self.opened, retried, (&self.givable, give));
         let rows: Vec<Row> =
             earlier.then_some(Row::Earlier).into_iter().chain(entries.into_iter().map(Row::Entry)).collect();
         self.apply(fresh, (earlier, keys), rows);
@@ -264,6 +288,8 @@ impl BotChat {
             sending: self.store.read(cx).busy(&say_key(&bot.id)),
             stops: self.store.read(cx).chat_takes_keys(),
             retry_stop: self.retry_stop.clone(),
+            givable: self.givable.clone(),
+            giving: self.giving.clone(),
         }
     }
 

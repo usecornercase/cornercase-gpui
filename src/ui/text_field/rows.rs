@@ -90,6 +90,11 @@ pub(super) fn pasted(text: &str, several_lines: bool) -> String {
     if several_lines { line_breaks(text) } else { one_line(text) }
 }
 
+pub(super) fn secret_pasted(text: &str) -> Option<String> {
+    let text = text.strip_suffix("\r\n").or_else(|| text.strip_suffix(['\n', '\r'])).unwrap_or(text);
+    (!text.chars().any(char::is_control)).then(|| text.to_string())
+}
+
 pub(super) fn one_line(pasted: &str) -> String {
     pasted.replace("\r\n", " ").replace(['\r', '\n'], " ")
 }

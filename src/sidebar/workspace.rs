@@ -390,7 +390,11 @@ pub(super) fn name_line(title: String, selected: bool) -> Div {
 }
 
 pub(super) fn agent_lines(first: impl IntoElement, details: String) -> Div {
-    let line = div().child(ui::one_line(details)).text_size(px(10.5)).text_color(colours::faint());
+    agent_lines_in(first, details, colours::faint())
+}
+
+pub(super) fn agent_lines_in(first: impl IntoElement, details: String, colour: Rgba) -> Div {
+    let line = div().child(ui::one_line(details)).text_size(px(10.5)).text_color(colour);
     div().flex_1().min_w(px(0.)).flex().flex_col().child(first).child(line)
 }
 

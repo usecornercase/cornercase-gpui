@@ -1,6 +1,8 @@
+use std::collections::{HashMap, HashSet};
+
 use super::entries::{
-    Again, Control, Entry, EntryKey, Retry, STEPS_SHOWN, Turn, arrived, asked, entries, folded, held, keys,
-    new_conversation_control, retry, row_splices, send_control, spliced, stop_control, turn,
+    Again, Control, Entry, EntryKey, Give, Retry, STEPS_SHOWN, Turn, arrived, asked, entries, folded, givable, held,
+    keys, new_conversation_control, retry, row_splices, send_control, spliced, stop_control, turn,
 };
 use super::words::{folded_label, time_label, turn_label};
 use super::{Scroll, scroll_distance, scroll_of};
@@ -67,7 +69,14 @@ fn an_answer_keeps_its_raw_markdown_for_its_copy() {
 use crate::model::bots::{Kind, Line};
 
 fn line(id: u64, kind: &str, text: &str, held: bool) -> Line {
-    Line { id, at: 1000 + i64::try_from(id).expect("small"), kind: Kind::from(kind), text: text.to_string(), held }
+    Line {
+        id,
+        at: 1000 + i64::try_from(id).expect("small"),
+        kind: Kind::from(kind),
+        text: text.to_string(),
+        held,
+        ask: None,
+    }
 }
 
 fn plain(ids: &[(u64, &str)]) -> Vec<Line> {
@@ -166,7 +175,7 @@ fn an_idle_bot_has_no_turn() {
 }
 
 fn key_of(entries: &[Entry]) -> Vec<EntryKey> {
-    keys(entries, &std::collections::HashSet::new(), None)
+    keys(entries, &HashSet::new(), None, (&HashMap::new(), Give::No))
 }
 
 #[test]
@@ -179,7 +188,7 @@ fn the_list_splices_only_the_entries_that_changed() {
 
 fn a_running_run(opened: &[u64]) -> Vec<EntryKey> {
     let lines = plain(&[(1, "you"), (2, "bot"), (3, "you"), (4, "step"), (5, "step"), (6, "step"), (7, "step")]);
-    keys(&entries(&lines), &ids(opened), None)
+    keys(&entries(&lines), &ids(opened), None, (&HashMap::new(), Give::No))
 }
 
 #[test]
@@ -271,11 +280,13 @@ fn a_step_run_keeps_its_real_last_id_so_a_capped_front_keeps_the_reader() {
 #[test]
 fn a_chat_is_fresh_for_another_bot_or_a_new_generation_but_not_a_new_revision() {
     use super::is_fresh;
-    let mark = ("prs".to_string(), 1, 3, None);
+    let stamp = |born, revision| ("prs".to_string(), born, revision, None, Vec::new(), Give::No);
+    let mark = stamp(1, 3);
     assert!(is_fresh(None, None, &mark));
     assert!(is_fresh(Some("ops"), Some(&mark), &mark));
-    assert!(is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 5, 3, None)));
-    assert!(!is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 1, 4, None)));
+    assert!(is_fresh(Some("prs"), Some(&mark), &stamp(5, 3)));
+    assert!(!is_fresh(Some("prs"), Some(&mark), &stamp(1, 4)));
+    assert!(!is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 1, 3, None, vec![4], Give::Button)));
 }
 
 #[test]
@@ -316,8 +327,8 @@ fn no_retry_without_a_message_kept_before_the_error() {
 fn an_error_that_gains_or_loses_retry_is_measured_again() {
     let lines = [line(1, "you", "ask", false), line(2, "error", "failed", false)];
     let entries = entries(&lines);
-    let without = keys(&entries, &std::collections::HashSet::new(), None);
-    let with = keys(&entries, &std::collections::HashSet::new(), Some(2));
+    let without = keys(&entries, &HashSet::new(), None, (&HashMap::new(), Give::No));
+    let with = keys(&entries, &HashSet::new(), Some(2), (&HashMap::new(), Give::No));
     assert_eq!(spliced(&without, &with), vec![(1..2, 1)]);
     assert_eq!(spliced(&with, &without), vec![(1..2, 1)]);
 }
@@ -396,7 +407,7 @@ fn retried(lines: &[Line]) -> Option<String> {
     }
 }
 
-fn ids(list: &[u64]) -> std::collections::HashSet<u64> {
+fn ids(list: &[u64]) -> HashSet<u64> {
     list.iter().copied().collect()
 }
 
@@ -611,4 +622,56 @@ fn a_stop_during_a_setup_drops_what_was_held() {
     let asked = asked(&lines);
     assert_eq!(asked.dropped, ids(&[2]));
     assert_eq!(asked.ended, vec![1]);
+}
+
+fn notice(id: u64, text: &str, ask: Option<u64>) -> Line {
+    Line { ask, ..line(id, "notice", text, false) }
+}
+
+fn asking_lines() -> Vec<Line> {
+    vec![
+        line(1, "you", "log in", false),
+        notice(2, "asks for a secret: campus-user", Some(4)),
+        line(3, "bot", "waiting for it", false),
+        notice(4, "secret saved: campus-user", Some(4)),
+    ]
+}
+
+#[test]
+fn the_first_line_of_a_waiting_ask_gets_give() {
+    assert_eq!(givable(&asking_lines(), &[4]), HashMap::from([(2, 4)]));
+}
+
+#[test]
+fn the_saved_notice_gets_no_button() {
+    assert_eq!(givable(&asking_lines(), &[]), HashMap::new());
+    assert_eq!(givable(&asking_lines(), &[9]), HashMap::new());
+}
+
+#[test]
+fn a_notice_entry_keeps_its_ask() {
+    let shown = entries(&asking_lines());
+    assert_eq!(shown[1], Entry::Notice { id: 2, text: "asks for a secret: campus-user".into(), ask: Some(4) });
+}
+
+#[test]
+fn a_row_is_measured_again_when_its_ask_ends() {
+    let shown = entries(&asking_lines());
+    let waiting = givable(&asking_lines(), &[4]);
+    let with = keys(&shown, &HashSet::new(), None, (&waiting, Give::Button));
+    let ended = keys(&shown, &HashSet::new(), None, (&HashMap::new(), Give::Button));
+    assert_ne!(with[1], ended[1]);
+    assert_eq!(with[0], ended[0]);
+    assert_eq!(with[3], ended[3]);
+}
+
+#[test]
+fn below_the_gate_the_line_says_what_it_needs() {
+    let shown = entries(&asking_lines());
+    let waiting = givable(&asking_lines(), &[4]);
+    let needs = keys(&shown, &HashSet::new(), None, (&waiting, Give::Needs));
+    let button = keys(&shown, &HashSet::new(), None, (&waiting, Give::Button));
+    assert_ne!(needs[1], button[1]);
+    let words = super::give_key(&crate::model::bots::Give::Here("Giving it needs cornercase 0.13.101.".into()));
+    assert_eq!(words, Give::Needs);
 }

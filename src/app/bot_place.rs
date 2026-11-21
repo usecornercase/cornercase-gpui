@@ -1,6 +1,9 @@
 use gpui::{Context, Entity, Window};
 
 use super::Root;
+use crate::dialogs;
+use crate::model::bots::{Here, keys_of, opens, sendable};
+use crate::panels::bot_chat;
 use crate::store::Store;
 
 impl Root {
@@ -34,6 +37,21 @@ impl Root {
         }
         self.activation_changed(window.is_window_active());
         cx.notify();
+    }
+
+    pub(super) fn take_bot_ask(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((bot, (ask, by))) = self.store.update(cx, |s, _| s.asks.bot_ask.take(&s.bots.list)) else { return };
+        let in_field = bot_chat::field_focus(cx).is_focused(window);
+        let s = self.store.read(cx);
+        let here = Here {
+            shown: s.shown_bot() == Some(bot.id.as_str()),
+            active: window.is_window_active(),
+            covered: !s.chat_takes_keys(),
+            keys: keys_of(in_field, !sendable(s.bots.drafts.text(&bot.id))),
+        };
+        if opens(by, here, s.dialog.is_some()) {
+            dialogs::answer_ask(&bot, ask, window, cx);
+        }
     }
 
     pub(crate) fn chat_shown(&self) -> bool {

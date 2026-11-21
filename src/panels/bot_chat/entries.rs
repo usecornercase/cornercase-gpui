@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use crate::model::bots::{Kind, Line};
@@ -11,7 +11,7 @@ pub(crate) enum Entry {
     Answer { id: u64, text: String, at: i64 },
     Steps { first: u64, last: u64, texts: Vec<String> },
     Failed { id: u64, text: String },
-    Notice { id: u64, text: String },
+    Notice { id: u64, text: String, ask: Option<u64> },
     Other { id: u64, text: String },
 }
 
@@ -138,7 +138,7 @@ fn entry_of(line: &Line, (held, dropped): (bool, bool)) -> Entry {
         Kind::Bot => Entry::Answer { id, text, at },
         Kind::Step => Entry::Steps { first: id, last: id, texts: vec![text] },
         Kind::Error => Entry::Failed { id, text },
-        Kind::Notice => Entry::Notice { id, text },
+        Kind::Notice => Entry::Notice { id, text, ask: line.ask },
         Kind::Other(_) => Entry::Other { id, text },
     }
 }
@@ -229,6 +229,21 @@ pub(crate) fn new_conversation_control(thinking: bool, starting: bool) -> Contro
     }
 }
 
+pub(crate) fn givable(lines: &[Line], waiting: &[u64]) -> HashMap<u64, u64> {
+    waiting
+        .iter()
+        .filter_map(|ask| lines.iter().find(|line| line.ask == Some(*ask)).map(|line| (line.id, *ask)))
+        .collect()
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum Give {
+    #[default]
+    No,
+    Button,
+    Needs,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EntryKey {
     kind: u8,
@@ -237,9 +252,15 @@ pub(crate) struct EntryKey {
     held: bool,
     open: bool,
     retry: bool,
+    give: Give,
 }
 
-pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>, retry: Option<u64>) -> Vec<EntryKey> {
+pub(crate) fn keys(
+    entries: &[Entry],
+    opened: &HashSet<u64>,
+    retry: Option<u64>,
+    (givable, give): (&HashMap<u64, u64>, Give),
+) -> Vec<EntryKey> {
     entries
         .iter()
         .map(|entry| {
@@ -253,7 +274,8 @@ pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>, retry: Option<u64>)
                 Entry::Other { id, .. } => (5, *id, false),
             };
             let retry = retry == Some(last) && kind == 3;
-            EntryKey { kind, first: entry.id(), last, held, open: opened.contains(&entry.id()), retry }
+            let give = if kind == 4 && givable.contains_key(&last) { give } else { Give::No };
+            EntryKey { kind, first: entry.id(), last, held, open: opened.contains(&entry.id()), retry, give }
         })
         .collect()
 }

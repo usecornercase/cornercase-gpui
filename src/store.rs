@@ -10,7 +10,7 @@ use crate::cli::{self, Feature, Has, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, ListMoves, Selection, Switch, switching_key};
-use crate::model::bots::{Bots, MenuAsk};
+use crate::model::bots::{Bots, By, MenuAsk};
 use crate::model::machines::{self, Machine};
 use crate::model::{Owner, Session};
 use crate::notify::Posted;
@@ -104,6 +104,7 @@ pub(crate) struct Asks {
     pub refocus: Option<FocusHandle>,
     pub open_update: Option<Updating>,
     pub bot_menu: MenuAsk<(gpui::Point<gpui::Pixels>, bool)>,
+    pub bot_ask: MenuAsk<(u64, By)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -117,6 +118,7 @@ pub(crate) enum ToastGo {
     Open(PanelKind),
     Copy(Clip),
     Bot(String, String),
+    BotAsk(String, String, u64),
 }
 
 struct GlobalStore(Entity<Store>);
@@ -370,6 +372,7 @@ impl Store {
             ToastGo::Open(kind) => self.open(*kind, cx),
             ToastGo::Copy(clip) => self.copy(clip, cx),
             ToastGo::Bot(id, name) => self.go_to_bot(id, name, cx),
+            ToastGo::BotAsk(id, name, ask) => self.go_to_ask(id, name, *ask, cx),
             ToastGo::Update(updating) => {
                 self.asks.open_update = Some(*updating);
                 cx.notify();

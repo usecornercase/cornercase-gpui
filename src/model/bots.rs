@@ -6,6 +6,11 @@ use serde_json::Value;
 use crate::cli::{Feature, Lacks, newer_here};
 use crate::platform::Os;
 
+pub(crate) use self::asks::{
+    ASKS_FOR_A_SECRET, Ask, AskOpen, Asking, By, Enter, Give, Here, IT_SAYS, ONE_LINE, REPLACES, access_words,
+    counted_as, decline_args, fields_after, give_args, give_json, giving, keys_of, on_enter, opens, tells_ask, title,
+    what_happens,
+};
 pub(crate) use self::form::{
     AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, id_of,
     kept_accounts, new_args, rename_args,
@@ -19,6 +24,7 @@ pub(crate) use self::talk::{
 };
 pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, read_since, tells};
 
+mod asks;
 mod form;
 mod manage;
 mod talk;
@@ -42,6 +48,8 @@ pub(crate) struct Bot {
     pub folder: String,
     #[serde(deserialize_with = "text_or_empty")]
     pub access: String,
+    #[serde(deserialize_with = "asks::listed")]
+    pub asks: Vec<Ask>,
 }
 
 fn set(value: Option<&String>) -> Option<String> {
@@ -67,6 +75,7 @@ impl Bot {
             && same(&self.account, &other.account)
             && self.state == other.state
             && self.unread == other.unread
+            && self.asks == other.asks
     }
 
     pub(crate) fn thinking(&self) -> bool {
@@ -129,6 +138,7 @@ pub(crate) struct Line {
     pub kind: Kind,
     pub text: String,
     pub held: bool,
+    pub ask: Option<u64>,
 }
 
 fn present<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
@@ -144,7 +154,8 @@ pub(crate) fn line_of(value: &Value) -> Option<Line> {
     };
     let at = present(value, "at").map_or(Some(0), Value::as_i64)?;
     let held = present(value, "held").map_or(Some(false), Value::as_bool)?;
-    Some(Line { id, at, kind: Kind::from(kind), text, held })
+    let ask = present(value, "ask").and_then(Value::as_u64);
+    Some(Line { id, at, kind: Kind::from(kind), text, held, ask })
 }
 
 pub(crate) fn history_of(text: &str) -> anyhow::Result<Vec<Line>> {
@@ -371,6 +382,7 @@ pub(crate) struct Bots {
     pub answers: Answers,
     pub to_tell: Vec<Told>,
     pub last_shown: Option<String>,
+    pub asking: Asking,
     stopping: HashSet<String>,
     revision: u64,
     asked: u64,

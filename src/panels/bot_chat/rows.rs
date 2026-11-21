@@ -9,8 +9,8 @@ use gpui::{
 
 use super::BotChat;
 use super::entries::{Again, Entry, Retry, folded};
-use super::words::{DROPPED_STAMP, EARLIER, HELD, RETRY, SENDING, SETTING_UP, folded_label, time_label};
-use crate::model::bots::Said;
+use super::words::{DROPPED_STAMP, EARLIER, GIVE, HELD, RETRY, SENDING, SETTING_UP, folded_label, time_label};
+use crate::model::bots::{Give, Said};
 use crate::store::{Clip, Store};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::markdown::text as md;
@@ -33,6 +33,8 @@ pub(super) struct Meta {
     pub sending: bool,
     pub stops: bool,
     pub retry_stop: FocusHandle,
+    pub givable: Rc<HashMap<u64, u64>>,
+    pub giving: Give,
 }
 
 pub(super) fn earlier_row() -> AnyElement {
@@ -49,7 +51,7 @@ pub(super) fn entry_row(entry: &Entry, meta: &Meta) -> AnyElement {
         Entry::Answer { id, text, at } => answer(*id, text, *at, meta),
         Entry::Steps { first, texts, .. } => steps(*first, texts, meta),
         Entry::Failed { id, text } => failed(*id, text, meta),
-        Entry::Notice { text, .. } => notice(text),
+        Entry::Notice { id, text, .. } => notice(*id, text, meta),
         Entry::Other { text, .. } => plain(text),
     }
     .into_any_element()
@@ -154,8 +156,30 @@ fn send_again(bot: &str, again: &Again, cx: &mut App) {
     });
 }
 
-fn notice(text: &str) -> Div {
-    line(div().text_size(px(11.5)).text_color(colours::muted()).text_center().child(text.to_string()))
+fn notice(id: u64, text: &str, meta: &Meta) -> Div {
+    let after = meta.givable.get(&id).and_then(|ask| give_part(*ask, meta));
+    let row = div().flex().flex_wrap().justify_center().items_center().gap_x(px(8.)).gap_y(px(4.));
+    line(row.text_size(px(11.5)).text_color(colours::muted()).text_center().child(text.to_string()).children(after))
+}
+
+fn give_part(ask: u64, meta: &Meta) -> Option<AnyElement> {
+    match &meta.giving {
+        Give::Offered => Some(give_button(ask, meta).into_any_element()),
+        Give::Here(words) => Some(div().text_color(colours::faint()).child(words.clone()).into_any_element()),
+        Give::No => None,
+    }
+}
+
+fn give_button(ask: u64, meta: &Meta) -> gpui::Stateful<Div> {
+    let name = format!("bot-give-{ask}");
+    let bot = meta.bot.clone();
+    press::stop(ui::button(("bot-give", ask), GIVE), name.clone(), meta.stops).on_click(
+        move |event: &ClickEvent, _, cx| {
+            if press::pressed(event, &name) {
+                Store::get(cx).update(cx, |store, cx| store.open_ask(&bot, ask, cx));
+            }
+        },
+    )
 }
 
 fn plain(text: &str) -> Div {

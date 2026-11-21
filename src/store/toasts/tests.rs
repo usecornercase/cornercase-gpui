@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::{Clip, Shown, Toast, ToastKind, drawn, newest_meant, push_toast};
+use crate::model::bots::{Ask, Bot};
 use crate::store::ToastGo;
 
 fn toast(id: u64, text: &str) -> Toast {
@@ -246,4 +247,35 @@ fn with_no_toast_the_key_takes_nothing() {
 fn a_copied_text_says_what_it_was() {
     let clip = Clip::of("# Title\n\n- one".into(), "the answer");
     assert_eq!(clip, Clip { text: "# Title\n\n- one".into(), said: "Copied the answer".into() });
+}
+
+fn asking(id: u64, bot: &str, ask: u64) -> Toast {
+    Toast {
+        action: Some(("Open".to_string(), ToastGo::BotAsk(bot.to_string(), "name".to_string(), ask))),
+        ..toast_of(id, "x", ToastKind::NeedsYou)
+    }
+}
+
+fn waiting(bot: &str, asks: &[u64]) -> Bot {
+    let asks = asks.iter().map(|id| Ask { id: *id, names: vec!["user".into()], ..Ask::default() }).collect();
+    Bot { id: bot.to_string(), asks, ..Bot::default() }
+}
+
+#[test]
+fn a_removed_bots_ask_toast_goes() {
+    let toasts = [asking(1, "notes", 3), asking(2, "ops", 4)];
+    let gone: Vec<u64> = toasts.iter().filter(|t| super::shows_bot(t, "notes")).map(|t| t.id).collect();
+    assert_eq!(gone, [1]);
+    assert!(super::ask_ended(&toasts[0], &[waiting("ops", &[4])]));
+}
+
+#[test]
+fn an_ended_asks_toast_goes() {
+    let list = [waiting("notes", &[3])];
+    let ended: Vec<u64> = [asking(1, "notes", 3), asking(2, "notes", 5), toast_of(3, "x", ToastKind::Done)]
+        .iter()
+        .filter(|t| super::ask_ended(t, &list))
+        .map(|t| t.id)
+        .collect();
+    assert_eq!(ended, [2]);
 }

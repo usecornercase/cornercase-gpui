@@ -11,7 +11,7 @@ use unicode_segmentation::UnicodeSegmentation;
 pub(crate) use self::element::show_box;
 use self::element::{Below, Head, Layout, TextElement};
 use self::enter::{Enter, passes_arrows, submits};
-use self::rows::{clamp_scroll, pasted, previous_grapheme};
+use self::rows::{clamp_scroll, pasted, previous_grapheme, secret_pasted};
 use self::secure::Secure;
 use self::shown::Shown;
 pub(crate) use self::typing::typing_at;
@@ -80,6 +80,7 @@ pub(crate) struct TextField {
 const CHAT_ROWS: RangeInclusive<usize> = 1..=6;
 
 type DownHook = Rc<dyn Fn(&mut Window, &mut App) -> bool>;
+type RefusedHook = Rc<dyn Fn(&mut Window, &mut App)>;
 
 #[derive(Default)]
 struct Options {
@@ -90,6 +91,7 @@ struct Options {
     scroller: Option<ScrollHandle>,
     below: Below,
     on_down: Option<DownHook>,
+    one_value: Option<RefusedHook>,
     enter: Enter,
 }
 
@@ -209,7 +211,16 @@ impl TextField {
     }
 
     fn insert_pasted(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let text = pasted(text, self.options.rows.is_some());
+        let text = match self.options.one_value.clone() {
+            None => pasted(text, self.options.rows.is_some()),
+            Some(refused) => {
+                let Some(text) = secret_pasted(text) else {
+                    refused(window, cx);
+                    return;
+                };
+                text
+            }
+        };
         self.replace_text_in_range(None, &text, window, cx);
     }
 
@@ -666,6 +677,11 @@ impl TextField {
 
     pub(crate) fn on_down(mut self, hook: impl Fn(&mut Window, &mut App) -> bool + 'static) -> Self {
         self.options.on_down = Some(Rc::new(hook));
+        self
+    }
+
+    pub(crate) fn one_value(mut self, refused: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.options.one_value = Some(Rc::new(refused));
         self
     }
 
