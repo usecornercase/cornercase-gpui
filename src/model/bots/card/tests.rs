@@ -257,3 +257,13 @@ fn a_machines_folder_is_shown_as_it_comes() {
     assert_eq!(folder_shown(path, &Home::Here, "/Users/me"), "~/.cornercase/bots/notes");
     assert_eq!(folder_shown(path, &Home::Machine("vps".into()), "/Users/me"), path);
 }
+
+#[test]
+fn a_folder_splits_into_its_parent_and_its_name_by_its_own_form() {
+    assert_eq!(folder_parts("~/.cornercase/bots/notes"), ("~/.cornercase/bots/", "notes"));
+    assert_eq!(folder_parts("/srv/cornercase/bots/notes/"), ("/srv/cornercase/bots/", "notes"));
+    assert_eq!(folder_parts(r"C:\Users\me\.cornercase\bots\notes"), (r"C:\Users\me\.cornercase\bots\", "notes"));
+    assert_eq!(folder_parts("C:/Users/me/bots/notes"), ("C:/Users/me/bots/", "notes"));
+    assert_eq!(folder_parts(r"/srv/a\b"), ("/srv/", r"a\b"));
+    assert_eq!(folder_parts("notes"), ("", "notes"));
+}

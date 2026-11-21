@@ -7,7 +7,7 @@ use crate::model::{MachinePlace, MachineSeen, PaneInfo, Session, Tab};
 use crate::panels::flows::model::plural;
 use crate::panels::queue::{Entry, repeat_words};
 use crate::platform::Os;
-use crate::platform::paths::home_relative;
+use crate::platform::paths::{Style, home_relative};
 
 const THE_AGENTS_OWN: &str = "the agent's own";
 const UNREADABLE: &str = "secrets cannot be read";
@@ -168,6 +168,12 @@ pub(crate) fn controls(home: &Home, routines_offered: bool) -> Controls {
             )),
         },
     }
+}
+
+pub(crate) fn folder_parts(shown: &str) -> (&str, &str) {
+    let style = Style::of_path(shown);
+    let whole = shown.trim_end_matches(|c| style.is_separator(c));
+    whole.split_at(style.name_start(whole))
 }
 
 pub(crate) fn folder_shown(path: &str, home: &Home, own_home: &str) -> String {

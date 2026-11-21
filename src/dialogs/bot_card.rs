@@ -12,7 +12,7 @@ use crate::cli;
 use crate::desktop;
 use crate::model::bots::{
     AboutGate, Bot, BotKey, CardRow, Controls, Home, ListRow, StartedRow, Tone as RowTone, about_failed, about_of,
-    card_rows, controls, folder_shown, routine_rows,
+    card_rows, controls, folder_parts, folder_shown, routine_rows,
 };
 use crate::panels::bot_chat::time_label;
 use crate::panels::queue;
@@ -188,13 +188,13 @@ fn fact_rows(rows: &[CardRow]) -> Div {
 }
 
 fn folder_text(shown: &str) -> Div {
-    let (parent, name) = shown.rsplit_once('/').map_or((String::new(), shown), |(p, n)| (format!("{p}/"), n));
+    let (parent, name) = folder_parts(shown);
     div()
         .flex_1()
         .min_w_0()
         .flex()
         .text_size(px(12.5))
-        .child(div().min_w_0().text_color(colours::muted()).child(ui::one_line(parent)))
+        .child(div().min_w_0().text_color(colours::muted()).child(ui::one_line(parent.to_string())))
         .child(div().flex_none().text_color(colours::text()).child(name.to_string()))
 }
 
