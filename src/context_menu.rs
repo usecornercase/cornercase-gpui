@@ -209,6 +209,13 @@ impl Root {
         }
     }
 
+    pub(crate) fn light_first(&mut self, cx: &mut Context<Self>) {
+        if let Some(menu) = &mut self.side.menu {
+            menu.highlight = step(&menu.entries, None, true);
+            cx.notify();
+        }
+    }
+
     fn open_submenu(&mut self, entries: &[Entry], cx: &mut Context<Self>) {
         if let Some(menu) = &mut self.side.menu {
             menu.entries = entries.to_vec();

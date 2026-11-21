@@ -1,6 +1,6 @@
 use super::entries::{
-    Control, Entry, EntryKey, Retry, STEPS_SHOWN, Turn, entries, folded, held, keys, new_conversation_control, retry,
-    row_splices, send_control, spliced, stop_control, turn,
+    Control, Entry, EntryKey, Retry, STEPS_SHOWN, Turn, asked, entries, folded, held, keys, new_conversation_control,
+    retry, row_splices, send_control, spliced, stop_control, turn,
 };
 use super::words::{folded_label, time_label, turn_label};
 use super::{Scroll, scroll_distance, scroll_of};
@@ -358,4 +358,110 @@ fn retry_sends_the_last_message_not_the_steps_between_it_and_the_error() {
 #[test]
 fn the_headers_menu_button_names_whose_menu_it_opens() {
     assert_eq!(super::words::menu_tip("PRs"), "More for PRs");
+}
+
+fn retried(lines: &[Line]) -> Option<String> {
+    retry(lines, false).map(|retry| retry.text)
+}
+
+fn ids(list: &[u64]) -> std::collections::HashSet<u64> {
+    list.iter().copied().collect()
+}
+
+#[test]
+fn retry_after_two_held_messages_sends_both_joined_by_a_blank_line() {
+    let lines = [
+        line(1, "you", "first", false),
+        line(2, "you", "a", true),
+        line(3, "you", "b", true),
+        line(4, "bot", "done", false),
+        line(5, "error", "failed", false),
+    ];
+    assert_eq!(retried(&lines), Some("a\n\nb".to_string()));
+}
+
+#[test]
+fn retry_after_a_stop_sends_what_ran_after_it_not_what_was_dropped() {
+    let lines = [
+        line(1, "you", "go", false),
+        line(2, "you", "a", true),
+        line(3, "you", "b", true),
+        line(4, "you", "c", true),
+        line(5, "notice", "stopped", false),
+        line(6, "notice", "2 held messages dropped", false),
+        line(7, "error", "failed", false),
+    ];
+    assert_eq!(retried(&lines), Some("c".to_string()));
+    assert_eq!(asked(&lines).dropped, ids(&[2, 3]));
+}
+
+#[test]
+fn a_message_held_while_a_stop_was_on_its_way_is_not_dropped() {
+    let lines = [
+        line(1, "you", "go", false),
+        line(2, "you", "late", true),
+        line(3, "notice", "stopped", false),
+        line(4, "error", "failed", false),
+    ];
+    assert_eq!(retried(&lines), Some("late".to_string()));
+    assert!(asked(&lines).dropped.is_empty());
+}
+
+#[test]
+fn messages_dropped_by_a_stop_are_the_first_held() {
+    let one = [
+        line(1, "you", "go", false),
+        line(2, "you", "a", true),
+        line(3, "you", "b", true),
+        line(4, "notice", "stopped", false),
+        line(5, "notice", "1 held message dropped", false),
+    ];
+    assert_eq!(asked(&one).dropped, ids(&[2]));
+    let more = [
+        line(1, "you", "go", false),
+        line(2, "you", "a", true),
+        line(3, "notice", "stopped", false),
+        line(4, "notice", "3 held messages dropped", false),
+    ];
+    assert_eq!(asked(&more).dropped, ids(&[2]));
+}
+
+#[test]
+fn a_restart_drops_what_was_held() {
+    let lines = [
+        line(1, "you", "go", false),
+        line(2, "you", "a", true),
+        line(3, "you", "b", true),
+        line(4, "notice", "interrupted by a restart", false),
+        line(5, "notice", "2 held messages dropped", false),
+    ];
+    assert_eq!(asked(&lines).dropped, ids(&[2, 3]));
+    assert_eq!(asked(&lines).ended, vec![1]);
+}
+
+#[test]
+fn no_retry_when_the_failed_turn_took_no_message() {
+    let lines = [line(1, "you", "old", false), line(2, "bot", "done", false), line(3, "error", "failed", false)];
+    assert_eq!(retried(&lines), None);
+}
+
+#[test]
+fn a_dropped_bubble_is_marked_and_measured_again() {
+    let before = vec![
+        line(1, "you", "go", false),
+        line(2, "you", "a", true),
+        line(3, "you", "b", true),
+        line(4, "notice", "stopped", false),
+    ];
+    let mut after = before.clone();
+    after.push(line(5, "notice", "1 held message dropped", false));
+    let dropped: Vec<u64> = entries(&after)
+        .iter()
+        .filter_map(|entry| match entry {
+            Entry::You { id, dropped: true, .. } => Some(*id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(dropped, [2]);
+    assert_eq!(spliced(&keys_of(&before), &keys_of(&after)), vec![(1..2, 1), (4..4, 1)]);
 }

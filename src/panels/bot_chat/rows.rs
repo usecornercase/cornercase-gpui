@@ -3,19 +3,21 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, ClickEvent, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, WeakEntity, div, px, relative,
+    AnyElement, ClickEvent, Div, FocusHandle, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, WeakEntity, div, px, relative,
 };
 
 use super::BotChat;
 use super::entries::{Entry, Retry, folded};
-use super::words::{EARLIER, HELD, RETRY, SENDING, folded_label, time_label};
+use super::words::{DROPPED_STAMP, EARLIER, HELD, RETRY, SENDING, folded_label, time_label};
 use crate::model::bots::Said;
 use crate::store::Store;
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::markdown::text as md;
 use crate::ui::markdown::{self, Block};
-use crate::ui::{self, Tone, glass};
+use crate::ui::{self, Tone, glass, press};
+
+const RETRY_STOP: &str = "bot-retry";
 
 pub(super) type Blocks = Rc<RefCell<HashMap<u64, Rc<Vec<Block>>>>>;
 
@@ -29,6 +31,8 @@ pub(super) struct Meta {
     pub retry: Option<Rc<Retry>>,
     pub bot: String,
     pub sending: bool,
+    pub stops: bool,
+    pub retry_stop: FocusHandle,
 }
 
 pub(super) fn earlier_row() -> AnyElement {
@@ -41,7 +45,7 @@ fn line(inner: Div) -> Div {
 
 pub(super) fn entry_row(entry: &Entry, meta: &Meta) -> AnyElement {
     match entry {
-        Entry::You { text, at, held, .. } => you(text, *at, *held, meta),
+        Entry::You { text, at, held, dropped, .. } => you(text, *at, (*held, *dropped), meta),
         Entry::Answer { id, text, at } => answer(*id, text, *at, meta),
         Entry::Steps { first, texts, .. } => steps(*first, texts, meta),
         Entry::Failed { id, text } => failed(*id, text, meta),
@@ -51,8 +55,12 @@ pub(super) fn entry_row(entry: &Entry, meta: &Meta) -> AnyElement {
     .into_any_element()
 }
 
-fn you(text: &str, at: i64, held: bool, meta: &Meta) -> Div {
-    let stamp = if held { HELD.to_string() } else { time_label(at, meta.now) };
+fn you(text: &str, at: i64, (held, dropped): (bool, bool), meta: &Meta) -> Div {
+    let stamp = match (dropped, held) {
+        (true, _) => DROPPED_STAMP.to_string(),
+        (false, true) => HELD.to_string(),
+        (false, false) => time_label(at, meta.now),
+    };
     let bubble = div()
         .max_w(relative(0.8))
         .px(px(12.))
@@ -62,6 +70,7 @@ fn you(text: &str, at: i64, held: bool, meta: &Meta) -> Div {
         .text_color(colours::text())
         .child(text.to_string());
     let stamp = div().text_size(px(10.5)).text_color(colours::faint()).child(stamp);
+    let bubble = if dropped { bubble.opacity(0.5) } else { bubble };
     line(div().flex().flex_col().items_end().gap(px(3.)).child(bubble).child(stamp))
 }
 
@@ -128,10 +137,12 @@ fn retry_button(retry: &Retry, meta: &Meta) -> AnyElement {
         return ui::busy_button("bot-retry", SENDING, Tone::Plain).into_any_element();
     }
     let (bot, text) = (meta.bot.clone(), retry.text.clone());
-    ui::button("bot-retry", RETRY)
-        .on_click(move |_: &ClickEvent, _, cx| {
-            let (bot, text) = (bot.clone(), text.clone());
-            Store::get(cx).update(cx, |store, cx| store.say_to_bot(&bot, text, Said::Again, cx));
+    press::stop_at(ui::button(RETRY_STOP, RETRY), &meta.retry_stop, RETRY_STOP, meta.stops)
+        .on_click(move |event: &ClickEvent, _, cx| {
+            if press::pressed(event, RETRY_STOP) {
+                let (bot, text) = (bot.clone(), text.clone());
+                Store::get(cx).update(cx, |store, cx| store.say_to_bot(&bot, text, Said::Again, cx));
+            }
         })
         .into_any_element()
 }

@@ -167,6 +167,7 @@ fn main() {
     app.run(|cx: &mut App| {
         system_keys(cx);
         ui::text_field::bind_keys(cx);
+        cx.intercept_keystrokes(|_, _, _| ui::press::keystroke()).detach();
         cx.on_app_quit(|cx| {
             let relaunch = self_update::take_relaunch(cx);
             async move {

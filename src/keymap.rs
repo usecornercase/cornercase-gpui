@@ -206,6 +206,7 @@ const MAC_OTHER_KEYS: &[(&str, &str)] = &[
     ("⌘↩", "Send a prompt, where ↩ breaks the line"),
     ("↩ ⇧↩", "In a bot's chat, ↩ sends and ⇧↩ breaks the line"),
     ("↑ ↓ PgUp PgDn", "Scroll a bot's chat (↑ ↓ while its field holds one line)"),
+    ("Tab ⇧Tab ↩ Space", "In a bot's chat, go to its buttons and press the one with the ring"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("⌘-click", "Open a link or a path with macOS"),
 ];
@@ -219,6 +220,7 @@ const LINUX_OTHER_KEYS: &[(&str, &str)] = &[
     ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
     ("Enter Shift+Enter", "In a bot's chat, Enter sends and Shift+Enter breaks the line"),
     ("↑ ↓ PageUp PageDown", "Scroll a bot's chat (↑ ↓ while its field holds one line)"),
+    ("Tab Shift+Tab Enter Space", "In a bot's chat, go to its buttons and press the one with the ring"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("Ctrl+click", "Open a link or a path with its default app"),
     ("Middle click", "Paste what is selected, Shift+middle click where a program takes the mouse"),
@@ -233,6 +235,7 @@ const WINDOWS_OTHER_KEYS: &[(&str, &str)] = &[
     ("Ctrl+C Ctrl+V", "Copy and paste in a text field or a page"),
     ("Enter Shift+Enter", "In a bot's chat, Enter sends and Shift+Enter breaks the line"),
     ("↑ ↓ PageUp PageDown", "Scroll a bot's chat (↑ ↓ while its field holds one line)"),
+    ("Tab Shift+Tab Enter Space", "In a bot's chat, go to its buttons and press the one with the ring"),
     ("Click", "Open a web address as Settings › Links says, a path in Files"),
     ("Ctrl+click", "Open a link or a path with its default app"),
 ];

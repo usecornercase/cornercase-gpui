@@ -3,9 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, Context, Entity, InteractiveElement as _, IntoElement, ListAlignment, ListOffset, ListState,
-    ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Window, div, list,
-    prelude::FluentBuilder as _, px,
+    AnyElement, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement, ListAlignment, ListOffset,
+    ListState, ParentElement as _, Render, ScrollHandle, StatefulInteractiveElement as _, Styled as _, Window, div,
+    list, prelude::FluentBuilder as _, px,
 };
 
 pub(crate) use self::controls::ask_new_conversation;
@@ -19,8 +19,9 @@ use crate::model::bots::{Bot, Chat, Read, reset_key, say_key};
 use crate::panels::queue;
 use crate::store::Store;
 use crate::theme::{colours, radius};
+use crate::ui::account_picker::reveals;
 use crate::ui::counting::Counting;
-use crate::ui::{self, Icon};
+use crate::ui::{self, Icon, press};
 
 mod controls;
 mod entries;
@@ -76,6 +77,10 @@ pub(crate) struct BotChat {
     mark: Option<Stamp>,
     heard: (Option<String>, u64, Controls),
     retry: Option<Rc<Retry>>,
+    examples: [FocusHandle; EXAMPLES.len()],
+    retry_stop: FocusHandle,
+    empty: ScrollHandle,
+    keyed: (bool, bool),
 }
 
 fn counting(chat: &mut BotChat) -> &mut Counting {
@@ -84,7 +89,7 @@ fn counting(chat: &mut BotChat) -> &mut Counting {
 
 pub(crate) type Stamp = (String, u64, u64, Option<u64>);
 
-pub(crate) type Controls = (bool, bool, bool);
+pub(crate) type Controls = (bool, bool, bool, bool);
 
 pub(crate) fn is_fresh(shown: Option<&str>, mark: Option<&Stamp>, stamp: &Stamp) -> bool {
     shown != Some(stamp.0.as_str()) || mark.is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1))
@@ -127,15 +132,19 @@ impl BotChat {
             blocks: Rc::new(RefCell::new(HashMap::new())),
             counting: Counting::default(),
             mark: None,
-            heard: (None, 0, (false, false, false)),
+            heard: (None, 0, (false, false, false, false)),
             retry: None,
+            examples: std::array::from_fn(|_| cx.focus_handle()),
+            retry_stop: cx.focus_handle(),
+            empty: ScrollHandle::new(),
+            keyed: (false, false),
         }
     }
 
     fn moved(&mut self, store: &Store) -> bool {
         let shown = store.shown_bot();
-        let controls = shown.map_or((false, false, false), |id| {
-            (store.bots.stopping(id), store.busy(&say_key(id)), store.busy(&reset_key(id)))
+        let controls = shown.map_or((false, false, false, false), |id| {
+            (store.bots.stopping(id), store.busy(&say_key(id)), store.busy(&reset_key(id)), store.chat_takes_keys())
         });
         let now = (shown.map(str::to_string), store.bots_revision(), controls);
         (std::mem::replace(&mut self.heard, now.clone()) != now) || self.bot.is_some() && now.0.is_none()
@@ -225,6 +234,18 @@ impl BotChat {
         self.rows = Rc::new(rows);
     }
 
+    fn reveal_stops(&mut self, window: &Window) {
+        let now = (self.examples.iter().any(|handle| handle.is_focused(window)), self.retry_stop.is_focused(window));
+        if reveals(now.0, self.keyed.0, false) {
+            self.empty.scroll_to_bottom();
+        }
+        if reveals(now.1, self.keyed.1, false) {
+            self.following = true;
+            self.news = false;
+        }
+        self.keyed = now;
+    }
+
     fn meta(&self, bot: &Bot, cx: &mut Context<Self>) -> Meta {
         Meta {
             name: bot.name.clone().into(),
@@ -235,6 +256,8 @@ impl BotChat {
             retry: self.retry.clone(),
             bot: bot.id.clone(),
             sending: self.store.read(cx).busy(&say_key(&bot.id)),
+            stops: self.store.read(cx).chat_takes_keys(),
+            retry_stop: self.retry_stop.clone(),
         }
     }
 
@@ -243,7 +266,7 @@ impl BotChat {
             Read::Failed(why) if chat.lines.is_empty() => ui::note(read_failed(&bot.name, why)).into_any_element(),
             Read::Failed(why) => self.failed_above_lines(bot, why, cx),
             Read::Asking if chat.lines.is_empty() => ui::loading("Reading the chat…").into_any_element(),
-            _ if chat.lines.is_empty() && !bot.thinking() => empty_page(bot).into_any_element(),
+            _ if chat.lines.is_empty() && !bot.thinking() => self.empty_page(bot, cx).into_any_element(),
             _ => self.lines(bot, cx),
         }
     }
@@ -285,20 +308,33 @@ impl BotChat {
     }
 }
 
-fn empty_page(bot: &Bot) -> impl IntoElement + use<> {
-    let [what, when] = EMPTY_LINES;
-    let examples = EXAMPLES.iter().enumerate().map(|(at, text)| example_row(&bot.id, at, text));
-    div().id("bot-empty").flex_1().min_h_0().overflow_y_scroll().child(
-        ui::emblem_page(Icon::Message, bot.name.clone())
-            .child(ui::emblem_line(what))
-            .child(ui::emblem_line(when))
-            .child(div().w_full().max_w(px(470.)).flex().flex_col().gap(px(8.)).children(examples)),
-    )
+impl BotChat {
+    fn empty_page(&self, bot: &Bot, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let [what, when] = EMPTY_LINES;
+        let stops = self.store.read(cx).chat_takes_keys();
+        let examples = EXAMPLES
+            .iter()
+            .zip(&self.examples)
+            .enumerate()
+            .map(|(at, (text, handle))| example_row(&bot.id, (at, text), handle, stops));
+        div().id("bot-empty").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.empty).child(
+            ui::emblem_page(Icon::Message, bot.name.clone())
+                .child(ui::emblem_line(what))
+                .child(ui::emblem_line(when))
+                .child(div().w_full().max_w(px(470.)).flex().flex_col().gap(px(8.)).children(examples)),
+        )
+    }
 }
 
-fn example_row(bot: &str, at: usize, text: &'static str) -> impl IntoElement + use<> {
+fn example_row(
+    bot: &str,
+    (at, text): (usize, &'static str),
+    handle: &FocusHandle,
+    stops: bool,
+) -> impl IntoElement + use<> {
     let bot = bot.to_string();
-    div()
+    let name = format!("bot-example-{at}");
+    let row = div()
         .id(("bot-example", at))
         .px(px(12.))
         .py(px(9.))
@@ -310,13 +346,19 @@ fn example_row(bot: &str, at: usize, text: &'static str) -> impl IntoElement + u
         .text_color(colours::soft())
         .cursor_pointer()
         .hover(|s| s.bg(colours::hover()))
-        .child(text)
-        .on_click(move |_, _, cx| Store::get(cx).update(cx, |store, cx| store.add_example(&bot, text, cx)))
+        .child(text);
+    press::stop_at(row, handle, name.clone(), stops).on_click(move |event, window, cx| {
+        if press::pressed(event, &name) {
+            Store::get(cx).update(cx, |store, cx| store.add_example(&bot, text, cx));
+            global::keys_to_field(window, cx);
+        }
+    })
 }
 
 impl Render for BotChat {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync(cx);
+        self.reveal_stops(window);
         if let Some(item_ix) = re_anchor(self.following, self.rows.len()) {
             self.list.scroll_to(ListOffset { item_ix, offset_in_item: px(0.) });
         }
@@ -325,19 +367,19 @@ impl Render for BotChat {
         let Some((bot, chat)) = found.map(|(bot, chat)| (bot.clone(), chat.clone())) else { return div() };
         let stopping = store.bots.stopping(&bot.id);
         let starting = store.busy(&reset_key(&bot.id));
+        let stops = store.chat_takes_keys();
         let now = queue::now();
         if bot.thinking() {
             self.counting.drawn();
         }
         self.counting.keep(counting, cx);
         let body = self.body(&bot, &chat, cx);
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .child(header(&bot, starting))
-            .child(body)
-            .children(turn_row(&bot, &chat, now, stopping))
+        div().size_full().flex().flex_col().child(header(&bot, starting, stops)).child(body).children(turn_row(
+            &bot,
+            &chat,
+            now,
+            (stopping, stops),
+        ))
     }
 }
 

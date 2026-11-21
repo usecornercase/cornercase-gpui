@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.120
+
+- **A bot's chat works with keys alone.** Tab and ⇧Tab (Shift+Tab on Linux and Windows) go from the chat's field to its buttons: New conversation, the `⋯` menu, the examples of an empty chat, Retry and Stop. The one you are on has a ring, and Return or Space presses it. The `⋯` menu opens with its first entry lit, so ↓, ↑ and Return go on from there. Tab never reaches the chat behind an open dialog or panel.
+- **Retry sends everything the failed answer was asked.** When several messages were held while a bot answered, the next answer took all of them, and Retry used to send only the last one again. It now sends them all, as the bot got them.
+- **A message that Stop dropped says so.** Messages still held when you press Stop are dropped, and their bubbles now read `Dropped` and are dimmed, instead of showing a time as if they had been sent. A message you send while the stop is on its way is not dropped, and keeps its time.
+
 ## 0.1.124
 
 - **Code is coloured by its language.** A code block in a bot's answer, a Recap, an issue, a Queue run's messages and the update notes is now coloured as code, when its fence names a language (` ```rust `, ` ```sh `, ` ```json `, ` ```toml `, ` ```ts `, ` ```python `, ` ```diff `, ` ```yaml ` and many more), in your theme's colours, light or dark. A block with no language, or one the window does not know, stays as it was.

@@ -82,14 +82,27 @@ fn two_answers_of_one_bot_counted_in_one_app_line_are_both_told_oldest_first() {
     assert_eq!(ids(&answers.counted("notes", (0, 2), later(base, 300))), [4, 6]);
 }
 
-#[test]
-fn a_count_that_rises_by_one_tells_the_newest_answer_and_keeps_the_older_for_the_next_rise() {
+fn six_then_four_told() -> (Answers, Instant) {
     let (mut answers, base) = (Answers::default(), Instant::now());
     answers.heard(answer("notes", 4), base);
     answers.heard(answer("notes", 6), later(base, 50));
     assert_eq!(ids(&answers.counted("notes", (0, 1), later(base, 300))), [6]);
     assert_eq!(ids(&answers.counted("notes", (1, 2), later(base, 800))), [4]);
+    (answers, base)
+}
+
+#[test]
+fn a_count_that_rises_by_one_tells_the_newest_answer_and_keeps_the_older_for_the_next_rise() {
+    let (mut answers, base) = six_then_four_told();
     assert_eq!(answers.counted("notes", (2, 3), later(base, 900)), []);
+}
+
+#[test]
+fn the_told_mark_only_moves_up_so_a_newer_answer_heard_again_is_not_told() {
+    let (mut answers, base) = six_then_four_told();
+    assert_eq!(answers.heard(answer("notes", 6), later(base, 900)), None);
+    assert_eq!(answers.counted("notes", (2, 3), later(base, 1000)), []);
+    assert_eq!(answers.heard(answer("notes", 6), later(base, 1100)), None);
 }
 
 #[test]
