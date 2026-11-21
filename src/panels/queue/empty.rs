@@ -5,6 +5,7 @@ use gpui::{
 
 use super::QueuePanel;
 use crate::panels::PanelKind;
+use crate::panels::bot_chat::EXAMPLES;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::{self, Icon, Tone, glass};
@@ -98,4 +99,10 @@ impl QueuePanel {
             .child(div().w_full().mt(px(8.)).flex().justify_center().child(points()));
         div().id("queue-empty").flex_1().min_h_0().overflow_y_scroll().child(page).into_any_element()
     }
+}
+
+pub(super) fn no_routines(name: &str) -> AnyElement {
+    let line = format!("{name} has no routines yet. Ask it in its chat, such as “{}”", EXAMPLES[EXAMPLES.len() - 1]);
+    let page = ui::emblem_page(Icon::Repeat, "No routines yet").child(ui::emblem_line(line));
+    div().id("queue-no-routines").flex_1().min_h_0().overflow_y_scroll().child(page).into_any_element()
 }

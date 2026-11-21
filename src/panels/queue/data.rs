@@ -18,6 +18,13 @@ pub(super) const ROUTINES_NOTE: &str = "A routine only runs while cornercase's s
                                         have routines.";
 const RUNS_SHOWN: usize = 10;
 
+pub(super) fn bot_routines_note(name: &str) -> String {
+    format!(
+        "A routine only runs while cornercase's server runs. Each run is a new conversation of {name}, which answers \
+         in its chat."
+    )
+}
+
 const fn machine(os: Os) -> &'static str {
     match os {
         Os::Mac => "the Mac",
@@ -42,6 +49,7 @@ pub(super) enum State {
     Pending,
     Starting,
     Started,
+    Answered,
     Failed,
     Missed,
     Removed,
@@ -60,6 +68,7 @@ impl State {
             "pending" => Self::Pending,
             "starting" => Self::Starting,
             "started" => Self::Started,
+            "answered" => Self::Answered,
             "failed" => Self::Failed,
             "missed" => Self::Missed,
             "removed" => Self::Removed,
@@ -73,7 +82,7 @@ impl State {
             Self::Failed | Self::Missed => Group::Unstarted,
             Self::Pending | Self::Starting => Group::Scheduled,
             Self::Repeating | Self::Paused => Group::Routines,
-            Self::Started | Self::Removed | Self::Kept => Group::Started,
+            Self::Started | Self::Answered | Self::Removed | Self::Kept => Group::Started,
             Self::Other => Group::Other,
         }
     }
@@ -126,6 +135,7 @@ pub(super) enum Click {
     Edit,
     Open(u64),
     Detail,
+    Chat(u64),
     Nothing,
 }
 
@@ -140,7 +150,35 @@ impl Click {
     }
 }
 
+pub(super) fn left_a_block(entry: &Entry) -> bool {
+    matches!(State::of(entry), State::Starting | State::Answered | State::Failed)
+}
+
+pub(super) fn chat_block(entry: &Entry, runs: &[&Entry]) -> Option<u64> {
+    if !entry.of_bot() {
+        return None;
+    }
+    if entry.is_routine() {
+        return runs.first().filter(|run| left_a_block(run)).map(|run| run.id);
+    }
+    left_a_block(entry).then_some(entry.id)
+}
+
+pub(super) fn bot_click(entry: &Entry, runs: &[&Entry]) -> Option<Click> {
+    entry.of_bot().then(|| chat_block(entry, runs).map_or(Click::Nothing, Click::Chat))
+}
+
+pub(super) fn scoped(entries: Vec<Entry>, bot: Option<&str>) -> Vec<Entry> {
+    match bot {
+        Some(bot) => entries.into_iter().filter(|entry| entry.place.bot.as_deref() == Some(bot)).collect(),
+        None => entries,
+    }
+}
+
 pub(super) fn offers_detail(entry: &Entry) -> bool {
+    if entry.of_bot() {
+        return false;
+    }
     match State::of(entry) {
         State::Started | State::Kept | State::Removed => true,
         State::Failed | State::Missed => entry.routine.is_some(),
@@ -166,6 +204,7 @@ pub(super) fn offers_result(entry: &Entry, pane: Option<u64>, results: bool) -> 
 #[serde(default)]
 pub(crate) struct Place {
     pub project: String,
+    pub bot: Option<String>,
     pub workspace: Option<String>,
     pub workspace_name: Option<String>,
     pub workspace_id: Option<u64>,
@@ -202,13 +241,21 @@ impl Entry {
         self.routine.is_none() && matches!(self.state.as_str(), "pending" | "failed" | "missed")
     }
 
+    pub(super) fn of_bot(&self) -> bool {
+        self.place.bot.as_deref().is_some_and(|bot| !bot.is_empty())
+    }
+
+    pub(super) fn editable(&self) -> bool {
+        self.runnable() && !self.of_bot()
+    }
+
     pub(super) fn is_routine(&self) -> bool {
         self.repeat.is_some()
     }
 
     pub(super) fn clearable(&self) -> bool {
         match State::of(self) {
-            State::Started => true,
+            State::Started | State::Answered => true,
             State::Removed | State::Kept | State::Failed | State::Missed => self.routine.is_some(),
             _ => false,
         }
@@ -269,6 +316,9 @@ pub(super) fn folder_name(path: &str) -> String {
 }
 
 pub(crate) fn place_label(place: &Place, session: Option<&Session>) -> String {
+    if let Some(bot) = place.bot.as_deref().filter(|bot| !bot.is_empty()) {
+        return format!("bot {bot}");
+    }
     let project = session
         .and_then(|s| s.projects.iter().find(|p| p.path == place.project))
         .map_or_else(|| folder_name(&place.project), |p| p.name.clone());
@@ -315,9 +365,14 @@ fn rows<'a>(entries: &'a [Entry], filter: &str, session: Option<&Session>) -> Ve
         .collect()
 }
 
-pub(super) fn sections<'a>(entries: &'a [Entry], filter: &str, session: Option<&Session>) -> Vec<Section<'a>> {
+pub(super) fn sections<'a>(
+    entries: &'a [Entry],
+    filter: &str,
+    session: Option<&Session>,
+    scoped: bool,
+) -> Vec<Section<'a>> {
     let mut rows = rows(entries, filter, session);
-    let says_nothing = filter.is_empty() && !rows.iter().any(|row| row.entry.is_routine());
+    let says_nothing = !scoped && filter.is_empty() && !rows.iter().any(|row| row.entry.is_routine());
     Group::ALL
         .into_iter()
         .map(|group| {
@@ -366,8 +421,10 @@ pub(crate) fn status_label(entry: &Entry, pane: Option<u64>) -> String {
     match State::of(entry) {
         State::Repeating | State::Paused => format!("↻ {}", repeat::words(entry.repeat.as_deref().unwrap_or_default())),
         State::Pending => "Pending".into(),
+        State::Starting if entry.of_bot() => "Answering…".into(),
         State::Starting => "Starting…".into(),
         State::Started => pane.map_or_else(|| "Started · pane closed".into(), |pane| format!("Started · pane {pane}")),
+        State::Answered => "Answered".into(),
         State::Failed => "Failed".into(),
         State::Missed => "Missed".into(),
         State::Removed => "Workspace removed".into(),
@@ -386,11 +443,24 @@ pub(super) fn notice(entry: &Entry) -> Option<String> {
 }
 
 pub(super) fn remove_tip(entry: &Entry) -> &'static str {
+    if entry.of_bot() {
+        return bot_remove_tip(entry);
+    }
     match (entry.is_routine(), entry.routine.is_some(), State::of(entry)) {
         (true, ..) => "Remove the routine and its runs: agents it started keep running, in their workspaces",
         (_, true, _) => "Remove this run from the list: its agent and its workspace stay",
         (.., State::Started) => "Remove it from the list: its agent keeps running",
         _ => "Remove",
+    }
+}
+
+fn bot_remove_tip(entry: &Entry) -> &'static str {
+    if entry.is_routine() {
+        "Remove the routine and its runs: what it answered stays in the chat"
+    } else if left_a_block(entry) {
+        "Remove it from the list: its answer stays in the chat"
+    } else {
+        "Remove"
     }
 }
 

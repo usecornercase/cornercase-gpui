@@ -42,7 +42,7 @@ fn entry(id: u64, state: &str) -> Entry {
 }
 
 fn ids(list: &[Entry], filter: &str) -> Vec<(Group, Vec<u64>)> {
-    sections(list, filter, None)
+    sections(list, filter, None, false)
         .into_iter()
         .map(|section| (section.group, section.rows.iter().map(|row| row.entry.id).collect()))
         .collect()
@@ -178,7 +178,7 @@ fn a_failed_run_says_why_and_a_missed_run_points_to_the_next_one() {
 #[test]
 fn routines_gather_their_runs_in_a_section_of_their_own() {
     let list = listed();
-    let shown = sections(&list, "", None);
+    let shown = sections(&list, "", None, false);
     assert_eq!(ids(&list, ""), [(Group::Routines, vec![2, 1, 6, 7, 3, 4])]);
     assert_eq!(runs_under(&shown, 2), [5]);
     assert_eq!(runs_under(&shown, 6), [8]);
@@ -191,7 +191,7 @@ fn routines_gather_their_runs_in_a_section_of_their_own() {
 fn a_routines_last_ten_runs_show_newest_first() {
     let mut list = vec![routine(1, "2h")];
     list.extend((2..=14).map(|id| run_of(1, id, "started")));
-    assert_eq!(runs_under(&sections(&list, "", None), 1), [14, 13, 12, 11, 10, 9, 8, 7, 6, 5]);
+    assert_eq!(runs_under(&sections(&list, "", None, false), 1), [14, 13, 12, 11, 10, 9, 8, 7, 6, 5]);
 }
 
 #[test]
@@ -203,7 +203,7 @@ fn a_run_whose_routine_is_gone_stays_in_its_states_section() {
 fn a_filter_that_matches_only_a_run_keeps_its_routine() {
     let list = [routine(1, "2h"), Entry { label: "release".into(), ..run_of(1, 2, "started") }, routine(3, "4h")];
     assert_eq!(ids(&list, "release"), [(Group::Routines, vec![1])]);
-    assert_eq!(runs_under(&sections(&list, "release", None), 1), [2]);
+    assert_eq!(runs_under(&sections(&list, "release", None, false), 1), [2]);
 }
 
 #[test]
@@ -241,10 +241,10 @@ fn clear_started_clears_finished_runs_and_never_a_routine() {
 #[test]
 fn clear_started_sits_with_what_started_else_with_the_routines_runs() {
     let finished = [routine(1, "2h"), run_of(1, 2, "kept")];
-    assert_eq!(clear_goes_in(&sections(&finished, "", None)), Some(Group::Routines));
+    assert_eq!(clear_goes_in(&sections(&finished, "", None, false)), Some(Group::Routines));
     let both = [routine(1, "2h"), run_of(1, 2, "kept"), entry(3, "started")];
-    assert_eq!(clear_goes_in(&sections(&both, "", None)), Some(Group::Started));
-    assert_eq!(clear_goes_in(&sections(&[routine(1, "2h")], "", None)), None);
+    assert_eq!(clear_goes_in(&sections(&both, "", None, false)), Some(Group::Started));
+    assert_eq!(clear_goes_in(&sections(&[routine(1, "2h")], "", None, false)), None);
 }
 
 #[test]
@@ -846,8 +846,8 @@ fn the_line_about_the_command_line_shows_only_above_a_row_that_would_open_a_deta
     use super::data::shows_results_note;
     let closed = vec![entry(1, "started")];
     let pending = vec![entry(2, "pending"), entry(3, "pending")];
-    assert!(shows_results_note(&sections(&closed, "", None), None, None));
-    assert!(!shows_results_note(&sections(&pending, "", None), None, None));
+    assert!(shows_results_note(&sections(&closed, "", None, false), None, None));
+    assert!(!shows_results_note(&sections(&pending, "", None, false), None, None));
 }
 
 #[test]
@@ -856,7 +856,7 @@ fn the_line_about_the_command_line_waits_for_a_row_whose_pane_is_live_and_has_no
     let live = vec![Entry { pane: Some(9), server: Some("boot-1".into()), ..entry(1, "started") }];
     let session = session_with_pane(9);
     let shows =
-        |list: &[Entry]| shows_results_note(&sections(list, "", Some(&session)), Some("boot-1"), Some(&session));
+        |list: &[Entry]| shows_results_note(&sections(list, "", Some(&session), false), Some("boot-1"), Some(&session));
     assert!(!shows(&live));
     let with_result = vec![Entry { result_at: Some(5), ..live[0].clone() }];
     assert!(shows(&with_result));
@@ -877,7 +877,9 @@ fn the_detail_goes_when_its_entry_leaves_the_feed_or_the_release_stops_offering_
 fn the_line_about_the_command_line_shows_above_a_routine_whose_only_openable_row_is_a_run() {
     use super::data::shows_results_note;
     let alone = vec![routine(1, "day 09:00")];
-    assert!(!shows_results_note(&sections(&alone, "", None), None, None));
+    assert!(!shows_results_note(&sections(&alone, "", None, false), None, None));
     let with_run = vec![routine(1, "day 09:00"), run_of(1, 2, "started")];
-    assert!(shows_results_note(&sections(&with_run, "", None), None, None));
+    assert!(shows_results_note(&sections(&with_run, "", None, false), None, None));
 }
+
+mod bots;

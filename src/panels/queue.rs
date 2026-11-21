@@ -31,7 +31,8 @@ use crate::store::{self, Busy, Store, ToastKind, args};
 use crate::theme::colours;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{self, TextField, TextFieldEvent};
-use data::{Body, Entry, entries};
+use data::{Body, scoped};
+pub(crate) use data::{Entry, entries};
 use detail::Detail;
 use form::{FlowChoices, Form, Spot};
 use rows::Snapshot;
@@ -54,6 +55,7 @@ pub(crate) struct QueuePanel {
     focus: FocusHandle,
     seqs: read::Counter,
     removal: Option<Removal>,
+    scope: Option<String>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -115,6 +117,7 @@ impl QueuePanel {
             focus: cx.focus_handle(),
             seqs: read::Counter::default(),
             removal: None,
+            scope: None,
             _subscriptions: subscriptions,
         }
     }
@@ -198,6 +201,17 @@ impl QueuePanel {
         Some(ui::undo_bar(removal.text.clone(), button).mx(px(16.)).mt(px(12.)))
     }
 
+    fn sync_scope(&mut self, bot: Option<&str>, cx: &mut Context<Self>) {
+        if self.scope.as_deref() == bot {
+            return;
+        }
+        self.scope = bot.map(str::to_string);
+        self.form = None;
+        self.detail = None;
+        self.removal = None;
+        self.filter.update(cx, TextField::clear);
+    }
+
     fn sync_form(&mut self, entries: &[Entry], session: Option<&Session>) {
         if let Some(edit) = self.form.as_ref().and_then(|f| f.edit)
             && !entries.iter().any(|e| e.id == edit && e.runnable())
@@ -221,12 +235,13 @@ impl QueuePanel {
         let filter = self.filter_text(cx);
         let shown = entries.iter().filter(|e| e.matches(&filter, snapshot.session.as_ref())).count();
         let body = Body::of(snapshot.loaded, entries.len(), shown);
-        let toolbar = matches!(body, Body::NoMatch | Body::List).then(|| self.toolbar(window, cx));
-        let content = match body {
-            Body::Loading => ui::loading("Loading…").into_any_element(),
-            Body::Empty => self.empty_page(cx),
-            Body::NoMatch => scrolled(ui::note(NO_MATCH)),
-            Body::List => scrolled(self.list(entries, &filter, snapshot, cx)),
+        let toolbar = matches!(body, Body::NoMatch | Body::List).then(|| self.toolbar(snapshot, window, cx));
+        let content = match (body, snapshot.scope.as_ref()) {
+            (Body::Loading, _) => ui::loading("Loading…").into_any_element(),
+            (Body::Empty, Some((_, name))) => empty::no_routines(name),
+            (Body::Empty, None) => self.empty_page(cx),
+            (Body::NoMatch, _) => scrolled(ui::note(NO_MATCH)),
+            (Body::List, _) => scrolled(self.list(entries, &filter, snapshot, cx)),
         };
         div()
             .flex_1()
@@ -242,15 +257,17 @@ impl QueuePanel {
 
 impl Render for QueuePanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (app, session, releases) = {
+        let (app, session, releases, scope) = {
             let s = Store::get(cx).read(cx);
-            (s.app.clone(), s.session.clone(), s.releases())
+            let scope = s.routines_of().map(|bot| (bot.id.clone(), bot.name.clone()));
+            (s.app.clone(), s.session.clone(), s.releases(), scope)
         };
-        let entries = entries(app.as_ref());
+        self.sync_scope(scope.as_ref().map(|(id, _)| id.as_str()), cx);
+        let entries = scoped(entries(app.as_ref()), self.scope.as_deref());
         self.sync_form(&entries, session.as_ref());
         self.sync_flows(cx);
         self.sync_accounts(cx);
-        let snapshot = Snapshot::new(app.as_ref(), session, &releases);
+        let snapshot = Snapshot::new(app.as_ref(), session, &releases).scoped(scope);
         self.sync_detail(&entries, snapshot.results, window, cx);
         let main = self.main(&entries, &snapshot, window, cx);
         let at = (Edge::Left, self.side_width.size());

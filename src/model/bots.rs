@@ -20,6 +20,7 @@ pub(crate) use self::manage::{
     Arrival, Closes, Creating, Making, Managing, MenuAsk, create_failed, making, remove_failed, rename_failed,
     save_failed,
 };
+pub(crate) use self::runs::{Aim, Anchor, Runs, aim};
 pub(crate) use self::secrets::{
     Listed, NAME_HINT, NEW_SECRET, REMOVE_SECRET, SAVED_AT_ONCE, SECRET_VALUE, Secret, SecretEnter, SecretsSection,
     SecretsSeen, empty_words, listed_of, on_secret_enter, remove_secret_message, replaces, rereads, secret_list_args,
@@ -36,6 +37,7 @@ mod asks;
 mod chat_apps;
 mod form;
 mod manage;
+mod runs;
 mod secrets;
 mod talk;
 mod told;
@@ -66,6 +68,10 @@ pub(crate) struct Bot {
     pub secrets: usize,
     #[serde(deserialize_with = "true_or_false")]
     pub secrets_unreadable: bool,
+    #[serde(deserialize_with = "count_or_none")]
+    pub routines: usize,
+    #[serde(deserialize_with = "time_or_none")]
+    pub next: Option<i64>,
 }
 
 fn set(value: Option<&String>) -> Option<String> {
@@ -82,6 +88,10 @@ fn count_or_none<'de, D: serde::Deserializer<'de>>(found: D) -> Result<usize, D:
 
 fn true_or_false<'de, D: serde::Deserializer<'de>>(found: D) -> Result<bool, D::Error> {
     Ok(Value::deserialize(found)?.as_bool() == Some(true))
+}
+
+fn time_or_none<'de, D: serde::Deserializer<'de>>(found: D) -> Result<Option<i64>, D::Error> {
+    Ok(Value::deserialize(found)?.as_i64())
 }
 
 impl Bot {
@@ -102,6 +112,7 @@ impl Bot {
             && self.asks == other.asks
             && self.secrets == other.secrets
             && self.secrets_unreadable == other.secrets_unreadable
+            && self.next == other.next
     }
 
     pub(crate) fn thinking(&self) -> bool {
@@ -165,6 +176,7 @@ pub(crate) struct Line {
     pub text: String,
     pub held: bool,
     pub ask: Option<u64>,
+    pub routine: Option<u64>,
 }
 
 fn present<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
@@ -181,7 +193,8 @@ pub(crate) fn line_of(value: &Value) -> Option<Line> {
     let at = present(value, "at").map_or(Some(0), Value::as_i64)?;
     let held = present(value, "held").map_or(Some(false), Value::as_bool)?;
     let ask = present(value, "ask").and_then(Value::as_u64);
-    Some(Line { id, at, kind: Kind::from(kind), text, held, ask })
+    let routine = present(value, "routine").and_then(Value::as_u64).filter(|_| present(value, "ask").is_none());
+    Some(Line { id, at, kind: Kind::from(kind), text, held, ask, routine })
 }
 
 pub(crate) fn history_of(text: &str) -> anyhow::Result<Vec<Line>> {
@@ -210,10 +223,6 @@ pub(crate) enum Heard {
 }
 
 impl BotEvent {
-    pub(crate) fn of_run(&self) -> bool {
-        self.line.as_ref().and_then(|line| present(line, "routine")).is_some()
-    }
-
     pub(crate) fn heard(&self) -> Heard {
         let bot = self.bot.clone();
         if let Some(line) = self.line.as_ref() {
@@ -409,7 +418,11 @@ pub(crate) struct Bots {
     pub to_tell: Vec<Told>,
     pub last_shown: Option<String>,
     pub asking: Asking,
+    pub runs: Runs,
+    pub anchor: Option<Anchor>,
+    pub queue_of: Option<String>,
     stopping: HashSet<String>,
+    again: HashSet<u64>,
     revision: u64,
     asked: u64,
 }
@@ -444,7 +457,7 @@ impl Bots {
     }
 
     pub(crate) fn thinking(&self) -> bool {
-        self.list.iter().any(Bot::thinking)
+        self.list.iter().any(Bot::thinking) || self.list.iter().any(|bot| self.runs.answering(&bot.id))
     }
 
     pub(crate) fn unread_of(&self) -> Vec<(String, usize)> {
@@ -508,6 +521,20 @@ impl Bots {
 
     pub(crate) fn stop_failed(&mut self, id: &str) {
         self.stopping.remove(id);
+    }
+
+    pub(crate) fn again_asked(&mut self, run: u64) {
+        self.again.insert(run);
+        self.revision += 1;
+    }
+
+    pub(crate) fn again_ended(&mut self, run: u64) {
+        self.again.remove(&run);
+        self.revision += 1;
+    }
+
+    pub(crate) fn again_busy(&self) -> &HashSet<u64> {
+        &self.again
     }
 
     pub(crate) fn heard(&mut self, bot: &str, line: Line) -> Option<Added> {

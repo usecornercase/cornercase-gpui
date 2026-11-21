@@ -4,7 +4,9 @@ use gpui::{
 };
 
 use super::QueuePanel;
-use super::data::{Entry, Group, ROUTINES_NOTE, Row, Section, clear_goes_in, sections, shows_results_note};
+use super::data::{
+    Entry, Group, ROUTINES_NOTE, Row, Section, bot_routines_note, clear_goes_in, sections, shows_results_note,
+};
 use super::rows::Snapshot;
 use crate::notify::tip;
 use crate::theme::colours;
@@ -47,8 +49,9 @@ fn nothing_scheduled() -> Div {
         .child(div().flex_1().min_w(px(0.)).child(NOTHING_SCHEDULED))
 }
 
-fn routines_note() -> Div {
-    ui::dim(ROUTINES_NOTE).px(px(12.)).pb(px(6.))
+fn routines_note(scope: Option<&(String, String)>) -> Div {
+    let note = scope.map_or_else(|| ROUTINES_NOTE.to_string(), |(_, name)| bot_routines_note(name));
+    ui::dim(note).px(px(12.)).pb(px(6.))
 }
 
 fn results_line(note: &str) -> Div {
@@ -76,7 +79,12 @@ impl QueuePanel {
         ui::search_field(field, focused, clear)
     }
 
-    pub(super) fn toolbar(&self, window: &Window, cx: &mut Context<Self>) -> Div {
+    pub(super) fn toolbar(&self, snapshot: &Snapshot, window: &Window, cx: &mut Context<Self>) -> Div {
+        let schedule = snapshot.scope.is_none().then(|| {
+            ui::icon_text_button("queue-new", Icon::Plus, "Schedule…", Tone::Primary)
+                .tooltip(tip("Schedule an agent to start later, or a routine that repeats"))
+                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_form(None, window, cx)))
+        });
         div()
             .flex_none()
             .flex()
@@ -87,11 +95,7 @@ impl QueuePanel {
             .border_b_1()
             .border_color(colours::border())
             .child(self.search_box(window, cx).flex_1().min_w(px(0.)))
-            .child(
-                ui::icon_text_button("queue-new", Icon::Plus, "Schedule…", Tone::Primary)
-                    .tooltip(tip("Schedule an agent to start later, or a routine that repeats"))
-                    .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_form(None, window, cx))),
-            )
+            .children(schedule)
     }
 
     fn row_and_runs(&self, row: &Row, snapshot: &Snapshot, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -107,15 +111,15 @@ impl QueuePanel {
             parts.push(nothing_scheduled().into_any_element());
         }
         if section.group == Group::Routines {
-            parts.push(routines_note().into_any_element());
+            parts.push(routines_note(snapshot.scope.as_ref()).into_any_element());
         }
         parts.extend(section.rows.iter().flat_map(|row| self.row_and_runs(row, snapshot, cx)));
         parts
     }
 
     pub(super) fn list(&self, entries: &[Entry], filter: &str, snapshot: &Snapshot, cx: &mut Context<Self>) -> Div {
-        let sections = sections(entries, filter, snapshot.session.as_ref());
-        let clear = clear_goes_in(&sections);
+        let sections = sections(entries, filter, snapshot.session.as_ref(), snapshot.scope.is_some());
+        let clear = clear_goes_in(&sections).filter(|_| snapshot.scope.is_none());
         let (boot, session) = (snapshot.boot.as_deref(), snapshot.session.as_ref());
         let note = snapshot.results_note.as_deref().filter(|_| shows_results_note(&sections, boot, session));
         let parts: Vec<AnyElement> = note

@@ -5,8 +5,8 @@ use gpui::{
 
 use super::entries::{self, Control, new_conversation_control, stop_control};
 use super::words::{
-    NEW_CONVERSATION, STARTING, STOP, STOPPING, answering, menu_tip, new_conversation_message, new_conversation_title,
-    secrets_label, turn_label,
+    NEW_CONVERSATION, ROUTINES, STARTING, STOP, STOPPING, answering, menu_tip, new_conversation_message,
+    new_conversation_title, routines_tip, secrets_label, turn_label,
 };
 use crate::dialogs::{self, Question};
 use crate::model::bots::{Bot, Chat};
@@ -20,8 +20,14 @@ use crate::ui::{self, Tone, press};
 const NEW_CONVERSATION_STOP: &str = "bot-new-conversation";
 const MENU_STOP: &str = "bot-menu";
 const STOP_STOP: &str = "bot-stop";
+const ROUTINES_STOP: &str = "bot-routines";
 
-pub(super) fn header(bot: &Bot, starting: bool, stops: bool, reach: Option<&Reach>) -> impl IntoElement + use<> {
+pub(super) fn header(
+    bot: &Bot,
+    starting: bool,
+    (stops, routines): (bool, bool),
+    reach: Option<&Reach>,
+) -> impl IntoElement + use<> {
     div()
         .flex_none()
         .flex()
@@ -41,6 +47,7 @@ pub(super) fn header(bot: &Bot, starting: bool, stops: bool, reach: Option<&Reac
         )
         .child(facts(bot))
         .children(reach.map(reach_icon))
+        .children(routines.then(|| routines_button(bot, stops)))
         .child(new_conversation(bot, starting, stops))
         .child(menu_button(bot, stops))
 }
@@ -69,6 +76,19 @@ fn reach_icon(reach: &Reach) -> impl IntoElement + use<> {
         .flex_none()
         .child(ui::icon(Icon::Phone, 13.).text_color(colours::faint()))
         .tooltip(notify::tip(reach_tip(reach)))
+}
+
+fn routines_button(bot: &Bot, stops: bool) -> impl IntoElement + use<> {
+    let id = bot.id.clone();
+    div().flex_none().child(
+        press::stop(ui::button(ROUTINES_STOP, ROUTINES), ROUTINES_STOP, stops)
+            .tooltip(notify::tip(routines_tip(&bot.name)))
+            .on_click(move |event: &ClickEvent, _, cx| {
+                if press::pressed(event, ROUTINES_STOP) {
+                    Store::get(cx).update(cx, |s, cx| s.open_routines(&id, cx));
+                }
+            }),
+    )
 }
 
 fn menu_button(bot: &Bot, stops: bool) -> impl IntoElement + use<> {

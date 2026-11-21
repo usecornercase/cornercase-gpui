@@ -1,0 +1,30 @@
+{
+  "boot": "47897-1795268093832914000",
+  "bots": [
+    {
+      "access": "cornercase",
+      "account": null,
+      "agent": "claude",
+      "chat_apps": "away",
+      "created": 1795268098,
+      "effort": null,
+      "folder": "/tmp/cc267/server.bots/prs",
+      "follow": true,
+      "following": [],
+      "held": 0,
+      "id": "prs",
+      "last": {
+        "at": 1795268131,
+        "kind": "bot",
+        "text": "**(fake)** answered.\n\n- one\n- two"
+      },
+      "model": null,
+      "name": "PRs",
+      "next": 1795269905,
+      "routines": 2,
+      "secrets": 0,
+      "state": "idle",
+      "unread": 2
+    }
+  ]
+}

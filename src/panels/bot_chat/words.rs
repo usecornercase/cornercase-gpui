@@ -1,4 +1,5 @@
 use super::entries::Turn;
+use crate::model::bots::Bot;
 use crate::panels::flows::model::{age, plural};
 use crate::panels::queue;
 
@@ -35,16 +36,27 @@ pub(crate) fn folded_label(hidden: usize) -> String {
     format!("+{}", plural(hidden, "step"))
 }
 
-pub(super) const EMPTY_LINES: [&str; 2] = [
-    "A bot is an agent of your own. It belongs to no project and keeps a memory.",
-    "It runs only when you write to it, and answers here. Try one of these:",
-];
+const WHAT_A_BOT_IS: &str = "A bot is an agent of your own. It belongs to no project and keeps a memory.";
 
-pub(crate) const EXAMPLES: [&str; 3] = [
+pub(crate) fn empty_lines(routines: bool) -> [&'static str; 2] {
+    let when = if routines {
+        "It answers here when you write to it, and on a schedule it sets itself. Try one of these:"
+    } else {
+        "It runs only when you write to it, and answers here. Try one of these:"
+    };
+    [WHAT_A_BOT_IS, when]
+}
+
+pub(crate) const EXAMPLES: [&str; 4] = [
     "Which of my open pull requests are blocked, and why?",
     "What did my agents get done today, in every project?",
     "Which issues labelled bug came in today, in every project?",
+    "Every weekday at 9, tell me which of my PRs are blocked.",
 ];
+
+pub(crate) fn examples_shown(routines: bool) -> usize {
+    if routines { EXAMPLES.len() } else { EXAMPLES.len() - 1 }
+}
 
 pub(crate) const SEND: &str = "Send";
 pub(crate) const SENDING: &str = "Sending…";
@@ -54,6 +66,20 @@ pub(crate) const STOPPING: &str = "Stopping…";
 pub(crate) const RETRY: &str = "Retry";
 pub(crate) const NEW_CONVERSATION: &str = "New conversation";
 pub(crate) const STARTING: &str = "Starting…";
+pub(crate) const RUN_AGAIN: &str = "Run again";
+pub(crate) const ANSWERING: &str = "Answering…";
+pub(crate) const ROUTINES: &str = "Routines";
+
+pub(crate) fn routines_tip(name: &str) -> String {
+    format!("What {name} does on a schedule")
+}
+
+pub(crate) fn row_detail(bot: &Bot, busy: bool, now: i64) -> String {
+    match bot.next.filter(|_| !busy) {
+        Some(next) => format!("next {}", time_label(next, now)),
+        None => bot.detail(),
+    }
+}
 
 pub(crate) fn placeholder(name: &str) -> String {
     format!("Message {name}…")

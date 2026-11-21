@@ -16,6 +16,7 @@ fn line(id: u64, kind: &str, text: &str, held: bool) -> Line {
         text: text.to_string(),
         held,
         ask: None,
+        routine: None,
     }
 }
 
@@ -530,23 +531,67 @@ fn answers() -> Vec<BotEvent> {
 
 fn told_of(event: &BotEvent) -> Option<Answer> {
     let Heard::Line(bot, line) = event.heard() else { return None };
-    answer_of(&bot, &line, event.of_run())
+    answer_of(&bot, &line)
+}
+
+fn routine_of(line: &Value) -> Option<u64> {
+    line_of(line).expect("the line stays").routine
 }
 
 #[test]
-fn a_line_of_a_routines_run_is_a_run() {
-    let found: Vec<bool> = answers().iter().map(BotEvent::of_run).collect();
-    assert_eq!(found, [false, false, true, true]);
-    let run = |line: Value| BotEvent { bot: "prs".into(), line: Some(line), ..BotEvent::default() };
-    assert!(!run(json!({"id": 1, "kind": "bot", "routine": null})).of_run());
-    assert!(!run(json!({"id": 1, "kind": "bot"})).of_run());
-    assert!(!BotEvent { bot: "prs".into(), ..BotEvent::default() }.of_run());
+fn a_line_of_a_routines_run_reads_its_run() {
+    let found: Vec<Option<u64>> = answers().iter().filter_map(told_of).map(|answer| answer.run).collect();
+    assert_eq!(found, [None, None, Some(1), Some(2)]);
+    assert_eq!(routine_of(&json!({"id": 1, "kind": "bot", "routine": 12})), Some(12));
+    assert_eq!(routine_of(&json!({"id": 1, "kind": "bot", "routine": null})), None);
+    assert_eq!(routine_of(&json!({"id": 1, "kind": "bot"})), None);
+}
+
+#[test]
+fn a_line_that_asks_or_whose_routine_is_of_another_type_reads_no_run_and_stays() {
+    assert_eq!(routine_of(&json!({"id": 1, "kind": "notice", "routine": 12, "ask": 3})), None);
+    assert_eq!(routine_of(&json!({"id": 1, "kind": "bot", "routine": "12"})), None);
+    assert_eq!(routine_of(&json!({"id": 1, "kind": "bot", "routine": -1})), None);
+}
+
+#[test]
+fn a_bot_reads_its_routines_and_next_run() {
+    let list = in_app(&app(fixture!("bots/app-routines.json")));
+    assert_eq!((list[0].routines, list[0].next), (2, Some(1_795_269_905)));
+    let older = in_app(&app(fixture!("bots/app-two.json")));
+    assert_eq!((older[0].routines, older[0].next), (0, None));
+}
+
+#[test]
+fn a_bot_whose_routines_or_next_have_another_type_stays_listed() {
+    let mut value = app(fixture!("bots/app-routines.json"));
+    value["bots"][0]["routines"] = json!("two");
+    value["bots"][0]["next"] = json!("soon");
+    let list = in_app(&value);
+    assert_eq!((list.len(), list[0].routines, list[0].next), (1, 0, None));
+}
+
+#[test]
+fn a_changed_next_run_draws_the_list_again_and_a_changed_count_alone_does_not() {
+    let mut bots = Bots::new();
+    let mut value = app(fixture!("bots/app-routines.json"));
+    bots.take_app(&value);
+    let revision = bots.revision();
+    value["bots"][0]["routines"] = json!(3);
+    bots.take_app(&value);
+    assert_eq!(bots.revision(), revision);
+    value["bots"][0]["next"] = json!(1_795_271_705);
+    bots.take_app(&value);
+    assert!(bots.revision() > revision);
 }
 
 #[test]
 fn cornercases_own_lines_are_answers_and_a_runs_error_is_left_to_its_message() {
-    let told: Vec<(bool, bool, bool)> =
-        answers().iter().filter_map(told_of).map(|a| (a.failed, a.run, tells(&a, (None, false), true))).collect();
+    let told: Vec<(bool, bool, bool)> = answers()
+        .iter()
+        .filter_map(told_of)
+        .map(|a| (a.failed, a.run.is_some(), tells(&a, (None, false), true)))
+        .collect();
     assert_eq!(told, [(false, false, true), (true, false, true), (false, true, true), (true, true, false)]);
 }
 

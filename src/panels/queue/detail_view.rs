@@ -166,7 +166,7 @@ impl QueuePanel {
     ) -> Option<AnyElement> {
         let detail = self.detail.as_ref()?;
         let entry = entries.iter().find(|e| e.id == detail.id)?;
-        let shown = self.shown(entry, snapshot, cx);
+        let shown = self.shown((entry, &[]), snapshot, cx);
         let refreshing = detail.answer.is_some() && Self::reading(detail, cx);
         let answer = detail.answer.as_ref();
         let kept = answer.and_then(|a| a.result.as_ref());

@@ -135,7 +135,7 @@ fn making_way(older: &[Toast]) -> usize {
 }
 
 pub(crate) fn shows_bot(toast: &Toast, id: &str) -> bool {
-    matches!(&toast.action, Some((_, ToastGo::Bot(bot, _) | ToastGo::BotAsk(bot, _, _))) if bot == id)
+    matches!(&toast.action, Some((_, ToastGo::Bot(bot, ..) | ToastGo::BotAsk(bot, _, _))) if bot == id)
 }
 
 pub(crate) fn ask_ended(toast: &Toast, list: &[Bot]) -> bool {

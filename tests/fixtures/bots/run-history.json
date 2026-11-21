@@ -1,0 +1,206 @@
+{
+  "bot": "prs",
+  "lines": [
+    {
+      "at": 1795268098,
+      "id": 1,
+      "kind": "you",
+      "text": "hello there"
+    },
+    {
+      "at": 1795268098,
+      "id": 2,
+      "kind": "step",
+      "text": "Read /tmp/cc267/proj/README",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268098,
+      "id": 3,
+      "kind": "step",
+      "text": "cornercase queue add --every 30m",
+      "tool": "Bash"
+    },
+    {
+      "at": 1795268100,
+      "id": 4,
+      "kind": "step",
+      "text": "Read /tmp/cc267/proj/NOTES",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268100,
+      "conversation": "fake-49096",
+      "id": 5,
+      "kind": "bot",
+      "model": "fake",
+      "text": "**(fake)** answered.\n\n- one\n- two",
+      "tokens": {
+        "cache_read": 0,
+        "cache_write": 0,
+        "input": 1,
+        "output": 1
+      }
+    },
+    {
+      "at": 1795268105,
+      "id": 6,
+      "kind": "you",
+      "text": "Every weekday at 9, tell me which of my PRs are blocked."
+    },
+    {
+      "at": 1795268105,
+      "id": 7,
+      "kind": "step",
+      "text": "Read /tmp/cc267/proj/README",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268105,
+      "id": 8,
+      "kind": "step",
+      "text": "cornercase queue add --every 30m",
+      "tool": "Bash"
+    },
+    {
+      "at": 1795268107,
+      "id": 9,
+      "kind": "step",
+      "text": "Read /tmp/cc267/proj/NOTES",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268107,
+      "conversation": "fake-50801",
+      "id": 10,
+      "kind": "bot",
+      "model": "fake",
+      "text": "**(fake)** answered.\n\n- one\n- two",
+      "tokens": {
+        "cache_read": 0,
+        "cache_write": 0,
+        "input": 1,
+        "output": 1
+      }
+    },
+    {
+      "at": 1795268116,
+      "id": 11,
+      "kind": "notice",
+      "routine": 5,
+      "text": "↻ Tell me which of my PRs are blocked… · 14:35"
+    },
+    {
+      "at": 1795268116,
+      "id": 12,
+      "kind": "step",
+      "routine": 5,
+      "text": "Read /tmp/cc267/proj/README",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268116,
+      "id": 13,
+      "kind": "step",
+      "routine": 5,
+      "text": "cornercase queue add --every 30m",
+      "tool": "Bash"
+    },
+    {
+      "at": 1795268119,
+      "id": 14,
+      "kind": "you",
+      "text": "a chat line between"
+    },
+    {
+      "at": 1795268119,
+      "id": 15,
+      "kind": "step",
+      "text": "Read /tmp/cc267/proj/README",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268121,
+      "id": 16,
+      "kind": "step",
+      "text": "Read /tmp/cc267/proj/NOTES",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268121,
+      "conversation": "fake-54050",
+      "id": 17,
+      "kind": "bot",
+      "model": "fake",
+      "text": "**(fake)** answered.\n\n- one\n- two",
+      "tokens": {
+        "cache_read": 0,
+        "cache_write": 0,
+        "input": 1,
+        "output": 1
+      }
+    },
+    {
+      "at": 1795268131,
+      "id": 18,
+      "kind": "step",
+      "routine": 5,
+      "text": "Read /tmp/cc267/proj/NOTES",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268131,
+      "conversation": "fake-53406",
+      "id": 19,
+      "kind": "bot",
+      "model": "fake",
+      "routine": 5,
+      "text": "**(fake)** answered.\n\n- one\n- two",
+      "tokens": {
+        "cache_read": 0,
+        "cache_write": 0,
+        "input": 1,
+        "output": 1
+      }
+    },
+    {
+      "at": 1795268135,
+      "id": 20,
+      "kind": "notice",
+      "routine": 7,
+      "text": "↻ Broken check · 14:35"
+    },
+    {
+      "at": 1795268135,
+      "id": 21,
+      "kind": "step",
+      "routine": 7,
+      "text": "Read /tmp/cc267/proj/README",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268135,
+      "id": 22,
+      "kind": "step",
+      "routine": 7,
+      "text": "cornercase queue add --every 30m",
+      "tool": "Bash"
+    },
+    {
+      "at": 1795268137,
+      "id": 23,
+      "kind": "step",
+      "routine": 7,
+      "text": "Read /tmp/cc267/proj/NOTES",
+      "tool": "Read"
+    },
+    {
+      "at": 1795268137,
+      "id": 24,
+      "kind": "error",
+      "routine": 7,
+      "text": "The fake was told to fail."
+    }
+  ],
+  "name": "PRs"
+}

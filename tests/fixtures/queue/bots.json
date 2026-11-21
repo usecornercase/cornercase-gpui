@@ -1,0 +1,147 @@
+{
+  "boot": "47897-1795268093832914000",
+  "queue": [
+    {
+      "agent": "claude",
+      "at": 1795268116,
+      "command": "",
+      "id": 5,
+      "label": "Tell me which of my PRs are blocked…",
+      "mode": null,
+      "place": {
+        "bot": "prs",
+        "branch": null,
+        "project": "",
+        "server": "",
+        "workspace": null,
+        "workspace_id": null,
+        "workspace_name": null
+      },
+      "program": "",
+      "prompt": "Tell me which of my PRs are blocked (wait a bit)",
+      "result_at": 1795268131,
+      "routine": 2,
+      "session": "fake-53406",
+      "started": 1795268116,
+      "state": "answered",
+      "submit": true,
+      "zone": "Europe/Madrid"
+    },
+    {
+      "agent": "claude",
+      "at": 1795268135,
+      "command": "",
+      "id": 7,
+      "label": "Broken check",
+      "mode": null,
+      "place": {
+        "bot": "prs",
+        "branch": null,
+        "project": "",
+        "server": "",
+        "workspace": null,
+        "workspace_id": null,
+        "workspace_name": null
+      },
+      "program": "",
+      "prompt": "Tell me what broke, then fail",
+      "reason": "The fake was told to fail.",
+      "routine": 3,
+      "started": 1795268135,
+      "state": "failed",
+      "submit": true,
+      "zone": "Europe/Madrid"
+    },
+    {
+      "agent": "claude",
+      "at": 1795269905,
+      "command": "",
+      "id": 2,
+      "label": "Review PRs",
+      "mode": null,
+      "next": 1795269905,
+      "place": {
+        "bot": "prs",
+        "branch": null,
+        "project": "",
+        "server": "",
+        "workspace": null,
+        "workspace_id": null,
+        "workspace_name": null
+      },
+      "program": "",
+      "prompt": "Tell me which of my PRs are blocked (wait a bit)",
+      "repeat": "30m",
+      "state": "pending",
+      "submit": true,
+      "zone": "Europe/Madrid"
+    },
+    {
+      "agent": "claude",
+      "at": 1795269907,
+      "command": "",
+      "id": 3,
+      "label": "Broken check",
+      "mode": null,
+      "next": 1795269907,
+      "place": {
+        "bot": "prs",
+        "branch": null,
+        "project": "",
+        "server": "",
+        "workspace": null,
+        "workspace_id": null,
+        "workspace_name": null
+      },
+      "program": "",
+      "prompt": "Tell me what broke, then fail",
+      "repeat": "30m",
+      "state": "pending",
+      "submit": true,
+      "zone": "Europe/Madrid"
+    },
+    {
+      "agent": "claude",
+      "at": 1795334400,
+      "command": "",
+      "id": 4,
+      "label": "Stand-up reminder",
+      "mode": null,
+      "place": {
+        "bot": "prs",
+        "branch": null,
+        "project": "",
+        "server": "",
+        "workspace": null,
+        "workspace_id": null,
+        "workspace_name": null
+      },
+      "program": "",
+      "prompt": "Remind me to stand up",
+      "state": "pending",
+      "submit": true,
+      "zone": "Europe/Madrid"
+    },
+    {
+      "agent": "claude",
+      "at": 1795338000,
+      "command": "/tmp/cc267/fake-claude",
+      "id": 9,
+      "label": "Fix build",
+      "mode": null,
+      "place": {
+        "branch": null,
+        "project": "/private/tmp/cc267/proj",
+        "server": "47897-1795268093832914000",
+        "workspace": null,
+        "workspace_id": null,
+        "workspace_name": null
+      },
+      "program": "/tmp/cc267/fake-claude",
+      "prompt": "Fix the build",
+      "state": "pending",
+      "submit": true,
+      "zone": "Europe/Madrid"
+    }
+  ]
+}

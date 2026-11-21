@@ -12,21 +12,21 @@ pub(crate) struct Answer {
     pub bot: String,
     pub id: u64,
     pub failed: bool,
-    pub run: bool,
+    pub run: Option<u64>,
     pub text: String,
 }
 
-pub(crate) fn answer_of(bot: &str, line: &Line, run: bool) -> Option<Answer> {
+pub(crate) fn answer_of(bot: &str, line: &Line) -> Option<Answer> {
     let failed = match line.kind {
         Kind::Bot => false,
         Kind::Error => true,
         _ => return None,
     };
-    Some(Answer { bot: bot.to_string(), id: line.id, failed, run, text: line.text.clone() })
+    Some(Answer { bot: bot.to_string(), id: line.id, failed, run: line.routine, text: line.text.clone() })
 }
 
 pub(crate) fn tells(answer: &Answer, (shown, active): (Option<&str>, bool), offered: bool) -> bool {
-    let run_failed = answer.run && answer.failed;
+    let run_failed = answer.run.is_some() && answer.failed;
     let on_screen = active && shown == Some(answer.bot.as_str());
     offered && !run_failed && !on_screen
 }
@@ -120,16 +120,33 @@ pub(crate) struct Told {
     pub failed: bool,
     pub first: String,
     pub ask: Option<u64>,
+    pub label: Option<String>,
+    pub run: Option<u64>,
 }
 
 impl Told {
-    pub(crate) fn new(answer: &Answer, name: &str) -> Self {
-        let (bot, name, failed) = (answer.bot.clone(), name.to_string(), answer.failed);
-        Self { bot, name, failed, first: first_of(answer), ask: None }
+    pub(crate) fn new(answer: &Answer, name: &str, label: Option<&str>) -> Self {
+        Self {
+            bot: answer.bot.clone(),
+            name: name.to_string(),
+            failed: answer.failed,
+            first: first_of(answer),
+            ask: None,
+            label: label.filter(|label| !label.is_empty()).map(str::to_string),
+            run: answer.run,
+        }
     }
 
     pub(crate) fn asking(bot: &str, name: &str, ask: &Ask) -> Self {
-        Self { bot: bot.to_string(), name: name.to_string(), failed: false, first: ask.joined(), ask: Some(ask.id) }
+        let (bot, name) = (bot.to_string(), name.to_string());
+        Self { bot, name, failed: false, first: ask.joined(), ask: Some(ask.id), label: None, run: None }
+    }
+
+    fn who(&self) -> String {
+        match &self.label {
+            Some(label) => format!("{} · {label}", self.name),
+            None => self.name.clone(),
+        }
     }
 
     pub(crate) fn headline(&self) -> String {
@@ -137,7 +154,7 @@ impl Told {
             return title(&self.name);
         }
         let said = if self.failed { "could not answer" } else { "answered" };
-        format!("{} {said}", self.name)
+        format!("{} {said}", self.who())
     }
 
     pub(crate) fn body(&self) -> Option<String> {
@@ -149,8 +166,8 @@ impl Told {
             return format!("{}: {}", self.headline(), self.first);
         }
         match (self.failed, self.body()) {
-            (false, Some(first)) => format!("{}: {first}", self.name),
-            (true, Some(first)) => format!("{} could not answer: {first}", self.name),
+            (false, Some(first)) => format!("{}: {first}", self.who()),
+            (true, Some(first)) => format!("{} could not answer: {first}", self.who()),
             (_, None) => self.headline(),
         }
     }
