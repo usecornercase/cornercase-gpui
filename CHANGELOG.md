@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.142
+
+- **A bot's details in one place.** Press the bot's name at the top of its chat, or choose **Details…** in its menu (its row's `⋯` or the chat's `⋯`), to see everything about it: its folder with **Copy path**, its agent, model, effort and account, its access (full access in red), how many secrets it keeps, the secrets it is waiting for, the day it was made, what it is for, and its routines with their next run or `paused`. It follows changes while it is open. **Routines…** opens what it does on a schedule and **Edit bot…** its form; Tab reaches every button and Escape closes it. What it is for needs cornercase 0.13.96 or newer. A linked machine's bot has no details yet, as it has no menu.
+- **Select and copy text in a bot's chat.** Drag over its answers, your messages and its errors, across paragraphs, lists, links and code blocks, then press ⌘C (Ctrl+Shift+C on Linux and Windows) to copy what you selected, as it is shown. A double click takes a word, a triple click a whole paragraph, code block or message, and a drag past the top or bottom scrolls the chat. A click on a link still opens it, and a click elsewhere clears the selection. The copy icon of each answer still copies its Markdown.
+
 ## 0.1.141
 
 - **The bots of your other machines show in the Bots section.** Under this computer's bots, each linked machine that has a bot gets a heading with its name, and its bots are listed under it with their state, agent and model, and unread count, as this computer's are. A bot made on a machine shows up by itself within a second or so.
