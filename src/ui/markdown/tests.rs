@@ -148,7 +148,7 @@ fn outline_reads_the_same_blocks_without_spans() {
 fn each_kind_of_block_picks_the_text_it_draws() {
     let blocks = parse(SAMPLE);
     let picked: Vec<Option<String>> =
-        blocks.iter().map(|block| block.picked_text().map(|text| text.into_owned())).collect();
+        blocks.iter().map(|block| block.picked_text().map(Cow::into_owned)).collect();
     assert_eq!(picked[0].as_deref(), Some("Problem"));
     assert_eq!(picked[1].as_deref(), Some("A plugin's popup (#435) runs a program."));
     assert_eq!(picked[2].as_deref(), Some("one more"));
