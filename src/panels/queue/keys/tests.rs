@@ -1,5 +1,5 @@
 use super::super::data::Body;
-use super::{KeysTo, follows, keys_go};
+use super::{KeysTo, follows, keys_go, takes_keys};
 
 #[test]
 fn the_keys_go_to_the_prompt_else_the_filter_else_the_pages_button_and_wait_while_loading() {
@@ -29,4 +29,14 @@ fn the_keys_follow_from_the_filter_to_the_pages_button_and_back_and_nowhere_else
     assert!(!follows(KeysTo::Prompt, KeysTo::Filter));
     assert!(!follows(KeysTo::Filter, KeysTo::Prompt));
     assert!(!follows(KeysTo::Wait, KeysTo::First));
+}
+
+#[test]
+fn a_change_of_target_across_a_dialog_takes_the_keys_and_one_on_top_only_when_the_old_target_had_them() {
+    assert!(takes_keys(KeysTo::Filter, KeysTo::First, (true, false)));
+    assert!(takes_keys(KeysTo::First, KeysTo::Filter, (true, false)));
+    assert!(takes_keys(KeysTo::Filter, KeysTo::First, (false, true)));
+    assert!(!takes_keys(KeysTo::Filter, KeysTo::First, (false, false)));
+    assert!(!takes_keys(KeysTo::Filter, KeysTo::Filter, (true, true)));
+    assert!(!takes_keys(KeysTo::Prompt, KeysTo::Filter, (true, true)));
 }

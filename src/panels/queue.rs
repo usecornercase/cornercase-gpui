@@ -38,7 +38,7 @@ use data::{Body, scoped};
 pub(crate) use data::{Entry, entries};
 use detail::Detail;
 use form::{FlowChoices, Form, Spot};
-use keys::{KeysTo, follows, keys_go};
+use keys::{KeysTo, Went, keys_go, takes_keys};
 use rows::{Around, Snapshot};
 pub(crate) use time::{days, local, now, when_label};
 use undo::{Removal, UNDO_FOR, undo_shown};
@@ -64,7 +64,7 @@ pub(crate) struct QueuePanel {
     wants_keys: bool,
     was_open: bool,
     had_form: bool,
-    went: KeysTo,
+    went: Went,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -166,7 +166,7 @@ impl QueuePanel {
             wants_keys: open,
             was_open: open,
             had_form: false,
-            went: KeysTo::Wait,
+            went: Went::default(),
             _subscriptions: subscriptions,
         }
     }
@@ -188,9 +188,14 @@ impl QueuePanel {
             self.wants_keys = true;
         }
         self.had_form = self.form.is_some();
+        if !on_top {
+            self.went.covered = true;
+            return;
+        }
         let to = keys_go(on_top, self.form.is_some(), body);
-        let before = std::mem::replace(&mut self.went, to);
-        if follows(before, to) && self.handle_of(before, true, cx).is_some_and(|had| had.is_focused(window)) {
+        let before = std::mem::replace(&mut self.went, Went { to, covered: false });
+        let had = self.handle_of(before.to, true, cx).is_some_and(|had| had.is_focused(window));
+        if takes_keys(before.to, to, (before.covered, had)) {
             self.wants_keys = true;
         }
         if !self.wants_keys || to == KeysTo::Wait {

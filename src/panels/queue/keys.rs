@@ -27,5 +27,21 @@ pub(super) fn follows(before: KeysTo, now: KeysTo) -> bool {
     before != now && page(before) && page(now)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Went {
+    pub(super) to: KeysTo,
+    pub(super) covered: bool,
+}
+
+impl Default for Went {
+    fn default() -> Self {
+        Self { to: KeysTo::Wait, covered: false }
+    }
+}
+
+pub(super) fn takes_keys(before: KeysTo, now: KeysTo, (covered, had): (bool, bool)) -> bool {
+    follows(before, now) && (covered || had)
+}
+
 #[cfg(test)]
 mod tests;
