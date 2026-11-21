@@ -10,7 +10,7 @@ use crate::cli::Version;
 use crate::context_menu::{Entry, danger, item, note, resting, submenu};
 use crate::dialogs::VIEW_CONTEXT;
 use crate::render::layout::Hit;
-use crate::sidebar::mark_label;
+use crate::sidebar::{copy_path_item, mark_label};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct TherePane {
@@ -96,13 +96,6 @@ fn agent_entries(run: &MachineRun, facts: &TherePane, agent: &AgentThere) -> Vec
         there_danger("Close agent…", run, pane, Root::close_agent_there),
     ]);
     entries
-}
-
-fn copy_path_item(machine: &str, path: &str) -> Entry {
-    let (machine, path) = (machine.to_string(), path.to_string());
-    item("Copy path", move |this, _, cx| {
-        this.store.update(cx, |s, cx| s.copy_from(path.clone(), &machine, cx));
-    })
 }
 
 fn move_entries(run: &MachineRun, facts: &TherePane) -> Vec<Entry> {

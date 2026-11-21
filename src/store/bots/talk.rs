@@ -5,7 +5,7 @@ use super::super::machines_there::sent_or_not;
 use super::super::{Busy, Clip, Store, ToastAction, ToastGo, ToastKind, args, reply_of, run_job, run_with};
 use crate::cli::{self, Target};
 use crate::model::bots::{
-    BotKey, Goes, Home, Said, refused_goes, reset_key, say_args, say_key, sendable, setup_args, stop_key,
+    BotKey, Goes, Home, Said, about_args, refused_goes, reset_key, say_args, say_key, sendable, setup_args, stop_key,
 };
 use crate::model::machines::hide_destination;
 
@@ -67,6 +67,10 @@ impl Call {
             None => words.extend(["--last", "1000"]),
         }
         Self { sends: false, ..Self::to(key, args(&words)) }
+    }
+
+    pub(super) fn about(key: &BotKey) -> Self {
+        Self { sends: false, ..Self::to(key, about_args(&key.id)) }
     }
 
     pub(super) fn seen(key: &BotKey) -> Self {

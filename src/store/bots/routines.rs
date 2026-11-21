@@ -3,7 +3,7 @@ use gpui::Context;
 use super::super::{Busy, Store, ToastKind, args};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature, Has};
-use crate::model::bots::Bot;
+use crate::model::bots::{Bot, Home};
 use crate::panels::PanelKind;
 use crate::ui::Icon;
 
@@ -23,7 +23,11 @@ fn again_key(run: u64) -> String {
 
 impl Store {
     pub(crate) fn routines_offered(&self) -> bool {
-        Feature::BotRoutines.on(self.releases().server) == Has::Yes
+        self.routines_offered_at(&Home::Here)
+    }
+
+    pub(crate) fn routines_offered_at(&self, home: &Home) -> bool {
+        Feature::BotRoutines.on(self.bot_releases(home).server) == Has::Yes
     }
 
     pub(crate) fn open_routines(&mut self, bot: &str, cx: &mut Context<Self>) {

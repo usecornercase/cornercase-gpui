@@ -110,6 +110,7 @@ fn a_call_built_from_a_machines_key_goes_to_that_machine() {
         Call::history(&there, None),
         Call::history(&there, Some(4)),
         Call::seen(&there),
+        Call::about(&there),
     ];
     for call in &calls {
         assert_eq!(call.home, vps, "{:?}", call.args);
@@ -137,6 +138,15 @@ fn a_read_refused_with_no_target_says_why_and_not_that_nothing_was_sent() {
     let read = Call::history(&there, None);
     assert_eq!(refused_words(read.sends, "vps unreachable"), "vps unreachable");
     assert!(!Call::seen(&there).sends);
+}
+
+#[test]
+fn reading_what_a_bot_is_for_never_says_nothing_was_sent() {
+    let about = Call::about(&BotKey::on("vps", "prs"));
+    assert!(!about.sends);
+    assert_eq!(about.args, ["bot", "about", "--json", "--", "prs"]);
+    assert_eq!(refused_words(about.sends, "vps unreachable"), "vps unreachable");
+    assert_eq!(Call::about(&prs()).home, Home::Here);
 }
 
 #[test]

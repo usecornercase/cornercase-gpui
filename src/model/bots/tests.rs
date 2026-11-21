@@ -856,3 +856,14 @@ fn follow_does_not_redraw_the_list() {
     assert_eq!(bots.revision(), revision);
     assert_eq!(bots.find("prs").and_then(|bot| bot.follow), Some(false));
 }
+
+#[test]
+fn a_home_keeps_its_bots_entries_and_not_the_projects() {
+    let app: Value = serde_json::from_str(fixture!("queue/bots.json")).expect("the fixture");
+    let mut bots = Bots::new();
+    bots.take_queue(&crate::panels::queue::entries(Some(&app)));
+    let ids: Vec<u64> = bots.queue.iter().map(|entry| entry.id).collect();
+    assert_eq!(ids, [5, 7, 2, 3, 4]);
+    bots.take_queue(&[]);
+    assert_eq!(bots.queue.len(), 0);
+}

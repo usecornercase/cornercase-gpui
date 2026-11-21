@@ -3,6 +3,7 @@ use serde_json::Value;
 use super::*;
 use crate::cli::Version;
 use crate::model::bots::{Ask, in_app};
+use crate::model::{MachineSeen, ThereId};
 use crate::panels::queue::entries;
 use crate::test_util::fixture;
 
@@ -196,4 +197,73 @@ fn a_started_agent_reads_its_title_and_its_workspace_when_the_project_has_severa
         (rows[0].row.name.as_str(), rows[0].row.detail.as_str()),
         ("Fix the flaky test", "claude · shop › fix/ci-482")
     );
+}
+
+fn vps() -> MachineSeen {
+    let view = session(fixture!("session/view-machine-bot.json"));
+    view.machines.into_iter().next().expect("the machine vps")
+}
+
+#[test]
+fn a_machines_agents_are_those_tagged_with_the_bot_that_run_an_agent() {
+    let rows = started_rows_there(&vps(), "notes");
+    let found: Vec<(u64, &str, &str, Option<&str>)> = rows
+        .iter()
+        .map(|started| {
+            (started.row.id, started.row.name.as_str(), started.row.detail.as_str(), started.status.as_deref())
+        })
+        .collect();
+    assert_eq!(found, [(0, "bash", "claude · there-proj", Some("idle"))]);
+    assert_eq!(started_rows_there(&vps(), "nobody"), []);
+}
+
+#[test]
+fn a_machines_agent_shows_its_own_tab() {
+    let seen = vps();
+    let rows = started_rows_there(&seen, "notes");
+    let ShowAt::There(place) = &rows[0].show else { panic!("a place on the machine, not {:?}", rows[0].show) };
+    assert_eq!((place.machine.as_str(), place.boot.as_str()), ("vps", "b-there"));
+    assert_eq!(place.tab, Some(ThereId::heard(10)));
+    assert_eq!(place.workspace, ThereId::heard(3));
+}
+
+#[test]
+fn a_machines_stop_is_named_apart_from_a_pane_here() {
+    let there = started_rows_there(&vps(), "notes");
+    let here = started_rows(&session(fixture!("session/view-bot.json")), "ops");
+    assert_eq!((there[0].stop.as_str(), here[0].stop.as_str()), ("there-9", "12"));
+    assert_eq!(here[0].show, ShowAt::Pane(12));
+}
+
+#[test]
+fn this_computers_bot_keeps_routines_and_edit() {
+    assert_eq!(controls(&Home::Here, true), Controls { routines: true, edit: true, note: None });
+    assert!(!controls(&Home::Here, false).routines);
+}
+
+#[test]
+fn a_machines_bot_is_read_only_and_says_where_to_change_it() {
+    let there = controls(&Home::Machine("vps".into()), true);
+    assert!(!there.routines && !there.edit);
+    assert_eq!(
+        there.note.as_deref(),
+        Some("Change it, its secrets and its routines on vps: this window only reads a machine's bot for now.")
+    );
+}
+
+#[test]
+fn a_machines_folder_is_shown_as_it_comes() {
+    let path = "/Users/me/.cornercase/bots/notes";
+    assert_eq!(folder_shown(path, &Home::Here, "/Users/me"), "~/.cornercase/bots/notes");
+    assert_eq!(folder_shown(path, &Home::Machine("vps".into()), "/Users/me"), path);
+}
+
+#[test]
+fn a_folder_splits_into_its_parent_and_its_name_by_its_own_form() {
+    assert_eq!(folder_parts("~/.cornercase/bots/notes"), ("~/.cornercase/bots/", "notes"));
+    assert_eq!(folder_parts("/srv/cornercase/bots/notes/"), ("/srv/cornercase/bots/", "notes"));
+    assert_eq!(folder_parts(r"C:\Users\me\.cornercase\bots\notes"), (r"C:\Users\me\.cornercase\bots\", "notes"));
+    assert_eq!(folder_parts("C:/Users/me/bots/notes"), ("C:/Users/me/bots/", "notes"));
+    assert_eq!(folder_parts(r"/srv/a\b"), ("/srv/", r"a\b"));
+    assert_eq!(folder_parts("notes"), ("", "notes"));
 }

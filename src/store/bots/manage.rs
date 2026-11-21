@@ -3,11 +3,11 @@ use std::time::Instant;
 use gpui::{Context, Pixels, Point};
 
 use super::super::run_on::start_key;
-use super::super::{Busy, Store, ToastKind, args};
+use super::super::{Asks, Busy, Store, ToastKind, args};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
 use crate::model::bots::{
-    AboutGate, Arrival, BotKey, Closes, Creating, Home, Making, about_gate, create_failed, id_of, making,
+    AboutGate, Arrival, Bot, BotKey, Closes, Creating, Home, Making, MenuAsk, about_gate, create_failed, id_of, making,
     remove_failed, rename_args, rename_failed, save_failed,
 };
 use crate::model::place::awaits;
@@ -22,8 +22,19 @@ fn rename_key(id: &str) -> String {
 }
 
 impl Store {
-    pub(crate) fn about_gate(&self) -> AboutGate {
-        about_gate(self.releases().lacks(Feature::BotAboutRead), Os::CURRENT)
+    pub(crate) fn about_gate(&self, home: &Home) -> AboutGate {
+        about_gate(self.bot_releases(home).lacks(Feature::BotAboutRead), Os::CURRENT)
+    }
+
+    pub(crate) fn read_bot_about(
+        &mut self,
+        key: &BotKey,
+        then: impl FnOnce(&mut Self, anyhow::Result<String>, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        let busy =
+            Busy::new(format!("bot-about:{}", key.tag()), format!("Reading what {} is for…", self.bot_label(key)));
+        self.bot_read(busy, Call::about(key), Box::new(then), cx);
     }
 
     pub(crate) fn making(&self) -> Option<Making> {
@@ -74,9 +85,14 @@ impl Store {
         self.bot_job(busy, Call::here(rename_args(id, name)), then, cx);
     }
 
-    pub(crate) fn ask_bot_menu(&mut self, id: &str, at: Point<Pixels>, keys: bool, cx: &mut Context<Self>) {
-        self.asks.bot_menu.ask(id, (at, keys));
+    pub(crate) fn ask_bot_menu(&mut self, key: &BotKey, at: Point<Pixels>, keys: bool, cx: &mut Context<Self>) {
+        self.asks.bot_menu.ask(key, (at, keys));
         cx.notify();
+    }
+
+    pub(crate) fn take_asked<P>(&mut self, pick: impl FnOnce(&mut Asks) -> &mut MenuAsk<P>) -> Option<(Bot, P)> {
+        let mut asked = std::mem::take(pick(&mut self.asks));
+        asked.take(|key| self.bot(key).cloned())
     }
 
     fn bot_created(&mut self, creating: &Creating, result: anyhow::Result<String>, cx: &mut Context<Self>) {

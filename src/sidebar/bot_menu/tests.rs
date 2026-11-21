@@ -151,3 +151,30 @@ fn the_remove_question_names_three_of_what_the_bot_scheduled_and_counts_the_rest
     let (_, message, _) = remove_words("PRs", &names(&["a", "b", "c", "d", "e"]));
     assert!(message.contains("what it scheduled (a, b, c and 2 more) are deleted"), "{message}");
 }
+
+fn on_vps(bot: Bot) -> Bot {
+    Bot { home: crate::model::bots::Home::Machine("vps".into()), ..bot }
+}
+
+#[test]
+fn a_machines_bot_offers_a_new_conversation_its_details_and_its_path_only() {
+    let rows =
+        want(&[("item", "New conversation…"), ("-", ""), ("item", "Details…"), ("-", ""), ("item", "Copy path")]);
+    for from in [MenuFrom::Row, MenuFrom::Header] {
+        assert_eq!(read_with(&on_vps(bot("idle")), from, (true, false)), rows, "{from:?}");
+    }
+}
+
+#[test]
+fn a_machines_bot_without_a_folder_offers_no_path() {
+    let bot = on_vps(Bot { folder: String::new(), ..bot("idle") });
+    assert_eq!(labels(&read_with(&bot, MenuFrom::Row, (true, false))), ["New conversation…", "", "Details…"]);
+}
+
+#[test]
+fn while_a_machines_bot_answers_its_conversation_rests() {
+    let rows = read_with(&on_vps(bot("thinking")), MenuFrom::Header, (false, false));
+    assert_eq!(rows[..2], want(&[("resting", "PRs is answering: stop it first"), ("resting", "New conversation…")]));
+    let run = read_with(&on_vps(bot("idle")), MenuFrom::Row, (false, true));
+    assert_eq!(run[..2], want(&[("resting", "PRs is answering: stop it first"), ("item", "New conversation…")]));
+}

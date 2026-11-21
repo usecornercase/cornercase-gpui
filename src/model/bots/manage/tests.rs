@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use super::*;
 use crate::cli::Version;
+use crate::model::bots::Home;
 
 fn bot(id: &str) -> Bot {
     Bot { id: id.into(), name: id.into(), ..Bot::default() }
@@ -188,20 +189,34 @@ fn each_secret_saved_here_raises_the_count_the_form_follows() {
     assert_eq!(manage.secrets_saved(), 2);
 }
 
+fn found(list: &[Bot]) -> impl FnOnce(&BotKey) -> Option<Bot> + '_ {
+    move |key| list.iter().find(|bot| bot.key() == *key).cloned()
+}
+
 #[test]
 fn a_menu_asked_for_is_taken_once() {
     let mut ask = MenuAsk::default();
-    ask.ask("prs", 7);
-    assert_eq!(ask.take(&[bot("prs")]), Some((bot("prs"), 7)));
-    assert_eq!(ask.take(&[bot("prs")]), None);
+    ask.ask(&BotKey::here("prs"), 7);
+    assert_eq!(ask.take(found(&[bot("prs")])), Some((bot("prs"), 7)));
+    assert_eq!(ask.take(found(&[bot("prs")])), None);
 }
 
 #[test]
 fn a_menu_asked_for_a_bot_that_left_the_list_opens_nothing() {
     let mut ask = MenuAsk::default();
-    ask.ask("prs", 7);
-    assert_eq!(ask.take(&[bot("ops")]), None);
-    assert_eq!(ask.take(&[bot("prs")]), None);
+    ask.ask(&BotKey::here("prs"), 7);
+    assert_eq!(ask.take(found(&[bot("ops")])), None);
+    assert_eq!(ask.take(found(&[bot("prs")])), None);
+}
+
+#[test]
+fn a_menu_asked_for_a_machines_bot_is_not_taken_for_the_same_id_here() {
+    let there = Bot { home: Home::Machine("vps".into()), ..bot("prs") };
+    let mut ask = MenuAsk::default();
+    ask.ask(&BotKey::on("vps", "prs"), 7);
+    assert_eq!(ask.take(found(&[bot("prs")])), None);
+    ask.ask(&BotKey::on("vps", "prs"), 8);
+    assert_eq!(ask.take(found(&[bot("prs"), there.clone()])), Some((there, 8)));
 }
 
 #[test]

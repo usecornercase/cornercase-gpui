@@ -35,7 +35,7 @@ impl Store {
         let mut told = Vec::new();
         for (bot, ask) in arrived {
             if on_screen.1 && on_screen.0.as_deref() == Some(bot.as_str()) && !opened {
-                self.asks.bot_ask.ask(bot, (*ask, By::Itself));
+                self.asks.bot_ask.ask(&BotKey::here(bot), (*ask, By::Itself));
                 opened = true;
             } else if tells_ask(bot, (on_screen.0.as_deref(), on_screen.1), true) {
                 told.extend(self.asking_told(bot, *ask));
@@ -54,7 +54,7 @@ impl Store {
     }
 
     pub(crate) fn open_ask(&mut self, bot: &str, ask: u64, cx: &mut Context<Self>) {
-        self.asks.bot_ask.ask(bot, (ask, By::Person));
+        self.asks.bot_ask.ask(&BotKey::here(bot), (ask, By::Person));
         cx.notify();
     }
 
