@@ -5,6 +5,7 @@ Every pull request that changes the app adds a section here for its new version.
 ## 0.1.135
 
 - **The small copy icon says what it copied.** On a bot's answer, a Flow's message and a Queue run's conversation, a press on the copy icon now answers `Copied the answer` or `Copied the message`, as every other Copy in the window does. Before, nothing told you whether the press took. Several copies in a row count in one toast instead of stacking.
+- **Opening a bot's steps no longer says there are new messages.** In a chat scrolled up while the bot was still working, a press on `+N steps` of its last run showed `New messages` although nothing had arrived. It now shows only when a line does.
 
 ## 0.1.133
 
