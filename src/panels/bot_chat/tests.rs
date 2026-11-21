@@ -290,13 +290,16 @@ fn a_step_run_keeps_its_real_last_id_so_a_capped_front_keeps_the_reader() {
 #[test]
 fn a_chat_is_fresh_for_another_bot_or_a_new_generation_but_not_a_new_revision() {
     use super::is_fresh;
-    let stamp = |born, revision| ("prs".to_string(), born, revision, None, Vec::new(), Give::No);
+    use crate::model::bots::BotKey;
+    let prs = BotKey::here("prs");
+    let stamp = |born, revision| (BotKey::here("prs"), born, revision, None, Vec::new(), Give::No);
     let mark = stamp(1, 3);
     assert!(is_fresh(None, None, &mark));
-    assert!(is_fresh(Some("ops"), Some(&mark), &mark));
-    assert!(is_fresh(Some("prs"), Some(&mark), &stamp(5, 3)));
-    assert!(!is_fresh(Some("prs"), Some(&mark), &stamp(1, 4)));
-    assert!(!is_fresh(Some("prs"), Some(&mark), &("prs".to_string(), 1, 3, None, vec![4], Give::Button)));
+    assert!(is_fresh(Some(&BotKey::here("ops")), Some(&mark), &mark));
+    assert!(is_fresh(Some(&BotKey::on("vps", "prs")), Some(&mark), &mark));
+    assert!(is_fresh(Some(&prs), Some(&mark), &stamp(5, 3)));
+    assert!(!is_fresh(Some(&prs), Some(&mark), &stamp(1, 4)));
+    assert!(!is_fresh(Some(&prs), Some(&mark), &(prs.clone(), 1, 3, None, vec![4], Give::Button)));
 }
 
 #[test]

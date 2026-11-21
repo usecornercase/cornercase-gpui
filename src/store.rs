@@ -10,7 +10,7 @@ use crate::cli::{self, Feature, Has, Queue, Stream, Target};
 use crate::desktop;
 use crate::model::accounts::pick::{AccountSettings, AgentChoices};
 use crate::model::accounts::{AccountsInfo, ListMoves, Selection, Switch, switching_key};
-use crate::model::bots::{Bots, By, MenuAsk};
+use crate::model::bots::{BotKey, Bots, By, Home, MenuAsk};
 use crate::model::machines::{self, Machine};
 use crate::model::{Owner, Session};
 use crate::notify::Posted;
@@ -117,8 +117,8 @@ pub(crate) enum ToastGo {
     Job(Busy, Vec<String>),
     Open(PanelKind),
     Copy(Clip),
-    Bot(String, String, Option<u64>),
-    BotAsk(String, String, u64),
+    Bot(BotKey, String, Option<u64>),
+    BotAsk(BotKey, String, u64),
 }
 
 struct GlobalStore(Entity<Store>);
@@ -193,9 +193,10 @@ impl Store {
         if self.list_moves.app_line(&value) {
             self.list_accounts(cx);
         }
-        self.take_bots(&value, cx);
+        self.take_bots(&Home::Here, &value, cx);
         self.app = Some(value);
         self.follow_machine_tunnels(cx);
+        self.follow_machine_bots(cx);
         self.ask_picked_home(cx);
         cx.notify();
     }
@@ -203,6 +204,7 @@ impl Store {
     pub(crate) fn take_machines(&mut self, machines: Vec<Machine>, cx: &mut Context<Self>) {
         self.machines = machines;
         self.follow_machine_tunnels(cx);
+        self.follow_machine_bots(cx);
         self.ask_picked_home(cx);
         cx.notify();
     }

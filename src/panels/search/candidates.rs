@@ -137,18 +137,26 @@ fn agent_candidate(pane: &PaneInfo, tab: &Tab, around: Vec<String>, place: &str)
     }
 }
 
-pub(super) fn bot_candidates(bots: &[Bot]) -> Vec<Candidate> {
+fn bot_detail(bot: &Bot) -> String {
+    match bot.home.machine() {
+        Some(machine) => format!("{} · on {machine}", bot.detail()),
+        None => bot.detail(),
+    }
+}
+
+pub(super) fn bot_candidates(bots: &[&Bot]) -> Vec<Candidate> {
     bots.iter()
         .map(|bot| Candidate {
             kind: Kind::Bot,
-            goto: Goto::Bot(bot.id.clone()),
+            goto: Goto::Bot(bot.key()),
             name: bot.name.clone(),
-            detail: bot.detail(),
+            detail: bot_detail(bot),
             place: String::new(),
             keys: distinct(
                 [bot.name.clone(), bot.id.clone(), bot.agent.clone()]
                     .into_iter()
                     .chain(bot.model.clone())
+                    .chain(bot.home.machine().map(str::to_string))
                     .filter(|key| !key.is_empty()),
             ),
             status: bot.thinking().then(|| "working".to_string()),
@@ -156,7 +164,7 @@ pub(super) fn bot_candidates(bots: &[Bot]) -> Vec<Candidate> {
         .collect()
 }
 
-pub(super) fn all_candidates(session: &Session, bots: &[Bot], offer: &Offer) -> Vec<Candidate> {
+pub(super) fn all_candidates(session: &Session, bots: &[&Bot], offer: &Offer) -> Vec<Candidate> {
     let mut all = candidates(session);
     if *offer == Offer::Rows {
         all.extend(bot_candidates(bots));

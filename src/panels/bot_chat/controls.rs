@@ -1,6 +1,7 @@
 use gpui::{
     App, Bounds, ClickEvent, FocusHandle, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent,
-    ParentElement as _, Pixels, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div, px,
+    ParentElement as _, Pixels, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use super::entries::{self, Control, new_conversation_control, stop_control};
@@ -10,7 +11,7 @@ use super::words::{
 };
 use super::{BotChat, global, routines_fit};
 use crate::dialogs::{self, Question};
-use crate::model::bots::{Bot, Chat};
+use crate::model::bots::{Bot, BotKey, Chat, Home};
 use crate::model::bots::{Reach, reach_tip};
 use crate::notify;
 use crate::store::Store;
@@ -84,7 +85,7 @@ pub(super) fn header(
         .children(reach.map(reach_icon))
         .children(routines)
         .child(new_conversation(bot, starting, stops))
-        .child(menu_button(bot, stops));
+        .when(bot.home == Home::Here, |d| d.child(menu_button(bot, stops)));
     match fit {
         Some(fit) => row.on_children_prepainted(move |bounds, window, cx| measured(&fit, (&bounds, at), window, cx)),
         None => row,
@@ -156,12 +157,12 @@ fn new_conversation(bot: &Bot, starting: bool, stops: bool) -> impl IntoElement 
                 .tooltip(notify::tip(answering(&bot.name))),
         ),
         Control::Ready => {
-            let (id, name) = (bot.id.clone(), bot.name.clone());
+            let (key, name) = (bot.key(), bot.label());
             slot.child(
                 press::stop(ui::button(NEW_CONVERSATION_STOP, NEW_CONVERSATION), NEW_CONVERSATION_STOP, stops)
                     .on_click(move |event, window, cx| {
                         if press::pressed(event, NEW_CONVERSATION_STOP) {
-                            ask_new_conversation(&id, &name, window, cx);
+                            ask_new_conversation(&key, &name, window, cx);
                         }
                     }),
             )
@@ -169,8 +170,8 @@ fn new_conversation(bot: &Bot, starting: bool, stops: bool) -> impl IntoElement 
     }
 }
 
-pub(crate) fn ask_new_conversation(id: &str, name: &str, window: &mut Window, cx: &mut App) {
-    let bot = id.to_string();
+pub(crate) fn ask_new_conversation(key: &BotKey, name: &str, window: &mut Window, cx: &mut App) {
+    let bot = key.clone();
     let question =
         Question::new(new_conversation_title(name), new_conversation_message(name), NEW_CONVERSATION, Vec::new())
             .on_yes({
@@ -188,7 +189,7 @@ pub(super) fn turn_row(
 ) -> Option<impl IntoElement + use<>> {
     let turn = entries::turn(&chat.lines, bot.thinking())
         .or_else(|| bot.thinking().then_some(entries::Turn { since: now, steps: 0 }))?;
-    let id = bot.id.clone();
+    let id = bot.key();
     let stop = match stop_control(stopping) {
         Control::Running | Control::Resting => ui::busy_button("bot-stop", STOPPING, Tone::Plain).into_any_element(),
         Control::Ready => press::stop(ui::button(STOP_STOP, STOP), STOP_STOP, stops)

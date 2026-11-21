@@ -5,7 +5,7 @@ use gpui::{
 
 use super::entries::{Control, send_control};
 use super::words::{SEND, SENDING, placeholder};
-use crate::model::bots::{Refill, Said, on_return, refill, say_key, sendable};
+use crate::model::bots::{BotKey, Refill, Said, on_return, refill, say_key, sendable};
 use crate::store::Store;
 use crate::theme::colours;
 use crate::ui::{self, TextField, TextFieldEvent, Tone};
@@ -13,7 +13,7 @@ use crate::ui::{self, TextField, TextFieldEvent, Tone};
 pub(crate) struct ChatField {
     pub(super) store: Entity<Store>,
     field: Entity<TextField>,
-    owner: Option<String>,
+    owner: Option<BotKey>,
     seen: (String, u64),
 }
 
@@ -38,18 +38,18 @@ impl ChatField {
 
     fn follow(&mut self, cx: &mut Context<Self>) {
         let store = self.store.read(cx);
-        let Some(shown) = store.shown_bot().map(str::to_string) else {
-            let listed = self.owner.as_deref().is_some_and(|owner| store.bots.find(owner).is_some());
-            if refill(self.owner.as_deref(), None, listed, self.seen.1, 0) == Refill::Forget {
+        let Some(shown) = store.shown_bot().cloned() else {
+            let listed = self.owner.as_ref().is_some_and(|owner| store.bot(owner).is_some());
+            if refill(self.owner.as_ref(), None, listed, self.seen.1, 0) == Refill::Forget {
                 self.owner = None;
             }
             return;
         };
-        let name = store.bots.find(&shown).map_or_else(|| shown.clone(), |bot| bot.name.clone());
-        let revision = store.bots.drafts.revision();
-        let draft = store.bots.drafts.text(&shown).to_string();
+        let name = store.bot_label(&shown);
+        let revision = store.drafts_revision();
+        let draft = store.draft(&shown).to_string();
         let stops = store.chat_takes_keys();
-        let fill = refill(self.owner.as_deref(), Some(&shown), true, self.seen.1, revision) == Refill::Fill;
+        let fill = refill(self.owner.as_ref(), Some(&shown), true, self.seen.1, revision) == Refill::Fill;
         if self.seen.0 != name {
             let label = placeholder(&name);
             self.field.update(cx, |field, cx| field.set_placeholder(label, cx));
@@ -82,7 +82,7 @@ impl ChatField {
 
     fn send_button(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let blank = !sendable(&self.field.read(cx).text());
-        let on_its_way = self.owner.as_deref().is_some_and(|bot| self.store.read(cx).busy(&say_key(bot)));
+        let on_its_way = self.owner.as_ref().is_some_and(|bot| self.store.read(cx).busy(&say_key(bot)));
         let width = div().w(px(86.)).flex_none();
         match send_control(blank, on_its_way) {
             Control::Running => {

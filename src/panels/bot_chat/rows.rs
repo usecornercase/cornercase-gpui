@@ -11,7 +11,7 @@ use super::BotChat;
 use super::entries::{Again, Entry, Retry, STEPS_SHOWN, folded};
 use super::run_block::run;
 use super::words::{DROPPED_STAMP, EARLIER, GIVE, HELD, RETRY, SENDING, SETTING_UP, folded_label, time_label};
-use crate::model::bots::{Give, Runs, Said};
+use crate::model::bots::{BotKey, Give, Runs, Said};
 use crate::store::{Clip, Store};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::markdown::text as md;
@@ -30,7 +30,7 @@ pub(super) struct Meta {
     pub opened: Rc<HashSet<u64>>,
     pub blocks: Blocks,
     pub retry: Option<Rc<Retry>>,
-    pub bot: String,
+    pub bot: BotKey,
     pub sending: bool,
     pub stops: bool,
     pub retry_stop: FocusHandle,
@@ -156,7 +156,7 @@ fn retry_button(retry: &Retry, meta: &Meta) -> AnyElement {
         .into_any_element()
 }
 
-fn send_again(bot: &str, again: &Again, cx: &mut App) {
+fn send_again(bot: &BotKey, again: &Again, cx: &mut App) {
     Store::get(cx).update(cx, |store, cx| match again {
         Again::Say(text) => store.say_to_bot(bot, text.clone(), Said::Again, cx),
         Again::Setup => store.set_up_bot(bot, cx),
@@ -183,7 +183,7 @@ fn give_button(ask: u64, meta: &Meta) -> gpui::Stateful<Div> {
     press::stop(ui::button(("bot-give", ask), GIVE), name.clone(), meta.stops).on_click(
         move |event: &ClickEvent, _, cx| {
             if press::pressed(event, &name) {
-                Store::get(cx).update(cx, |store, cx| store.open_ask(&bot, ask, cx));
+                Store::get(cx).update(cx, |store, cx| store.open_ask(&bot.id, ask, cx));
             }
         },
     )

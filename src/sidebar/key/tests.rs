@@ -1,6 +1,7 @@
 use gpui::SharedString;
 
 use super::{KeyParts, SidebarKey};
+use crate::model::bots::BotKey;
 use crate::model::machines::LinkState;
 use crate::model::{MachinePlace, MachineSeen, ThereWorkspace};
 use crate::sidebar::arrange::Sizes;
@@ -21,7 +22,7 @@ struct Inputs {
     widths: (f32, f32),
     place: Option<MachinePlace>,
     bots: u64,
-    bot: Option<String>,
+    bot: Option<BotKey>,
     bots_folded: bool,
 }
 
@@ -38,7 +39,7 @@ impl Inputs {
             widths: self.widths,
             place: self.place.as_ref(),
             bots: self.bots,
-            bot: self.bot.as_deref(),
+            bot: self.bot.as_ref(),
             bots_folded: self.bots_folded,
         })
     }
@@ -50,7 +51,8 @@ fn seen() -> MachineSeen {
 
 const CHANGES: &[Change<Inputs>] = &[
     ("the bots' revision", |i| i.bots += 1),
-    ("the shown bot", |i| i.bot = Some("prs".into())),
+    ("the shown bot", |i| i.bot = Some(BotKey::here("prs"))),
+    ("the shown bot's machine", |i| i.bot = Some(BotKey::on("vps", "prs"))),
     ("the fold of the bots", |i| i.bots_folded = true),
     ("the session", |i| i.session += 1),
     ("the store", |i| i.store += 1),

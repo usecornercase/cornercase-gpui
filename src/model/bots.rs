@@ -16,6 +16,7 @@ pub(crate) use self::form::{
     AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, id_of,
     kept_accounts, new_args, rename_args,
 };
+pub(crate) use self::home::{BotKey, Home, event_of, giving_at, label};
 pub(crate) use self::manage::{
     Arrival, Closes, Creating, Making, Managing, MenuAsk, create_failed, making, remove_failed, rename_failed,
     save_failed,
@@ -36,6 +37,7 @@ pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, read_since, 
 mod asks;
 mod chat_apps;
 mod form;
+mod home;
 mod manage;
 mod runs;
 mod secrets;
@@ -72,6 +74,8 @@ pub(crate) struct Bot {
     pub routines: usize,
     #[serde(deserialize_with = "time_or_none")]
     pub next: Option<i64>,
+    #[serde(skip)]
+    pub home: Home,
 }
 
 fn set(value: Option<&String>) -> Option<String> {
@@ -95,6 +99,14 @@ fn time_or_none<'de, D: serde::Deserializer<'de>>(found: D) -> Result<Option<i64
 }
 
 impl Bot {
+    pub(crate) fn key(&self) -> BotKey {
+        BotKey { home: self.home.clone(), id: self.id.clone() }
+    }
+
+    pub(crate) fn label(&self) -> String {
+        label(&self.name, &self.home)
+    }
+
     fn settled_by(&self, newer: &Bot) -> bool {
         (self.thinking() && !newer.thinking()) || newer.unread > self.unread
     }
@@ -132,6 +144,7 @@ impl Bot {
             set(self.model.as_ref()),
             set(self.effort.as_ref()),
             set(self.account.as_ref()),
+            self.home.machine().map(|machine| format!("on {machine}")),
         ]
         .into_iter()
         .flatten()
@@ -370,21 +383,21 @@ pub(crate) enum Offer {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum KeyGoes {
-    Show(String),
+    Show(BotKey),
     Say(String),
     NoBot,
     Nothing,
 }
 
-fn after_shown<'a>(list: &'a [Bot], shown: Option<&str>) -> impl Iterator<Item = &'a Bot> {
-    let start = shown.and_then(|id| list.iter().position(|bot| bot.id == id)).map_or(0, |at| at + 1);
-    list.iter().cycle().skip(start).take(list.len())
+fn after_shown<'a>(list: &'a [&'a Bot], shown: Option<&BotKey>) -> impl Iterator<Item = &'a Bot> {
+    let start = shown.and_then(|key| list.iter().position(|bot| bot.key() == *key)).map_or(0, |at| at + 1);
+    list.iter().copied().cycle().skip(start).take(list.len())
 }
 
 pub(crate) fn key_goes(
     (offer, making): (&Offer, Option<&Making>),
-    bots: &[Bot],
-    (open, last): (Option<&str>, Option<&str>),
+    bots: &[&Bot],
+    (open, last): (Option<&BotKey>, Option<&BotKey>),
 ) -> KeyGoes {
     match (offer, making) {
         (Offer::Lacks(words), _) | (Offer::Hidden, Some(Making::Here(words) | Making::Server(words))) => {
@@ -393,10 +406,11 @@ pub(crate) fn key_goes(
         (Offer::Hidden, None) => KeyGoes::Nothing,
         (Offer::Hidden, Some(Making::Offered)) => KeyGoes::NoBot,
         (Offer::Rows, _) => {
-            let unread = after_shown(bots, open).find(|bot| bot.unread > 0 && Some(bot.id.as_str()) != open);
+            let unread = after_shown(bots, open).find(|bot| bot.unread > 0 && Some(&bot.key()) != open);
             let next = || open.and_then(|_| after_shown(bots, open).next());
-            let back = || last.and_then(|id| bots.iter().find(|bot| bot.id == id)).or(bots.first());
-            unread.or_else(next).or_else(back).map_or(KeyGoes::Nothing, |bot| KeyGoes::Show(bot.id.clone()))
+            let back =
+                || last.and_then(|key| bots.iter().copied().find(|bot| bot.key() == *key)).or(bots.first().copied());
+            unread.or_else(next).or_else(back).map_or(KeyGoes::Nothing, |bot| KeyGoes::Show(bot.key()))
         }
     }
 }
@@ -420,11 +434,11 @@ pub(crate) struct Bots {
     pub manage: Managing,
     pub answers: Answers,
     pub to_tell: Vec<Told>,
-    pub last_shown: Option<String>,
     pub asking: Asking,
     pub runs: Runs,
     pub anchor: Option<Anchor>,
     pub queue_of: Option<String>,
+    pub home: Home,
     stopping: HashSet<String>,
     again: HashSet<u64>,
     revision: u64,
@@ -440,7 +454,11 @@ pub(crate) struct AppMoved {
 
 impl Bots {
     pub(crate) fn new() -> Self {
-        Self { active: true, ..Self::default() }
+        Self::at(Home::Here, true)
+    }
+
+    pub(crate) fn at(home: Home, active: bool) -> Self {
+        Self { active, home, ..Self::default() }
     }
 
     pub(crate) fn revision(&self) -> u64 {
@@ -473,7 +491,10 @@ impl Bots {
     }
 
     pub(crate) fn take_app(&mut self, app: &Value) -> AppMoved {
-        let list = in_app(app);
+        let mut list = in_app(app);
+        for bot in &mut list {
+            bot.home = self.home.clone();
+        }
         let settled = list
             .iter()
             .filter(|new| self.find(&new.id).is_some_and(|old| old.settled_by(new)))
@@ -564,17 +585,17 @@ impl Bots {
     pub(crate) fn can_show(&self, id: &str, offer: &Offer) -> bool {
         *offer == Offer::Rows && self.find(id).is_some()
     }
+}
 
-    pub(crate) fn offer(&self, lacks: Option<Lacks<'_>>, os: Os) -> Offer {
-        if self.list.is_empty() {
-            return Offer::Hidden;
+pub(crate) fn offer_of(any: bool, lacks: Option<Lacks<'_>>, os: Os) -> Offer {
+    if !any {
+        return Offer::Hidden;
+    }
+    match lacks {
+        Some(Lacks::ThisComputer(has)) => {
+            Offer::Lacks(format!("Showing your bots needs {}.", newer_here(Feature::Bots.since(), has, os)))
         }
-        match lacks {
-            Some(Lacks::ThisComputer(has)) => {
-                Offer::Lacks(format!("Showing your bots needs {}.", newer_here(Feature::Bots.since(), has, os)))
-            }
-            _ => Offer::Rows,
-        }
+        _ => Offer::Rows,
     }
 }
 

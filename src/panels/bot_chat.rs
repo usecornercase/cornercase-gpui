@@ -18,7 +18,7 @@ pub(crate) use self::words::{EXAMPLES, answering, row_detail};
 use self::words::{empty_lines, examples_shown, read_failed};
 use crate::model::bots::Give as Giving;
 use crate::model::bots::Reach;
-use crate::model::bots::{Aimed, Bot, Chat, Read, Runs, aim, reset_key, say_key};
+use crate::model::bots::{Aimed, Bot, BotKey, Chat, Home, Read, Runs, aim, giving_at, reset_key, say_key};
 use crate::panels::queue;
 use crate::store::Store;
 use crate::theme::{colours, radius};
@@ -70,7 +70,7 @@ enum Row {
 pub(crate) struct BotChat {
     store: Entity<Store>,
     list: ListState,
-    bot: Option<String>,
+    bot: Option<BotKey>,
     rows: Rc<Vec<Row>>,
     keys: Vec<EntryKey>,
     earlier: bool,
@@ -80,7 +80,7 @@ pub(crate) struct BotChat {
     blocks: Blocks,
     counting: Counting,
     mark: Option<Stamp>,
-    heard: (Option<String>, u64, Controls, Option<Reach>),
+    heard: (Option<BotKey>, u64, Controls, Option<Reach>),
     retry: Option<Rc<Retry>>,
     givable: Rc<HashMap<u64, u64>>,
     giving: Giving,
@@ -105,12 +105,12 @@ fn counting(chat: &mut BotChat) -> &mut Counting {
     &mut chat.counting
 }
 
-pub(crate) type Stamp = (String, u64, u64, Option<u64>, Vec<u64>, entries::Give);
+pub(crate) type Stamp = (BotKey, u64, u64, Option<u64>, Vec<u64>, entries::Give);
 
 pub(crate) type Controls = (bool, bool, bool, bool, bool);
 
-pub(crate) fn is_fresh(shown: Option<&str>, mark: Option<&Stamp>, stamp: &Stamp) -> bool {
-    shown != Some(stamp.0.as_str()) || mark.is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1))
+pub(crate) fn is_fresh(shown: Option<&BotKey>, mark: Option<&Stamp>, stamp: &Stamp) -> bool {
+    shown != Some(&stamp.0) || mark.is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1))
 }
 
 pub(crate) fn example_to_reveal(now: Option<usize>, was: Option<usize>) -> Option<usize> {
@@ -121,9 +121,8 @@ pub(crate) fn re_anchor(following: bool, rows: usize) -> Option<usize> {
     following.then_some(rows)
 }
 
-fn asks_of(store: &Store, bot: &str) -> (Vec<u64>, Giving) {
-    let waiting = store.bots.find(bot).map(|bot| bot.asks.iter().map(|ask| ask.id).collect()).unwrap_or_default();
-    (waiting, store.asks_offer())
+fn asks_of(store: &Store, bot: &Bot) -> (Vec<u64>, Giving) {
+    (bot.asks.iter().map(|ask| ask.id).collect(), giving_at(&bot.home, store.asks_offer()))
 }
 
 pub(crate) fn give_key(giving: &Giving) -> entries::Give {
@@ -193,12 +192,12 @@ impl BotChat {
 
     fn moved(&mut self, store: &Store) -> bool {
         let shown = store.shown_bot();
-        let controls = shown.map_or((false, false, false, false, false), |id| {
-            let busy = (store.busy(&say_key(id)), store.busy(&reset_key(id)));
-            (store.bots.stopping(id), busy.0, busy.1, store.chat_takes_keys(), store.bot_setup_offered())
+        let controls = shown.map_or((false, false, false, false, false), |key| {
+            let busy = (store.busy(&say_key(key)), store.busy(&reset_key(key)));
+            (store.bot_stopping(key), busy.0, busy.1, store.chat_takes_keys(), store.bot_setup_offered(key))
         });
-        let reach = shown.and_then(|id| store.bot_reach(id));
-        let now = (shown.map(str::to_string), store.bots_revision(), controls, reach);
+        let reach = shown.and_then(|key| store.bot_reach(key));
+        let now = (shown.cloned(), store.bots_revision(), controls, reach);
         (std::mem::replace(&mut self.heard, now.clone()) != now) || self.bot.is_some() && now.0.is_none()
     }
 
@@ -246,18 +245,16 @@ impl BotChat {
 
     fn sync(&mut self, cx: &mut Context<Self>) {
         let store = self.store.read(cx);
-        let chat = store.shown_bot().and_then(|id| store.bots.chat.as_ref().filter(|chat| chat.bot == id));
-        let Some(chat) = chat else {
+        let Some((bot, chat)) = store.shown_chat() else {
             self.bot = None;
             return;
         };
-        let thinking = store.bots.find(&chat.bot).is_some_and(Bot::thinking);
-        let retry = entries::retry(&chat.lines, thinking, store.bot_setup_offered());
-        let (waiting, giving) = asks_of(store, &chat.bot);
+        let retry = entries::retry(&chat.lines, bot.thinking(), store.bot_setup_offered(&bot.key()));
+        let (waiting, giving) = asks_of(store, bot);
         let give = give_key(&giving);
         let revision = store.bots_revision();
-        let stamp = (chat.bot.clone(), chat.born, revision, retry.as_ref().map(|retry| retry.error), waiting, give);
-        let fresh = is_fresh(self.bot.as_deref(), self.mark.as_ref(), &stamp);
+        let stamp = (bot.key(), chat.born, revision, retry.as_ref().map(|retry| retry.error), waiting, give);
+        let fresh = is_fresh(self.bot.as_ref(), self.mark.as_ref(), &stamp);
         if !fresh && self.mark.as_ref() == Some(&stamp) {
             return;
         }
@@ -265,7 +262,7 @@ impl BotChat {
         let (earlier, entries) = (chat.earlier(), entries::entries(&chat.lines));
         let first = chat.lines.first().map_or(0, |line| line.id);
         if fresh {
-            self.bot = Some(chat.bot.clone());
+            self.bot = Some(bot.key());
             self.opened.clear();
             self.blocks.borrow_mut().clear();
         }
@@ -273,7 +270,8 @@ impl BotChat {
         self.retry = retry.map(Rc::new);
         self.givable = Rc::new(entries::givable(&chat.lines, self.mark.as_ref().map_or(&[][..], |mark| &mark.4)));
         self.giving = giving;
-        self.run.runs = Rc::new(store.bots.runs.clone());
+        let runs = store.bots_at(&bot.home).map_or_else(Runs::default, |bots| bots.runs.clone());
+        self.run.runs = Rc::new(if bot.home == Home::Here { runs } else { runs.without_again() });
         self.keep_again_stops(&entries, cx);
         let retried = self.retry.as_ref().map(|retry| retry.error);
         let keys = entries::keys(&entries, &self.opened, retried, (&self.givable, give), &self.run.runs);
@@ -353,10 +351,11 @@ impl BotChat {
 
     fn take_aim(&mut self, cx: &Context<Self>) {
         let store = self.store.read(cx);
-        let Some(chat) = store.bots.chat.as_ref().filter(|chat| Some(chat.bot.as_str()) == self.bot.as_deref()) else {
+        let Some((bot, chat)) = store.shown_chat().filter(|(bot, _)| self.bot.as_ref() == Some(&bot.key())) else {
             return;
         };
-        let anchor = store.bots.anchor.clone().filter(|anchor| anchor.bot == chat.bot);
+        let anchor =
+            store.bots_at(&bot.home).and_then(|bots| bots.anchor.clone()).filter(|anchor| anchor.bot == chat.bot);
         let (go, aimed) = aim(&self.row_runs(), anchor.as_ref(), self.run.aimed, chat.settled());
         self.run.aimed = aimed;
         if let Some(item_ix) = go {
@@ -380,8 +379,8 @@ impl BotChat {
             opened: Rc::new(self.opened.clone()),
             blocks: self.blocks.clone(),
             retry: self.retry.clone(),
-            bot: bot.id.clone(),
-            sending: self.store.read(cx).busy(&say_key(&bot.id)),
+            bot: bot.key(),
+            sending: self.store.read(cx).busy(&say_key(&bot.key())),
             stops: self.store.read(cx).chat_takes_keys(),
             retry_stop: self.retry_stop.clone(),
             givable: self.givable.clone(),
@@ -449,7 +448,7 @@ impl BotChat {
             .zip(&self.examples)
             .take(examples_shown(routines))
             .enumerate()
-            .map(|(at, (text, handle))| example_row(&bot.id, (at, text), handle, stops));
+            .map(|(at, (text, handle))| example_row(&bot.key(), (at, text), handle, stops));
         div().id("bot-empty").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.empty).child(
             ui::emblem_page(Icon::Message, bot.name.clone())
                 .child(ui::emblem_line(what))
@@ -473,12 +472,12 @@ fn reveal_example(scroller: &ScrollHandle, bounds: &[Bounds<Pixels>], at: usize,
 }
 
 fn example_row(
-    bot: &str,
+    bot: &BotKey,
     (at, text): (usize, &'static str),
     handle: &FocusHandle,
     stops: bool,
 ) -> impl IntoElement + use<> {
-    let bot = bot.to_string();
+    let bot = bot.clone();
     let name = format!("bot-example-{at}");
     let row = div()
         .id(("bot-example", at))
@@ -510,13 +509,14 @@ impl Render for BotChat {
             self.list.scroll_to(ListOffset { item_ix, offset_in_item: px(0.) });
         }
         let store = self.store.read(cx);
-        let found = store.shown_bot().and_then(|id| store.bots.find(id).zip(store.bots.chat.as_ref()));
-        let Some((bot, chat)) = found.map(|(bot, chat)| (bot.clone(), chat.clone())) else { return div() };
-        let stopping = store.bots.stopping(&bot.id);
-        let starting = store.busy(&reset_key(&bot.id));
+        let Some((bot, chat)) = store.shown_chat().map(|(bot, chat)| (bot.clone(), chat.clone())) else {
+            return div();
+        };
+        let stopping = store.bot_stopping(&bot.key());
+        let starting = store.busy(&reset_key(&bot.key()));
         let stops = store.chat_takes_keys();
-        let reach = store.bot_reach(&bot.id);
-        let routines = store.routines_offered();
+        let reach = store.bot_reach(&bot.key());
+        let routines = store.routines_offered() && bot.home == Home::Here;
         let now = queue::now();
         if bot.thinking() {
             self.counting.drawn();

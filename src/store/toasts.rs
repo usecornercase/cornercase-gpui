@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use gpui::{ClipboardItem, Context};
 
 use super::{Store, ToastGo};
-use crate::model::bots::Bot;
+use crate::model::bots::{Bot, BotKey};
 
 pub(crate) const COPY_COMMAND: &str = "Copy command";
 
@@ -134,13 +134,13 @@ fn making_way(older: &[Toast]) -> usize {
         .unwrap_or(0)
 }
 
-pub(crate) fn shows_bot(toast: &Toast, id: &str) -> bool {
-    matches!(&toast.action, Some((_, ToastGo::Bot(bot, ..) | ToastGo::BotAsk(bot, _, _))) if bot == id)
+pub(crate) fn shows_bot(toast: &Toast, key: &BotKey) -> bool {
+    matches!(&toast.action, Some((_, ToastGo::Bot(bot, ..) | ToastGo::BotAsk(bot, _, _))) if bot == key)
 }
 
 pub(crate) fn ask_ended(toast: &Toast, list: &[Bot]) -> bool {
-    let Some((_, ToastGo::BotAsk(id, _, ask))) = &toast.action else { return false };
-    !list.iter().find(|bot| bot.id == *id).is_some_and(|bot| bot.asks.iter().any(|found| found.id == *ask))
+    let Some((_, ToastGo::BotAsk(key, _, ask))) = &toast.action else { return false };
+    !list.iter().find(|bot| bot.key() == *key).is_some_and(|bot| bot.asks.iter().any(|found| found.id == *ask))
 }
 
 pub(crate) fn newest_meant(toasts: &[Toast], now: Instant) -> Option<u64> {
@@ -159,9 +159,9 @@ pub(crate) fn push_toast(toasts: &mut Vec<Toast>, mut toast: Toast) {
 }
 
 impl Store {
-    pub(crate) fn drop_bot_toasts(&mut self, id: &str, cx: &mut Context<Self>) {
+    pub(crate) fn drop_bot_toasts(&mut self, key: &BotKey, cx: &mut Context<Self>) {
         let before = self.toasts.len();
-        self.toasts.retain(|toast| !shows_bot(toast, id));
+        self.toasts.retain(|toast| !shows_bot(toast, key));
         if self.toasts.len() != before {
             cx.notify();
         }

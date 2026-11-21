@@ -389,6 +389,7 @@ impl Store {
     pub(crate) fn follow_tunnels(&mut self, cx: &mut Context<Self>) {
         self.follow_own_tunnels(cx);
         self.follow_machine_tunnels(cx);
+        self.follow_machine_bots(cx);
         self.follow_server_taker(cx);
     }
 

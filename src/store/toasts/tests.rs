@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use super::{Clip, Shown, Toast, ToastKind, drawn, newest_meant, push_toast};
-use crate::model::bots::{Ask, Bot};
+use crate::model::bots::{Ask, Bot, BotKey};
 use crate::store::ToastGo;
 
 fn toast(id: u64, text: &str) -> Toast {
@@ -190,10 +190,22 @@ fn a_removed_bots_answer_toasts_go_and_the_others_stay() {
         action: go.map(|go| ("Show".to_string(), go)),
         ..toast_of(id, "x", ToastKind::Done)
     };
-    let bot = |id: &str| Some(ToastGo::Bot(id.to_string(), "name".to_string(), None));
+    let bot = |id: &str| Some(ToastGo::Bot(BotKey::here(id), "name".to_string(), None));
     let toasts = [on(1, bot("notes")), on(2, bot("ops")), on(3, None), on(4, Some(ToastGo::Run(vec!["x".into()])))];
-    let gone: Vec<u64> = toasts.iter().filter(|t| super::shows_bot(t, "notes")).map(|t| t.id).collect();
+    let gone: Vec<u64> = toasts.iter().filter(|t| super::shows_bot(t, &BotKey::here("notes"))).map(|t| t.id).collect();
     assert_eq!(gone, [1]);
+}
+
+#[test]
+fn a_bots_toasts_are_told_apart_from_those_of_the_same_id_on_a_machine() {
+    let on = |id: u64, key: BotKey| Toast {
+        action: Some(("Show".to_string(), ToastGo::Bot(key, "name".to_string(), None))),
+        ..toast_of(id, "x", ToastKind::Done)
+    };
+    let toasts = [on(1, BotKey::here("prs")), on(2, BotKey::on("vps", "prs"))];
+    let gone: Vec<u64> =
+        toasts.iter().filter(|t| super::shows_bot(t, &BotKey::on("vps", "prs"))).map(|t| t.id).collect();
+    assert_eq!(gone, [2]);
 }
 
 fn ms(n: u64) -> Duration {
@@ -251,7 +263,7 @@ fn a_copied_text_says_what_it_was() {
 
 fn asking(id: u64, bot: &str, ask: u64) -> Toast {
     Toast {
-        action: Some(("Open".to_string(), ToastGo::BotAsk(bot.to_string(), "name".to_string(), ask))),
+        action: Some(("Open".to_string(), ToastGo::BotAsk(BotKey::here(bot), "name".to_string(), ask))),
         ..toast_of(id, "x", ToastKind::NeedsYou)
     }
 }
@@ -264,7 +276,7 @@ fn waiting(bot: &str, asks: &[u64]) -> Bot {
 #[test]
 fn a_removed_bots_ask_toast_goes() {
     let toasts = [asking(1, "notes", 3), asking(2, "ops", 4)];
-    let gone: Vec<u64> = toasts.iter().filter(|t| super::shows_bot(t, "notes")).map(|t| t.id).collect();
+    let gone: Vec<u64> = toasts.iter().filter(|t| super::shows_bot(t, &BotKey::here("notes"))).map(|t| t.id).collect();
     assert_eq!(gone, [1]);
     assert!(super::ask_ended(&toasts[0], &[waiting("ops", &[4])]));
 }

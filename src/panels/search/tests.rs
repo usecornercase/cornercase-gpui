@@ -6,7 +6,7 @@ use super::names::{
     Candidate, Goto, Kind, Ranked, context_top, find, key_rank, listing_status, no_project, rank, shown_bot_row,
     shown_row,
 };
-use crate::model::bots::Offer;
+use crate::model::bots::{BotKey, Home, Offer};
 use crate::model::{Session, Shown};
 use crate::platform::Os;
 
@@ -317,8 +317,12 @@ fn bots() -> Vec<crate::model::bots::Bot> {
 
 fn with_bots(query: &str) -> Vec<Ranked> {
     let mut all = candidates(&session());
-    all.extend(bot_candidates(&bots()));
+    all.extend(bot_candidates(&bots().iter().collect::<Vec<_>>()));
     rank(all, query)
+}
+
+fn here(id: &str) -> BotKey {
+    BotKey::here(id)
 }
 
 #[test]
@@ -330,31 +334,43 @@ fn bots_are_listed_after_the_sessions_rows() {
 
 #[test]
 fn a_bot_is_found_by_its_name_and_by_its_model() {
-    assert_eq!(with_bots("prs")[0].candidate.goto, Goto::Bot("prs".into()));
-    assert_eq!(with_bots("opus")[0].candidate.goto, Goto::Bot("ops".into()));
+    assert_eq!(with_bots("prs")[0].candidate.goto, Goto::Bot(here("prs")));
+    assert_eq!(with_bots("opus")[0].candidate.goto, Goto::Bot(here("ops")));
 }
 
 #[test]
 fn a_bots_row_goes_to_its_chat() {
     let row = &with_bots("ops")[0].candidate;
-    assert_eq!((row.goto.clone(), row.goto.focus()), (Goto::Bot("ops".into()), None));
+    assert_eq!((row.goto.clone(), row.goto.focus()), (Goto::Bot(here("ops")), None));
     assert_eq!(row.status.as_deref(), Some("working"));
 }
 
 #[test]
 fn search_opens_on_the_row_of_the_shown_bot() {
     let listed = with_bots("");
-    assert_eq!(shown_bot_row(&listed, "ops"), Some(listed.len() - 1));
-    assert_eq!(shown_bot_row(&listed, "nobody"), None);
+    assert_eq!(shown_bot_row(&listed, &here("ops")), Some(listed.len() - 1));
+    assert_eq!(shown_bot_row(&listed, &here("nobody")), None);
+}
+
+#[test]
+fn a_machines_bot_names_its_machine_and_goes_to_its_key() {
+    let mut there = bots();
+    for bot in &mut there {
+        bot.home = Home::Machine("vps".into());
+    }
+    let found = rank(bot_candidates(&there.iter().collect::<Vec<_>>()), "vps");
+    let ops = found.iter().find(|r| r.candidate.name == "ops").expect("ops is found by its machine");
+    assert_eq!(ops.candidate.goto, Goto::Bot(BotKey::on("vps", "ops")));
+    assert_eq!(ops.candidate.detail, "claude · opus · on vps");
 }
 
 #[test]
 fn no_bot_is_listed_when_nothing_is_offered() {
     let lacks = Offer::Lacks("needs a newer cornercase".into());
     for offer in [Offer::Hidden, lacks] {
-        let all = rank(all_candidates(&session(), &bots(), &offer), "prs");
+        let all = rank(all_candidates(&session(), &bots().iter().collect::<Vec<_>>(), &offer), "prs");
         assert!(all.iter().all(|r| r.candidate.kind != Kind::Bot), "{offer:?}");
     }
-    let rows = rank(all_candidates(&session(), &bots(), &Offer::Rows), "prs");
+    let rows = rank(all_candidates(&session(), &bots().iter().collect::<Vec<_>>(), &Offer::Rows), "prs");
     assert!(rows.iter().any(|r| r.candidate.kind == Kind::Bot));
 }

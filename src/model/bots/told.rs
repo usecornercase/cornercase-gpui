@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use super::{Ask, Kind, Line, title};
+use super::{Ask, BotKey, Kind, Line, title};
 use crate::ui::markdown::{self, Block};
 
 pub(crate) const PAIRED_WITHIN: Duration = Duration::from_secs(2);
@@ -115,7 +115,7 @@ impl Answers {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Told {
-    pub bot: String,
+    pub bot: BotKey,
     pub name: String,
     pub failed: bool,
     pub first: String,
@@ -125,9 +125,9 @@ pub(crate) struct Told {
 }
 
 impl Told {
-    pub(crate) fn new(answer: &Answer, name: &str, label: Option<&str>) -> Self {
+    pub(crate) fn new(answer: &Answer, bot: BotKey, name: &str, label: Option<&str>) -> Self {
         Self {
-            bot: answer.bot.clone(),
+            bot,
             name: name.to_string(),
             failed: answer.failed,
             first: first_of(answer),
@@ -137,9 +137,16 @@ impl Told {
         }
     }
 
-    pub(crate) fn asking(bot: &str, name: &str, ask: &Ask) -> Self {
-        let (bot, name) = (bot.to_string(), name.to_string());
-        Self { bot, name, failed: false, first: ask.joined(), ask: Some(ask.id), label: None, run: None }
+    pub(crate) fn asking(bot: BotKey, name: &str, ask: &Ask) -> Self {
+        Self {
+            bot,
+            name: name.to_string(),
+            failed: false,
+            first: ask.joined(),
+            ask: Some(ask.id),
+            label: None,
+            run: None,
+        }
     }
 
     fn who(&self) -> String {

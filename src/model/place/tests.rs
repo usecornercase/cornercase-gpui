@@ -1,6 +1,14 @@
 use super::*;
 use crate::model::ThereWorkspace;
 
+fn here(id: &str) -> BotKey {
+    BotKey::here(id)
+}
+
+fn vps() -> Home {
+    Home::Machine("vps".into())
+}
+
 fn place() -> MachinePlace {
     let seen = crate::model::MachineSeen::default();
     MachinePlace::at(&seen, &ThereWorkspace::default(), None)
@@ -8,35 +16,50 @@ fn place() -> MachinePlace {
 
 #[test]
 fn showing_a_bot_leaves_a_machines_place() {
-    let shown = Showing::Machine(place()).after(Moved::Bot("prs".into()));
-    assert_eq!((shown.bot(), shown.machine()), (Some("prs"), None));
+    let shown = Showing::Machine(place()).after(Moved::Bot(here("prs")));
+    assert_eq!((shown.bot(), shown.machine()), (Some(&here("prs")), None));
 }
 
 #[test]
 fn picking_a_machines_place_leaves_the_chat() {
-    assert_eq!(Showing::Bot("prs".into()).after(Moved::Machine(place())).bot(), None);
+    assert_eq!(Showing::Bot(here("prs")).after(Moved::Machine(place())).bot(), None);
 }
 
 #[test]
 fn a_move_to_a_local_place_leaves_the_chat() {
-    assert_eq!(Showing::Bot("prs".into()).after(Moved::Local), Showing::Local);
+    assert_eq!(Showing::Bot(here("prs")).after(Moved::Local), Showing::Local);
 }
 
 #[test]
 fn the_removal_of_the_shown_bot_leaves_its_chat() {
-    assert_eq!(Showing::Bot("prs".into()).after(Moved::Removed("prs".into())), Showing::Local);
+    assert_eq!(Showing::Bot(here("prs")).after(Moved::Removed(here("prs"))), Showing::Local);
 }
 
 #[test]
 fn the_removal_of_another_bot_keeps_the_chat() {
-    assert_eq!(Showing::Bot("prs".into()).after(Moved::Removed("ops".into())).bot(), Some("prs"));
+    assert_eq!(Showing::Bot(here("prs")).after(Moved::Removed(here("ops"))).bot(), Some(&here("prs")));
 }
 
 #[test]
 fn a_list_without_the_shown_bot_leaves_its_chat() {
-    let shown = Showing::Bot("prs".into());
-    assert_eq!(shown.clone().after(Moved::Listed(vec!["ops".into()])), Showing::Local);
-    assert_eq!(shown.after(Moved::Listed(vec!["prs".into()])).bot(), Some("prs"));
+    let shown = Showing::Bot(here("prs"));
+    assert_eq!(shown.clone().after(Moved::Listed(Home::Here, vec!["ops".into()])), Showing::Local);
+    assert_eq!(shown.after(Moved::Listed(Home::Here, vec!["prs".into()])).bot(), Some(&here("prs")));
+}
+
+#[test]
+fn a_list_of_one_home_that_lacks_the_id_keeps_a_chat_of_another_home() {
+    let shown = Showing::Bot(here("prs"));
+    assert_eq!(shown.clone().after(Moved::Listed(vps(), Vec::new())), shown);
+    let there = Showing::Bot(BotKey::on("vps", "prs"));
+    assert_eq!(there.clone().after(Moved::Listed(Home::Here, Vec::new())), there);
+    assert_eq!(there.after(Moved::Listed(vps(), Vec::new())), Showing::Local);
+}
+
+#[test]
+fn a_removed_bot_on_a_machine_keeps_the_chat_of_the_same_id_here() {
+    let shown = Showing::Bot(here("prs"));
+    assert_eq!(shown.clone().after(Moved::Removed(BotKey::on("vps", "prs"))), shown);
 }
 
 #[test]

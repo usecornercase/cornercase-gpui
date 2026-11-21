@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use super::BotKey;
+
 pub(crate) fn sendable(text: &str) -> bool {
     !text.trim().is_empty()
 }
@@ -16,16 +18,16 @@ pub(crate) fn setup_args(bot: &str) -> Vec<String> {
     ["bot", "setup", bot, "--json"].map(str::to_string).to_vec()
 }
 
-pub(crate) fn say_key(bot: &str) -> String {
-    format!("bot-say:{bot}")
+pub(crate) fn say_key(bot: &BotKey) -> String {
+    format!("bot-say:{}", bot.tag())
 }
 
-pub(crate) fn stop_key(bot: &str) -> String {
-    format!("bot-stop:{bot}")
+pub(crate) fn stop_key(bot: &BotKey) -> String {
+    format!("bot-stop:{}", bot.tag())
 }
 
-pub(crate) fn reset_key(bot: &str) -> String {
-    format!("bot-reset:{bot}")
+pub(crate) fn reset_key(bot: &BotKey) -> String {
+    format!("bot-reset:{}", bot.tag())
 }
 
 pub(crate) fn restored(failed: &str, typed: &str) -> String {
@@ -64,7 +66,7 @@ pub(crate) enum Refill {
     Fill,
 }
 
-pub(crate) fn refill(owner: Option<&str>, shown: Option<&str>, listed: bool, seen: u64, revision: u64) -> Refill {
+pub(crate) fn refill(owner: Option<&BotKey>, shown: Option<&BotKey>, listed: bool, seen: u64, revision: u64) -> Refill {
     match shown {
         None if owner.is_some() && !listed => Refill::Forget,
         Some(shown) if owner != Some(shown) || seen != revision => Refill::Fill,

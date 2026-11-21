@@ -5,7 +5,7 @@ use crate::app::Root;
 use crate::cli;
 use crate::context_menu::{Entry, danger, item, resting};
 use crate::dialogs::{self, Question};
-use crate::model::bots::Bot;
+use crate::model::bots::{Bot, BotKey};
 use crate::panels::bot_chat::{answering, ask_new_conversation};
 use crate::panels::files::open::Found;
 use crate::store::Store;
@@ -46,7 +46,7 @@ fn ask_remove(id: &str, name: &str, window: &mut Window, cx: &mut gpui::App) {
         let bot = bot.clone();
         move |cx| Store::get(cx).update(cx, |s, cx| s.remove_bot(&bot, cx))
     });
-    dialogs::confirm_naming(&bot, question, window, cx);
+    dialogs::confirm_naming(&BotKey::here(&bot), question, window, cx);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,8 +67,8 @@ fn conversation_entries(bot: &Bot, run_answers: bool) -> Vec<Entry> {
     if bot.thinking() {
         return vec![resting(answering(&bot.name)), resting(NEW_CONVERSATION_ENTRY)];
     }
-    let (id, name) = (bot.id.clone(), bot.name.clone());
-    let new = item(NEW_CONVERSATION_ENTRY, move |_, window, cx| ask_new_conversation(&id, &name, window, cx));
+    let (key, name) = (bot.key(), bot.name.clone());
+    let new = item(NEW_CONVERSATION_ENTRY, move |_, window, cx| ask_new_conversation(&key, &name, window, cx));
     if run_answers { vec![resting(answering(&bot.name)), new] } else { vec![new] }
 }
 

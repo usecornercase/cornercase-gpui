@@ -295,26 +295,26 @@ fn lacking(has: u64) -> Lacks<'static> {
 #[test]
 fn an_older_command_line_hides_the_rows_and_says_what_it_needs() {
     assert_eq!(
-        two().offer(Some(lacking(73)), Os::Mac),
+        offer_of(true, Some(lacking(73)), Os::Mac),
         Offer::Lacks("Showing your bots needs cornercase 0.13.77 or newer on this Mac (it has 0.13.73).".into())
     );
 }
 
 #[test]
 fn an_unread_command_line_release_shows_the_rows() {
-    assert_eq!(two().offer(None, Os::Mac), Offer::Rows);
+    assert_eq!(offer_of(true, None, Os::Mac), Offer::Rows);
 }
 
 #[test]
 fn a_server_without_bots_offers_nothing() {
-    assert_eq!(Bots::new().offer(Some(lacking(73)), Os::Mac), Offer::Hidden);
+    assert_eq!(offer_of(false, Some(lacking(73)), Os::Mac), Offer::Hidden);
 }
 
 #[test]
 fn a_command_line_release_that_could_not_be_read_counts_as_older() {
     let none = Some(Lacks::ThisComputer(None));
     assert_eq!(
-        two().offer(none, Os::Linux),
+        offer_of(true, none, Os::Linux),
         Offer::Lacks("Showing your bots needs cornercase 0.13.77 or newer on this computer.".into())
     );
 }
@@ -384,8 +384,8 @@ fn a_chat_is_shown_only_when_rows_are_offered_and_the_bot_is_listed() {
     let bots = two();
     assert!(bots.can_show("prs", &Offer::Rows));
     assert!(!bots.can_show("nobody", &Offer::Rows));
-    assert!(!bots.can_show("prs", &bots.offer(Some(lacking(73)), Os::Mac)));
-    assert!(!Bots::new().can_show("prs", &Bots::new().offer(None, Os::Mac)));
+    assert!(!bots.can_show("prs", &offer_of(true, Some(lacking(73)), Os::Mac)));
+    assert!(!Bots::new().can_show("prs", &offer_of(false, None, Os::Mac)));
 }
 
 #[test]
@@ -516,13 +516,25 @@ fn rows() -> (Offer, Option<Making>) {
     (Offer::Rows, Some(Making::Offered))
 }
 
-fn goes(bots: &[Bot], open: Option<&str>, last: Option<&str>) -> KeyGoes {
+fn keyed(bots: &[Bot], open: Option<&BotKey>, last: Option<&BotKey>) -> KeyGoes {
     let (offer, making) = rows();
-    key_goes((&offer, making.as_ref()), bots, (open, last))
+    let all: Vec<&Bot> = bots.iter().collect();
+    key_goes((&offer, making.as_ref()), &all, (open, last))
+}
+
+fn goes(bots: &[Bot], open: Option<&str>, last: Option<&str>) -> KeyGoes {
+    keyed(bots, open.map(BotKey::here).as_ref(), last.map(BotKey::here).as_ref())
 }
 
 fn show(id: &str) -> KeyGoes {
-    KeyGoes::Show(id.to_string())
+    KeyGoes::Show(BotKey::here(id))
+}
+
+fn on_vps(mut bots: Vec<Bot>) -> Vec<Bot> {
+    for bot in &mut bots {
+        bot.home = Home::Machine("vps".into());
+    }
+    bots
 }
 
 fn answers() -> Vec<BotEvent> {
@@ -642,6 +654,50 @@ fn with_one_bot_the_key_stays_on_it() {
 }
 
 #[test]
+fn the_key_goes_to_a_machines_unread_bot_after_the_shown_one() {
+    let mut list = listed(&[("prs", 0), ("notes", 0)]);
+    list.extend(on_vps(listed(&[("ops", 1)])));
+    assert_eq!(goes(&list, Some("prs"), None), KeyGoes::Show(BotKey::on("vps", "ops")));
+}
+
+#[test]
+fn the_key_walks_from_the_last_bot_here_to_a_machines_first_and_wraps() {
+    let mut list = listed(&[("prs", 0)]);
+    list.extend(on_vps(listed(&[("ops", 0)])));
+    assert_eq!(goes(&list, Some("prs"), None), KeyGoes::Show(BotKey::on("vps", "ops")));
+    assert_eq!(keyed(&list, Some(&BotKey::on("vps", "ops")), None), show("prs"));
+}
+
+#[test]
+fn the_key_tells_a_bot_here_from_one_of_the_same_id_on_a_machine() {
+    let mut list = listed(&[("prs", 0)]);
+    list.extend(on_vps(listed(&[("prs", 1)])));
+    assert_eq!(goes(&list, Some("prs"), None), KeyGoes::Show(BotKey::on("vps", "prs")));
+    assert_eq!(keyed(&list, Some(&BotKey::on("vps", "prs")), None), show("prs"));
+}
+
+#[test]
+fn the_rows_show_when_only_a_machine_lists_a_bot_and_hide_with_none_anywhere() {
+    assert_eq!(offer_of(true, None, Os::Mac), Offer::Rows);
+    assert_eq!(offer_of(false, None, Os::Mac), Offer::Hidden);
+}
+
+#[test]
+fn the_list_of_a_machine_stamps_its_bots_with_that_machine() {
+    let mut bots = Bots::at(Home::Machine("vps".into()), true);
+    bots.take_app(&app(fixture!("bots/app-two.json")));
+    assert!(bots.list.iter().all(|bot| bot.key().home == Home::Machine("vps".into())));
+    assert_eq!(bots.find("prs").map(Bot::label).as_deref(), Some("prs on vps"));
+    assert!(two().list.iter().all(|bot| bot.home == Home::Here));
+}
+
+#[test]
+fn a_machines_bot_says_where_it_runs_in_its_facts() {
+    let bot = Bot { agent: "claude".into(), home: Home::Machine("vps".into()), ..Bot::default() };
+    assert_eq!(bot.facts(), "claude · on vps");
+}
+
+#[test]
 fn with_no_bot_the_key_says_how_to_make_one() {
     let (offer, making) = (Offer::Hidden, Some(Making::Offered));
     assert_eq!(key_goes((&offer, making.as_ref()), &[], (None, None)), KeyGoes::NoBot);
@@ -652,7 +708,7 @@ fn with_no_bot_the_key_says_how_to_make_one() {
 fn below_the_gate_the_key_says_the_sections_sentence() {
     let offer = Offer::Lacks("Showing your bots needs cornercase 0.13.77.".into());
     let list = listed(&[("prs", 1)]);
-    let said = key_goes((&offer, Some(&Making::Here("x".into()))), &list, (None, None));
+    let said = key_goes((&offer, Some(&Making::Here("x".into()))), &[&list[0]], (None, None));
     assert_eq!(said, KeyGoes::Say("Showing your bots needs cornercase 0.13.77.".into()));
 }
 

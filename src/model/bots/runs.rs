@@ -54,6 +54,13 @@ impl Runs {
         self.by_entry.get(&run).and_then(|found| found.again)
     }
 
+    pub(crate) fn without_again(mut self) -> Self {
+        for run in self.by_entry.values_mut() {
+            run.again = None;
+        }
+        self
+    }
+
     pub(crate) fn label(&self, run: u64) -> Option<&str> {
         self.by_entry.get(&run).map(|found| found.label.as_str())
     }

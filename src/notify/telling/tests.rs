@@ -1,4 +1,5 @@
 use super::*;
+use crate::model::bots::BotKey;
 use crate::notify::{Event, parse_event};
 
 fn message(name: &str) -> Message {
@@ -323,7 +324,15 @@ fn a_merged_run_that_freed_is_told_as_done_with_its_sentence_as_it_comes() {
 }
 
 fn told(failed: bool, first: &str) -> Told {
-    Told { bot: "n1".into(), name: "notes".into(), failed, first: first.into(), ask: None, label: None, run: None }
+    Told {
+        bot: BotKey::here("n1"),
+        name: "notes".into(),
+        failed,
+        first: first.into(),
+        ask: None,
+        label: None,
+        run: None,
+    }
 }
 
 #[test]
@@ -343,7 +352,7 @@ fn an_error_is_a_needs_you_toast_with_show() {
 #[test]
 fn shows_button_names_the_bot_by_its_id_and_keeps_its_name() {
     let button = Telling::of_bot(&told(false, "Answer")).button;
-    assert_eq!(button.map(|(_, go)| go), Some(ToastGo::Bot("n1".into(), "notes".into(), None)));
+    assert_eq!(button.map(|(_, go)| go), Some(ToastGo::Bot(BotKey::here("n1"), "notes".into(), None)));
 }
 
 #[test]

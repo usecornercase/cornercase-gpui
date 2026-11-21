@@ -7,7 +7,7 @@ use gpui::{
 use crate::cli;
 use crate::model::Spot;
 use crate::model::accounts::pick::{AccountPick, account_args};
-use crate::model::bots::REPLACES;
+use crate::model::bots::{BotKey, REPLACES};
 use crate::model::machines::run_on::Starting;
 use crate::model::machines::run_on::checks::Wanted;
 use crate::store::{self, Busy, StartThere, Store, args};
@@ -465,7 +465,7 @@ pub(crate) struct Confirm {
     focus: FocusHandle,
 }
 
-pub(crate) fn confirm_naming(bot: &str, question: Question, window: &mut Window, cx: &mut App) {
+pub(crate) fn confirm_naming(bot: &BotKey, question: Question, window: &mut Window, cx: &mut App) {
     confirm(question, window, cx);
     Store::get(cx).update(cx, |s, _| s.names_bot(bot));
 }

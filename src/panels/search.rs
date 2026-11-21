@@ -135,7 +135,7 @@ impl SearchPanel {
         }
         let shown = Store::get(cx).read(cx).session.as_ref().map(crate::model::Session::shown).unwrap_or_default();
         let (names, _) = self.names(cx);
-        let bot = Store::get(cx).read(cx).shown_bot().and_then(|id| shown_bot_row(&names, id));
+        let bot = Store::get(cx).read(cx).shown_bot().and_then(|key| shown_bot_row(&names, key));
         let selected = bot.or_else(|| shown_row(&names, shown)).unwrap_or(0);
         (selected, context_top(&names, selected))
     }
@@ -234,7 +234,7 @@ impl SearchPanel {
     fn names(&self, cx: &App) -> (Vec<Ranked>, usize) {
         let store = Store::get(cx);
         let Some(session) = &store.read(cx).session else { return (Vec::new(), 0) };
-        let all = all_candidates(session, &store.read(cx).bots.list, &store.read(cx).bots_offer());
+        let all = all_candidates(session, &store.read(cx).all_bots(), &store.read(cx).bots_offer());
         let mut ranked = rank(all, &self.query(cx));
         let total = ranked.len();
         ranked.truncate(MAX_NAMES);
@@ -534,8 +534,8 @@ fn reveal(command: Vec<String>, cx: &mut App) {
 
 fn go(goto: &Goto, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| {
-        if let Goto::Bot(id) = goto {
-            s.show_bot(id, cx);
+        if let Goto::Bot(key) = goto {
+            s.show_bot(key, cx);
         }
         if let Goto::Group { id, .. } = goto {
             s.cmd(args(&["expand", "--group", &id.to_string()]));

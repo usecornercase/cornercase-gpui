@@ -4,7 +4,8 @@ use super::super::{Busy, Store};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
 use crate::model::bots::{
-    self, SecretsSection, SecretsSeen, secret_remove_args, secret_remove_failed, secret_save_failed, secret_set_args,
+    self, BotKey, SecretsSection, SecretsSeen, secret_remove_args, secret_remove_failed, secret_save_failed,
+    secret_set_args,
 };
 use crate::platform::Os;
 
@@ -37,7 +38,7 @@ impl Store {
         dialog: u64,
         cx: &mut Context<Self>,
     ) {
-        let doing = format!("Saving a secret of {}…", self.bot_name(bot));
+        let doing = format!("Saving a secret of {}…", self.bot_label(&BotKey::here(bot)));
         let then: Then = Box::new(move |this, result, cx| match result {
             Ok(_) => {
                 this.bots.manage.secret_saved();
@@ -46,7 +47,12 @@ impl Store {
             }
             Err(error) => this.refused_here(dialog, secret_save_failed(&cli::reason(&error)), cx),
         });
-        self.dialog_job((dialog, doing), Call::with_stdin(secret_set_args(bot, name), value.into_bytes()), then, cx);
+        self.dialog_job(
+            (dialog, doing),
+            Call::here_with_stdin(secret_set_args(bot, name), value.into_bytes()),
+            then,
+            cx,
+        );
     }
 
     pub(crate) fn remove_secret(&mut self, (bot, name): (&str, &str), form: u64, cx: &mut Context<Self>) {
@@ -54,7 +60,7 @@ impl Store {
         if self.busy(&key) {
             return;
         }
-        let bot_name = self.bot_name(bot);
+        let bot_name = self.bot_label(&BotKey::here(bot));
         let busy = Busy::new(key, format!("Removing {name} from {bot_name}…"));
         let secret = name.to_string();
         let then: Then = Box::new(move |this, result, cx| match result {
@@ -66,6 +72,6 @@ impl Store {
                 this.refused_here(form, secret_remove_failed(&secret, &bot_name, &cli::reason(&error)), cx);
             }
         });
-        self.bot_job(busy, Call::args(secret_remove_args(bot, name)), then, cx);
+        self.bot_job(busy, Call::here(secret_remove_args(bot, name)), then, cx);
     }
 }

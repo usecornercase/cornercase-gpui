@@ -87,10 +87,10 @@ impl Root {
         let goes = {
             let s = self.store.read(cx);
             let (offer, making) = (s.bots_offer(), s.making());
-            bots::key_goes((&offer, making.as_ref()), &s.bots.list, (s.shown_bot(), s.bots.last_shown.as_deref()))
+            bots::key_goes((&offer, making.as_ref()), &s.all_bots(), (s.shown_bot(), s.last_bot()))
         };
         match goes {
-            KeyGoes::Show(id) => self.store.update(cx, |s, cx| s.show_bot(&id, cx)),
+            KeyGoes::Show(key) => self.store.update(cx, |s, cx| s.show_bot(&key, cx)),
             KeyGoes::Say(words) => self.tell(&words, cx),
             KeyGoes::NoBot => {
                 let keys = keys_of(Command::NewBot, Os::CURRENT).unwrap_or_default();

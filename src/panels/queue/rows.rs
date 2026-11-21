@@ -13,6 +13,7 @@ use super::time::{Civil, local, now, relative, when_label};
 use super::{QueuePanel, open_pane, pausing, starting};
 use crate::cli::Releases;
 use crate::model::Session;
+use crate::model::bots::BotKey;
 use crate::notify::tip;
 use crate::platform::Os;
 use crate::store::Store;
@@ -267,7 +268,7 @@ fn chat_button(entry: &Entry, run: u64) -> AnyElement {
 
 pub(super) fn open_chat(bot: &str, run: u64, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| {
-        s.show_bot_at(bot, Some(run), cx);
+        s.show_bot_at(&BotKey::here(bot), Some(run), cx);
         s.close_sheet(cx);
     });
 }
