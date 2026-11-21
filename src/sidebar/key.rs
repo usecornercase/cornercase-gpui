@@ -5,6 +5,7 @@ use super::machine_rows::ThereFolds;
 use super::{Look, Renaming};
 use crate::app::Root;
 use crate::model::MachinePlace;
+use crate::model::bots::BotKey;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SidebarKey {
@@ -18,7 +19,7 @@ pub(crate) struct SidebarKey {
     widths: (f32, f32),
     place: Option<MachinePlace>,
     bots: u64,
-    bot: Option<String>,
+    bot: Option<BotKey>,
     bots_folded: bool,
 }
 
@@ -33,7 +34,7 @@ pub(crate) struct KeyParts<'a> {
     pub(crate) widths: (f32, f32),
     pub(crate) place: Option<&'a MachinePlace>,
     pub(crate) bots: u64,
-    pub(crate) bot: Option<&'a str>,
+    pub(crate) bot: Option<&'a BotKey>,
     pub(crate) bots_folded: bool,
 }
 
@@ -50,7 +51,7 @@ impl SidebarKey {
             widths: parts.widths,
             place: parts.place.cloned(),
             bots: parts.bots,
-            bot: parts.bot.map(str::to_string),
+            bot: parts.bot.cloned(),
             bots_folded: parts.bots_folded,
         }
     }
@@ -69,7 +70,7 @@ impl Root {
             widths: (self.sidebar_width.size(), self.pair_width.size()),
             place: self.side.machine_place.as_ref(),
             bots: self.store.read(cx).bots_revision(),
-            bot: self.side.bot.as_deref(),
+            bot: self.side.bot.as_ref(),
             bots_folded: self.side.bots_folded,
         })
     }

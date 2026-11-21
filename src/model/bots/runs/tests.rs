@@ -103,3 +103,13 @@ fn a_failed_read_settles_the_anchor() {
 fn a_chat_still_read_without_the_block_waits() {
     assert_eq!(aim(&[None, Some(7)], Some(&anchor(5, 3)), Aimed::default(), false), (None, Aimed::default()));
 }
+
+#[test]
+fn runs_without_again_keep_their_labels_and_offer_nothing_to_run_again() {
+    let runs = Runs::of(&queue());
+    let found: Vec<u64> = runs.by_entry.keys().copied().filter(|run| runs.again(*run).is_some()).collect();
+    assert!(!found.is_empty(), "the fixture has a run to run again");
+    let there = runs.clone().without_again();
+    assert!(found.iter().all(|run| there.again(*run).is_none()));
+    assert_eq!(there.label(5), runs.label(5));
+}

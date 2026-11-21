@@ -1,5 +1,9 @@
 use super::*;
 
+fn here(id: &str) -> BotKey {
+    BotKey::here(id)
+}
+
 #[test]
 fn a_message_of_only_blanks_is_not_sent() {
     for text in ["", " ", "  \n\t \n"] {
@@ -123,30 +127,36 @@ fn an_example_goes_after_a_draft_on_a_line_of_its_own() {
 
 #[test]
 fn each_job_of_a_bot_has_a_key_of_its_own() {
-    let keys = [say_key("prs"), stop_key("prs"), reset_key("prs"), say_key("ops")];
+    let (prs, ops, there) = (BotKey::here("prs"), BotKey::here("ops"), BotKey::on("vps", "prs"));
+    let keys = [say_key(&prs), stop_key(&prs), reset_key(&prs), say_key(&ops), say_key(&there), stop_key(&there)];
     for (i, key) in keys.iter().enumerate() {
         assert!(keys.iter().skip(i + 1).all(|other| other != key), "{key}");
     }
 }
 
 #[test]
+fn a_chat_of_the_same_id_on_a_machine_fills_the_field_from_its_own_draft() {
+    assert_eq!(refill(Some(&here("prs")), Some(&BotKey::on("vps", "prs")), true, 3, 3), Refill::Fill);
+}
+
+#[test]
 fn a_chat_that_shows_another_bot_fills_the_field_from_its_draft() {
-    assert_eq!(refill(Some("prs"), Some("ops"), true, 3, 3), Refill::Fill);
-    assert_eq!(refill(None, Some("prs"), true, 0, 0), Refill::Fill);
+    assert_eq!(refill(Some(&here("prs")), Some(&here("ops")), true, 3, 3), Refill::Fill);
+    assert_eq!(refill(None, Some(&here("prs")), true, 0, 0), Refill::Fill);
 }
 
 #[test]
 fn a_chat_that_shows_the_same_bot_again_keeps_the_field_and_its_caret() {
-    assert_eq!(refill(Some("prs"), Some("prs"), true, 3, 3), Refill::Keep);
-    assert_eq!(refill(Some("prs"), None, true, 3, 3), Refill::Keep);
+    assert_eq!(refill(Some(&here("prs")), Some(&here("prs")), true, 3, 3), Refill::Keep);
+    assert_eq!(refill(Some(&here("prs")), None, true, 3, 3), Refill::Keep);
 }
 
 #[test]
 fn a_draft_the_window_put_in_asks_the_field_to_fill_again() {
-    assert_eq!(refill(Some("prs"), Some("prs"), true, 3, 4), Refill::Fill);
+    assert_eq!(refill(Some(&here("prs")), Some(&here("prs")), true, 3, 4), Refill::Fill);
 }
 
 #[test]
 fn a_removed_bots_text_is_forgotten_so_a_bot_made_again_with_its_id_starts_empty() {
-    assert_eq!(refill(Some("prs"), None, false, 3, 3), Refill::Forget);
+    assert_eq!(refill(Some(&here("prs")), None, false, 3, 3), Refill::Forget);
 }

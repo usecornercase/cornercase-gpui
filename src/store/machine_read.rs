@@ -11,6 +11,7 @@ use crate::model::{Aim, MachinePlace, MachineSeen};
 use crate::panels::PanelKind;
 use crate::platform::{Os, paths};
 
+use super::bots::BotsThere;
 use super::machines_there::CliRelease;
 use super::{Busy, Store, UpdateThere, args, run_with, update_job, update_key};
 
@@ -245,6 +246,7 @@ pub(super) struct ThereState {
     pub(super) tab: Option<TabThere>,
     pub(super) older: HashMap<String, KeptOlder>,
     pub(super) checks: HashMap<String, Check>,
+    pub(super) bots: BotsThere,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -473,6 +475,7 @@ impl Store {
     fn older_changed(&mut self, cx: &mut Context<Self>) {
         cx.notify();
         self.follow_machine_tunnels(cx);
+        self.follow_machine_bots(cx);
     }
 
     pub(crate) fn recheck_there(&mut self, machine: &str, cx: &mut Context<Self>) {

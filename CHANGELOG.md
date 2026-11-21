@@ -2,6 +2,16 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.141
+
+- **The bots of your other machines show in the Bots section.** Under this computer's bots, each linked machine that has a bot gets a heading with its name, and its bots are listed under it with their state, agent and model, and unread count, as this computer's are. A bot made on a machine shows up by itself within a second or so.
+- **A machine's bot chats from this window.** Pressing its row opens its chat in place of the panes, read and written through that machine's cornercase. The header says `on vps`, and the field, Stop, Retry, New conversation and the examples all work. Showing the chat marks its answers read there.
+- **A machine's bot's answers are told once**, as this computer's are: a toast that names the bot and its machine (`PRs on vps: …`), with Show, and a desktop notification while the window is behind. ⇧⌘I goes to a machine's bot with an unread answer, after this computer's, and Search finds a machine's bot by its name or by the machine's.
+- **A bot here and a bot of the same name on a machine stay apart**: two rows, two chats, two drafts, and a message never goes to the other one.
+- **While a machine cannot be reached**, its bots stay listed, dimmed, with the reason under its name, and a message is not sent (`vps unreachable: nothing was sent`; your text stays in the field). They come back by themselves.
+- **What a machine's bot does not have yet**: the chat apps icon and Routines in its chat's header, Run again on a failed run (its runs show in its chat, as here), and a `⋯` menu, so it cannot be made, renamed, edited or removed from here, nor its secrets set (do that in that machine's window, or with `cornercase --remote`). A window that is itself on another server (`--remote`) lists none of the bots of that server's machines yet.
+- **A machine's bot that asks for a secret** says so on its row and in its chat, as this computer's do, but the dialog that gives it is for this computer's bots only for now: give it on that machine.
+
 ## 0.1.140
 
 - **A bot's routines show in its chat.** With cornercase 0.13.85 or newer, when a bot does something on a schedule you asked for ("every weekday at 9, tell me which of my PRs are blocked"), each run shows in its chat as one block where it started: its name and time, its steps folded, then its answer, `Answering…` while it works. A run that failed shows why and offers **Run again**. Lines that come in while you talk to the bot stay out of the block, and a run never changes the answer you are waiting for.

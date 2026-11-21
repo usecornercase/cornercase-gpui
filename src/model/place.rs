@@ -1,3 +1,4 @@
+use crate::model::bots::{BotKey, Home};
 use crate::model::machines::seen::MachinePlace;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -5,16 +6,16 @@ pub(crate) enum Showing {
     #[default]
     Local,
     Machine(MachinePlace),
-    Bot(String),
+    Bot(BotKey),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Moved {
     Local,
     Machine(MachinePlace),
-    Bot(String),
-    Removed(String),
-    Listed(Vec<String>),
+    Bot(BotKey),
+    Removed(BotKey),
+    Listed(Home, Vec<String>),
 }
 
 impl Showing {
@@ -25,9 +26,9 @@ impl Showing {
         }
     }
 
-    pub(crate) fn bot(&self) -> Option<&str> {
+    pub(crate) fn bot(&self) -> Option<&BotKey> {
         match self {
-            Self::Bot(id) => Some(id),
+            Self::Bot(key) => Some(key),
             _ => None,
         }
     }
@@ -36,9 +37,9 @@ impl Showing {
         match (moved, self) {
             (Moved::Local, _) => Self::Local,
             (Moved::Machine(place), _) => Self::Machine(place),
-            (Moved::Bot(id), _) => Self::Bot(id),
-            (Moved::Removed(gone), Self::Bot(id)) if id == gone => Self::Local,
-            (Moved::Listed(ids), Self::Bot(id)) if !ids.contains(&id) => Self::Local,
+            (Moved::Bot(key), _) => Self::Bot(key),
+            (Moved::Removed(gone), Self::Bot(key)) if key == gone => Self::Local,
+            (Moved::Listed(home, ids), Self::Bot(key)) if key.home == home && !ids.contains(&key.id) => Self::Local,
             (_, kept) => kept,
         }
     }

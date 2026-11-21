@@ -3,12 +3,12 @@ use std::time::Instant;
 use gpui::{Context, Pixels, Point};
 
 use super::super::run_on::start_key;
-use super::super::{Busy, Store, ToastKind};
+use super::super::{Busy, Store, ToastKind, args};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
 use crate::model::bots::{
-    Arrival, Closes, Creating, Making, create_failed, id_of, making, remove_failed, rename_args, rename_failed,
-    save_failed,
+    Arrival, BotKey, Closes, Creating, Home, Making, create_failed, id_of, making, remove_failed, rename_args,
+    rename_failed, save_failed,
 };
 use crate::model::place::awaits;
 use crate::platform::Os;
@@ -43,13 +43,13 @@ impl Store {
     pub(crate) fn create_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
         let creating = Creating::new(dialog, name, self.bots.boot.as_deref());
         let then: Then = Box::new(move |this, result, cx| this.bot_created(&creating, result, cx));
-        self.dialog_job((dialog, format!("Creating the bot {name}…")), Call::args(args), then, cx);
+        self.dialog_job((dialog, format!("Creating the bot {name}…")), Call::here(args), then, cx);
     }
 
     pub(crate) fn save_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
         let name_of = name.to_string();
         let then: Then = Box::new(move |this, result, cx| this.bot_saved(dialog, &name_of, result, cx));
-        self.dialog_job((dialog, format!("Saving {name}…")), Call::args(args), then, cx);
+        self.dialog_job((dialog, format!("Saving {name}…")), Call::here(args), then, cx);
     }
 
     fn bot_saved(&mut self, dialog: u64, name: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
@@ -60,14 +60,14 @@ impl Store {
     }
 
     pub(crate) fn rename_bot(&mut self, id: &str, name: &str, cx: &mut Context<Self>) {
-        let was = self.bot_name(id);
+        let was = self.bot_label(&BotKey::here(id));
         let busy = Busy::new(rename_key(id), format!("Renaming {was}…"));
         let then: Then = Box::new(move |this, result, cx| {
             if let Err(error) = result {
                 this.toast(rename_failed(&was, &cli::reason(&error)), ToastKind::Error, cx);
             }
         });
-        self.bot_job(busy, Call::args(rename_args(id, name)), then, cx);
+        self.bot_job(busy, Call::here(rename_args(id, name)), then, cx);
     }
 
     pub(crate) fn ask_bot_menu(&mut self, id: &str, at: Point<Pixels>, keys: bool, cx: &mut Context<Self>) {
@@ -105,7 +105,7 @@ impl Store {
     pub(super) fn follow_made(&mut self, cx: &mut Context<Self>) {
         let Some(made) = self.bots.manage.made.take() else { return };
         match made.arrival(&self.bots.list, self.bots.boot.as_deref(), Instant::now()) {
-            Arrival::Listed => self.show_bot(&made.id, cx),
+            Arrival::Listed => self.show_bot(&BotKey::here(&made.id), cx),
             Arrival::NotYet => self.bots.manage.made = Some(made),
             Arrival::Gone => {}
         }
@@ -122,7 +122,7 @@ impl Store {
             return;
         }
         self.bots.manage.asked_to_remove(id);
-        let (name, bot) = (self.bot_name(id), id.to_string());
+        let (name, bot) = (self.bot_label(&BotKey::here(id)), id.to_string());
         let busy = Busy::new(remove_key(id), format!("Removing {name}…"));
         let then: Then = Box::new(move |this, result, cx| {
             if let Err(error) = result {
@@ -130,22 +130,26 @@ impl Store {
                 this.toast(remove_failed(&name, &cli::reason(&error)), ToastKind::Error, cx);
             }
         });
-        self.bot_job(busy, Call::of(&["bot", "remove", id]), then, cx);
+        self.bot_job(busy, Call::here(args(&["bot", "remove", id])), then, cx);
     }
 
-    pub(crate) fn names_bot(&mut self, id: &str) {
-        if let Some(dialog) = self.shown_dialog() {
-            self.bots.manage.name_dialog(id, dialog);
+    pub(crate) fn names_bot(&mut self, key: &BotKey) {
+        let Some(dialog) = self.shown_dialog() else { return };
+        if let Some(bots) = self.bots_at_mut(&key.home) {
+            bots.manage.name_dialog(&key.id, dialog);
         }
     }
 
-    pub(super) fn close_dialog_if_gone(&mut self, listed: &[String], cx: &mut Context<Self>) {
-        let closes = self.bots.manage.gone_closes(listed, self.shown_dialog(), self.behind_dialog());
+    pub(super) fn close_dialog_if_gone(&mut self, home: &Home, listed: &[String], cx: &mut Context<Self>) {
+        let (shown, behind) = (self.shown_dialog(), self.behind_dialog());
+        let closes = self.bots_at(home).map_or(Closes::Nothing, |bots| bots.manage.gone_closes(listed, shown, behind));
         self.close_named(closes, cx);
     }
 
-    pub(super) fn close_dialog_naming(&mut self, gone: &str, cx: &mut Context<Self>) {
-        let closes = self.bots.manage.closes_dialog(gone, self.shown_dialog(), self.behind_dialog());
+    pub(super) fn close_dialog_naming(&mut self, gone: &BotKey, cx: &mut Context<Self>) {
+        let (shown, behind) = (self.shown_dialog(), self.behind_dialog());
+        let closes =
+            self.bots_at(&gone.home).map_or(Closes::Nothing, |bots| bots.manage.closes_dialog(&gone.id, shown, behind));
         self.close_named(closes, cx);
     }
 

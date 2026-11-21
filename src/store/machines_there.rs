@@ -94,7 +94,7 @@ pub(crate) fn machine_target(window: &Target, listing: Listing<'_>, seen: &Machi
     }
 }
 
-fn sent_or_not(why: &str) -> String {
+pub(super) fn sent_or_not(why: &str) -> String {
     format!("{why}: {NOTHING_SENT}")
 }
 

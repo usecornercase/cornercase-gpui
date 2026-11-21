@@ -1,6 +1,6 @@
 use gpui::Context;
 
-use super::super::{Busy, Store, ToastKind};
+use super::super::{Busy, Store, ToastKind, args};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature, Has};
 use crate::model::bots::Bot;
@@ -61,7 +61,7 @@ impl Store {
             }
             cx.notify();
         });
-        self.bot_job(busy, Call::of(&["queue", "run", &target.to_string()]), then, cx);
+        self.bot_job(busy, Call::here(args(&["queue", "run", &target.to_string()])), then, cx);
     }
 
     pub(super) fn close_routines_if_gone(&mut self, cx: &mut Context<Self>) {

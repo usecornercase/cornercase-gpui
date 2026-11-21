@@ -9,8 +9,8 @@ use self::secrets::SecretsRow;
 use super::{body_height, bot_refusal, cancel_and, close, dialog_starts, fitted, forget_refusal, frame, show, within};
 use crate::cli::Feature;
 use crate::model::bots::{
-    AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, kept_accounts,
-    new_args,
+    AgentInfo, BotKey, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open,
+    kept_accounts, new_args,
 };
 use crate::store::{Store, args};
 use crate::theme::colours;
@@ -104,7 +104,7 @@ pub(crate) fn new_bot(window: &mut Window, cx: &mut App) {
 pub(crate) fn edit_bot(id: &str, window: &mut Window, cx: &mut App) {
     let Some(bot) = Store::get(cx).read(cx).bots.find(id).cloned() else { return };
     if open_form(Mode::Edit(Box::new(Editing::of(&bot))), window, cx) {
-        Store::get(cx).update(cx, |s, _| s.names_bot(id));
+        Store::get(cx).update(cx, |s, _| s.names_bot(&BotKey::here(id)));
     }
 }
 

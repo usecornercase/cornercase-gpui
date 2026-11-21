@@ -3,7 +3,7 @@ use gpui::Context;
 use super::super::{Busy, Store, ToastKind};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
-use crate::model::bots::{self, AskOpen, By, Give, Told, decline_args, give_args, giving, tells_ask};
+use crate::model::bots::{self, AskOpen, BotKey, By, Give, Home, Told, decline_args, give_args, giving, tells_ask};
 use crate::platform::Os;
 
 fn decline_key(bot: &str, ask: u64) -> String {
@@ -29,7 +29,8 @@ impl Store {
         if self.asks_offer() != Give::Offered {
             return;
         }
-        let on_screen = (self.shown_bot().map(str::to_string), self.bots.active);
+        let shown = self.shown_bot().filter(|key| key.home == Home::Here).map(|key| key.id.clone());
+        let on_screen = (shown, self.bots.active);
         let mut opened = false;
         let mut told = Vec::new();
         for (bot, ask) in arrived {
@@ -49,7 +50,7 @@ impl Store {
     fn asking_told(&self, bot: &str, ask: u64) -> Option<Told> {
         let found = self.bots.find(bot)?;
         let waiting = found.asks.iter().find(|waiting| waiting.id == ask)?;
-        Some(Told::asking(bot, &found.name, waiting))
+        Some(Told::asking(BotKey::here(bot), &found.name, waiting))
     }
 
     pub(crate) fn open_ask(&mut self, bot: &str, ask: u64, cx: &mut Context<Self>) {
@@ -57,12 +58,16 @@ impl Store {
         cx.notify();
     }
 
-    pub(in crate::store) fn go_to_ask(&mut self, id: &str, name: &str, ask: u64, cx: &mut Context<Self>) {
+    pub(in crate::store) fn go_to_ask(&mut self, key: &BotKey, name: &str, ask: u64, cx: &mut Context<Self>) {
+        if key.home != Home::Here {
+            return self.go_to_bot(key, name, None, cx);
+        }
+        let id = key.id.as_str();
         if self.bots.find(id).is_none() {
             self.toast(bots::gone(name), ToastKind::Info, cx);
             return;
         }
-        self.show_bot(id, cx);
+        self.show_bot(key, cx);
         if self.waits(id, ask) && self.asks_offer() == Give::Offered {
             self.open_ask(id, ask, cx);
         }
@@ -75,19 +80,19 @@ impl Store {
     }
 
     pub(crate) fn give_secrets(&mut self, (bot, ask): (&str, u64), json: String, dialog: u64, cx: &mut Context<Self>) {
-        let doing = format!("Saving the secrets of {}…", self.bot_name(bot));
+        let doing = format!("Saving the secrets of {}…", self.bot_label(&BotKey::here(bot)));
         let then: Then = Box::new(move |this, result, cx| match result {
             Ok(_) => this.close_started(Some(dialog), false, cx),
             Err(error) => this.refused_here(dialog, format!("Could not save the secrets: {}", cli::reason(&error)), cx),
         });
-        self.dialog_job((dialog, doing), Call::with_stdin(give_args(bot, ask), json.into_bytes()), then, cx);
+        self.dialog_job((dialog, doing), Call::here_with_stdin(give_args(bot, ask), json.into_bytes()), then, cx);
     }
 
     pub(crate) fn decline_ask(&mut self, (bot, ask): (&str, u64), cx: &mut Context<Self>) {
         if self.busy(&decline_key(bot, ask)) {
             return;
         }
-        let name = self.bot_name(bot);
+        let name = self.bot_label(&BotKey::here(bot));
         let busy = Busy::new(decline_key(bot, ask), format!("Declining what {name} asked for…"));
         let then: Then = Box::new(move |this, result, cx| {
             if let Err(error) = result {
@@ -95,6 +100,6 @@ impl Store {
                 this.toast(words, ToastKind::Error, cx);
             }
         });
-        self.bot_job(busy, Call::args(decline_args(bot, ask)), then, cx);
+        self.bot_job(busy, Call::here(decline_args(bot, ask)), then, cx);
     }
 }

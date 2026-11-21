@@ -186,7 +186,7 @@ impl Notifier {
     }
 
     fn tell_bots(&mut self, cx: &mut Context<Self>) {
-        let told = self.store.update(cx, |s, _| std::mem::take(&mut s.bots.to_tell));
+        let told = self.store.update(cx, |s, _| s.take_told());
         for told in &told {
             self.announce(Telling::of_bot(told), cx);
         }
@@ -235,7 +235,7 @@ impl Notifier {
             Some(Event::Clipboard { text, pane }) => self.clipboard(text, pane, cx),
             Some(Event::Bell { tab, pane, .. }) => self.bell(tab, pane, cx),
             Some(Event::Message(message)) => self.message(&message, cx),
-            Some(Event::Bot(event)) => self.store.update(cx, |s, cx| s.bot_heard(&event, cx)),
+            Some(Event::Bot(event)) => self.store.update(cx, |s, cx| s.bot_heard_here(&event, cx)),
             Some(Event::Other) | None => {}
         }
     }

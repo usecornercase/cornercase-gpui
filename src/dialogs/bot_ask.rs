@@ -37,7 +37,7 @@ pub(crate) fn answer_ask(bot: &Bot, ask: u64, window: &mut Window, cx: &mut App)
     let Some(first) = view.read(cx).fields.first().map(|(_, field)| field.clone()) else { return };
     show_at_top(view.into(), &first, window, cx);
     Store::get(cx).update(cx, |s, _| {
-        s.names_bot(&bot.id);
+        s.names_bot(&bot.key());
         s.names_ask(&bot.id, ask);
     });
 }

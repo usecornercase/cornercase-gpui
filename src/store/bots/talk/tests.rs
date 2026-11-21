@@ -2,13 +2,17 @@ use super::*;
 use crate::cli::{Queue, QueueTap};
 use crate::model::bots::say_args;
 
+fn prs() -> BotKey {
+    BotKey::here("prs")
+}
+
 fn put(queue: &Queue, call: Call) {
     drop(reply_of(queue, call.args, call.stdin));
 }
 
 fn said(text: &str) -> Vec<(Vec<String>, Option<Vec<u8>>)> {
     let (queue, tap) = QueueTap::new();
-    put(&queue, Call::say(false, "prs", text).expect("a call"));
+    put(&queue, Call::say(false, &prs(), text).expect("a call"));
     tap.with_stdin()
 }
 
@@ -45,8 +49,8 @@ fn a_message_never_appears_among_the_arguments() {
 #[test]
 fn stop_and_new_conversation_go_on_the_queue_with_nothing_on_standard_input() {
     let (queue, tap) = QueueTap::new();
-    put(&queue, Call::stop("prs"));
-    put(&queue, Call::reset("prs"));
+    put(&queue, Call::stop(&prs()));
+    put(&queue, Call::reset(&prs()));
     let sent = tap.with_stdin();
     assert_eq!(sent.len(), 2);
     assert!(sent.iter().all(|(_, stdin)| stdin.is_none()));
@@ -58,7 +62,7 @@ fn stop_and_new_conversation_go_on_the_queue_with_nothing_on_standard_input() {
 fn two_messages_sent_one_after_the_other_arrive_in_that_order() {
     let (queue, tap) = QueueTap::new();
     for text in ["first", "second"] {
-        put(&queue, Call::say(false, "prs", text).expect("a call"));
+        put(&queue, Call::say(false, &prs(), text).expect("a call"));
     }
     let texts: Vec<_> = tap.with_stdin().into_iter().map(|(_, stdin)| stdin.expect("text")).collect();
     assert_eq!(texts, [b"first".to_vec(), b"second".to_vec()]);
@@ -78,18 +82,67 @@ fn a_blank_draft_offers_nothing_in_the_toast() {
 
 #[test]
 fn a_message_is_not_sent_while_another_to_the_same_bot_is_on_its_way() {
-    assert!(Call::say(true, "prs", "second").is_none());
-    assert!(Call::say(false, "prs", "second").is_some());
+    assert!(Call::say(true, &prs(), "second").is_none());
+    assert!(Call::say(false, &prs(), "second").is_some());
 }
 
 #[test]
 fn a_setup_goes_on_the_queue_with_nothing_on_standard_input() {
     let (queue, tap) = QueueTap::new();
-    put(&queue, Call::setup(false, "prs").expect("a call"));
+    put(&queue, Call::setup(false, &prs()).expect("a call"));
     assert_eq!(tap.with_stdin(), [(vec!["bot".to_string(), "setup".into(), "prs".into(), "--json".into()], None)]);
 }
 
 #[test]
 fn a_setup_is_not_sent_while_a_message_to_the_same_bot_is_on_its_way() {
-    assert!(Call::setup(true, "prs").is_none());
+    assert!(Call::setup(true, &prs()).is_none());
+}
+
+#[test]
+fn a_call_built_from_a_machines_key_goes_to_that_machine() {
+    let there = BotKey::on("vps", "prs");
+    let vps = Home::Machine("vps".into());
+    let calls = [
+        Call::say(false, &there, "hi").expect("a call"),
+        Call::setup(false, &there).expect("a call"),
+        Call::stop(&there),
+        Call::reset(&there),
+        Call::history(&there, None),
+        Call::history(&there, Some(4)),
+        Call::seen(&there),
+    ];
+    for call in &calls {
+        assert_eq!(call.home, vps, "{:?}", call.args);
+        assert!(call.args.iter().any(|word| word == "prs"), "{:?}", call.args);
+        assert!(call.args.iter().all(|word| !word.contains("vps")), "{:?}", call.args);
+    }
+}
+
+#[test]
+fn a_call_built_from_a_key_here_stays_on_this_server() {
+    for call in [Call::stop(&prs()), Call::seen(&prs()), Call::history(&prs(), None), Call::here(vec!["bot".into()])] {
+        assert_eq!(call.home, Home::Here);
+    }
+}
+
+#[test]
+fn a_history_read_asks_for_the_last_thousand_or_what_came_after() {
+    assert_eq!(Call::history(&prs(), None).args, ["bot", "history", "prs", "--json", "--last", "1000"]);
+    assert_eq!(Call::history(&prs(), Some(7)).args, ["bot", "history", "prs", "--json", "--after", "7"]);
+}
+
+#[test]
+fn a_read_refused_with_no_target_says_why_and_not_that_nothing_was_sent() {
+    let there = BotKey::on("vps", "prs");
+    let read = Call::history(&there, None);
+    assert_eq!(refused_words(read.sends, "vps unreachable"), "vps unreachable");
+    assert!(!Call::seen(&there).sends);
+}
+
+#[test]
+fn a_message_refused_with_no_target_says_nothing_was_sent() {
+    let there = BotKey::on("vps", "prs");
+    for call in [Call::say(false, &there, "hi").expect("a call"), Call::stop(&there), Call::reset(&there)] {
+        assert_eq!(refused_words(call.sends, "vps unreachable"), "vps unreachable: nothing was sent");
+    }
 }

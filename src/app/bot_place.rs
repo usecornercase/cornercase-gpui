@@ -10,7 +10,7 @@ impl Root {
     pub(super) fn follow_place(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {
         let (place, bot) = {
             let s = store.read(cx);
-            (s.machine_place().cloned(), s.shown_bot().map(str::to_string))
+            (s.machine_place().cloned(), s.shown_bot().cloned())
         };
         let was = self.side.bot.is_some();
         let moved = bot != self.side.bot;
@@ -44,7 +44,7 @@ impl Root {
         let in_field = bot_chat::field_focus(cx).is_focused(window);
         let s = self.store.read(cx);
         let here = Here {
-            shown: s.shown_bot() == Some(bot.id.as_str()),
+            shown: s.shown_bot() == Some(&bot.key()),
             active: window.is_window_active(),
             covered: !s.chat_takes_keys(),
             keys: keys_of(in_field, !sendable(s.bots.drafts.text(&bot.id))),

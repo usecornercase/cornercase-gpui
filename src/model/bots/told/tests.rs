@@ -301,37 +301,48 @@ fn control_characters_and_runs_of_blanks_are_left_out() {
 
 #[test]
 fn an_answers_toast_names_the_bot_and_its_first_line() {
-    let told = Told::new(&answer("notes", 1), "notes", None);
+    let told = Told::new(&answer("notes", 1), BotKey::here("notes"), "notes", None);
     assert_eq!(told.text(), "notes: Answer 1");
 }
 
 #[test]
 fn an_errors_toast_says_the_bot_could_not_answer() {
     let failed = Answer { failed: true, text: "Not logged in\nmore".into(), ..answer("notes", 1) };
-    assert_eq!(Told::new(&failed, "notes", None).text(), "notes could not answer: Not logged in");
+    assert_eq!(
+        Told::new(&failed, BotKey::here("notes"), "notes", None).text(),
+        "notes could not answer: Not logged in"
+    );
 }
 
 #[test]
 fn an_error_is_read_as_the_chat_draws_it_not_as_markdown() {
     let failed = Answer { failed: true, text: "\n__init__.py *failed* [x](y)\nnext".into(), ..answer("notes", 1) };
-    assert_eq!(Told::new(&failed, "notes", None).first, "__init__.py *failed* [x](y)");
+    assert_eq!(Told::new(&failed, BotKey::here("notes"), "notes", None).first, "__init__.py *failed* [x](y)");
     let long = Answer { text: "e".repeat(300), ..failed };
-    let first = Told::new(&long, "notes", None).first;
+    let first = Told::new(&long, BotKey::here("notes"), "notes", None).first;
     assert_eq!((first.chars().count(), first.ends_with('…')), (100, true));
 }
 
 #[test]
 fn an_answer_with_no_text_says_the_bot_answered() {
     let blank = Answer { text: String::new(), ..answer("notes", 1) };
-    assert_eq!(Told::new(&blank, "notes", None).text(), "notes answered");
-    assert_eq!(Told::new(&Answer { failed: true, ..blank }, "notes", None).text(), "notes could not answer");
+    assert_eq!(Told::new(&blank, BotKey::here("notes"), "notes", None).text(), "notes answered");
+    assert_eq!(
+        Told::new(&Answer { failed: true, ..blank }, BotKey::here("notes"), "notes", None).text(),
+        "notes could not answer"
+    );
 }
 
 #[test]
 fn the_headline_says_answered_or_could_not_answer_and_the_body_is_the_first_line() {
-    let told = Told::new(&answer("notes", 1), "notes", None);
+    let told = Told::new(&answer("notes", 1), BotKey::here("notes"), "notes", None);
     assert_eq!((told.headline().as_str(), told.body().as_deref()), ("notes answered", Some("Answer 1")));
-    let failed = Told::new(&Answer { failed: true, text: String::new(), ..answer("notes", 1) }, "notes", None);
+    let failed = Told::new(
+        &Answer { failed: true, text: String::new(), ..answer("notes", 1) },
+        BotKey::here("notes"),
+        "notes",
+        None,
+    );
     assert_eq!((failed.headline().as_str(), failed.body()), ("notes could not answer", None));
 }
 
@@ -343,7 +354,7 @@ fn a_gone_bot_is_named_as_gone() {
 #[test]
 fn an_ask_is_told_in_cornercases_words() {
     let names = vec!["campus-user".to_string(), "campus-password".to_string()];
-    let told = Told::asking("campus", "Campus", &Ask { id: 3, names, ..Ask::default() });
+    let told = Told::asking(BotKey::here("campus"), "Campus", &Ask { id: 3, names, ..Ask::default() });
     assert_eq!(told.text(), "Campus asks for a secret: campus-user, campus-password");
     assert_eq!(told.headline(), "Campus asks for a secret");
     assert_eq!(told.body().as_deref(), Some("campus-user, campus-password"));
@@ -353,7 +364,7 @@ fn an_ask_is_told_in_cornercases_words() {
 #[test]
 fn a_runs_answer_names_its_routine_in_the_toast_and_the_headline() {
     let run = Answer { run: Some(5), ..answer("prs", 1) };
-    let told = Told::new(&run, "PRs", Some("Review PRs"));
+    let told = Told::new(&run, BotKey::here("prs"), "PRs", Some("Review PRs"));
     assert_eq!(told.text(), "PRs · Review PRs: Answer 1");
     assert_eq!(told.headline(), "PRs · Review PRs answered");
     assert_eq!(told.run, Some(5));
@@ -361,9 +372,9 @@ fn a_runs_answer_names_its_routine_in_the_toast_and_the_headline() {
 
 #[test]
 fn an_answer_without_a_label_reads_as_before() {
-    let told = Told::new(&Answer { run: Some(5), ..answer("prs", 1) }, "PRs", None);
+    let told = Told::new(&Answer { run: Some(5), ..answer("prs", 1) }, BotKey::here("prs"), "PRs", None);
     assert_eq!((told.text().as_str(), told.headline().as_str()), ("PRs: Answer 1", "PRs answered"));
-    let blank = Told::new(&answer("prs", 1), "PRs", Some(""));
+    let blank = Told::new(&answer("prs", 1), BotKey::here("prs"), "PRs", Some(""));
     assert_eq!(blank.text(), "PRs: Answer 1");
 }
 
@@ -371,5 +382,8 @@ fn an_answer_without_a_label_reads_as_before() {
 fn a_runs_failure_is_still_not_told_whatever_its_label() {
     let failed = Answer { failed: true, run: Some(5), ..answer("prs", 1) };
     assert!(!tells(&failed, (None, false), true));
-    assert_eq!(Told::new(&failed, "PRs", Some("Review PRs")).headline(), "PRs · Review PRs could not answer");
+    assert_eq!(
+        Told::new(&failed, BotKey::here("prs"), "PRs", Some("Review PRs")).headline(),
+        "PRs · Review PRs could not answer"
+    );
 }

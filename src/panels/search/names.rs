@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use crate::keymap::{self, Command};
 use crate::model::Shown;
+use crate::model::bots::BotKey;
 use crate::platform::Os;
 
 const FUZZY: u8 = 4;
@@ -24,7 +25,7 @@ pub(super) enum Goto {
     Workspace(u64),
     Tab(u64),
     Agent { pane: u64, tab: u64 },
-    Bot(String),
+    Bot(BotKey),
 }
 
 impl Goto {
@@ -108,8 +109,8 @@ pub(super) fn rank(candidates: Vec<Candidate>, query: &str) -> Vec<Ranked> {
     hits.into_iter().map(|(_, _, r)| r).collect()
 }
 
-pub(super) fn shown_bot_row(ranked: &[Ranked], id: &str) -> Option<usize> {
-    ranked.iter().position(|r| matches!(&r.candidate.goto, Goto::Bot(bot) if bot == id))
+pub(super) fn shown_bot_row(ranked: &[Ranked], key: &BotKey) -> Option<usize> {
+    ranked.iter().position(|r| matches!(&r.candidate.goto, Goto::Bot(bot) if bot == key))
 }
 
 pub(super) fn shown_row(ranked: &[Ranked], shown: Shown) -> Option<usize> {

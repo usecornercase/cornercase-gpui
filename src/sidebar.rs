@@ -144,7 +144,7 @@ pub(crate) struct SideState {
     pub hovered: Option<SharedString>,
     pub strip: crate::tabs::TabStrip,
     pub machine_place: Option<MachinePlace>,
-    pub bot: Option<String>,
+    pub bot: Option<crate::model::bots::BotKey>,
     pub bots_folded: bool,
     pub aside: bool,
 }

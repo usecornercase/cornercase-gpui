@@ -204,7 +204,8 @@ impl Root {
 
     pub(super) fn keep_beating(&mut self, window: &Window, cx: &App) {
         self.parts.beat.drawing(Instant::now());
-        let working = self.session.as_ref().is_some_and(Session::anyone_working) || self.store.read(cx).bots.thinking();
+        let working =
+            self.session.as_ref().is_some_and(Session::anyone_working) || self.store.read(cx).any_bot_thinking();
         if working && self.parts.beat.start() {
             follow_frames(window, self.parts.orbit_layer.entity_id(), self.parts.beat.clone());
         }
