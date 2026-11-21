@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.139
+
+- **See and change the passwords a bot keeps, in Edit bot….** With cornercase 0.13.100 or newer, the form has a **Secrets** section listing each secret by name and when it was saved. **Add…** saves a new one, **Replace…** gives a saved one a new value, and **Remove** takes one away after asking. Each opens over the form and saves at once with its own button, so what you typed in the form is still there when it comes back.
+- **The value is typed behind bullets and never shown again.** It goes to cornercase only, the field is emptied as it is sent, and a name cornercase would refuse is said before anything is sent.
+- **A bot's chat says how many secrets it keeps** after its agent and model in the header, such as `2 secrets`, and says so in red when they cannot be read.
+
 ## 0.1.138
 
 - **A bot's form has a Chat apps row.** With cornercase 0.13.107 or newer and Telegram or Discord paired, New bot and Edit bot… let you choose when the bot's answers also reach your chat apps: **While away** (the default: only while away is on), **Always** or **Off**. A message you write to a bot from a chat app is answered there whichever you choose. Edit bot… sends the choice only when you change it. Tab reaches the three choices, and Return or Space picks the one with the ring.

@@ -1,11 +1,12 @@
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, IntoElement,
-    ParentElement as _, Render, ScrollHandle, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _,
-    Window, div, prelude::FluentBuilder as _, px,
+    ParentElement as _, Render, ScrollHandle, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 
 use self::chat_apps::ChatRow;
-use super::{body_height, cancel_and, close, dialog_starts, fitted, frame, show, within};
+use self::secrets::SecretsRow;
+use super::{body_height, bot_refusal, cancel_and, close, dialog_starts, fitted, forget_refusal, frame, show, within};
 use crate::cli::Feature;
 use crate::model::bots::{
     AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, kept_accounts,
@@ -14,9 +15,10 @@ use crate::model::bots::{
 use crate::store::{Store, args};
 use crate::theme::colours;
 use crate::ui::account_picker::AccountPickers;
-use crate::ui::{self, TextField, TextFieldEvent, Tone};
+use crate::ui::{self, TextField, TextFieldEvent, Tone, text_field};
 
 mod chat_apps;
+mod secrets;
 
 const TITLE: &str = "New bot";
 const SAVE: &str = "Save";
@@ -66,6 +68,7 @@ pub(crate) struct BotForm {
     error: Option<&'static str>,
     scroller: ScrollHandle,
     chat: ChatRow,
+    secrets: SecretsRow,
 }
 
 fn field(
@@ -122,8 +125,12 @@ impl BotForm {
             name.update(cx, |name, cx| name.set_text(editing.before.name.clone(), cx));
             model.update(cx, |model, cx| model.set_text(own, cx));
         }
-        cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
-        let chat = ChatRow::new(&mode, cx);
+        cx.observe(&Store::get(cx), |this, _, cx| {
+            this.follow_secrets(cx);
+            cx.notify();
+        })
+        .detach();
+        let (chat, secrets) = (ChatRow::new(&mode, cx), SecretsRow::new(cx));
         let mut form = Self {
             mode,
             listing: Listing::Reading,
@@ -137,8 +144,10 @@ impl BotForm {
             error: None,
             scroller,
             chat,
+            secrets,
         };
         form.read_agents(cx);
+        form.follow_secrets(cx);
         form
     }
 
@@ -199,7 +208,7 @@ impl BotForm {
             }
             model.set_placeholder(if hint.is_empty() { OWN.to_string() } else { hint }, cx);
         });
-        Self::forget_refusal(cx);
+        forget_refusal(cx);
     }
 
     fn agent(&self) -> Option<&AgentInfo> {
@@ -216,14 +225,9 @@ impl BotForm {
         self.reset_model(hint, true, cx);
     }
 
-    fn forget_refusal(cx: &mut Context<Self>) {
-        let dialog = cx.entity_id().as_u64();
-        Store::get(cx).update(cx, |s, cx| s.forget_bot_refusal(dialog, cx));
-    }
-
     fn changed(&mut self, cx: &mut Context<Self>) {
         self.error = None;
-        Self::forget_refusal(cx);
+        forget_refusal(cx);
         cx.notify();
     }
 
@@ -423,14 +427,9 @@ impl BotForm {
             .children(accounts)
             .child(self.access_field(&agent, cx))
             .children(self.chat_field(cx))
+            .children(self.secrets_field(cx))
             .child(self.about_field(window, cx))
             .children(self.editing().map(|_| ui::dim(FROM_NEXT)))
-    }
-
-    fn refusal(&self, dialog: u64, cx: &App) -> Option<Div> {
-        let held = Store::get(cx).read(cx).bots.manage.refusal(dialog).map(str::to_string);
-        let words: Option<SharedString> = self.error.map(SharedString::from).or(held.map(SharedString::from));
-        words.map(|words| div().text_size(px(12.)).text_color(colours::failed()).child(words))
     }
 
     fn submit_button(&self, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -449,6 +448,15 @@ impl BotForm {
     }
 }
 
+fn revealed(field: Div, scroller: &ScrollHandle) -> Div {
+    let scroller = scroller.clone();
+    div().child(field).on_children_prepainted(move |bounds, window, _| {
+        if let Some(found) = bounds.first() {
+            text_field::show_box(&scroller, (found.top(), found.size.height), window);
+        }
+    })
+}
+
 impl Focusable for BotForm {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
         self.name.read(cx).focus_handle(cx)
@@ -461,15 +469,14 @@ impl Render for BotForm {
         self.accounts.follow(choices, Self::picked, cx);
         let height = body_height(f32::from(window.viewport_size().height));
         self.chat_reveal(window);
+        self.secrets_keys(window);
         let body = self.fields(window, cx);
         let scrolled = fitted("bot-form", window, body).min_h_0().track_scroll(&self.scroller);
-        let column = div()
-            .flex()
-            .flex_col()
-            .gap(px(12.))
-            .max_h(px(height))
-            .child(scrolled)
-            .children(self.refusal(cx.entity_id().as_u64(), cx));
+        let column = div().flex().flex_col().gap(px(12.)).max_h(px(height)).child(scrolled).children(bot_refusal(
+            self.error,
+            cx.entity_id().as_u64(),
+            cx,
+        ));
         frame(self.title(), column, cancel_and(self.submit_button(cx))).w(px(520.))
     }
 }

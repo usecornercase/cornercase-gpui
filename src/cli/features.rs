@@ -13,6 +13,7 @@ pub(crate) enum Feature {
     BotSetup,
     BotAsks,
     BotChatApps,
+    BotSecrets,
 }
 
 impl Feature {
@@ -27,6 +28,7 @@ impl Feature {
             Self::BotSetup => Version::new(0, 13, 89),
             Self::BotAsks => Version::new(0, 13, 101),
             Self::BotChatApps => Version::new(0, 13, 107),
+            Self::BotSecrets => Version::new(0, 13, 100),
         }
     }
 

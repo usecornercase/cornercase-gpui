@@ -4,10 +4,19 @@ use super::entries::{
     Again, Control, Entry, EntryKey, Give, Retry, STEPS_SHOWN, Turn, arrived, asked, entries, folded, givable, held,
     keys, new_conversation_control, retry, row_splices, send_control, spliced, stop_control, turn,
 };
-use super::words::{folded_label, time_label, turn_label};
+use super::words::{folded_label, secrets_label, time_label, turn_label};
 use super::{Scroll, scroll_distance, scroll_of};
 
 const NOON: i64 = 1_794_744_000;
+
+#[test]
+fn the_header_counts_a_bots_secrets() {
+    assert_eq!(secrets_label(0, false), None);
+    assert_eq!(secrets_label(1, false), Some(("1 secret".to_string(), false)));
+    assert_eq!(secrets_label(2, false), Some(("2 secrets".to_string(), false)));
+    assert_eq!(secrets_label(0, true), Some(("secrets cannot be read".to_string(), true)));
+    assert_eq!(secrets_label(3, true), Some(("secrets cannot be read".to_string(), true)));
+}
 
 #[test]
 fn a_line_of_today_shows_its_time_of_day() {

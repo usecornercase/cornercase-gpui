@@ -1,15 +1,15 @@
 use gpui::{
-    App, ClickEvent, Context, Div, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _, ScrollHandle,
+    App, ClickEvent, Context, Div, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _,
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
-use super::{BotForm, Mode};
+use super::{BotForm, Mode, revealed};
 use crate::model::bots::{AWAY, CHOICES, Row, UNPAIRED, note, sent};
 use crate::notify;
 use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::account_picker::reveals;
-use crate::ui::{self, press, text_field};
+use crate::ui::{self, press};
 
 const LABEL: &str = "Chat apps";
 const STOPS: [&str; 3] = ["bot-chat-apps-away", "bot-chat-apps-always", "bot-chat-apps-off"];
@@ -110,13 +110,4 @@ fn pair_pressed(event: &ClickEvent, _: &mut Window, cx: &mut App) {
 fn open_remote(store: &mut Store, cx: &mut Context<Store>) {
     store.close_dialog(cx);
     store.open_settings_page(REMOTE, cx);
-}
-
-fn revealed(field: Div, scroller: &ScrollHandle) -> Div {
-    let scroller = scroller.clone();
-    div().child(field).on_children_prepainted(move |bounds, window, _| {
-        if let Some(found) = bounds.first() {
-            text_field::show_box(&scroller, (found.top(), found.size.height), window);
-        }
-    })
 }

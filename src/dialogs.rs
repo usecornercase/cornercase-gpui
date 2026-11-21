@@ -7,6 +7,7 @@ use gpui::{
 use crate::cli;
 use crate::model::Spot;
 use crate::model::accounts::pick::{AccountPick, account_args};
+use crate::model::bots::REPLACES;
 use crate::model::machines::run_on::Starting;
 use crate::model::machines::run_on::checks::Wanted;
 use crate::store::{self, Busy, StartThere, Store, args};
@@ -16,6 +17,7 @@ use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
 mod bot_ask;
 mod bot_form;
+mod bot_secret;
 mod closing;
 mod context;
 mod merge_check;
@@ -91,6 +93,28 @@ fn ask_button(workspace: u64, text: String, label: String) -> Stateful<Div> {
         close(cx);
         Store::get(cx).update(cx, |s, cx| s.ask_agent(workspace, &text, &label, cx));
     })
+}
+
+fn bot_refusal(own: Option<&str>, dialog: u64, cx: &App) -> Option<Div> {
+    let held = Store::get(cx).read(cx).bots.manage.refusal(dialog).map(str::to_string);
+    let words: Option<SharedString> =
+        own.map(|own| SharedString::from(own.to_string())).or(held.map(SharedString::from));
+    words.map(|words| div().text_size(px(12.)).text_color(colours::failed()).child(words))
+}
+
+fn forget_refusal<T: 'static>(cx: &mut Context<T>) {
+    let dialog = cx.entity_id().as_u64();
+    Store::get(cx).update(cx, |s, cx| s.forget_bot_refusal(dialog, cx));
+}
+
+fn secret_label(name: &str, replace: bool) -> Div {
+    div()
+        .flex()
+        .gap(px(6.))
+        .text_size(px(11.))
+        .text_color(colours::muted())
+        .child(name.to_string())
+        .when(replace, |d| d.child(div().text_color(colours::faint()).child(REPLACES)))
 }
 
 pub(crate) fn show(view: AnyView, focus: &FocusHandle, window: &mut Window, cx: &mut App) {
@@ -450,6 +474,12 @@ pub(crate) fn confirm(question: Question, window: &mut Window, cx: &mut App) {
     let view = cx.new(|cx| Confirm { question, focus: cx.focus_handle() });
     let focus = view.read(cx).focus.clone();
     show(view.into(), &focus, window, cx);
+}
+
+pub(crate) fn confirm_over(question: Question, back: FocusHandle, cx: &mut App) {
+    let view = cx.new(|cx| Confirm { question, focus: cx.focus_handle() });
+    let focus = view.read(cx).focus.clone();
+    Store::get(cx).update(cx, |s, cx| s.show_dialog_over(view.into(), focus, back, cx));
 }
 
 impl Confirm {

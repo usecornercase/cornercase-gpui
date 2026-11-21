@@ -17,7 +17,14 @@ pub(crate) use self::form::{
     kept_accounts, new_args, rename_args,
 };
 pub(crate) use self::manage::{
-    Arrival, Creating, Making, Managing, MenuAsk, create_failed, making, remove_failed, rename_failed, save_failed,
+    Arrival, Closes, Creating, Making, Managing, MenuAsk, create_failed, making, remove_failed, rename_failed,
+    save_failed,
+};
+pub(crate) use self::secrets::{
+    Listed, NAME_HINT, NEW_SECRET, REMOVE_SECRET, SAVED_AT_ONCE, SECRET_VALUE, Secret, SecretEnter, SecretsSection,
+    SecretsSeen, empty_words, listed_of, on_secret_enter, remove_secret_message, replaces, rereads, secret_list_args,
+    secret_remove_args, secret_remove_failed, secret_save_failed, secret_set_args, secrets_read_failed,
+    secrets_section, what_a_secret_is,
 };
 pub(crate) use self::talk::{
     Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, setup_args,
@@ -29,6 +36,7 @@ mod asks;
 mod chat_apps;
 mod form;
 mod manage;
+mod secrets;
 mod talk;
 mod told;
 
@@ -54,6 +62,10 @@ pub(crate) struct Bot {
     pub asks: Vec<Ask>,
     #[serde(deserialize_with = "text_or_empty")]
     pub chat_apps: String,
+    #[serde(deserialize_with = "count_or_none")]
+    pub secrets: usize,
+    #[serde(deserialize_with = "true_or_false")]
+    pub secrets_unreadable: bool,
 }
 
 fn set(value: Option<&String>) -> Option<String> {
@@ -62,6 +74,14 @@ fn set(value: Option<&String>) -> Option<String> {
 
 fn text_or_empty<'de, D: serde::Deserializer<'de>>(found: D) -> Result<String, D::Error> {
     Ok(Value::deserialize(found)?.as_str().map(str::to_string).unwrap_or_default())
+}
+
+fn count_or_none<'de, D: serde::Deserializer<'de>>(found: D) -> Result<usize, D::Error> {
+    Ok(Value::deserialize(found)?.as_u64().and_then(|count| usize::try_from(count).ok()).unwrap_or_default())
+}
+
+fn true_or_false<'de, D: serde::Deserializer<'de>>(found: D) -> Result<bool, D::Error> {
+    Ok(Value::deserialize(found)?.as_bool() == Some(true))
 }
 
 impl Bot {
@@ -80,6 +100,8 @@ impl Bot {
             && self.state == other.state
             && self.unread == other.unread
             && self.asks == other.asks
+            && self.secrets == other.secrets
+            && self.secrets_unreadable == other.secrets_unreadable
     }
 
     pub(crate) fn thinking(&self) -> bool {
