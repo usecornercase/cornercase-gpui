@@ -14,8 +14,15 @@ use crate::theme::code::Inks;
 use crate::theme::{self, FONT_FAMILY};
 use crate::theme::{colours, radius};
 use crate::ui::highlight::Span;
+use crate::ui::selection::Pick;
 
 pub(crate) type OnLink = Rc<dyn Fn(&str, &mut App)>;
+pub(crate) type Picks<'a> = &'a dyn Fn(usize, &str) -> Option<Pick>;
+
+struct Drawing<'a> {
+    on_link: &'a OnLink,
+    pick: Option<Pick>,
+}
 
 pub(crate) fn open_web(address: &str, cx: &mut App) {
     if is_web(address) {
@@ -38,8 +45,16 @@ pub(crate) fn linked_blocks(id: &str, blocks: &[Block], on_link: &OnLink) -> Vec
     blocks.iter().enumerate().map(|(i, b)| linked_block(SharedString::from(format!("{id}-{i}")), b, on_link)).collect()
 }
 
+pub(crate) fn picked_blocks(id: &str, blocks: &[Block], on_link: &OnLink, picks: Picks<'_>) -> Vec<AnyElement> {
+    let drawn = |(i, block): (usize, &Block)| {
+        let pick = block.picked_text().and_then(|text| picks(i, &text));
+        drawn_block(SharedString::from(format!("{id}-{i}")), block, Drawing { on_link, pick })
+    };
+    blocks.iter().enumerate().map(drawn).collect()
+}
+
 pub(crate) fn raw(source: &str) -> AnyElement {
-    code_box(&Code::plain(source))
+    code_box(&Code::plain(source), None)
 }
 
 pub(crate) fn block(id: SharedString, block: &Block) -> AnyElement {
@@ -51,18 +66,22 @@ fn opens_the_address() -> OnLink {
 }
 
 pub(crate) fn linked_block(id: SharedString, block: &Block, on_link: &OnLink) -> AnyElement {
+    drawn_block(id, block, Drawing { on_link, pick: None })
+}
+
+fn drawn_block(id: SharedString, block: &Block, drawing: Drawing<'_>) -> AnyElement {
     match block {
-        Block::Heading(level, text) => heading(*level, inline((id, 0), text, on_link)),
-        Block::Paragraph(text) => div().child(inline((id, 0), text, on_link)).into_any_element(),
-        Block::Item(depth, marker, text) => item(*depth, marker, inline((id, 0), text, on_link)),
+        Block::Heading(level, text) => heading(*level, inline((id, 0), text, drawing)),
+        Block::Paragraph(text) => div().child(inline((id, 0), text, drawing)).into_any_element(),
+        Block::Item(depth, marker, text) => item(*depth, marker, inline((id, 0), text, drawing)),
         Block::Quote(text) => div()
             .pl(px(10.))
             .border_l_2()
             .border_color(colours::selected())
             .text_color(colours::muted())
-            .child(inline((id, 0), text, on_link))
+            .child(inline((id, 0), text, drawing))
             .into_any_element(),
-        Block::Code(code) => code_box(code),
+        Block::Code(code) => code_box(code, drawing.pick),
         Block::Table(rows) => table(rows),
         Block::Rule => div().h(px(1.)).my(px(4.)).bg(colours::border()).into_any_element(),
     }
@@ -102,7 +121,7 @@ fn item(depth: usize, marker: &str, text: AnyElement) -> AnyElement {
         .into_any_element()
 }
 
-fn code_box(code: &Code) -> AnyElement {
+fn code_box(code: &Code, pick: Option<Pick>) -> AnyElement {
     div()
         .px(px(12.))
         .py(px(10.))
@@ -114,15 +133,17 @@ fn code_box(code: &Code) -> AnyElement {
         .text_size(px(12.))
         .text_color(colours::text())
         .overflow_hidden()
-        .children(code.shown().map(|shown| code_lines(shown, code.spans())))
+        .children(code.shown().map(|shown| code_lines(shown, code.spans(), pick)))
         .into_any_element()
 }
 
-fn code_lines(shown: String, spans: &[Span]) -> AnyElement {
-    if spans.is_empty() {
-        return shown.into_any_element();
+fn code_lines(shown: String, spans: &[Span], pick: Option<Pick>) -> AnyElement {
+    let inked = || styles(spans, &theme::code_inks());
+    match pick {
+        Some(pick) => pick.draw(shown, inked(), IntoElement::into_any_element).into_any_element(),
+        None if spans.is_empty() => shown.into_any_element(),
+        None => StyledText::new(shown).with_highlights(inked()).into_any_element(),
     }
-    StyledText::new(shown).with_highlights(styles(spans, &theme::code_inks())).into_any_element()
 }
 
 pub(super) fn styles(spans: &[Span], inks: &Inks) -> Vec<(Range<usize>, HighlightStyle)> {
@@ -167,9 +188,16 @@ fn table(rows: &[Vec<String>]) -> AnyElement {
         .into_any_element()
 }
 
-fn inline(id: impl Into<ElementId>, text: &Inline, on_link: &OnLink) -> AnyElement {
+fn inline(id: impl Into<ElementId>, text: &Inline, drawing: Drawing<'_>) -> AnyElement {
     let highlights: Vec<_> = text.runs().into_iter().map(|(range, marks)| (range, style(&marks))).collect();
-    let styled = StyledText::new(text.text.clone()).with_highlights(highlights);
+    let linked = |styled: StyledText| linked(id, styled, text, drawing.on_link);
+    match drawing.pick {
+        Some(pick) => pick.draw(text.text.clone(), highlights, linked).into_any_element(),
+        None => linked(StyledText::new(text.text.clone()).with_highlights(highlights)),
+    }
+}
+
+fn linked(id: impl Into<ElementId>, styled: StyledText, text: &Inline, on_link: &OnLink) -> AnyElement {
     if text.links.is_empty() {
         return styled.into_any_element();
     }

@@ -9,6 +9,7 @@ use gpui::{
 
 use super::BotChat;
 use super::entries::{Again, Entry, Retry, STEPS_SHOWN, folded};
+use super::picking::Spot;
 use super::run_block::run;
 use super::words::{DROPPED_STAMP, EARLIER, GIVE, HELD, RETRY, SENDING, SETTING_UP, folded_label, time_label};
 use crate::model::bots::{BotKey, Give, Runs, Said};
@@ -16,6 +17,7 @@ use crate::store::{Clip, Store};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::markdown::text as md;
 use crate::ui::markdown::{self, Block};
+use crate::ui::selection::{self, Laid, Lit, Selection};
 use crate::ui::{self, Tone, glass, press};
 
 const RETRY_STOP: &str = "bot-retry";
@@ -39,6 +41,20 @@ pub(super) struct Meta {
     pub runs: Rc<Runs>,
     pub again_busy: Rc<HashSet<u64>>,
     pub again_stops: Rc<HashMap<u64, FocusHandle>>,
+    pub laid: Laid<Spot>,
+    pub selection: Option<Selection<Spot>>,
+    pub on_link: md::OnLink,
+}
+
+impl Meta {
+    fn pick(&self, spot: Spot, text: &str) -> selection::Pick {
+        let lit = self.selection.map_or(Lit::Nothing, |selection| selection.lit(spot, text));
+        selection::pick(&self.laid, spot, lit)
+    }
+
+    fn picked(&self, spot: Spot, text: &str) -> Div {
+        self.pick(spot, text).draw(text.to_string(), Vec::new(), IntoElement::into_any_element)
+    }
 }
 
 pub(super) fn earlier_row() -> AnyElement {
@@ -51,8 +67,8 @@ pub(super) fn line(inner: Div) -> Div {
 
 pub(super) fn entry_row(entry: &Entry, meta: &Meta) -> AnyElement {
     match entry {
-        Entry::You { text, at, held, dropped, .. } => you(text, *at, (*held, *dropped), meta),
-        Entry::Answer { id, text, at } => line(answer(*id, text, *at, meta)),
+        Entry::You { id, text, at, held, dropped } => you((*id, text), *at, (*held, *dropped), meta),
+        Entry::Answer { id, text, at } => line(answer((*id, *id), text, *at, meta)),
         Entry::Steps { first, texts, .. } => line(steps(*first, texts, STEPS_SHOWN, meta)),
         Entry::Failed { id, text } => failed(*id, text, meta),
         Entry::Notice { id, text, .. } => notice(*id, text, meta),
@@ -62,7 +78,7 @@ pub(super) fn entry_row(entry: &Entry, meta: &Meta) -> AnyElement {
     .into_any_element()
 }
 
-fn you(text: &str, at: i64, (held, dropped): (bool, bool), meta: &Meta) -> Div {
+fn you((id, text): (u64, &str), at: i64, (held, dropped): (bool, bool), meta: &Meta) -> Div {
     let stamp = match (dropped, held) {
         (true, _) => DROPPED_STAMP.to_string(),
         (false, true) => HELD.to_string(),
@@ -75,18 +91,18 @@ fn you(text: &str, at: i64, (held, dropped): (bool, bool), meta: &Meta) -> Div {
         .rounded(px(radius::card()))
         .bg(glass::tint(colours::brand(), 0.22))
         .text_color(colours::text())
-        .child(text.to_string());
+        .child(meta.picked(Spot { entry: id, part: 0 }, text));
     let stamp = div().text_size(px(10.5)).text_color(colours::faint()).child(stamp);
     let bubble = if dropped { bubble.opacity(0.5) } else { bubble };
     line(div().flex().flex_col().items_end().gap(px(3.)).child(bubble).child(stamp))
 }
 
-fn blocks_of(id: u64, text: &str, meta: &Meta) -> Rc<Vec<Block>> {
-    meta.blocks.borrow_mut().entry(id).or_insert_with(|| Rc::new(markdown::parse(text))).clone()
+pub(super) fn blocks_of(id: u64, text: &str, blocks: &Blocks) -> Rc<Vec<Block>> {
+    blocks.borrow_mut().entry(id).or_insert_with(|| Rc::new(markdown::parse(text))).clone()
 }
 
-pub(super) fn answer(id: u64, text: &str, at: i64, meta: &Meta) -> Div {
-    let blocks = blocks_of(id, text, meta);
+pub(super) fn answer((entry, id): (u64, u64), text: &str, at: i64, meta: &Meta) -> Div {
+    let blocks = blocks_of(id, text, &meta.blocks);
     let head = div()
         .flex()
         .items_center()
@@ -95,11 +111,12 @@ pub(super) fn answer(id: u64, text: &str, at: i64, meta: &Meta) -> Div {
         .text_color(colours::faint())
         .child(div().font_weight(FontWeight::SEMIBOLD).child(format!("{} · {}", meta.name, time_label(at, meta.now))))
         .child(ui::copy_button(("bot-answer", id), Clip::of(text.to_string(), "the answer")));
-    let body = div().flex().flex_col().gap(px(6.)).text_color(colours::soft()).children(md::linked_blocks(
-        &format!("bot-{id}"),
-        &blocks,
-        &md::opens_web_addresses(),
-    ));
+    let picks = |at: usize, shown: &str| {
+        let part = u32::try_from(at).ok()?;
+        Some(meta.pick(Spot { entry, part }, shown))
+    };
+    let drawn = md::picked_blocks(&format!("bot-{id}"), &blocks, &meta.on_link, &picks);
+    let body = div().flex().flex_col().gap(px(6.)).text_color(colours::soft()).children(drawn);
     div().flex().flex_col().gap(px(2.)).child(head).child(body)
 }
 
@@ -131,14 +148,14 @@ pub(super) fn steps(first: u64, texts: &[String], kept: usize, meta: &Meta) -> D
         .children(rows)
 }
 
-pub(super) fn error_with(text: &str, button: Option<AnyElement>) -> Div {
-    let text = div().text_color(colours::failed()).child(text.to_string());
+pub(super) fn error_with((spot, text): (Spot, &str), button: Option<AnyElement>, meta: &Meta) -> Div {
+    let text = div().text_color(colours::failed()).child(meta.picked(spot, text));
     div().flex().flex_col().items_start().gap(px(6.)).child(text).children(button)
 }
 
 fn failed(id: u64, text: &str, meta: &Meta) -> Div {
     let retry = meta.retry.as_ref().filter(|retry| retry.error == id).map(|retry| retry_button(retry, meta));
-    line(error_with(text, retry))
+    line(error_with((Spot { entry: id, part: 0 }, text), retry, meta))
 }
 
 fn retry_button(retry: &Retry, meta: &Meta) -> AnyElement {

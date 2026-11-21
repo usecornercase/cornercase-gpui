@@ -4,14 +4,15 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, Bounds, Context, Div, Entity, FocusHandle, InteractiveElement as _, IntoElement, ListAlignment,
-    ListOffset, ListState, ParentElement as _, Pixels, Render, ScrollHandle, StatefulInteractiveElement as _,
-    Styled as _, Window, div, list, prelude::FluentBuilder as _, px,
+    ListOffset, ListState, MouseButton, ParentElement as _, Pixels, Render, ScrollHandle,
+    StatefulInteractiveElement as _, Styled as _, Window, div, list, prelude::FluentBuilder as _, px,
 };
 
 pub(crate) use self::controls::ask_new_conversation;
 use self::controls::{Fit, header, turn_row};
 use self::entries::{Entry, EntryKey, Retry};
-pub(crate) use self::global::{field_focus, scroll, view};
+pub(crate) use self::global::{copy_selection, field_focus, scroll, view};
+use self::picking::Spot;
 use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
 use self::runs::offers_again;
 pub(crate) use self::words::{EXAMPLES, answering, row_detail, time_label};
@@ -24,12 +25,15 @@ use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::account_picker::reveals;
 use crate::ui::counting::Counting;
+use crate::ui::markdown::text::{OnLink, open_web};
+use crate::ui::selection::{self, Selecting};
 use crate::ui::{self, Icon, press, text_field};
 
 mod controls;
 mod entries;
 mod field;
 mod global;
+mod picking;
 mod rows;
 mod run_block;
 mod runs;
@@ -92,6 +96,7 @@ pub(crate) struct BotChat {
     run: RunsShown,
     routines: (bool, f32),
     routines_stop: FocusHandle,
+    selecting: Selecting<Spot>,
 }
 
 #[derive(Default)]
@@ -155,13 +160,7 @@ impl BotChat {
         })
         .detach();
         let list = ListState::new(0, ListAlignment::Top, px(OVERDRAW));
-        let chat = cx.entity().downgrade();
-        list.set_scroll_handler(move |_, _, cx| {
-            let chat = chat.clone();
-            cx.defer(move |cx| {
-                let _ = chat.update(cx, BotChat::reached_the_end);
-            });
-        });
+        follow_scroll(&list, cx);
         Self {
             store,
             list,
@@ -187,6 +186,7 @@ impl BotChat {
             run: RunsShown::default(),
             routines: (true, ROUTINES_WIDTH),
             routines_stop: cx.focus_handle(),
+            selecting: Selecting::default(),
         }
     }
 
@@ -235,12 +235,16 @@ impl BotChat {
 
     fn scroll(&mut self, step: Scroll, cx: &mut Context<Self>) {
         let viewport = f32::from(self.list.viewport_bounds().size.height);
-        self.list.scroll_by(px(scroll_distance(step, viewport)));
+        self.scroll_by(px(scroll_distance(step, viewport)));
+        cx.notify();
+    }
+
+    fn scroll_by(&mut self, distance: Pixels) {
+        self.list.scroll_by(distance);
         self.following = at_end(&self.list);
         if self.following {
             self.news = false;
         }
-        cx.notify();
     }
 
     fn sync(&mut self, cx: &mut Context<Self>) {
@@ -265,6 +269,7 @@ impl BotChat {
             self.bot = Some(bot.key());
             self.opened.clear();
             self.blocks.borrow_mut().clear();
+            self.selecting.clear();
         }
         self.blocks.borrow_mut().retain(|id, _| *id >= first);
         self.retry = retry.map(Rc::new);
@@ -388,6 +393,9 @@ impl BotChat {
             runs: self.run.runs.clone(),
             again_busy: Rc::new(self.store.read(cx).bots.again_busy().clone()),
             again_stops: Rc::new(self.run.again_stops.clone()),
+            laid: self.selecting.laid().clone(),
+            selection: self.selecting.selection,
+            on_link: guarded_link(cx),
         }
     }
 
@@ -421,10 +429,8 @@ impl BotChat {
     fn lines(&mut self, bot: &Bot, cx: &mut Context<Self>) -> AnyElement {
         let (rows, meta) = (self.rows.clone(), self.meta(bot, cx));
         let chat = cx.entity().downgrade();
-        div()
-            .relative()
-            .flex_1()
-            .min_h_0()
+        selection::listens(div().relative().flex_1().min_h_0(), cx)
+            .on_mouse_down(MouseButton::Left, |_, _, cx| global::drop_field_selection(cx))
             .child(
                 list(self.list.clone(), move |ix, _, _| match rows.get(ix) {
                     Some(Row::Entry(entry)) => entry_row(entry, &meta),
@@ -433,7 +439,8 @@ impl BotChat {
                 })
                 .size_full(),
             )
-            .when(self.news, |d| d.child(chip(chat)))
+            .when(self.news, |d| d.child(chip(chat.clone())))
+            .child(selection::layer(chat, &self.selecting, None, 0.))
             .into_any_element()
     }
 }
@@ -500,8 +507,28 @@ fn example_row(
     })
 }
 
+fn follow_scroll(list: &ListState, cx: &Context<BotChat>) {
+    let chat = cx.entity().downgrade();
+    list.set_scroll_handler(move |_, _, cx| {
+        let chat = chat.clone();
+        cx.defer(move |cx| {
+            let _ = chat.update(cx, BotChat::reached_the_end);
+        });
+    });
+}
+
+fn guarded_link(cx: &Context<BotChat>) -> OnLink {
+    let chat = cx.entity().downgrade();
+    Rc::new(move |address, cx| {
+        if !chat.upgrade().is_some_and(|chat| chat.read(cx).selecting.shows()) {
+            open_web(address, cx);
+        }
+    })
+}
+
 impl Render for BotChat {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.selecting.laid().clear();
         self.sync(cx);
         self.take_aim(cx);
         self.reveal_stops(window);

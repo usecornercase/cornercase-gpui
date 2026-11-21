@@ -1,11 +1,11 @@
 use gpui::{App, Context, Entity, Keystroke, Window};
 
 use crate::app::Root;
-use crate::panels::PanelKind;
 use crate::panels::changes::ChangesPanel;
 use crate::panels::files::FilesPanel;
 use crate::panels::queue::QueuePanel;
 use crate::panels::todo::TodoPanel;
+use crate::panels::{PanelKind, bot_chat};
 use crate::ui::selection::Step;
 
 impl Root {
@@ -75,5 +75,9 @@ impl Root {
             return false;
         }
         self.queue_panel().is_some_and(|queue| queue.update(cx, QueuePanel::copy_selection))
+    }
+
+    pub(super) fn chat_copy(&mut self, cx: &mut Context<Self>) -> bool {
+        self.chat_shown() && self.store.read(cx).chat_takes_keys() && bot_chat::copy_selection(cx)
     }
 }

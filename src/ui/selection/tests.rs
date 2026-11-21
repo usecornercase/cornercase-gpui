@@ -3,8 +3,8 @@ use std::ops::Range;
 use gpui::{Bounds, HighlightStyle, Hsla, point, px, size};
 
 use super::{
-    Caret, Edge, Lit, Press, Selection, Span, Zone, bar_origin, edge_at, host, lines_label, off_centre, off_edge,
-    overlay, reference, row_at, row_from, row_near, selected_chars, word_at,
+    Caret, Edge, Lit, Press, Selection, Span, Zone, bar_origin, edge_at, host, lines_label, lit_styles, off_centre,
+    off_edge, overlay, reference, row_at, row_from, row_near, selected_chars, word_at,
 };
 
 fn caret(spot: usize, at: usize) -> Caret<usize> {
@@ -554,4 +554,54 @@ fn each_part_comes_from_the_line_s_own_text() {
 #[test]
 fn a_selection_of_nothing_copies_nothing() {
     assert_eq!(copied(chars((0, 2), (0, 2)), &[(0, "abc")]), "");
+}
+
+#[test]
+fn a_press_in_text_released_without_a_move_selects_nothing_and_clears_what_was_selected() {
+    let press = Press::down(Some(chars((1, 0), (2, 3))), caret(4, 3), Zone::Text, false);
+    assert_eq!(press.released(press.at_once()), None);
+    let fresh = Press::down(None, caret(4, 3), Zone::Text, false);
+    assert_eq!(fresh.released(fresh.at_once()), None);
+}
+
+#[test]
+fn a_drag_in_text_back_to_its_start_is_empty_not_the_line() {
+    let mut press = Press::down(None, caret(4, 3), Zone::Text, false);
+    assert_eq!(press.dragged(caret(4, 6)), chars((4, 3), (4, 6)));
+    let back = press.dragged(caret(4, 3));
+    assert_eq!(back, chars((4, 3), (4, 3)));
+    assert!(back.is_empty());
+}
+
+#[test]
+fn a_triple_press_in_text_keeps_the_whole_part_on_release() {
+    let press = Press::down(None, caret(4, 3), Zone::Numbers, false);
+    assert_eq!(press.released(press.at_once()), Some(Selection::line(4)));
+}
+
+#[test]
+fn shift_makes_no_whole_lines_in_text() {
+    let mut press = Press::down(Some(chars((1, 0), (2, 3))), caret(4, 3), Zone::Text, true);
+    assert_eq!(press.dragged(caret(5, 1)), chars((4, 3), (5, 1)));
+    let still = Press::down(Some(chars((1, 0), (2, 3))), caret(4, 3), Zone::Text, true);
+    assert_eq!(still.released(still.at_once()), None);
+}
+
+#[test]
+fn a_lit_part_gives_the_range_to_paint() {
+    assert_eq!(Lit::Line.range_in(7), Some(0..7));
+    assert_eq!(Lit::Chars { range: 2..5, line_break: true }.range_in(7), Some(2..5));
+    assert_eq!(Lit::Chars { range: 3..3, line_break: true }.range_in(7), None);
+    assert_eq!(Lit::Nothing.range_in(7), None);
+}
+
+#[test]
+fn lit_styles_keep_the_styles_outside_the_range() {
+    let out = lit_styles(vec![(0..6, red())], &Lit::Chars { range: 4..8, line_break: false }, 10);
+    assert_eq!(out[0], (0..4, red()));
+    assert_eq!(out[1].0, 4..6);
+    assert_eq!(out[1].1.color, red().color);
+    assert_eq!(out[2].0, 6..8);
+    assert_eq!(out[2].1.background_color, selected_chars().background_color);
+    assert_eq!(lit_styles(vec![(0..6, red())], &Lit::Nothing, 10), vec![(0..6, red())]);
 }

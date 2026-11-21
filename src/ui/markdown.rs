@@ -1,6 +1,7 @@
 mod code;
 pub(crate) mod text;
 
+use std::borrow::Cow;
 use std::iter::Peekable;
 use std::ops::Range;
 use std::str::Lines;
@@ -32,6 +33,18 @@ pub(crate) enum Block {
     Code(Code),
     Table(Vec<Vec<String>>),
     Rule,
+}
+
+impl Block {
+    pub(crate) fn picked_text(&self) -> Option<Cow<'_, str>> {
+        match self {
+            Self::Heading(_, text) | Self::Paragraph(text) | Self::Item(_, _, text) | Self::Quote(text) => {
+                Some(Cow::Borrowed(text.text.as_str()))
+            }
+            Self::Code(code) => code.shown().map(Cow::Owned),
+            Self::Table(_) | Self::Rule => None,
+        }
+    }
 }
 
 pub(crate) fn parse(source: &str) -> Vec<Block> {

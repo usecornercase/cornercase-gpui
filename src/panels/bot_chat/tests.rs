@@ -680,4 +680,5 @@ fn below_the_gate_the_line_says_what_it_needs() {
     assert_eq!(words, Give::Needs);
 }
 
+mod picking;
 mod runs;

@@ -143,3 +143,28 @@ fn outline_reads_the_same_blocks_without_spans() {
     assert_eq!(code.spans(), []);
     assert_eq!(painted[..6], outlined[..6]);
 }
+
+#[test]
+fn each_kind_of_block_picks_the_text_it_draws() {
+    let blocks = parse(SAMPLE);
+    let picked: Vec<Option<String>> =
+        blocks.iter().map(|block| block.picked_text().map(|text| text.into_owned())).collect();
+    assert_eq!(picked[0].as_deref(), Some("Problem"));
+    assert_eq!(picked[1].as_deref(), Some("A plugin's popup (#435) runs a program."));
+    assert_eq!(picked[2].as_deref(), Some("one more"));
+    assert_eq!(picked[5].as_deref(), Some("quoted text"));
+    assert_eq!(picked[6].as_deref(), Some("fn main() {}"));
+    assert_eq!((picked[7].as_deref(), picked[8].as_deref()), (None, None));
+}
+
+#[test]
+fn a_code_blocks_picked_text_has_four_spaces_for_a_tab() {
+    let blocks = parse("```\nif x {\n\treturn;\n}\n```");
+    assert_eq!(blocks[0].picked_text().as_deref(), Some("if x {\n    return;\n}"));
+}
+
+#[test]
+fn a_paragraph_with_a_link_picks_its_words_and_not_its_address() {
+    let blocks = parse("See [the docs](https://example.com/docs) now.");
+    assert_eq!(blocks[0].picked_text().as_deref(), Some("See the docs now."));
+}
