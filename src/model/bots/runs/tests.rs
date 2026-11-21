@@ -61,29 +61,45 @@ fn anchor(run: u64, serial: u64) -> Anchor {
     Anchor { bot: "prs".into(), run, serial }
 }
 
+fn done(serial: u64) -> Aimed {
+    Aimed { done: serial, early: serial }
+}
+
 #[test]
-fn the_aim_goes_to_the_rows_block_once() {
+fn a_read_chat_goes_to_the_rows_block_once() {
     let rows = [None, Some(7), None, Some(5)];
-    assert_eq!(aim(&rows, Some(&anchor(5, 3)), 0, true), Aim::Go(3));
-    assert_eq!(aim(&rows, Some(&anchor(5, 3)), 3, true), Aim::Wait);
-    assert_eq!(aim(&rows, None, 0, true), Aim::Wait);
+    let (go, aimed) = aim(&rows, Some(&anchor(5, 3)), Aimed::default(), true);
+    assert_eq!((go, aimed.done), (Some(3), 3));
+    assert_eq!(aim(&rows, Some(&anchor(5, 3)), aimed, true).0, None);
+    assert_eq!(aim(&rows, None, Aimed::default(), true), (None, Aimed::default()));
 }
 
 #[test]
-fn the_aim_waits_while_the_chat_is_read_and_misses_a_read_chat_without_the_block() {
-    let rows = [None, Some(7)];
-    assert_eq!(aim(&rows, Some(&anchor(5, 3)), 0, false), Aim::Wait);
-    assert_eq!(aim(&rows, Some(&anchor(5, 3)), 0, true), Aim::Miss);
+fn a_read_chat_without_the_block_takes_the_anchor_and_moves_nothing() {
+    let (go, aimed) = aim(&[None, Some(7)], Some(&anchor(5, 3)), Aimed::default(), true);
+    assert_eq!((go, aimed.done), (None, 3));
 }
 
 #[test]
-fn the_aim_keeps_its_anchor_while_the_chat_is_read_and_takes_it_once_read() {
+fn while_the_chat_is_read_the_block_is_gone_to_once_and_again_once_it_is_read() {
     let rows = [None, Some(5)];
-    let reading = aim(&rows, Some(&anchor(5, 3)), 0, false);
-    assert_eq!(reading, Aim::Go(1));
-    assert!(!consumed(reading, false));
-    let read = aim(&rows, Some(&anchor(5, 3)), 0, true);
-    assert!(consumed(read, true));
-    assert!(consumed(Aim::Miss, true));
-    assert!(!consumed(Aim::Wait, true));
+    let (first, aimed) = aim(&rows, Some(&anchor(5, 3)), Aimed::default(), false);
+    assert_eq!((first, aimed.done), (Some(1), 0));
+    let (again, aimed) = aim(&rows, Some(&anchor(5, 3)), aimed, false);
+    assert_eq!(again, None, "a render while it is read leaves the reader's scroll alone");
+    let (settled, aimed) = aim(&[None, None, Some(5)], Some(&anchor(5, 3)), aimed, true);
+    assert_eq!((settled, aimed), (Some(2), done(3)));
+}
+
+#[test]
+fn a_failed_read_settles_the_anchor() {
+    let rows = [None, Some(5)];
+    let (go, aimed) = aim(&rows, Some(&anchor(5, 3)), Aimed { done: 0, early: 3 }, true);
+    assert_eq!((go, aimed), (Some(1), done(3)));
+    assert_eq!(aim(&rows, Some(&anchor(5, 3)), aimed, true).0, None, "no render after it scrolls back");
+}
+
+#[test]
+fn a_chat_still_read_without_the_block_waits() {
+    assert_eq!(aim(&[None, Some(7)], Some(&anchor(5, 3)), Aimed::default(), false), (None, Aimed::default()));
 }

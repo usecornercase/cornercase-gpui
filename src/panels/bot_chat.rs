@@ -18,7 +18,7 @@ pub(crate) use self::words::{EXAMPLES, answering, row_detail};
 use self::words::{empty_lines, examples_shown, read_failed};
 use crate::model::bots::Give as Giving;
 use crate::model::bots::Reach;
-use crate::model::bots::{Aim, Bot, Chat, Read, Runs, aim, consumed, reset_key, say_key};
+use crate::model::bots::{Aimed, Bot, Chat, Read, Runs, aim, reset_key, say_key};
 use crate::panels::queue;
 use crate::store::Store;
 use crate::theme::{colours, radius};
@@ -91,7 +91,7 @@ pub(crate) struct BotChat {
     due: Option<usize>,
     runs: Rc<Runs>,
     again_stops: HashMap<u64, FocusHandle>,
-    aimed: u64,
+    aimed: Aimed,
     routines: (bool, f32),
     routines_stop: FocusHandle,
 }
@@ -182,7 +182,7 @@ impl BotChat {
             due: None,
             runs: Rc::new(Runs::default()),
             again_stops: HashMap::new(),
-            aimed: 0,
+            aimed: Aimed::default(),
             routines: (true, ROUTINES_WIDTH),
             routines_stop: cx.focus_handle(),
         }
@@ -354,15 +354,12 @@ impl BotChat {
             return;
         };
         let anchor = store.bots.anchor.clone().filter(|anchor| anchor.bot == chat.bot);
-        let read = chat.read == Read::Done;
-        let aimed = aim(&self.row_runs(), anchor.as_ref(), self.aimed, read);
-        if let Aim::Go(item_ix) = aimed {
+        let (go, aimed) = aim(&self.row_runs(), anchor.as_ref(), self.aimed, chat.settled());
+        self.aimed = aimed;
+        if let Some(item_ix) = go {
             self.list.scroll_to(ListOffset { item_ix, offset_in_item: px(0.) });
             self.following = false;
             self.news = false;
-        }
-        if let Some(anchor) = anchor.filter(|_| consumed(aimed, read)) {
-            self.aimed = anchor.serial;
         }
     }
 

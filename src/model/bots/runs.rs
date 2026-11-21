@@ -70,24 +70,25 @@ pub(crate) struct Anchor {
     pub serial: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Aim {
-    Wait,
-    Go(usize),
-    Miss,
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Aimed {
+    pub done: u64,
+    pub early: u64,
 }
 
-pub(crate) fn aim(rows: &[Option<u64>], anchor: Option<&Anchor>, aimed: u64, read: bool) -> Aim {
-    let Some(anchor) = anchor.filter(|anchor| anchor.serial > aimed) else { return Aim::Wait };
-    match rows.iter().position(|row| *row == Some(anchor.run)) {
-        Some(ix) => Aim::Go(ix),
-        None if read => Aim::Miss,
-        None => Aim::Wait,
+pub(crate) fn aim(
+    rows: &[Option<u64>],
+    anchor: Option<&Anchor>,
+    aimed: Aimed,
+    settled: bool,
+) -> (Option<usize>, Aimed) {
+    let Some(anchor) = anchor.filter(|anchor| anchor.serial > aimed.done) else { return (None, aimed) };
+    let row = rows.iter().position(|row| *row == Some(anchor.run));
+    match (settled, row) {
+        (true, row) => (row, Aimed { done: anchor.serial, ..aimed }),
+        (false, Some(ix)) if anchor.serial > aimed.early => (Some(ix), Aimed { early: anchor.serial, ..aimed }),
+        (false, _) => (None, aimed),
     }
-}
-
-pub(crate) fn consumed(aim: Aim, read: bool) -> bool {
-    read && aim != Aim::Wait
 }
 
 #[cfg(test)]

@@ -20,7 +20,7 @@ pub(crate) use self::manage::{
     Arrival, Closes, Creating, Making, Managing, MenuAsk, create_failed, making, remove_failed, rename_failed,
     save_failed,
 };
-pub(crate) use self::runs::{Aim, Anchor, Runs, aim, consumed};
+pub(crate) use self::runs::{Aimed, Anchor, Runs, aim};
 pub(crate) use self::secrets::{
     Listed, NAME_HINT, NEW_SECRET, REMOVE_SECRET, SAVED_AT_ONCE, SECRET_VALUE, Secret, SecretEnter, SecretsSection,
     SecretsSeen, empty_words, listed_of, on_secret_enter, remove_secret_message, replaces, rereads, secret_list_args,
@@ -289,6 +289,10 @@ impl Chat {
 
     pub(crate) fn failed(&self) -> bool {
         matches!(self.read, Read::Failed(_))
+    }
+
+    pub(crate) fn settled(&self) -> bool {
+        self.read != Read::Asking
     }
 
     pub(crate) fn catch_up(&self) -> CatchUp {

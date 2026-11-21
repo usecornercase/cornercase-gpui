@@ -747,3 +747,12 @@ fn a_secret_saved_or_removed_redraws_the_list() {
     bots.take_app(&with(2, true));
     assert!(bots.revision() > counted);
 }
+
+#[test]
+fn a_chat_is_settled_once_its_history_is_read_or_failed() {
+    let mut chat = Chat::new("prs", 1);
+    assert!(!chat.settled());
+    chat.fail("no answer came".into());
+    assert!(chat.settled());
+    assert!(read_chat(Vec::new()).settled());
+}
