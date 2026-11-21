@@ -25,7 +25,6 @@ const NO_AGENT: &str = "No agent here can be a bot yet.";
 const CHOOSE_ACCESS: &str = "Choose its access.";
 const THROUGH: &str = "Through cornercase";
 const FULL_ACCESS: &str = "Full access";
-const THROUGH_NOTE: &str = "Through cornercase, it reads anything and writes only in its own folder.";
 const FULL_NOTE: &str = "Full access lets it change any file and run anything, unattended.";
 const ABOUT_HINT: &str = "what it is for (optional)";
 const OWN: &str = "the agent's own";
@@ -386,7 +385,7 @@ impl BotForm {
             .flex_col()
             .gap(px(6.))
             .child(div().flex().child(pair))
-            .child(ui::dim(THROUGH_NOTE))
+            .child(ui::dim(agent.through_note()))
             .child(full)
             .children(agent.full_only_line().map(ui::dim));
         ui::field("Access", column)
