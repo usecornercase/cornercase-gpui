@@ -22,6 +22,15 @@ impl Store {
         self.releases().lacks(Feature::BotSetup).is_none()
     }
 
+    pub(crate) fn chat_apps_row(&self) -> bots::Row {
+        bots::row(self.releases().lacks(Feature::BotChatApps), &bots::platforms(self.app.as_ref()), Os::CURRENT)
+    }
+
+    pub(crate) fn bot_reach(&self, id: &str) -> Option<bots::Reach> {
+        let bot = self.bots.find(id)?;
+        bots::reach(&bot.chat_apps, &bots::platforms(self.app.as_ref()))
+    }
+
     pub(crate) fn bots_revision(&self) -> u64 {
         self.bots.revision()
     }

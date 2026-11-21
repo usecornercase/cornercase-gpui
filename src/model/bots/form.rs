@@ -4,6 +4,7 @@ use anyhow::bail;
 use serde::Deserialize;
 use serde_json::Value;
 
+use super::chat_apps::known;
 use super::{Bot, set, text_or_empty};
 use crate::cli::{Has, flag};
 
@@ -101,6 +102,7 @@ pub(crate) struct Typed {
     pub account: Option<String>,
     pub access: Option<String>,
     pub about: String,
+    pub chat_apps: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,6 +135,9 @@ pub(crate) fn new_args(agent: &AgentInfo, typed: &Typed) -> Result<Vec<String>, 
         args.push(flag("account", account));
     }
     args.push(flag("access", access));
+    if let Some(chat) = typed.chat_apps.as_deref() {
+        args.push(flag("chat-apps", chat));
+    }
     if !typed.about.trim().is_empty() {
         args.push(flag("about", &typed.about));
     }
@@ -168,6 +173,7 @@ impl Editing {
             account: set(bot.account.as_ref()),
             access,
             about: String::new(),
+            chat_apps: known(&bot.chat_apps),
         };
         Self { id: bot.id.clone(), agent: bot.agent.clone(), before }
     }
@@ -191,6 +197,9 @@ impl Editing {
         }
         if let Some(access) = now.access.as_deref().filter(|a| Some(*a) != before.access.as_deref()) {
             changes.push(flag("access", access));
+        }
+        if let Some(chat) = now.chat_apps.as_deref().filter(|c| Some(*c) != before.chat_apps.as_deref()) {
+            changes.push(flag("chat-apps", chat));
         }
         (!changes.is_empty()).then(|| [edit_head(&self.id), changes].concat())
     }

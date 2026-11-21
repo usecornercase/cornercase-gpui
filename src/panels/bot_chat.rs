@@ -16,6 +16,7 @@ use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
 pub(crate) use self::words::answering;
 use self::words::{EMPTY_LINES, EXAMPLES, read_failed};
 use crate::model::bots::Give as Giving;
+use crate::model::bots::Reach;
 use crate::model::bots::{Bot, Chat, Read, reset_key, say_key};
 use crate::panels::queue;
 use crate::store::Store;
@@ -76,7 +77,7 @@ pub(crate) struct BotChat {
     blocks: Blocks,
     counting: Counting,
     mark: Option<Stamp>,
-    heard: (Option<String>, u64, Controls),
+    heard: (Option<String>, u64, Controls, Option<Reach>),
     retry: Option<Rc<Retry>>,
     givable: Rc<HashMap<u64, u64>>,
     giving: Giving,
@@ -153,7 +154,7 @@ impl BotChat {
             blocks: Rc::new(RefCell::new(HashMap::new())),
             counting: Counting::default(),
             mark: None,
-            heard: (None, 0, (false, false, false, false, false)),
+            heard: (None, 0, (false, false, false, false, false), None),
             retry: None,
             givable: Rc::default(),
             giving: Giving::No,
@@ -171,7 +172,8 @@ impl BotChat {
             let busy = (store.busy(&say_key(id)), store.busy(&reset_key(id)));
             (store.bots.stopping(id), busy.0, busy.1, store.chat_takes_keys(), store.bot_setup_offered())
         });
-        let now = (shown.map(str::to_string), store.bots_revision(), controls);
+        let reach = shown.and_then(|id| store.bot_reach(id));
+        let now = (shown.map(str::to_string), store.bots_revision(), controls, reach);
         (std::mem::replace(&mut self.heard, now.clone()) != now) || self.bot.is_some() && now.0.is_none()
     }
 
@@ -413,18 +415,20 @@ impl Render for BotChat {
         let stopping = store.bots.stopping(&bot.id);
         let starting = store.busy(&reset_key(&bot.id));
         let stops = store.chat_takes_keys();
+        let reach = store.bot_reach(&bot.id);
         let now = queue::now();
         if bot.thinking() {
             self.counting.drawn();
         }
         self.counting.keep(counting, cx);
         let body = self.body(&bot, &chat, cx);
-        div().size_full().flex().flex_col().child(header(&bot, starting, stops)).child(body).children(turn_row(
-            &bot,
-            &chat,
-            now,
-            (stopping, stops),
-        ))
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .child(header(&bot, starting, stops, reach.as_ref()))
+            .child(body)
+            .children(turn_row(&bot, &chat, now, (stopping, stops)))
     }
 }
 

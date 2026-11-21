@@ -95,6 +95,13 @@ fn a_tab_opens_its_page_with_nothing_marked() {
 }
 
 #[test]
+fn a_page_asked_by_name_opens_with_nothing_marked() {
+    let tab = FoundSetting::tab("Remote");
+    assert!(tab.is_tab());
+    assert_eq!(spot(&described(), &tab), Spot::default());
+}
+
+#[test]
 fn a_row_without_a_key_lands_on_the_first_of_its_section() {
     let d = described();
     let another = FoundSetting {

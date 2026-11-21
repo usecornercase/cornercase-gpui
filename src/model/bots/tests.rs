@@ -654,3 +654,28 @@ fn an_ask_that_comes_redraws_the_row() {
     bots.take_app(&json!({ "bots": [{ "id": "campus", "name": "campus", "asks": [{ "id": 3, "names": ["pw"] }] }] }));
     assert!(bots.revision() > before);
 }
+
+#[test]
+fn a_bots_chat_apps_option_is_read_from_the_app_line() {
+    let list = in_app(&app(fixture!("bots/app-chat-apps.json")));
+    let options: Vec<(&str, &str)> = list.iter().map(|bot| (bot.id.as_str(), bot.chat_apps.as_str())).collect();
+    assert_eq!(options, vec![("plain", "off"), ("loud", "always")]);
+}
+
+#[test]
+fn a_bot_without_chat_apps_or_with_another_type_stays_in_the_list() {
+    let found = in_app(&json!({"bots": [{"id": "prs", "name": "prs"}, {"id": "ops", "name": "ops", "chat_apps": 2}]}));
+    let options: Vec<&str> = found.iter().map(|bot| bot.chat_apps.as_str()).collect();
+    assert_eq!(options, vec!["", ""]);
+}
+
+#[test]
+fn a_change_of_only_chat_apps_redraws_nothing_of_the_list() {
+    let mut bots = Bots::new();
+    let with = |option: &str| json!({"bots": [{"id": "prs", "name": "prs", "chat_apps": option}]});
+    bots.take_app(&with("away"));
+    let revision = bots.revision();
+    bots.take_app(&with("always"));
+    assert_eq!(bots.revision(), revision);
+    assert_eq!(bots.find("prs").map(|bot| bot.chat_apps.as_str()), Some("always"));
+}
