@@ -663,3 +663,5 @@ The fixtures (2026-11-12): the files in `tests/fixtures/tunnels/` come from 0.13
 - **The tests** (C): `self-test` prints 145 tests; the bench's test 85 under `sh` and under dash, shellcheck clean; the rules taken out of copies are in the pull request's description.
 - **The tester's and the UI reviewer's passes** (T, U) are recorded in the pull request's description.
 - **Not checked:** `post yes:` with a real grant, a key posted through it, a press, a drag or a scroll (nobody had the grant); a window started from outside the folder with no `window.pid` (not found, by design); what the grant hangs on (its cause is not known); Linux and Windows, where the helper does not run.
+
+2026-11-21, **`period`** (#329), macOS 26 on Apple silicon, Swift 6.2.3: `key <pid> period cmd` reached a debug window as ⌘. on the layout in use, from the terminal, a chat's field, a sheet, under a dialog and with the Browser's page focused (`design/notifications.md`); `self-test` holds `period` on the US and Spanish ISO fixtures and in the key grammar.
