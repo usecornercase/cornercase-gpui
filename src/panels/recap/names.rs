@@ -13,7 +13,7 @@ pub(super) fn blocks(text: &str, places: &Places) -> Vec<Block> {
             Block::Heading(_, text) | Block::Paragraph(text) | Block::Item(_, _, text) | Block::Quote(text) => {
                 linked(text, places);
             }
-            Block::Code(code) => *code = named(code, places),
+            Block::Code(code) => code.retext(&named(code.text(), places)),
             Block::Table(rows) => rows.iter_mut().flatten().for_each(|cell| *cell = named(cell, places)),
             Block::Rule => {}
         }

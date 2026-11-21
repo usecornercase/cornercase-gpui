@@ -1,5 +1,6 @@
 mod fonts;
 
+pub(crate) mod code;
 pub(crate) mod colour;
 pub(crate) mod contrast;
 pub(crate) mod current;
@@ -169,6 +170,11 @@ pub(crate) fn ansi(index: u8) -> Hsla {
 
 pub(crate) fn palette_rgba(index: u8) -> Rgba {
     from_bytes(palette(index))
+}
+
+pub(crate) fn code_inks() -> code::Inks {
+    let panes = terminal_opacity();
+    current::read(|t| code::inks(t, panes))
 }
 
 pub(crate) fn terminal_opacity() -> f32 {

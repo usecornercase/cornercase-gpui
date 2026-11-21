@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use super::{Places, blocks, label};
 use crate::panels::recap::data::{Answer, Named, Place};
 use crate::test_util::fixture;
+use crate::ui::highlight::Kind;
 use crate::ui::markdown::{Block, Inline, Mark};
 
 fn places() -> Places {
@@ -126,7 +127,8 @@ fn an_id_in_inline_code_is_a_link_with_its_code_mark() {
 #[test]
 fn a_code_block_and_a_table_name_the_id_without_a_link() {
     let read = blocks("```\nsee [p1]\n```\n| [c1] | [p1] |\n|---|---|", &places());
-    assert_eq!(read[0], Block::Code("see #212".to_string()));
+    let Block::Code(code) = &read[0] else { panic!("{:?}", read[0]) };
+    assert_eq!(code.text(), "see #212");
     assert_eq!(read[1], Block::Table(vec![vec!["shop › main › claude".to_string(), "#212".to_string()]]));
 }
 
@@ -150,4 +152,13 @@ fn every_id_of_a_real_answer_is_named() {
     assert_eq!(shown(first, "p1"), "#212");
     let Block::Item(_, _, unknown) = &read[2] else { panic!("{:?}", read[2]) };
     assert!(unknown.text.starts_with("[c9]"), "{}", unknown.text);
+}
+
+#[test]
+fn a_renamed_code_blocks_spans_fit_its_new_text() {
+    let read = blocks("```rust\nlet a = \"[p1]\";\n```", &places());
+    let Block::Code(code) = &read[0] else { panic!("{:?}", read[0]) };
+    assert_eq!(code.text(), "let a = \"#212\";");
+    let string = code.spans().iter().find(|(_, kind)| *kind == Kind::String).expect("a string");
+    assert_eq!(&code.text()[string.0.clone()], "\"#212\"");
 }

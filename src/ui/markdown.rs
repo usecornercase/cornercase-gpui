@@ -1,8 +1,11 @@
+mod code;
 pub(crate) mod text;
 
 use std::iter::Peekable;
 use std::ops::Range;
 use std::str::Lines;
+
+pub(crate) use code::Code;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Mark {
@@ -26,14 +29,22 @@ pub(crate) enum Block {
     Paragraph(Inline),
     Item(usize, String, Inline),
     Quote(Inline),
-    Code(String),
+    Code(Code),
     Table(Vec<Vec<String>>),
     Rule,
 }
 
 pub(crate) fn parse(source: &str) -> Vec<Block> {
+    read(source, true)
+}
+
+pub(crate) fn outline(source: &str) -> Vec<Block> {
+    read(source, false)
+}
+
+fn read(source: &str, paint: bool) -> Vec<Block> {
     let source = strip_comments(&source.replace("\r\n", "\n"));
-    let mut parser = Parser { lines: source.lines().peekable(), blocks: Vec::new(), paragraph: Vec::new() };
+    let mut parser = Parser { lines: source.lines().peekable(), blocks: Vec::new(), paragraph: Vec::new(), paint };
     while let Some(line) = parser.lines.next() {
         parser.line(line);
     }
@@ -45,6 +56,7 @@ struct Parser<'a> {
     lines: Peekable<Lines<'a>>,
     blocks: Vec<Block>,
     paragraph: Vec<&'a str>,
+    paint: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -79,6 +91,7 @@ impl<'a> Parser<'a> {
 
     fn fenced(&mut self, trimmed: &str, indent: usize) -> bool {
         let Some(fence) = ["```", "~~~"].into_iter().find(|f| trimmed.starts_with(f)) else { return false };
+        let lang = code::language(trimmed.trim_start_matches(['`', '~']));
         let mut code = Vec::new();
         for next in self.lines.by_ref() {
             if next.trim_start().starts_with(fence) {
@@ -86,7 +99,9 @@ impl<'a> Parser<'a> {
             }
             code.push(next.get(indent.min(indent_of(next))..).unwrap_or(next));
         }
-        self.push(Block::Code(code.join("\n")))
+        let text = code.join("\n");
+        let code = if self.paint { Code::new(&lang, &text) } else { Code::plain(&text) };
+        self.push(Block::Code(code))
     }
 
     fn blank(&mut self, trimmed: &str) -> bool {
@@ -157,7 +172,7 @@ impl<'a> Parser<'a> {
         while code.last().is_some_and(|l| l.trim().is_empty()) {
             code.pop();
         }
-        self.blocks.push(Block::Code(code.join("\n")));
+        self.blocks.push(Block::Code(Code::plain(&code.join("\n"))));
         true
     }
 

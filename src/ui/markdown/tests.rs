@@ -1,4 +1,5 @@
 use super::*;
+use crate::ui::highlight::Kind;
 
 const SAMPLE: &str = "## Problem\n\nA plugin's popup (#435) runs\na program.\n\n- one\n  more\n- [x] done\n1. first\n\n> quoted\n> text\n\n```rust\nfn main() {}\n```\n---\n| a | b |\n|---|---|\n| 1 | 2 |\n<!-- hidden -->";
 
@@ -21,7 +22,9 @@ fn check_text_blocks(blocks: &[Block]) {
 
 fn check_other_blocks(blocks: &[Block]) {
     assert!(matches!(&blocks[5], Block::Quote(t) if t.text == "quoted text"));
-    assert_eq!(blocks[6], Block::Code("fn main() {}".into()));
+    let Block::Code(code) = &blocks[6] else { panic!("{:?}", blocks[6]) };
+    assert_eq!((code.lang(), code.text()), ("rust", "fn main() {}"));
+    assert_eq!(code_kinds(code)[..2], [("fn".to_string(), Kind::Keyword), ("main".to_string(), Kind::Function)]);
     assert_eq!(blocks[7], Block::Rule);
     assert_eq!(blocks[8], Block::Table(vec![vec!["a".into(), "b".into()], vec!["1".into(), "2".into()]]));
 }
@@ -92,4 +95,51 @@ fn a_changelog_section_reads_as_items_with_their_marks() {
     let at = |s: &str| first.text.find(s).map(|i| i..i + s.len()).expect("in the text");
     assert!(first.marks.contains(&(at("Each update says what it updates."), Mark::Bold)));
     assert!(first.marks.contains(&(at("↑ cornercase 0.13.19"), Mark::Code)));
+}
+
+fn code_kinds(code: &Code) -> Vec<(String, Kind)> {
+    code.spans().iter().map(|(range, kind)| (code.text()[range.clone()].to_string(), *kind)).collect()
+}
+
+fn only_code(source: &str) -> Code {
+    let blocks = parse(source);
+    let [Block::Code(code)] = blocks.as_slice() else { panic!("{blocks:?}") };
+    code.clone()
+}
+
+#[test]
+fn a_block_with_no_language_or_an_unknown_one_stays_plain() {
+    for source in ["```\nfn a() {}\n```", "```nope\nfn a() {}\n```", "    fn a() {}"] {
+        let code = only_code(source);
+        assert_eq!(code.text(), "fn a() {}", "{source}");
+        assert!(code.spans().is_empty(), "{source}");
+    }
+}
+
+#[test]
+fn an_unclosed_fence_takes_the_rest_and_is_coloured() {
+    let code = only_code("```rust\nfn a() {}\n\nlet b = 1;");
+    assert_eq!(code.text(), "fn a() {}\n\nlet b = 1;");
+    let kinds = code_kinds(&code);
+    assert!(kinds.contains(&("fn".to_string(), Kind::Keyword)));
+    assert!(kinds.contains(&("let".to_string(), Kind::Keyword)));
+}
+
+#[test]
+fn a_longer_fence_and_tildes_name_a_language() {
+    assert_eq!(only_code("````ts\nconst a = 1;\n````").lang(), "ts");
+    let tildes = only_code("~~~ sh\necho hi\n~~~");
+    assert_eq!(tildes.lang(), "sh");
+    assert!(code_kinds(&tildes).contains(&("echo".to_string(), Kind::Function)));
+}
+
+#[test]
+fn outline_reads_the_same_blocks_without_spans() {
+    let painted = parse(SAMPLE);
+    let outlined = outline(SAMPLE);
+    assert_eq!(painted.len(), outlined.len());
+    let Block::Code(code) = &outlined[6] else { panic!("{:?}", outlined[6]) };
+    assert_eq!(code.text(), "fn main() {}");
+    assert_eq!(code.spans(), []);
+    assert_eq!(painted[..6], outlined[..6]);
 }

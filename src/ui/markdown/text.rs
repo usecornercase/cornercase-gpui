@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::rc::Rc;
 
 use gpui::{
@@ -6,11 +7,13 @@ use gpui::{
     prelude::FluentBuilder as _, px,
 };
 
-use super::{Block, Inline, Mark};
+use super::{Block, Code, Inline, Mark};
 use crate::model::link::is_web;
 use crate::store::{Store, ToastKind};
-use crate::theme::FONT_FAMILY;
+use crate::theme::code::Inks;
+use crate::theme::{self, FONT_FAMILY};
 use crate::theme::{colours, radius};
+use crate::ui::highlight::Span;
 
 pub(crate) type OnLink = Rc<dyn Fn(&str, &mut App)>;
 
@@ -36,7 +39,7 @@ pub(crate) fn linked_blocks(id: &str, blocks: &[Block], on_link: &OnLink) -> Vec
 }
 
 pub(crate) fn raw(source: &str) -> AnyElement {
-    code_box(source)
+    code_box(&Code::plain(source))
 }
 
 pub(crate) fn block(id: SharedString, block: &Block) -> AnyElement {
@@ -59,7 +62,7 @@ pub(crate) fn linked_block(id: SharedString, block: &Block, on_link: &OnLink) ->
             .text_color(colours::muted())
             .child(inline((id, 0), text, on_link))
             .into_any_element(),
-        Block::Code(text) => code_box(text),
+        Block::Code(code) => code_box(code),
         Block::Table(rows) => table(rows),
         Block::Rule => div().h(px(1.)).my(px(4.)).bg(colours::border()).into_any_element(),
     }
@@ -99,7 +102,7 @@ fn item(depth: usize, marker: &str, text: AnyElement) -> AnyElement {
         .into_any_element()
 }
 
-fn code_box(text: &str) -> AnyElement {
+fn code_box(code: &Code) -> AnyElement {
     div()
         .px(px(12.))
         .py(px(10.))
@@ -111,13 +114,34 @@ fn code_box(text: &str) -> AnyElement {
         .text_size(px(12.))
         .text_color(colours::text())
         .overflow_hidden()
-        .children(code_text(text))
+        .children(code.shown().map(|shown| code_lines(shown, code.spans())))
         .into_any_element()
 }
 
-fn code_text(text: &str) -> Option<String> {
-    let lines: Vec<String> = text.lines().map(|line| line.replace('\t', "    ")).collect();
-    (!lines.is_empty()).then(|| lines.join("\n"))
+fn code_lines(shown: String, spans: &[Span]) -> AnyElement {
+    if spans.is_empty() {
+        return shown.into_any_element();
+    }
+    StyledText::new(shown).with_highlights(styles(spans, &theme::code_inks())).into_any_element()
+}
+
+pub(super) fn styles(spans: &[Span], inks: &Inks) -> Vec<(Range<usize>, HighlightStyle)> {
+    spans
+        .iter()
+        .map(|(range, kind)| {
+            let style = match kind.ansi() {
+                Some(index) => {
+                    HighlightStyle { color: Some(inks.ansi[usize::from(index)].into()), ..Default::default() }
+                }
+                None => HighlightStyle {
+                    color: Some(inks.comment.into()),
+                    font_style: Some(FontStyle::Italic),
+                    ..Default::default()
+                },
+            };
+            (range.clone(), style)
+        })
+        .collect()
 }
 
 fn table(rows: &[Vec<String>]) -> AnyElement {

@@ -1,16 +1,14 @@
 use super::*;
+use crate::theme::code::inks;
+use crate::theme::current::fallback;
+use crate::ui::highlight::Kind;
 
 #[test]
-fn a_code_block_is_one_text_that_keeps_blank_lines() {
-    assert_eq!(code_text("fn main() {\n\n\tlet a = 1;\n}\n").as_deref(), Some("fn main() {\n\n    let a = 1;\n}"));
-}
-
-#[test]
-fn a_blank_code_block_keeps_its_one_line() {
-    assert_eq!(code_text("\n").as_deref(), Some(""));
-}
-
-#[test]
-fn an_empty_code_block_has_no_line() {
-    assert_eq!(code_text(""), None);
+fn each_kind_takes_its_ink() {
+    let inks = inks(&fallback(), 1.);
+    let styled = styles(&[(0..2, Kind::Keyword), (3..9, Kind::Comment), (10..12, Kind::Removed)], &inks);
+    assert_eq!(styled[0], (0..2, HighlightStyle { color: Some(inks.ansi[5].into()), ..Default::default() }));
+    assert_eq!(styled[1].1.color, Some(inks.comment.into()));
+    assert_eq!(styled[1].1.font_style, Some(FontStyle::Italic));
+    assert_eq!(styled[2].1.color, Some(inks.ansi[1].into()));
 }

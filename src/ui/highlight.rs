@@ -1,13 +1,16 @@
+mod toml;
+
 use std::ops::Range;
 use std::path::Path;
 use std::sync::OnceLock;
 
 use syntect::parsing::{ParseState, Scope, ScopeStack, ScopeStackOp, SyntaxReference, SyntaxSet};
 
-pub(super) const MAX_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_BLOCK_BYTES: usize = 8 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Kind {
+pub(crate) enum Kind {
     Keyword,
     Function,
     Type,
@@ -15,9 +18,30 @@ pub(super) enum Kind {
     Number,
     Comment,
     Tag,
+    Added,
+    Removed,
 }
 
-pub(super) type Span = (Range<usize>, Kind);
+impl Kind {
+    pub(crate) fn ansi(self) -> Option<u8> {
+        match self {
+            Kind::Keyword => Some(5),
+            Kind::Function => Some(4),
+            Kind::Type => Some(6),
+            Kind::String | Kind::Added => Some(2),
+            Kind::Number => Some(3),
+            Kind::Tag | Kind::Removed => Some(1),
+            Kind::Comment => None,
+        }
+    }
+}
+
+pub(crate) type Span = (Range<usize>, Kind);
+
+enum Grammar {
+    Syntect(&'static SyntaxReference),
+    Toml,
+}
 
 fn syntaxes() -> &'static SyntaxSet {
     static SET: OnceLock<SyntaxSet> = OnceLock::new();
@@ -40,7 +64,6 @@ fn rules() -> &'static [(Scope, Kind)] {
             ("entity.name.function", Kind::Function),
             ("support.function", Kind::Function),
             ("variable.function", Kind::Function),
-            ("meta.function-call", Kind::Function),
             ("markup.heading", Kind::Function),
             ("entity.name.type", Kind::Type),
             ("entity.name.class", Kind::Type),
@@ -57,6 +80,10 @@ fn rules() -> &'static [(Scope, Kind)] {
             ("meta.mapping.key", Kind::Tag),
             ("variable.other.member", Kind::Tag),
             ("variable.other.property", Kind::Tag),
+            ("markup.inserted", Kind::Added),
+            ("markup.deleted", Kind::Removed),
+            ("meta.diff.range", Kind::Function),
+            ("meta.diff.header", Kind::Keyword),
             ("keyword", Kind::Keyword),
             ("storage", Kind::Keyword),
         ];
@@ -72,27 +99,51 @@ fn kind(stack: &ScopeStack) -> Option<Kind> {
         .find_map(|scope| rules().iter().find(|(prefix, _)| prefix.is_prefix_of(*scope)).map(|(_, k)| *k))
 }
 
-fn syntax_for(path: &Path, first_line: &str) -> Option<&'static SyntaxReference> {
+fn relative(word: &str) -> &str {
+    match word {
+        "ts" | "tsx" | "mts" | "cts" | "jsx" | "mjs" | "cjs" | "typescript" | "javascript" | "node" => "js",
+        "bash" | "zsh" | "fish" | "shell" | "console" | "shellsession" | "env" => "sh",
+        "jsonc" | "json5" => "json",
+        "kotlin" | "kt" | "kts" | "swift" => "java",
+        "vue" | "svelte" => "html",
+        "golang" => "go",
+        "csharp" => "cs",
+        "python3" => "py",
+        other => other,
+    }
+}
+
+fn not_plain(syntax: &'static SyntaxReference) -> Option<Grammar> {
+    (syntax.name != "Plain Text").then_some(Grammar::Syntect(syntax))
+}
+
+fn grammar_for(path: &Path, first_line: &str) -> Option<Grammar> {
     let set = syntaxes();
     let name = path.file_name()?.to_str()?;
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-    let ext = match ext {
-        "ts" | "tsx" | "mts" | "cts" | "jsx" | "mjs" | "cjs" => "js",
-        "toml" | "ini" | "cfg" | "conf" => "ini",
-        "zsh" | "fish" | "env" => "sh",
-        "jsonc" | "json5" => "json",
-        "kt" | "kts" | "swift" => "java",
-        "vue" | "svelte" => "html",
-        other => other,
-    };
+    if ext == "toml" || name == "Cargo.lock" {
+        return Some(Grammar::Toml);
+    }
     set.find_syntax_by_extension(name)
-        .or_else(|| set.find_syntax_by_extension(ext))
+        .or_else(|| set.find_syntax_by_extension(relative(ext)))
         .or_else(|| set.find_syntax_by_first_line(first_line))
-        .filter(|s| s.name != "Plain Text")
+        .and_then(not_plain)
 }
 
-pub(super) fn language(path: &Path, first_line: &str) -> Option<&'static str> {
-    syntax_for(path, first_line).map(|s| s.name.as_str())
+fn grammar_named(lang: &str) -> Option<Grammar> {
+    let lang = lang.to_lowercase();
+    match lang.as_str() {
+        "" => None,
+        "toml" => Some(Grammar::Toml),
+        other => syntaxes().find_syntax_by_token(relative(other)).and_then(not_plain),
+    }
+}
+
+pub(crate) fn language(path: &Path, first_line: &str) -> Option<&'static str> {
+    grammar_for(path, first_line).map(|grammar| match grammar {
+        Grammar::Syntect(syntax) => syntax.name.as_str(),
+        Grammar::Toml => "TOML",
+    })
 }
 
 fn push_span(spans: &mut Vec<Span>, range: Range<usize>, stack: &ScopeStack, len: usize) {
@@ -121,12 +172,7 @@ fn line_spans(ops: Vec<(usize, ScopeStackOp)>, stack: &mut ScopeStack, len: usiz
     spans
 }
 
-pub(super) fn highlight(path: &Path, lines: &[String]) -> Option<Vec<Vec<Span>>> {
-    let bytes: usize = lines.iter().map(|l| l.len() + 1).sum();
-    if bytes > MAX_BYTES {
-        return None;
-    }
-    let syntax = syntax_for(path, lines.first().map_or("", String::as_str))?;
+fn parsed(syntax: &SyntaxReference, lines: &[&str]) -> Vec<Vec<Span>> {
     let set = syntaxes();
     let mut state = ParseState::new(syntax);
     let mut stack = ScopeStack::new();
@@ -138,12 +184,43 @@ pub(super) fn highlight(path: &Path, lines: &[String]) -> Option<Vec<Vec<Span>>>
         buf.push('\n');
         let Ok(ops) = state.parse_line(&buf, set) else {
             out.resize(lines.len(), Vec::new());
-            return Some(out);
+            return out;
         };
-        let spans = line_spans(ops, &mut stack, line.len());
-        out.push(spans);
+        out.push(line_spans(ops, &mut stack, line.len()));
     }
-    Some(out)
+    out
+}
+
+fn painted(grammar: &Grammar, lines: &[&str]) -> Vec<Vec<Span>> {
+    match grammar {
+        Grammar::Syntect(syntax) => parsed(syntax, lines),
+        Grammar::Toml => toml::spans(lines),
+    }
+}
+
+pub(crate) fn highlight(path: &Path, lines: &[String]) -> Option<Vec<Vec<Span>>> {
+    let bytes: usize = lines.iter().map(|l| l.len() + 1).sum();
+    if bytes > MAX_BYTES {
+        return None;
+    }
+    let grammar = grammar_for(path, lines.first().map_or("", String::as_str))?;
+    let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+    Some(painted(&grammar, &lines))
+}
+
+pub(crate) fn fenced(lang: &str, text: &str) -> Vec<Span> {
+    if text.len() > MAX_BLOCK_BYTES {
+        return Vec::new();
+    }
+    let Some(grammar) = grammar_named(lang) else { return Vec::new() };
+    let lines: Vec<&str> = text.split('\n').collect();
+    let mut start = 0;
+    let mut out = Vec::new();
+    for (line, spans) in lines.iter().zip(painted(&grammar, &lines)) {
+        out.extend(spans.into_iter().map(|(range, kind)| (range.start + start..range.end + start, kind)));
+        start += line.len() + 1;
+    }
+    out
 }
 
 #[cfg(test)]

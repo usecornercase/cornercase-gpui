@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.124
+
+- **Code is coloured by its language.** A code block in a bot's answer, a Recap, an issue, a Queue run's messages and the update notes is now coloured as code, when its fence names a language (` ```rust `, ` ```sh `, ` ```json `, ` ```toml `, ` ```ts `, ` ```python `, ` ```diff `, ` ```yaml ` and many more), in your theme's colours, light or dark. A block with no language, or one the window does not know, stays as it was.
+- **The Files panel colours TOML files and diffs too**, and in a shell script a command's arguments no longer take the colour of its name.
+
 ## 0.1.122
 
 - **Closing a dialog while it starts something on a linked machine keeps you where you are.** This holds for a new workspace, an agent on an issue, a flow and a login tab. The window used to jump to the new tab once the machine listed it, even in the middle of what you were typing elsewhere. Now the toast says what started and the new tab's row shows in the sidebar.
