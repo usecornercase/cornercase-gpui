@@ -262,7 +262,7 @@ Part 1 of #346: a bot that lacks a password runs `cornercase bot secret ask NAME
 
 **What is never written**: no value goes in an argument, a toast, a log line, a draft, `layout.json`, a `Debug` print or a busy label. The JSON lives from Save to the job's start and nothing keeps it; an error names the command and cornercase's words, never standard input (`cli::answered`).
 
-**Out of this part**: a linked machine's bots (part 2b-iv of #266: nothing is read or told for them), drawing an ask's `routine` (#267), Settings' token field (its paste is unchanged).
+**Out of this part**: answering a linked machine's bot (part 2b-iv of #266 shows its ask, and says to give it on that machine: see "A linked machine's bots"), drawing an ask's `routine` (#267), Settings' token field (its paste is unchanged).
 
 **What rests on reading** (no test makes a gpui entity): `take_bots` → `asks_moved` (closing the dialog, dropping ended toasts, `bot_ask` or `to_tell`) and `answers_counted`'s arrivals; `Store::go`'s `BotAsk` arm → `go_to_ask`; `Root::take_bot_ask` building `Here` from the window and the chat's field; `answer_ask` → `show_at_top`, `names_bot`, `names_ask`; the dialog observing `Store` and replacing its fields; Save emptying the fields before `give_secrets`; `insert_pasted` calling the hook; Give…'s press.
 
