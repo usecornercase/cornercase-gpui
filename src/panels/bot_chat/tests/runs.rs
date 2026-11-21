@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use serde_json::{Value, json};
 
-use super::super::entries::{Block, Entry, EntryKey, Give, asked, entries, folded, held, keys, retry, spliced, turn};
+use super::super::entries::{
+    Block, Entry, EntryKey, Give, arrived, asked, entries, folded, held, keys, retry, spliced, turn,
+};
 use super::super::runs::NO_TITLE;
 use super::super::words::{EXAMPLES, empty_lines, examples_shown, row_detail};
 use super::super::{NAME_ROOM, routines_fit};
@@ -227,4 +229,17 @@ fn a_line_of_an_unknown_kind_in_a_run_stays_in_its_block_as_plain_text() {
     let read = entries(&lines);
     assert_eq!(blocks(&read)[0].others, ["Approval required"]);
     assert_eq!(read.len(), 1);
+}
+
+#[test]
+fn a_line_joining_the_last_block_is_news_and_one_joining_an_earlier_block_is_not() {
+    let runs = Runs::default();
+    let header = line(1, "notice", "↻ PRs · 09:00", Some(5));
+    let old = keys_with(std::slice::from_ref(&header), &runs);
+    let answered = keys_with(&[header.clone(), line(2, "bot", "done", Some(5))], &runs);
+    assert!(arrived(&old, &answered));
+    let chat = line(3, "you", "hi", None);
+    let before = keys_with(&[header.clone(), chat.clone()], &runs);
+    let after = keys_with(&[header, chat, line(4, "bot", "done", Some(5))], &runs);
+    assert!(!arrived(&before, &after));
 }

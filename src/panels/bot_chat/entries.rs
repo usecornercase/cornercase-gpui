@@ -342,7 +342,7 @@ pub(crate) fn keys(
 }
 
 pub(crate) fn arrived(old: &[EntryKey], new: &[EntryKey]) -> bool {
-    old.last().map(|key| key.last) != new.last().map(|key| key.last)
+    old.last().map(|key| key.tail) != new.last().map(|key| key.tail)
 }
 
 impl EntryKey {
