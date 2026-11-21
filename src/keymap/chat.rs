@@ -47,6 +47,7 @@ pub(crate) fn in_chat(command: Command) -> InChat {
         | Command::ZoomOut
         | Command::ZoomReset
         | Command::Shortcuts
+        | Command::TakeToast
         | Command::Back
         | Command::Forward
         | Command::Reload

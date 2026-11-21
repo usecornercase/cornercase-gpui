@@ -1,9 +1,9 @@
 use gpui::{Decorations, Tiling, WindowControls};
 
-use super::{GAP, room, top};
+use super::{BOTTOM, CLEAR, GAP, LEAST_ROOM, room, top};
 use crate::app::frame::Frame;
 use crate::app::placement;
-use crate::ui::stack::{Fitting, fitting, most};
+use crate::ui::stack::{Fitting, fitting, most, standing};
 
 const LINE: f32 = 22.;
 
@@ -30,5 +30,14 @@ fn at_the_least_window_a_toast_taller_than_the_room_shows_whole_with_the_more_li
 fn the_stack_starts_below_the_title_row_on_every_platform() {
     for frame in frames() {
         assert!(top(frame) >= crate::app::TITLEBAR_HEIGHT + GAP);
+    }
+}
+
+#[test]
+fn at_the_least_window_a_chats_field_leaves_room_for_a_toast_at_the_top() {
+    for frame in frames() {
+        let column = (top(frame), placement::LEAST.1 - BOTTOM);
+        let stands = standing(column, Some((280., 300.)), CLEAR, LEAST_ROOM);
+        assert!(stands.from_top && stands.bottom - stands.top >= LEAST_ROOM);
     }
 }

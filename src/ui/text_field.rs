@@ -14,6 +14,7 @@ use self::enter::{Enter, passes_arrows, submits};
 use self::rows::{clamp_scroll, pasted, previous_grapheme};
 use self::secure::Secure;
 use self::shown::Shown;
+pub(crate) use self::typing::typing_at;
 use crate::desktop;
 use crate::platform::Os;
 
@@ -23,6 +24,7 @@ mod handler;
 mod rows;
 mod secure;
 mod shown;
+mod typing;
 
 actions!(
     text_field,

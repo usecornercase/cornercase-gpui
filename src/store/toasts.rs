@@ -8,6 +8,7 @@ pub(crate) const COPY_COMMAND: &str = "Copy command";
 
 const KEPT: usize = 5;
 const PAST_END: Duration = Duration::from_millis(100);
+const MEANT: Duration = Duration::from_millis(300);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Shown {
@@ -19,6 +20,10 @@ pub(crate) struct Shown {
 impl Shown {
     pub(crate) fn so_far(self, now: Instant) -> Duration {
         self.banked + self.since.map_or(Duration::ZERO, |since| now.saturating_duration_since(since))
+    }
+
+    pub(crate) fn drawn(self) -> bool {
+        self.since.is_some()
     }
 
     pub(crate) fn ever(self) -> bool {
@@ -128,6 +133,10 @@ pub(crate) fn shows_bot(toast: &Toast, id: &str) -> bool {
     matches!(&toast.action, Some((_, ToastGo::Bot(bot, _))) if bot == id)
 }
 
+pub(crate) fn newest_meant(toasts: &[Toast], now: Instant) -> Option<u64> {
+    toasts.iter().rev().find(|t| t.shown.drawn() && !t.expired_at(now) && t.shown.so_far(now) >= MEANT).map(|t| t.id)
+}
+
 pub(crate) fn push_toast(toasts: &mut Vec<Toast>, mut toast: Toast) {
     if let Some(at) = toasts.iter().position(|t| t.repeats(&toast)) {
         toast.count += toasts.remove(at).count;
@@ -165,6 +174,12 @@ impl Store {
         let shown = Shown::default();
         push_toast(&mut self.toasts, Toast { id, text: text.into(), kind, action, shown, count: 1 });
         cx.notify();
+    }
+
+    pub(crate) fn take_newest_toast(&mut self, cx: &mut Context<Self>) {
+        if let Some(id) = newest_meant(&self.toasts, Instant::now()) {
+            self.dismiss_toast(id, cx);
+        }
     }
 
     pub(crate) fn toasts_drawn(&mut self, ids: &[u64], cx: &mut Context<Self>) {
