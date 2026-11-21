@@ -7,7 +7,8 @@ use super::super::{Busy, Store, ToastKind};
 use super::talk::{Call, Then};
 use crate::cli::{self, Feature};
 use crate::model::bots::{
-    Arrival, Creating, Making, create_failed, id_of, making, remove_failed, rename_args, rename_failed, save_failed,
+    Arrival, Closes, Creating, Making, create_failed, id_of, making, remove_failed, rename_args, rename_failed,
+    save_failed,
 };
 use crate::model::place::awaits;
 use crate::platform::Os;
@@ -139,14 +140,20 @@ impl Store {
     }
 
     pub(super) fn close_dialog_if_gone(&mut self, listed: &[String], cx: &mut Context<Self>) {
-        if self.bots.manage.named_gone(listed, self.shown_dialog()) {
-            self.close_dialog(cx);
-        }
+        let closes = self.bots.manage.gone_closes(listed, self.shown_dialog(), self.behind_dialog());
+        self.close_named(closes, cx);
     }
 
     pub(super) fn close_dialog_naming(&mut self, gone: &str, cx: &mut Context<Self>) {
-        if self.bots.manage.closes_dialog(gone, self.shown_dialog()) {
-            self.close_dialog(cx);
+        let closes = self.bots.manage.closes_dialog(gone, self.shown_dialog(), self.behind_dialog());
+        self.close_named(closes, cx);
+    }
+
+    fn close_named(&mut self, closes: Closes, cx: &mut Context<Self>) {
+        match closes {
+            Closes::Nothing => {}
+            Closes::Shown => self.close_dialog(cx),
+            Closes::Both => self.close_dialog_and_behind(cx),
         }
     }
 }

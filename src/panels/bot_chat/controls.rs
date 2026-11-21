@@ -6,7 +6,7 @@ use gpui::{
 use super::entries::{self, Control, new_conversation_control, stop_control};
 use super::words::{
     NEW_CONVERSATION, STARTING, STOP, STOPPING, answering, menu_tip, new_conversation_message, new_conversation_title,
-    turn_label,
+    secrets_label, turn_label,
 };
 use crate::dialogs::{self, Question};
 use crate::model::bots::{Bot, Chat};
@@ -39,12 +39,28 @@ pub(super) fn header(bot: &Bot, starting: bool, stops: bool, reach: Option<&Reac
                 .text_color(colours::text())
                 .child(ui::one_line(bot.name.clone())),
         )
-        .child(
-            div().flex_1().min_w_0().text_size(px(11.5)).text_color(colours::faint()).child(ui::one_line(bot.facts())),
-        )
+        .child(facts(bot))
         .children(reach.map(reach_icon))
         .child(new_conversation(bot, starting, stops))
         .child(menu_button(bot, stops))
+}
+
+fn facts(bot: &Bot) -> impl IntoElement + use<> {
+    let facts = bot.facts();
+    let secrets = secrets_label(bot.secrets, bot.secrets_unreadable).map(|(words, unreadable)| {
+        let colour = if unreadable { colours::failed() } else { colours::faint() };
+        let words = if facts.is_empty() { words } else { format!("· {words}") };
+        div().flex_none().text_color(colour).child(words)
+    });
+    div()
+        .flex_1()
+        .min_w_0()
+        .flex()
+        .gap(px(4.))
+        .text_size(px(11.5))
+        .text_color(colours::faint())
+        .child(div().min_w_0().child(ui::one_line(facts)))
+        .children(secrets)
 }
 
 fn reach_icon(reach: &Reach) -> impl IntoElement + use<> {

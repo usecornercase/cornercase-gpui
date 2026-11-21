@@ -679,3 +679,26 @@ fn a_change_of_only_chat_apps_redraws_nothing_of_the_list() {
     assert_eq!(bots.revision(), revision);
     assert_eq!(bots.find("prs").map(|bot| bot.chat_apps.as_str()), Some("always"));
 }
+
+#[test]
+fn a_bots_secrets_are_counted_from_the_app_line_and_a_wrong_count_keeps_the_bot() {
+    let list = in_app(&app(fixture!("bots/app-secrets.json")));
+    let found: Vec<(&str, usize, bool)> =
+        list.iter().map(|bot| (bot.id.as_str(), bot.secrets, bot.secrets_unreadable)).collect();
+    assert_eq!(found, [("campus", 2, false), ("plain", 0, false), ("broken", 0, true), ("odd", 0, false)]);
+}
+
+#[test]
+fn a_secret_saved_or_removed_redraws_the_list() {
+    let mut bots = Bots::new();
+    let with = |secrets: usize, unreadable: bool| json!({"bots": [{"id": "campus", "name": "campus", "secrets": secrets, "secrets_unreadable": unreadable}]});
+    bots.take_app(&with(1, false));
+    let before = bots.revision();
+    bots.take_app(&with(1, false));
+    assert_eq!(bots.revision(), before);
+    bots.take_app(&with(2, false));
+    let counted = bots.revision();
+    assert!(counted > before);
+    bots.take_app(&with(2, true));
+    assert!(bots.revision() > counted);
+}

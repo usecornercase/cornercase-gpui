@@ -107,22 +107,22 @@ fn a_removal_asked_here_is_forgotten_once_the_list_drops_the_bot() {
 fn a_dialog_that_names_a_removed_bot_closes() {
     let mut manage = Managing::default();
     manage.name_dialog("prs", 7);
-    assert!(manage.closes_dialog("prs", Some(7)));
+    assert_eq!(manage.closes_dialog("prs", Some(7), None), Closes::Shown);
 }
 
 #[test]
 fn another_dialog_stays_when_a_named_bot_is_removed() {
     let mut manage = Managing::default();
     manage.name_dialog("prs", 7);
-    assert!(!manage.closes_dialog("prs", Some(8)));
-    assert!(!manage.closes_dialog("prs", None));
+    assert_eq!(manage.closes_dialog("prs", Some(8), None), Closes::Nothing);
+    assert_eq!(manage.closes_dialog("prs", None, None), Closes::Nothing);
 }
 
 #[test]
 fn a_dialog_that_names_another_bot_stays() {
     let mut manage = Managing::default();
     manage.name_dialog("prs", 7);
-    assert!(!manage.closes_dialog("ops", Some(7)));
+    assert_eq!(manage.closes_dialog("ops", Some(7), None), Closes::Nothing);
 }
 
 #[test]
@@ -162,9 +162,30 @@ fn a_reply_from_another_server_run_drops_the_wait_for_the_new_bot() {
 fn a_dialog_naming_a_bot_the_list_dropped_closes() {
     let mut manage = Managing::default();
     manage.name_dialog("prs", 7);
-    assert!(manage.named_gone(&["ops".to_string()], Some(7)));
-    assert!(!manage.named_gone(&["prs".to_string()], Some(7)));
-    assert!(!manage.named_gone(&[], Some(8)));
+    assert_eq!(manage.gone_closes(&["ops".to_string()], Some(7), None), Closes::Shown);
+    assert_eq!(manage.gone_closes(&["prs".to_string()], Some(7), None), Closes::Nothing);
+    assert_eq!(manage.gone_closes(&[], Some(8), None), Closes::Nothing);
+}
+
+#[test]
+fn a_form_behind_its_own_dialog_closes_with_it_when_its_bot_is_gone() {
+    let mut manage = Managing::default();
+    manage.name_dialog("prs", 7);
+    assert_eq!(manage.gone_closes(&[], Some(9), Some(7)), Closes::Both);
+    assert_eq!(manage.gone_closes(&["prs".to_string()], Some(9), Some(7)), Closes::Nothing);
+    assert_eq!(manage.gone_closes(&[], Some(9), Some(8)), Closes::Nothing);
+    assert_eq!(manage.closes_dialog("prs", Some(9), Some(7)), Closes::Both);
+    assert_eq!(manage.closes_dialog("ops", Some(9), Some(7)), Closes::Nothing);
+    assert_eq!(manage.closes_dialog("prs", Some(9), Some(8)), Closes::Nothing);
+}
+
+#[test]
+fn each_secret_saved_here_raises_the_count_the_form_follows() {
+    let mut manage = Managing::default();
+    assert_eq!(manage.secrets_saved(), 0);
+    manage.secret_saved();
+    manage.secret_saved();
+    assert_eq!(manage.secrets_saved(), 2);
 }
 
 #[test]

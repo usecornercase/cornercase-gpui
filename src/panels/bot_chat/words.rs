@@ -24,6 +24,13 @@ pub(crate) fn turn_label(turn: Turn, now: i64) -> String {
     parts.into_iter().flatten().collect::<Vec<_>>().join(" · ")
 }
 
+pub(crate) fn secrets_label(count: usize, unreadable: bool) -> Option<(String, bool)> {
+    if unreadable {
+        return Some(("secrets cannot be read".to_string(), true));
+    }
+    (count > 0).then(|| (plural(count, "secret"), false))
+}
+
 pub(crate) fn folded_label(hidden: usize) -> String {
     format!("+{}", plural(hidden, "step"))
 }

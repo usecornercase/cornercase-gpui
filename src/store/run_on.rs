@@ -96,6 +96,15 @@ impl Store {
         self.dialog.as_ref().map(|dialog| dialog.entity_id().as_u64())
     }
 
+    pub(super) fn behind_dialog(&self) -> Option<u64> {
+        self.dialog_behind.as_ref().map(|(dialog, _)| dialog.entity_id().as_u64())
+    }
+
+    pub(super) fn close_dialog_and_behind(&mut self, cx: &mut Context<Self>) {
+        self.dialog_behind = None;
+        self.close_dialog(cx);
+    }
+
     pub(crate) fn shown_dialog_starts(&self) -> bool {
         self.shown_dialog().is_some_and(|dialog| self.dialog_starts(dialog))
     }

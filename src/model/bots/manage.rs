@@ -73,6 +73,14 @@ pub(crate) struct Managing {
     removing: HashSet<String>,
     named: Option<(String, u64)>,
     refused: Option<(u64, String)>,
+    secrets_saved: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Closes {
+    Nothing,
+    Shown,
+    Both,
 }
 
 impl Managing {
@@ -96,8 +104,19 @@ impl Managing {
         self.made = None;
     }
 
-    pub(crate) fn named_gone(&self, listed: &[String], shown: Option<u64>) -> bool {
-        self.named.as_ref().is_some_and(|(bot, dialog)| !listed.contains(bot) && Some(*dialog) == shown)
+    fn closes(&self, gone: impl Fn(&str) -> bool, shown: Option<u64>, behind: Option<u64>) -> Closes {
+        let Some((_, dialog)) = self.named.as_ref().filter(|(bot, _)| gone(bot)) else { return Closes::Nothing };
+        if Some(*dialog) == shown {
+            Closes::Shown
+        } else if Some(*dialog) == behind {
+            Closes::Both
+        } else {
+            Closes::Nothing
+        }
+    }
+
+    pub(crate) fn gone_closes(&self, listed: &[String], shown: Option<u64>, behind: Option<u64>) -> Closes {
+        self.closes(|bot| !listed.iter().any(|id| id == bot), shown, behind)
     }
 
     pub(crate) fn keep_listed(&mut self, listed: &[String]) {
@@ -108,8 +127,16 @@ impl Managing {
         self.named = Some((bot.to_string(), dialog));
     }
 
-    pub(crate) fn closes_dialog(&self, gone: &str, shown: Option<u64>) -> bool {
-        self.named.as_ref().is_some_and(|(bot, dialog)| bot == gone && Some(*dialog) == shown)
+    pub(crate) fn closes_dialog(&self, gone: &str, shown: Option<u64>, behind: Option<u64>) -> Closes {
+        self.closes(|bot| bot == gone, shown, behind)
+    }
+
+    pub(crate) fn secret_saved(&mut self) {
+        self.secrets_saved += 1;
+    }
+
+    pub(crate) fn secrets_saved(&self) -> u64 {
+        self.secrets_saved
     }
 
     pub(crate) fn refuse(&mut self, dialog: u64, words: String) {

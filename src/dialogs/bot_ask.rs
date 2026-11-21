@@ -1,13 +1,16 @@
 use gpui::{
     App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, IntoElement, ParentElement as _,
-    Render, ScrollHandle, SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
+    Render, ScrollHandle, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
-use super::{body_height, close, dialog_starts, fitted, frame, hooked_field, show_at_top, within};
+use super::{
+    body_height, bot_refusal, close, dialog_starts, fitted, forget_refusal, frame, hooked_field, secret_label,
+    show_at_top, within,
+};
 use crate::cli;
 use crate::model::bots::{
-    Ask, Bot, Enter, IT_SAYS, ONE_LINE, REPLACES, access_words, fields_after, give_json, on_enter, title, what_happens,
+    Ask, Bot, Enter, IT_SAYS, ONE_LINE, access_words, fields_after, give_json, on_enter, title, what_happens,
 };
 use crate::store::Store;
 use crate::theme::colours;
@@ -105,8 +108,7 @@ impl BotAsk {
 
     fn changed(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.note = None;
-        let dialog = cx.entity_id().as_u64();
-        Store::get(cx).update(cx, |s, cx| s.forget_bot_refusal(dialog, cx));
+        forget_refusal(cx);
         cx.notify();
     }
 
@@ -166,16 +168,6 @@ fn said(about: &str) -> Div {
         .child(words.child(about.to_string()))
 }
 
-fn secret_label(name: &str, replace: bool) -> Div {
-    div()
-        .flex()
-        .gap(px(6.))
-        .text_size(px(11.))
-        .text_color(colours::muted())
-        .child(name.to_string())
-        .when(replace, |d| d.child(div().text_color(colours::faint()).child(REPLACES)))
-}
-
 impl BotAsk {
     fn fields_column(&self, replace: bool, window: &Window, cx: &App) -> Div {
         let rows = self.fields.iter().map(|(name, field)| {
@@ -193,12 +185,6 @@ impl BotAsk {
             .child(said(&ask.about))
             .child(self.fields_column(ask.replace, window, cx))
             .child(ui::dim(what_happens(cli::host().is_none())))
-    }
-
-    fn under(&self, dialog: u64, cx: &App) -> Option<Div> {
-        let held = Store::get(cx).read(cx).bots.manage.refusal(dialog).map(str::to_string);
-        let words: Option<SharedString> = self.note.map(SharedString::from).or(held.map(SharedString::from));
-        words.map(|words| div().text_size(px(12.)).text_color(colours::failed()).child(words))
     }
 
     fn never_button(starts: bool, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -249,7 +235,7 @@ impl Render for BotAsk {
             .gap(px(10.))
             .max_h(px(height))
             .child(fitted("bot-ask", window, body).min_h_0().track_scroll(&self.scroller))
-            .children(self.under(cx.entity_id().as_u64(), cx));
+            .children(bot_refusal(self.note, cx.entity_id().as_u64(), cx));
         frame(title(&bot.name), column, Self::buttons(cx))
     }
 }

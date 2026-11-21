@@ -11,6 +11,7 @@ use crate::platform::Os;
 
 mod asks;
 mod manage;
+mod secrets;
 mod talk;
 
 impl Store {
