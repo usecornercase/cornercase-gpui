@@ -19,5 +19,10 @@ pub(super) fn keys_go(form: bool, body: Body) -> KeysTo {
     }
 }
 
+pub(super) fn follows(before: KeysTo, now: KeysTo) -> bool {
+    let page = |to: KeysTo| matches!(to, KeysTo::Filter | KeysTo::First);
+    before != now && page(before) && page(now)
+}
+
 #[cfg(test)]
 mod tests;
