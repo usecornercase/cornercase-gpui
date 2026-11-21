@@ -295,6 +295,7 @@ impl Root {
             self.tell_machine_visible();
         }
         self.track_leaving(cx);
+        self.take_bot_ask(window, cx);
         self.parts.store_seen += 1;
         cx.notify();
     }

@@ -32,6 +32,10 @@ impl Call {
         Self { args, stdin: None }
     }
 
+    pub(super) fn with_stdin(args: Vec<String>, stdin: Vec<u8>) -> Self {
+        Self { args, stdin: Some(stdin) }
+    }
+
     pub(super) fn of(words: &[&str]) -> Self {
         Self { args: words.iter().map(|word| (*word).to_string()).collect(), stdin: None }
     }

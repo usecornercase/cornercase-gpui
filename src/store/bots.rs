@@ -9,6 +9,7 @@ use crate::model::bots::{self, Answer, BotEvent, CatchUp, Chat, Heard, Offer, Re
 use crate::model::place::Moved;
 use crate::platform::Os;
 
+mod asks;
 mod manage;
 mod talk;
 
@@ -35,8 +36,10 @@ impl Store {
         let asked = shown.as_ref().is_some_and(|(id, _)| self.bots.manage.asked(id));
         let before = self.bots.unread_of();
         let moved = self.bots.take_app(app);
+        let arrived = self.bots.asking.known.arrived(&self.bots.list);
         self.place(Moved::Listed(moved.listed.clone()));
         self.close_dialog_if_gone(&moved.listed, cx);
+        self.asks_moved(&arrived, cx);
         match shown {
             Some((_, name)) if self.shown_bot().is_none() => {
                 if !asked {
@@ -46,12 +49,17 @@ impl Store {
             _ if moved.boot_changed && self.bots.chat.is_some() => self.read_chat(None, cx),
             _ => self.heal_chat(&moved.settled, cx),
         }
-        self.answers_counted(&before, moved.boot_changed, cx);
+        self.answers_counted(&before, (moved.boot_changed, &arrived), cx);
         self.mind_seen(cx);
         self.follow_made(cx);
     }
 
-    fn answers_counted(&mut self, before: &[(String, usize)], boot: bool, cx: &mut Context<Self>) {
+    fn answers_counted(
+        &mut self,
+        before: &[(String, usize)],
+        (boot, arrived): (bool, &[(String, u64)]),
+        cx: &mut Context<Self>,
+    ) {
         if boot {
             self.bots.answers.forget();
             return;
@@ -64,7 +72,8 @@ impl Store {
                 self.drop_bot_toasts(id, cx);
             }
             if let Some(is) = is {
-                due.extend(self.bots.answers.counted(id, (*was, is), now));
+                let asked = arrived.iter().filter(|(bot, _)| bot == id).count();
+                due.extend(self.bots.answers.counted(id, bots::counted_as(*was, is, asked), now));
             }
         }
         self.tell_answers(&due, cx);

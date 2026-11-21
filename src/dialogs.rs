@@ -14,6 +14,7 @@ use crate::theme::{colours, radius};
 use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
+mod bot_ask;
 mod bot_form;
 mod closing;
 mod context;
@@ -24,6 +25,7 @@ mod remote;
 mod run_on;
 mod shortcuts;
 
+pub(crate) use bot_ask::answer_ask;
 pub(crate) use bot_form::{edit_bot, new_bot};
 pub(crate) use closing::{CloseWords, agent_doing, agent_title, closes_line, on_machine};
 pub(crate) use context::{ContextThere, VIEW_CONTEXT, context_choices, view_context, view_context_there};
@@ -117,11 +119,24 @@ fn shaped_field<T: 'static>(
     on_submit: impl Fn(&mut T, &mut Window, &mut Context<T>) + 'static,
     window: &mut Window,
 ) -> Entity<TextField> {
+    hooked_field(placeholder, shape, cx, (on_submit, |_, _, cx| cx.notify()), window)
+}
+
+fn hooked_field<T: 'static>(
+    placeholder: &str,
+    shape: impl FnOnce(TextField) -> TextField,
+    cx: &mut Context<T>,
+    (on_submit, on_changed): (
+        impl Fn(&mut T, &mut Window, &mut Context<T>) + 'static,
+        impl Fn(&mut T, &mut Window, &mut Context<T>) + 'static,
+    ),
+    window: &mut Window,
+) -> Entity<TextField> {
     let field = cx.new(|cx| shape(TextField::new(placeholder.to_string(), cx).in_tab_order()));
     cx.subscribe_in(&field, window, move |this, _, event, window, cx| match event {
         TextFieldEvent::Submit => on_submit(this, window, cx),
         TextFieldEvent::Cancel => close(cx),
-        TextFieldEvent::Changed => cx.notify(),
+        TextFieldEvent::Changed => on_changed(this, window, cx),
     })
     .detach();
     field

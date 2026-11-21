@@ -6,6 +6,7 @@ pub(super) const HELD: &str = "Held";
 pub(super) const DROPPED_STAMP: &str = "Dropped";
 pub(super) const EARLIER: &str = "Earlier messages are left out: these are the newest 1,000.";
 pub(super) const NEW_MESSAGES: &str = "New messages";
+pub(super) const GIVE: &str = "Give…";
 
 pub(crate) fn time_label(at: i64, now: i64) -> String {
     let (Some(then), Some(today)) = (queue::local(at), queue::local(now)) else { return String::new() };

@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.137
+
+- **Give a bot the password it asks for.** With cornercase 0.13.101 or newer, a bot that needs a password or a token it does not have can ask you for it. Its row in the sidebar says `asks for a secret`, its chat's line has **Give…**, and a dialog shows the bot's reason with a masked field for each value. **Save** keeps them encrypted for that bot only, **Not now** (or Escape) leaves the question waiting, and **Never** turns it down. The value never goes through the chat.
+- **The dialog never takes your keys by surprise.** It opens by itself only while you are looking at that bot's chat with nothing typed in its field. Anywhere else a toast tells you, with **Open**, and a desktop notification does while the window is in the background.
+- **A pasted password keeps what you copied.** A line break at its end is left out, and a paste with a tab or a line break inside is refused with a note, instead of being saved with a space nobody could see.
+
 ## 0.1.135
 
 - **The small copy icon says what it copied.** On a bot's answer, a Flow's message and a Queue run's conversation, a press on the copy icon now answers `Copied the answer` or `Copied the message`, as every other Copy in the window does. Before, nothing told you whether the press took. Several copies in a row count in one toast instead of stacking.

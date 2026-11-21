@@ -26,23 +26,29 @@ impl Store {
         Some(making(self.releases().lacks(Feature::Bots), Os::CURRENT))
     }
 
-    fn dialog_job(&mut self, (dialog, doing): (u64, String), args: Vec<String>, then: Then, cx: &mut Context<Self>) {
+    pub(super) fn dialog_job(
+        &mut self,
+        (dialog, doing): (u64, String),
+        call: Call,
+        then: Then,
+        cx: &mut Context<Self>,
+    ) {
         if self.busy(&start_key(dialog)) {
             return;
         }
-        self.bot_job(Busy::new(start_key(dialog), doing), Call::args(args), then, cx);
+        self.bot_job(Busy::new(start_key(dialog), doing), call, then, cx);
     }
 
     pub(crate) fn create_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
         let creating = Creating::new(dialog, name, self.bots.boot.as_deref());
         let then: Then = Box::new(move |this, result, cx| this.bot_created(&creating, result, cx));
-        self.dialog_job((dialog, format!("Creating the bot {name}…")), args, then, cx);
+        self.dialog_job((dialog, format!("Creating the bot {name}…")), Call::args(args), then, cx);
     }
 
     pub(crate) fn save_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
         let name_of = name.to_string();
         let then: Then = Box::new(move |this, result, cx| this.bot_saved(dialog, &name_of, result, cx));
-        self.dialog_job((dialog, format!("Saving {name}…")), args, then, cx);
+        self.dialog_job((dialog, format!("Saving {name}…")), Call::args(args), then, cx);
     }
 
     fn bot_saved(&mut self, dialog: u64, name: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
@@ -86,7 +92,7 @@ impl Store {
         }
     }
 
-    fn refused_here(&mut self, dialog: u64, words: String, cx: &mut Context<Self>) {
+    pub(super) fn refused_here(&mut self, dialog: u64, words: String, cx: &mut Context<Self>) {
         if self.shown_dialog() == Some(dialog) {
             self.bots.manage.refuse(dialog, words);
             cx.notify();

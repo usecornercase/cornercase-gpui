@@ -15,7 +15,7 @@ fn later(base: Instant, ms: u64) -> Instant {
 }
 
 fn line(kind: &str, text: &str) -> Line {
-    Line { id: 7, at: 0, kind: Kind::from(kind), text: text.to_string(), held: false }
+    Line { id: 7, at: 0, kind: Kind::from(kind), text: text.to_string(), held: false, ask: None }
 }
 
 #[test]
@@ -337,4 +337,14 @@ fn the_headline_says_answered_or_could_not_answer_and_the_body_is_the_first_line
 #[test]
 fn a_gone_bot_is_named_as_gone() {
     assert_eq!(gone("notes"), "notes is gone");
+}
+
+#[test]
+fn an_ask_is_told_in_cornercases_words() {
+    let names = vec!["campus-user".to_string(), "campus-password".to_string()];
+    let told = Told::asking("campus", "Campus", &Ask { id: 3, names, ..Ask::default() });
+    assert_eq!(told.text(), "Campus asks for a secret: campus-user, campus-password");
+    assert_eq!(told.headline(), "Campus asks for a secret");
+    assert_eq!(told.body().as_deref(), Some("campus-user, campus-password"));
+    assert_eq!((told.ask, told.failed), (Some(3), false));
 }

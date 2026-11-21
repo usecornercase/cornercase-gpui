@@ -2,7 +2,7 @@ use gpui::px;
 
 use super::{
     Rows, Span, clamp_scroll, line_breaks, measured_rows, one_line, pasted, previous_grapheme, rows_shown,
-    scroll_from_top, scroll_to_show, scroll_to_show_with_margins, sideways, thumb,
+    scroll_from_top, scroll_to_show, scroll_to_show_with_margins, secret_pasted, sideways, thumb,
 };
 
 fn wrapped() -> Rows {
@@ -252,4 +252,27 @@ fn a_field_one_pixel_too_low_for_that_moves_the_form_as_little_as_it_takes() {
 #[test]
 fn a_room_larger_than_the_body_keeps_the_caret_s_line_in_view() {
     assert_eq!(scroll_to_show_with_margins(px(0.), (px(290.), px(20.)), (px(12.), px(400.)), px(212.)), px(278.));
+}
+
+#[test]
+fn a_pasted_secret_loses_one_line_break_at_its_end() {
+    assert_eq!(secret_pasted("hunter2\n").as_deref(), Some("hunter2"));
+    assert_eq!(secret_pasted("hunter2\r\n").as_deref(), Some("hunter2"));
+    assert_eq!(secret_pasted("hunter2\r").as_deref(), Some("hunter2"));
+    assert_eq!(secret_pasted("hunter2\n\n"), None);
+}
+
+#[test]
+fn a_pasted_secret_with_a_tab_or_a_line_break_inside_is_refused() {
+    assert_eq!(secret_pasted("hun\tter2"), None);
+    assert_eq!(secret_pasted("hun\nter2"), None);
+    assert_eq!(secret_pasted("hun\rter2"), None);
+    assert_eq!(secret_pasted("\u{1b}[A"), None);
+}
+
+#[test]
+fn a_pasted_secret_is_otherwise_unchanged() {
+    for text in ["  spaced  ", "pa\"ss\\ ñ😀", " "] {
+        assert_eq!(secret_pasted(text).as_deref(), Some(text));
+    }
 }

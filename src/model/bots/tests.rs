@@ -9,7 +9,14 @@ fn app(text: &str) -> Value {
 }
 
 fn line(id: u64, kind: &str, text: &str, held: bool) -> Line {
-    Line { id, at: 1000 + i64::try_from(id).expect("small"), kind: Kind::from(kind), text: text.to_string(), held }
+    Line {
+        id,
+        at: 1000 + i64::try_from(id).expect("small"),
+        kind: Kind::from(kind),
+        text: text.to_string(),
+        held,
+        ask: None,
+    }
 }
 
 fn plain(ids: &[(u64, &str)]) -> Vec<Line> {
@@ -621,4 +628,29 @@ fn the_chat_takes_the_keys_only_when_no_dialog_or_sheet_has_them() {
     assert!(keys_go_to_chat(false, false));
     assert!(!keys_go_to_chat(true, false));
     assert!(!keys_go_to_chat(false, true));
+}
+
+#[test]
+fn a_notice_carries_its_ask() {
+    let lines = history_of(fixture!("bots/history-asks.json")).expect("history");
+    let asks: Vec<(u64, Option<u64>)> = lines.iter().map(|line| (line.id, line.ask)).collect();
+    assert_eq!(asks, [(1, None), (2, Some(3)), (3, None), (4, Some(3)), (5, None), (6, None)]);
+}
+
+#[test]
+fn a_wrong_ask_on_a_line_keeps_the_line() {
+    let line = line_of(&json!({ "id": 5, "kind": "notice", "text": "secret not given: x", "ask": "five" }));
+    assert_eq!(line.map(|line| (line.id, line.ask)), Some((5, None)));
+}
+
+#[test]
+fn an_ask_that_comes_redraws_the_row() {
+    let mut bots = Bots::new();
+    let quiet = json!({ "bots": [{ "id": "campus", "name": "campus" }] });
+    bots.take_app(&quiet);
+    let before = bots.revision();
+    bots.take_app(&quiet);
+    assert_eq!(bots.revision(), before);
+    bots.take_app(&json!({ "bots": [{ "id": "campus", "name": "campus", "asks": [{ "id": 3, "names": ["pw"] }] }] }));
+    assert!(bots.revision() > before);
 }

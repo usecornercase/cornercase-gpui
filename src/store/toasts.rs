@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use gpui::{ClipboardItem, Context};
 
 use super::{Store, ToastGo};
+use crate::model::bots::Bot;
 
 pub(crate) const COPY_COMMAND: &str = "Copy command";
 
@@ -134,7 +135,12 @@ fn making_way(older: &[Toast]) -> usize {
 }
 
 pub(crate) fn shows_bot(toast: &Toast, id: &str) -> bool {
-    matches!(&toast.action, Some((_, ToastGo::Bot(bot, _))) if bot == id)
+    matches!(&toast.action, Some((_, ToastGo::Bot(bot, _) | ToastGo::BotAsk(bot, _, _))) if bot == id)
+}
+
+pub(crate) fn ask_ended(toast: &Toast, list: &[Bot]) -> bool {
+    let Some((_, ToastGo::BotAsk(id, _, ask))) = &toast.action else { return false };
+    !list.iter().find(|bot| bot.id == *id).is_some_and(|bot| bot.asks.iter().any(|found| found.id == *ask))
 }
 
 pub(crate) fn newest_meant(toasts: &[Toast], now: Instant) -> Option<u64> {
@@ -156,6 +162,15 @@ impl Store {
     pub(crate) fn drop_bot_toasts(&mut self, id: &str, cx: &mut Context<Self>) {
         let before = self.toasts.len();
         self.toasts.retain(|toast| !shows_bot(toast, id));
+        if self.toasts.len() != before {
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn drop_ended_ask_toasts(&mut self, cx: &mut Context<Self>) {
+        let before = self.toasts.len();
+        let list = &self.bots.list;
+        self.toasts.retain(|toast| !ask_ended(toast, list));
         if self.toasts.len() != before {
             cx.notify();
         }

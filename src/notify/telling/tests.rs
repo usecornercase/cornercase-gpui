@@ -323,7 +323,7 @@ fn a_merged_run_that_freed_is_told_as_done_with_its_sentence_as_it_comes() {
 }
 
 fn told(failed: bool, first: &str) -> Told {
-    Told { bot: "n1".into(), name: "notes".into(), failed, first: first.into() }
+    Told { bot: "n1".into(), name: "notes".into(), failed, first: first.into(), ask: None }
 }
 
 #[test]

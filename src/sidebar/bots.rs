@@ -8,12 +8,12 @@ use super::arrange::divider;
 use super::head_row;
 use super::rail::count_disc;
 use super::rows::{End, chevron, hover_button, hover_listener, list_text, rename_box, trailing};
-use super::workspace::{agent_lines, name_line};
+use super::workspace::{agent_lines, agent_lines_in, name_line};
 use super::{Renaming, tip};
 use crate::app::Root;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
-use crate::model::bots::{Bot, Making, Offer};
+use crate::model::bots::{ASKS_FOR_A_SECRET, Bot, Making, Offer};
 use crate::theme::colours;
 use crate::ui::{self, Icon, icon, orbits};
 
@@ -127,7 +127,11 @@ impl Root {
             Some(field) => rename_box(field).py(px(1.)).into_any_element(),
             None => name_line(bot.name.clone(), shown).into_any_element(),
         };
-        agent_lines(first, bot.detail())
+        if bot.asks.is_empty() {
+            agent_lines(first, bot.detail())
+        } else {
+            agent_lines_in(first, ASKS_FOR_A_SECRET.to_string(), colours::waiting())
+        }
     }
 
     fn bot_menu_button(id: &str, gid: &SharedString, cx: &mut Context<Self>) -> impl IntoElement + use<> {

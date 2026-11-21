@@ -5,6 +5,7 @@ use crate::panels::PanelKind;
 use crate::store::{Busy, NoticeThere, ToastAction, ToastGo, ToastKind, args, setup_key};
 
 pub(super) const SHOW: &str = "Show";
+const OPEN: &str = "Open";
 pub(super) const OPEN_QUEUE: &str = "Open Queue";
 pub(super) const REOPEN: &str = "Reopen agents";
 pub(super) const GO: &str = "Go";
@@ -99,10 +100,16 @@ impl Telling {
     }
 
     pub(super) fn of_bot(told: &Told) -> Telling {
+        let (bot, name) = (told.bot.clone(), told.name.clone());
+        let (kind, button) = match told.ask {
+            Some(ask) => (ToastKind::NeedsYou, (OPEN.to_string(), ToastGo::BotAsk(bot, name, ask))),
+            None if told.failed => (ToastKind::NeedsYou, (SHOW.to_string(), ToastGo::Bot(bot, name))),
+            None => (ToastKind::Done, (SHOW.to_string(), ToastGo::Bot(bot, name))),
+        };
         Telling {
             text: told.text(),
-            kind: if told.failed { ToastKind::NeedsYou } else { ToastKind::Done },
-            button: Some((SHOW.to_string(), ToastGo::Bot(told.bot.clone(), told.name.clone()))),
+            kind,
+            button: Some(button),
             headline: Some(told.headline()),
             body: told.body(),
             sound: None,

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use super::{Kind, Line};
+use super::{Ask, Kind, Line, title};
 use crate::ui::markdown::{self, Block};
 
 pub(crate) const PAIRED_WITHIN: Duration = Duration::from_secs(2);
@@ -119,14 +119,23 @@ pub(crate) struct Told {
     pub name: String,
     pub failed: bool,
     pub first: String,
+    pub ask: Option<u64>,
 }
 
 impl Told {
     pub(crate) fn new(answer: &Answer, name: &str) -> Self {
-        Self { bot: answer.bot.clone(), name: name.to_string(), failed: answer.failed, first: first_of(answer) }
+        let (bot, name, failed) = (answer.bot.clone(), name.to_string(), answer.failed);
+        Self { bot, name, failed, first: first_of(answer), ask: None }
+    }
+
+    pub(crate) fn asking(bot: &str, name: &str, ask: &Ask) -> Self {
+        Self { bot: bot.to_string(), name: name.to_string(), failed: false, first: ask.joined(), ask: Some(ask.id) }
     }
 
     pub(crate) fn headline(&self) -> String {
+        if self.ask.is_some() {
+            return title(&self.name);
+        }
         let said = if self.failed { "could not answer" } else { "answered" };
         format!("{} {said}", self.name)
     }
@@ -136,6 +145,9 @@ impl Told {
     }
 
     pub(crate) fn text(&self) -> String {
+        if self.ask.is_some() {
+            return format!("{}: {}", self.headline(), self.first);
+        }
         match (self.failed, self.body()) {
             (false, Some(first)) => format!("{}: {first}", self.name),
             (true, Some(first)) => format!("{} could not answer: {first}", self.name),
