@@ -32,7 +32,7 @@ use crate::theme::colours;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{self, TextField, TextFieldEvent};
 use data::{Body, scoped};
-pub(crate) use data::{Entry, entries, repeat_words};
+pub(crate) use data::{Entry, entries};
 use detail::Detail;
 use form::{FlowChoices, Form, Spot};
 use rows::Snapshot;
@@ -85,6 +85,10 @@ pub(crate) fn toast_outcome<T>(result: anyhow::Result<T>, done: impl FnOnce(T) -
 
 fn toast_error(error: &anyhow::Error, cx: &mut App) {
     Store::get(cx).update(cx, |s, cx| s.toast(cli::reason(error), ToastKind::Error, cx));
+}
+
+pub(crate) fn repeat_words(entry: &Entry) -> String {
+    repeat::words(entry.repeat.as_deref().unwrap_or_default())
 }
 
 fn starting(entry: u64) -> String {
