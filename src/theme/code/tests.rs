@@ -67,12 +67,13 @@ fn a_colour_no_lightness_saves_becomes_the_text() {
 #[test]
 fn the_inks_are_kept_while_the_theme_and_the_opacity_stay() {
     let theme = Arc::new(fallback());
-    let mut kept = None;
-    let first = kept_inks(&mut kept, theme.clone(), 0.8);
-    let held = kept.as_ref().map(|k: &Kept| Arc::as_ptr(&k.theme));
-    assert_eq!(kept_inks(&mut kept, theme.clone(), 0.8), first);
-    assert_eq!(kept.as_ref().map(|k| Arc::as_ptr(&k.theme)), held);
-    assert_eq!(first, inks(&theme, 0.8));
+    let marked = Inks { comment: from_bytes([1, 2, 3]), ..inks(&theme, 0.8) };
+    let mut kept = Some(Kept { theme: theme.clone(), panes: 0.8f32.to_bits(), inks: marked });
+    assert_eq!(kept_inks(&mut kept, theme.clone(), 0.8), marked);
+    assert_eq!(kept_inks(&mut kept, theme.clone(), 0.7), inks(&theme, 0.7));
+    kept = Some(Kept { theme: theme.clone(), panes: 0.8f32.to_bits(), inks: marked });
+    let equal = Arc::new(fallback());
+    assert_eq!(kept_inks(&mut kept, equal.clone(), 0.8), inks(&equal, 0.8));
 }
 
 #[test]
