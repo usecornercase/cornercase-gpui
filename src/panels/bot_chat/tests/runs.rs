@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use super::super::entries::{Block, Entry, EntryKey, Give, asked, entries, folded, held, keys, retry, spliced, turn};
 use super::super::runs::NO_TITLE;
 use super::super::words::{EXAMPLES, empty_lines, examples_shown, row_detail};
+use super::super::{NAME_ROOM, routines_fit};
 use crate::model::bots::{Bot, Kind, Line, Runs, history_of};
 use crate::panels::queue;
 use crate::test_util::fixture;
@@ -175,4 +176,38 @@ fn the_empty_chat_names_a_schedule_and_offers_four_examples_only_with_routines()
     assert!(empty_lines(false)[1].starts_with("It runs only when you write to it"));
     assert_eq!((examples_shown(true), examples_shown(false)), (4, 3));
     assert!(EXAMPLES[3].starts_with("Every weekday at 9"));
+}
+
+const BUTTON: f32 = 75.;
+
+#[test]
+fn routines_stays_while_the_name_keeps_its_room_and_goes_below_it() {
+    assert!(routines_fit(NAME_ROOM, true, BUTTON));
+    assert!(routines_fit(400., true, BUTTON));
+    assert!(!routines_fit(NAME_ROOM - 1., true, BUTTON));
+}
+
+#[test]
+fn a_hidden_routines_comes_back_only_once_the_room_holds_it_its_gap_and_the_slack() {
+    let back = NAME_ROOM + BUTTON + 10. + 8.;
+    assert!(routines_fit(back, false, BUTTON));
+    assert!(!routines_fit(back - 1., false, BUTTON));
+}
+
+#[test]
+fn no_width_in_the_slacks_band_flips_routines() {
+    for step in 0..=80 {
+        let drawn_room = NAME_ROOM - 4. + f32::from(u8::try_from(step).expect("small")) * 0.25;
+        let hidden_room = drawn_room + BUTTON + 10.;
+        let drawn = routines_fit(drawn_room, true, BUTTON);
+        let back = routines_fit(hidden_room, false, BUTTON);
+        assert!(!back || drawn, "comes back at {hidden_room} and would go again at {drawn_room}");
+        assert!(drawn || !back, "goes at {drawn_room} and would come back at {hidden_room}");
+    }
+}
+
+#[test]
+fn the_least_windows_room_hides_routines_and_keeps_it_hidden() {
+    assert!(!routines_fit(26., true, BUTTON));
+    assert!(!routines_fit(111., false, BUTTON));
 }

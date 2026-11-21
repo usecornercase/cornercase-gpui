@@ -1,6 +1,6 @@
 use gpui::{
-    App, ClickEvent, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    App, Bounds, ClickEvent, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, ParentElement as _,
+    Pixels, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div, px,
 };
 
 use super::entries::{self, Control, new_conversation_control, stop_control};
@@ -8,6 +8,7 @@ use super::words::{
     NEW_CONVERSATION, ROUTINES, STARTING, STOP, STOPPING, answering, menu_tip, new_conversation_message,
     new_conversation_title, routines_tip, secrets_label, turn_label,
 };
+use super::{BotChat, routines_fit};
 use crate::dialogs::{self, Question};
 use crate::model::bots::{Bot, Chat};
 use crate::model::bots::{Reach, reach_tip};
@@ -22,13 +23,35 @@ const MENU_STOP: &str = "bot-menu";
 const STOP_STOP: &str = "bot-stop";
 const ROUTINES_STOP: &str = "bot-routines";
 
+pub(super) struct Fit {
+    pub chat: WeakEntity<BotChat>,
+    pub drawn: bool,
+    pub width: f32,
+}
+
+fn measured(fit: &Fit, (bounds, at): (&[Bounds<Pixels>], usize), cx: &mut App) {
+    let (Some(name), Some(first)) = (bounds.first(), bounds.get(2)) else { return };
+    let room = f32::from(first.left() - name.left());
+    let width = fit.drawn.then(|| bounds.get(at)).flatten().map(|button| f32::from(button.size.width));
+    let fits = routines_fit(room, fit.drawn, width.unwrap_or(fit.width));
+    if fits == fit.drawn && width.is_none_or(|width| (width - fit.width).abs() < 0.5) {
+        return;
+    }
+    let chat = fit.chat.clone();
+    cx.defer(move |cx| {
+        let _ = chat.update(cx, |chat, cx| chat.set_routines_fit(fits, width, cx));
+    });
+}
+
 pub(super) fn header(
     bot: &Bot,
     starting: bool,
-    (stops, routines): (bool, bool),
+    (stops, fit): (bool, Option<Fit>),
     reach: Option<&Reach>,
 ) -> impl IntoElement + use<> {
-    div()
+    let drawn = fit.as_ref().is_some_and(|fit| fit.drawn);
+    let at = 2 + usize::from(reach.is_some());
+    let row = div()
         .flex_none()
         .flex()
         .items_center()
@@ -47,9 +70,13 @@ pub(super) fn header(
         )
         .child(facts(bot))
         .children(reach.map(reach_icon))
-        .children(routines.then(|| routines_button(bot, stops)))
+        .children(drawn.then(|| routines_button(bot, stops)))
         .child(new_conversation(bot, starting, stops))
-        .child(menu_button(bot, stops))
+        .child(menu_button(bot, stops));
+    match fit {
+        Some(fit) => row.on_children_prepainted(move |bounds, _, cx| measured(&fit, (&bounds, at), cx)),
+        None => row,
+    }
 }
 
 fn facts(bot: &Bot) -> impl IntoElement + use<> {

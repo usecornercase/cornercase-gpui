@@ -9,7 +9,7 @@ use gpui::{
 };
 
 pub(crate) use self::controls::ask_new_conversation;
-use self::controls::{header, turn_row};
+use self::controls::{Fit, header, turn_row};
 use self::entries::{Entry, EntryKey, Retry};
 pub(crate) use self::global::{field_focus, scroll, view};
 use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
@@ -92,6 +92,7 @@ pub(crate) struct BotChat {
     runs: Rc<Runs>,
     again_stops: HashMap<u64, FocusHandle>,
     aimed: u64,
+    routines: (bool, f32),
 }
 
 fn counting(chat: &mut BotChat) -> &mut Counting {
@@ -125,6 +126,15 @@ pub(crate) fn give_key(giving: &Giving) -> entries::Give {
         Giving::Here(_) => entries::Give::Needs,
         Giving::No => entries::Give::No,
     }
+}
+
+pub(crate) const NAME_ROOM: f32 = 116.;
+const GAP: f32 = 10.;
+const SLACK: f32 = 8.;
+const ROUTINES_WIDTH: f32 = 80.;
+
+pub(crate) fn routines_fit(room: f32, drawn: bool, width: f32) -> bool {
+    if drawn { room >= NAME_ROOM } else { room - width - GAP >= NAME_ROOM + SLACK }
 }
 
 fn at_end(list: &ListState) -> bool {
@@ -172,6 +182,7 @@ impl BotChat {
             runs: Rc::new(Runs::default()),
             again_stops: HashMap::new(),
             aimed: 0,
+            routines: (true, ROUTINES_WIDTH),
         }
     }
 
@@ -184,6 +195,16 @@ impl BotChat {
         let reach = shown.and_then(|id| store.bot_reach(id));
         let now = (shown.map(str::to_string), store.bots_revision(), controls, reach);
         (std::mem::replace(&mut self.heard, now.clone()) != now) || self.bot.is_some() && now.0.is_none()
+    }
+
+    fn set_routines_fit(&mut self, fits: bool, width: Option<f32>, cx: &mut Context<Self>) {
+        if let Some(width) = width {
+            self.routines.1 = width;
+        }
+        if self.routines.0 != fits {
+            self.routines.0 = fits;
+            cx.notify();
+        }
     }
 
     fn open_steps(&mut self, first: u64, cx: &mut Context<Self>) {
@@ -342,6 +363,12 @@ impl BotChat {
         }
     }
 
+    fn fit(&self, routines: bool, cx: &Context<Self>) -> Option<Fit> {
+        let chat = cx.entity().downgrade();
+        let (drawn, width) = self.routines;
+        routines.then_some(Fit { chat, drawn, width })
+    }
+
     fn meta(&self, bot: &Bot, cx: &mut Context<Self>) -> Meta {
         Meta {
             name: bot.name.clone().into(),
@@ -497,7 +524,7 @@ impl Render for BotChat {
             .size_full()
             .flex()
             .flex_col()
-            .child(header(&bot, starting, (stops, routines), reach.as_ref()))
+            .child(header(&bot, starting, (stops, self.fit(routines, cx)), reach.as_ref()))
             .child(body)
             .children(turn_row(&bot, &chat, now, (stopping, stops)))
     }
