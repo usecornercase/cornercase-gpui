@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.131
+## 0.1.133
 
 - **A new bot's setup shows in its chat.** With cornercase 0.13.89 or newer, a bot made with what it is for sets itself up at once. Its chat opens on `setting up`, and the row under it now says how long the bot has been at it and how many steps it took, where it only said `Thinking`.
 - **Retry runs a failed setup again.** When the setup fails, Retry under the error sets the bot up again (`Setting up…` while it is on its way), instead of offering nothing.
