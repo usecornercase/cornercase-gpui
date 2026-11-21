@@ -10,7 +10,7 @@ fn seen(saved: u64, count: usize, unreadable: bool) -> SecretsSeen {
 fn the_list_is_read_with_its_names_and_dates() {
     let listed = listed_of(fixture!("bots/secret-list.json")).expect("list");
     let found: Vec<(&str, i64)> = listed.secrets.iter().map(|secret| (secret.name.as_str(), secret.saved)).collect();
-    assert_eq!(found, [("campus-password", 1_795_000_100), ("shell-token", 1_795_003_700)]);
+    assert_eq!(found, [("campus-password", 1_795_277_104), ("shell-token", 1_795_277_261)]);
     assert_eq!(listed.key, "file");
     assert_eq!(listed.names(), ["campus-password", "shell-token"]);
 }

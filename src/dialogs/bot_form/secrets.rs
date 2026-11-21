@@ -28,6 +28,7 @@ const REMOVE: &str = "Remove";
 const REMOVING: &str = "Removing…";
 const ADD_STOP: &str = "bot-secret-add";
 const RETRY_STOP: &str = "bot-secrets-retry";
+const NAME_WIDEST: f32 = 220.;
 
 pub(super) fn saved_label(at: i64, now: i64) -> Option<String> {
     if at <= 0 {
@@ -289,7 +290,13 @@ impl BotForm {
             .flex()
             .items_center()
             .gap(px(8.))
-            .child(div().flex_none().max_w(px(220.)).text_size(px(12.5)).child(ui::one_line(secret.name.clone())))
+            .child(
+                div()
+                    .flex_none()
+                    .text_size(px(12.5))
+                    .text_color(colours::text())
+                    .child(ui::one_line(secret.name.clone()).widest(px(NAME_WIDEST))),
+            )
             .child(div().flex_1().min_w_0().text_size(px(11.)).text_color(colours::muted()).child(ui::one_line(saved)))
             .child(replace_button((id, &secret.name), names, replace))
             .child(remove_button((id, bot, &secret.name), remove, cx.entity_id().as_u64(), cx));
