@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.122
+
+- **Closing a dialog while it starts something on a linked machine keeps you where you are.** This holds for a new workspace, an agent on an issue, a flow and a login tab. The window used to jump to the new tab once the machine listed it, even in the middle of what you were typing elsewhere. Now the toast says what started and the new tab's row shows in the sidebar.
+- **A dialog left open until the machine answers still takes you to the new tab**, as before.
+
 ## 0.1.118
 
 - **Settings left open while cornercase's settings cannot be read no longer asks for them again and again.** It used to read them once more each time anything changed in the window, such as an agent at work, a resize or a theme change. Now it reads them again only when cornercase starts again, its settings change or the window connects to it again, so it still shows them by itself once they can be read, and Try again still reads them at once.

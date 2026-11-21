@@ -38,3 +38,23 @@ fn a_list_without_the_shown_bot_leaves_its_chat() {
     assert_eq!(shown.clone().after(Moved::Listed(vec!["ops".into()])), Showing::Local);
     assert_eq!(shown.after(Moved::Listed(vec!["prs".into()])).bot(), Some("prs"));
 }
+
+#[test]
+fn a_start_whose_dialog_is_still_shown_at_the_answer_is_awaited() {
+    assert!(awaits(true, Some(7), Some(7)));
+}
+
+#[test]
+fn a_start_whose_dialog_was_closed_before_the_answer_is_not_awaited() {
+    assert_eq!((awaits(true, Some(7), None), awaits(true, Some(7), Some(8))), (false, false));
+}
+
+#[test]
+fn a_start_that_did_not_ask_to_be_selected_is_not_awaited() {
+    assert!(!awaits(false, Some(7), Some(7)));
+}
+
+#[test]
+fn a_start_no_dialog_sent_is_not_awaited() {
+    assert!(!awaits(true, None, None));
+}
