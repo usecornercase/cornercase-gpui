@@ -172,12 +172,6 @@ impl Root {
         }
     }
 
-    pub(crate) fn focus_lost(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.overlay_open(cx) && self.store.read(cx).shown_dock().is_some() {
-            window.focus(&self.dock_focus);
-        }
-    }
-
     pub(crate) fn dock_focused(&self, window: &Window, cx: &App) -> bool {
         self.dock_focus.is_focused(window) || self.dock_focus.contains_focused(window, cx)
     }

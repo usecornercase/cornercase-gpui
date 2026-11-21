@@ -7,7 +7,7 @@ pub(crate) const STEPS_SHOWN: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Entry {
-    You { id: u64, text: String, at: i64, held: bool },
+    You { id: u64, text: String, at: i64, held: bool, dropped: bool },
     Answer { id: u64, text: String, at: i64 },
     Steps { first: u64, last: u64, texts: Vec<String> },
     Failed { id: u64, text: String },
@@ -47,8 +47,68 @@ pub(crate) fn held(lines: &[Line]) -> HashSet<u64> {
     after_the_last_end(lines).iter().filter(|line| line.kind == Kind::You && line.held).map(|line| line.id).collect()
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Asked {
+    pub ended: Vec<u64>,
+    pub dropped: HashSet<u64>,
+}
+
+const ENDS: [&str; 2] = ["stopped", "interrupted by a restart"];
+
+fn dropped_in(text: &str) -> usize {
+    let count = text.strip_suffix(" held message dropped").or_else(|| text.strip_suffix(" held messages dropped"));
+    count.and_then(|count| count.parse().ok()).unwrap_or_default()
+}
+
+#[derive(Default)]
+struct Walk {
+    turn: Vec<u64>,
+    waiting: Vec<u64>,
+    closing: bool,
+    asked: Asked,
+}
+
+impl Walk {
+    fn drop_first(&mut self, count: usize) {
+        let count = count.min(self.waiting.len());
+        self.asked.dropped.extend(self.waiting.drain(..count));
+    }
+
+    fn end(&mut self) {
+        self.asked.ended = std::mem::take(&mut self.turn);
+        self.closing = true;
+    }
+
+    fn step(&mut self, line: &Line) {
+        let dropped = if line.kind == Kind::Notice { dropped_in(&line.text) } else { 0 };
+        if dropped > 0 {
+            self.drop_first(dropped);
+            return;
+        }
+        if std::mem::take(&mut self.closing) {
+            self.turn = std::mem::take(&mut self.waiting);
+        }
+        match line.kind {
+            Kind::You if line.held => self.waiting.push(line.id),
+            Kind::You => self.turn = vec![line.id],
+            Kind::Bot | Kind::Error => self.end(),
+            Kind::Notice if ENDS.contains(&line.text.as_str()) => self.end(),
+            _ => {}
+        }
+    }
+}
+
+pub(crate) fn asked(lines: &[Line]) -> Asked {
+    let mut walk = Walk::default();
+    for line in lines {
+        walk.step(line);
+    }
+    walk.asked
+}
+
 pub(crate) fn entries(lines: &[Line]) -> Vec<Entry> {
     let held = held(lines);
+    let dropped = asked(lines).dropped;
     let mut out: Vec<Entry> = Vec::new();
     for line in lines {
         if let (Kind::Step, Some(Entry::Steps { texts, last, .. })) = (&line.kind, out.last_mut()) {
@@ -56,15 +116,15 @@ pub(crate) fn entries(lines: &[Line]) -> Vec<Entry> {
             *last = line.id;
             continue;
         }
-        out.push(entry_of(line, held.contains(&line.id)));
+        out.push(entry_of(line, (held.contains(&line.id), dropped.contains(&line.id))));
     }
     out
 }
 
-fn entry_of(line: &Line, held: bool) -> Entry {
+fn entry_of(line: &Line, (held, dropped): (bool, bool)) -> Entry {
     let (id, text, at) = (line.id, line.text.clone(), line.at);
     match &line.kind {
-        Kind::You => Entry::You { id, text, at, held },
+        Kind::You => Entry::You { id, text, at, held, dropped },
         Kind::Bot => Entry::Answer { id, text, at },
         Kind::Step => Entry::Steps { first: id, last: id, texts: vec![text] },
         Kind::Error => Entry::Failed { id, text },
@@ -110,8 +170,10 @@ pub(crate) struct Retry {
 
 pub(crate) fn retry(lines: &[Line], thinking: bool) -> Option<Retry> {
     let last = lines.last().filter(|line| !thinking && line.kind == Kind::Error)?;
-    let you = lines[..lines.len() - 1].iter().rev().find(|line| line.kind == Kind::You)?;
-    Some(Retry { error: last.id, text: you.text.clone() })
+    let ended = asked(lines).ended;
+    let texts: Vec<&str> =
+        ended.iter().filter_map(|id| lines.iter().find(|line| line.id == *id)).map(|line| line.text.as_str()).collect();
+    (!texts.is_empty()).then(|| Retry { error: last.id, text: texts.join("\n\n") })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -156,6 +218,7 @@ pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>, retry: Option<u64>)
         .iter()
         .map(|entry| {
             let (kind, last, held) = match entry {
+                Entry::You { id, dropped: true, .. } => (6, *id, false),
                 Entry::You { id, held, .. } => (0, *id, *held),
                 Entry::Answer { id, .. } => (1, *id, false),
                 Entry::Steps { last, .. } => (2, *last, false),

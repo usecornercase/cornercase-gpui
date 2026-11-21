@@ -169,3 +169,29 @@ fn a_press_leaves_the_keys_alone_without_a_chat_or_under_an_overlay() {
     assert!(!press_goes_to_rest(false, false, false));
     assert!(!press_goes_to_rest(true, true, false));
 }
+
+#[test]
+fn a_lost_focus_under_a_dialog_or_a_sheet_stays() {
+    assert_eq!(lost_goes(true, Some(Place::Window), false), Lost::Stay);
+    assert_eq!(lost_goes(true, Some(Place::Dock(ISSUES)), true), Lost::Stay);
+    assert_eq!(lost_goes(true, None, true), Lost::Stay);
+}
+
+#[test]
+fn a_focus_lost_in_the_dock_goes_to_its_card() {
+    assert_eq!(lost_goes(false, Some(Place::Dock(ISSUES)), true), Lost::Dock);
+}
+
+#[test]
+fn a_focus_lost_in_the_window_goes_to_the_rest() {
+    assert_eq!(lost_goes(false, Some(Place::Window), false), Lost::Rest);
+    assert_eq!(lost_goes(false, Some(Place::Window), true), Lost::Rest);
+}
+
+#[test]
+fn a_focus_lost_with_nothing_noted_keeps_the_docks_rule() {
+    assert_eq!(lost_goes(false, None, true), Lost::Dock);
+    assert_eq!(lost_goes(false, None, false), Lost::Stay);
+    assert_eq!(lost_goes(false, Some(Place::Terminal), true), Lost::Dock);
+    assert_eq!(lost_goes(false, Some(Place::Terminal), false), Lost::Stay);
+}

@@ -48,12 +48,14 @@ impl ChatField {
         let name = store.bots.find(&shown).map_or_else(|| shown.clone(), |bot| bot.name.clone());
         let revision = store.bots.drafts.revision();
         let draft = store.bots.drafts.text(&shown).to_string();
+        let stops = store.chat_takes_keys();
         let fill = refill(self.owner.as_deref(), Some(&shown), true, self.seen.1, revision) == Refill::Fill;
         if self.seen.0 != name {
             let label = placeholder(&name);
             self.field.update(cx, |field, cx| field.set_placeholder(label, cx));
         }
         self.seen = (name, revision);
+        self.field.update(cx, |field, _| field.set_in_tab_order(stops));
         if fill {
             self.owner = Some(shown);
             self.field.update(cx, |field, cx| field.fill(draft, cx));

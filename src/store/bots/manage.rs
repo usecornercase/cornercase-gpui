@@ -63,8 +63,8 @@ impl Store {
         self.bot_job(busy, Call::args(rename_args(id, name)), then, cx);
     }
 
-    pub(crate) fn ask_bot_menu(&mut self, id: &str, at: Point<Pixels>, cx: &mut Context<Self>) {
-        self.asks.bot_menu.ask(id, at);
+    pub(crate) fn ask_bot_menu(&mut self, id: &str, at: Point<Pixels>, keys: bool, cx: &mut Context<Self>) {
+        self.asks.bot_menu.ask(id, (at, keys));
         cx.notify();
     }
 

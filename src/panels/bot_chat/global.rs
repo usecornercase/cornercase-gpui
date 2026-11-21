@@ -1,6 +1,6 @@
 use gpui::{
     AnyElement, AnyView, App, AppContext as _, Entity, FocusHandle, Global, IntoElement as _, ParentElement as _,
-    StyleRefinement, Styled as _, div, px,
+    StyleRefinement, Styled as _, Window, div, px,
 };
 
 use super::field::ChatField;
@@ -42,6 +42,10 @@ pub(super) fn to_end(cx: &mut App) {
 pub(crate) fn field_focus(cx: &mut App) -> FocusHandle {
     let field = ChatField::get(cx);
     field.read(cx).focus_handle(cx)
+}
+
+pub(super) fn keys_to_field(window: &mut Window, cx: &mut App) {
+    window.focus(&field_focus(cx));
 }
 
 impl BotChat {

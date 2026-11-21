@@ -21,6 +21,10 @@ impl Store {
         self.bots.revision()
     }
 
+    pub(crate) fn chat_takes_keys(&self) -> bool {
+        bots::keys_go_to_chat(self.dialog.is_some(), self.sheet.is_some()) && !self.shows_file_full_screen()
+    }
+
     pub(super) fn take_bots(&mut self, app: &Value, cx: &mut Context<Self>) {
         let shown = self.shown_bot().and_then(|id| self.bots.find(id)).map(|bot| (bot.id.clone(), bot.name.clone()));
         let draft = shown.as_ref().map(|(id, _)| self.bots.drafts.text(id).to_string()).unwrap_or_default();

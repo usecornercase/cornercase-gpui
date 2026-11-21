@@ -3,6 +3,7 @@ use crate::panels::flows::model::{age, plural};
 use crate::panels::queue;
 
 pub(super) const HELD: &str = "Held";
+pub(super) const DROPPED_STAMP: &str = "Dropped";
 pub(super) const EARLIER: &str = "Earlier messages are left out: these are the newest 1,000.";
 pub(super) const NEW_MESSAGES: &str = "New messages";
 

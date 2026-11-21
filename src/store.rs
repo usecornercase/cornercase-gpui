@@ -103,7 +103,7 @@ pub(crate) struct Store {
 pub(crate) struct Asks {
     pub refocus: Option<FocusHandle>,
     pub open_update: Option<Updating>,
-    pub bot_menu: MenuAsk<gpui::Point<gpui::Pixels>>,
+    pub bot_menu: MenuAsk<(gpui::Point<gpui::Pixels>, bool)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

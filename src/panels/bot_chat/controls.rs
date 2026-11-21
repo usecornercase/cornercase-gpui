@@ -1,5 +1,5 @@
 use gpui::{
-    App, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, ParentElement as _,
+    App, ClickEvent, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, ParentElement as _,
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
@@ -13,9 +13,13 @@ use crate::model::bots::{Bot, Chat};
 use crate::notify;
 use crate::store::Store;
 use crate::theme::colours;
-use crate::ui::{self, Tone};
+use crate::ui::{self, Tone, press};
 
-pub(super) fn header(bot: &Bot, starting: bool) -> impl IntoElement + use<> {
+const NEW_CONVERSATION_STOP: &str = "bot-new-conversation";
+const MENU_STOP: &str = "bot-menu";
+const STOP_STOP: &str = "bot-stop";
+
+pub(super) fn header(bot: &Bot, starting: bool, stops: bool) -> impl IntoElement + use<> {
     div()
         .flex_none()
         .flex()
@@ -36,24 +40,28 @@ pub(super) fn header(bot: &Bot, starting: bool) -> impl IntoElement + use<> {
         .child(
             div().flex_1().min_w_0().text_size(px(11.5)).text_color(colours::faint()).child(ui::one_line(bot.facts())),
         )
-        .child(new_conversation(bot, starting))
-        .child(menu_button(bot))
+        .child(new_conversation(bot, starting, stops))
+        .child(menu_button(bot, stops))
 }
 
-fn menu_button(bot: &Bot) -> impl IntoElement + use<> {
-    let id = bot.id.clone();
+fn menu_button(bot: &Bot, stops: bool) -> impl IntoElement + use<> {
+    let (id, keyed) = (bot.id.clone(), bot.id.clone());
     div().flex_none().child(
-        ui::icon_button("bot-menu", "⋯")
-            .text_color(colours::muted())
+        press::stop(ui::icon_button(MENU_STOP, "⋯").text_color(colours::muted()), MENU_STOP, stops)
             .tooltip(notify::tip(menu_tip(&bot.name)))
             .on_mouse_down(MouseButton::Left, move |e: &MouseDownEvent, _, cx| {
                 cx.stop_propagation();
-                Store::get(cx).update(cx, |s, cx| s.ask_bot_menu(&id, e.position, cx));
+                Store::get(cx).update(cx, |s, cx| s.ask_bot_menu(&id, e.position, false, cx));
+            })
+            .on_click(move |event: &ClickEvent, _, cx| {
+                if event.is_keyboard() && press::pressed(event, MENU_STOP) {
+                    Store::get(cx).update(cx, |s, cx| s.ask_bot_menu(&keyed, event.position(), true, cx));
+                }
             }),
     )
 }
 
-fn new_conversation(bot: &Bot, starting: bool) -> impl IntoElement + use<> {
+fn new_conversation(bot: &Bot, starting: bool, stops: bool) -> impl IntoElement + use<> {
     let slot = div().flex_none();
     match new_conversation_control(bot.thinking(), starting) {
         Control::Running => slot.child(ui::busy_button("bot-new-conversation", STARTING, Tone::Plain)),
@@ -64,8 +72,12 @@ fn new_conversation(bot: &Bot, starting: bool) -> impl IntoElement + use<> {
         Control::Ready => {
             let (id, name) = (bot.id.clone(), bot.name.clone());
             slot.child(
-                ui::button("bot-new-conversation", NEW_CONVERSATION)
-                    .on_click(move |_, window, cx| ask_new_conversation(&id, &name, window, cx)),
+                press::stop(ui::button(NEW_CONVERSATION_STOP, NEW_CONVERSATION), NEW_CONVERSATION_STOP, stops)
+                    .on_click(move |event, window, cx| {
+                        if press::pressed(event, NEW_CONVERSATION_STOP) {
+                            ask_new_conversation(&id, &name, window, cx);
+                        }
+                    }),
             )
         }
     }
@@ -82,14 +94,23 @@ pub(crate) fn ask_new_conversation(id: &str, name: &str, window: &mut Window, cx
     dialogs::confirm_naming(&bot, question, window, cx);
 }
 
-pub(super) fn turn_row(bot: &Bot, chat: &Chat, now: i64, stopping: bool) -> Option<impl IntoElement + use<>> {
+pub(super) fn turn_row(
+    bot: &Bot,
+    chat: &Chat,
+    now: i64,
+    (stopping, stops): (bool, bool),
+) -> Option<impl IntoElement + use<>> {
     let turn = entries::turn(&chat.lines, bot.thinking())
         .or_else(|| bot.thinking().then_some(entries::Turn { since: now, steps: 0 }))?;
     let id = bot.id.clone();
     let stop = match stop_control(stopping) {
         Control::Running | Control::Resting => ui::busy_button("bot-stop", STOPPING, Tone::Plain).into_any_element(),
-        Control::Ready => ui::button("bot-stop", STOP)
-            .on_click(move |_, _, cx| Store::get(cx).update(cx, |s, cx| s.stop_bot(&id, cx)))
+        Control::Ready => press::stop(ui::button(STOP_STOP, STOP), STOP_STOP, stops)
+            .on_click(move |event, _, cx| {
+                if press::pressed(event, STOP_STOP) {
+                    Store::get(cx).update(cx, |s, cx| s.stop_bot(&id, cx));
+                }
+            })
             .into_any_element(),
     };
     Some(

@@ -672,6 +672,10 @@ impl TextField {
         self
     }
 
+    pub(crate) fn set_in_tab_order(&mut self, on: bool) {
+        self.focus_handle = self.focus_handle.clone().tab_stop(on);
+    }
+
     pub(crate) fn clears_on_escape(mut self) -> Self {
         self.options.clears_on_escape = true;
         self

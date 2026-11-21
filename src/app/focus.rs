@@ -60,6 +60,22 @@ pub(crate) enum Keys {
     DockCard,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Lost {
+    Dock,
+    Rest,
+    Stay,
+}
+
+pub(crate) fn lost_goes(overlay: bool, noted: Option<Place>, dock: bool) -> Lost {
+    match noted {
+        _ if overlay => Lost::Stay,
+        Some(Place::Window) => Lost::Rest,
+        _ if dock => Lost::Dock,
+        _ => Lost::Stay,
+    }
+}
+
 #[derive(Default)]
 pub(super) struct Held {
     pub(super) had: Overlays,
@@ -112,6 +128,10 @@ impl<T> Noted<T> {
     pub(crate) fn take(&mut self) -> Option<(Place, T)> {
         self.held.take()
     }
+
+    pub(crate) fn place(&self) -> Option<Place> {
+        self.held.as_ref().map(|(place, _)| *place)
+    }
 }
 
 impl Root {
@@ -154,6 +174,15 @@ impl Root {
         match rest_of(self.chat_shown()) {
             Rest::Field => bot_chat::field_focus(cx),
             Rest::Terminal => self.focus.clone(),
+        }
+    }
+
+    pub(crate) fn focus_lost(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let dock = self.store.read(cx).shown_dock().is_some();
+        match lost_goes(self.overlay_open(cx), self.held.home.place(), dock) {
+            Lost::Dock => window.focus(&self.dock_focus),
+            Lost::Rest => window.focus(&self.keys_rest(cx)),
+            Lost::Stay => {}
         }
     }
 

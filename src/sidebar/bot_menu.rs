@@ -86,8 +86,11 @@ impl Root {
 
     pub(crate) fn take_bot_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let asked = self.store.update(cx, |s, _| s.asks.bot_menu.take(&s.bots.list));
-        if let Some((bot, at)) = asked {
+        if let Some((bot, (at, keys))) = asked {
             self.show_bot_menu(&bot, (MenuFrom::Header, at), window, cx);
+            if keys {
+                self.light_first(cx);
+            }
         }
     }
 
