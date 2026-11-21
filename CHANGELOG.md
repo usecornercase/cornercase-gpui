@@ -10,8 +10,9 @@ Every pull request that changes the app adds a section here for its new version.
 - **A line whose agent closed**, or one of an earlier run of the server, reads `closed` and has no Show.
 - **The sidebar says which bot started an agent.** A tab's and an agent's details read `claude · by PRs · Opus 5.5 · …`, and follow the bot when it is renamed.
 - **Follow agents in New bot and Edit bot…**: untick it so the bot is not told when its agents finish or need you; its agents still say `by` it. Edit sends it only when you change it.
+- **The bot's card lists the agents it started** that are still open, under **Agents it started**, each with its status, its title, where it runs and **Show**, which closes the card and shows that agent's tab.
 - Tab reaches Show, a finished message and Go to agent, in the order of the lines, and scrolls the chat to them.
-- **What waits**: a linked machine's bot shows these lines without Show or Go to agent (they say `on vps`), and its agents' rows do not say `by` it yet. The bot's card does not list the agents it started yet.
+- **What waits**: a linked machine's bot shows these lines without Show or Go to agent (they say `on vps`), and its agents' rows do not say `by` it yet.
 
 ## 0.1.143
 

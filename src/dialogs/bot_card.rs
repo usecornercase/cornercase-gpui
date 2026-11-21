@@ -6,11 +6,12 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
+use self::started::{started, started_stops};
 use super::{body_height, close, edit_bot, fitted, frame, revealed, show};
 use crate::cli;
 use crate::model::bots::{
-    AboutGate, Bot, BotKey, CardRow, ListRow, Tone as RowTone, about_args, about_failed, about_of, card_rows,
-    routine_rows,
+    AboutGate, Bot, BotKey, CardRow, ListRow, StartedRow, Tone as RowTone, about_args, about_failed, about_of,
+    card_rows, routine_rows,
 };
 use crate::panels::bot_chat::time_label;
 use crate::panels::queue;
@@ -30,6 +31,8 @@ const READING: &str = "Reading…";
 const TRY_AGAIN: &str = "Try again";
 const ROUTINES_TITLE: &str = "Routines";
 const NO_ROUTINES: &str = "No routines yet";
+
+mod started;
 
 fn card_title(name: &str) -> String {
     format!("The bot {name}")
@@ -51,7 +54,7 @@ pub(crate) struct BotCard {
     stops: HashMap<SharedString, FocusHandle>,
     keyed: Option<SharedString>,
     due: Option<SharedString>,
-    drawn: Vec<&'static str>,
+    drawn: Vec<SharedString>,
     scroller: ScrollHandle,
 }
 
@@ -117,17 +120,18 @@ impl BotCard {
         self.keyed = now;
     }
 
-    fn drawn_stops(&self, bot: &Bot, routines: bool) -> Vec<&'static str> {
+    fn drawn_stops(&self, bot: &Bot, routines: bool, agents: Vec<SharedString>) -> Vec<SharedString> {
         let failed = matches!(self.about, About::Failed(_));
-        [(!bot.folder.is_empty(), COPY_STOP), (failed, RETRY_STOP), (routines, ROUTINES_STOP), (true, EDIT_STOP)]
-            .into_iter()
-            .filter_map(|(drawn, name)| drawn.then_some(name))
-            .collect()
+        let fixed = |stops: &[(bool, &'static str)]| -> Vec<SharedString> {
+            stops.iter().filter(|(drawn, _)| *drawn).map(|(_, name)| SharedString::from(*name)).collect()
+        };
+        let before = fixed(&[(!bot.folder.is_empty(), COPY_STOP), (failed, RETRY_STOP)]);
+        let after = fixed(&[(routines, ROUTINES_STOP), (true, EDIT_STOP)]);
+        [before, agents, after].concat()
     }
 
     fn keep_keys(&self, window: &mut Window) {
-        let lost =
-            self.stops.iter().any(|(name, handle)| handle.is_focused(window) && !self.drawn.contains(&name.as_ref()));
+        let lost = self.stops.iter().any(|(name, handle)| handle.is_focused(window) && !self.drawn.contains(name));
         if lost {
             window.focus(&self.focus);
         }
@@ -139,7 +143,7 @@ impl BotCard {
             press::Key::Previous => self.drawn.last(),
             press::Key::Press | press::Key::Other => return,
         };
-        if let Some(handle) = to.and_then(|name| self.stops.get(*name)) {
+        if let Some(handle) = to.and_then(|name| self.stops.get(name)) {
             window.focus(handle);
             cx.stop_propagation();
         }
@@ -276,7 +280,7 @@ impl BotCard {
         section(ROUTINES_TITLE, lines, NO_ROUTINES, Some(self.card_stop(open, ROUTINES_STOP).into_any_element()))
     }
 
-    fn body(&self, bot: &Bot, cx: &mut Context<Self>) -> Div {
+    fn body(&self, bot: &Bot, agents: Option<&[StartedRow]>, cx: &mut Context<Self>) -> Div {
         let store = Store::get(cx).read(cx);
         let now = queue::now();
         let routines = store
@@ -289,6 +293,7 @@ impl BotCard {
             .children(self.folder_line(bot))
             .child(fact_rows(&card_rows(bot, made_day(bot))))
             .children(self.about_part(cx))
+            .children(agents.map(|rows| self.started_part(rows)))
             .children(routines.map(|rows| self.routines_part(&rows)))
     }
 
@@ -315,10 +320,13 @@ impl Render for BotCard {
         self.reveal(window);
         let store = Store::get(cx).read(cx);
         let Some(bot) = store.bots.find(&self.bot).cloned() else { return div() };
-        self.drawn = self.drawn_stops(&bot, store.routines_offered());
+        let (routines, agents) = (store.routines_offered(), started(store, &bot.id));
+        let rows = agents.as_deref().unwrap_or_default();
+        self.keep_started_stops(rows, cx);
+        self.drawn = self.drawn_stops(&bot, routines, started_stops(rows));
         self.keep_keys(window);
         let height = body_height(f32::from(window.viewport_size().height));
-        let body = self.body(&bot, cx);
+        let body = self.body(&bot, agents.as_deref(), cx);
         let column = div()
             .flex()
             .flex_col()

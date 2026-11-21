@@ -163,3 +163,37 @@ fn what_it_is_for_is_read_hidden_or_says_this_computer_needs_a_newer_cornercase(
         AboutGate::Lacks("Needs cornercase 0.13.96 or newer on this Mac (it has 0.13.95).".into())
     );
 }
+
+fn session(text: &str) -> Session {
+    serde_json::from_str(text).expect("a session")
+}
+
+#[test]
+fn a_bots_card_lists_the_agents_it_started_and_not_a_shell_it_tagged() {
+    let view = session(fixture!("session/view-bot.json"));
+    let ops = started_rows(&view, "ops");
+    let found: Vec<(u64, &str, &str, Option<&str>)> = ops
+        .iter()
+        .map(|started| {
+            (started.row.id, started.row.name.as_str(), started.row.detail.as_str(), started.status.as_deref())
+        })
+        .collect();
+    assert_eq!(found, [(12, "bash", "claude · proj", Some("idle"))]);
+    assert_eq!(started_rows(&view, "prs"), []);
+    assert_eq!(started_rows(&view, "nobody"), []);
+}
+
+#[test]
+fn a_started_agent_reads_its_title_and_its_workspace_when_the_project_has_several() {
+    let view = session(
+        r#"{"projects":[{"id":1,"name":"shop","workspaces":[{"id":2,"name":"main","tabs":[]},
+        {"id":3,"name":"fix/ci-482","tabs":[{"id":4,"name":"claude","panes":[
+        {"id":5,"agent":"claude","bot":"prs","title":"✳ Fix the flaky test","status":"working"}]}]}]}]}"#,
+    );
+    let rows = started_rows(&view, "prs");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        (rows[0].row.name.as_str(), rows[0].row.detail.as_str()),
+        ("Fix the flaky test", "claude · shop › fix/ci-482")
+    );
+}

@@ -3,6 +3,7 @@ use serde_json::Value;
 
 use super::{Bot, access_words, set};
 use crate::cli::{Feature, Lacks, newer_here};
+use crate::model::{PaneInfo, Session, Tab, Workspace};
 use crate::panels::flows::model::plural;
 use crate::panels::queue::{Entry, repeat_words};
 use crate::platform::Os;
@@ -85,6 +86,36 @@ pub(crate) fn routine_rows(entries: &[Entry], bot: &str, next: impl Fn(i64) -> S
             ListRow { id: entry.id, name: entry.label.clone(), detail }
         })
         .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StartedRow {
+    pub row: ListRow,
+    pub status: Option<String>,
+}
+
+fn place(project: &str, workspaces: usize, workspace: &Workspace) -> String {
+    if workspaces > 1 { format!("{project} › {}", workspace.name) } else { project.to_string() }
+}
+
+fn started_row(pane: &PaneInfo, tab: &Tab, place: &str) -> StartedRow {
+    let name = pane.agent_title().unwrap_or_else(|| tab.name.clone());
+    let agent = pane.agent.clone().unwrap_or_default();
+    let row = ListRow { id: pane.id, name, detail: format!("{agent} · {place}") };
+    StartedRow { row, status: pane.status.clone() }
+}
+
+pub(crate) fn started_rows(session: &Session, bot: &str) -> Vec<StartedRow> {
+    let mut rows = Vec::new();
+    for project in &session.projects {
+        for workspace in &project.workspaces {
+            let place = place(&project.name, project.workspaces.len(), workspace);
+            let panes = workspace.tabs.iter().flat_map(|tab| tab.panes.iter().map(move |pane| (tab, pane)));
+            let tagged = panes.filter(|(_, pane)| pane.agent.is_some() && pane.bot.as_deref() == Some(bot));
+            rows.extend(tagged.map(|(tab, pane)| started_row(pane, tab, &place)));
+        }
+    }
+    rows
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

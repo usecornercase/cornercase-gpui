@@ -12,8 +12,8 @@ pub(crate) use self::asks::{
     what_happens,
 };
 pub(crate) use self::card::{
-    AboutGate, CardRow, ListRow, Tone, about_args, about_failed, about_gate, about_of, card_rows, routine_rows,
-    secrets_words,
+    AboutGate, CardRow, ListRow, StartedRow, Tone, about_args, about_failed, about_gate, about_of, card_rows,
+    routine_rows, secrets_words, started_rows,
 };
 pub(crate) use self::chat_apps::{AWAY, CHOICES, Reach, Row, UNPAIRED, note, platforms, reach, reach_tip, row, sent};
 pub(crate) use self::follow::{AgentRef, FollowRow, by, failed, follow_note, follow_row, follow_sent, showable, words};
