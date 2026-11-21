@@ -9,13 +9,14 @@ use gpui::{
 use self::started::{started, started_stops};
 use super::{body_height, close, edit_bot, fitted, frame, revealed, show};
 use crate::cli;
+use crate::desktop;
 use crate::model::bots::{
-    AboutGate, Bot, BotKey, CardRow, ListRow, StartedRow, Tone as RowTone, about_args, about_failed, about_of,
-    card_rows, routine_rows,
+    AboutGate, Bot, BotKey, CardRow, Controls, Home, ListRow, StartedRow, Tone as RowTone, about_failed, about_of,
+    card_rows, controls, folder_shown, routine_rows,
 };
 use crate::panels::bot_chat::time_label;
 use crate::panels::queue;
-use crate::store::{self, Busy, Clip, Store};
+use crate::store::{Clip, Store};
 use crate::theme::colours;
 use crate::ui::{self, press};
 
@@ -47,7 +48,7 @@ enum About {
 }
 
 pub(crate) struct BotCard {
-    bot: String,
+    bot: BotKey,
     about: About,
     serial: u64,
     focus: FocusHandle,
@@ -58,26 +59,26 @@ pub(crate) struct BotCard {
     scroller: ScrollHandle,
 }
 
-pub(crate) fn bot_card(id: &str, window: &mut Window, cx: &mut App) {
-    if Store::get(cx).read(cx).bots.find(id).is_none() {
+pub(crate) fn bot_card(key: &BotKey, window: &mut Window, cx: &mut App) {
+    if Store::get(cx).read(cx).bot(key).is_none() {
         return;
     }
-    let view = cx.new(|cx| BotCard::new(id, cx));
+    let view = cx.new(|cx| BotCard::new(key, cx));
     let focus = view.read(cx).focus.clone();
     show(view.into(), &focus, window, cx);
-    Store::get(cx).update(cx, |s, _| s.names_bot(&BotKey::here(id)));
+    Store::get(cx).update(cx, |s, _| s.names_bot(key));
 }
 
 impl BotCard {
-    fn new(id: &str, cx: &mut Context<Self>) -> Self {
+    fn new(key: &BotKey, cx: &mut Context<Self>) -> Self {
         cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
-        let about = match Store::get(cx).read(cx).about_gate() {
+        let about = match Store::get(cx).read(cx).about_gate(&key.home) {
             AboutGate::Hidden => About::Hidden,
             AboutGate::Lacks(words) => About::Lacks(words),
             AboutGate::Read => About::Reading,
         };
         let mut card = Self {
-            bot: id.to_string(),
+            bot: key.clone(),
             about,
             serial: 0,
             focus: cx.focus_handle(),
@@ -94,12 +95,13 @@ impl BotCard {
     }
 
     fn read_about(&mut self, cx: &mut Context<Self>) {
-        let name = Store::get(cx).read(cx).bots.find(&self.bot).map_or_else(|| self.bot.clone(), |b| b.name.clone());
         self.serial += 1;
         self.about = About::Reading;
-        let serial = self.serial;
-        let busy = Busy::new(format!("bot-about:{}", self.bot), format!("Reading what {name} is for…"));
-        store::run_busy(cx, busy, about_args(&self.bot), move |this, result, cx| this.about_read(serial, result, cx));
+        let (serial, card, key) = (self.serial, cx.weak_entity(), self.bot.clone());
+        let then = move |_: &mut Store, result, cx: &mut Context<Store>| {
+            let _ = card.update(cx, |card, cx| card.about_read(serial, result, cx));
+        };
+        Store::get(cx).update(cx, |s, cx| s.read_bot_about(&key, then, cx));
         cx.notify();
     }
 
@@ -120,13 +122,13 @@ impl BotCard {
         self.keyed = now;
     }
 
-    fn drawn_stops(&self, bot: &Bot, routines: bool, agents: Vec<SharedString>) -> Vec<SharedString> {
+    fn drawn_stops(&self, bot: &Bot, shown: &Controls, agents: Vec<SharedString>) -> Vec<SharedString> {
         let failed = matches!(self.about, About::Failed(_));
         let fixed = |stops: &[(bool, &'static str)]| -> Vec<SharedString> {
             stops.iter().filter(|(drawn, _)| *drawn).map(|(_, name)| SharedString::from(*name)).collect()
         };
         let before = fixed(&[(!bot.folder.is_empty(), COPY_STOP), (failed, RETRY_STOP)]);
-        let after = fixed(&[(routines, ROUTINES_STOP), (true, EDIT_STOP)]);
+        let after = fixed(&[(shown.routines, ROUTINES_STOP), (shown.edit, EDIT_STOP)]);
         [before, agents, after].concat()
     }
 
@@ -185,9 +187,8 @@ fn fact_rows(rows: &[CardRow]) -> Div {
     div().flex().flex_col().gap(px(6.)).children(lines)
 }
 
-fn folder_text(path: &str) -> Div {
-    let shown = ui::home_relative(path);
-    let (parent, name) = shown.rsplit_once('/').map_or((String::new(), shown.as_str()), |(p, n)| (format!("{p}/"), n));
+fn folder_text(shown: &str) -> Div {
+    let (parent, name) = shown.rsplit_once('/').map_or((String::new(), shown), |(p, n)| (format!("{p}/"), n));
     div()
         .flex_1()
         .min_w_0()
@@ -197,10 +198,19 @@ fn folder_text(path: &str) -> Div {
         .child(div().flex_none().text_color(colours::text()).child(name.to_string()))
 }
 
-fn copy_pressed(event: &ClickEvent, path: &str, cx: &mut App) {
-    if press::pressed(event, COPY_STOP) {
-        let clip = Clip::of(path.to_string(), &ui::home_relative(path));
-        Store::get(cx).update(cx, |s, cx| s.copy(&clip, cx));
+fn copy_pressed(event: &ClickEvent, (path, home): (&str, &Home), cx: &mut App) {
+    if !press::pressed(event, COPY_STOP) {
+        return;
+    }
+    Store::get(cx).update(cx, |s, cx| match home.machine() {
+        None => s.copy(&Clip::of(path.to_string(), &ui::home_relative(path)), cx),
+        Some(machine) => s.copy_from(path.to_string(), machine, cx),
+    });
+}
+
+fn edit_pressed(event: &ClickEvent, bot: &str, window: &mut Window, cx: &mut App) {
+    if press::pressed(event, EDIT_STOP) {
+        edit_bot(bot, window, cx);
     }
 }
 
@@ -235,13 +245,14 @@ impl BotCard {
         if bot.folder.is_empty() {
             return None;
         }
-        let path = bot.folder.clone();
-        let copy = ui::button(COPY_STOP, "Copy path").on_click(move |event, _, cx| copy_pressed(event, &path, cx));
+        let (path, home) = (bot.folder.clone(), bot.home.clone());
+        let copy =
+            ui::button(COPY_STOP, "Copy path").on_click(move |event, _, cx| copy_pressed(event, (&path, &home), cx));
         let line = div()
             .flex()
             .items_center()
             .gap(px(10.))
-            .child(folder_text(&bot.folder))
+            .child(folder_text(&folder_shown(&bot.folder, &bot.home, &desktop::home_text())))
             .child(self.card_stop(copy, COPY_STOP));
         Some(labelled("Folder", line).items_center())
     }
@@ -272,40 +283,47 @@ impl BotCard {
             .child(self.card_stop(again, RETRY_STOP))
     }
 
-    fn routines_part(&self, rows: &[ListRow]) -> Div {
-        let bot = self.bot.clone();
-        let open =
-            ui::button(ROUTINES_STOP, "Routines…").on_click(move |event, _, cx| routines_pressed(event, &bot, cx));
+    fn routines_part(&self, rows: &[ListRow], button: bool) -> Div {
+        let bot = self.bot.id.clone();
+        let open = button.then(|| {
+            let button =
+                ui::button(ROUTINES_STOP, "Routines…").on_click(move |event, _, cx| routines_pressed(event, &bot, cx));
+            self.card_stop(button, ROUTINES_STOP).into_any_element()
+        });
         let lines = rows.iter().map(|row| listed(row, None, None).into_any_element()).collect();
-        section(ROUTINES_TITLE, lines, NO_ROUTINES, Some(self.card_stop(open, ROUTINES_STOP).into_any_element()))
+        section(ROUTINES_TITLE, lines, NO_ROUTINES, open)
     }
 
-    fn body(&self, bot: &Bot, agents: Option<&[StartedRow]>, cx: &mut Context<Self>) -> Div {
+    fn body(&self, bot: &Bot, (agents, shown): (Option<&[StartedRow]>, &Controls), cx: &mut Context<Self>) -> Div {
         let store = Store::get(cx).read(cx);
         let now = queue::now();
         let routines = store
-            .routines_offered()
-            .then(|| routine_rows(&queue::entries(store.app.as_ref()), &bot.id, |at| time_label(at, now)));
+            .routines_offered_at(&bot.home)
+            .then(|| store.bots_at(&bot.home).map(|bots| routine_rows(&bots.queue, &bot.id, |at| time_label(at, now))))
+            .flatten();
+        let reach = bot.home.machine().and_then(|machine| store.machine_bots_note(machine));
         div()
             .flex()
             .flex_col()
             .gap(px(14.))
+            .children(reach.map(ui::dim))
             .children(self.folder_line(bot))
             .child(fact_rows(&card_rows(bot, made_day(bot))))
             .children(self.about_part(cx))
             .children(agents.map(|rows| self.started_part(rows)))
-            .children(routines.map(|rows| self.routines_part(&rows)))
+            .children(routines.map(|rows| self.routines_part(&rows, shown.routines)))
+            .children(shown.note.clone().map(ui::dim))
     }
 
-    fn buttons(&self) -> Div {
-        let bot = self.bot.clone();
-        let edit = ui::button(EDIT_STOP, "Edit bot…").on_click(move |event: &ClickEvent, window, cx| {
-            if press::pressed(event, EDIT_STOP) {
-                edit_bot(&bot, window, cx);
-            }
+    fn buttons(&self, shown: &Controls) -> Div {
+        let bot = self.bot.id.clone();
+        let edit = shown.edit.then(|| {
+            let button = ui::button(EDIT_STOP, "Edit bot…")
+                .on_click(move |event: &ClickEvent, window, cx| edit_pressed(event, &bot, window, cx));
+            self.card_stop(button, EDIT_STOP)
         });
         let done = ui::primary_button("bot-card-done", "Done").on_click(|_: &ClickEvent, _, cx| close(cx));
-        div().flex().gap(px(8.)).child(self.card_stop(edit, EDIT_STOP)).child(done)
+        div().flex().gap(px(8.)).children(edit).child(done)
     }
 }
 
@@ -319,23 +337,23 @@ impl Render for BotCard {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.reveal(window);
         let store = Store::get(cx).read(cx);
-        let Some(bot) = store.bots.find(&self.bot).cloned() else { return div() };
-        let (routines, agents) = (store.routines_offered(), started(store, &bot.id));
+        let Some(bot) = store.bot(&self.bot).cloned() else { return div() };
+        let (shown, agents) = (controls(&bot.home, store.routines_offered_at(&bot.home)), started(store, &self.bot));
         let rows = agents.as_deref().unwrap_or_default();
         self.keep_started_stops(rows, cx);
-        self.drawn = self.drawn_stops(&bot, routines, started_stops(rows));
+        self.drawn = self.drawn_stops(&bot, &shown, started_stops(rows));
         self.keep_keys(window);
         let height = body_height(f32::from(window.viewport_size().height));
-        let body = self.body(&bot, agents.as_deref(), cx);
+        let body = self.body(&bot, (agents.as_deref(), &shown), cx);
         let column = div()
             .flex()
             .flex_col()
             .max_h(px(height))
             .child(fitted("bot-card", window, body).min_h_0().track_scroll(&self.scroller));
         div().track_focus(&self.focus).on_key_down(cx.listener(Self::walk)).child(frame(
-            card_title(&bot.name),
+            card_title(&bot.label()),
             column,
-            self.buttons(),
+            self.buttons(&shown),
         ))
     }
 }

@@ -16,7 +16,7 @@ use crate::cli;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::MachineSeen;
-use crate::model::bots::{ASKS_FOR_A_SECRET, Bot, Home, Making, Offer};
+use crate::model::bots::{ASKS_FOR_A_SECRET, Bot, BotKey, Home, Making, Offer};
 use crate::panels::bot_chat::row_detail;
 use crate::panels::queue;
 use crate::theme::colours;
@@ -132,7 +132,7 @@ impl Root {
         let gid = SharedString::from(format!("bot-{}", bot.key().tag()));
         let (shown, active, dim) = on_screen;
         let own = bot.home == Home::Here;
-        let hovered = own && self.row_hovered(&gid);
+        let hovered = self.row_hovered(&gid);
         let busy =
             bot.thinking() || self.store.read(cx).bots_at(&bot.home).is_some_and(|bots| bots.runs.answering(&bot.id));
         let row = ui::row(("sidebar-bot", index), shown)
@@ -144,15 +144,7 @@ impl Root {
             .child(self.bot_lead(busy))
             .child(self.bot_text(bot, (shown, busy)))
             .child(Self::bot_end(bot, (shown && active, hovered), &gid, cx));
-        let key = bot.key();
-        if !own {
-            return row
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                    this.store.update(cx, |s, cx| s.show_bot(&key, cx));
-                }))
-                .into_any_element();
-        }
-        let (id, press) = (bot.id.clone(), bot.id.clone());
+        let (key, press, id) = (bot.key(), bot.key(), bot.id.clone());
         row.on_hover(hover_listener(gid, cx))
             .on_mouse_down(
                 MouseButton::Right,
@@ -161,7 +153,7 @@ impl Root {
                 }),
             )
             .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
-                if e.click_count() == 2 {
+                if own && e.click_count() == 2 {
                     this.start_bot_rename(&id, window, cx);
                 } else {
                     this.store.update(cx, |s, cx| s.show_bot(&key, cx));
@@ -183,7 +175,7 @@ impl Root {
         let disc = count_disc(unread).filter(|_| !seen);
         trailing(End { gap: 4., buttons: 1, figures: disc.is_some() }, hovered)
             .children(disc.map(gpui::Styled::flex_none))
-            .when(hovered, |d| d.child(Self::bot_menu_button(&bot.id, gid, cx)))
+            .when(hovered, |d| d.child(Self::bot_menu_button(&bot.key(), gid, cx)))
     }
 
     fn bot_text(&self, bot: &Bot, (shown, busy): (bool, bool)) -> impl IntoElement + use<> {
@@ -199,13 +191,13 @@ impl Root {
         }
     }
 
-    fn bot_menu_button(id: &str, gid: &SharedString, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let id = id.to_string();
-        hover_button(SharedString::from(format!("bot-menu-{id}")), gid.clone(), "⋯", 0).on_mouse_down(
+    fn bot_menu_button(key: &BotKey, gid: &SharedString, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let key = key.clone();
+        hover_button(SharedString::from(format!("bot-menu-{}", key.tag())), gid.clone(), "⋯", 0).on_mouse_down(
             MouseButton::Left,
             cx.listener(move |this, e: &MouseDownEvent, window, cx| {
                 cx.stop_propagation();
-                this.open_bot_menu(&id, e.position, window, cx);
+                this.open_bot_menu(&key, e.position, window, cx);
             }),
         )
     }

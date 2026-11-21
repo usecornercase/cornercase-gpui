@@ -1,7 +1,7 @@
 use gpui::{
     AnyElement, App, Bounds, ClickEvent, FocusHandle, InteractiveElement as _, IntoElement, MouseButton,
     MouseDownEvent, ParentElement as _, Pixels, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div,
-    prelude::FluentBuilder as _, px,
+    px,
 };
 
 use super::entries::{self, Control, new_conversation_control, stop_control};
@@ -11,7 +11,7 @@ use super::words::{
 };
 use super::{BotChat, global, routines_fit};
 use crate::dialogs::{self, Question};
-use crate::model::bots::{Bot, BotKey, Chat, Home, secrets_words};
+use crate::model::bots::{Bot, BotKey, Chat, secrets_words};
 use crate::model::bots::{Reach, reach_tip};
 use crate::notify;
 use crate::store::Store;
@@ -78,7 +78,7 @@ pub(super) fn header(
         .children(reach.map(reach_icon))
         .children(routines)
         .child(new_conversation(bot, starting, stops))
-        .when(bot.home == Home::Here, |d| d.child(menu_button(bot, stops)));
+        .child(menu_button(bot, stops));
     match fit {
         Some(fit) => row.on_children_prepainted(move |bounds, window, cx| measured(&fit, (&bounds, at), window, cx)),
         None => row,
@@ -92,15 +92,12 @@ fn name_button(bot: &Bot) -> AnyElement {
         .font_weight(gpui::FontWeight::SEMIBOLD)
         .text_color(colours::text())
         .child(ui::one_line(bot.name.clone()));
-    if bot.home != Home::Here {
-        return name.into_any_element();
-    }
-    let id = bot.id.clone();
+    let key = bot.key();
     name.id("bot-card-name")
         .cursor_pointer()
         .hover(|s| s.text_color(colours::brand()))
-        .tooltip(notify::tip(details_tip(&bot.name)))
-        .on_click(move |_: &ClickEvent, window, cx| dialogs::bot_card(&id, window, cx))
+        .tooltip(notify::tip(details_tip(&bot.label())))
+        .on_click(move |_: &ClickEvent, window, cx| dialogs::bot_card(&key, window, cx))
         .into_any_element()
 }
 
@@ -144,10 +141,10 @@ fn routines_button(bot: &Bot, stop: &FocusHandle, stops: bool) -> impl IntoEleme
 }
 
 fn menu_button(bot: &Bot, stops: bool) -> impl IntoElement + use<> {
-    let (id, keyed) = (bot.id.clone(), bot.id.clone());
+    let (id, keyed) = (bot.key(), bot.key());
     div().flex_none().child(
         press::stop(ui::icon_button(MENU_STOP, "⋯").text_color(colours::muted()), MENU_STOP, stops)
-            .tooltip(notify::tip(menu_tip(&bot.name)))
+            .tooltip(notify::tip(menu_tip(&bot.label())))
             .on_mouse_down(MouseButton::Left, move |e: &MouseDownEvent, _, cx| {
                 cx.stop_propagation();
                 Store::get(cx).update(cx, |s, cx| s.ask_bot_menu(&id, e.position, false, cx));

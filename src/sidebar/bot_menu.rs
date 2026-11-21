@@ -1,6 +1,6 @@
 use gpui::{Context, Pixels, Point, Window};
 
-use super::menus::folder_items;
+use super::menus::{copy_path_item, folder_items};
 use crate::app::Root;
 use crate::cli;
 use crate::context_menu::{Entry, danger, item, resting};
@@ -73,9 +73,23 @@ fn conversation_entries(bot: &Bot, run_answers: bool) -> Vec<Entry> {
     if run_answers { vec![resting(answering(&bot.name)), new] } else { vec![new] }
 }
 
+fn details_entry(bot: &Bot) -> Entry {
+    let key = bot.key();
+    item(DETAILS_ENTRY, move |_, window, cx| dialogs::bot_card(&key, window, cx))
+}
+
+fn machine_menu(bot: &Bot, machine: &str, run_answers: bool) -> Vec<Entry> {
+    let mut entries = conversation_entries(bot, run_answers);
+    entries.extend([Entry::Separator, details_entry(bot)]);
+    if !bot.folder.is_empty() {
+        entries.extend([Entry::Separator, copy_path_item(machine, &bot.folder)]);
+    }
+    entries
+}
+
 fn own_entries(bot: &Bot, from: MenuFrom, routines: bool) -> Vec<Entry> {
-    let (renaming, editing, listing, showing) = (bot.id.clone(), bot.id.clone(), bot.id.clone(), bot.id.clone());
-    let details = item(DETAILS_ENTRY, move |_, window, cx| dialogs::bot_card(&showing, window, cx));
+    let (renaming, editing, listing) = (bot.id.clone(), bot.id.clone(), bot.id.clone());
+    let details = details_entry(bot);
     let rename = item(RENAME_ENTRY, move |this, window, cx| this.start_bot_rename(&renaming, window, cx));
     let edit = item(EDIT_ENTRY, move |_, window, cx| dialogs::edit_bot(&editing, window, cx));
     let routines = routines
@@ -97,6 +111,9 @@ fn removal_entry(bot: &Bot, run_answers: bool) -> Entry {
 }
 
 pub(super) fn bot_menu(bot: &Bot, from: MenuFrom, offers: Offers<'_>) -> Vec<Entry> {
+    if let Some(machine) = bot.home.machine() {
+        return machine_menu(bot, machine, offers.run_answers);
+    }
     let mut entries = conversation_entries(bot, offers.run_answers);
     entries.push(Entry::Separator);
     entries.extend(own_entries(bot, from, offers.routines));
@@ -109,13 +126,19 @@ pub(super) fn bot_menu(bot: &Bot, from: MenuFrom, offers: Offers<'_>) -> Vec<Ent
 }
 
 impl Root {
-    pub(super) fn open_bot_menu(&mut self, id: &str, at: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(bot) = self.store.read(cx).bots.find(id).cloned() else { return };
+    pub(super) fn open_bot_menu(
+        &mut self,
+        key: &BotKey,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(bot) = self.store.read(cx).bot(key).cloned() else { return };
         self.show_bot_menu(&bot, (MenuFrom::Row, at), window, cx);
     }
 
     pub(crate) fn take_bot_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let asked = self.store.update(cx, |s, _| s.asks.bot_menu.take(&s.bots.list));
+        let asked = self.store.update(cx, |s, _| s.take_asked(|asks| &mut asks.bot_menu));
         if let Some((bot, (at, keys))) = asked {
             self.show_bot_menu(&bot, (MenuFrom::Header, at), window, cx);
             if keys {
@@ -133,7 +156,7 @@ impl Root {
     ) {
         let store = self.store.read(cx);
         let (openers, routines) = (store.openers.clone(), store.routines_offered());
-        let run_answers = store.bots.runs.answering(&bot.id);
+        let run_answers = store.bots_at(&bot.home).is_some_and(|bots| bots.runs.answering(&bot.id));
         let offers = Offers { openers: &openers, here: cli::host().is_none(), routines, run_answers };
         self.open_menu(at, bot_menu(bot, from, offers), window, cx);
     }

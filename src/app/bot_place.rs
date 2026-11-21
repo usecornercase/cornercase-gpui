@@ -40,7 +40,9 @@ impl Root {
     }
 
     pub(super) fn take_bot_ask(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some((bot, (ask, by))) = self.store.update(cx, |s, _| s.asks.bot_ask.take(&s.bots.list)) else { return };
+        let Some((bot, (ask, by))) = self.store.update(cx, |s, _| s.take_asked(|asks| &mut asks.bot_ask)) else {
+            return;
+        };
         let in_field = bot_chat::field_focus(cx).is_focused(window);
         let s = self.store.read(cx);
         let here = Here {

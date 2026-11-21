@@ -8,7 +8,6 @@ use crate::cli::{self, Feature};
 use crate::model::bots::{
     self, Anchor, Answer, Bot, BotEvent, BotKey, Bots, CatchUp, Chat, Heard, Home, Offer, Read, Runs, Told,
 };
-use crate::model::machines::run_on::server_release;
 use crate::model::place::Moved;
 use crate::panels::queue;
 use crate::platform::Os;
@@ -26,7 +25,9 @@ mod there;
 pub(super) use self::there::BotsThere;
 
 fn take_runs(bots: &mut Bots, app: &Value) {
-    let runs = Runs::of(&queue::entries(Some(app)));
+    let entries = queue::entries(Some(app));
+    bots.take_queue(&entries);
+    let runs = Runs::of(&entries);
     if runs != bots.runs {
         bots.runs = runs;
         bots.bump();
@@ -47,16 +48,12 @@ impl Store {
         bots::offer_of(self.any_bot_listed(), self.releases().lacks(Feature::Bots), Os::CURRENT)
     }
 
+    pub(crate) fn bot_releases(&self, home: &Home) -> cli::Releases<'static> {
+        bots::releases_at(home, (self.session.as_ref(), &self.machines), self.heard_release())
+    }
+
     pub(crate) fn bot_setup_offered(&self, key: &BotKey) -> bool {
-        let releases = match key.home.machine() {
-            None => self.releases(),
-            Some(machine) => cli::Releases {
-                server: server_release(Some(machine), self.session.as_ref(), &self.machines),
-                here: self.heard_release(),
-                machine: None,
-            },
-        };
-        releases.lacks(Feature::BotSetup).is_none()
+        self.bot_releases(&key.home).lacks(Feature::BotSetup).is_none()
     }
 
     pub(crate) fn chat_apps_row(&self) -> bots::Row {

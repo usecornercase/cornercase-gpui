@@ -2,6 +2,10 @@ use serde::Deserialize as _;
 use serde_json::Value;
 
 use super::{BotEvent, Give};
+use crate::cli::{Release, Releases};
+use crate::model::Session;
+use crate::model::machines::Machine;
+use crate::model::machines::run_on::server_release;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum Home {
@@ -48,6 +52,14 @@ pub(crate) fn label(name: &str, home: &Home) -> String {
         None => name.to_string(),
         Some(machine) => format!("{name} on {machine}"),
     }
+}
+
+pub(crate) fn releases_at(
+    home: &Home,
+    (session, machines): (Option<&Session>, &[Machine]),
+    here: Release,
+) -> Releases<'static> {
+    Releases { server: server_release(home.machine(), session, machines), here, machine: None }
 }
 
 pub(crate) fn giving_at(home: &Home, offer: Give) -> Give {

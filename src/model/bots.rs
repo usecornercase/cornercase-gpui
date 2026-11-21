@@ -4,6 +4,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::cli::{Feature, Lacks, newer_here};
+use crate::panels::queue::Entry;
 use crate::platform::Os;
 
 pub(crate) use self::asks::{
@@ -12,8 +13,8 @@ pub(crate) use self::asks::{
     what_happens,
 };
 pub(crate) use self::card::{
-    AboutGate, CardRow, ListRow, StartedRow, Tone, about_args, about_failed, about_gate, about_of, card_rows,
-    routine_rows, secrets_words, started_rows,
+    AboutGate, CardRow, Controls, ListRow, ShowAt, StartedRow, Tone, about_args, about_failed, about_gate, about_of,
+    card_rows, controls, folder_shown, routine_rows, secrets_words, started_rows, started_rows_there,
 };
 pub(crate) use self::chat_apps::{AWAY, CHOICES, Reach, Row, UNPAIRED, note, platforms, reach, reach_tip, row, sent};
 pub(crate) use self::follow::{AgentRef, FollowRow, by, failed, follow_note, follow_row, follow_sent, showable, words};
@@ -21,7 +22,7 @@ pub(crate) use self::form::{
     AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, id_of,
     kept_accounts, new_args, rename_args,
 };
-pub(crate) use self::home::{BotKey, Home, event_of, giving_at, label};
+pub(crate) use self::home::{BotKey, Home, event_of, giving_at, label, releases_at};
 pub(crate) use self::manage::{
     Arrival, Closes, Creating, Making, Managing, MenuAsk, create_failed, making, remove_failed, rename_failed,
     save_failed,
@@ -463,6 +464,7 @@ pub(crate) struct Bots {
     pub runs: Runs,
     pub anchor: Option<Anchor>,
     pub queue_of: Option<String>,
+    pub queue: Vec<Entry>,
     pub home: Home,
     stopping: HashSet<String>,
     again: HashSet<u64>,
@@ -488,6 +490,10 @@ impl Bots {
 
     pub(crate) fn revision(&self) -> u64 {
         self.revision + self.chat.as_ref().map_or(0, Chat::revision)
+    }
+
+    pub(crate) fn take_queue(&mut self, entries: &[Entry]) {
+        self.queue = entries.iter().filter(|entry| entry.place.bot.is_some()).cloned().collect();
     }
 
     pub(crate) fn bump(&mut self) {

@@ -1,12 +1,13 @@
 use anyhow::bail;
 use serde_json::Value;
 
-use super::{Bot, access_words, set};
+use super::{Bot, Home, access_words, set};
 use crate::cli::{Feature, Lacks, newer_here};
-use crate::model::{PaneInfo, Session, Tab, Workspace};
+use crate::model::{MachinePlace, MachineSeen, PaneInfo, Session, Tab};
 use crate::panels::flows::model::plural;
 use crate::panels::queue::{Entry, repeat_words};
 use crate::platform::Os;
+use crate::platform::paths::home_relative;
 
 const THE_AGENTS_OWN: &str = "the agent's own";
 const UNREADABLE: &str = "secrets cannot be read";
@@ -89,33 +90,91 @@ pub(crate) fn routine_rows(entries: &[Entry], bot: &str, next: impl Fn(i64) -> S
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ShowAt {
+    Pane(u64),
+    There(Box<MachinePlace>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StartedRow {
     pub row: ListRow,
     pub status: Option<String>,
+    pub stop: String,
+    pub show: ShowAt,
 }
 
-fn place(project: &str, workspaces: usize, workspace: &Workspace) -> String {
-    if workspaces > 1 { format!("{project} › {}", workspace.name) } else { project.to_string() }
+fn place(project: &str, workspaces: usize, workspace: &str) -> String {
+    if workspaces > 1 { format!("{project} › {workspace}") } else { project.to_string() }
 }
 
-fn started_row(pane: &PaneInfo, tab: &Tab, place: &str) -> StartedRow {
+fn tagged<'a, Id>(tabs: &'a [Tab<Id>], bot: &'a str) -> impl Iterator<Item = (&'a Tab<Id>, &'a PaneInfo<Id>)> {
+    tabs.iter()
+        .flat_map(|tab| tab.panes.iter().map(move |pane| (tab, pane)))
+        .filter(move |(_, pane)| pane.agent.is_some() && pane.bot.as_deref() == Some(bot))
+}
+
+fn started_row<Id>(
+    (tab, pane): (&Tab<Id>, &PaneInfo<Id>),
+    place: &str,
+    (id, stop, show): (u64, String, ShowAt),
+) -> StartedRow {
     let name = pane.agent_title().unwrap_or_else(|| tab.name.clone());
     let agent = pane.agent.clone().unwrap_or_default();
-    let row = ListRow { id: pane.id, name, detail: format!("{agent} · {place}") };
-    StartedRow { row, status: pane.status.clone() }
+    let row = ListRow { id, name, detail: format!("{agent} · {place}") };
+    StartedRow { row, status: pane.status.clone(), stop, show }
 }
 
 pub(crate) fn started_rows(session: &Session, bot: &str) -> Vec<StartedRow> {
     let mut rows = Vec::new();
     for project in &session.projects {
         for workspace in &project.workspaces {
-            let place = place(&project.name, project.workspaces.len(), workspace);
-            let panes = workspace.tabs.iter().flat_map(|tab| tab.panes.iter().map(move |pane| (tab, pane)));
-            let tagged = panes.filter(|(_, pane)| pane.agent.is_some() && pane.bot.as_deref() == Some(bot));
-            rows.extend(tagged.map(|(tab, pane)| started_row(pane, tab, &place)));
+            let place = place(&project.name, project.workspaces.len(), &workspace.name);
+            rows.extend(tagged(&workspace.tabs, bot).map(|(tab, pane)| {
+                started_row((tab, pane), &place, (pane.id, pane.id.to_string(), ShowAt::Pane(pane.id)))
+            }));
         }
     }
     rows
+}
+
+pub(crate) fn started_rows_there(seen: &MachineSeen, bot: &str) -> Vec<StartedRow> {
+    let workspaces = seen.projects.iter().flat_map(|project| project.workspaces.iter().map(move |ws| (project, ws)));
+    let panes = workspaces.flat_map(|(project, ws)| tagged(&ws.tabs, bot).map(move |found| (project, ws, found)));
+    panes
+        .enumerate()
+        .map(|(at, (project, ws, (tab, pane)))| {
+            let place = place(&project.name, project.workspaces.len(), &ws.name);
+            let show = ShowAt::There(Box::new(MachinePlace::at(seen, ws, Some(tab.id))));
+            started_row((tab, pane), &place, (u64::try_from(at).unwrap_or(u64::MAX), pane.id.key(), show))
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Controls {
+    pub routines: bool,
+    pub edit: bool,
+    pub note: Option<String>,
+}
+
+pub(crate) fn controls(home: &Home, routines_offered: bool) -> Controls {
+    match home.machine() {
+        None => Controls { routines: routines_offered, edit: true, note: None },
+        Some(machine) => Controls {
+            routines: false,
+            edit: false,
+            note: Some(format!(
+                "Change it, its secrets and its routines on {machine}: this window only reads a machine's bot for now."
+            )),
+        },
+    }
+}
+
+pub(crate) fn folder_shown(path: &str, home: &Home, own_home: &str) -> String {
+    match home {
+        Home::Here => home_relative(path, own_home),
+        Home::Machine(_) => path.to_string(),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

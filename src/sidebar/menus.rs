@@ -59,6 +59,13 @@ pub(super) fn folder_items(path: &str, openers: &[Found], here: bool) -> Vec<Ent
     open_in.into_iter().chain([copy]).collect()
 }
 
+pub(crate) fn copy_path_item(machine: &str, path: &str) -> Entry {
+    let (machine, path) = (machine.to_string(), path.to_string());
+    item("Copy path", move |this, _, cx| {
+        this.store.update(cx, |s, cx| s.copy_from(path.clone(), &machine, cx));
+    })
+}
+
 pub(crate) fn path_items(path: &str, openers: &[Found]) -> Vec<Entry> {
     folder_items(path, openers, cli::host().is_none())
 }

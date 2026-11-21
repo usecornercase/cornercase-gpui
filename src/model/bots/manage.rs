@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::time::Instant;
 
-use super::Bot;
+use super::{Bot, BotKey};
 use crate::cli::{Feature, Lacks, newer};
 use crate::model::machines::run_on::AWAITED_FOR;
 use crate::platform::Os;
@@ -158,7 +158,7 @@ impl Managing {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MenuAsk<P> {
-    asked: Option<(String, P)>,
+    asked: Option<(BotKey, P)>,
 }
 
 impl<P> Default for MenuAsk<P> {
@@ -168,13 +168,13 @@ impl<P> Default for MenuAsk<P> {
 }
 
 impl<P> MenuAsk<P> {
-    pub(crate) fn ask(&mut self, bot: &str, at: P) {
-        self.asked = Some((bot.to_string(), at));
+    pub(crate) fn ask(&mut self, bot: &BotKey, at: P) {
+        self.asked = Some((bot.clone(), at));
     }
 
-    pub(crate) fn take(&mut self, list: &[Bot]) -> Option<(Bot, P)> {
-        let (id, at) = self.asked.take()?;
-        list.iter().find(|bot| bot.id == id).map(|bot| (bot.clone(), at))
+    pub(crate) fn take(&mut self, find: impl FnOnce(&BotKey) -> Option<Bot>) -> Option<(Bot, P)> {
+        let (key, at) = self.asked.take()?;
+        find(&key).map(|bot| (bot, at))
     }
 }
 
