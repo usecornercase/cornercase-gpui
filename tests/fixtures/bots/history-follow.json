@@ -1,0 +1,175 @@
+{
+  "bot": "prs",
+  "lines": [
+    {
+      "at": 1795286892,
+      "id": 1,
+      "kind": "you",
+      "text": "zzstart please start an agent on the flaky test"
+    },
+    {
+      "at": 1795286892,
+      "id": 2,
+      "kind": "step",
+      "text": "cornercase start claude --project 4",
+      "tool": "Bash"
+    },
+    {
+      "agent": {
+        "boot": "b-1",
+        "kind": "claude",
+        "pane": 6,
+        "project": 4,
+        "workspace": 3
+      },
+      "at": 1795286892,
+      "id": 3,
+      "kind": "started",
+      "text": "▶ started claude in proj"
+    },
+    {
+      "at": 1795286938,
+      "conversation": "8b610e1d-23f2-4ef4-8666-258ef8b082dc",
+      "id": 4,
+      "kind": "bot",
+      "model": "claude-opus-5-5",
+      "text": "(fake) I started an agent."
+    },
+    {
+      "agent": {
+        "boot": "b-1",
+        "kind": "claude",
+        "pane": 6,
+        "project": 4,
+        "workspace": 3
+      },
+      "at": 1795286994,
+      "body": "fake claude: type idle, working, blocked, done, error\nfix it\nfake claude: fix it\n\nfake claude:\n\nfake claude:\n\nfake claude:\n\nfake claude:\nworking\nfinish\nI fixed **the flaky test** and pushed it.\nAll green now.",
+      "id": 5,
+      "kind": "finished",
+      "text": "✓ claude finished in proj"
+    },
+    {
+      "at": 1795286998,
+      "id": 6,
+      "kind": "step",
+      "text": "cornercase read",
+      "tool": "Bash"
+    },
+    {
+      "at": 1795287001,
+      "conversation": "8b610e1d-23f2-4ef4-8666-258ef8b082dc",
+      "id": 7,
+      "kind": "bot",
+      "model": "claude-opus-5-5",
+      "text": "(fake) **Report**: the agent is done."
+    },
+    {
+      "at": 1795287038,
+      "id": 8,
+      "kind": "you",
+      "text": "zzstart a second one"
+    },
+    {
+      "at": 1795287038,
+      "id": 9,
+      "kind": "step",
+      "text": "cornercase start claude --project 4",
+      "tool": "Bash"
+    },
+    {
+      "agent": {
+        "boot": "b-1",
+        "kind": "claude",
+        "pane": 8,
+        "project": 4,
+        "workspace": 3
+      },
+      "at": 1795287038,
+      "id": 10,
+      "kind": "started",
+      "text": "▶ started claude in proj"
+    },
+    {
+      "at": 1795287039,
+      "conversation": "8b610e1d-23f2-4ef4-8666-258ef8b082dc",
+      "id": 11,
+      "kind": "bot",
+      "model": "claude-opus-5-5",
+      "text": "(fake) I started an agent."
+    },
+    {
+      "agent": {
+        "boot": "b-1",
+        "kind": "claude",
+        "pane": 8,
+        "project": 4,
+        "workspace": 3
+      },
+      "at": 1795287058,
+      "body": "fake claude: type idle, working, blocked, done, error\nworking\nblocked\nDo you want to run the tests?\n> 1. Yes\n  2. No",
+      "id": 12,
+      "kind": "waiting",
+      "text": "! claude needs you in proj"
+    },
+    {
+      "at": 1795287120,
+      "id": 13,
+      "kind": "you",
+      "text": "zzstart a third one"
+    },
+    {
+      "at": 1795287120,
+      "id": 14,
+      "kind": "step",
+      "text": "cornercase start claude --project 4",
+      "tool": "Bash"
+    },
+    {
+      "agent": {
+        "boot": "b-1",
+        "kind": "claude",
+        "pane": 10,
+        "project": 4,
+        "workspace": 3
+      },
+      "at": 1795287120,
+      "id": 15,
+      "kind": "started",
+      "text": "▶ started claude in proj"
+    },
+    {
+      "at": 1795287121,
+      "conversation": "8b610e1d-23f2-4ef4-8666-258ef8b082dc",
+      "id": 16,
+      "kind": "bot",
+      "model": "claude-opus-5-5",
+      "text": "(fake) I started an agent."
+    },
+    {
+      "agent": {
+        "boot": "b-1",
+        "kind": "claude",
+        "pane": 10,
+        "project": 4,
+        "workspace": 3
+      },
+      "at": 1795287178,
+      "body": "fake claude: type idle, working, blocked, done, error\nworking\nit broke\nfake claude: it broke\nerror",
+      "id": 17,
+      "kind": "finished",
+      "run": 12,
+      "text": "✗ claude failed in proj"
+    },
+    {
+      "agent": {
+        "boot": "b-1",
+        "pane": "nine"
+      },
+      "at": 1795287179,
+      "id": 50,
+      "kind": "started",
+      "text": "▶ started claude in proj"
+    }
+  ]
+}

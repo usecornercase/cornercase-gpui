@@ -41,19 +41,32 @@ fn agent() -> PaneInfo {
 
 #[test]
 fn an_agent_row_without_an_account_reads_as_before() {
-    assert_eq!(agent_details(&agent(), None, &Look::default()), "claude · coder · Opus 5.5 · 12%");
+    assert_eq!(agent_details(&agent(), None, None, &Look::default()), "claude · coder · Opus 5.5 · 12%");
 }
 
 #[test]
 fn an_agent_row_names_its_account_after_the_model() {
-    assert_eq!(agent_details(&agent(), Some("work"), &Look::default()), "claude · coder · Opus 5.5 · work · 12%");
+    assert_eq!(agent_details(&agent(), Some("work"), None, &Look::default()), "claude · coder · Opus 5.5 · work · 12%");
 }
 
 #[test]
 fn an_agent_row_says_a_restart_waits_for_its_turn() {
     let waiting = PaneInfo { account_restart: Some("waiting".into()), ..agent() };
     assert_eq!(
-        agent_details(&waiting, Some("work"), &Look::default()),
+        agent_details(&waiting, Some("work"), None, &Look::default()),
         "claude · coder · Opus 5.5 · work · 12% · restarts after this turn"
     );
+}
+
+#[test]
+fn by_comes_after_the_agent_and_its_role_and_before_the_model() {
+    assert_eq!(
+        agent_details(&agent(), Some("work"), Some("by PRs"), &Look::default()),
+        "claude · coder · by PRs · Opus 5.5 · work · 12%"
+    );
+}
+
+#[test]
+fn no_bot_no_by() {
+    assert!(!agent_details(&agent(), Some("work"), None, &Look::default()).contains("by "));
 }

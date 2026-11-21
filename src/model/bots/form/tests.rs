@@ -133,6 +133,7 @@ fn each_field_set_is_sent_as_an_option() {
         access: Some(FULL.into()),
         about: "line one\nline two".into(),
         chat_apps: None,
+        follow: None,
     };
     let args = new_args(by(&list, "claude"), &all).expect("sent");
     let want = [
@@ -402,6 +403,7 @@ fn an_edit_never_sends_the_agent_or_what_the_bot_is_for() {
         access: Some("full".into()),
         about: "x".into(),
         chat_apps: None,
+        follow: None,
     };
     let args = editing.args(&claude(), &now).expect("changes");
     assert!(args.iter().all(|word| !word.starts_with("--agent") && !word.starts_with("--about")), "{args:?}");
@@ -584,4 +586,41 @@ fn a_chat_apps_change_goes_last_after_the_access() {
     now.name = "x".into();
     let want = strs(&["bot", "edit", "prs", "--json", "--name=x", "--access=full", "--chat-apps=always"]);
     assert_eq!(editing.args(&claude(), &now), Some(want));
+}
+
+#[test]
+fn create_sends_follow_after_the_access_when_the_box_shows() {
+    let list = agents();
+    for (on, word) in [(true, "--follow=on"), (false, "--follow=off")] {
+        let t = Typed { follow: Some(on), chat_apps: Some("away".into()), ..typed("PRs") };
+        let args = new_args(by(&list, "claude"), &t).expect("sent");
+        let want =
+            ["bot", "new", "--json", "--agent=claude", "--access=cornercase", word, "--chat-apps=away", "--", "PRs"];
+        assert_eq!(args, strs(&want));
+    }
+}
+
+#[test]
+fn create_sends_no_follow_when_the_row_is_hidden() {
+    let list = agents();
+    let args = new_args(by(&list, "claude"), &typed("PRs")).expect("sent");
+    assert!(args.iter().all(|word| !word.starts_with("--follow")), "{args:?}");
+}
+
+#[test]
+fn save_sends_follow_only_when_it_changed() {
+    let (editing, now) = edit_of(&Bot { follow: Some(true), ..bare_bot() });
+    assert_eq!(editing.args(&claude(), &now), None);
+    let off = Typed { follow: Some(false), ..now.clone() };
+    assert_eq!(editing.args(&claude(), &off), Some(strs(&["bot", "edit", "prs", "--json", "--follow=off"])));
+    let hidden = Typed { follow: None, ..now };
+    assert_eq!(editing.args(&claude(), &hidden), None);
+}
+
+#[test]
+fn save_sends_no_follow_when_the_server_gave_none() {
+    let (editing, now) = edit_of(&bare_bot());
+    assert_eq!(editing.before.follow, None);
+    let ticked = Typed { follow: Some(true), ..now };
+    assert_eq!(editing.args(&claude(), &ticked), None);
 }

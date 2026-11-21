@@ -50,7 +50,7 @@ pub(crate) fn parts(entry: &Entry, blocks: BlocksOf<'_>) -> Vec<(Spot, String)> 
             found.extend(block.error.as_ref().map(|error| (spot(block.head, ERROR_PART), error.clone())));
             found
         }
-        Entry::Steps { .. } | Entry::Notice { .. } | Entry::Other { .. } => Vec::new(),
+        Entry::Steps { .. } | Entry::Notice { .. } | Entry::Other { .. } | Entry::Agent(_) => Vec::new(),
     }
 }
 

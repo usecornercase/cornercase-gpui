@@ -193,3 +193,11 @@ fn a_session_names_the_release_of_the_server_that_sent_it() {
     assert_eq!(release(crate::test_util::fixture!("session/view_0_13_21.json")), Version::parse("0.13.21"));
     assert_eq!(Session::default().release(), None);
 }
+
+#[test]
+fn a_tab_and_a_pane_read_their_bot() {
+    let session: Session = parse(crate::test_util::fixture!("session/view-bot.json"));
+    let bots: Vec<(Option<&str>, Option<&str>)> =
+        session.tabs().map(|tab| (tab.bot.as_deref(), tab.panes[0].bot.as_deref())).collect();
+    assert_eq!(bots, [(None, None), (Some("prs"), Some("prs")), (Some("ops"), Some("ops"))]);
+}

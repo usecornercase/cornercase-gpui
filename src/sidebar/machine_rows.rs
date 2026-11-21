@@ -80,7 +80,7 @@ fn there_details_line(ws: &ThereWorkspace, folded: bool, leaving: bool) -> Optio
 }
 
 fn there_tab_details(tab: &Tab<ThereId>, title: &str, look: &Look) -> Option<String> {
-    Some(tab_details(tab, None, look)).filter(|details| !details.is_empty() && details != title)
+    Some(tab_details(tab, None, None, look)).filter(|details| !details.is_empty() && details != title)
 }
 
 fn there_tab_text(name: Div, note: Option<String>, details: Option<String>) -> Div {

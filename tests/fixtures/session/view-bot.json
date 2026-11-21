@@ -1,0 +1,199 @@
+{
+  "boot": "b-2",
+  "caller": null,
+  "config": {
+    "revision": 1
+  },
+  "groups": [],
+  "home": "/work/x",
+  "projects": [
+    {
+      "active": true,
+      "collapsed": false,
+      "custom_name": null,
+      "group": null,
+      "id": 1,
+      "name": "proj",
+      "path": "/work/proj",
+      "workspaces": [
+        {
+          "active": true,
+          "against_base": {
+            "added": 0,
+            "base": "main",
+            "files": 0,
+            "removed": 0
+          },
+          "behind": 0,
+          "branch": "main",
+          "changes": {
+            "added": 0,
+            "files": 0,
+            "mode": "uncommitted",
+            "removed": 0
+          },
+          "collapsed": false,
+          "custom_name": null,
+          "id": 2,
+          "name": "main",
+          "path": "/work/proj",
+          "pull_request": null,
+          "run_dir": null,
+          "setup": null,
+          "tabs": [
+            {
+              "active": true,
+              "controller": 11,
+              "custom_name": null,
+              "id": 4,
+              "layout": {
+                "leaf": 3
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "caller": false,
+                  "context": null,
+                  "conversation": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_from": null,
+                  "held_queued": false,
+                  "held_sends": 0,
+                  "id": 3,
+                  "model": null,
+                  "parent": null,
+                  "path": "/work/proj",
+                  "pid": 34798,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            },
+            {
+              "active": false,
+              "bot": "prs",
+              "custom_name": null,
+              "id": 6,
+              "layout": {
+                "leaf": 5
+              },
+              "name": "zsh",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": null,
+                  "at_prompt": true,
+                  "background_shell": false,
+                  "bot": "prs",
+                  "caller": false,
+                  "context": null,
+                  "conversation": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_from": null,
+                  "held_queued": false,
+                  "held_sends": 0,
+                  "id": 5,
+                  "model": null,
+                  "parent": null,
+                  "path": "/work/proj",
+                  "pid": 34799,
+                  "program": "zsh",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": null,
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": null
+            },
+            {
+              "active": false,
+              "bot": "ops",
+              "custom_name": null,
+              "id": 13,
+              "layout": {
+                "leaf": 12
+              },
+              "name": "bash",
+              "panes": [
+                {
+                  "active": true,
+                  "agent": "claude",
+                  "at_prompt": false,
+                  "background_shell": false,
+                  "bot": "ops",
+                  "caller": false,
+                  "context": null,
+                  "conversation": null,
+                  "dialog": false,
+                  "draft": false,
+                  "held_from": null,
+                  "held_queued": false,
+                  "held_sends": 0,
+                  "id": 12,
+                  "model": null,
+                  "parent": null,
+                  "path": "/work/proj",
+                  "pid": 43020,
+                  "program": "bash",
+                  "resumes": false,
+                  "resuming": false,
+                  "role": null,
+                  "status": "idle",
+                  "subagents": 0,
+                  "survey": false,
+                  "title": null
+                }
+              ],
+              "status": "idle"
+            }
+          ],
+          "worktree": false
+        }
+      ]
+    }
+  ],
+  "revision": 1,
+  "shown": {
+    "pane": 3,
+    "project": 1,
+    "tab": 4,
+    "workspace": 2
+  },
+  "theme": {
+    "from": "client",
+    "scheme": "dark"
+  },
+  "version": "0.13.109",
+  "view": {
+    "active": false,
+    "cols": null,
+    "controls": false,
+    "id": 14,
+    "projection": 1,
+    "rows": null,
+    "shown": {
+      "pane": 3,
+      "project": 1,
+      "tab": 4,
+      "workspace": 2
+    },
+    "visible": true
+  }
+}

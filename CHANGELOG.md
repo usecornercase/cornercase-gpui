@@ -2,6 +2,17 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.144
+
+- **A bot's chat shows the agents it starts.** With cornercase 0.13.91 or newer, when a bot starts an agent its chat says so, such as `started claude in cornercase › fix/ci-482`, with **Show**, which leaves the chat and shows that agent's tab.
+- **And when they finish.** When the agent is done its chat shows its last message, folded to three lines (a click, or Return or Space, opens it whole and folds it again), with a done or failed mark, and the bot then answers with what it made of it; the chat counts that answer's time and steps as it works.
+- **And when one needs you.** When an agent waits for you, the chat shows the end of its screen and **Go to agent**. The bot does not answer then: the agent's own notice tells you.
+- **A line whose agent closed**, or one of an earlier run of the server, reads `closed` and has no Show.
+- **The sidebar says which bot started an agent.** A tab's and an agent's details read `claude · by PRs · Opus 5.5 · …`, and follow the bot when it is renamed.
+- **Follow agents in New bot and Edit bot…**: untick it so the bot is not told when its agents finish or need you; its agents still say `by` it. Edit sends it only when you change it.
+- Tab reaches Show, a finished message and Go to agent, in the order of the lines, and scrolls the chat to them.
+- **What waits**: a linked machine's bot shows these lines without Show or Go to agent (they say `on vps`), and its agents' rows do not say `by` it yet. The bot's card does not list the agents it started yet.
+
 ## 0.1.143
 
 - **Schedule a bot's routine or reminder from the window.** With cornercase 0.13.85 or newer, a bot's **Routines** (in its chat's header, or **Routines…** in its `⋯`) has **Schedule…**, and its empty page **Schedule a routine…**: the form opens on every day at 09:00 with the keys in its prompt, and asks only what a bot needs, what it should do, when and a name. The bot answers in its chat with its own agent, model and account. Choose a one-off time instead and it is a reminder.

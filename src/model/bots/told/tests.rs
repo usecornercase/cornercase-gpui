@@ -15,7 +15,17 @@ fn later(base: Instant, ms: u64) -> Instant {
 }
 
 fn line(kind: &str, text: &str) -> Line {
-    Line { id: 7, at: 0, kind: Kind::from(kind), text: text.to_string(), held: false, ask: None, routine: None }
+    Line {
+        id: 7,
+        at: 0,
+        kind: Kind::from(kind),
+        text: text.to_string(),
+        held: false,
+        ask: None,
+        routine: None,
+        agent: None,
+        body: None,
+    }
 }
 
 #[test]
@@ -62,7 +72,7 @@ fn a_line_older_than_the_last_told_is_not_told() {
 
 #[test]
 fn steps_notices_and_your_own_lines_are_no_answers() {
-    for kind in ["you", "step", "notice", "something-new"] {
+    for kind in ["you", "step", "notice", "something-new", "started", "finished", "waiting"] {
         assert_eq!(answer_of("notes", &line(kind, "x")), None, "{kind}");
     }
     assert_eq!(answer_of("notes", &line("bot", "x")).map(|a| a.failed), Some(false));
@@ -386,4 +396,10 @@ fn a_runs_failure_is_still_not_told_whatever_its_label() {
         Told::new(&failed, BotKey::here("prs"), "PRs", Some("Review PRs")).headline(),
         "PRs · Review PRs could not answer"
     );
+}
+
+#[test]
+fn the_outline_text_is_one_line_per_block_without_marks() {
+    let text = outline_text("# Done\n\n**Fixed** the `flaky` test.\n\n- one\n- two\n\n---\n\n```\nlet x = 1;\n```");
+    assert_eq!(text, "Done\nFixed the flaky test.\none\ntwo\nlet x = 1;");
 }

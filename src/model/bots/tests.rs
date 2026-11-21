@@ -17,6 +17,8 @@ fn line(id: u64, kind: &str, text: &str, held: bool) -> Line {
         held,
         ask: None,
         routine: None,
+        agent: None,
+        body: None,
     }
 }
 
@@ -830,4 +832,27 @@ fn a_chat_is_settled_once_its_history_is_read_or_failed() {
     chat.fail("no answer came".into());
     assert!(chat.settled());
     assert!(read_chat(Vec::new()).settled());
+}
+
+#[test]
+fn a_bot_reads_follow_leniently() {
+    let found = in_app(&json!({"bots": [
+        {"id": "a", "name": "a", "follow": true},
+        {"id": "b", "name": "b", "follow": false},
+        {"id": "c", "name": "c"},
+        {"id": "d", "name": "d", "follow": "on"}
+    ]}));
+    let follows: Vec<Option<bool>> = found.iter().map(|bot| bot.follow).collect();
+    assert_eq!(follows, [Some(true), Some(false), None, None]);
+}
+
+#[test]
+fn follow_does_not_redraw_the_list() {
+    let mut bots = Bots::new();
+    let with = |on: bool| json!({"bots": [{"id": "prs", "name": "prs", "follow": on}]});
+    bots.take_app(&with(true));
+    let revision = bots.revision();
+    bots.take_app(&with(false));
+    assert_eq!(bots.revision(), revision);
+    assert_eq!(bots.find("prs").and_then(|bot| bot.follow), Some(false));
 }

@@ -22,6 +22,7 @@ fn a_server_has_each_gated_feature_from_the_release_that_brought_it() {
         (Feature::BotChatApps, 107),
         (Feature::BotSecrets, 100),
         (Feature::BotAboutRead, 96),
+        (Feature::BotFollow, 91),
     ];
     for (feature, patch) in features {
         let before = Version::new(0, 13, patch - 1);

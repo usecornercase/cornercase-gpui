@@ -69,7 +69,7 @@ fn fit_tags(width: f32, attention: bool, hidden: usize, machine: &str) -> Fit {
 
 fn there_line(row: &ThereRow<'_>, place: Option<String>, look: &Look, now: i64) -> String {
     let ThereAgent { seen, pane, .. } = row.agent;
-    let what = seen.pane_note(pane, now).unwrap_or_else(|| agent_details(pane, None, look));
+    let what = seen.pane_note(pane, now).unwrap_or_else(|| agent_details(pane, None, None, look));
     place.into_iter().chain([what]).collect::<Vec<_>>().join(" · ")
 }
 

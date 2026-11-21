@@ -103,3 +103,13 @@ pub(crate) fn new_conversation_message(name: &str) -> String {
 pub(super) fn read_failed(name: &str, why: &str) -> String {
     format!("Could not read the chat of {name}: {why}")
 }
+
+pub(super) const SHOW: &str = "Show";
+pub(super) const CLOSED: &str = "closed";
+pub(super) const GO_TO_AGENT: &str = "Go to agent";
+pub(super) const SHOW_WHOLE: &str = "Show the whole message";
+pub(super) const FOLD: &str = "Fold the message";
+
+pub(super) fn there(machine: &str) -> String {
+    format!("on {machine}")
+}

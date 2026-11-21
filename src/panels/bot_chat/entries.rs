@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
+use super::agents::{self, AgentLine};
 use super::runs::{block, offers_again};
 use crate::model::bots::{Kind, Line, Runs};
 
@@ -14,6 +15,7 @@ pub(crate) enum Entry {
     Failed { id: u64, text: String },
     Notice { id: u64, text: String, ask: Option<u64> },
     Other { id: u64, text: String },
+    Agent(AgentLine),
     Run(Block),
 }
 
@@ -40,6 +42,7 @@ impl Entry {
             | Self::Notice { id, .. }
             | Self::Other { id, .. } => *id,
             Self::Steps { first, .. } => *first,
+            Self::Agent(line) => line.id,
             Self::Run(block) => block.head,
         }
     }
@@ -69,7 +72,7 @@ fn is_setup(line: &Line) -> bool {
 }
 
 fn opens_a_turn(line: &Line) -> bool {
-    (line.kind == Kind::You && !line.held) || is_setup(line)
+    (line.kind == Kind::You && !line.held) || is_setup(line) || line.kind == Kind::Finished
 }
 
 fn own(lines: &[Line]) -> Vec<&Line> {
@@ -180,6 +183,10 @@ fn entry_of(line: &Line, (held, dropped): (bool, bool)) -> Entry {
         Kind::Step => Entry::Steps { first: id, last: id, texts: vec![text] },
         Kind::Error => Entry::Failed { id, text },
         Kind::Notice => Entry::Notice { id, text, ask: line.ask },
+        Kind::Started | Kind::Finished | Kind::Waiting => match agents::state_of(line) {
+            Some(state) => Entry::Agent(agents::agent_line(line, state)),
+            None => Entry::Other { id, text },
+        },
         Kind::Other(_) => Entry::Other { id, text },
     }
 }
@@ -229,6 +236,7 @@ pub(crate) struct Retry {
 fn again_of(asked: &[&Line], setup: bool) -> Option<Again> {
     match asked {
         [] => None,
+        _ if asked.iter().any(|line| line.kind == Kind::Finished) => None,
         [only] if is_setup(only) => setup.then_some(Again::Setup),
         _ => {
             let texts: Vec<&str> = asked.iter().map(|line| line.text.as_str()).collect();
@@ -332,6 +340,7 @@ pub(crate) fn keys(
                 Entry::Failed { id, .. } => (3, *id, false),
                 Entry::Notice { id, .. } => (4, *id, false),
                 Entry::Other { id, .. } => (5, *id, false),
+                Entry::Agent(line) => (8, line.id, line.pane.is_some()),
             };
             let retry = retry == Some(last) && kind == 3;
             let give = if kind == 4 && givable.contains_key(&last) { give } else { Give::No };
