@@ -2,7 +2,7 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
-## 0.1.120
+## 0.1.125
 
 - **A bot's chat works with keys alone.** Tab and ⇧Tab (Shift+Tab on Linux and Windows) go from the chat's field to its buttons: New conversation, the `⋯` menu, the examples of an empty chat, Retry and Stop. The one you are on has a ring, and Return or Space presses it. The `⋯` menu opens with its first entry lit, so ↓, ↑ and Return go on from there. Tab never reaches the chat behind an open dialog or panel.
 - **Retry sends everything the failed answer was asked.** When several messages were held while a bot answered, the next answer took all of them, and Retry used to send only the last one again. It now sends them all, as the bot got them.

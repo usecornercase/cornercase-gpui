@@ -3,9 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement, ListAlignment, ListOffset,
-    ListState, ParentElement as _, Render, ScrollHandle, StatefulInteractiveElement as _, Styled as _, Window, div,
-    list, prelude::FluentBuilder as _, px,
+    AnyElement, Bounds, Context, Div, Entity, FocusHandle, InteractiveElement as _, IntoElement, ListAlignment,
+    ListOffset, ListState, ParentElement as _, Pixels, Render, ScrollHandle, StatefulInteractiveElement as _,
+    Styled as _, Window, div, list, prelude::FluentBuilder as _, px,
 };
 
 pub(crate) use self::controls::ask_new_conversation;
@@ -21,7 +21,7 @@ use crate::store::Store;
 use crate::theme::{colours, radius};
 use crate::ui::account_picker::reveals;
 use crate::ui::counting::Counting;
-use crate::ui::{self, Icon, press};
+use crate::ui::{self, Icon, press, text_field};
 
 mod controls;
 mod entries;
@@ -80,7 +80,8 @@ pub(crate) struct BotChat {
     examples: [FocusHandle; EXAMPLES.len()],
     retry_stop: FocusHandle,
     empty: ScrollHandle,
-    keyed: (bool, bool),
+    keyed: (Option<usize>, bool),
+    due: Option<usize>,
 }
 
 fn counting(chat: &mut BotChat) -> &mut Counting {
@@ -93,6 +94,10 @@ pub(crate) type Controls = (bool, bool, bool, bool);
 
 pub(crate) fn is_fresh(shown: Option<&str>, mark: Option<&Stamp>, stamp: &Stamp) -> bool {
     shown != Some(stamp.0.as_str()) || mark.is_some_and(|mark| (&mark.0, mark.1) != (&stamp.0, stamp.1))
+}
+
+pub(crate) fn example_to_reveal(now: Option<usize>, was: Option<usize>) -> Option<usize> {
+    now.filter(|_| now != was)
 }
 
 pub(crate) fn re_anchor(following: bool, rows: usize) -> Option<usize> {
@@ -137,7 +142,8 @@ impl BotChat {
             examples: std::array::from_fn(|_| cx.focus_handle()),
             retry_stop: cx.focus_handle(),
             empty: ScrollHandle::new(),
-            keyed: (false, false),
+            keyed: (None, false),
+            due: None,
         }
     }
 
@@ -235,10 +241,9 @@ impl BotChat {
     }
 
     fn reveal_stops(&mut self, window: &Window) {
-        let now = (self.examples.iter().any(|handle| handle.is_focused(window)), self.retry_stop.is_focused(window));
-        if reveals(now.0, self.keyed.0, false) {
-            self.empty.scroll_to_bottom();
-        }
+        let now =
+            (self.examples.iter().position(|handle| handle.is_focused(window)), self.retry_stop.is_focused(window));
+        self.due = example_to_reveal(now.0, self.keyed.0);
         if reveals(now.1, self.keyed.1, false) {
             self.following = true;
             self.news = false;
@@ -321,8 +326,21 @@ impl BotChat {
             ui::emblem_page(Icon::Message, bot.name.clone())
                 .child(ui::emblem_line(what))
                 .child(ui::emblem_line(when))
-                .child(div().w_full().max_w(px(470.)).flex().flex_col().gap(px(8.)).children(examples)),
+                .child(self.examples_column().children(examples)),
         )
+    }
+
+    fn examples_column(&self) -> Div {
+        let column = div().w_full().max_w(px(470.)).flex().flex_col().gap(px(8.));
+        let Some(at) = self.due else { return column };
+        let scroller = self.empty.clone();
+        column.on_children_prepainted(move |bounds, window, _| reveal_example(&scroller, &bounds, at, window))
+    }
+}
+
+fn reveal_example(scroller: &ScrollHandle, bounds: &[Bounds<Pixels>], at: usize, window: &mut Window) {
+    if let Some(found) = bounds.get(at) {
+        text_field::show_box(scroller, (found.top(), found.size.height), window);
     }
 }
 

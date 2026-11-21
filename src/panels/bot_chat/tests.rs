@@ -465,3 +465,21 @@ fn a_dropped_bubble_is_marked_and_measured_again() {
     assert_eq!(dropped, [2]);
     assert_eq!(spliced(&keys_of(&before), &keys_of(&after)), vec![(1..2, 1), (4..4, 1)]);
 }
+
+#[test]
+fn the_example_that_gets_the_keys_is_revealed_once() {
+    assert_eq!(super::example_to_reveal(Some(0), None), Some(0));
+    assert_eq!(super::example_to_reveal(Some(0), Some(0)), None);
+}
+
+#[test]
+fn the_keys_moving_to_another_example_reveal_it() {
+    assert_eq!(super::example_to_reveal(Some(1), Some(0)), Some(1));
+    assert_eq!(super::example_to_reveal(Some(0), Some(2)), Some(0));
+}
+
+#[test]
+fn the_keys_leaving_the_examples_reveal_nothing() {
+    assert_eq!(super::example_to_reveal(None, Some(1)), None);
+    assert_eq!(super::example_to_reveal(None, None), None);
+}
