@@ -251,7 +251,7 @@ impl Notifier {
 
     fn message(&mut self, message: &Message, cx: &mut Context<Self>) {
         let store = self.store.read(cx);
-        let looking = telling::Looking::of(self.active, store.sheet);
+        let looking = telling::Looking::of(self.active, store.sheet, store.routines_of().is_some());
         if telling::dropped(message, &looking, |key| store.busy(key)) {
             return;
         }

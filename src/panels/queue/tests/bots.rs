@@ -2,9 +2,13 @@ use serde_json::Value;
 
 use super::super::data::Click;
 use super::super::data::{
-    Entry, Group, Place, ROUTINES_NOTE, State, bot_click, chat_block, entries, offers_detail, place_label, remove_tip,
-    routine_kinds, routines_note, scoped, sections, status_label,
+    Entry, Group, Place, State, bot_click, chat_block, entries, offers_detail, place_label, remove_tip, scoped,
+    sections, status_label,
 };
+use super::super::draft::{Draft, Target, When};
+use super::super::form::{saved_text, start};
+use super::draft;
+use crate::model::accounts::pick::AccountPick;
 use crate::test_util::fixture;
 
 fn queue() -> Vec<Entry> {
@@ -51,12 +55,12 @@ fn a_bots_place_reads_bot_and_its_id() {
 }
 
 #[test]
-fn a_bots_entry_is_never_editable_and_offers_no_detail() {
+fn a_bots_entry_that_can_run_offers_edit_and_no_detail() {
     for id in [2, 4, 5, 7] {
-        let entry = found(id);
-        assert!(!entry.editable() && !offers_detail(&entry), "{id}");
+        assert!(!offers_detail(&found(id)), "{id}");
     }
-    assert!(found(4).runnable() && found(9).editable());
+    assert!(found(2).runnable() && found(4).runnable());
+    assert!(!found(5).runnable() && !found(7).runnable());
 }
 
 #[test]
@@ -80,11 +84,11 @@ fn a_missed_run_a_pending_reminder_and_a_projects_entry_go_to_no_block() {
 }
 
 #[test]
-fn the_scope_keeps_only_that_bots_entries_and_all_of_them_with_none() {
+fn the_scope_keeps_only_that_bots_entries_and_none_keeps_only_the_projects() {
     let ids = |list: Vec<Entry>| list.iter().map(|entry| entry.id).collect::<Vec<_>>();
     assert_eq!(ids(scoped(queue(), Some("prs"))), [5, 7, 2, 3, 4]);
     assert_eq!(ids(scoped(queue(), Some("ops"))), Vec::<u64>::new());
-    assert_eq!(ids(scoped(queue(), None)), [5, 7, 2, 3, 4, 9]);
+    assert_eq!(ids(scoped(queue(), None)), [9]);
 }
 
 #[test]
@@ -104,22 +108,81 @@ fn removing_a_bots_routine_or_run_says_its_answers_stay_in_the_chat() {
     assert_eq!(remove_tip(&found(4)), "Remove");
 }
 
-fn routine_of_project(id: u64) -> Entry {
-    Entry { id, state: "pending".into(), repeat: Some("2h".into()), label: format!("entry {id}"), ..Entry::default() }
+fn for_bot(when: When) -> Draft {
+    Draft {
+        when,
+        clock: "09:00".into(),
+        text: "Which of my PRs are blocked?".into(),
+        target: Target::Worktree { project: 3, branch: "feat/x".into() },
+        agent: Some("codex".into()),
+        mode: Some("plan".into()),
+        flow: Some("team".into()),
+        cleanup: Some(true),
+        accounts: vec![AccountPick { agent: "claude".into(), folder: "work".into() }],
+        bot: Some("prs".into()),
+        ..draft()
+    }
 }
 
-fn note_for(list: &[Entry]) -> &'static str {
-    let sections = sections(list, "", None, false);
-    let routines = sections.iter().find(|section| section.group == Group::Routines).expect("routines");
-    routines_note(routine_kinds(&routines.rows))
+fn strings(words: &[&str]) -> Vec<String> {
+    words.iter().map(|word| (*word).to_string()).collect()
 }
 
 #[test]
-fn the_queues_routines_note_says_what_its_routines_are() {
-    let bot_routine = found(2);
-    assert_eq!(note_for(&[routine_of_project(1)]), ROUTINES_NOTE);
-    let only_bots = note_for(std::slice::from_ref(&bot_routine));
-    assert!(only_bots.contains("a bot's routine") && !only_bots.contains("worktree"), "{only_bots}");
-    let mixed = note_for(&[routine_of_project(1), bot_routine]);
-    assert!(mixed.contains("a project's routine") && mixed.contains("a bot's routine"), "{mixed}");
+fn a_new_routine_for_a_bot_sends_the_bot_and_nothing_of_a_project() {
+    let draft = Draft { name: Some(" PR review ".into()), ..for_bot(When::Daily) };
+    let sent = strings(&[
+        "queue",
+        "add",
+        "--every",
+        "day 09:00",
+        "--prompt=Which of my PRs are blocked?",
+        "--bot",
+        "prs",
+        "--name",
+        "PR review",
+        "--json",
+    ]);
+    assert_eq!(draft.args(), Ok(sent));
+}
+
+#[test]
+fn a_new_reminder_for_a_bot_sends_at() {
+    let draft = Draft { amount: "1".into(), unit: 'h', ..for_bot(When::In) };
+    let sent =
+        strings(&["queue", "add", "--at", "in 1h", "--prompt=Which of my PRs are blocked?", "--bot", "prs", "--json"]);
+    assert_eq!(draft.args(), Ok(sent));
+}
+
+#[test]
+fn an_edit_of_a_bots_entry_sends_only_what_changed_and_never_the_bot() {
+    let untouched = Draft { edit: Some(2), text: String::new(), name: None, ..for_bot(When::Keep) };
+    assert_eq!(untouched.args(), Ok(strings(&["queue", "edit", "2", "--json"])));
+    let renamed = Draft { name: Some("Morning PRs".into()), ..untouched.clone() };
+    assert_eq!(renamed.args(), Ok(strings(&["queue", "edit", "2", "--name", "Morning PRs", "--json"])));
+    let moved = Draft { text: "Only the red ones".into(), ..Draft { when: When::Weekdays, ..untouched } };
+    let sent = strings(&["queue", "edit", "2", "--every", "weekday 09:00", "--prompt=Only the red ones", "--json"]);
+    assert_eq!(moved.args(), Ok(sent));
+}
+
+#[test]
+fn a_bots_entry_without_a_prompt_is_refused_before_sending() {
+    let empty = Draft { text: "  ".into(), ..for_bot(When::Daily) };
+    assert_eq!(empty.args(), Err("write what it should do".to_string()));
+}
+
+#[test]
+fn a_new_bot_form_starts_on_every_day_at_nine() {
+    let (when, times) = start(None, true);
+    assert_eq!((when, times.clock.as_str()), (When::Daily, "09:00"));
+    assert_eq!(start(None, false).0, When::In);
+    assert_eq!(start(Some(&found(4)), true).0, When::Keep);
+}
+
+#[test]
+fn a_bots_reminder_is_told_as_a_reminder() {
+    assert_eq!(saved_text(false, false, true), "Reminder scheduled");
+    assert_eq!(saved_text(true, false, true), "Reminder saved");
+    assert_eq!(saved_text(false, true, true), "Routine scheduled");
+    assert_eq!(saved_text(false, false, false), "Scheduled");
 }

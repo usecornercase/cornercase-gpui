@@ -476,6 +476,7 @@ fn draft() -> Draft {
         cleanup: None,
         name: Some(String::new()),
         accounts: Vec::new(),
+        bot: None,
     }
 }
 

@@ -55,3 +55,22 @@ fn a_removals_undo_shows_only_in_the_scope_it_was_asked_in() {
     assert!(!undo_shown(Some("prs"), None));
     assert!(!undo_shown(None, Some("prs")));
 }
+
+#[test]
+fn clearing_says_how_many_were_the_bots_runs() {
+    let text = |entries: serde_json::Value| {
+        let out = json!({ "entries": entries, "undo": 7 });
+        Removal::from_answer(&out.to_string()).expect("a removal").text
+    };
+    let bots_run = |id: u64| json!({ "id": id, "label": "prs", "state": "answered", "place": { "bot": "prs" } });
+    let project = |id: u64| json!({ "id": id, "label": "fix", "state": "started" });
+    assert_eq!(text(json!([project(1), bots_run(2)])), "Removed 2 started entries, 1 of them a bot's run");
+    assert_eq!(
+        text(json!([project(1), bots_run(2), bots_run(3)])),
+        "Removed 3 started entries, 2 of them your bots' runs"
+    );
+    assert_eq!(text(json!([project(1), project(2)])), "Removed 2 started entries");
+    let routine = json!({ "id": 4, "label": "Review PRs", "repeat": "30m", "place": { "bot": "prs" } });
+    let run = json!({ "id": 5, "label": "Review PRs", "routine": 4, "state": "answered", "place": { "bot": "prs" } });
+    assert_eq!(text(json!([routine, run])), "Removed “Review PRs” and its run");
+}

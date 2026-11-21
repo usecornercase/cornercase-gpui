@@ -80,6 +80,7 @@ impl Times {
 
 pub(super) struct Form {
     pub(super) edit: Option<u64>,
+    pub(super) bot: Option<String>,
     pub(super) issue: bool,
     pub(super) prompt: Entity<TextField>,
     pub(super) issue_key: Entity<TextField>,
@@ -145,10 +146,57 @@ impl Fields {
         self.field((placeholder, text), TextField::wraps, window, cx)
     }
 
-    fn prompt(&mut self, text: &str, window: &mut Window, cx: &mut Context<QueuePanel>) -> Entity<TextField> {
+    fn prompt(
+        &mut self,
+        (placeholder, text): (&str, &str),
+        window: &mut Window,
+        cx: &mut Context<QueuePanel>,
+    ) -> Entity<TextField> {
         let scroller = self.scroller.clone();
-        self.field(("What the agent should do", text), move |field| field.prompt().inside(scroller), window, cx)
+        self.field((placeholder, text), move |field| field.prompt().inside(scroller), window, cx)
     }
+}
+
+struct Words {
+    prompt: &'static str,
+    name: &'static str,
+}
+
+impl Words {
+    const fn of(bot: bool) -> Self {
+        if bot {
+            Self { prompt: "What the bot should do", name: "its name in the list and the chat (optional)" }
+        } else {
+            Self { prompt: "What the agent should do", name: "the tab's name (optional)" }
+        }
+    }
+}
+
+pub(super) fn start(entry: Option<&Entry>, bot: bool) -> (When, Times) {
+    let times = Times::of(entry);
+    match (entry, bot) {
+        (Some(_), _) => (When::Keep, times),
+        (None, true) => (When::Daily, Times { clock: "09:00".into(), ..times }),
+        (None, false) => (When::In, times),
+    }
+}
+
+fn boxes(
+    entry: Option<&Entry>,
+    (bot, times): (bool, &Times),
+    window: &mut Window,
+    cx: &mut Context<QueuePanel>,
+) -> (Fields, [Entity<TextField>; 7]) {
+    let words = Words::of(bot);
+    let mut f = Fields::default();
+    let prompt = f.prompt((words.prompt, entry.map_or("", |e| &e.prompt)), window, cx);
+    let issue_key = f.add("https://github.com/org/repo/issues/12, #12 or ENG-42", "", window, cx);
+    let clock = f.add("14:30", &times.clock, window, cx);
+    let date = f.add("2026-10-24", &times.date, window, cx);
+    let amount = f.add("1", &times.amount, window, cx);
+    let branch = f.add("feat/my-branch", "", window, cx);
+    let name = f.add(words.name, entry.map_or("", |e| &e.label), window, cx);
+    (f, [prompt, issue_key, clock, date, amount, branch, name])
 }
 
 pub(super) fn starting_agent(
@@ -173,27 +221,23 @@ fn start_place(entry: Option<&Entry>, session: Option<&Session>) -> (Option<u64>
 impl Form {
     fn new(
         entry: Option<&Entry>,
+        bot: Option<String>,
         session: Option<&Session>,
         window: &mut Window,
         cx: &mut Context<QueuePanel>,
     ) -> Self {
-        let times = Times::of(entry);
-        let mut f = Fields::default();
-        let prompt = f.prompt(entry.map_or("", |e| &e.prompt), window, cx);
-        let issue_key = f.add("https://github.com/org/repo/issues/12, #12 or ENG-42", "", window, cx);
-        let clock = f.add("14:30", &times.clock, window, cx);
-        let date = f.add("2026-10-24", &times.date, window, cx);
-        let amount = f.add("1", &times.amount, window, cx);
-        let branch = f.add("feat/my-branch", "", window, cx);
-        let name = f.add("the tab's name (optional)", entry.map_or("", |e| &e.label), window, cx);
+        let (when, times) = start(entry, bot.is_some());
+        let (f, [prompt, issue_key, clock, date, amount, branch, name]) =
+            boxes(entry, (bot.is_some(), &times), window, cx);
         let (project, spot) = start_place(entry, session);
         Self {
             edit: entry.map(|e| e.id),
+            bot,
             issue: false,
             prompt,
             issue_key,
             source: None,
-            when: if entry.is_some() { When::Keep } else { When::In },
+            when,
             clock,
             date,
             amount,
@@ -229,6 +273,9 @@ impl Form {
     }
 
     pub(super) fn account_agents(&self, default: Option<&str>) -> Vec<String> {
+        if self.bot.is_some() {
+            return Vec::new();
+        }
         let kept = self.editing().then_some(self.old.agent.as_str());
         starting_agent(self.runs_flow(), self.agent.as_deref(), kept, default)
     }
@@ -241,7 +288,7 @@ impl Form {
     }
 
     pub(super) fn fit_repository(&mut self, session: &Session) {
-        if !self.repeats() || self.spot == Spot::Keep {
+        if !self.repeats() || self.spot == Spot::Keep || self.bot.is_some() {
             return;
         }
         let fitting = repository_for(self.project, session);
@@ -265,7 +312,7 @@ impl Form {
         let text = |f: &Entity<TextField>| f.read(cx).text();
         let default = Store::get(cx).read(cx).account_settings.default_agent.clone();
         let editing = self.editing();
-        let issue = self.issue && !self.repeats();
+        let issue = self.issue && !self.repeats() && self.bot.is_none();
         let mut body = if issue { text(&self.issue_key) } else { text(&self.prompt) };
         if editing && !issue && body.trim() == self.old.prompt.trim() {
             body.clear();
@@ -290,6 +337,7 @@ impl Form {
             cleanup: cleanup_flag(self.repeats(), self.cleanup, editing.then_some(self.old.cleanup)),
             name,
             accounts: self.accounts.picks(&self.account_agents(default.as_deref()), cx),
+            bot: self.bot.clone(),
         }
     }
 }
@@ -307,24 +355,27 @@ impl FlowChoices {
     }
 }
 
-fn saved_text(editing: bool, routine: bool) -> &'static str {
-    match (editing, routine) {
-        (true, true) => "Routine saved",
-        (true, false) => "Queue entry saved",
-        (false, true) => "Routine scheduled",
-        (false, false) => "Scheduled",
+pub(super) fn saved_text(editing: bool, routine: bool, bot: bool) -> &'static str {
+    match (editing, routine, bot) {
+        (true, true, _) => "Routine saved",
+        (true, false, true) => "Reminder saved",
+        (true, false, false) => "Queue entry saved",
+        (false, true, _) => "Routine scheduled",
+        (false, false, true) => "Reminder scheduled",
+        (false, false, false) => "Scheduled",
     }
 }
 
 impl QueuePanel {
     pub(super) fn open_form(&mut self, entry: Option<&Entry>, window: &mut Window, cx: &mut Context<Self>) {
-        if self.config.is_none() {
+        let bot = entry.map_or_else(|| self.scope.clone(), |e| e.place.bot.clone().filter(|_| e.of_bot()));
+        if self.config.is_none() && bot.is_none() {
             Self::load_config(cx);
         }
         self.detail = None;
         let store = Store::get(cx);
         let session = store.read(cx).session.clone();
-        let form = Form::new(entry, session.as_ref(), window, cx);
+        let form = Form::new(entry, bot, session.as_ref(), window, cx);
         let focus = form.prompt.read(cx).focus_handle(cx);
         self.form = Some(form);
         self.flows = FlowChoices::default();
@@ -349,7 +400,9 @@ impl QueuePanel {
     }
 
     pub(super) fn sync_flows(&mut self, cx: &mut Context<Self>) {
-        let Some(project) = self.form.as_ref().filter(|f| f.repeats()).map(|f| f.project) else { return };
+        let Some(project) = self.form.as_ref().filter(|f| f.repeats() && f.bot.is_none()).map(|f| f.project) else {
+            return;
+        };
         if self.flows.asked_for(project) {
             return;
         }
@@ -389,7 +442,7 @@ impl QueuePanel {
         };
         form.busy = true;
         form.error = None;
-        let text = saved_text(draft.edit.is_some(), form.repeats());
+        let text = saved_text(draft.edit.is_some(), form.repeats(), form.bot.is_some());
         store::run_json(cx, command, move |this: &mut Self, answer, cx| match answer {
             Ok(_) => this.saved(text, cx),
             Err(e) => this.save_failed(cli::reason(&e), cx),

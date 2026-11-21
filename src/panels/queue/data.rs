@@ -18,32 +18,6 @@ pub(super) const ROUTINES_NOTE: &str = "A routine only runs while cornercase's s
                                         have routines.";
 const RUNS_SHOWN: usize = 10;
 
-const BOTS_NOTE: &str = "A routine only runs while cornercase's server runs. Each run of a bot's routine is a new \
-                         conversation of the bot, which answers in its chat.";
-const BOTH_NOTE: &str = "A routine only runs while cornercase's server runs. Each run of a project's routine gets a \
-                         fresh worktree from the up-to-date default branch, so only git repositories can have them; \
-                         each run of a bot's routine is a new conversation of the bot, which answers in its chat.";
-
-pub(super) fn routine_kinds(rows: &[Row<'_>]) -> (bool, bool) {
-    let routines = || rows.iter().map(|row| row.entry).filter(|entry| entry.is_routine());
-    (routines().any(|entry| !entry.of_bot()), routines().any(Entry::of_bot))
-}
-
-pub(super) fn routines_note((projects, bots): (bool, bool)) -> &'static str {
-    match (projects, bots) {
-        (false, true) => BOTS_NOTE,
-        (true, true) => BOTH_NOTE,
-        (_, false) => ROUTINES_NOTE,
-    }
-}
-
-pub(super) fn bot_routines_note(name: &str) -> String {
-    format!(
-        "A routine only runs while cornercase's server runs. Each run is a new conversation of {name}, which answers \
-         in its chat."
-    )
-}
-
 const fn machine(os: Os) -> &'static str {
     match os {
         Os::Mac => "the Mac",
@@ -190,7 +164,7 @@ pub(super) fn bot_click(entry: &Entry, runs: &[&Entry]) -> Option<Click> {
 pub(super) fn scoped(entries: Vec<Entry>, bot: Option<&str>) -> Vec<Entry> {
     match bot {
         Some(bot) => entries.into_iter().filter(|entry| entry.place.bot.as_deref() == Some(bot)).collect(),
-        None => entries,
+        None => entries.into_iter().filter(|entry| !entry.of_bot()).collect(),
     }
 }
 
@@ -262,10 +236,6 @@ impl Entry {
 
     pub(super) fn of_bot(&self) -> bool {
         self.place.bot.as_deref().is_some_and(|bot| !bot.is_empty())
-    }
-
-    pub(super) fn editable(&self) -> bool {
-        self.runnable() && !self.of_bot()
     }
 
     pub(super) fn is_routine(&self) -> bool {

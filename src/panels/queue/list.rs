@@ -1,17 +1,20 @@
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Div, Focusable as _, FontWeight, IntoElement, ParentElement as _,
+    AnyElement, App, ClickEvent, Context, Div, Focusable as _, FontWeight, IntoElement, ParentElement as _, Stateful,
     StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 use super::QueuePanel;
-use super::data::{
-    Entry, Group, Row, Section, bot_routines_note, clear_goes_in, routine_kinds, routines_note, sections,
-    shows_results_note,
-};
+use super::bot::bot_routines_note;
+use super::data::{Entry, Group, ROUTINES_NOTE, Row, Section, clear_goes_in, sections, shows_results_note};
 use super::rows::Snapshot;
 use crate::notify::tip;
 use crate::theme::colours;
-use crate::ui::{self, Icon, TextField, Tone};
+use crate::ui::{self, Icon, TextField, Tone, press};
+
+pub(super) const NEW_STOP: &str = "queue-new";
+const CLEARS: &str = "Remove every started entry and finished run from the list: their agents keep running";
+const CLEARS_BOTS_TOO: &str = "Remove every started entry and finished run from the list, your bots' runs too \
+                               (leaving those needs usecornercase/cornercase-terminal#929): their agents keep running";
 
 const NOTHING_SCHEDULED: &str = "Nothing is scheduled. Schedule… starts an agent later: at a time, in a while, when \
                                  your limits reset, or again and again as a routine.";
@@ -50,9 +53,8 @@ fn nothing_scheduled() -> Div {
         .child(div().flex_1().min_w(px(0.)).child(NOTHING_SCHEDULED))
 }
 
-fn routines_line(scope: Option<&(String, String)>, rows: &[Row<'_>]) -> Div {
-    let note =
-        scope.map_or_else(|| routines_note(routine_kinds(rows)).to_string(), |(_, name)| bot_routines_note(name));
+fn routines_line(scope: Option<&(String, String)>) -> Div {
+    let note = scope.map_or_else(|| ROUTINES_NOTE.to_string(), |(_, name)| bot_routines_note(name));
     ui::dim(note).px(px(12.)).pb(px(6.))
 }
 
@@ -60,11 +62,22 @@ fn results_line(note: &str) -> Div {
     ui::dim(note.to_string()).px(px(12.)).pt(px(8.))
 }
 
-fn clear_started(cx: &mut Context<QueuePanel>) -> AnyElement {
+fn elsewhere_line(line: &str) -> Div {
+    ui::dim(line.to_string()).px(px(12.)).pt(px(14.))
+}
+
+fn schedule_tip(scope: Option<&(String, String)>) -> String {
+    scope.map_or_else(
+        || "Schedule an agent to start later, or a routine that repeats".to_string(),
+        |(_, name)| format!("Schedule a routine or a reminder for {name}, without asking it"),
+    )
+}
+
+fn clear_started(clears_bots: usize, cx: &mut Context<QueuePanel>) -> AnyElement {
     ui::button("queue-clear-started", "Clear started")
         .px(px(10.))
         .py(px(2.))
-        .tooltip(tip("Remove every started entry and finished run from the list: their agents keep running"))
+        .tooltip(tip(if clears_bots > 0 { CLEARS_BOTS_TOO } else { CLEARS }))
         .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.clear_started(cx)))
         .into_any_element()
 }
@@ -81,12 +94,19 @@ impl QueuePanel {
         ui::search_field(field, focused, clear)
     }
 
+    fn schedule_button(&self, snapshot: &Snapshot, cx: &mut Context<Self>) -> Stateful<Div> {
+        let button = ui::icon_text_button(NEW_STOP, Icon::Plus, "Schedule…", Tone::Primary);
+        press::stop_at(button, &self.first, NEW_STOP, snapshot.stops)
+            .tooltip(tip(schedule_tip(snapshot.scope.as_ref())))
+            .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                if press::pressed(event, NEW_STOP) {
+                    this.open_form(None, window, cx);
+                }
+            }))
+    }
+
     pub(super) fn toolbar(&self, snapshot: &Snapshot, window: &Window, cx: &mut Context<Self>) -> Div {
-        let schedule = snapshot.scope.is_none().then(|| {
-            ui::icon_text_button("queue-new", Icon::Plus, "Schedule…", Tone::Primary)
-                .tooltip(tip("Schedule an agent to start later, or a routine that repeats"))
-                .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_form(None, window, cx)))
-        });
+        let schedule = snapshot.bot_add_note().is_none().then(|| self.schedule_button(snapshot, cx));
         div()
             .flex_none()
             .flex()
@@ -107,13 +127,13 @@ impl QueuePanel {
     }
 
     fn section(&self, section: &Section, clears: bool, snapshot: &Snapshot, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        let action = clears.then(|| clear_started(cx));
+        let action = clears.then(|| clear_started(snapshot.clears_bots, cx));
         let mut parts = vec![heading(section.group, section.rows.len(), action).into_any_element()];
         if section.rows.is_empty() {
             parts.push(nothing_scheduled().into_any_element());
         }
         if section.group == Group::Routines {
-            parts.push(routines_line(snapshot.scope.as_ref(), &section.rows).into_any_element());
+            parts.push(routines_line(snapshot.scope.as_ref()).into_any_element());
         }
         parts.extend(section.rows.iter().flat_map(|row| self.row_and_runs(row, snapshot, cx)));
         parts
@@ -124,12 +144,13 @@ impl QueuePanel {
         let clear = clear_goes_in(&sections).filter(|_| snapshot.scope.is_none());
         let (boot, session) = (snapshot.boot.as_deref(), snapshot.session.as_ref());
         let note = snapshot.results_note.as_deref().filter(|_| shows_results_note(&sections, boot, session));
-        let parts: Vec<AnyElement> = note
-            .map(|note| results_line(note).into_any_element())
-            .into_iter()
+        let notes = snapshot.bot_add_note().into_iter().chain(note).map(|note| results_line(note).into_any_element());
+        let elsewhere = snapshot.elsewhere.as_deref().filter(|_| snapshot.scope.is_none());
+        let parts: Vec<AnyElement> = notes
             .chain(
                 sections.iter().flat_map(|section| self.section(section, clear == Some(section.group), snapshot, cx)),
             )
+            .chain(elsewhere.map(|line| elsewhere_line(line).into_any_element()))
             .collect();
         div().flex().flex_col().gap(px(2.)).px(px(10.)).pb(px(16.)).children(parts)
     }
