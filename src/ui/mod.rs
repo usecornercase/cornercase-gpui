@@ -5,6 +5,7 @@ pub(crate) mod counting;
 pub(crate) mod cued;
 pub(crate) mod file_icons;
 pub(crate) mod glass;
+pub(crate) mod highlight;
 pub(crate) mod icons;
 pub(crate) mod markdown;
 pub(crate) mod menu;

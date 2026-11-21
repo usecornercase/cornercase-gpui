@@ -79,15 +79,9 @@ pub(super) fn clip(ranges: &[Range<usize>], within: Range<usize>) -> Vec<Range<u
 }
 
 pub(super) fn kind_style(kind: Kind) -> HighlightStyle {
-    let colour = |i: u8| HighlightStyle { color: Some(ansi(i)), ..Default::default() };
-    match kind {
-        Kind::Keyword => colour(5),
-        Kind::Function => colour(4),
-        Kind::Type => colour(6),
-        Kind::String => colour(2),
-        Kind::Number => colour(3),
-        Kind::Tag => colour(1),
-        Kind::Comment => HighlightStyle {
+    match kind.ansi() {
+        Some(index) => HighlightStyle { color: Some(ansi(index)), ..Default::default() },
+        None => HighlightStyle {
             color: Some(colours::faint().into()),
             font_style: Some(FontStyle::Italic),
             ..Default::default()

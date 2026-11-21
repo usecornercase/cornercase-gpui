@@ -154,7 +154,7 @@ fn block_text(block: &Block) -> String {
         Block::Heading(_, inline) | Block::Paragraph(inline) | Block::Quote(inline) | Block::Item(_, _, inline) => {
             tidy(&inline.text)
         }
-        Block::Code(code) => code.lines().map(tidy).find(|line| !line.is_empty()).unwrap_or_default(),
+        Block::Code(code) => code.text().lines().map(tidy).find(|line| !line.is_empty()).unwrap_or_default(),
         Block::Table(rows) => rows
             .first()
             .map(|row| {
@@ -175,7 +175,7 @@ fn cut(first: String) -> String {
 }
 
 pub(crate) fn first_line(source: &str) -> String {
-    cut(markdown::parse(source).iter().map(block_text).find(|text| !text.is_empty()).unwrap_or_default())
+    cut(markdown::outline(source).iter().map(block_text).find(|text| !text.is_empty()).unwrap_or_default())
 }
 
 fn plain_first_line(text: &str) -> String {

@@ -1,5 +1,6 @@
 mod fonts;
 
+pub(crate) mod code;
 pub(crate) mod colour;
 pub(crate) mod contrast;
 pub(crate) mod current;
@@ -12,6 +13,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{Hsla, Rgba};
+use parking_lot::Mutex;
 
 use crate::model::{Colour, Colours, Style};
 use crate::platform::Os;
@@ -169,6 +171,12 @@ pub(crate) fn ansi(index: u8) -> Hsla {
 
 pub(crate) fn palette_rgba(index: u8) -> Rgba {
     from_bytes(palette(index))
+}
+
+pub(crate) fn code_inks() -> code::Inks {
+    static KEPT: Mutex<Option<code::Kept>> = Mutex::new(None);
+    let panes = terminal_opacity();
+    code::kept_inks(&mut KEPT.lock(), current(), panes)
 }
 
 pub(crate) fn terminal_opacity() -> f32 {

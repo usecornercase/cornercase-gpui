@@ -37,7 +37,7 @@ pub(crate) fn surfaces(theme: &Theme) -> Vec<(&'static str, Rgba)> {
     ]
 }
 
-fn worst(colour: Rgba, surfaces: &[(&'static str, Rgba)]) -> (&'static str, f32) {
+pub(super) fn worst(colour: Rgba, surfaces: &[(&'static str, Rgba)]) -> (&'static str, f32) {
     surfaces
         .iter()
         .map(|(name, surface)| (*name, ratio(over(colour, *surface), *surface)))

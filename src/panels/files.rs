@@ -3,7 +3,6 @@ mod find;
 mod finder;
 mod gutter;
 mod gutter_view;
-mod highlight;
 mod lines;
 mod menu;
 pub(crate) mod open;
@@ -43,6 +42,7 @@ use crate::prefs::LongLines;
 use crate::store::{MachineRead, Store};
 use crate::theme::colours;
 use crate::ui::counting::Counting;
+use crate::ui::highlight;
 use crate::ui::selection::Selecting;
 use crate::ui::{self, TextField, TextFieldEvent};
 
