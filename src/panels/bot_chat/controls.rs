@@ -10,16 +10,18 @@ use super::words::{
 };
 use crate::dialogs::{self, Question};
 use crate::model::bots::{Bot, Chat};
+use crate::model::bots::{Reach, reach_tip};
 use crate::notify;
 use crate::store::Store;
 use crate::theme::colours;
+use crate::ui::Icon;
 use crate::ui::{self, Tone, press};
 
 const NEW_CONVERSATION_STOP: &str = "bot-new-conversation";
 const MENU_STOP: &str = "bot-menu";
 const STOP_STOP: &str = "bot-stop";
 
-pub(super) fn header(bot: &Bot, starting: bool, stops: bool) -> impl IntoElement + use<> {
+pub(super) fn header(bot: &Bot, starting: bool, stops: bool, reach: Option<&Reach>) -> impl IntoElement + use<> {
     div()
         .flex_none()
         .flex()
@@ -40,8 +42,17 @@ pub(super) fn header(bot: &Bot, starting: bool, stops: bool) -> impl IntoElement
         .child(
             div().flex_1().min_w_0().text_size(px(11.5)).text_color(colours::faint()).child(ui::one_line(bot.facts())),
         )
+        .children(reach.map(reach_icon))
         .child(new_conversation(bot, starting, stops))
         .child(menu_button(bot, stops))
+}
+
+fn reach_icon(reach: &Reach) -> impl IntoElement + use<> {
+    div()
+        .id("bot-chat-apps")
+        .flex_none()
+        .child(ui::icon(Icon::Phone, 13.).text_color(colours::faint()))
+        .tooltip(notify::tip(reach_tip(reach)))
 }
 
 fn menu_button(bot: &Bot, stops: bool) -> impl IntoElement + use<> {

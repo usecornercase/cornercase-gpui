@@ -4,6 +4,7 @@ use gpui::{
     Window, div, prelude::FluentBuilder as _, px,
 };
 
+use self::chat_apps::ChatRow;
 use super::{body_height, cancel_and, close, dialog_starts, fitted, frame, show, within};
 use crate::cli::Feature;
 use crate::model::bots::{
@@ -14,6 +15,8 @@ use crate::store::{Store, args};
 use crate::theme::colours;
 use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, TextField, TextFieldEvent, Tone};
+
+mod chat_apps;
 
 const TITLE: &str = "New bot";
 const SAVE: &str = "Save";
@@ -47,7 +50,7 @@ enum Listing {
 
 enum Mode {
     New,
-    Edit(Editing),
+    Edit(Box<Editing>),
 }
 
 pub(crate) struct BotForm {
@@ -62,6 +65,7 @@ pub(crate) struct BotForm {
     accounts: AccountPickers,
     error: Option<&'static str>,
     scroller: ScrollHandle,
+    chat: ChatRow,
 }
 
 fn field(
@@ -96,7 +100,7 @@ pub(crate) fn new_bot(window: &mut Window, cx: &mut App) {
 
 pub(crate) fn edit_bot(id: &str, window: &mut Window, cx: &mut App) {
     let Some(bot) = Store::get(cx).read(cx).bots.find(id).cloned() else { return };
-    if open_form(Mode::Edit(Editing::of(&bot)), window, cx) {
+    if open_form(Mode::Edit(Box::new(Editing::of(&bot))), window, cx) {
         Store::get(cx).update(cx, |s, _| s.names_bot(id));
     }
 }
@@ -119,6 +123,7 @@ impl BotForm {
             model.update(cx, |model, cx| model.set_text(own, cx));
         }
         cx.observe(&Store::get(cx), |_, _, cx| cx.notify()).detach();
+        let chat = ChatRow::new(&mode, cx);
         let mut form = Self {
             mode,
             listing: Listing::Reading,
@@ -131,6 +136,7 @@ impl BotForm {
             accounts: AccountPickers::default().inside(scroller.clone()),
             error: None,
             scroller,
+            chat,
         };
         form.read_agents(cx);
         form
@@ -254,6 +260,7 @@ impl BotForm {
             account,
             access: self.access.clone(),
             about: self.about.read(cx).text(),
+            chat_apps: self.chat_sent(cx),
         }
     }
 
@@ -415,6 +422,7 @@ impl BotForm {
             .children(self.effort_field(&agent, cx))
             .children(accounts)
             .child(self.access_field(&agent, cx))
+            .children(self.chat_field(cx))
             .child(self.about_field(window, cx))
             .children(self.editing().map(|_| ui::dim(FROM_NEXT)))
     }
@@ -452,6 +460,7 @@ impl Render for BotForm {
         let choices = Store::get(cx).read(cx).account_choices();
         self.accounts.follow(choices, Self::picked, cx);
         let height = body_height(f32::from(window.viewport_size().height));
+        self.chat_reveal(window);
         let body = self.fields(window, cx);
         let scrolled = fitted("bot-form", window, body).min_h_0().track_scroll(&self.scroller);
         let column = div()

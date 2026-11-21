@@ -549,6 +549,10 @@ impl Store {
         self.open_sheet(PanelKind::Settings, cx);
     }
 
+    pub(crate) fn open_settings_page(&mut self, page: &str, cx: &mut Context<Self>) {
+        self.land_on(FoundSetting::tab(page), cx);
+    }
+
     pub(crate) fn read_run_file(&mut self, path: String, cx: &mut Context<Self>) {
         self.show_local(cx);
         self.run_file = Some(path);

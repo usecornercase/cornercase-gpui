@@ -78,6 +78,12 @@ fn a_sheet_opened_by_the_answer_covers_what_had_the_keys() {
 }
 
 #[test]
+fn a_dialog_over_the_terminal_that_ends_into_a_new_sheet_asks_for_the_rest_before_the_sheet_takes_the_keys() {
+    let change = change(over(true, None), over(false, Some(PanelKind::Settings)), Some(Place::Terminal));
+    assert_eq!(keys_after(&change), Keys::Root);
+}
+
+#[test]
 fn nothing_to_go_back_to_takes_the_keys_to_the_window_at_once() {
     assert_eq!(keys_after(&ended_over_issues(None)), Keys::Root);
 }

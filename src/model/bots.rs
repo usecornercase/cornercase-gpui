@@ -11,6 +11,7 @@ pub(crate) use self::asks::{
     counted_as, decline_args, fields_after, give_args, give_json, giving, keys_of, on_enter, opens, tells_ask, title,
     what_happens,
 };
+pub(crate) use self::chat_apps::{AWAY, CHOICES, Reach, Row, UNPAIRED, note, platforms, reach, reach_tip, row, sent};
 pub(crate) use self::form::{
     AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, id_of,
     kept_accounts, new_args, rename_args,
@@ -25,6 +26,7 @@ pub(crate) use self::talk::{
 pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, read_since, tells};
 
 mod asks;
+mod chat_apps;
 mod form;
 mod manage;
 mod talk;
@@ -50,6 +52,8 @@ pub(crate) struct Bot {
     pub access: String,
     #[serde(deserialize_with = "asks::listed")]
     pub asks: Vec<Ask>,
+    #[serde(deserialize_with = "text_or_empty")]
+    pub chat_apps: String,
 }
 
 fn set(value: Option<&String>) -> Option<String> {

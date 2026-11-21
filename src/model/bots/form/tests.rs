@@ -132,6 +132,7 @@ fn each_field_set_is_sent_as_an_option() {
         account: Some("/tmp/made-up".into()),
         access: Some(FULL.into()),
         about: "line one\nline two".into(),
+        chat_apps: None,
     };
     let args = new_args(by(&list, "claude"), &all).expect("sent");
     let want = [
@@ -250,6 +251,7 @@ fn full_bot() -> Bot {
         effort: Some("high".into()),
         account: Some("made-up-1".into()),
         access: "full".into(),
+        chat_apps: "always".into(),
         ..Bot::default()
     }
 }
@@ -280,6 +282,7 @@ fn an_edited_bot_opens_with_every_option_it_has() {
     assert_eq!(before.effort.as_deref(), Some("high"));
     assert_eq!(before.account.as_deref(), Some("made-up-1"));
     assert_eq!(before.access.as_deref(), Some("full"));
+    assert_eq!(before.chat_apps.as_deref(), Some("always"));
 }
 
 #[test]
@@ -398,6 +401,7 @@ fn an_edit_never_sends_the_agent_or_what_the_bot_is_for() {
         account: Some("made-up-2".into()),
         access: Some("full".into()),
         about: "x".into(),
+        chat_apps: None,
     };
     let args = editing.args(&claude(), &now).expect("changes");
     assert!(args.iter().all(|word| !word.starts_with("--agent") && !word.starts_with("--about")), "{args:?}");
@@ -518,4 +522,66 @@ fn the_form_says_nothing_of_a_setup_to_a_server_without_it() {
     assert_eq!(about_note(Has::No(Some(crate::cli::Version::new(0, 13, 88)))), None);
     assert_eq!(about_note(Has::No(None)), None);
     assert_eq!(about_note(Has::Unread), None);
+}
+
+#[test]
+fn a_new_bot_sends_the_chat_apps_choice_after_the_access() {
+    let list = agents();
+    let t = Typed { chat_apps: Some("always".into()), about: "x".into(), ..typed("PRs") };
+    let args = new_args(by(&list, "claude"), &t).expect("sent");
+    let want = [
+        "bot",
+        "new",
+        "--json",
+        "--agent=claude",
+        "--access=cornercase",
+        "--chat-apps=always",
+        "--about=x",
+        "--",
+        "PRs",
+    ];
+    assert_eq!(args, strs(&want));
+}
+
+#[test]
+fn a_new_bot_with_no_chat_apps_choice_sends_none() {
+    let list = agents();
+    let args = new_args(by(&list, "claude"), &typed("PRs")).expect("sent");
+    assert!(args.iter().all(|word| !word.starts_with("--chat-apps")), "{args:?}");
+}
+
+#[test]
+fn an_edited_bot_opens_with_its_chat_apps_option() {
+    for option in ["away", "always", "off"] {
+        let bot = Bot { chat_apps: option.into(), ..bare_bot() };
+        assert_eq!(Editing::of(&bot).before.chat_apps.as_deref(), Some(option));
+    }
+}
+
+#[test]
+fn a_chat_apps_value_the_form_does_not_know_opens_with_none_chosen() {
+    for option in ["", "sometimes"] {
+        let bot = Bot { chat_apps: option.into(), ..bare_bot() };
+        assert_eq!(Editing::of(&bot).before.chat_apps, None);
+    }
+}
+
+#[test]
+fn a_chat_apps_choice_is_sent_only_when_it_changed() {
+    let (editing, mut now) = edit_of(&full_bot());
+    assert_eq!(editing.args(&claude(), &now), None);
+    now.chat_apps = Some("off".into());
+    assert_eq!(editing.args(&claude(), &now), Some(strs(&["bot", "edit", "prs", "--json", "--chat-apps=off"])));
+    now.chat_apps = None;
+    assert_eq!(editing.args(&claude(), &now), None);
+}
+
+#[test]
+fn a_chat_apps_change_goes_last_after_the_access() {
+    let (editing, mut now) = edit_of(&bare_bot());
+    now.chat_apps = Some("always".into());
+    now.access = Some("full".into());
+    now.name = "x".into();
+    let want = strs(&["bot", "edit", "prs", "--json", "--name=x", "--access=full", "--chat-apps=always"]);
+    assert_eq!(editing.args(&claude(), &now), Some(want));
 }

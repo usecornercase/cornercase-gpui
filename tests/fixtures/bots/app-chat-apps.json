@@ -1,0 +1,60 @@
+{
+  "boot": "boot-1",
+  "revision": 3,
+  "away": [
+    {
+      "away": false,
+      "platform": "telegram",
+      "ready": true
+    },
+    {
+      "away": false,
+      "platform": "discord",
+      "ready": false
+    }
+  ],
+  "bots": [
+    {
+      "access": "cornercase",
+      "account": null,
+      "agent": "claude",
+      "chat_apps": "off",
+      "created": 1795270311,
+      "effort": null,
+      "folder": "/tmp/cc269p/server.bots/plain",
+      "follow": true,
+      "following": [],
+      "held": 0,
+      "id": "plain",
+      "last": null,
+      "model": null,
+      "name": "Plain",
+      "next": null,
+      "routines": 0,
+      "secrets": 0,
+      "state": "idle",
+      "unread": 0
+    },
+    {
+      "access": "cornercase",
+      "account": null,
+      "agent": "claude",
+      "chat_apps": "always",
+      "created": 1795270311,
+      "effort": null,
+      "folder": "/tmp/cc269p/server.bots/loud",
+      "follow": true,
+      "following": [],
+      "held": 0,
+      "id": "loud",
+      "last": null,
+      "model": null,
+      "name": "Loud",
+      "next": null,
+      "routines": 0,
+      "secrets": 0,
+      "state": "idle",
+      "unread": 0
+    }
+  ]
+}

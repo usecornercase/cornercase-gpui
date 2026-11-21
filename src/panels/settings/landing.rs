@@ -30,6 +30,10 @@ pub(crate) struct FoundSetting {
 }
 
 impl FoundSetting {
+    pub(crate) fn tab(page: &str) -> Self {
+        Self { title: page.to_string(), page: page.to_string(), ..Self::default() }
+    }
+
     pub(crate) fn is_tab(&self) -> bool {
         self.key.is_none() && self.title == self.page
     }

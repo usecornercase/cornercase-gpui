@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.138
+
+- **A bot's form has a Chat apps row.** With cornercase 0.13.107 or newer and Telegram or Discord paired, New bot and Edit bot… let you choose when the bot's answers also reach your chat apps: **While away** (the default: only while away is on), **Always** or **Off**. A message you write to a bot from a chat app is answered there whichever you choose. Edit bot… sends the choice only when you change it. Tab reaches the three choices, and Return or Space picks the one with the ring.
+- **With no chat app paired, the row says where to pair one**: `Pair Telegram or Discord in Settings › Remote`. A click, or Return on it, closes the form and opens that page.
+- **A bot's chat shows a small phone in its header while its answers also go to a chat app**, and its tooltip says which.
+
 ## 0.1.137
 
 - **Give a bot the password it asks for.** With cornercase 0.13.101 or newer, a bot that needs a password or a token it does not have can ask you for it. Its row in the sidebar says `asks for a secret`, its chat's line has **Give…**, and a dialog shows the bot's reason with a masked field for each value. **Save** keeps them encrypted for that bot only, **Not now** (or Escape) leaves the question waiting, and **Never** turns it down. The value never goes through the chat.
