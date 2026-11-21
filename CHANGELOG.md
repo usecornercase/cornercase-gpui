@@ -2,6 +2,12 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.145
+
+- **A linked machine's bot has its details too.** Its row's `⋯` (or a right click) and the `⋯` at the top of its chat offer **New conversation…**, **Details…** and **Copy path**, and a click on its name at the top of its chat opens the same card: `The bot Notes on vps`, read from that machine. It shows its folder as that machine has it (Copy path says it is on vps, not on this Mac), its agent, model, access and secrets, what it is for, the agents it started there with **Show**, which shows that agent's tab on the machine, and its routines with their next run.
+- It only reads: change the bot, its secrets and its routines on that machine (its last line says so), in its window or with `cornercase --remote`. While the machine cannot be reached the card says why, and **Try again** reads what it is for once it is back.
+- Tab reaches every button of the card, and Return or Space presses the one with the ring.
+
 ## 0.1.144
 
 - **A bot's chat shows the agents it starts.** With cornercase 0.13.91 or newer, when a bot starts an agent its chat says so, such as `started claude in cornercase › fix/ci-482`, with **Show**, which leaves the chat and shows that agent's tab.
