@@ -243,3 +243,22 @@ fn a_line_joining_the_last_block_is_news_and_one_joining_an_earlier_block_is_not
     let after = keys_with(&[header, chat, line(4, "bot", "done", Some(5))], &runs);
     assert!(!arrived(&before, &after));
 }
+
+fn laid(spots: &[(f32, f32)]) -> Vec<gpui::Bounds<gpui::Pixels>> {
+    let at = |(left, width): &(f32, f32)| {
+        gpui::Bounds::new(gpui::point(gpui::px(*left), gpui::px(0.)), gpui::size(gpui::px(*width), gpui::px(20.)))
+    };
+    spots.iter().map(at).collect()
+}
+
+#[test]
+fn the_room_ends_at_the_first_fixed_control_and_the_width_is_the_buttons() {
+    let plain = laid(&[(16., 40.), (66., 100.), (176., 75.), (261., 120.), (391., 24.)]);
+    let measure = |bounds: &[gpui::Bounds<gpui::Pixels>], phone: bool, drawn: bool| {
+        super::super::controls::measure(bounds, super::super::controls::routines_at(phone), drawn)
+    };
+    assert_eq!(measure(&plain, false, true), Some((160., Some(75.))));
+    let phone = laid(&[(16., 40.), (66., 80.), (156., 13.), (179., 75.), (264., 120.), (394., 24.)]);
+    assert_eq!(measure(&phone, true, true), Some((140., Some(75.))));
+    assert_eq!(measure(&phone, true, false), Some((140., None)));
+}

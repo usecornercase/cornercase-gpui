@@ -30,10 +30,18 @@ pub(super) struct Fit {
     pub stop: FocusHandle,
 }
 
+pub(super) fn routines_at(phone: bool) -> usize {
+    2 + usize::from(phone)
+}
+
+pub(super) fn measure(bounds: &[Bounds<Pixels>], at: usize, drawn: bool) -> Option<(f32, Option<f32>)> {
+    let (name, first) = (bounds.first()?, bounds.get(2)?);
+    let width = drawn.then(|| bounds.get(at)).flatten().map(|button| f32::from(button.size.width));
+    Some((f32::from(first.left() - name.left()), width))
+}
+
 fn measured(fit: &Fit, (bounds, at): (&[Bounds<Pixels>], usize), window: &mut Window, cx: &mut App) {
-    let (Some(name), Some(first)) = (bounds.first(), bounds.get(2)) else { return };
-    let room = f32::from(first.left() - name.left());
-    let width = fit.drawn.then(|| bounds.get(at)).flatten().map(|button| f32::from(button.size.width));
+    let Some((room, width)) = measure(bounds, at, fit.drawn) else { return };
     let fits = routines_fit(room, fit.drawn, width.unwrap_or(fit.width));
     if fits == fit.drawn && width.is_none_or(|width| (width - fit.width).abs() < 0.5) {
         return;
@@ -54,7 +62,7 @@ pub(super) fn header(
     reach: Option<&Reach>,
 ) -> impl IntoElement + use<> {
     let routines = fit.as_ref().filter(|fit| fit.drawn).map(|fit| routines_button(bot, &fit.stop, stops));
-    let at = 2 + usize::from(reach.is_some());
+    let at = routines_at(reach.is_some());
     let row = div()
         .flex_none()
         .flex()
