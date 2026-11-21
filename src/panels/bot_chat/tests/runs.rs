@@ -16,9 +16,19 @@ fn history() -> Vec<Line> {
     history_of(fixture!("bots/run-history.json")).expect("the fixture")
 }
 
-fn line(id: u64, kind: &str, text: &str, routine: Option<u64>) -> Line {
+pub(super) fn line(id: u64, kind: &str, text: &str, routine: Option<u64>) -> Line {
     let at = 1000 + i64::try_from(id).expect("small");
-    Line { id, at, kind: Kind::from(kind), text: text.to_string(), held: false, ask: None, routine }
+    Line {
+        id,
+        at,
+        kind: Kind::from(kind),
+        text: text.to_string(),
+        held: false,
+        ask: None,
+        routine,
+        agent: None,
+        body: None,
+    }
 }
 
 fn held_line(id: u64, text: &str) -> Line {

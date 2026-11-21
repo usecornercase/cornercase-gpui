@@ -5,6 +5,7 @@ use gpui::{
 };
 
 use self::chat_apps::ChatRow;
+use self::follow::FollowBox;
 use self::secrets::SecretsRow;
 use super::{
     body_height, bot_refusal, cancel_and, close, dialog_starts, fitted, forget_refusal, frame, revealed, show, within,
@@ -20,6 +21,7 @@ use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, TextField, TextFieldEvent, Tone};
 
 mod chat_apps;
+mod follow;
 mod secrets;
 
 const TITLE: &str = "New bot";
@@ -70,6 +72,7 @@ pub(crate) struct BotForm {
     error: Option<&'static str>,
     scroller: ScrollHandle,
     chat: ChatRow,
+    follow: FollowBox,
     secrets: SecretsRow,
 }
 
@@ -132,7 +135,7 @@ impl BotForm {
             cx.notify();
         })
         .detach();
-        let (chat, secrets) = (ChatRow::new(&mode, cx), SecretsRow::new(cx));
+        let (chat, follow, secrets) = (ChatRow::new(&mode, cx), FollowBox::new(&mode, cx), SecretsRow::new(cx));
         let mut form = Self {
             mode,
             listing: Listing::Reading,
@@ -146,6 +149,7 @@ impl BotForm {
             error: None,
             scroller,
             chat,
+            follow,
             secrets,
         };
         form.read_agents(cx);
@@ -267,6 +271,7 @@ impl BotForm {
             access: self.access.clone(),
             about: self.about.read(cx).text(),
             chat_apps: self.chat_sent(cx),
+            follow: self.follow_sent(cx),
         }
     }
 
@@ -428,6 +433,7 @@ impl BotForm {
             .children(self.effort_field(&agent, cx))
             .children(accounts)
             .child(self.access_field(&agent, cx))
+            .children(self.follow_field(cx))
             .children(self.chat_field(cx))
             .children(self.secrets_field(cx))
             .child(self.about_field(window, cx))
@@ -462,6 +468,7 @@ impl Render for BotForm {
         self.accounts.follow(choices, Self::picked, cx);
         let height = body_height(f32::from(window.viewport_size().height));
         self.chat_reveal(window);
+        self.follow_reveal(window);
         self.secrets_keys(window);
         let body = self.fields(window, cx);
         let scrolled = fitted("bot-form", window, body).min_h_0().track_scroll(&self.scroller);

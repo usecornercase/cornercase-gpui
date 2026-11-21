@@ -77,6 +77,8 @@ fn line(id: u64, kind: &str, text: &str, held: bool) -> Line {
         held,
         ask: None,
         routine: None,
+        agent: None,
+        body: None,
     }
 }
 
@@ -283,14 +285,25 @@ fn a_chat_is_fresh_for_another_bot_or_a_new_generation_but_not_a_new_revision() 
     use super::is_fresh;
     use crate::model::bots::BotKey;
     let prs = BotKey::here("prs");
-    let stamp = |born, revision| (BotKey::here("prs"), born, revision, None, Vec::new(), Give::No);
+    let stamp = |born, revision| (BotKey::here("prs"), born, revision, None, Vec::new(), Give::No, Vec::new());
     let mark = stamp(1, 3);
     assert!(is_fresh(None, None, &mark));
     assert!(is_fresh(Some(&BotKey::here("ops")), Some(&mark), &mark));
     assert!(is_fresh(Some(&BotKey::on("vps", "prs")), Some(&mark), &mark));
     assert!(is_fresh(Some(&prs), Some(&mark), &stamp(5, 3)));
     assert!(!is_fresh(Some(&prs), Some(&mark), &stamp(1, 4)));
-    assert!(!is_fresh(Some(&prs), Some(&mark), &(prs.clone(), 1, 3, None, vec![4], Give::Button)));
+    assert!(!is_fresh(Some(&prs), Some(&mark), &(prs.clone(), 1, 3, None, vec![4], Give::Button, Vec::new())));
+}
+
+#[test]
+fn a_changed_set_of_live_agent_lines_builds_the_rows_again_without_starting_over() {
+    use super::is_fresh;
+    use crate::model::bots::BotKey;
+    let prs = BotKey::here("prs");
+    let live = (prs.clone(), 1, 3, None, Vec::new(), Give::No, vec![4, 9]);
+    let closed = (prs.clone(), 1, 3, None, Vec::new(), Give::No, vec![9]);
+    assert_ne!(live, closed);
+    assert!(!is_fresh(Some(&prs), Some(&live), &closed));
 }
 
 #[test]
@@ -680,5 +693,6 @@ fn below_the_gate_the_line_says_what_it_needs() {
     assert_eq!(words, Give::Needs);
 }
 
+mod agents;
 mod picking;
 mod runs;

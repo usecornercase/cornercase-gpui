@@ -8,6 +8,7 @@ use gpui::{
     StatefulInteractiveElement as _, Styled as _, Window, div, list, prelude::FluentBuilder as _, px,
 };
 
+use self::agents::Stop;
 pub(crate) use self::controls::ask_new_conversation;
 use self::controls::{Fit, header, turn_row};
 use self::entries::{Entry, EntryKey, Retry};
@@ -29,6 +30,8 @@ use crate::ui::markdown::text::{OnLink, open_web};
 use crate::ui::selection::{self, Selecting};
 use crate::ui::{self, Icon, press, text_field};
 
+mod agent_row;
+mod agents;
 mod controls;
 mod entries;
 mod field;
@@ -84,7 +87,7 @@ pub(crate) struct BotChat {
     blocks: Blocks,
     counting: Counting,
     mark: Option<Stamp>,
-    heard: (Option<BotKey>, u64, Controls, Option<Reach>),
+    heard: (Option<BotKey>, u64, Controls, Option<Reach>, Vec<u64>),
     retry: Option<Rc<Retry>>,
     givable: Rc<HashMap<u64, u64>>,
     giving: Giving,
@@ -97,6 +100,13 @@ pub(crate) struct BotChat {
     routines: (bool, f32),
     routines_stop: FocusHandle,
     selecting: Selecting<Spot>,
+    agents: AgentsShown,
+}
+
+#[derive(Default)]
+struct AgentsShown {
+    stops: HashMap<Stop, FocusHandle>,
+    keyed: Option<Stop>,
 }
 
 #[derive(Default)]
@@ -110,7 +120,7 @@ fn counting(chat: &mut BotChat) -> &mut Counting {
     &mut chat.counting
 }
 
-pub(crate) type Stamp = (BotKey, u64, u64, Option<u64>, Vec<u64>, entries::Give);
+pub(crate) type Stamp = (BotKey, u64, u64, Option<u64>, Vec<u64>, entries::Give, Vec<u64>);
 
 pub(crate) type Controls = (bool, bool, bool, bool, bool);
 
@@ -124,6 +134,14 @@ pub(crate) fn example_to_reveal(now: Option<usize>, was: Option<usize>) -> Optio
 
 pub(crate) fn re_anchor(following: bool, rows: usize) -> Option<usize> {
     following.then_some(rows)
+}
+
+fn stamp_of(store: &Store, bot: &Bot, chat: &Chat) -> (Stamp, Option<Retry>, Giving) {
+    let retry = entries::retry(&chat.lines, bot.thinking(), store.bot_setup_offered(&bot.key()));
+    let (waiting, giving) = asks_of(store, bot);
+    let error = retry.as_ref().map(|retry| retry.error);
+    let stamp = (bot.key(), chat.born, store.bots_revision(), error, waiting, give_key(&giving), store.shown_agents());
+    (stamp, retry, giving)
 }
 
 fn asks_of(store: &Store, bot: &Bot) -> (Vec<u64>, Giving) {
@@ -174,7 +192,7 @@ impl BotChat {
             blocks: Rc::new(RefCell::new(HashMap::new())),
             counting: Counting::default(),
             mark: None,
-            heard: (None, 0, (false, false, false, false, false), None),
+            heard: (None, 0, (false, false, false, false, false), None, Vec::new()),
             retry: None,
             givable: Rc::default(),
             giving: Giving::No,
@@ -187,6 +205,7 @@ impl BotChat {
             routines: (true, ROUTINES_WIDTH),
             routines_stop: cx.focus_handle(),
             selecting: Selecting::default(),
+            agents: AgentsShown::default(),
         }
     }
 
@@ -197,7 +216,7 @@ impl BotChat {
             (store.bot_stopping(key), busy.0, busy.1, store.chat_takes_keys(), store.bot_setup_offered(key))
         });
         let reach = shown.and_then(|key| store.bot_reach(key));
-        let now = (shown.cloned(), store.bots_revision(), controls, reach);
+        let now = (shown.cloned(), store.bots_revision(), controls, reach, store.shown_agents());
         (std::mem::replace(&mut self.heard, now.clone()) != now) || self.bot.is_some() && now.0.is_none()
     }
 
@@ -253,17 +272,14 @@ impl BotChat {
             self.bot = None;
             return;
         };
-        let retry = entries::retry(&chat.lines, bot.thinking(), store.bot_setup_offered(&bot.key()));
-        let (waiting, giving) = asks_of(store, bot);
-        let give = give_key(&giving);
-        let revision = store.bots_revision();
-        let stamp = (bot.key(), chat.born, revision, retry.as_ref().map(|retry| retry.error), waiting, give);
+        let (stamp, retry, giving) = stamp_of(store, bot, chat);
         let fresh = is_fresh(self.bot.as_ref(), self.mark.as_ref(), &stamp);
         if !fresh && self.mark.as_ref() == Some(&stamp) {
             return;
         }
+        let (give, shows) = (stamp.5, stamp.6.iter().copied().collect::<HashSet<u64>>());
         self.mark = Some(stamp);
-        let (earlier, entries) = (chat.earlier(), entries::entries(&chat.lines));
+        let entries = agents::linked(entries::entries(&chat.lines), &shows);
         let first = chat.lines.first().map_or(0, |line| line.id);
         if fresh {
             self.bot = Some(bot.key());
@@ -277,7 +293,19 @@ impl BotChat {
         self.giving = giving;
         let runs = store.bots_at(&bot.home).map_or_else(Runs::default, |bots| bots.runs.clone());
         self.run.runs = Rc::new(if bot.home == Home::Here { runs } else { runs.without_again() });
+        let earlier = chat.earlier();
+        self.lay_out(fresh, (earlier, give), entries, cx);
+    }
+
+    fn lay_out(
+        &mut self,
+        fresh: bool,
+        (earlier, give): (bool, entries::Give),
+        entries: Vec<Entry>,
+        cx: &Context<Self>,
+    ) {
         self.keep_again_stops(&entries, cx);
+        self.keep_agent_stops(&entries, cx);
         let retried = self.retry.as_ref().map(|retry| retry.error);
         let keys = entries::keys(&entries, &self.opened, retried, (&self.givable, give), &self.run.runs);
         let rows: Vec<Row> =
@@ -321,7 +349,29 @@ impl BotChat {
         }
     }
 
+    fn keep_agent_stops(&mut self, entries: &[Entry], cx: &Context<Self>) {
+        let offered = agents::stops(entries);
+        self.agents.stops.retain(|stop, _| offered.contains(stop));
+        for stop in offered {
+            self.agents.stops.entry(stop).or_insert_with(|| cx.focus_handle());
+        }
+    }
+
+    fn reveal_agent_stop(&mut self, window: &Window) {
+        let now = self.agents.stops.iter().find(|(_, handle)| handle.is_focused(window)).map(|(stop, _)| *stop);
+        if let Some(ix) = now.filter(|_| now != self.agents.keyed).and_then(|stop| self.row_of_line(stop.line())) {
+            self.list.scroll_to_reveal_item(ix);
+            self.following = false;
+        }
+        self.agents.keyed = now;
+    }
+
+    fn row_of_line(&self, id: u64) -> Option<usize> {
+        self.rows.iter().position(|row| matches!(row, Row::Entry(Entry::Agent(line)) if line.id == id))
+    }
+
     fn reveal_stops(&mut self, window: &Window) {
+        self.reveal_agent_stop(window);
         let again = self.run.again_stops.iter().find(|(_, handle)| handle.is_focused(window)).map(|(run, _)| *run);
         let now = (
             self.examples.iter().position(|handle| handle.is_focused(window)),
@@ -396,6 +446,7 @@ impl BotChat {
             laid: self.selecting.laid().clone(),
             selection: self.selecting.selection,
             on_link: guarded_link(cx),
+            agent_stops: Rc::new(self.agents.stops.clone()),
         }
     }
 

@@ -103,6 +103,11 @@ pub(crate) struct Typed {
     pub access: Option<String>,
     pub about: String,
     pub chat_apps: Option<String>,
+    pub follow: Option<bool>,
+}
+
+fn on_or_off(on: bool) -> &'static str {
+    if on { "on" } else { "off" }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,6 +140,9 @@ pub(crate) fn new_args(agent: &AgentInfo, typed: &Typed) -> Result<Vec<String>, 
         args.push(flag("account", account));
     }
     args.push(flag("access", access));
+    if let Some(follow) = typed.follow {
+        args.push(flag("follow", on_or_off(follow)));
+    }
     if let Some(chat) = typed.chat_apps.as_deref() {
         args.push(flag("chat-apps", chat));
     }
@@ -174,6 +182,7 @@ impl Editing {
             access,
             about: String::new(),
             chat_apps: known(&bot.chat_apps),
+            follow: bot.follow,
         };
         Self { id: bot.id.clone(), agent: bot.agent.clone(), before }
     }
@@ -197,6 +206,11 @@ impl Editing {
         }
         if let Some(access) = now.access.as_deref().filter(|a| Some(*a) != before.access.as_deref()) {
             changes.push(flag("access", access));
+        }
+        if let (Some(was), Some(follow)) = (before.follow, now.follow)
+            && was != follow
+        {
+            changes.push(flag("follow", on_or_off(follow)));
         }
         if let Some(chat) = now.chat_apps.as_deref().filter(|c| Some(*c) != before.chat_apps.as_deref()) {
             changes.push(flag("chat-apps", chat));

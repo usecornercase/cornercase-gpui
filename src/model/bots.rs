@@ -12,10 +12,11 @@ pub(crate) use self::asks::{
     what_happens,
 };
 pub(crate) use self::card::{
-    AboutGate, CardRow, ListRow, Tone, about_args, about_failed, about_gate, about_of, card_rows, routine_rows,
-    secrets_words,
+    AboutGate, CardRow, ListRow, StartedRow, Tone, about_args, about_failed, about_gate, about_of, card_rows,
+    routine_rows, secrets_words, started_rows,
 };
 pub(crate) use self::chat_apps::{AWAY, CHOICES, Reach, Row, UNPAIRED, note, platforms, reach, reach_tip, row, sent};
+pub(crate) use self::follow::{AgentRef, FollowRow, by, failed, follow_note, follow_row, follow_sent, showable, words};
 pub(crate) use self::form::{
     AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, id_of,
     kept_accounts, new_args, rename_args,
@@ -36,11 +37,12 @@ pub(crate) use self::talk::{
     Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, setup_args,
     stop_key,
 };
-pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, read_since, tells};
+pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, outline_text, read_since, tells};
 
 mod asks;
 mod card;
 mod chat_apps;
+mod follow;
 mod form;
 mod home;
 mod manage;
@@ -79,6 +81,8 @@ pub(crate) struct Bot {
     pub routines: usize,
     #[serde(deserialize_with = "time_or_none")]
     pub next: Option<i64>,
+    #[serde(deserialize_with = "flag_or_none")]
+    pub follow: Option<bool>,
     #[serde(skip)]
     pub home: Home,
     #[serde(deserialize_with = "time_or_none")]
@@ -99,6 +103,10 @@ fn count_or_none<'de, D: serde::Deserializer<'de>>(found: D) -> Result<usize, D:
 
 fn true_or_false<'de, D: serde::Deserializer<'de>>(found: D) -> Result<bool, D::Error> {
     Ok(Value::deserialize(found)?.as_bool() == Some(true))
+}
+
+fn flag_or_none<'de, D: serde::Deserializer<'de>>(found: D) -> Result<Option<bool>, D::Error> {
+    Ok(Value::deserialize(found)?.as_bool())
 }
 
 fn time_or_none<'de, D: serde::Deserializer<'de>>(found: D) -> Result<Option<i64>, D::Error> {
@@ -172,6 +180,9 @@ pub(crate) enum Kind {
     Step,
     Error,
     Notice,
+    Started,
+    Finished,
+    Waiting,
     Other(String),
 }
 
@@ -183,6 +194,9 @@ impl From<&str> for Kind {
             "step" => Self::Step,
             "error" => Self::Error,
             "notice" => Self::Notice,
+            "started" => Self::Started,
+            "finished" => Self::Finished,
+            "waiting" => Self::Waiting,
             other => Self::Other(other.to_string()),
         }
     }
@@ -197,6 +211,8 @@ pub(crate) struct Line {
     pub held: bool,
     pub ask: Option<u64>,
     pub routine: Option<u64>,
+    pub agent: Option<AgentRef>,
+    pub body: Option<String>,
 }
 
 fn present<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
@@ -214,7 +230,9 @@ pub(crate) fn line_of(value: &Value) -> Option<Line> {
     let held = present(value, "held").map_or(Some(false), Value::as_bool)?;
     let ask = present(value, "ask").and_then(Value::as_u64);
     let routine = present(value, "routine").and_then(Value::as_u64).filter(|_| present(value, "ask").is_none());
-    Some(Line { id, at, kind: Kind::from(kind), text, held, ask, routine })
+    let agent = follow::agent_of(value);
+    let body = present(value, "body").and_then(Value::as_str).map(str::to_string);
+    Some(Line { id, at, kind: Kind::from(kind), text, held, ask, routine, agent, body })
 }
 
 pub(crate) fn history_of(text: &str) -> anyhow::Result<Vec<Line>> {

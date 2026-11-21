@@ -19,10 +19,12 @@ pub(super) fn tab_title<Id>(tab: &Tab<Id>) -> String {
     tab.agent_pane().and_then(PaneInfo::agent_title).unwrap_or_else(|| tab.name.clone())
 }
 
-pub(super) fn tab_details<Id>(tab: &Tab<Id>, mark: Option<&str>, look: &Look) -> String {
-    let mut details = match tab.agent_pane() {
-        Some(agent) => vec![agent_details(agent, mark, look)],
-        None => tab.panes.first().and_then(|p| p.program.clone()).filter(|p| *p != tab.name).into_iter().collect(),
+pub(super) fn tab_details<Id>(tab: &Tab<Id>, mark: Option<&str>, by: Option<&str>, look: &Look) -> String {
+    let mut details = if let Some(agent) = tab.agent_pane() {
+        vec![agent_details(agent, mark, by, look)]
+    } else {
+        let program = tab.panes.first().and_then(|p| p.program.clone()).filter(|p| *p != tab.name);
+        program.into_iter().chain(by.map(str::to_string)).collect()
     };
     details.extend(tab.memory().map(memory_size));
     if tab.panes.len() > 1 {
@@ -71,7 +73,8 @@ impl Root {
         let target = Target::Tab(id);
         let title = tab_title(tab);
         let mark = tab.agent_pane().and_then(|agent| self.account_mark(agent, cx));
-        let details = tab_details(tab, mark.as_deref(), &self.side.look.current);
+        let by = self.started_by(tab.bot.as_deref(), cx);
+        let details = tab_details(tab, mark.as_deref(), by.as_deref(), &self.side.look.current);
         let details = Some(details).filter(|d| !d.is_empty() && *d != title);
         let name = name_label(title.clone()).flex_initial().min_w(px(0.)).text_color(if selected {
             colours::text()

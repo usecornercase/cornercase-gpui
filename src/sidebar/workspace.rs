@@ -266,6 +266,10 @@ impl Root {
         self.side.look.current.account_mark.then(|| self.store.read(cx).accounts.mark(pane)).flatten()
     }
 
+    pub(super) fn started_by(&self, bot: Option<&str>, cx: &App) -> Option<String> {
+        self.store.read(cx).started_by(bot)
+    }
+
     fn agent_tab_name(&self, tab: u64) -> String {
         self.session
             .as_ref()
@@ -285,7 +289,9 @@ impl Root {
         let id = pane.id;
         let selected = shown.pane == Some(id);
         let title = pane.agent_title().unwrap_or_else(|| self.agent_tab_name(row.tab));
-        let details = agent_details(pane, self.account_mark(pane, cx).as_deref(), &self.side.look.current);
+        let by = self.started_by(pane.bot.as_deref(), cx);
+        let details =
+            agent_details(pane, self.account_mark(pane, cx).as_deref(), by.as_deref(), &self.side.look.current);
         let details = place.place.iter().cloned().chain([details]).collect::<Vec<_>>().join(" · ");
         let gid = SharedString::from(format!("{}-{id}", place.scope));
         ui::row(gid.clone(), selected)
@@ -349,9 +355,10 @@ fn agent_menu_button(id: u64, scope: &str, group: SharedString, cx: &mut Context
     )
 }
 
-pub(super) fn agent_details<Id>(pane: &PaneInfo<Id>, mark: Option<&str>, look: &Look) -> String {
+pub(super) fn agent_details<Id>(pane: &PaneInfo<Id>, mark: Option<&str>, by: Option<&str>, look: &Look) -> String {
     let mut details = vec![pane.agent.clone().unwrap_or_default()];
     details.extend(pane.role.clone());
+    details.extend(by.map(str::to_string));
     details.extend(look.model_of(pane));
     details.extend(mark.map(str::to_string));
     details.extend(look.share_of(pane));

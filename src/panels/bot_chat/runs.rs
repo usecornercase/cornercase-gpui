@@ -24,7 +24,7 @@ pub(super) fn block(run: u64, members: &[&Line]) -> Entry {
         end: end.map(|line| line.text.clone()),
         others: members
             .iter()
-            .filter(|line| matches!(line.kind, Kind::Other(_)))
+            .filter(|line| matches!(line.kind, Kind::Other(_) | Kind::Started | Kind::Finished | Kind::Waiting))
             .map(|line| line.text.clone())
             .collect(),
     })

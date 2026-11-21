@@ -16,7 +16,7 @@ fn opus(id: u64) -> PaneInfo {
 }
 
 fn details(tab: &Tab, mark: Option<&str>) -> String {
-    tab_details(tab, mark, &Look::default())
+    tab_details(tab, mark, None, &Look::default())
 }
 
 #[test]
@@ -70,6 +70,21 @@ fn an_agent_tab_adds_the_memory_of_its_panes_before_counting_them() {
 #[test]
 fn the_model_and_context_follow_their_switches() {
     let tab = Tab { id: 1, name: "claude".into(), panes: vec![opus(2)], ..Default::default() };
-    assert_eq!(tab_details(&tab, None, &Look { model: false, ..Look::default() }), "claude · 12%");
-    assert_eq!(tab_details(&tab, None, &Look { context: false, ..Look::default() }), "claude · Opus 5.5");
+    assert_eq!(tab_details(&tab, None, None, &Look { model: false, ..Look::default() }), "claude · 12%");
+    assert_eq!(tab_details(&tab, None, None, &Look { context: false, ..Look::default() }), "claude · Opus 5.5");
+}
+
+#[test]
+fn a_tab_says_who_started_it() {
+    let tab = Tab { id: 1, name: "claude".into(), panes: vec![opus(2)], ..Default::default() };
+    assert_eq!(tab_details(&tab, None, Some("by PRs"), &Look::default()), "claude · by PRs · Opus 5.5 · 12%");
+}
+
+#[test]
+fn a_shell_tab_a_bot_opened_says_so_after_its_program() {
+    let logs = Tab { id: 1, name: "logs".into(), panes: vec![shell(2)], ..Default::default() };
+    assert_eq!(tab_details(&logs, None, Some("by PRs"), &Look::default()), "zsh · by PRs");
+    let pane = PaneInfo { memory: Some(2 * 1024 * 1024), ..shell(2) };
+    let zsh = Tab { id: 1, name: "zsh".into(), panes: vec![pane], ..Default::default() };
+    assert_eq!(tab_details(&zsh, None, Some("by PRs"), &Look::default()), "by PRs · 2 MB");
 }

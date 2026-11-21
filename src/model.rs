@@ -140,6 +140,7 @@ pub(crate) struct Tab<Id = u64> {
     pub active: bool,
     pub panes: Vec<PaneInfo<Id>>,
     pub custom_name: Option<String>,
+    pub bot: Option<String>,
 }
 
 #[expect(clippy::struct_excessive_bools, reason = "mirrors the flags of a pane in cornercase's view")]
@@ -172,6 +173,7 @@ pub(crate) struct PaneInfo<Id = u64> {
     pub draft: bool,
     pub compacted: bool,
     pub memory: Option<u64>,
+    pub bot: Option<String>,
 }
 
 impl<Id> PaneInfo<Id> {

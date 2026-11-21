@@ -8,6 +8,8 @@ use gpui::{
 };
 
 use super::BotChat;
+use super::agent_row::agent;
+use super::agents::Stop;
 use super::entries::{Again, Entry, Retry, STEPS_SHOWN, folded};
 use super::picking::Spot;
 use super::run_block::run;
@@ -44,6 +46,7 @@ pub(super) struct Meta {
     pub laid: Laid<Spot>,
     pub selection: Option<Selection<Spot>>,
     pub on_link: md::OnLink,
+    pub agent_stops: Rc<HashMap<Stop, FocusHandle>>,
 }
 
 impl Meta {
@@ -73,6 +76,7 @@ pub(super) fn entry_row(entry: &Entry, meta: &Meta) -> AnyElement {
         Entry::Failed { id, text } => failed(*id, text, meta),
         Entry::Notice { id, text, .. } => notice(*id, text, meta),
         Entry::Other { text, .. } => plain(text),
+        Entry::Agent(line) => agent(line, meta),
         Entry::Run(block) => run(block, meta),
     }
     .into_any_element()

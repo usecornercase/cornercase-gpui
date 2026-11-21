@@ -214,6 +214,11 @@ pub(crate) fn first_line(source: &str) -> String {
     cut(markdown::outline(source).iter().map(block_text).find(|text| !text.is_empty()).unwrap_or_default())
 }
 
+pub(crate) fn outline_text(source: &str) -> String {
+    let blocks = markdown::outline(source);
+    blocks.iter().map(block_text).filter(|text| !text.is_empty()).collect::<Vec<_>>().join("\n")
+}
+
 fn plain_first_line(text: &str) -> String {
     cut(text.lines().map(tidy).find(|line| !line.is_empty()).unwrap_or_default())
 }
