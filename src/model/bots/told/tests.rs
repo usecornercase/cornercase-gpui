@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use super::*;
 
 fn answer(bot: &str, id: u64) -> Answer {
-    Answer { bot: bot.to_string(), id, failed: false, run: false, text: format!("Answer {id}") }
+    Answer { bot: bot.to_string(), id, failed: false, run: None, text: format!("Answer {id}") }
 }
 
 fn ids(answers: &[Answer]) -> Vec<u64> {
@@ -15,7 +15,7 @@ fn later(base: Instant, ms: u64) -> Instant {
 }
 
 fn line(kind: &str, text: &str) -> Line {
-    Line { id: 7, at: 0, kind: Kind::from(kind), text: text.to_string(), held: false, ask: None }
+    Line { id: 7, at: 0, kind: Kind::from(kind), text: text.to_string(), held: false, ask: None, routine: None }
 }
 
 #[test]
@@ -63,15 +63,16 @@ fn a_line_older_than_the_last_told_is_not_told() {
 #[test]
 fn steps_notices_and_your_own_lines_are_no_answers() {
     for kind in ["you", "step", "notice", "something-new"] {
-        assert_eq!(answer_of("notes", &line(kind, "x"), false), None, "{kind}");
+        assert_eq!(answer_of("notes", &line(kind, "x")), None, "{kind}");
     }
-    assert_eq!(answer_of("notes", &line("bot", "x"), false).map(|a| a.failed), Some(false));
+    assert_eq!(answer_of("notes", &line("bot", "x")).map(|a| a.failed), Some(false));
 }
 
 #[test]
 fn an_error_is_an_answer_that_failed() {
-    let failed = answer_of("notes", &line("error", "Not logged in"), true).expect("an answer");
-    assert_eq!((failed.failed, failed.run, failed.id), (true, true, 7));
+    let run = Line { routine: Some(5), ..line("error", "Not logged in") };
+    let failed = answer_of("notes", &run).expect("an answer");
+    assert_eq!((failed.failed, failed.run, failed.id), (true, Some(5), 7));
 }
 
 #[test]
@@ -236,9 +237,9 @@ fn a_bot_whose_chat_does_not_show_tells_whether_the_window_is_active_or_behind()
 
 #[test]
 fn a_runs_error_is_left_to_its_queue_message() {
-    let failed = Answer { failed: true, run: true, ..answer("notes", 1) };
+    let failed = Answer { failed: true, run: Some(5), ..answer("notes", 1) };
     assert!(!tells(&failed, (None, false), true));
-    assert!(tells(&Answer { run: false, ..failed }, (None, false), true));
+    assert!(tells(&Answer { run: None, ..failed }, (None, false), true));
 }
 
 #[test]
@@ -248,7 +249,7 @@ fn nothing_is_told_below_the_gate() {
 
 #[test]
 fn a_runs_answer_is_told() {
-    assert!(tells(&Answer { run: true, ..answer("notes", 1) }, (None, true), true));
+    assert!(tells(&Answer { run: Some(5), ..answer("notes", 1) }, (None, true), true));
 }
 
 #[test]
@@ -300,37 +301,37 @@ fn control_characters_and_runs_of_blanks_are_left_out() {
 
 #[test]
 fn an_answers_toast_names_the_bot_and_its_first_line() {
-    let told = Told::new(&answer("notes", 1), "notes");
+    let told = Told::new(&answer("notes", 1), "notes", None);
     assert_eq!(told.text(), "notes: Answer 1");
 }
 
 #[test]
 fn an_errors_toast_says_the_bot_could_not_answer() {
     let failed = Answer { failed: true, text: "Not logged in\nmore".into(), ..answer("notes", 1) };
-    assert_eq!(Told::new(&failed, "notes").text(), "notes could not answer: Not logged in");
+    assert_eq!(Told::new(&failed, "notes", None).text(), "notes could not answer: Not logged in");
 }
 
 #[test]
 fn an_error_is_read_as_the_chat_draws_it_not_as_markdown() {
     let failed = Answer { failed: true, text: "\n__init__.py *failed* [x](y)\nnext".into(), ..answer("notes", 1) };
-    assert_eq!(Told::new(&failed, "notes").first, "__init__.py *failed* [x](y)");
+    assert_eq!(Told::new(&failed, "notes", None).first, "__init__.py *failed* [x](y)");
     let long = Answer { text: "e".repeat(300), ..failed };
-    let first = Told::new(&long, "notes").first;
+    let first = Told::new(&long, "notes", None).first;
     assert_eq!((first.chars().count(), first.ends_with('…')), (100, true));
 }
 
 #[test]
 fn an_answer_with_no_text_says_the_bot_answered() {
     let blank = Answer { text: String::new(), ..answer("notes", 1) };
-    assert_eq!(Told::new(&blank, "notes").text(), "notes answered");
-    assert_eq!(Told::new(&Answer { failed: true, ..blank }, "notes").text(), "notes could not answer");
+    assert_eq!(Told::new(&blank, "notes", None).text(), "notes answered");
+    assert_eq!(Told::new(&Answer { failed: true, ..blank }, "notes", None).text(), "notes could not answer");
 }
 
 #[test]
 fn the_headline_says_answered_or_could_not_answer_and_the_body_is_the_first_line() {
-    let told = Told::new(&answer("notes", 1), "notes");
+    let told = Told::new(&answer("notes", 1), "notes", None);
     assert_eq!((told.headline().as_str(), told.body().as_deref()), ("notes answered", Some("Answer 1")));
-    let failed = Told::new(&Answer { failed: true, text: String::new(), ..answer("notes", 1) }, "notes");
+    let failed = Told::new(&Answer { failed: true, text: String::new(), ..answer("notes", 1) }, "notes", None);
     assert_eq!((failed.headline().as_str(), failed.body()), ("notes could not answer", None));
 }
 
@@ -347,4 +348,28 @@ fn an_ask_is_told_in_cornercases_words() {
     assert_eq!(told.headline(), "Campus asks for a secret");
     assert_eq!(told.body().as_deref(), Some("campus-user, campus-password"));
     assert_eq!((told.ask, told.failed), (Some(3), false));
+}
+
+#[test]
+fn a_runs_answer_names_its_routine_in_the_toast_and_the_headline() {
+    let run = Answer { run: Some(5), ..answer("prs", 1) };
+    let told = Told::new(&run, "PRs", Some("Review PRs"));
+    assert_eq!(told.text(), "PRs · Review PRs: Answer 1");
+    assert_eq!(told.headline(), "PRs · Review PRs answered");
+    assert_eq!(told.run, Some(5));
+}
+
+#[test]
+fn an_answer_without_a_label_reads_as_before() {
+    let told = Told::new(&Answer { run: Some(5), ..answer("prs", 1) }, "PRs", None);
+    assert_eq!((told.text().as_str(), told.headline().as_str()), ("PRs: Answer 1", "PRs answered"));
+    let blank = Told::new(&answer("prs", 1), "PRs", Some(""));
+    assert_eq!(blank.text(), "PRs: Answer 1");
+}
+
+#[test]
+fn a_runs_failure_is_still_not_told_whatever_its_label() {
+    let failed = Answer { failed: true, run: Some(5), ..answer("prs", 1) };
+    assert!(!tells(&failed, (None, false), true));
+    assert_eq!(Told::new(&failed, "PRs", Some("Review PRs")).headline(), "PRs · Review PRs could not answer");
 }

@@ -14,6 +14,8 @@ use crate::app::Root;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::bots::{ASKS_FOR_A_SECRET, Bot, Making, Offer};
+use crate::panels::bot_chat::row_detail;
+use crate::panels::queue;
 use crate::theme::colours;
 use crate::ui::{self, Icon, icon, orbits};
 
@@ -84,7 +86,8 @@ impl Root {
 
     fn bot_row(&self, index: usize, bot: &Bot, on_screen: (bool, bool), cx: &mut Context<Self>) -> AnyElement {
         let (id, gid) = (bot.id.clone(), SharedString::from(format!("bot-{}", bot.id)));
-        let lead = if bot.thinking() {
+        let busy = bot.thinking() || self.store.read(cx).bots.runs.answering(&bot.id);
+        let lead = if busy {
             orbits::badge(Some("working"), &self.parts.spots, 1.)
         } else {
             ui::badge_slot().child(icon(Icon::Message, 12.).text_color(colours::faint()))
@@ -103,7 +106,7 @@ impl Root {
             .px(px(6.))
             .py(px(3.))
             .child(lead)
-            .child(self.bot_text(bot, shown))
+            .child(self.bot_text(bot, (shown, busy)))
             .child(end)
             .on_hover(hover_listener(gid, cx))
             .on_mouse_down(
@@ -122,13 +125,13 @@ impl Root {
             .into_any_element()
     }
 
-    fn bot_text(&self, bot: &Bot, shown: bool) -> impl IntoElement + use<> {
+    fn bot_text(&self, bot: &Bot, (shown, busy): (bool, bool)) -> impl IntoElement + use<> {
         let first = match self.rename_field(&Renaming::Bot(bot.id.clone())) {
             Some(field) => rename_box(field).py(px(1.)).into_any_element(),
             None => name_line(bot.name.clone(), shown).into_any_element(),
         };
         if bot.asks.is_empty() {
-            agent_lines(first, bot.detail())
+            agent_lines(first, row_detail(bot, busy, queue::now()))
         } else {
             agent_lines_in(first, ASKS_FOR_A_SECRET.to_string(), colours::waiting())
         }

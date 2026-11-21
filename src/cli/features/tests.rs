@@ -16,6 +16,7 @@ fn a_server_has_each_gated_feature_from_the_release_that_brought_it() {
         (Feature::QueueResults, 51),
         (Feature::FlowFreeBuilds, 64),
         (Feature::Bots, 77),
+        (Feature::BotRoutines, 85),
         (Feature::BotSetup, 89),
         (Feature::BotAsks, 101),
         (Feature::BotChatApps, 107),

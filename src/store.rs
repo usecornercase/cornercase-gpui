@@ -117,7 +117,7 @@ pub(crate) enum ToastGo {
     Job(Busy, Vec<String>),
     Open(PanelKind),
     Copy(Clip),
-    Bot(String, String),
+    Bot(String, String, Option<u64>),
     BotAsk(String, String, u64),
 }
 
@@ -371,7 +371,7 @@ impl Store {
             ToastGo::Job(busy, args) => self.run_aside_once(busy.clone(), args.clone(), cx),
             ToastGo::Open(kind) => self.open(*kind, cx),
             ToastGo::Copy(clip) => self.copy(clip, cx),
-            ToastGo::Bot(id, name) => self.go_to_bot(id, name, cx),
+            ToastGo::Bot(id, name, run) => self.go_to_bot(id, name, *run, cx),
             ToastGo::BotAsk(id, name, ask) => self.go_to_ask(id, name, *ask, cx),
             ToastGo::Update(updating) => {
                 self.asks.open_update = Some(*updating);
@@ -492,7 +492,7 @@ impl Store {
     pub(crate) fn toggle(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
         if kind.docked() {
             self.toggle_dock(kind, cx);
-        } else if self.sheet == Some(kind) {
+        } else if bots::closes(self.sheet, kind, self.routines_of().is_some()) {
             self.close_sheet(cx);
         } else {
             self.open_sheet(kind, cx);
@@ -518,6 +518,7 @@ impl Store {
     }
 
     pub(crate) fn open_sheet(&mut self, kind: PanelKind, cx: &mut Context<Self>) {
+        self.bots.queue_of = None;
         let was_shown = self.sheet == Some(kind);
         self.sheet = Some(kind);
         self.shown_again(kind, was_shown, cx);

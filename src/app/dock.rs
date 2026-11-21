@@ -65,7 +65,7 @@ fn dock_header(kind: PanelKind, store: &Entity<Store>) -> Div {
         .pr(px(10.))
         .border_b_1()
         .border_color(colours::border())
-        .child(panel_title(kind))
+        .child(panel_title(kind.icon(), kind.title()))
         .child(ui::icon_button("dock-close", "✕").on_click(move |_: &ClickEvent, _, cx| {
             store.update(cx, Store::close_dock);
         }))

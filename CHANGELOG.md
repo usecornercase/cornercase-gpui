@@ -2,6 +2,17 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.140
+
+- **A bot's routines show in its chat.** With cornercase 0.13.85 or newer, when a bot does something on a schedule you asked for ("every weekday at 9, tell me which of my PRs are blocked"), each run shows in its chat as one block where it started: its name and time, its steps folded, then its answer, `Answering…` while it works. A run that failed shows why and offers **Run again**. Lines that come in while you talk to the bot stay out of the block, and a run never changes the answer you are waiting for.
+- **Routines in a bot's chat.** The chat's header has **Routines** (in a narrow window it gives way to the bot's name, and stays in the chat's `⋯` menu), and the bot's menu **Routines…**: they open what the bot does on a schedule, with each routine's runs under it. Start now, Pause, Resume and Remove (with Undo) work there, and a click on a run that answered closes it and shows the chat at that run's block.
+- **A bot's row tells its next run.** While the bot is idle, its row in the sidebar reads `next 09:00` in place of its agent, and its spinner turns while a routine's run answers.
+- **A routine's answer names the routine.** Its toast reads `PRs · Review PRs: …`, and Show opens the chat at that run's block.
+- **The Queue reads a bot's entries.** A bot's routine shows `bot prs` as where it runs, a run that answered reads `Answered`, and **Open chat** shows its answer. A bot's entries offer no Edit here: ask the bot to change them, or use `cornercase queue edit`. Scheduling a bot's routine from the window comes next; meanwhile, ask the bot.
+- **Removing a bot names what it scheduled**, since its routines and reminders go with it.
+- **An empty chat offers a fourth example** that sets a schedule, and says that a bot answers on a schedule too.
+- Tab reaches Routines and Run again in a chat, and Return or Space presses them.
+
 ## 0.1.139
 
 - **See and change the passwords a bot keeps, in Edit bot….** With cornercase 0.13.100 or newer, the form has a **Secrets** section listing each secret by name and when it was saved. **Add…** saves a new one, **Replace…** gives a saved one a new value, and **Remove** takes one away after asking. Each opens over the form and saves at once with its own button, so what you typed in the form is still there when it comes back.

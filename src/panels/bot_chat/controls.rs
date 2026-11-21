@@ -1,13 +1,14 @@
 use gpui::{
-    App, ClickEvent, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    App, Bounds, ClickEvent, FocusHandle, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement as _, Pixels, StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div, px,
 };
 
 use super::entries::{self, Control, new_conversation_control, stop_control};
 use super::words::{
-    NEW_CONVERSATION, STARTING, STOP, STOPPING, answering, menu_tip, new_conversation_message, new_conversation_title,
-    secrets_label, turn_label,
+    NEW_CONVERSATION, ROUTINES, STARTING, STOP, STOPPING, answering, menu_tip, new_conversation_message,
+    new_conversation_title, routines_tip, secrets_label, turn_label,
 };
+use super::{BotChat, global, routines_fit};
 use crate::dialogs::{self, Question};
 use crate::model::bots::{Bot, Chat};
 use crate::model::bots::{Reach, reach_tip};
@@ -20,9 +21,49 @@ use crate::ui::{self, Tone, press};
 const NEW_CONVERSATION_STOP: &str = "bot-new-conversation";
 const MENU_STOP: &str = "bot-menu";
 const STOP_STOP: &str = "bot-stop";
+const ROUTINES_STOP: &str = "bot-routines";
 
-pub(super) fn header(bot: &Bot, starting: bool, stops: bool, reach: Option<&Reach>) -> impl IntoElement + use<> {
-    div()
+pub(super) struct Fit {
+    pub chat: WeakEntity<BotChat>,
+    pub drawn: bool,
+    pub width: f32,
+    pub stop: FocusHandle,
+}
+
+pub(super) fn routines_at(phone: bool) -> usize {
+    2 + usize::from(phone)
+}
+
+pub(super) fn measure(bounds: &[Bounds<Pixels>], at: usize, drawn: bool) -> Option<(f32, Option<f32>)> {
+    let (name, first) = (bounds.first()?, bounds.get(2)?);
+    let width = drawn.then(|| bounds.get(at)).flatten().map(|button| f32::from(button.size.width));
+    Some((f32::from(first.left() - name.left()), width))
+}
+
+fn measured(fit: &Fit, (bounds, at): (&[Bounds<Pixels>], usize), window: &mut Window, cx: &mut App) {
+    let Some((room, width)) = measure(bounds, at, fit.drawn) else { return };
+    let fits = routines_fit(room, fit.drawn, width.unwrap_or(fit.width));
+    if fits == fit.drawn && width.is_none_or(|width| (width - fit.width).abs() < 0.5) {
+        return;
+    }
+    if !fits && fit.drawn && fit.stop.is_focused(window) {
+        window.defer(cx, global::keys_to_field);
+    }
+    let chat = fit.chat.clone();
+    cx.defer(move |cx| {
+        let _ = chat.update(cx, |chat, cx| chat.set_routines_fit(fits, width, cx));
+    });
+}
+
+pub(super) fn header(
+    bot: &Bot,
+    starting: bool,
+    (stops, fit): (bool, Option<Fit>),
+    reach: Option<&Reach>,
+) -> impl IntoElement + use<> {
+    let routines = fit.as_ref().filter(|fit| fit.drawn).map(|fit| routines_button(bot, &fit.stop, stops));
+    let at = routines_at(reach.is_some());
+    let row = div()
         .flex_none()
         .flex()
         .items_center()
@@ -41,8 +82,13 @@ pub(super) fn header(bot: &Bot, starting: bool, stops: bool, reach: Option<&Reac
         )
         .child(facts(bot))
         .children(reach.map(reach_icon))
+        .children(routines)
         .child(new_conversation(bot, starting, stops))
-        .child(menu_button(bot, stops))
+        .child(menu_button(bot, stops));
+    match fit {
+        Some(fit) => row.on_children_prepainted(move |bounds, window, cx| measured(&fit, (&bounds, at), window, cx)),
+        None => row,
+    }
 }
 
 fn facts(bot: &Bot) -> impl IntoElement + use<> {
@@ -69,6 +115,19 @@ fn reach_icon(reach: &Reach) -> impl IntoElement + use<> {
         .flex_none()
         .child(ui::icon(Icon::Phone, 13.).text_color(colours::faint()))
         .tooltip(notify::tip(reach_tip(reach)))
+}
+
+fn routines_button(bot: &Bot, stop: &FocusHandle, stops: bool) -> impl IntoElement + use<> {
+    let id = bot.id.clone();
+    div().flex_none().child(
+        press::stop_at(ui::button(ROUTINES_STOP, ROUTINES), stop, ROUTINES_STOP, stops)
+            .tooltip(notify::tip(routines_tip(&bot.name)))
+            .on_click(move |event: &ClickEvent, _, cx| {
+                if press::pressed(event, ROUTINES_STOP) {
+                    Store::get(cx).update(cx, |s, cx| s.open_routines(&id, cx));
+                }
+            }),
+    )
 }
 
 fn menu_button(bot: &Bot, stops: bool) -> impl IntoElement + use<> {

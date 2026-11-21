@@ -26,6 +26,10 @@ impl Removal {
     }
 }
 
+pub(super) fn undo_shown(asked_in: Option<&str>, now: Option<&str>) -> bool {
+    asked_in == now
+}
+
 fn routine_text(routine: &Entry, runs: usize) -> String {
     match runs {
         0 => format!("Removed “{}”", routine.label),

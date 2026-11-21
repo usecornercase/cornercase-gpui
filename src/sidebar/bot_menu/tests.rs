@@ -11,7 +11,16 @@ fn vs_code() -> Vec<Found> {
 }
 
 fn read(bot: &Bot, from: MenuFrom, openers: &[Found], here: bool) -> Vec<(&'static str, String)> {
-    read_entries(&bot_menu(bot, from, (openers, here)))
+    read_entries(&bot_menu(bot, from, Offers { openers, here, routines: false, run_answers: false }))
+}
+
+fn read_with(bot: &Bot, from: MenuFrom, (routines, run_answers): (bool, bool)) -> Vec<(&'static str, String)> {
+    let openers = vs_code();
+    read_entries(&bot_menu(bot, from, Offers { openers: &openers, here: true, routines, run_answers }))
+}
+
+fn labels(rows: &[(&'static str, String)]) -> Vec<String> {
+    rows.iter().map(|(_, label)| label.clone()).collect()
 }
 
 fn want(rows: &[(&'static str, &str)]) -> Vec<(&'static str, String)> {
@@ -84,8 +93,47 @@ fn a_bot_without_a_folder_offers_neither_open_in_nor_copy_path() {
 
 #[test]
 fn the_remove_question_says_what_goes_and_what_stays() {
-    let (title, message, button) = remove_words("PRs");
+    let (title, message, button) = remove_words("PRs", &[]);
     assert_eq!(title, "Remove the bot PRs?");
     assert_eq!(message, "Its chat, its memory and its folder are deleted. Agents it started keep running.");
     assert_eq!(button, "Remove");
+}
+
+#[test]
+fn routines_is_listed_after_edit_only_when_offered_from_the_row_and_the_header() {
+    for from in [MenuFrom::Row, MenuFrom::Header] {
+        let offered = labels(&read_with(&bot("idle"), from, (true, false)));
+        let edit = offered.iter().position(|label| label == "Edit bot…").expect("edit");
+        assert_eq!(offered[edit + 1], "Routines…", "{from:?}");
+        let not = labels(&read_with(&bot("idle"), from, (false, false)));
+        assert!(!not.iter().any(|label| label == "Routines…"), "{from:?}");
+    }
+}
+
+#[test]
+fn while_a_run_answers_remove_rests_and_says_why_and_a_new_conversation_does_not() {
+    let rows = read_with(&bot("idle"), MenuFrom::Row, (true, true));
+    assert_eq!(rows[0], ("resting", "PRs is answering: stop it first".to_string()));
+    assert_eq!(rows[1], ("item", "New conversation…".to_string()));
+    assert_eq!(rows.last(), Some(&("resting", "Remove bot…".to_string())));
+}
+
+fn names(labels: &[&str]) -> Vec<String> {
+    labels.iter().map(|label| (*label).to_string()).collect()
+}
+
+#[test]
+fn the_remove_question_names_what_the_bot_scheduled() {
+    let (_, message, _) = remove_words("PRs", &names(&["Review PRs", "Morning brief"]));
+    assert_eq!(
+        message,
+        "Its chat, its memory, its folder and what it scheduled (Review PRs, Morning brief) are deleted. Agents it \
+         started keep running."
+    );
+}
+
+#[test]
+fn the_remove_question_names_three_of_what_the_bot_scheduled_and_counts_the_rest() {
+    let (_, message, _) = remove_words("PRs", &names(&["a", "b", "c", "d", "e"]));
+    assert!(message.contains("what it scheduled (a, b, c and 2 more) are deleted"), "{message}");
 }

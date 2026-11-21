@@ -9,15 +9,16 @@ use gpui::{
 };
 
 pub(crate) use self::controls::ask_new_conversation;
-use self::controls::{header, turn_row};
+use self::controls::{Fit, header, turn_row};
 use self::entries::{Entry, EntryKey, Retry};
 pub(crate) use self::global::{field_focus, scroll, view};
 use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
-pub(crate) use self::words::answering;
-use self::words::{EMPTY_LINES, EXAMPLES, read_failed};
+use self::runs::offers_again;
+pub(crate) use self::words::{EXAMPLES, answering, row_detail};
+use self::words::{empty_lines, examples_shown, read_failed};
 use crate::model::bots::Give as Giving;
 use crate::model::bots::Reach;
-use crate::model::bots::{Bot, Chat, Read, reset_key, say_key};
+use crate::model::bots::{Aimed, Bot, Chat, Read, Runs, aim, reset_key, say_key};
 use crate::panels::queue;
 use crate::store::Store;
 use crate::theme::{colours, radius};
@@ -30,6 +31,8 @@ mod entries;
 mod field;
 mod global;
 mod rows;
+mod run_block;
+mod runs;
 mod words;
 
 const OVERDRAW: f32 = 600.;
@@ -84,8 +87,18 @@ pub(crate) struct BotChat {
     examples: [FocusHandle; EXAMPLES.len()],
     retry_stop: FocusHandle,
     empty: ScrollHandle,
-    keyed: (Option<usize>, bool),
+    keyed: (Option<usize>, bool, Option<u64>),
     due: Option<usize>,
+    run: RunsShown,
+    routines: (bool, f32),
+    routines_stop: FocusHandle,
+}
+
+#[derive(Default)]
+struct RunsShown {
+    runs: Rc<Runs>,
+    again_stops: HashMap<u64, FocusHandle>,
+    aimed: Aimed,
 }
 
 fn counting(chat: &mut BotChat) -> &mut Counting {
@@ -119,6 +132,15 @@ pub(crate) fn give_key(giving: &Giving) -> entries::Give {
         Giving::Here(_) => entries::Give::Needs,
         Giving::No => entries::Give::No,
     }
+}
+
+pub(crate) const NAME_ROOM: f32 = 116.;
+const GAP: f32 = 10.;
+const SLACK: f32 = 8.;
+const ROUTINES_WIDTH: f32 = 80.;
+
+pub(crate) fn routines_fit(room: f32, drawn: bool, width: f32) -> bool {
+    if drawn { room >= NAME_ROOM } else { room - width - GAP >= NAME_ROOM + SLACK }
 }
 
 fn at_end(list: &ListState) -> bool {
@@ -161,8 +183,11 @@ impl BotChat {
             examples: std::array::from_fn(|_| cx.focus_handle()),
             retry_stop: cx.focus_handle(),
             empty: ScrollHandle::new(),
-            keyed: (None, false),
+            keyed: (None, false, None),
             due: None,
+            run: RunsShown::default(),
+            routines: (true, ROUTINES_WIDTH),
+            routines_stop: cx.focus_handle(),
         }
     }
 
@@ -175,6 +200,16 @@ impl BotChat {
         let reach = shown.and_then(|id| store.bot_reach(id));
         let now = (shown.map(str::to_string), store.bots_revision(), controls, reach);
         (std::mem::replace(&mut self.heard, now.clone()) != now) || self.bot.is_some() && now.0.is_none()
+    }
+
+    fn set_routines_fit(&mut self, fits: bool, width: Option<f32>, cx: &mut Context<Self>) {
+        if let Some(width) = width {
+            self.routines.1 = width;
+        }
+        if self.routines.0 != fits {
+            self.routines.0 = fits;
+            cx.notify();
+        }
     }
 
     fn open_steps(&mut self, first: u64, cx: &mut Context<Self>) {
@@ -220,8 +255,8 @@ impl BotChat {
         let retry = entries::retry(&chat.lines, thinking, store.bot_setup_offered());
         let (waiting, giving) = asks_of(store, &chat.bot);
         let give = give_key(&giving);
-        let stamp =
-            (chat.bot.clone(), chat.born, chat.revision(), retry.as_ref().map(|retry| retry.error), waiting, give);
+        let revision = store.bots_revision();
+        let stamp = (chat.bot.clone(), chat.born, revision, retry.as_ref().map(|retry| retry.error), waiting, give);
         let fresh = is_fresh(self.bot.as_deref(), self.mark.as_ref(), &stamp);
         if !fresh && self.mark.as_ref() == Some(&stamp) {
             return;
@@ -238,8 +273,10 @@ impl BotChat {
         self.retry = retry.map(Rc::new);
         self.givable = Rc::new(entries::givable(&chat.lines, self.mark.as_ref().map_or(&[][..], |mark| &mark.4)));
         self.giving = giving;
+        self.run.runs = Rc::new(store.bots.runs.clone());
+        self.keep_again_stops(&entries, cx);
         let retried = self.retry.as_ref().map(|retry| retry.error);
-        let keys = entries::keys(&entries, &self.opened, retried, (&self.givable, give));
+        let keys = entries::keys(&entries, &self.opened, retried, (&self.givable, give), &self.run.runs);
         let rows: Vec<Row> =
             earlier.then_some(Row::Earlier).into_iter().chain(entries.into_iter().map(Row::Entry)).collect();
         self.apply(fresh, (earlier, keys), rows);
@@ -267,15 +304,72 @@ impl BotChat {
         self.rows = Rc::new(rows);
     }
 
+    fn keep_again_stops(&mut self, entries: &[Entry], cx: &Context<Self>) {
+        let offered: Vec<u64> = entries
+            .iter()
+            .filter_map(|entry| match entry {
+                Entry::Run(block) if offers_again(block, &self.run.runs) => Some(block.run),
+                _ => None,
+            })
+            .collect();
+        self.run.again_stops.retain(|run, _| offered.contains(run));
+        for run in offered {
+            self.run.again_stops.entry(run).or_insert_with(|| cx.focus_handle());
+        }
+    }
+
     fn reveal_stops(&mut self, window: &Window) {
-        let now =
-            (self.examples.iter().position(|handle| handle.is_focused(window)), self.retry_stop.is_focused(window));
+        let again = self.run.again_stops.iter().find(|(_, handle)| handle.is_focused(window)).map(|(run, _)| *run);
+        let now = (
+            self.examples.iter().position(|handle| handle.is_focused(window)),
+            self.retry_stop.is_focused(window),
+            again,
+        );
         self.due = example_to_reveal(now.0, self.keyed.0);
         if reveals(now.1, self.keyed.1, false) {
             self.following = true;
             self.news = false;
         }
+        if let Some(ix) = again.filter(|_| again != self.keyed.2).and_then(|run| self.row_of(run)) {
+            self.list.scroll_to_reveal_item(ix);
+            self.following = false;
+        }
         self.keyed = now;
+    }
+
+    fn row_runs(&self) -> Vec<Option<u64>> {
+        self.rows
+            .iter()
+            .map(|row| match row {
+                Row::Entry(entry) => entry.run(),
+                Row::Earlier => None,
+            })
+            .collect()
+    }
+
+    fn row_of(&self, run: u64) -> Option<usize> {
+        self.row_runs().iter().position(|found| *found == Some(run))
+    }
+
+    fn take_aim(&mut self, cx: &Context<Self>) {
+        let store = self.store.read(cx);
+        let Some(chat) = store.bots.chat.as_ref().filter(|chat| Some(chat.bot.as_str()) == self.bot.as_deref()) else {
+            return;
+        };
+        let anchor = store.bots.anchor.clone().filter(|anchor| anchor.bot == chat.bot);
+        let (go, aimed) = aim(&self.row_runs(), anchor.as_ref(), self.run.aimed, chat.settled());
+        self.run.aimed = aimed;
+        if let Some(item_ix) = go {
+            self.list.scroll_to(ListOffset { item_ix, offset_in_item: px(0.) });
+            self.following = false;
+            self.news = false;
+        }
+    }
+
+    fn fit(&self, routines: bool, cx: &Context<Self>) -> Option<Fit> {
+        let chat = cx.entity().downgrade();
+        let (drawn, width) = self.routines;
+        routines.then(|| Fit { chat, drawn, width, stop: self.routines_stop.clone() })
     }
 
     fn meta(&self, bot: &Bot, cx: &mut Context<Self>) -> Meta {
@@ -292,6 +386,9 @@ impl BotChat {
             retry_stop: self.retry_stop.clone(),
             givable: self.givable.clone(),
             giving: self.giving.clone(),
+            runs: self.run.runs.clone(),
+            again_busy: Rc::new(self.store.read(cx).bots.again_busy().clone()),
+            again_stops: Rc::new(self.run.again_stops.clone()),
         }
     }
 
@@ -344,11 +441,13 @@ impl BotChat {
 
 impl BotChat {
     fn empty_page(&self, bot: &Bot, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let [what, when] = EMPTY_LINES;
+        let routines = self.store.read(cx).routines_offered();
+        let [what, when] = empty_lines(routines);
         let stops = self.store.read(cx).chat_takes_keys();
         let examples = EXAMPLES
             .iter()
             .zip(&self.examples)
+            .take(examples_shown(routines))
             .enumerate()
             .map(|(at, (text, handle))| example_row(&bot.id, (at, text), handle, stops));
         div().id("bot-empty").flex_1().min_h_0().overflow_y_scroll().track_scroll(&self.empty).child(
@@ -405,6 +504,7 @@ fn example_row(
 impl Render for BotChat {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync(cx);
+        self.take_aim(cx);
         self.reveal_stops(window);
         if let Some(item_ix) = re_anchor(self.following, self.rows.len()) {
             self.list.scroll_to(ListOffset { item_ix, offset_in_item: px(0.) });
@@ -416,6 +516,7 @@ impl Render for BotChat {
         let starting = store.busy(&reset_key(&bot.id));
         let stops = store.chat_takes_keys();
         let reach = store.bot_reach(&bot.id);
+        let routines = store.routines_offered();
         let now = queue::now();
         if bot.thinking() {
             self.counting.drawn();
@@ -426,7 +527,7 @@ impl Render for BotChat {
             .size_full()
             .flex()
             .flex_col()
-            .child(header(&bot, starting, stops, reach.as_ref()))
+            .child(header(&bot, starting, (stops, self.fit(routines, cx)), reach.as_ref()))
             .child(body)
             .children(turn_row(&bot, &chat, now, (stopping, stops)))
     }

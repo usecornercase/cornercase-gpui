@@ -40,7 +40,7 @@ fn run_text(run: &Entry, shown: &Shown, snapshot: &Snapshot) -> Div {
 
 impl QueuePanel {
     pub(super) fn run_row(&self, run: &Entry, snapshot: &Snapshot, cx: &mut Context<Self>) -> AnyElement {
-        let shown = self.shown(run, snapshot, cx);
+        let shown = self.shown((run, &[]), snapshot, cx);
         let group = SharedString::from(format!("queue-row-{}", run.id));
         let (click, clicked) = (shown.click, run.clone());
         let row = base_row(run.id, shown.lit(), click, group.clone())

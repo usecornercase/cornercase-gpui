@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::Removal;
+use super::{Removal, undo_shown};
 
 #[test]
 fn a_removal_keeps_the_number_restore_takes() {
@@ -45,4 +45,13 @@ fn removing_a_run_or_clearing_runs_says_so() {
 fn nothing_to_undo_without_a_number() {
     assert_eq!(Removal::from_answer(&json!({ "entries": [] }).to_string()), None);
     assert_eq!(Removal::from_answer("4028901700366324\n"), None);
+}
+
+#[test]
+fn a_removals_undo_shows_only_in_the_scope_it_was_asked_in() {
+    assert!(undo_shown(None, None));
+    assert!(undo_shown(Some("prs"), Some("prs")));
+    assert!(!undo_shown(Some("prs"), Some("notes")));
+    assert!(!undo_shown(Some("prs"), None));
+    assert!(!undo_shown(None, Some("prs")));
 }

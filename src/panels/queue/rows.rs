@@ -5,7 +5,9 @@ use gpui::{
 };
 use serde_json::Value;
 
-use super::data::{Click, Entry, Row, State, live_pane, notice, offers_result, remove_tip, status_label};
+use super::data::{
+    Click, Entry, Row, State, bot_click, chat_block, live_pane, notice, offers_result, remove_tip, status_label,
+};
 use super::result::{results_note, results_offered};
 use super::time::{Civil, local, now, relative, when_label};
 use super::{QueuePanel, open_pane, pausing, starting};
@@ -33,6 +35,7 @@ pub(super) struct Snapshot {
     pub(super) now: i64,
     pub(super) results: bool,
     pub(super) results_note: Option<String>,
+    pub(super) scope: Option<(String, String)>,
 }
 
 impl Snapshot {
@@ -48,7 +51,12 @@ impl Snapshot {
             now,
             results,
             results_note,
+            scope: None,
         }
+    }
+
+    pub(super) fn scoped(self, scope: Option<(String, String)>) -> Self {
+        Self { scope, ..self }
     }
 }
 
@@ -83,7 +91,7 @@ pub(super) fn state_colour(state: State) -> Rgba {
     match state {
         State::Pending | State::Repeating => colours::accent(),
         State::Starting => colours::working(),
-        State::Started => colours::done(),
+        State::Started | State::Answered => colours::done(),
         State::Failed => colours::failed(),
         State::Missed | State::Kept => colours::waiting(),
         State::Removed | State::Paused | State::Other => colours::muted(),
@@ -94,7 +102,7 @@ fn glyph(state: State) -> Icon {
     match state {
         State::Pending => Icon::Pending,
         State::Starting => Icon::Working,
-        State::Started | State::Removed => Icon::Done,
+        State::Started | State::Answered | State::Removed => Icon::Done,
         State::Failed => Icon::Failed,
         State::Missed | State::Kept => Icon::Waiting,
         State::Repeating => Icon::Repeat,
@@ -125,7 +133,7 @@ fn when_column(entry: &Entry, snapshot: &Snapshot) -> Div {
 
 fn entry_text(entry: &Entry, shown: &Shown, session: Option<&Session>) -> Div {
     let first_line = entry.first_prompt_line();
-    let quiet = matches!(shown.state, State::Started | State::Removed | State::Kept | State::Paused);
+    let quiet = matches!(shown.state, State::Started | State::Answered | State::Removed | State::Kept | State::Paused);
     let title = if quiet { colours::soft() } else { colours::text() };
     div()
         .flex_1()
@@ -246,6 +254,24 @@ fn open_button(id: u64, pane: u64) -> AnyElement {
         .into_any_element()
 }
 
+fn chat_button(entry: &Entry, run: u64) -> AnyElement {
+    let bot = entry.place.bot.clone().unwrap_or_default();
+    ui::button(("queue-chat", entry.id), "Open chat")
+        .tooltip(tip("Show its answer in the bot's chat"))
+        .on_click(move |_: &ClickEvent, _, cx| {
+            cx.stop_propagation();
+            open_chat(&bot, run, cx);
+        })
+        .into_any_element()
+}
+
+pub(super) fn open_chat(bot: &str, run: u64, cx: &mut App) {
+    Store::get(cx).update(cx, |s, cx| {
+        s.show_bot_at(bot, Some(run), cx);
+        s.close_sheet(cx);
+    });
+}
+
 fn remove_button(entry: &Entry, cx: &mut Context<QueuePanel>) -> AnyElement {
     let id = entry.id;
     ui::tool_button(("queue-rm", id), Icon::Trash, TOOL, false)
@@ -269,9 +295,10 @@ fn actions(row: &Row, shown: &Shown, group: SharedString, cx: &mut Context<Queue
         .gap(px(4.))
         .children(runnable.then(|| start_button(entry, shown, cx)))
         .children(entry.is_routine().then(|| pause_button(entry, shown, cx)))
-        .children(runnable.then(|| edit_button(entry, shown, cx)))
+        .children(entry.editable().then(|| edit_button(entry, shown, cx)))
         .children(shown.result.then(|| result_button(entry, cx)))
         .children(shown.pane.map(|pane| open_button(entry.id, pane)))
+        .children(chat_block(entry, &row.runs).map(|run| chat_button(entry, run)))
         .children(row.removable().then(|| remove_button(entry, cx)));
     if shown.editing() || shown.starting || shown.pausing {
         buttons.flex_none().into_any_element()
@@ -287,6 +314,7 @@ pub(super) fn run_actions(run: &Entry, shown: &Shown, group: SharedString, cx: &
         .gap(px(4.))
         .children(shown.result.then(|| result_button(run, cx)))
         .children(shown.pane.map(|pane| open_button(run.id, pane)))
+        .children(chat_block(run, &[]).map(|block| chat_button(run, block)))
         .children((shown.state != State::Starting).then(|| remove_button(run, cx)));
     revealed(group, buttons)
 }
@@ -296,13 +324,14 @@ pub(super) fn base_row(id: u64, selected: bool, click: Click, group: SharedStrin
 }
 
 impl QueuePanel {
-    pub(super) fn shown(&self, entry: &Entry, snapshot: &Snapshot, cx: &App) -> Shown {
+    pub(super) fn shown(&self, (entry, runs): (&Entry, &[&Entry]), snapshot: &Snapshot, cx: &App) -> Shown {
         let state = State::of(entry);
         let pane = live_pane(entry, snapshot.boot.as_deref(), snapshot.session.as_ref());
         let store = Store::get(cx).read(cx);
         let (starting, pausing) = (store.busy(&starting(entry.id)), store.busy(&pausing(entry.id)));
         let editing = self.form.as_ref().is_some_and(|f| f.edit == Some(entry.id));
-        let click = Click::of(entry, pane, starting || editing, snapshot.results);
+        let click =
+            bot_click(entry, runs).unwrap_or_else(|| Click::of(entry, pane, starting || editing, snapshot.results));
         let result = offers_result(entry, pane, snapshot.results);
         let detailed = self.detail.as_ref().is_some_and(|detail| detail.id == entry.id);
         let beside = if editing {
@@ -320,13 +349,14 @@ impl QueuePanel {
             Click::Edit => self.open_form(Some(entry), window, cx),
             Click::Open(pane) => open_pane(pane, cx),
             Click::Detail => self.open_detail(entry, window, cx),
+            Click::Chat(run) => open_chat(entry.place.bot.as_deref().unwrap_or_default(), run, cx),
             Click::Nothing => {}
         }
     }
 
     pub(super) fn entry_row(&self, row: &Row, snapshot: &Snapshot, cx: &mut Context<Self>) -> AnyElement {
         let entry = row.entry;
-        let shown = self.shown(entry, snapshot, cx);
+        let shown = self.shown((entry, &row.runs), snapshot, cx);
         let group = SharedString::from(format!("queue-row-{}", entry.id));
         let (click, clicked) = (shown.click, entry.clone());
         base_row(entry.id, shown.lit(), click, group.clone())

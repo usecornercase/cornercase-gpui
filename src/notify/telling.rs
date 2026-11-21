@@ -103,8 +103,8 @@ impl Telling {
         let (bot, name) = (told.bot.clone(), told.name.clone());
         let (kind, button) = match told.ask {
             Some(ask) => (ToastKind::NeedsYou, (OPEN.to_string(), ToastGo::BotAsk(bot, name, ask))),
-            None if told.failed => (ToastKind::NeedsYou, (SHOW.to_string(), ToastGo::Bot(bot, name))),
-            None => (ToastKind::Done, (SHOW.to_string(), ToastGo::Bot(bot, name))),
+            None if told.failed => (ToastKind::NeedsYou, (SHOW.to_string(), ToastGo::Bot(bot, name, told.run))),
+            None => (ToastKind::Done, (SHOW.to_string(), ToastGo::Bot(bot, name, told.run))),
         };
         Telling {
             text: told.text(),

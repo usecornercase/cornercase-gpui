@@ -8,9 +8,10 @@ use gpui::{
 };
 
 use super::BotChat;
-use super::entries::{Again, Entry, Retry, folded};
+use super::entries::{Again, Entry, Retry, STEPS_SHOWN, folded};
+use super::run_block::run;
 use super::words::{DROPPED_STAMP, EARLIER, GIVE, HELD, RETRY, SENDING, SETTING_UP, folded_label, time_label};
-use crate::model::bots::{Give, Said};
+use crate::model::bots::{Give, Runs, Said};
 use crate::store::{Clip, Store};
 use crate::theme::{FONT_FAMILY, colours, radius};
 use crate::ui::markdown::text as md;
@@ -35,24 +36,28 @@ pub(super) struct Meta {
     pub retry_stop: FocusHandle,
     pub givable: Rc<HashMap<u64, u64>>,
     pub giving: Give,
+    pub runs: Rc<Runs>,
+    pub again_busy: Rc<HashSet<u64>>,
+    pub again_stops: Rc<HashMap<u64, FocusHandle>>,
 }
 
 pub(super) fn earlier_row() -> AnyElement {
     line(div().text_size(px(11.)).text_color(colours::faint()).text_center().child(EARLIER)).into_any_element()
 }
 
-fn line(inner: Div) -> Div {
+pub(super) fn line(inner: Div) -> Div {
     div().w_full().flex().justify_center().px(px(16.)).py(px(5.)).child(div().w_full().max_w(px(820.)).child(inner))
 }
 
 pub(super) fn entry_row(entry: &Entry, meta: &Meta) -> AnyElement {
     match entry {
         Entry::You { text, at, held, dropped, .. } => you(text, *at, (*held, *dropped), meta),
-        Entry::Answer { id, text, at } => answer(*id, text, *at, meta),
-        Entry::Steps { first, texts, .. } => steps(*first, texts, meta),
+        Entry::Answer { id, text, at } => line(answer(*id, text, *at, meta)),
+        Entry::Steps { first, texts, .. } => line(steps(*first, texts, STEPS_SHOWN, meta)),
         Entry::Failed { id, text } => failed(*id, text, meta),
         Entry::Notice { id, text, .. } => notice(*id, text, meta),
         Entry::Other { text, .. } => plain(text),
+        Entry::Run(block) => run(block, meta),
     }
     .into_any_element()
 }
@@ -80,7 +85,7 @@ fn blocks_of(id: u64, text: &str, meta: &Meta) -> Rc<Vec<Block>> {
     meta.blocks.borrow_mut().entry(id).or_insert_with(|| Rc::new(markdown::parse(text))).clone()
 }
 
-fn answer(id: u64, text: &str, at: i64, meta: &Meta) -> Div {
+pub(super) fn answer(id: u64, text: &str, at: i64, meta: &Meta) -> Div {
     let blocks = blocks_of(id, text, meta);
     let head = div()
         .flex()
@@ -95,11 +100,11 @@ fn answer(id: u64, text: &str, at: i64, meta: &Meta) -> Div {
         &blocks,
         &md::opens_web_addresses(),
     ));
-    line(div().flex().flex_col().gap(px(2.)).child(head).child(body))
+    div().flex().flex_col().gap(px(2.)).child(head).child(body)
 }
 
-fn steps(first: u64, texts: &[String], meta: &Meta) -> Div {
-    let (hidden, shown) = folded(texts, meta.opened.contains(&first));
+pub(super) fn steps(first: u64, texts: &[String], kept: usize, meta: &Meta) -> Div {
+    let (hidden, shown) = folded(texts, meta.opened.contains(&first), kept);
     let more = (hidden > 0).then(|| {
         let chat = meta.chat.clone();
         div()
@@ -116,22 +121,24 @@ fn steps(first: u64, texts: &[String], meta: &Meta) -> Div {
             })
     });
     let rows = shown.iter().map(|text| div().child(ui::one_line(format!("▸ {text}"))));
-    line(
-        div()
-            .flex()
-            .flex_col()
-            .text_size(px(11.5))
-            .text_color(colours::faint())
-            .font_family(FONT_FAMILY)
-            .children(more)
-            .children(rows),
-    )
+    div()
+        .flex()
+        .flex_col()
+        .text_size(px(11.5))
+        .text_color(colours::faint())
+        .font_family(FONT_FAMILY)
+        .children(more)
+        .children(rows)
+}
+
+pub(super) fn error_with(text: &str, button: Option<AnyElement>) -> Div {
+    let text = div().text_color(colours::failed()).child(text.to_string());
+    div().flex().flex_col().items_start().gap(px(6.)).child(text).children(button)
 }
 
 fn failed(id: u64, text: &str, meta: &Meta) -> Div {
     let retry = meta.retry.as_ref().filter(|retry| retry.error == id).map(|retry| retry_button(retry, meta));
-    let text = div().text_color(colours::failed()).child(text.to_string());
-    line(div().flex().flex_col().items_start().gap(px(6.)).child(text).children(retry))
+    line(error_with(text, retry))
 }
 
 fn retry_button(retry: &Retry, meta: &Meta) -> AnyElement {

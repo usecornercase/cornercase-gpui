@@ -75,7 +75,7 @@ fn an_answer_keeps_its_raw_markdown_for_its_copy() {
     assert!(matches!(&entries[0], Entry::Answer { text, .. } if text == "**bold** and `code`"));
 }
 
-use crate::model::bots::{Kind, Line};
+use crate::model::bots::{Kind, Line, Runs};
 
 fn line(id: u64, kind: &str, text: &str, held: bool) -> Line {
     Line {
@@ -85,6 +85,7 @@ fn line(id: u64, kind: &str, text: &str, held: bool) -> Line {
         text: text.to_string(),
         held,
         ask: None,
+        routine: None,
     }
 }
 
@@ -99,14 +100,14 @@ fn steps(n: usize) -> Vec<String> {
 #[test]
 fn three_steps_or_fewer_stay_in_view() {
     for n in 1..=STEPS_SHOWN {
-        assert_eq!(folded(&steps(n), false), (0, &steps(n)[..]));
+        assert_eq!(folded(&steps(n), false, STEPS_SHOWN), (0, &steps(n)[..]));
     }
 }
 
 #[test]
 fn more_than_three_steps_fold_to_the_last_three() {
     let all = steps(5);
-    assert_eq!(folded(&all, false), (2, &all[2..]));
+    assert_eq!(folded(&all, false, STEPS_SHOWN), (2, &all[2..]));
 }
 
 #[test]
@@ -125,7 +126,7 @@ fn each_run_of_steps_folds_on_its_own() {
 #[test]
 fn an_opened_run_shows_every_step() {
     let all = steps(6);
-    assert_eq!(folded(&all, true), (0, &all[..]));
+    assert_eq!(folded(&all, true, STEPS_SHOWN), (0, &all[..]));
 }
 
 #[test]
@@ -184,7 +185,7 @@ fn an_idle_bot_has_no_turn() {
 }
 
 fn key_of(entries: &[Entry]) -> Vec<EntryKey> {
-    keys(entries, &HashSet::new(), None, (&HashMap::new(), Give::No))
+    keys(entries, &HashSet::new(), None, (&HashMap::new(), Give::No), &Runs::default())
 }
 
 #[test]
@@ -197,7 +198,7 @@ fn the_list_splices_only_the_entries_that_changed() {
 
 fn a_running_run(opened: &[u64]) -> Vec<EntryKey> {
     let lines = plain(&[(1, "you"), (2, "bot"), (3, "you"), (4, "step"), (5, "step"), (6, "step"), (7, "step")]);
-    keys(&entries(&lines), &ids(opened), None, (&HashMap::new(), Give::No))
+    keys(&entries(&lines), &ids(opened), None, (&HashMap::new(), Give::No), &Runs::default())
 }
 
 #[test]
@@ -336,8 +337,8 @@ fn no_retry_without_a_message_kept_before_the_error() {
 fn an_error_that_gains_or_loses_retry_is_measured_again() {
     let lines = [line(1, "you", "ask", false), line(2, "error", "failed", false)];
     let entries = entries(&lines);
-    let without = keys(&entries, &HashSet::new(), None, (&HashMap::new(), Give::No));
-    let with = keys(&entries, &HashSet::new(), Some(2), (&HashMap::new(), Give::No));
+    let without = keys(&entries, &HashSet::new(), None, (&HashMap::new(), Give::No), &Runs::default());
+    let with = keys(&entries, &HashSet::new(), Some(2), (&HashMap::new(), Give::No), &Runs::default());
     assert_eq!(spliced(&without, &with), vec![(1..2, 1)]);
     assert_eq!(spliced(&with, &without), vec![(1..2, 1)]);
 }
@@ -667,8 +668,8 @@ fn a_notice_entry_keeps_its_ask() {
 fn a_row_is_measured_again_when_its_ask_ends() {
     let shown = entries(&asking_lines());
     let waiting = givable(&asking_lines(), &[4]);
-    let with = keys(&shown, &HashSet::new(), None, (&waiting, Give::Button));
-    let ended = keys(&shown, &HashSet::new(), None, (&HashMap::new(), Give::Button));
+    let with = keys(&shown, &HashSet::new(), None, (&waiting, Give::Button), &Runs::default());
+    let ended = keys(&shown, &HashSet::new(), None, (&HashMap::new(), Give::Button), &Runs::default());
     assert_ne!(with[1], ended[1]);
     assert_eq!(with[0], ended[0]);
     assert_eq!(with[3], ended[3]);
@@ -678,9 +679,11 @@ fn a_row_is_measured_again_when_its_ask_ends() {
 fn below_the_gate_the_line_says_what_it_needs() {
     let shown = entries(&asking_lines());
     let waiting = givable(&asking_lines(), &[4]);
-    let needs = keys(&shown, &HashSet::new(), None, (&waiting, Give::Needs));
-    let button = keys(&shown, &HashSet::new(), None, (&waiting, Give::Button));
+    let needs = keys(&shown, &HashSet::new(), None, (&waiting, Give::Needs), &Runs::default());
+    let button = keys(&shown, &HashSet::new(), None, (&waiting, Give::Button), &Runs::default());
     assert_ne!(needs[1], button[1]);
     let words = super::give_key(&crate::model::bots::Give::Here("Giving it needs cornercase 0.13.101.".into()));
     assert_eq!(words, Give::Needs);
 }
+
+mod runs;

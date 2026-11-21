@@ -41,10 +41,10 @@ use crate::sidebar::{self, Arrangement, Fold, SideState};
 use crate::store::{PageAnswer, Store, ToastKind};
 use crate::terminal::Pointer;
 use crate::theme::{self, colours, radius};
-use crate::ui;
 use crate::ui::counting::Counting;
 use crate::ui::motion::{self, Leaving, Way};
 use crate::ui::split::{self, Edge, Split};
+use crate::ui::{self, Icon};
 pub(crate) use connection::Connection;
 use dock::{dock_card, dock_view, over_the_terminal};
 use machine::MachineTab;
@@ -647,7 +647,8 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let card = sheet_card(kind, self.panel(kind, window, cx), &self.store);
+        let title = self.store.read(cx).sheet_title(kind);
+        let card = sheet_card(title, self.panel(kind, window, cx), &self.store);
         let id = format!("sheet-in-{}", kind.title());
         overlay(
             SharedString::from(format!("{id}-veil")),
@@ -665,7 +666,8 @@ impl Root {
     ) -> Vec<AnyElement> {
         let sheet = self.leaving_sheet.gone().map(|(serial, kind)| (serial, *kind));
         let sheet = sheet.map(|(serial, kind)| {
-            let card = sheet_card(kind, self.panel(kind, window, cx), &self.store);
+            let title = self.store.read(cx).sheet_title(kind);
+            let card = sheet_card(title, self.panel(kind, window, cx), &self.store);
             overlay(
                 ("sheet-out-veil", serial),
                 Way::Out,
@@ -839,7 +841,7 @@ fn occluder() -> Div {
     div().absolute().inset_0().occlude()
 }
 
-fn sheet_card(kind: PanelKind, view: AnyView, store: &Entity<Store>) -> Stateful<Div> {
+fn sheet_card(title: (Icon, String), view: AnyView, store: &Entity<Store>) -> Stateful<Div> {
     ui::glass::card(radius::sheet())
         .id("sheet")
         .w(gpui::relative(0.82))
@@ -849,11 +851,11 @@ fn sheet_card(kind: PanelKind, view: AnyView, store: &Entity<Store>) -> Stateful
         .flex_col()
         .overflow_hidden()
         .occlude()
-        .child(sheet_header(kind, store))
+        .child(sheet_header(title, store))
         .child(div().flex_1().overflow_hidden().child(view))
 }
 
-fn sheet_header(kind: PanelKind, store: &Entity<Store>) -> Div {
+fn sheet_header((icon, title): (Icon, String), store: &Entity<Store>) -> Div {
     let store = store.clone();
     div()
         .h(px(50.))
@@ -865,20 +867,20 @@ fn sheet_header(kind: PanelKind, store: &Entity<Store>) -> Div {
         .pr(px(14.))
         .border_b_1()
         .border_color(colours::border())
-        .child(panel_title(kind))
+        .child(panel_title(icon, title))
         .child(
             ui::icon_button("sheet-close", "✕")
                 .on_click(move |_: &ClickEvent, _, cx| store.update(cx, Store::close_sheet)),
         )
 }
 
-fn panel_title(kind: PanelKind) -> Div {
+fn panel_title(icon: Icon, title: impl Into<SharedString>) -> Div {
     div()
         .flex()
         .items_center()
         .gap(px(8.))
-        .child(ui::icon(kind.icon(), 15.).text_color(colours::accent()))
-        .child(ui::title(kind.title()))
+        .child(ui::icon(icon, 15.).text_color(colours::accent()))
+        .child(ui::title(title))
 }
 
 fn first_line(text: &str) -> &str {

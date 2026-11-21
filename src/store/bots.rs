@@ -5,14 +5,18 @@ use serde_json::Value;
 
 use super::{Busy, Store, ToastKind, args, run_job};
 use crate::cli::{self, Feature};
-use crate::model::bots::{self, Answer, BotEvent, CatchUp, Chat, Heard, Offer, Read, Told};
+use crate::model::bots::{self, Anchor, Answer, BotEvent, CatchUp, Chat, Heard, Offer, Read, Runs, Told};
 use crate::model::place::Moved;
+use crate::panels::queue;
 use crate::platform::Os;
 
 mod asks;
 mod manage;
+mod routines;
 mod secrets;
 mod talk;
+
+pub(super) use routines::closes;
 
 impl Store {
     pub(crate) fn bots_offer(&self) -> Offer {
@@ -47,8 +51,14 @@ impl Store {
         let before = self.bots.unread_of();
         let moved = self.bots.take_app(app);
         let arrived = self.bots.asking.known.arrived(&self.bots.list);
+        let runs = Runs::of(&queue::entries(Some(app)));
+        if runs != self.bots.runs {
+            self.bots.runs = runs;
+            self.bots.bump();
+        }
         self.place(Moved::Listed(moved.listed.clone()));
         self.close_dialog_if_gone(&moved.listed, cx);
+        self.close_routines_if_gone(cx);
         self.asks_moved(&arrived, cx);
         match shown {
             Some((_, name)) if self.shown_bot().is_none() => {
@@ -89,8 +99,8 @@ impl Store {
         self.tell_answers(&due, cx);
     }
 
-    fn answer_heard(&mut self, bot: &str, line: &bots::Line, run: bool, cx: &mut Context<Self>) {
-        let Some(answer) = bots::answer_of(bot, line, run) else { return };
+    fn answer_heard(&mut self, bot: &str, line: &bots::Line, cx: &mut Context<Self>) {
+        let Some(answer) = bots::answer_of(bot, line) else { return };
         if let Some(due) = self.bots.answers.heard(answer, Instant::now()) {
             self.tell_answers(&[due], cx);
         }
@@ -101,7 +111,10 @@ impl Store {
         let told: Vec<Told> = answers
             .iter()
             .filter(|answer| bots::tells(answer, (self.shown_bot(), self.bots.active), offered))
-            .map(|answer| Told::new(answer, &self.bot_name(&answer.bot)))
+            .map(|answer| {
+                let label = answer.run.and_then(|run| self.bots.runs.label(run));
+                Told::new(answer, &self.bot_name(&answer.bot), label)
+            })
             .collect();
         if told.is_empty() {
             return;
@@ -110,9 +123,9 @@ impl Store {
         cx.notify();
     }
 
-    pub(super) fn go_to_bot(&mut self, id: &str, name: &str, cx: &mut Context<Self>) {
+    pub(super) fn go_to_bot(&mut self, id: &str, name: &str, run: Option<u64>, cx: &mut Context<Self>) {
         if self.bots.find(id).is_some() {
-            self.show_bot(id, cx);
+            self.show_bot_at(id, run, cx);
         } else {
             self.toast(bots::gone(name), ToastKind::Info, cx);
         }
@@ -146,10 +159,19 @@ impl Store {
         cx.notify();
     }
 
+    pub(crate) fn show_bot_at(&mut self, id: &str, run: Option<u64>, cx: &mut Context<Self>) {
+        self.show_bot(id, cx);
+        let Some(run) = run.filter(|_| self.shown_bot() == Some(id)) else { return };
+        let serial = self.bots.next_ask();
+        self.bots.anchor = Some(Anchor { bot: id.to_string(), run, serial });
+        self.bots.bump();
+        cx.notify();
+    }
+
     pub(crate) fn bot_heard(&mut self, event: &BotEvent, cx: &mut Context<Self>) {
         match event.heard() {
             Heard::Line(bot, line) => {
-                self.answer_heard(&bot, &line, event.of_run(), cx);
+                self.answer_heard(&bot, &line, cx);
                 self.line_heard(&bot, line, cx);
             }
             Heard::State(bot, thinking) => {

@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use crate::model::bots::{Kind, Line};
+use super::runs::{block, offers_again};
+use crate::model::bots::{Kind, Line, Runs};
 
 pub(crate) const STEPS_SHOWN: usize = 3;
 
@@ -13,6 +14,21 @@ pub(crate) enum Entry {
     Failed { id: u64, text: String },
     Notice { id: u64, text: String, ask: Option<u64> },
     Other { id: u64, text: String },
+    Run(Block),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Block {
+    pub run: u64,
+    pub head: u64,
+    pub tail: u64,
+    pub lines: usize,
+    pub title: String,
+    pub steps: Vec<String>,
+    pub answer: Option<(u64, String, i64)>,
+    pub error: Option<String>,
+    pub end: Option<String>,
+    pub others: Vec<String>,
 }
 
 impl Entry {
@@ -24,6 +40,14 @@ impl Entry {
             | Self::Notice { id, .. }
             | Self::Other { id, .. } => *id,
             Self::Steps { first, .. } => *first,
+            Self::Run(block) => block.head,
+        }
+    }
+
+    pub(crate) fn run(&self) -> Option<u64> {
+        match self {
+            Self::Run(block) => Some(block.run),
+            _ => None,
         }
     }
 }
@@ -48,13 +72,18 @@ fn opens_a_turn(line: &Line) -> bool {
     (line.kind == Kind::You && !line.held) || is_setup(line)
 }
 
-fn after_the_last_end(lines: &[Line]) -> &[Line] {
-    let from = lines.iter().rposition(ends_a_turn).map_or(0, |at| at + 1);
+fn own(lines: &[Line]) -> Vec<&Line> {
+    lines.iter().filter(|line| line.routine.is_none()).collect()
+}
+
+fn after_the_last_end<'a>(lines: &'a [&'a Line]) -> &'a [&'a Line] {
+    let from = lines.iter().rposition(|line| ends_a_turn(line)).map_or(0, |at| at + 1);
     &lines[from..]
 }
 
 pub(crate) fn held(lines: &[Line]) -> HashSet<u64> {
-    after_the_last_end(lines).iter().filter(|line| line.kind == Kind::You && line.held).map(|line| line.id).collect()
+    let lines = own(lines);
+    after_the_last_end(&lines).iter().filter(|line| line.kind == Kind::You && line.held).map(|line| line.id).collect()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -110,7 +139,7 @@ impl Walk {
 
 pub(crate) fn asked(lines: &[Line]) -> Asked {
     let mut walk = Walk::default();
-    for line in lines {
+    for line in own(lines) {
         walk.step(line);
     }
     walk.asked
@@ -120,13 +149,25 @@ pub(crate) fn entries(lines: &[Line]) -> Vec<Entry> {
     let held = held(lines);
     let dropped = asked(lines).dropped;
     let mut out: Vec<Entry> = Vec::new();
+    let mut runs: HashMap<u64, (usize, Vec<&Line>)> = HashMap::new();
     for line in lines {
+        if let Some(run) = line.routine {
+            let (_, members) = runs.entry(run).or_insert_with(|| {
+                out.push(block(run, &[line]));
+                (out.len() - 1, Vec::new())
+            });
+            members.push(line);
+            continue;
+        }
         if let (Kind::Step, Some(Entry::Steps { texts, last, .. })) = (&line.kind, out.last_mut()) {
             texts.push(line.text.clone());
             *last = line.id;
             continue;
         }
         out.push(entry_of(line, (held.contains(&line.id), dropped.contains(&line.id))));
+    }
+    for (run, (at, members)) in runs {
+        out[at] = block(run, &members);
     }
     out
 }
@@ -143,11 +184,11 @@ fn entry_of(line: &Line, (held, dropped): (bool, bool)) -> Entry {
     }
 }
 
-pub(crate) fn folded(texts: &[String], open: bool) -> (usize, &[String]) {
-    if open || texts.len() <= STEPS_SHOWN {
+pub(crate) fn folded(texts: &[String], open: bool, kept: usize) -> (usize, &[String]) {
+    if open || texts.len() <= kept {
         return (0, texts);
     }
-    let hidden = texts.len() - STEPS_SHOWN;
+    let hidden = texts.len() - kept;
     (hidden, &texts[hidden..])
 }
 
@@ -161,7 +202,8 @@ pub(crate) fn turn(lines: &[Line], thinking: bool) -> Option<Turn> {
     if !thinking {
         return None;
     }
-    let tail = after_the_last_end(lines);
+    let lines = own(lines);
+    let tail = after_the_last_end(&lines);
     let ended = lines.len() - tail.len();
     let since = tail
         .iter()
@@ -196,7 +238,7 @@ fn again_of(asked: &[&Line], setup: bool) -> Option<Again> {
 }
 
 pub(crate) fn retry(lines: &[Line], thinking: bool, setup: bool) -> Option<Retry> {
-    let last = lines.last().filter(|line| !thinking && line.kind == Kind::Error)?;
+    let last = own(lines).last().copied().filter(|line| !thinking && line.kind == Kind::Error)?;
     let ended = asked(lines).ended;
     let asked: Vec<&Line> = ended.iter().filter_map(|id| lines.iter().find(|line| line.id == *id)).collect();
     again_of(&asked, setup).map(|again| Retry { error: last.id, again })
@@ -249,10 +291,26 @@ pub(crate) struct EntryKey {
     kind: u8,
     first: u64,
     last: u64,
+    tail: u64,
+    lines: usize,
     held: bool,
     open: bool,
     retry: bool,
     give: Give,
+}
+
+fn block_key(block: &Block, opened: &HashSet<u64>, runs: &Runs) -> EntryKey {
+    EntryKey {
+        kind: 7,
+        first: block.head,
+        last: block.head,
+        tail: block.tail,
+        lines: block.lines,
+        held: runs.answers(block.run),
+        open: opened.contains(&block.head),
+        retry: offers_again(block, runs),
+        give: Give::No,
+    }
 }
 
 pub(crate) fn keys(
@@ -260,11 +318,13 @@ pub(crate) fn keys(
     opened: &HashSet<u64>,
     retry: Option<u64>,
     (givable, give): (&HashMap<u64, u64>, Give),
+    runs: &Runs,
 ) -> Vec<EntryKey> {
     entries
         .iter()
         .map(|entry| {
             let (kind, last, held) = match entry {
+                Entry::Run(block) => return block_key(block, opened, runs),
                 Entry::You { id, dropped: true, .. } => (6, *id, false),
                 Entry::You { id, held, .. } => (0, *id, *held),
                 Entry::Answer { id, .. } => (1, *id, false),
@@ -275,13 +335,14 @@ pub(crate) fn keys(
             };
             let retry = retry == Some(last) && kind == 3;
             let give = if kind == 4 && givable.contains_key(&last) { give } else { Give::No };
-            EntryKey { kind, first: entry.id(), last, held, open: opened.contains(&entry.id()), retry, give }
+            let open = opened.contains(&entry.id());
+            EntryKey { kind, first: entry.id(), last, tail: last, lines: 0, held, open, retry, give }
         })
         .collect()
 }
 
 pub(crate) fn arrived(old: &[EntryKey], new: &[EntryKey]) -> bool {
-    old.last().map(|key| key.last) != new.last().map(|key| key.last)
+    old.last().map(|key| key.tail) != new.last().map(|key| key.tail)
 }
 
 impl EntryKey {

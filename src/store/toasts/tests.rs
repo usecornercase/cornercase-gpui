@@ -190,7 +190,7 @@ fn a_removed_bots_answer_toasts_go_and_the_others_stay() {
         action: go.map(|go| ("Show".to_string(), go)),
         ..toast_of(id, "x", ToastKind::Done)
     };
-    let bot = |id: &str| Some(ToastGo::Bot(id.to_string(), "name".to_string()));
+    let bot = |id: &str| Some(ToastGo::Bot(id.to_string(), "name".to_string(), None));
     let toasts = [on(1, bot("notes")), on(2, bot("ops")), on(3, None), on(4, Some(ToastGo::Run(vec!["x".into()])))];
     let gone: Vec<u64> = toasts.iter().filter(|t| super::shows_bot(t, "notes")).map(|t| t.id).collect();
     assert_eq!(gone, [1]);
