@@ -436,6 +436,10 @@ pub(crate) fn live_pane(entry: &Entry, boot: Option<&str>, session: Option<&Sess
     (this_run && session.and_then(|s| s.pane(pane)).is_some()).then_some(pane)
 }
 
+pub(crate) fn repeat_words(entry: &Entry) -> String {
+    repeat::words(entry.repeat.as_deref().unwrap_or_default())
+}
+
 pub(crate) fn status_label(entry: &Entry, pane: Option<u64>) -> String {
     match State::of(entry) {
         State::Repeating | State::Paused => format!("↻ {}", repeat::words(entry.repeat.as_deref().unwrap_or_default())),

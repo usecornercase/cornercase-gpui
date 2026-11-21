@@ -11,6 +11,7 @@ use crate::panels::files::open::Found;
 use crate::store::Store;
 
 const NEW_CONVERSATION_ENTRY: &str = "New conversation…";
+const DETAILS_ENTRY: &str = "Details…";
 const RENAME_ENTRY: &str = "Rename bot";
 const EDIT_ENTRY: &str = "Edit bot…";
 const ROUTINES_ENTRY: &str = "Routines…";
@@ -73,14 +74,15 @@ fn conversation_entries(bot: &Bot, run_answers: bool) -> Vec<Entry> {
 }
 
 fn own_entries(bot: &Bot, from: MenuFrom, routines: bool) -> Vec<Entry> {
-    let (renaming, editing, listing) = (bot.id.clone(), bot.id.clone(), bot.id.clone());
+    let (renaming, editing, listing, showing) = (bot.id.clone(), bot.id.clone(), bot.id.clone(), bot.id.clone());
+    let details = item(DETAILS_ENTRY, move |_, window, cx| dialogs::bot_card(&showing, window, cx));
     let rename = item(RENAME_ENTRY, move |this, window, cx| this.start_bot_rename(&renaming, window, cx));
     let edit = item(EDIT_ENTRY, move |_, window, cx| dialogs::edit_bot(&editing, window, cx));
     let routines = routines
         .then(|| item(ROUTINES_ENTRY, move |this, _, cx| this.store.update(cx, |s, cx| s.open_routines(&listing, cx))));
     let mut entries = match from {
-        MenuFrom::Row => vec![rename, edit],
-        MenuFrom::Header => vec![edit],
+        MenuFrom::Row => vec![details, rename, edit],
+        MenuFrom::Header => vec![details, edit],
     };
     entries.extend(routines);
     entries

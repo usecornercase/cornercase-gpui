@@ -32,7 +32,7 @@ use crate::theme::colours;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{self, TextField, TextFieldEvent};
 use data::{Body, scoped};
-pub(crate) use data::{Entry, entries};
+pub(crate) use data::{Entry, entries, repeat_words};
 use detail::Detail;
 use form::{FlowChoices, Form, Spot};
 use rows::Snapshot;

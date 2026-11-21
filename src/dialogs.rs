@@ -16,6 +16,7 @@ use crate::ui::account_picker::AccountPickers;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
 mod bot_ask;
+mod bot_card;
 mod bot_form;
 mod bot_secret;
 mod closing;
@@ -28,6 +29,7 @@ mod run_on;
 mod shortcuts;
 
 pub(crate) use bot_ask::answer_ask;
+pub(crate) use bot_card::bot_card;
 pub(crate) use bot_form::{edit_bot, new_bot};
 pub(crate) use closing::{CloseWords, agent_doing, agent_title, closes_line, on_machine};
 pub(crate) use context::{ContextThere, VIEW_CONTEXT, context_choices, view_context, view_context_there};
@@ -59,6 +61,15 @@ const RING_ROOM: f32 = 6.;
 pub(crate) fn fitted(id: &'static str, window: &Window, body: impl IntoElement) -> Stateful<Div> {
     let height = body_height(f32::from(window.viewport_size().height));
     div().id(id).max_h(px(height + 2. * RING_ROOM)).p(px(RING_ROOM)).m(px(-RING_ROOM)).overflow_y_scroll().child(body)
+}
+
+fn revealed(field: Div, scroller: &ScrollHandle) -> Div {
+    let scroller = scroller.clone();
+    div().child(field).on_children_prepainted(move |bounds, window, _| {
+        if let Some(found) = bounds.first() {
+            ui::text_field::show_box(&scroller, (found.top(), found.size.height), window);
+        }
+    })
 }
 
 pub(crate) fn cancel_and(action: Stateful<Div>) -> Div {

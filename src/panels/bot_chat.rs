@@ -14,7 +14,7 @@ use self::entries::{Entry, EntryKey, Retry};
 pub(crate) use self::global::{field_focus, scroll, view};
 use self::rows::{Blocks, Meta, chip, earlier_row, entry_row};
 use self::runs::offers_again;
-pub(crate) use self::words::{EXAMPLES, answering, row_detail};
+pub(crate) use self::words::{EXAMPLES, answering, row_detail, time_label};
 use self::words::{empty_lines, examples_shown, read_failed};
 use crate::model::bots::Give as Giving;
 use crate::model::bots::Reach;
