@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use gpui::{
     AnyElement, App, AppContext as _, ClickEvent, Context, Div, FocusHandle, Focusable, InteractiveElement as _,
-    IntoElement, ParentElement as _, Render, ScrollHandle, SharedString, Stateful, StatefulInteractiveElement as _,
-    Styled as _, Window, div, px,
+    IntoElement, KeyDownEvent, ParentElement as _, Render, ScrollHandle, SharedString, Stateful,
+    StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 use super::{body_height, close, edit_bot, fitted, frame, revealed, show};
@@ -51,6 +51,7 @@ pub(crate) struct BotCard {
     stops: HashMap<SharedString, FocusHandle>,
     keyed: Option<SharedString>,
     due: Option<SharedString>,
+    drawn: Vec<&'static str>,
     scroller: ScrollHandle,
 }
 
@@ -80,6 +81,7 @@ impl BotCard {
             stops: STOPS.iter().map(|name| (SharedString::from(*name), cx.focus_handle())).collect(),
             keyed: None,
             due: None,
+            drawn: Vec::new(),
             scroller: ScrollHandle::new(),
         };
         if matches!(card.about, About::Reading) {
@@ -113,6 +115,34 @@ impl BotCard {
         let now = self.stops.iter().find(|(_, handle)| handle.is_focused(window)).map(|(name, _)| name.clone());
         self.due = now.clone().filter(|name| self.keyed.as_ref() != Some(name));
         self.keyed = now;
+    }
+
+    fn drawn_stops(&self, bot: &Bot, routines: bool) -> Vec<&'static str> {
+        let failed = matches!(self.about, About::Failed(_));
+        [(!bot.folder.is_empty(), COPY_STOP), (failed, RETRY_STOP), (routines, ROUTINES_STOP), (true, EDIT_STOP)]
+            .into_iter()
+            .filter_map(|(drawn, name)| drawn.then_some(name))
+            .collect()
+    }
+
+    fn keep_keys(&self, window: &mut Window) {
+        let lost =
+            self.stops.iter().any(|(name, handle)| handle.is_focused(window) && !self.drawn.contains(&name.as_ref()));
+        if lost {
+            window.focus(&self.focus);
+        }
+    }
+
+    fn walk(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let to = match press::key_of(&event.keystroke.key, event.keystroke.modifiers) {
+            press::Key::Next => self.drawn.first(),
+            press::Key::Previous => self.drawn.last(),
+            press::Key::Press | press::Key::Other => return,
+        };
+        if let Some(handle) = to.and_then(|name| self.stops.get(*name)) {
+            window.focus(handle);
+            cx.stop_propagation();
+        }
     }
 
     fn card_stop(&self, element: Stateful<Div>, name: &str) -> Div {
@@ -209,7 +239,7 @@ impl BotCard {
             .gap(px(10.))
             .child(folder_text(&bot.folder))
             .child(self.card_stop(copy, COPY_STOP));
-        Some(labelled("Folder", line))
+        Some(labelled("Folder", line).items_center())
     }
 
     fn about_part(&self, cx: &mut Context<Self>) -> Option<Div> {
@@ -283,7 +313,10 @@ impl Focusable for BotCard {
 impl Render for BotCard {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.reveal(window);
-        let Some(bot) = Store::get(cx).read(cx).bots.find(&self.bot).cloned() else { return div() };
+        let store = Store::get(cx).read(cx);
+        let Some(bot) = store.bots.find(&self.bot).cloned() else { return div() };
+        self.drawn = self.drawn_stops(&bot, store.routines_offered());
+        self.keep_keys(window);
         let height = body_height(f32::from(window.viewport_size().height));
         let body = self.body(&bot, cx);
         let column = div()
@@ -291,6 +324,10 @@ impl Render for BotCard {
             .flex_col()
             .max_h(px(height))
             .child(fitted("bot-card", window, body).min_h_0().track_scroll(&self.scroller));
-        div().track_focus(&self.focus).child(frame(card_title(&bot.name), column, self.buttons()))
+        div().track_focus(&self.focus).on_key_down(cx.listener(Self::walk)).child(frame(
+            card_title(&bot.name),
+            column,
+            self.buttons(),
+        ))
     }
 }
