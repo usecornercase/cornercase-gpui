@@ -1,0 +1,135 @@
+{
+  "agents": [
+    {
+      "accesses": [
+        "cornercase",
+        "full"
+      ],
+      "agent": "claude",
+      "bot": true,
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "installed": true,
+      "models": [
+        "opus",
+        "sonnet",
+        "haiku"
+      ],
+      "title": "Claude Code",
+      "why": null
+    },
+    {
+      "accesses": [
+        "full"
+      ],
+      "agent": "codex",
+      "bot": true,
+      "efforts": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "installed": true,
+      "models": [],
+      "title": "Codex",
+      "why": "its sandbox is not known to reach cornercase on this system"
+    },
+    {
+      "accesses": [
+        "cornercase",
+        "full"
+      ],
+      "agent": "gemini",
+      "bot": true,
+      "efforts": [],
+      "installed": true,
+      "models": [],
+      "reads": "folder",
+      "title": "Gemini CLI",
+      "why": null
+    },
+    {
+      "accesses": [
+        "full"
+      ],
+      "agent": "opencode",
+      "bot": true,
+      "efforts": [],
+      "installed": true,
+      "models": [],
+      "title": "opencode",
+      "why": "a command can write outside its folder"
+    },
+    {
+      "accesses": [],
+      "agent": "grok",
+      "bot": false,
+      "efforts": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "installed": false,
+      "models": [],
+      "title": "Grok Build",
+      "why": "not yet"
+    },
+    {
+      "accesses": [
+        "full"
+      ],
+      "agent": "cursor",
+      "bot": true,
+      "efforts": [],
+      "installed": true,
+      "models": [],
+      "title": "Cursor CLI",
+      "why": "its edits can leave its folder"
+    },
+    {
+      "accesses": [
+        "cornercase",
+        "full"
+      ],
+      "agent": "copilot",
+      "bot": true,
+      "efforts": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "installed": true,
+      "models": [
+        "auto"
+      ],
+      "reads": "folder",
+      "title": "GitHub Copilot CLI",
+      "why": null
+    },
+    {
+      "accesses": [],
+      "agent": "vibe",
+      "bot": false,
+      "efforts": [],
+      "installed": false,
+      "models": [],
+      "title": "Vibe CLI",
+      "why": "not yet"
+    }
+  ]
+}

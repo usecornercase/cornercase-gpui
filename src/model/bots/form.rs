@@ -4,11 +4,14 @@ use anyhow::bail;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{Bot, set};
+use super::{Bot, set, text_or_empty};
 use crate::cli::flag;
 
 pub(crate) const CORNERCASE: &str = "cornercase";
 pub(crate) const FULL: &str = "full";
+const FOLDER: &str = "folder";
+const READS_ANYTHING: &str = "Through cornercase, it reads anything and writes only in its own folder.";
+const READS_FOLDER: &str = "Through cornercase, it reads and writes only in its own folder.";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -18,6 +21,8 @@ pub(crate) struct AgentInfo {
     pub bot: bool,
     pub why: Option<String>,
     pub accesses: Vec<String>,
+    #[serde(deserialize_with = "text_or_empty")]
+    pub reads: String,
     pub efforts: Vec<String>,
     pub models: Vec<String>,
 }
@@ -42,6 +47,10 @@ pub(crate) fn id_of(answer: &str) -> Option<String> {
 impl AgentInfo {
     pub(crate) fn offers(&self, access: &str) -> bool {
         self.accesses.iter().any(|a| a == access)
+    }
+
+    pub(crate) fn through_note(&self) -> &'static str {
+        if self.reads == FOLDER { READS_FOLDER } else { READS_ANYTHING }
     }
 
     pub(crate) fn takes_effort(&self) -> bool {

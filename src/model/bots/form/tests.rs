@@ -446,3 +446,63 @@ fn an_edited_bots_picker_starts_on_its_account() {
     assert_eq!(kept.get("claude").map(String::as_str), Some("made-up-1"));
     assert_eq!(kept.iter().filter(|(_, account)| !account.is_empty()).count(), 1);
 }
+
+fn newer() -> Vec<AgentInfo> {
+    agents_of(fixture!("bots/agents-reads.json")).expect("fixture")
+}
+
+const READS_ANYTHING_NOTE: &str = "Through cornercase, it reads anything and writes only in its own folder.";
+
+#[test]
+fn an_agent_that_reads_only_its_folder_says_so_under_access() {
+    let list = newer();
+    for name in ["gemini", "copilot"] {
+        assert_eq!(by(&list, name).through_note(), "Through cornercase, it reads and writes only in its own folder.");
+    }
+}
+
+#[test]
+fn an_agent_that_reads_anything_keeps_the_sentence_it_had() {
+    let list = newer();
+    for name in ["claude", "codex", "opencode", "cursor"] {
+        assert_eq!(by(&list, name).through_note(), READS_ANYTHING_NOTE);
+    }
+}
+
+#[test]
+fn an_older_servers_agents_read_anything() {
+    assert!(agents().iter().all(|agent| agent.through_note() == READS_ANYTHING_NOTE));
+}
+
+#[test]
+fn a_reads_of_another_type_or_value_reads_anything_and_the_agent_stays() {
+    let cases = [r"5", "null", "true", r#"["folder"]"#, r#"{"folder":true}"#, r#""anything""#, r#""Folder""#, r#""""#];
+    let entries: Vec<String> = cases
+        .iter()
+        .enumerate()
+        .map(|(at, reads)| format!(r#"{{"agent":"a{at}","bot":true,"reads":{reads}}}"#))
+        .collect();
+    let list = agents_of(&format!(r#"{{"agents":[{}]}}"#, entries.join(","))).expect("list");
+    assert_eq!(list.len(), cases.len());
+    assert!(list.iter().all(|agent| agent.through_note() == READS_ANYTHING_NOTE));
+}
+
+#[test]
+fn the_agents_of_a_newer_server_are_read_with_their_reasons() {
+    let list = newer();
+    assert_eq!(
+        by(&list, "opencode").full_only_line().as_deref(),
+        Some("opencode can be a bot with full access only: a command can write outside its folder.")
+    );
+    assert_eq!(
+        by(&list, "cursor").full_only_line().as_deref(),
+        Some("Cursor CLI can be a bot with full access only: its edits can leave its folder.")
+    );
+    assert_eq!(by(&list, "gemini").full_only_line(), None);
+}
+
+#[test]
+fn a_default_agent_that_reads_only_its_folder_is_chosen_at_open() {
+    let list = newer();
+    assert_eq!(chosen_at_open(&list, Some("gemini")), list.iter().position(|a| a.agent == "gemini"));
+}

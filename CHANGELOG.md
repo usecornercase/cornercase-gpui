@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.130
+
+- **New bot and Edit bot… say what a Gemini CLI or GitHub Copilot CLI bot can read.** With access through cornercase, a bot of these two agents reads and writes only in its own folder, and the note under Access said it reads anything. With cornercase 0.13.86 or newer the note follows the agent you choose; for the other agents it reads as before.
+
 ## 0.1.126
 
 - **⌘. takes the newest toast away** (Ctrl+Shift+. on Linux and Windows), from anywhere in the window, also under a dialog. Until now only a click on its ✕ did, or waiting 4 to 15 seconds. It only takes the toast away: an agent that needs you keeps its mark in the sidebar and ⌘B still goes to it, and a bot's unread count stays, so ⇧⌘I still goes to it. Esc leaves toasts alone, since it belongs to the program in the pane.
