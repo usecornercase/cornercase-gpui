@@ -10,6 +10,7 @@ pub(crate) enum Feature {
     FlowFreeBuilds,
     MachineTunnels,
     Bots,
+    BotSetup,
 }
 
 impl Feature {
@@ -21,6 +22,7 @@ impl Feature {
             Self::FlowFreeBuilds => Version::new(0, 13, 64),
             Self::MachineTunnels => Version::new(0, 13, 67),
             Self::Bots => Version::new(0, 13, 77),
+            Self::BotSetup => Version::new(0, 13, 89),
         }
     }
 

@@ -81,3 +81,15 @@ fn a_message_is_not_sent_while_another_to_the_same_bot_is_on_its_way() {
     assert!(Call::say(true, "prs", "second").is_none());
     assert!(Call::say(false, "prs", "second").is_some());
 }
+
+#[test]
+fn a_setup_goes_on_the_queue_with_nothing_on_standard_input() {
+    let (queue, tap) = QueueTap::new();
+    put(&queue, Call::setup(false, "prs").expect("a call"));
+    assert_eq!(tap.with_stdin(), [(vec!["bot".to_string(), "setup".into(), "prs".into(), "--json".into()], None)]);
+}
+
+#[test]
+fn a_setup_is_not_sent_while_a_message_to_the_same_bot_is_on_its_way() {
+    assert!(Call::setup(true, "prs").is_none());
+}

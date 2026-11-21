@@ -25,6 +25,11 @@ fn a_message_goes_to_a_bot_on_standard_input() {
 }
 
 #[test]
+fn a_setup_is_asked_with_json() {
+    assert_eq!(setup_args("prs"), ["bot", "setup", "prs", "--json"]);
+}
+
+#[test]
 fn a_refused_message_goes_back_whole() {
     let mut drafts = Drafts::default();
     drafts.put_back("prs", "a\nb ");

@@ -1,6 +1,6 @@
 use super::entries::{
-    Control, Entry, EntryKey, Retry, STEPS_SHOWN, Turn, asked, entries, folded, held, keys, new_conversation_control,
-    retry, row_splices, send_control, spliced, stop_control, turn,
+    Again, Control, Entry, EntryKey, Retry, STEPS_SHOWN, Turn, asked, entries, folded, held, keys,
+    new_conversation_control, retry, row_splices, send_control, spliced, stop_control, turn,
 };
 use super::words::{folded_label, time_label, turn_label};
 use super::{Scroll, scroll_distance, scroll_of};
@@ -252,7 +252,7 @@ fn a_chat_is_fresh_for_another_bot_or_a_new_generation_but_not_a_new_revision() 
 #[test]
 fn retry_is_offered_on_an_error_that_is_the_last_line_while_no_turn_runs() {
     let lines = [line(1, "you", "ask", false), line(2, "error", "failed", false)];
-    assert_eq!(retry(&lines, false), Some(Retry { error: 2, text: "ask".into() }));
+    assert_eq!(retry(&lines, false, true), Some(Retry { error: 2, again: Again::Say("ask".into()) }));
 }
 
 #[test]
@@ -263,24 +263,24 @@ fn retry_sends_the_last_message_before_the_error() {
         line(3, "you", "new", false),
         line(4, "error", "x", false),
     ];
-    assert_eq!(retry(&lines, false).map(|retry| retry.text), Some("new".to_string()));
+    assert_eq!(retried(&lines), Some("new".to_string()));
 }
 
 #[test]
 fn no_retry_while_a_turn_runs() {
     let lines = [line(1, "you", "ask", false), line(2, "error", "failed", false)];
-    assert_eq!(retry(&lines, true), None);
+    assert_eq!(retry(&lines, true, true), None);
 }
 
 #[test]
 fn no_retry_when_the_error_is_not_the_last_line() {
     let lines = [line(1, "you", "ask", false), line(2, "error", "failed", false), line(3, "notice", "stopped", false)];
-    assert_eq!(retry(&lines, false), None);
+    assert_eq!(retry(&lines, false, true), None);
 }
 
 #[test]
 fn no_retry_without_a_message_kept_before_the_error() {
-    assert_eq!(retry(&[line(1, "error", "failed", false)], false), None);
+    assert_eq!(retry(&[line(1, "error", "failed", false)], false, true), None);
 }
 
 #[test]
@@ -352,7 +352,7 @@ fn retry_sends_the_last_message_not_the_steps_between_it_and_the_error() {
         line(2, "step", "cornercase status --json", false),
         line(3, "error", "x", false),
     ];
-    assert_eq!(retry(&lines, false).map(|retry| retry.text), Some("ask".to_string()));
+    assert_eq!(retried(&lines), Some("ask".to_string()));
 }
 
 #[test]
@@ -361,7 +361,10 @@ fn the_headers_menu_button_names_whose_menu_it_opens() {
 }
 
 fn retried(lines: &[Line]) -> Option<String> {
-    retry(lines, false).map(|retry| retry.text)
+    match retry(lines, false, true)?.again {
+        Again::Say(text) => Some(text),
+        Again::Setup => None,
+    }
 }
 
 fn ids(list: &[u64]) -> std::collections::HashSet<u64> {
@@ -482,4 +485,101 @@ fn the_keys_moving_to_another_example_reveal_it() {
 fn the_keys_leaving_the_examples_reveal_nothing() {
     assert_eq!(super::example_to_reveal(None, Some(1)), None);
     assert_eq!(super::example_to_reveal(None, None), None);
+}
+
+#[test]
+fn a_setup_turn_is_timed_from_its_notice_with_the_steps_since() {
+    let lines = [line(1, "notice", "setting up", false), line(2, "step", "a", false), line(3, "step", "b", false)];
+    assert_eq!(turn(&lines, true), Some(Turn { since: 1001, steps: 2 }));
+}
+
+#[test]
+fn a_message_held_during_a_setup_does_not_move_its_start() {
+    let lines = [
+        line(1, "notice", "setting up", false),
+        line(2, "step", "a", false),
+        line(3, "you", "wait", true),
+        line(4, "step", "b", false),
+    ];
+    assert_eq!(turn(&lines, true), Some(Turn { since: 1001, steps: 2 }));
+    assert!(held(&lines).contains(&3));
+}
+
+#[test]
+fn a_setup_run_again_is_timed_from_its_own_notice() {
+    let lines = [
+        line(1, "notice", "setting up", false),
+        line(2, "error", "failed", false),
+        line(3, "notice", "setting up", false),
+        line(4, "step", "a", false),
+    ];
+    assert_eq!(turn(&lines, true), Some(Turn { since: 1003, steps: 1 }));
+}
+
+#[test]
+fn the_turn_after_a_setup_that_held_a_message_starts_at_its_answer() {
+    let lines = [
+        line(1, "notice", "setting up", false),
+        line(2, "you", "wait", true),
+        line(3, "bot", "done", false),
+        line(4, "step", "a", false),
+    ];
+    assert_eq!(turn(&lines, true), Some(Turn { since: 1003, steps: 1 }));
+}
+
+#[test]
+fn another_notice_opens_no_turn() {
+    assert_eq!(turn(&[line(1, "notice", "new conversation", false)], true), None);
+}
+
+fn failed_setup() -> [Line; 3] {
+    [line(1, "notice", "setting up", false), line(2, "step", "a", false), line(3, "error", "failed", false)]
+}
+
+#[test]
+fn retry_after_a_failed_setup_runs_the_setup_again() {
+    assert_eq!(retry(&failed_setup(), false, true), Some(Retry { error: 3, again: Again::Setup }));
+}
+
+#[test]
+fn no_retry_after_a_failed_setup_without_the_feature() {
+    assert_eq!(retry(&failed_setup(), false, false), None);
+}
+
+#[test]
+fn retry_after_a_setup_never_sends_its_notice_as_a_message() {
+    let again = retry(&failed_setup(), false, true).map(|retry| retry.again);
+    assert!(!matches!(again, Some(Again::Say(_))), "{again:?}");
+}
+
+#[test]
+fn retry_after_messages_held_during_a_setup_sends_those_messages() {
+    let lines = [
+        line(1, "notice", "setting up", false),
+        line(2, "you", "a", true),
+        line(3, "bot", "done", false),
+        line(4, "error", "failed", false),
+    ];
+    for setup in [true, false] {
+        assert_eq!(retry(&lines, false, setup).map(|retry| retry.again), Some(Again::Say("a".into())), "{setup}");
+    }
+}
+
+#[test]
+fn no_retry_while_a_setup_runs() {
+    let lines = [line(1, "notice", "setting up", false), line(2, "error", "failed", false)];
+    assert_eq!(retry(&lines, true, true), None);
+}
+
+#[test]
+fn a_stop_during_a_setup_drops_what_was_held() {
+    let lines = [
+        line(1, "notice", "setting up", false),
+        line(2, "you", "wait", true),
+        line(3, "notice", "stopped", false),
+        line(4, "notice", "1 held message dropped", false),
+    ];
+    let asked = asked(&lines);
+    assert_eq!(asked.dropped, ids(&[2]));
+    assert_eq!(asked.ended, vec![1]);
 }

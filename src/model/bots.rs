@@ -7,14 +7,15 @@ use crate::cli::{Feature, Lacks, newer_here};
 use crate::platform::Os;
 
 pub(crate) use self::form::{
-    AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, agents_of, chosen_at_open, id_of, kept_accounts,
-    new_args, rename_args,
+    AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, id_of,
+    kept_accounts, new_args, rename_args,
 };
 pub(crate) use self::manage::{
     Arrival, Creating, Making, Managing, MenuAsk, create_failed, making, remove_failed, rename_failed, save_failed,
 };
 pub(crate) use self::talk::{
-    Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, stop_key,
+    Drafts, Goes, Refill, Said, on_return, refill, refused_goes, reset_key, say_args, say_key, sendable, setup_args,
+    stop_key,
 };
 pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, read_since, tells};
 

@@ -506,3 +506,16 @@ fn a_default_agent_that_reads_only_its_folder_is_chosen_at_open() {
     let list = newer();
     assert_eq!(chosen_at_open(&list, Some("gemini")), list.iter().position(|a| a.agent == "gemini"));
 }
+
+#[test]
+fn the_form_says_a_bot_sets_itself_up_from_what_it_is_for() {
+    let note = about_note(Has::Yes).expect("a note");
+    assert!(note.contains("sets itself up") && note.contains("starts nothing"), "{note}");
+}
+
+#[test]
+fn the_form_says_nothing_of_a_setup_to_a_server_without_it() {
+    assert_eq!(about_note(Has::No(Some(crate::cli::Version::new(0, 13, 88)))), None);
+    assert_eq!(about_note(Has::No(None)), None);
+    assert_eq!(about_note(Has::Unread), None);
+}

@@ -2,7 +2,7 @@ use gpui::Context;
 
 use super::super::{Busy, Clip, Store, ToastAction, ToastGo, ToastKind, reply_of};
 use crate::cli;
-use crate::model::bots::{Goes, Said, refused_goes, reset_key, say_args, say_key, sendable, stop_key};
+use crate::model::bots::{Goes, Said, refused_goes, reset_key, say_args, say_key, sendable, setup_args, stop_key};
 
 pub(crate) const COPY_MESSAGE: &str = "Copy message";
 
@@ -22,6 +22,10 @@ pub(super) struct Call {
 impl Call {
     fn say(on_its_way: bool, bot: &str, text: &str) -> Option<Self> {
         (!on_its_way).then(|| Self { args: say_args(bot), stdin: Some(text.as_bytes().to_vec()) })
+    }
+
+    fn setup(on_its_way: bool, bot: &str) -> Option<Self> {
+        (!on_its_way).then(|| Self::args(setup_args(bot)))
     }
 
     pub(super) fn args(args: Vec<String>) -> Self {
@@ -122,13 +126,23 @@ impl Store {
     pub(crate) fn new_conversation(&mut self, bot: &str, cx: &mut Context<Self>) {
         let name = self.bot_name(bot);
         let busy = Busy::new(reset_key(bot), format!("Starting a new conversation with {name}…"));
+        self.bot_act(busy, Call::reset(bot), format!("Could not start a new conversation with {name}"), cx);
+    }
+
+    pub(crate) fn set_up_bot(&mut self, bot: &str, cx: &mut Context<Self>) {
+        let Some(call) = Call::setup(self.busy(&say_key(bot)), bot) else { return };
+        let name = self.bot_name(bot);
+        let busy = Busy::new(say_key(bot), format!("Setting {name} up…"));
+        self.bot_act(busy, call, format!("Could not set {name} up"), cx);
+    }
+
+    fn bot_act(&mut self, busy: Busy, call: Call, failed: String, cx: &mut Context<Self>) {
         let then: Then = Box::new(move |this, result, cx| {
             if let Err(error) = result {
-                let words = format!("Could not start a new conversation with {name}: {}", cli::reason(&error));
-                this.toast(words, ToastKind::Error, cx);
+                this.toast(format!("{failed}: {}", cli::reason(&error)), ToastKind::Error, cx);
             }
         });
-        self.bot_job(busy, Call::reset(bot), then, cx);
+        self.bot_job(busy, call, then, cx);
     }
 }
 

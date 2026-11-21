@@ -5,13 +5,18 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{Bot, set, text_or_empty};
-use crate::cli::flag;
+use crate::cli::{Has, flag};
 
 pub(crate) const CORNERCASE: &str = "cornercase";
 pub(crate) const FULL: &str = "full";
 const FOLDER: &str = "folder";
 const READS_ANYTHING: &str = "Through cornercase, it reads anything and writes only in its own folder.";
 const READS_FOLDER: &str = "Through cornercase, it reads and writes only in its own folder.";
+pub(crate) const SETS_ITSELF_UP: &str = "Once made, the bot sets itself up from it at once: it schedules what this asks for and says in its chat what it will do. Left empty, it starts nothing and spends no tokens until you write to it.";
+
+pub(crate) fn about_note(setup: Has) -> Option<&'static str> {
+    (setup == Has::Yes).then_some(SETS_ITSELF_UP)
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
