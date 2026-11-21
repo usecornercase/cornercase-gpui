@@ -86,5 +86,9 @@ pub(crate) fn aim(rows: &[Option<u64>], anchor: Option<&Anchor>, aimed: u64, rea
     }
 }
 
+pub(crate) fn consumed(aim: Aim, read: bool) -> bool {
+    read && aim != Aim::Wait
+}
+
 #[cfg(test)]
 mod tests;

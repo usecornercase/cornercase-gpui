@@ -211,3 +211,20 @@ fn the_least_windows_room_hides_routines_and_keeps_it_hidden() {
     assert!(!routines_fit(26., true, BUTTON));
     assert!(!routines_fit(111., false, BUTTON));
 }
+
+#[test]
+fn a_line_that_lands_before_a_blocks_newest_is_measured_again() {
+    let runs = Runs::default();
+    let old = keys_with(&[line(1, "notice", "↻ PRs · 09:00", Some(5)), line(4, "bot", "done", Some(5))], &runs);
+    let caught_up =
+        [line(1, "notice", "↻ PRs · 09:00", Some(5)), line(2, "step", "a", Some(5)), line(4, "bot", "done", Some(5))];
+    assert_eq!(spliced(&old, &keys_with(&caught_up, &runs)), vec![(0..1, 1)]);
+}
+
+#[test]
+fn a_line_of_an_unknown_kind_in_a_run_stays_in_its_block_as_plain_text() {
+    let lines = [line(1, "notice", "↻ PRs · 09:00", Some(5)), line(2, "future-note", "Approval required", Some(5))];
+    let read = entries(&lines);
+    assert_eq!(blocks(&read)[0].others, ["Approval required"]);
+    assert_eq!(read.len(), 1);
+}

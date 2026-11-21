@@ -37,7 +37,7 @@ use detail::Detail;
 use form::{FlowChoices, Form, Spot};
 use rows::Snapshot;
 pub(crate) use time::{days, local, now, when_label};
-use undo::{Removal, UNDO_FOR};
+use undo::{Removal, UNDO_FOR, undo_shown};
 
 const SIDE: Split = Split::new(420., 360., 760.);
 const LIST_KEEP: f32 = 320.;
@@ -152,16 +152,20 @@ impl QueuePanel {
         if self.form.as_ref().is_some_and(|f| f.edit == Some(id)) {
             self.form = None;
         }
-        Self::take_out(args(&["queue", "remove", &id.to_string(), "--json"]), cx);
+        self.take_out(args(&["queue", "remove", &id.to_string(), "--json"]), cx);
     }
 
-    fn clear_started(cx: &mut Context<Self>) {
-        Self::take_out(args(&["queue", "clear-started", "--json"]), cx);
+    fn clear_started(&self, cx: &mut Context<Self>) {
+        self.take_out(args(&["queue", "clear-started", "--json"]), cx);
     }
 
-    fn take_out(command: Vec<String>, cx: &mut Context<Self>) {
-        store::run(cx, command, |this: &mut Self, result, cx| match result {
-            Ok(out) => this.offer_undo(Removal::from_answer(&out), cx),
+    fn take_out(&self, command: Vec<String>, cx: &mut Context<Self>) {
+        let asked_in = self.scope.clone();
+        store::run(cx, command, move |this: &mut Self, result, cx| match result {
+            Ok(out) if undo_shown(asked_in.as_deref(), this.scope.as_deref()) => {
+                this.offer_undo(Removal::from_answer(&out), cx);
+            }
+            Ok(_) => {}
             Err(e) => toast_error(&e, cx),
         });
     }

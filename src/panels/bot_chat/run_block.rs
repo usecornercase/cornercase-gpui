@@ -34,6 +34,10 @@ fn end(text: &str) -> Div {
     div().text_size(px(11.5)).text_color(colours::faint()).child(text.to_string())
 }
 
+fn other(text: &str) -> Div {
+    div().text_color(colours::muted()).child(text.to_string())
+}
+
 fn again_button(run: u64, meta: &Meta) -> Option<AnyElement> {
     if meta.again_busy.contains(&run) {
         return Some(ui::busy_button(("bot-run-again", run), STARTING, Tone::Plain).into_any_element());
@@ -68,6 +72,7 @@ pub(super) fn run(block: &Block, meta: &Meta) -> Div {
         .child(title(block))
         .children(steps)
         .children(answer)
+        .children(block.others.iter().map(|text| other(text)))
         .children(error(block, meta))
         .children(block.end.as_deref().map(end))
         .children(meta.runs.answers(block.run).then(|| answering(block.run)));

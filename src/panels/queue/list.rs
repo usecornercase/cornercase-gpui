@@ -5,7 +5,8 @@ use gpui::{
 
 use super::QueuePanel;
 use super::data::{
-    Entry, Group, ROUTINES_NOTE, Row, Section, bot_routines_note, clear_goes_in, sections, shows_results_note,
+    Entry, Group, Row, Section, bot_routines_note, clear_goes_in, routine_kinds, routines_note, sections,
+    shows_results_note,
 };
 use super::rows::Snapshot;
 use crate::notify::tip;
@@ -49,8 +50,9 @@ fn nothing_scheduled() -> Div {
         .child(div().flex_1().min_w(px(0.)).child(NOTHING_SCHEDULED))
 }
 
-fn routines_note(scope: Option<&(String, String)>) -> Div {
-    let note = scope.map_or_else(|| ROUTINES_NOTE.to_string(), |(_, name)| bot_routines_note(name));
+fn routines_line(scope: Option<&(String, String)>, rows: &[Row<'_>]) -> Div {
+    let note =
+        scope.map_or_else(|| routines_note(routine_kinds(rows)).to_string(), |(_, name)| bot_routines_note(name));
     ui::dim(note).px(px(12.)).pb(px(6.))
 }
 
@@ -63,7 +65,7 @@ fn clear_started(cx: &mut Context<QueuePanel>) -> AnyElement {
         .px(px(10.))
         .py(px(2.))
         .tooltip(tip("Remove every started entry and finished run from the list: their agents keep running"))
-        .on_click(cx.listener(|_, _: &ClickEvent, _, cx| QueuePanel::clear_started(cx)))
+        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.clear_started(cx)))
         .into_any_element()
 }
 
@@ -111,7 +113,7 @@ impl QueuePanel {
             parts.push(nothing_scheduled().into_any_element());
         }
         if section.group == Group::Routines {
-            parts.push(routines_note(snapshot.scope.as_ref()).into_any_element());
+            parts.push(routines_line(snapshot.scope.as_ref(), &section.rows).into_any_element());
         }
         parts.extend(section.rows.iter().flat_map(|row| self.row_and_runs(row, snapshot, cx)));
         parts

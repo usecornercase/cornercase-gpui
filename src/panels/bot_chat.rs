@@ -18,7 +18,7 @@ pub(crate) use self::words::{EXAMPLES, answering, row_detail};
 use self::words::{empty_lines, examples_shown, read_failed};
 use crate::model::bots::Give as Giving;
 use crate::model::bots::Reach;
-use crate::model::bots::{Aim, Bot, Chat, Read, Runs, aim, reset_key, say_key};
+use crate::model::bots::{Aim, Bot, Chat, Read, Runs, aim, consumed, reset_key, say_key};
 use crate::panels::queue;
 use crate::store::Store;
 use crate::theme::{colours, radius};
@@ -354,13 +354,14 @@ impl BotChat {
             return;
         };
         let anchor = store.bots.anchor.clone().filter(|anchor| anchor.bot == chat.bot);
-        let aimed = aim(&self.row_runs(), anchor.as_ref(), self.aimed, chat.read == Read::Done);
+        let read = chat.read == Read::Done;
+        let aimed = aim(&self.row_runs(), anchor.as_ref(), self.aimed, read);
         if let Aim::Go(item_ix) = aimed {
             self.list.scroll_to(ListOffset { item_ix, offset_in_item: px(0.) });
             self.following = false;
             self.news = false;
         }
-        if let Some(anchor) = anchor.filter(|_| aimed != Aim::Wait) {
+        if let Some(anchor) = anchor.filter(|_| consumed(aimed, read)) {
             self.aimed = anchor.serial;
         }
     }

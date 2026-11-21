@@ -16,11 +16,17 @@ pub(super) fn block(run: u64, members: &[&Line]) -> Entry {
         run,
         head: members.first().map_or(0, |line| line.id),
         tail: members.last().map_or(0, |line| line.id),
+        lines: members.len(),
         title: title_of(members.first()),
         steps: members.iter().filter(|line| line.kind == Kind::Step).map(|line| line.text.clone()).collect(),
         answer: of(Kind::Bot).map(|line| (line.id, line.text.clone(), line.at)),
         error: of(Kind::Error).map(|line| line.text.clone()),
         end: end.map(|line| line.text.clone()),
+        others: members
+            .iter()
+            .filter(|line| matches!(line.kind, Kind::Other(_)))
+            .map(|line| line.text.clone())
+            .collect(),
     })
 }
 

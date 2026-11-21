@@ -2,8 +2,8 @@ use serde_json::Value;
 
 use super::super::data::Click;
 use super::super::data::{
-    Entry, Group, Place, State, bot_click, chat_block, entries, offers_detail, place_label, remove_tip, scoped,
-    sections, status_label,
+    Entry, Group, Place, ROUTINES_NOTE, State, bot_click, chat_block, entries, offers_detail, place_label, remove_tip,
+    routine_kinds, routines_note, scoped, sections, status_label,
 };
 use crate::test_util::fixture;
 
@@ -102,4 +102,24 @@ fn removing_a_bots_routine_or_run_says_its_answers_stay_in_the_chat() {
     assert!(remove_tip(&found(2)).contains("what it answered stays in the chat"));
     assert!(remove_tip(&found(5)).contains("its answer stays in the chat"));
     assert_eq!(remove_tip(&found(4)), "Remove");
+}
+
+fn routine_of_project(id: u64) -> Entry {
+    Entry { id, state: "pending".into(), repeat: Some("2h".into()), label: format!("entry {id}"), ..Entry::default() }
+}
+
+fn note_for(list: &[Entry]) -> &'static str {
+    let sections = sections(list, "", None, false);
+    let routines = sections.iter().find(|section| section.group == Group::Routines).expect("routines");
+    routines_note(routine_kinds(&routines.rows))
+}
+
+#[test]
+fn the_queues_routines_note_says_what_its_routines_are() {
+    let bot_routine = found(2);
+    assert_eq!(note_for(&[routine_of_project(1)]), ROUTINES_NOTE);
+    let only_bots = note_for(std::slice::from_ref(&bot_routine));
+    assert!(only_bots.contains("a bot's routine") && !only_bots.contains("worktree"), "{only_bots}");
+    let mixed = note_for(&[routine_of_project(1), bot_routine]);
+    assert!(mixed.contains("a project's routine") && mixed.contains("a bot's routine"), "{mixed}");
 }

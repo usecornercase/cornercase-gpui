@@ -75,3 +75,15 @@ fn the_aim_waits_while_the_chat_is_read_and_misses_a_read_chat_without_the_block
     assert_eq!(aim(&rows, Some(&anchor(5, 3)), 0, false), Aim::Wait);
     assert_eq!(aim(&rows, Some(&anchor(5, 3)), 0, true), Aim::Miss);
 }
+
+#[test]
+fn the_aim_keeps_its_anchor_while_the_chat_is_read_and_takes_it_once_read() {
+    let rows = [None, Some(5)];
+    let reading = aim(&rows, Some(&anchor(5, 3)), 0, false);
+    assert_eq!(reading, Aim::Go(1));
+    assert!(!consumed(reading, false));
+    let read = aim(&rows, Some(&anchor(5, 3)), 0, true);
+    assert!(consumed(read, true));
+    assert!(consumed(Aim::Miss, true));
+    assert!(!consumed(Aim::Wait, true));
+}

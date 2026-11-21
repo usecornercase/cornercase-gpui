@@ -22,11 +22,13 @@ pub(crate) struct Block {
     pub run: u64,
     pub head: u64,
     pub tail: u64,
+    pub lines: usize,
     pub title: String,
     pub steps: Vec<String>,
     pub answer: Option<(u64, String, i64)>,
     pub error: Option<String>,
     pub end: Option<String>,
+    pub others: Vec<String>,
 }
 
 impl Entry {
@@ -290,6 +292,7 @@ pub(crate) struct EntryKey {
     first: u64,
     last: u64,
     tail: u64,
+    lines: usize,
     held: bool,
     open: bool,
     retry: bool,
@@ -302,6 +305,7 @@ fn block_key(block: &Block, opened: &HashSet<u64>, runs: &Runs) -> EntryKey {
         first: block.head,
         last: block.head,
         tail: block.tail,
+        lines: block.lines,
         held: runs.answers(block.run),
         open: opened.contains(&block.head),
         retry: offers_again(block, runs),
@@ -332,7 +336,7 @@ pub(crate) fn keys(
             let retry = retry == Some(last) && kind == 3;
             let give = if kind == 4 && givable.contains_key(&last) { give } else { Give::No };
             let open = opened.contains(&entry.id());
-            EntryKey { kind, first: entry.id(), last, tail: last, held, open, retry, give }
+            EntryKey { kind, first: entry.id(), last, tail: last, lines: 0, held, open, retry, give }
         })
         .collect()
 }
