@@ -1,5 +1,5 @@
 use super::entries::{
-    Again, Control, Entry, EntryKey, Retry, STEPS_SHOWN, Turn, asked, entries, folded, held, keys,
+    Again, Control, Entry, EntryKey, Retry, STEPS_SHOWN, Turn, arrived, asked, entries, folded, held, keys,
     new_conversation_control, retry, row_splices, send_control, spliced, stop_control, turn,
 };
 use super::words::{folded_label, time_label, turn_label};
@@ -175,6 +175,35 @@ fn the_list_splices_only_the_entries_that_changed() {
     let new = key_of(&entries(&plain(&[(1, "you"), (2, "bot"), (3, "you"), (4, "bot")])));
     assert_eq!(spliced(&old, &new), vec![(3..3, 1)]);
     assert_eq!(spliced(&old, &old), Vec::new());
+}
+
+fn a_running_run(opened: &[u64]) -> Vec<EntryKey> {
+    let lines = plain(&[(1, "you"), (2, "bot"), (3, "you"), (4, "step"), (5, "step"), (6, "step"), (7, "step")]);
+    keys(&entries(&lines), &ids(opened), None)
+}
+
+#[test]
+fn opening_the_last_run_of_steps_is_not_a_new_message() {
+    let (shut, open) = (a_running_run(&[]), a_running_run(&[4]));
+    assert_ne!(shut, open);
+    assert!(!arrived(&shut, &open));
+    assert!(!arrived(&open, &shut));
+}
+
+#[test]
+fn a_line_after_the_last_one_is_a_new_message() {
+    let old = key_of(&entries(&plain(&[(1, "you"), (2, "step")])));
+    let joined = key_of(&entries(&plain(&[(1, "you"), (2, "step"), (3, "step")])));
+    let answered = key_of(&entries(&plain(&[(1, "you"), (2, "step"), (3, "bot")])));
+    assert!(arrived(&old, &joined));
+    assert!(arrived(&old, &answered));
+}
+
+#[test]
+fn a_chat_with_nothing_new_has_no_new_message() {
+    let same = key_of(&entries(&plain(&[(1, "you"), (2, "bot")])));
+    assert!(!arrived(&same, &same));
+    assert!(!arrived(&[], &[]));
 }
 
 #[test]

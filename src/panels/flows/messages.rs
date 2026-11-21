@@ -10,7 +10,7 @@ use super::model::{self, Edge, FlowSpec, Message, Run, RunFile};
 use super::widgets::{chip, error_small, loop_chip, open_path, panel_box};
 use super::{FlowsPanel, Place};
 use crate::notify::tip;
-use crate::store::Store;
+use crate::store::{Clip, Store};
 use crate::theme::colours;
 use crate::ui::{self, Icon, Tone, glass};
 
@@ -167,7 +167,9 @@ fn header(flow: &FlowSpec, message: &Message, text: String, now: i64) -> Div {
         .children(edge_chip(flow, message.edge))
         .child(div().flex_1())
         .child(ui::dim(format!("#{} · {}", message.seq, model::ago(&message.time, now))))
-        .when(!text.is_empty(), |d| d.child(ui::copy_button(("copy-message", message.seq), text)))
+        .when(!text.is_empty(), |d| {
+            d.child(ui::copy_button(("copy-message", message.seq), Clip::of(text, "the message")))
+        })
 }
 
 fn body(shown: String, whole: bool) -> Div {

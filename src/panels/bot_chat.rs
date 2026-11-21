@@ -232,7 +232,7 @@ impl BotChat {
             }
             if following {
                 self.list.scroll_to(ListOffset { item_ix: rows.len(), offset_in_item: px(0.) });
-            } else if keys.last() != self.keys.last() {
+            } else if entries::arrived(&self.keys, &keys) {
                 self.news = true;
             }
         }

@@ -258,6 +258,10 @@ pub(crate) fn keys(entries: &[Entry], opened: &HashSet<u64>, retry: Option<u64>)
         .collect()
 }
 
+pub(crate) fn arrived(old: &[EntryKey], new: &[EntryKey]) -> bool {
+    old.last().map(|key| key.last) != new.last().map(|key| key.last)
+}
+
 impl EntryKey {
     fn overlaps(&self, other: &Self) -> bool {
         self.first <= other.last && other.first <= self.last
