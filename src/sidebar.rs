@@ -145,7 +145,7 @@ pub(crate) struct SideState {
     pub strip: crate::tabs::TabStrip,
     pub machine_place: Option<MachinePlace>,
     pub bot: Option<crate::model::bots::BotKey>,
-    pub bots_folded: bool,
+    pub bots: bool,
     pub aside: bool,
 }
 

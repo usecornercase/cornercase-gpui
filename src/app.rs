@@ -388,7 +388,7 @@ impl Root {
     pub(crate) fn activation_changed(&mut self, active: bool) {
         self.window_active = active;
         self.tell_machine_visible();
-        let visible = active && self.machine.is_none() && self.side.bot.is_none();
+        let visible = active && self.machine.is_none() && !self.side.bots;
         if visible == self.visible {
             return;
         }

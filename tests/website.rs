@@ -11,7 +11,7 @@ const RULE: &str = "|";
 const GAP: &str = "…";
 
 const TEACH: &str = "tests/website.rs reads this to compare the page's window with the app's: if what it draws is the same, teach the test the new shape (design/website.md, Kept in step with the app)";
-const KNOWN_WORDS: [&str; 6] = ["into_iter", "chain", "map", "collect", "then_some", "flow"];
+const KNOWN_WORDS: [&str; 8] = ["into_iter", "chain", "map", "collect", "then_some", "flatten", "flow", "bots"];
 
 type Found<T> = Result<T, String>;
 
@@ -66,6 +66,26 @@ fn arms(code: &str, prefix: &str, file: &str) -> Found<HashMap<String, String>> 
         }
     }
     Ok(found)
+}
+
+fn binding(statement: &str) -> Found<(&str, &str)> {
+    let unbound = || unread(RAIL, &format!("column has `{}`, a statement the test does not read", statement.trim()));
+    let (left, value) =
+        statement.trim().strip_prefix("let ").and_then(|rest| rest.split_once('=')).ok_or_else(unbound)?;
+    match words(left).as_slice() {
+        [name] => Ok((*name, value)),
+        _ => Err(unbound()),
+    }
+}
+
+fn after_call<'a>(text: &'a str, call: &str) -> Option<&'a str> {
+    let rest = &text[text.find(call)? + call.len()..];
+    let mut depth = 1;
+    let close = rest.char_indices().find(|&(_, c)| {
+        depth += i32::from(c == '(') - i32::from(c == ')');
+        depth == 0
+    })?;
+    Some(&rest[close.0 + 1..])
 }
 
 fn quoted(text: &str) -> Option<&str> {
@@ -151,6 +171,7 @@ impl App {
         }
         match word {
             "Slot::Divider" => Ok(vec![RULE.to_string()]),
+            "Slot::Bots" => Ok(vec![self.only_icon(&self.rail, RAIL, "bots_button")?]),
             "Slot::Plugins" | "Slot::Panel" => Ok(vec![]),
             _ if word.starts_with("Slot::") => {
                 Err(unread(RAIL, &format!("column draws {word}, which the test does not know")))
@@ -161,10 +182,25 @@ impl App {
         }
     }
 
+    fn code_icons(&self, code: &str, bound: &HashMap<&str, Vec<String>>) -> Found<Vec<String>> {
+        let icons: Found<Vec<Vec<String>>> = words(code)
+            .into_iter()
+            .map(|word| bound.get(word).map_or_else(|| self.word_icons(word), |icons| Ok(icons.clone())))
+            .collect();
+        Ok(icons?.concat())
+    }
+
     fn column(&self) -> Found<Vec<String>> {
         let body = block(&self.rail, RAIL, "fn column(")?;
-        let icons: Found<Vec<Vec<String>>> = words(body).into_iter().map(|word| self.word_icons(word)).collect();
-        Ok(icons?.concat())
+        let mut statements: Vec<&str> = body.split(';').collect();
+        let tail = statements.pop().unwrap_or_default();
+        let mut bound = HashMap::new();
+        for statement in statements {
+            let (name, value) = binding(statement)?;
+            let icons = self.code_icons(value, &bound)?;
+            bound.insert(name, icons);
+        }
+        self.code_icons(tail, &bound)
     }
 
     fn only_icon(&self, text: &str, file: &str, name: &str) -> Found<String> {
@@ -203,10 +239,14 @@ impl App {
     fn drawn_as_read(&self) -> Found<()> {
         let panels = block(&self.rail, RAIL, "fn rail_panels(")?;
         let compact: String = panels.chars().filter(|c| !c.is_whitespace()).collect();
-        let piped = compact.contains("column(flow).into_iter().flat_map(") && compact.contains("}).collect()");
+        let flat = after_call(&compact, "column(").is_some_and(|rest| rest.starts_with(".into_iter().flat_map("));
+        let piped = flat && compact.contains("}).collect()");
         let once = words(panels).iter().filter(|word| **word == "slots").count() == 2;
         if !(piped && once) || panels.contains(".child(") || panels.matches(".children(").count() != 1 {
             return Err(unread(RAIL, "rail_panels draws something besides column's slots"));
+        }
+        if !compact.contains("Slot::Bots=>vec![bots_button(") {
+            return Err(unread(RAIL, "rail_panels draws Slot::Bots other than with bots_button"));
         }
         let button = block(&self.rail, RAIL, "fn rail_button(")?;
         if !button.contains("kind.icon()") || words(button).iter().any(|word| word.starts_with("Icon::")) {
@@ -365,7 +405,7 @@ fn differ(app: &[String], page: &[String]) -> String {
     let at = app.iter().zip(page).position(|(a, p)| a != p).unwrap_or(app.len().min(page.len()));
     let item = |list: &[String]| list.get(at).map_or("nothing", String::as_str).to_string();
     let mut lines = vec![
-        "the page's rail is not the app's (a flow's workspace, no plugin's button)".to_string(),
+        "the page's rail is not the app's (a server with bots, a flow's workspace, no plugin's button)".to_string(),
         format!("  app:  {}", app.join(" ")),
         format!("  page: {}", page.join(" ")),
     ];
@@ -373,7 +413,7 @@ fn differ(app: &[String], page: &[String]) -> String {
     lines.extend(only("page", page, app));
     lines.push(format!("  first difference, at {}: the app draws {}, the page {}", at + 1, item(app), item(page)));
     lines.push(format!(
-        "make {PAGE_RAIL} draw the app's rail (its docked, sheets and bottom lists; | is its w-rail__rule, … its w-rail__gap, design/website.md); the story lights a docked icon by its class js-rail-<name> in site/src/client/stage/index.ts and site/src/styles/stage.css, so rename those with it"
+        "make {PAGE_RAIL} draw the app's rail (the Bots icon on its own, its docked, sheets and bottom lists; | is its w-rail__rule, … its w-rail__gap, design/website.md); the story lights a docked icon by its class js-rail-<name> in site/src/client/stage/index.ts and site/src/styles/stage.css, so rename those with it"
     ));
     lines.join("\n")
 }
@@ -383,7 +423,7 @@ fn app_with(rail: &str, icons: &str) -> App {
 }
 
 #[test]
-fn the_pages_rail_is_the_apps_in_a_flows_workspace_with_no_plugin() {
+fn the_pages_rail_is_the_apps_on_a_server_with_bots_in_a_flows_workspace_with_no_plugin() {
     let app = App::read().rail().unwrap_or_else(|why| panic!("{why}"));
     let page = page_rail(&read(PAGE_RAIL)).unwrap_or_else(|why| panic!("{why}"));
     assert!(app.iter().any(|item| ![RULE, GAP].contains(&item.as_str())), "{RAIL}: the rail draws no icon");
@@ -429,13 +469,28 @@ fn a_children_call_in_the_rail_fails() {
 }
 
 #[test]
+fn a_binding_in_the_column_counts_where_it_is_used() {
+    let column = "fn column(flow: bool, bots: bool) -> Vec<Slot> {\n    let door = bots.then_some([Slot::Bots]).into_iter().flatten();\n    [Slot::Divider].into_iter().chain(door).collect()\n}\n";
+    let app =
+        app_with(&format!("fn bots_button() {{\n    Icon::Bots\n}}\n{column}"), "Icon::Bots => asset!(\"bot\"),\n");
+    assert_eq!(app.column().expect("the short column reads"), [RULE, "bot"]);
+}
+
+#[test]
+fn a_statement_in_the_column_that_binds_nothing_fails() {
+    let app = app_with("fn column(flow: bool) -> Vec<Slot> {\n    slots.push(Slot::Divider);\n    slots\n}\n", "");
+    let why = app.column().expect_err("a statement that is no binding is an error");
+    assert!(why.contains("column has `slots.push(Slot::Divider)`"), "{why}");
+}
+
+#[test]
 fn a_call_in_the_column_this_test_does_not_know_fails() {
     let app = app_with("fn column(flow: bool) -> Vec<Slot> {\n    machines(flow)\n}\n", "");
     let why = app.column().expect_err("an unknown call is an error");
     assert!(why.contains("column calls machines"), "{why}");
 }
 
-const SLOTS: &str = "let slots = column(flow)\n        .into_iter()\n        .flat_map(|slot| match slot {\n            Slot::Divider => vec![rule()],\n        })\n        .collect();";
+const SLOTS: &str = "let slots = column(flow, door(bots))\n        .into_iter()\n        .flat_map(|slot| match slot {\n            Slot::Bots => vec![bots_button(bots)],\n            Slot::Divider => vec![rule()],\n        })\n        .collect();";
 
 fn rail_drawn(panels: &str, button: &str) -> String {
     let rail = format!(
@@ -471,6 +526,13 @@ fn a_rail_panels_that_reorders_the_slots_in_another_statement_fails() {
     let panels = format!("{SLOTS}\nlet slots = slots.into_iter().rev().collect();\ndiv().children(slots)");
     let why = rail_drawn(&panels, "kind.icon()");
     assert!(why.contains("rail_panels draws something besides column's slots"), "{why}");
+}
+
+#[test]
+fn a_rail_panels_that_draws_the_bots_slot_with_another_button_fails() {
+    let panels = SLOTS.replace("bots_button(", "rail_button(");
+    let why = rail_drawn(&format!("{panels}\ndiv().children(slots)"), "kind.icon()");
+    assert!(why.contains("rail_panels draws Slot::Bots other than with bots_button"), "{why}");
 }
 
 #[test]

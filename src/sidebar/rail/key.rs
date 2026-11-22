@@ -11,6 +11,7 @@ pub(crate) struct RailKey {
     menu: bool,
     place: Option<MachinePlace>,
     pointed: Option<PanelKind>,
+    bots: (bool, u64),
 }
 
 pub(crate) struct RailInputs<'a> {
@@ -20,6 +21,7 @@ pub(crate) struct RailInputs<'a> {
     pub(crate) menu: bool,
     pub(crate) place: Option<&'a MachinePlace>,
     pub(crate) pointed: Option<PanelKind>,
+    pub(crate) bots: (bool, u64),
 }
 
 impl RailKey {
@@ -31,6 +33,7 @@ impl RailKey {
             menu: inputs.menu,
             place: inputs.place.cloned(),
             pointed: inputs.pointed,
+            bots: inputs.bots,
         }
     }
 }
@@ -44,6 +47,7 @@ impl Root {
             menu: self.side.menu.is_some(),
             place: self.side.machine_place.as_ref(),
             pointed: crate::tour::Guide::pointed(cx),
+            bots: (self.side.bots, self.store.read(cx).bots_revision()),
         })
     }
 }

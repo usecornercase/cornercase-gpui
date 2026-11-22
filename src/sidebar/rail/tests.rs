@@ -46,7 +46,7 @@ fn the_rail_draws_the_dock_its_plugins_a_line_then_four_sheets() {
     use super::{Slot, column};
     let panel = Slot::Panel;
     assert_eq!(
-        column(false),
+        column(false, false),
         [
             panel(PanelKind::Changes),
             panel(PanelKind::Files),
@@ -66,9 +66,17 @@ fn the_rail_draws_the_dock_its_plugins_a_line_then_four_sheets() {
 #[test]
 fn a_flows_workspace_adds_flow_after_the_browser() {
     use super::{Slot, column};
-    let with = column(true);
+    let with = column(true, false);
     let at = with.iter().position(|slot| *slot == Slot::Panel(PanelKind::Browser)).expect("browser");
     assert_eq!(with[at + 1], Slot::Panel(PanelKind::Flow));
     assert_eq!(with[at + 2], Slot::Plugins);
-    assert_eq!(with.len(), column(false).len() + 1);
+    assert_eq!(with.len(), column(false, false).len() + 1);
+}
+
+#[test]
+fn a_server_with_bots_puts_their_button_first_above_a_line() {
+    use super::{Slot, column};
+    let with = column(false, true);
+    assert_eq!(with[..2], [Slot::Bots, Slot::Divider]);
+    assert_eq!(with[2..], column(false, false)[..]);
 }

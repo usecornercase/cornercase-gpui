@@ -7,6 +7,7 @@ pub(crate) enum Showing {
     Local,
     Machine(MachinePlace),
     Bot(BotKey),
+    Bots,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,6 +15,7 @@ pub(crate) enum Moved {
     Local,
     Machine(MachinePlace),
     Bot(BotKey),
+    Bots,
     Removed(BotKey),
     Listed(Home, Vec<String>),
 }
@@ -33,13 +35,18 @@ impl Showing {
         }
     }
 
+    pub(crate) fn bots(&self) -> bool {
+        matches!(self, Self::Bot(_) | Self::Bots)
+    }
+
     pub(crate) fn after(self, moved: Moved) -> Self {
         match (moved, self) {
             (Moved::Local, _) => Self::Local,
             (Moved::Machine(place), _) => Self::Machine(place),
             (Moved::Bot(key), _) => Self::Bot(key),
-            (Moved::Removed(gone), Self::Bot(key)) if key == gone => Self::Local,
-            (Moved::Listed(home, ids), Self::Bot(key)) if key.home == home && !ids.contains(&key.id) => Self::Local,
+            (Moved::Bots, _) => Self::Bots,
+            (Moved::Removed(gone), Self::Bot(key)) if key == gone => Self::Bots,
+            (Moved::Listed(home, ids), Self::Bot(key)) if key.home == home && !ids.contains(&key.id) => Self::Bots,
             (_, kept) => kept,
         }
     }

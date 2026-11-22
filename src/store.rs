@@ -170,7 +170,10 @@ impl Store {
 
     fn publish(store: Entity<Store>, cx: &mut App) -> Entity<Store> {
         cx.set_global(GlobalStore(store.clone()));
-        store.update(cx, |_, cx| detect_openers(cx));
+        store.update(cx, |s, cx| {
+            s.bots.faces = bots::load_faces();
+            detect_openers(cx);
+        });
         store
     }
 

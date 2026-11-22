@@ -11,8 +11,9 @@ use crate::cli::{Has, flag};
 pub(crate) const CORNERCASE: &str = "cornercase";
 pub(crate) const FULL: &str = "full";
 const FOLDER: &str = "folder";
-const READS_ANYTHING: &str = "Through cornercase, it reads anything and writes only in its own folder.";
-const READS_FOLDER: &str = "Through cornercase, it reads and writes only in its own folder.";
+const CANNOT_BE_A_BOT: &str = "cannot be a bot";
+const READS_ANYTHING: &str = "Reads anything, writes only in its own folder.";
+const READS_FOLDER: &str = "Reads and writes only in its own folder.";
 pub(crate) const SETS_ITSELF_UP: &str = "Once made, the bot sets itself up from it at once: it schedules what this asks for and says in its chat what it will do. Left empty, it starts nothing and spends no tokens until you write to it.";
 
 pub(crate) fn about_note(setup: Has) -> Option<&'static str> {
@@ -43,6 +44,24 @@ pub(crate) fn chosen_at_open(agents: &[AgentInfo], default: Option<&str>) -> Opt
     let through = |a: &AgentInfo| a.bot && a.offers(CORNERCASE);
     let default = default.and_then(|name| agents.iter().position(|a| a.agent == name && through(a)));
     default.or_else(|| agents.iter().position(through)).or_else(|| agents.iter().position(|a| a.bot))
+}
+
+fn capitalised(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map(|first| first.to_uppercase().chain(chars).collect()).unwrap_or_default()
+}
+
+pub(crate) fn unavailable_line(agents: &[AgentInfo]) -> Option<String> {
+    let mut by_why: Vec<(String, Vec<&str>)> = Vec::new();
+    for agent in agents.iter().filter(|a| !a.bot) {
+        let why = capitalised(agent.why.as_deref().unwrap_or(CANNOT_BE_A_BOT));
+        match by_why.iter_mut().find(|(said, _)| *said == why) {
+            Some((_, names)) => names.push(agent.name()),
+            None => by_why.push((why, vec![agent.name()])),
+        }
+    }
+    let parts: Vec<String> = by_why.iter().map(|(why, names)| format!("{why}: {}", names.join(", "))).collect();
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
 pub(crate) fn id_of(answer: &str) -> Option<String> {

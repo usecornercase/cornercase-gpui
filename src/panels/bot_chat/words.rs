@@ -15,6 +15,17 @@ pub(crate) fn time_label(at: i64, now: i64) -> String {
     if same_day { then.clock() } else { queue::when_label(then, today) }
 }
 
+pub(crate) fn list_time(at: i64, now: i64) -> String {
+    const WEEKDAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    let (Some(then), Some(today)) = (queue::local(at), queue::local(now)) else { return String::new() };
+    match queue::days(today.year, today.month, today.day) - queue::days(then.year, then.month, then.day) {
+        0 => then.clock(),
+        1 => "Yesterday".to_string(),
+        2..=6 => WEEKDAYS.get(then.weekday as usize).copied().unwrap_or_default().to_string(),
+        _ => then.date(),
+    }
+}
+
 pub(crate) fn turn_label(turn: Turn, now: i64) -> String {
     let waited = age((now - turn.since).max(0));
     let parts = [

@@ -20,11 +20,19 @@ fn names(groups: &[Group]) -> Vec<(Option<String>, Vec<String>)> {
 }
 
 #[test]
-fn this_computers_bots_come_first_with_no_heading() {
+fn this_computers_bots_come_first_under_their_own_heading_beside_a_machines() {
     let (vps, here) = (Home::Machine("vps".into()), [bot("prs", &Home::Here)]);
     let there = [bot("ops", &vps)];
     let groups = bot_groups(&here, vec![(&seen("vps"), &there[..], None)]);
-    assert_eq!(names(&groups), [(None, vec!["prs".to_string()]), (Some("vps".into()), vec!["ops".to_string()])]);
+    let expected =
+        [(Some(THIS_COMPUTER.to_string()), vec!["prs".to_string()]), (Some("vps".into()), vec!["ops".to_string()])];
+    assert_eq!(names(&groups), expected);
+}
+
+#[test]
+fn this_computers_bots_alone_have_no_heading() {
+    let groups = bot_groups(&[bot("prs", &Home::Here)], Vec::new());
+    assert_eq!(names(&groups), [(None, vec!["prs".to_string()])]);
 }
 
 #[test]

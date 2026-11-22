@@ -36,16 +36,15 @@ const SHEETS: [PanelKind; 4] = [PanelKind::Search, PanelKind::Issues, PanelKind:
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Slot {
+    Bots,
     Panel(PanelKind),
     Plugins,
     Divider,
 }
 
-fn column(flow: bool) -> Vec<Slot> {
-    DOCKED
-        .into_iter()
-        .chain(flow.then_some(PanelKind::Flow))
-        .map(Slot::Panel)
+fn column(flow: bool, bots: bool) -> Vec<Slot> {
+    let door = bots.then_some([Slot::Bots, Slot::Divider]).into_iter().flatten();
+    door.chain(DOCKED.into_iter().chain(flow.then_some(PanelKind::Flow)).map(Slot::Panel))
         .chain([Slot::Plugins, Slot::Divider])
         .chain(SHEETS.into_iter().map(Slot::Panel))
         .collect()
@@ -58,6 +57,26 @@ struct Shared {
     pointed: Option<PanelKind>,
     tips: bool,
     notes: Notes,
+    bots: BotsDoor,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct BotsDoor {
+    shown: bool,
+    open: bool,
+    unread: u64,
+    thinking: bool,
+}
+
+fn bots_button(door: BotsDoor, tips: bool, store: Entity<Store>) -> impl IntoElement {
+    let mark = count_disc(door.unread)
+        .map(|disc| disc.absolute().right(px(2.)).bottom(px(2.)).bg(colours::brand()).text_color(colours::on_brand()))
+        .or_else(|| door.thinking.then(|| corner().size(px(DOT)).m(px(2.)).bg(colours::working())));
+    ui::tool_button("rail-bots", Icon::Bots, SLOT, door.open)
+        .relative()
+        .when(tips, |b| b.tooltip(tip("Bots".to_string())))
+        .on_click(move |_: &ClickEvent, _, cx| store.update(cx, Store::toggle_bots))
+        .children(mark)
 }
 
 fn tours_button(tips: bool) -> impl IntoElement {
@@ -117,9 +136,10 @@ impl Root {
 
     fn rail_panels(&self, shared: Shared, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let flow = PanelKind::Flow.shows(self.store.read(cx).session.as_ref());
-        let slots: Vec<AnyElement> = column(flow)
+        let slots: Vec<AnyElement> = column(flow, shared.bots.shown)
             .into_iter()
             .flat_map(|slot| match slot {
+                Slot::Bots => vec![bots_button(shared.bots, shared.tips, self.store.clone()).into_any_element()],
                 Slot::Panel(kind) => vec![rail_button(kind, shared, self.store.clone()).into_any_element()],
                 Slot::Plugins => self.plugin_slots(cx),
                 Slot::Divider => vec![rule().into_any_element()],
@@ -161,6 +181,16 @@ impl Root {
         }
     }
 
+    fn bots_door(&self, cx: &Context<Self>) -> BotsDoor {
+        let s = self.store.read(cx);
+        BotsDoor {
+            shown: s.bots_door(),
+            open: self.side.bots,
+            unread: u64::try_from(s.bots_unread()).unwrap_or(u64::MAX),
+            thinking: s.any_bot_thinking(),
+        }
+    }
+
     fn rail_shared(&self, cx: &mut Context<Self>) -> Shared {
         let (dock, sheet) = {
             let s = self.store.read(cx);
@@ -172,6 +202,7 @@ impl Root {
             pointed: crate::tour::Guide::pointed(cx),
             tips: self.side.menu.is_none(),
             notes: self.rail_notes(cx),
+            bots: self.bots_door(cx),
         }
     }
 }
@@ -181,7 +212,7 @@ fn rule() -> Div {
 }
 
 fn rail_button(kind: PanelKind, shared: Shared, store: Entity<Store>) -> impl IntoElement {
-    let Shared { dock, sheet, pointed, tips, notes } = shared;
+    let Shared { dock, sheet, pointed, tips, notes, .. } = shared;
     let active = dock == Some(kind) || sheet == Some(kind);
     let ringed = pointed.map(gear::spot) == Some(gear::Spot::Icon(kind));
     ui::tool_button(SharedString::from(format!("rail-{}", kind.title())), kind.icon(), SLOT, active)

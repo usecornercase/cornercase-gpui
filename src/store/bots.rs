@@ -12,9 +12,11 @@ use crate::model::place::Moved;
 use crate::panels::queue;
 use crate::platform::Os;
 
+pub(crate) use self::faces::load_faces;
 use self::talk::Call;
 
 mod asks;
+mod faces;
 mod follow;
 mod manage;
 mod routines;
@@ -44,6 +46,15 @@ struct Before {
 pub(super) use routines::closes;
 
 impl Store {
+    pub(crate) fn bots_lobby(&self) -> bots::Lobby {
+        let sets_itself_up = self.server_has(Feature::BotSetup) == cli::Has::Yes;
+        bots::lobby_of(&self.bots_offer(), self.making().as_ref(), sets_itself_up)
+    }
+
+    pub(crate) fn bots_door(&self) -> bool {
+        self.making().is_some() || self.bots_offer() != Offer::Hidden
+    }
+
     pub(crate) fn bots_offer(&self) -> Offer {
         bots::offer_of(self.any_bot_listed(), self.releases().lacks(Feature::Bots), Os::CURRENT)
     }
@@ -269,6 +280,7 @@ impl Store {
             self.toast_with(format!("{label} was removed"), ToastKind::Info, copy, cx);
         }
         self.close_dialog_naming(key, cx);
+        self.forget_face(key, cx);
         cx.notify();
     }
 

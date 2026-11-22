@@ -55,21 +55,41 @@ impl Store {
         self.bot_job(Busy::new(start_key(dialog), doing), call, then, cx);
     }
 
-    pub(crate) fn create_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
+    pub(crate) fn create_bot(
+        &mut self,
+        args: Vec<String>,
+        (name, face): (&str, u8),
+        dialog: u64,
+        cx: &mut Context<Self>,
+    ) {
         let creating = Creating::new(dialog, name, self.bots.boot.as_deref());
-        let then: Then = Box::new(move |this, result, cx| this.bot_created(&creating, result, cx));
+        let then: Then = Box::new(move |this, result, cx| this.bot_created(&creating, face, result, cx));
         self.dialog_job((dialog, format!("Creating the bot {name}…")), Call::here(args), then, cx);
     }
 
-    pub(crate) fn save_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
+    pub(crate) fn save_bot(
+        &mut self,
+        args: Vec<String>,
+        (name, picked): (&str, Option<(BotKey, u8)>),
+        dialog: u64,
+        cx: &mut Context<Self>,
+    ) {
         let name_of = name.to_string();
-        let then: Then = Box::new(move |this, result, cx| this.bot_saved(dialog, &name_of, result, cx));
+        let then: Then = Box::new(move |this, result, cx| this.bot_saved((dialog, &name_of, picked), result, cx));
         self.dialog_job((dialog, format!("Saving {name}…")), Call::here(args), then, cx);
     }
 
-    fn bot_saved(&mut self, dialog: u64, name: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn bot_saved(
+        &mut self,
+        (dialog, name, picked): (u64, &str, Option<(BotKey, u8)>),
+        result: anyhow::Result<String>,
+        cx: &mut Context<Self>,
+    ) {
         match result {
-            Ok(_) => self.close_started(Some(dialog), false, cx),
+            Ok(_) => {
+                self.keep_picked_face(picked, cx);
+                self.close_started(Some(dialog), false, cx);
+            }
             Err(error) => self.refused_here(dialog, save_failed(name, &cli::reason(&error)), cx),
         }
     }
@@ -95,7 +115,7 @@ impl Store {
         asked.take(|key| self.bot(key).cloned())
     }
 
-    fn bot_created(&mut self, creating: &Creating, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn bot_created(&mut self, creating: &Creating, face: u8, result: anyhow::Result<String>, cx: &mut Context<Self>) {
         let dialog = creating.dialog;
         match result {
             Ok(answer) => {
@@ -103,6 +123,7 @@ impl Store {
                 self.close_started(Some(dialog), false, cx);
                 match id_of(&answer) {
                     Some(id) => {
+                        self.set_face(&BotKey::here(&id), face, cx);
                         self.bots.manage.made = creating.made(shown, &id, Instant::now());
                         self.follow_made(cx);
                     }
@@ -144,8 +165,9 @@ impl Store {
         self.bots.manage.asked_to_remove(id);
         let (name, bot) = (self.bot_label(&BotKey::here(id)), id.to_string());
         let busy = Busy::new(remove_key(id), format!("Removing {name}…"));
-        let then: Then = Box::new(move |this, result, cx| {
-            if let Err(error) = result {
+        let then: Then = Box::new(move |this, result, cx| match result {
+            Ok(_) => this.forget_face(&BotKey::here(&bot), cx),
+            Err(error) => {
                 this.bots.manage.removal_failed(&bot);
                 this.toast(remove_failed(&name, &cli::reason(&error)), ToastKind::Error, cx);
             }

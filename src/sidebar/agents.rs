@@ -72,11 +72,8 @@ impl Root {
         with_place: bool,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let shown = if self.side.machine_place.is_some() || self.side.bot.is_some() {
-            Shown::default()
-        } else {
-            session.shown()
-        };
+        let shown =
+            if self.side.machine_place.is_some() || self.side.bots { Shown::default() } else { session.shown() };
         let place = AgentPlace {
             scope: "section-agent",
             place: with_place.then(|| place(session, row.workspace)).flatten(),

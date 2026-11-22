@@ -5,10 +5,9 @@ use crate::app::Root;
 use crate::app::machine::MachineTab;
 use crate::app::machine::acts::MARKING;
 use crate::cli;
-use crate::keymap::{Command, keys_of};
+use crate::keymap::Command;
 use crate::model::bots::{self, KeyGoes};
 use crate::model::{PaneInfo, Session};
-use crate::platform::Os;
 use crate::sidebar::cmd;
 use crate::store::{self, Store, ToastKind};
 
@@ -91,11 +90,7 @@ impl Root {
         };
         match goes {
             KeyGoes::Show(key) => self.store.update(cx, |s, cx| s.show_bot(&key, cx)),
-            KeyGoes::Say(words) => self.tell(&words, cx),
-            KeyGoes::NoBot => {
-                let keys = keys_of(Command::NewBot, Os::CURRENT).unwrap_or_default();
-                self.tell(&bots::no_bot_words(&keys), cx);
-            }
+            KeyGoes::Page => self.store.update(cx, Store::open_bots),
             KeyGoes::Nothing => {}
         }
     }

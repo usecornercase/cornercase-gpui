@@ -28,6 +28,7 @@ pub(crate) enum Icon {
     SplitRight,
     SplitDown,
     Agent,
+    Bots,
     Keyboard,
     Server,
     Cloud,
@@ -113,7 +114,7 @@ pub(crate) enum Icon {
 }
 
 impl Icon {
-    const ALL: [Icon; 97] = [
+    const ALL: [Icon; 98] = [
         Icon::Changes,
         Icon::Files,
         Icon::Todo,
@@ -129,6 +130,7 @@ impl Icon {
         Icon::SplitRight,
         Icon::SplitDown,
         Icon::Agent,
+        Icon::Bots,
         Icon::Keyboard,
         Icon::Server,
         Icon::Cloud,
@@ -238,6 +240,7 @@ impl Icon {
             Icon::SplitRight => asset!("columns-2"),
             Icon::SplitDown => asset!("rows-2"),
             Icon::Agent => asset!("bot"),
+            Icon::Bots => asset!("bot-message-square"),
             Icon::Keyboard => asset!("keyboard"),
             Icon::Help => asset!("circle-help"),
             Icon::Server => asset!("server"),

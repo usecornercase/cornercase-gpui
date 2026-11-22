@@ -76,6 +76,9 @@ fn workspaces_header(project: Option<u64>, cx: &mut Context<Root>) -> Div {
 impl Root {
     pub(super) fn sidebar_cards(&self, cx: &mut Context<Self>) -> Div {
         let cards = div().flex_1().min_h_0().flex().flex_row().gap(px(GAP));
+        if self.side.bots {
+            return cards.child(self.bots_card(cx));
+        }
         let projects =
             div().flex_1().min_h_0().flex().flex_col().child(sidebar_header(cx)).child(self.projects_list(cx));
         let lists = match self.side.look.current.arrangement {
@@ -85,11 +88,10 @@ impl Root {
             Arrangement::SideBySide => {
                 let width = px(self.projects_column());
                 let column = card().flex_none().flex_basis(width).w(width).min_h_0().child(projects);
-                let column = column.children(self.bots_section(cx));
-                return cards.child(column).child(self.main_card(self.workspaces_section(cx), false, cx));
+                return cards.child(column).child(self.main_card(self.workspaces_section(cx), cx));
             }
         };
-        cards.child(self.main_card(lists, true, cx))
+        cards.child(self.main_card(lists, cx))
     }
 
     fn stack(&self, top: Div, bottom: Div, cx: &mut Context<Self>) -> Div {
@@ -115,15 +117,11 @@ impl Root {
             .child(bottom)
     }
 
-    fn main_card(&self, lists: Div, with_bots: bool, cx: &mut Context<Self>) -> Div {
-        card().min_w_0().min_h_0().child(self.with_agents(lists, with_bots, cx)).child(sidebar_footer(cx))
+    fn main_card(&self, lists: Div, cx: &mut Context<Self>) -> Div {
+        card().min_w_0().min_h_0().child(self.with_agents(lists, cx)).child(sidebar_footer(cx))
     }
 
-    fn with_agents(&self, lists: Div, with_bots: bool, cx: &mut Context<Self>) -> Div {
-        let lists = match with_bots.then(|| self.bots_section(cx)).flatten() {
-            Some(bots) => div().flex_1().min_h_0().flex().flex_col().child(lists).child(bots),
-            None => lists,
-        };
+    fn with_agents(&self, lists: Div, cx: &mut Context<Self>) -> Div {
         let area = div().flex_1().min_h_0().relative().flex().flex_col().child(lists);
         let Some(agents) = self.agents_section(cx) else { return area };
         let height = self.side.sizes.agents.size();
@@ -155,7 +153,7 @@ impl Root {
         let place = self.side.machine_place.clone();
         let shown = match &place {
             Some(place) => Shown { project: session.pair_of(place), ..Shown::default() },
-            None if self.side.bot.is_some() => Shown { project: session.shown().project, ..Shown::default() },
+            None if self.side.bots => Shown { project: session.shown().project, ..Shown::default() },
             None => session.shown(),
         };
         Listing {

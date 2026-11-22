@@ -8,14 +8,15 @@ use crate::store::Store;
 
 impl Root {
     pub(super) fn follow_place(&mut self, store: &Entity<Store>, window: &mut Window, cx: &mut Context<Self>) {
-        let (place, bot) = {
+        let (place, bot, page) = {
             let s = store.read(cx);
-            (s.machine_place().cloned(), s.shown_bot().cloned())
+            (s.machine_place().cloned(), s.shown_bot().cloned(), s.shows_bots())
         };
-        let was = self.side.bot.is_some();
-        let moved = bot != self.side.bot;
+        let was = self.side.bots;
+        let moved = bot != self.side.bot || page != self.side.bots;
         let rested = self.keys_rest(cx);
         self.side.bot = bot;
+        self.side.bots = page;
         if place != self.side.machine_place {
             self.machine_place_changed(place, window, cx);
         }
@@ -27,7 +28,7 @@ impl Root {
     }
 
     fn chat_place_changed(&mut self, was: bool, window: &Window, cx: &mut Context<Self>) {
-        match (was, self.side.bot.is_some()) {
+        match (was, self.side.bots) {
             (false, true) => {
                 self.drop_drags();
                 self.own.pause_surface();
@@ -58,5 +59,9 @@ impl Root {
 
     pub(crate) fn chat_shown(&self) -> bool {
         self.side.bot.is_some()
+    }
+
+    pub(crate) fn bots_shown(&self) -> bool {
+        self.side.bots
     }
 }

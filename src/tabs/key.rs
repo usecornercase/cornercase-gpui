@@ -49,7 +49,7 @@ impl Root {
             renaming: self.side.rename.as_ref().map(|rename| &rename.what),
             place: self.side.machine_place.as_ref(),
             machine: self.machine.is_some(),
-            bot: self.side.bot.is_some(),
+            bot: self.side.bots,
             aside: self.side.aside,
         })
     }
