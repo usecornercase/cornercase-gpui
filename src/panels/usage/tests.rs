@@ -58,3 +58,10 @@ fn a_cached_answer_after_a_fresh_failure_still_shows() {
     assert_eq!(load.value, Some(1));
     assert!(load.error.is_some());
 }
+
+#[test]
+fn a_cached_answer_keeps_when_it_was_taken() {
+    let mut load = Load::default();
+    load.cached(Ok(1));
+    assert!(load.taken.is_some());
+}

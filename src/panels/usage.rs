@@ -1,9 +1,14 @@
 mod agents;
+mod chart;
 mod data;
+mod gauge;
+mod heatmap;
 mod limits;
 mod machines;
 mod parts;
+mod series;
 mod stats;
+mod tiles;
 mod widgets;
 
 use std::collections::HashMap;
@@ -46,11 +51,12 @@ struct Load<T> {
     loading: bool,
     error: Option<String>,
     at: Option<i64>,
+    taken: Option<i64>,
 }
 
 impl<T> Default for Load<T> {
     fn default() -> Self {
-        Self { value: None, loading: false, error: None, at: None }
+        Self { value: None, loading: false, error: None, at: None, taken: None }
     }
 }
 
@@ -62,6 +68,7 @@ impl<T> Load<T> {
                 self.value = Some(value);
                 self.error = None;
                 self.at = Some(data::now());
+                self.taken = self.at;
             }
             Err(e) => self.error = Some(cli::reason(&e)),
         }
@@ -72,6 +79,7 @@ impl<T> Load<T> {
             && let Ok(value) = result
         {
             self.value = Some(value);
+            self.taken = Some(data::now());
         }
     }
 
@@ -355,18 +363,21 @@ impl UsagePanel {
             return load.missing("Could not read the stats", READING_STATS.to_string(), cx);
         };
         let now = data::now();
-        let days = stats.days(now);
-        let page = div().flex().flex_col().gap(px(14.));
+        let read = load.taken.unwrap_or(now);
+        let days = stats.days(read);
+        let page = div().flex().flex_col().gap(px(14.)).children(stale(load.error.as_ref()));
         if stats.empty() && stats.merged_pull_requests.is_none() {
             return page
-                .children(stale(load.error.as_ref()))
                 .child(card().child(ui::note(EMPTY)))
-                .child(stats::heatmap(stats, days))
+                .child(heatmap::heatmap(stats, days, read))
                 .children(notes(stats.notes(now)))
                 .into_any_element();
         }
-        page.children(stale(load.error.as_ref()))
-            .child(stats::hero(stats, days))
+        let window = self.shown_window();
+        page.child(self.window_row(data::counting(days), cx))
+            .child(stats::hero(stats, window, self.shown() == Pick::All))
+            .child(tiles::tiles(stats, window, days))
+            .child(chart::chart(stats, read))
             .child(
                 div()
                     .flex()
@@ -374,10 +385,24 @@ impl UsagePanel {
                     .items_start()
                     .gap(px(14.))
                     .child(div().flex_1().min_w(px(380.)).child(stats::table(stats)))
-                    .child(stats::heatmap(stats, days)),
+                    .child(heatmap::heatmap(stats, days, read)),
             )
             .children(notes(stats.notes(now)))
             .into_any_element()
+    }
+
+    fn shown_window(&self) -> usize {
+        self.window.min(WINDOWS.len() - 1)
+    }
+
+    fn window_row(&self, aside: String, cx: &Context<Self>) -> Div {
+        div()
+            .flex()
+            .items_center()
+            .gap(px(10.))
+            .child(ui::segments(self.window_tabs(cx)))
+            .child(div().flex_1())
+            .child(ui::dim(aside))
     }
 
     fn window_tabs(&self, cx: &Context<Self>) -> Vec<AnyElement> {
@@ -400,22 +425,14 @@ impl UsagePanel {
         let Some(stats) = &load.value else {
             return load.missing("Could not read the stats", READING_STATS.to_string(), cx);
         };
-        let key = WINDOWS[self.window.min(WINDOWS.len() - 1)].0;
+        let key = WINDOWS[self.shown_window()].0;
         let agents = stats.agents(key);
         let count = plural(agents.len() as u64, "agent", "agents");
         div()
             .flex()
             .flex_col()
             .gap(px(14.))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(10.))
-                    .child(ui::segments(self.window_tabs(cx)))
-                    .child(div().flex_1())
-                    .child(ui::dim(format!("{count} with work in this window"))),
-            )
+            .child(self.window_row(format!("{count} with work in this window"), cx))
             .child(if agents.is_empty() {
                 card().child(ui::note("No agent worked in this window.")).into_any_element()
             } else {

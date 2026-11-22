@@ -217,8 +217,8 @@ impl Stats {
         total.counts.is_empty() && total.busy_seconds == 0. && total.most_at_once == 0
     }
 
-    pub(super) fn parallel(&self) -> Option<(f64, f64, f64)> {
-        let w = self.window("24h");
+    pub(super) fn parallel(&self, key: &str) -> Option<(f64, f64, f64)> {
+        let w = self.window(key);
         (w.busy_seconds >= 60.)
             .then(|| (w.counts.agent_seconds / w.busy_seconds, w.counts.agent_seconds, w.busy_seconds))
     }

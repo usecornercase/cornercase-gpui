@@ -1,11 +1,20 @@
+use std::time::Duration;
+
 use gpui::{
-    ClickEvent, Context, Div, FontWeight, Hsla, ParentElement as _, SharedString, StatefulInteractiveElement as _,
-    Styled as _, div, px,
+    Animation, ClickEvent, Context, Div, FontWeight, Hsla, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, div, px,
 };
 
 use super::UsagePanel;
 use crate::theme::{colours, radius};
 use crate::ui;
+use crate::ui::motion;
+
+const RISE: Duration = Duration::from_millis(900);
+
+pub(super) fn rise() -> Animation {
+    Animation::new(RISE).with_easing(motion::ease_out)
+}
 
 pub(super) fn card() -> Div {
     div().p(px(18.)).rounded(px(radius::card())).bg(colours::terminal()).border_1().border_color(colours::border())
