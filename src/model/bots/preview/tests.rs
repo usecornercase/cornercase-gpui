@@ -69,3 +69,17 @@ fn bots_get_different_face_colours() {
     let colours: std::collections::HashSet<u8> = ids.iter().map(|id| face_colour(id)).collect();
     assert!(colours.len() > 3);
 }
+
+#[test]
+fn words_keep_their_underscores_and_signs() {
+    let shown = |text: &str| says(Some(&last("bot", text)), (false, false));
+    assert_eq!(shown("Renamed fix_ci_482 to fix_ci_483"), Says::Line("Renamed fix_ci_482 to fix_ci_483".into()));
+    assert_eq!(shown("-3 tests failing"), Says::Line("-3 tests failing".into()));
+    assert_eq!(shown("+1 on this"), Says::Line("+1 on this".into()));
+    assert_eq!(shown("#12 is merged"), Says::Line("#12 is merged".into()));
+}
+
+#[test]
+fn a_quoted_list_item_loses_every_marker() {
+    assert_eq!(says(Some(&last("bot", "> - **done**")), (false, false)), Says::Line("done".into()));
+}

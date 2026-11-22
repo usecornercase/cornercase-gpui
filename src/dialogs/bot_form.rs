@@ -295,16 +295,16 @@ impl BotForm {
         let dialog = cx.entity_id().as_u64();
         let face = self.shown_face(cx);
         if let Some(editing) = self.editing() {
-            if self.face.is_some() {
-                let key = BotKey::here(&editing.id);
-                Store::get(cx).update(cx, |s, cx| s.set_face(&key, face, cx));
-            }
+            let picked = self.face.map(|face| (BotKey::here(&editing.id), face));
             match editing.save(dialog_starts(cx), &agent, &typed) {
                 Save::Waits => {}
-                Save::Closes => close(cx),
+                Save::Closes => {
+                    Store::get(cx).update(cx, |s, cx| s.keep_picked_face(picked, cx));
+                    close(cx);
+                }
                 Save::Sends(command) => {
                     let name = editing.before.name.clone();
-                    Store::get(cx).update(cx, |s, cx| s.save_bot(command, &name, dialog, cx));
+                    Store::get(cx).update(cx, |s, cx| s.save_bot(command, (&name, picked), dialog, cx));
                 }
             }
             return;
@@ -368,10 +368,8 @@ impl BotForm {
         let column = column.child(self.agent_field(cx));
         let Some(agent) = self.agent().cloned() else { return column };
         let column = column.child(self.access_field(&agent, cx)).child(self.more_head(&agent, cx));
-        if !self.more.open {
-            return column;
-        }
-        column.child(self.more_fields(&agent, window, cx)).children(self.editing().map(|_| ui::dim(FROM_NEXT)))
+        let column = column.when(self.more.open, |d| d.child(self.more_fields(&agent, window, cx)));
+        column.children(self.editing().map(|_| ui::dim(FROM_NEXT).w_full()))
     }
 
     fn more_fields(&self, agent: &AgentInfo, window: &Window, cx: &mut Context<Self>) -> Div {

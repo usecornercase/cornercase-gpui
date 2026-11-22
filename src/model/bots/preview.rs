@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 const PREVIEW_MAX: usize = 120;
+const LEADS: [&str; 6] = ["> ", "- ", "* ", "+ ", "[ ] ", "[x] "];
 pub(crate) const FACE_COLOURS: [u8; 12] = [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -49,10 +50,25 @@ fn plain(text: &str) -> Option<String> {
     Some(cut(&line))
 }
 
+fn without_lead(line: &str) -> &str {
+    let mut line = line.trim();
+    loop {
+        let heading = line.trim_start_matches('#');
+        let unled = [heading.strip_prefix(' ').filter(|_| heading.len() < line.len())]
+            .into_iter()
+            .chain(LEADS.iter().map(|lead| line.strip_prefix(lead)))
+            .flatten()
+            .next();
+        match unled {
+            Some(rest) => line = rest.trim_start(),
+            None => return line,
+        }
+    }
+}
+
 fn unmarked(line: &str) -> String {
-    let line = line.trim().trim_start_matches(['#', '>', '-', '*', '+']).trim_start();
-    let line = line.strip_prefix("[ ] ").or_else(|| line.strip_prefix("[x] ")).unwrap_or(line);
-    let line: String = line.chars().filter(|c| !matches!(c, '*' | '`' | '_' | '~')).collect();
+    let line = without_lead(line);
+    let line = line.replace("**", "").replace("__", "").replace("~~", "").replace('`', "");
     line.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 

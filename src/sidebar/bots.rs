@@ -12,7 +12,7 @@ use crate::cli;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
 use crate::model::MachineSeen;
-use crate::model::bots::{ASKS_FOR_A_SECRET, Bot, BotKey, Home, Making, Offer, Says, says};
+use crate::model::bots::{ASKS_FOR_A_SECRET, Bot, BotKey, Home, Lobby, Making, Offer, Says, says};
 use crate::panels::bot_chat::{list_time, row_detail};
 use crate::panels::queue;
 use crate::theme::{colours, radius};
@@ -82,7 +82,10 @@ impl Root {
     fn bots_body(&self, cx: &mut Context<Self>) -> AnyElement {
         match self.store.read(cx).bots_offer() {
             Offer::Lacks(text) => ui::note(text).text_size(px(12.)).into_any_element(),
-            Offer::Hidden => ui::note(NO_BOTS).text_size(px(12.)).into_any_element(),
+            Offer::Hidden => match self.store.read(cx).bots_lobby() {
+                Lobby::Lacks(words) => ui::note(words).text_size(px(12.)).into_any_element(),
+                _ => ui::note(NO_BOTS).text_size(px(12.)).into_any_element(),
+            },
             Offer::Rows => self.bot_rows(cx),
         }
     }
@@ -195,7 +198,12 @@ impl Root {
         if state.hovered {
             return Self::bot_menu_button(&bot.key(), gid, cx).into_any_element();
         }
-        let when = bot.last.as_ref().map(|last| list_time(last.at, queue::now())).unwrap_or_default();
+        let when = bot
+            .last
+            .as_ref()
+            .filter(|last| last.at > 0)
+            .map(|last| list_time(last.at, queue::now()))
+            .unwrap_or_default();
         let colour = if state.unread.is_some() { colours::brand() } else { colours::faint() };
         div().flex_none().text_size(px(11.)).text_color(colour).child(when).into_any_element()
     }

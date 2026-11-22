@@ -280,6 +280,7 @@ impl Store {
             self.toast_with(format!("{label} was removed"), ToastKind::Info, copy, cx);
         }
         self.close_dialog_naming(key, cx);
+        self.forget_face(key, cx);
         cx.notify();
     }
 

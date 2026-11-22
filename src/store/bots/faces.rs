@@ -27,6 +27,12 @@ impl Store {
         }
     }
 
+    pub(crate) fn keep_picked_face(&mut self, picked: Option<(BotKey, u8)>, cx: &mut Context<Self>) {
+        if let Some((key, colour)) = picked {
+            self.set_face(&key, colour, cx);
+        }
+    }
+
     pub(super) fn forget_face(&mut self, key: &BotKey, cx: &mut Context<Self>) {
         if self.bots.faces.forget(key) {
             self.keep_faces(cx);

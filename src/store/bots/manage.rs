@@ -67,15 +67,29 @@ impl Store {
         self.dialog_job((dialog, format!("Creating the bot {name}…")), Call::here(args), then, cx);
     }
 
-    pub(crate) fn save_bot(&mut self, args: Vec<String>, name: &str, dialog: u64, cx: &mut Context<Self>) {
+    pub(crate) fn save_bot(
+        &mut self,
+        args: Vec<String>,
+        (name, picked): (&str, Option<(BotKey, u8)>),
+        dialog: u64,
+        cx: &mut Context<Self>,
+    ) {
         let name_of = name.to_string();
-        let then: Then = Box::new(move |this, result, cx| this.bot_saved(dialog, &name_of, result, cx));
+        let then: Then = Box::new(move |this, result, cx| this.bot_saved((dialog, &name_of, picked), result, cx));
         self.dialog_job((dialog, format!("Saving {name}…")), Call::here(args), then, cx);
     }
 
-    fn bot_saved(&mut self, dialog: u64, name: &str, result: anyhow::Result<String>, cx: &mut Context<Self>) {
+    fn bot_saved(
+        &mut self,
+        (dialog, name, picked): (u64, &str, Option<(BotKey, u8)>),
+        result: anyhow::Result<String>,
+        cx: &mut Context<Self>,
+    ) {
         match result {
-            Ok(_) => self.close_started(Some(dialog), false, cx),
+            Ok(_) => {
+                self.keep_picked_face(picked, cx);
+                self.close_started(Some(dialog), false, cx);
+            }
             Err(error) => self.refused_here(dialog, save_failed(name, &cli::reason(&error)), cx),
         }
     }
