@@ -15,7 +15,7 @@ mod repeat;
 mod result;
 mod rows;
 mod runs;
-mod time;
+pub(crate) mod time;
 mod undo;
 
 use std::time::Duration;

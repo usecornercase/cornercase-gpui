@@ -84,7 +84,7 @@ fn parses_stats() {
                      "accounts": [{"provider": "GitHub", "host": "github.com", "login": "me", "error": "offline"}]}"#;
     let stats: Stats = serde_json::from_str(&stats_json(merged)).expect("stats parse");
     assert!(!stats.empty());
-    let (factor, agent, busy) = stats.parallel().expect("busy for more than a minute");
+    let (factor, agent, busy) = stats.parallel("24h").expect("busy for more than a minute");
     assert!((factor - 2957. / 1478.5).abs() < 1e-9);
     assert_eq!((duration(agent), duration(busy)), ("49m".into(), "24m".into()));
     let rows = stats.rows();
@@ -106,9 +106,9 @@ fn idle_day_has_no_headline() {
     assert_eq!(stats.rows().len(), 9);
     let mut quiet = stats.clone();
     quiet.windows.insert("24h".into(), Window { busy_seconds: 59., ..Window::default() });
-    assert!(quiet.parallel().is_none());
+    assert!(quiet.parallel("24h").is_none());
     assert!(Stats::default().empty());
-    assert!(Stats::default().parallel().is_none());
+    assert!(Stats::default().parallel("24h").is_none());
 }
 
 #[test]

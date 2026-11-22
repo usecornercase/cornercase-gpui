@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.146
+
+- **Usage › Stats opens on how much your agents did at once.** A gauge shows the parallel factor (`3.4×`), beside `Your agents did 9h 47m of work in 2h 51m on the clock`, the time that gained over one agent at a time, and bars for agent work, wall time busy and the most agents at once. The gauge and the numbers count up when the sheet opens.
+- **Pick 24 h, 7 days or total above it** (the same choice as By agent's), and the whole top of the page follows: the gauge, the sentence and four tiles with agents started, prompts, tokens out and merged pull requests. Under 24 h each tile says how the day compares with your 7-day average; under 7 days and total, how much a day.
+- **A chart of agent hours per day** over the last 26 weeks, with the 7-day average, your record day marked and named, and a tooltip for each day.
+- **The heatmap shows the months**, has a tooltip on every block (`Nov 14 · 3h 20m`), marks the newest one, and says your streak, your best day and how many days had agents at work.
+- The table with every counter stays below the chart, beside the heatmap.
+
 ## 0.1.145
 
 - **A linked machine's bot has its details too.** Its row's `⋯` (or a right click) and the `⋯` at the top of its chat offer **New conversation…**, **Details…** and **Copy path**, and a click on its name at the top of its chat opens the same card: `The bot Notes on vps`, read from that machine. It shows its folder as that machine has it (Copy path says it is on vps, not on this Mac), its agent, model, access and secrets, what it is for, the agents it started there with **Show**, which shows that agent's tab on the machine, and its routines with their next run.
