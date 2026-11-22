@@ -51,11 +51,12 @@ struct Load<T> {
     loading: bool,
     error: Option<String>,
     at: Option<i64>,
+    taken: Option<i64>,
 }
 
 impl<T> Default for Load<T> {
     fn default() -> Self {
-        Self { value: None, loading: false, error: None, at: None }
+        Self { value: None, loading: false, error: None, at: None, taken: None }
     }
 }
 
@@ -67,6 +68,7 @@ impl<T> Load<T> {
                 self.value = Some(value);
                 self.error = None;
                 self.at = Some(data::now());
+                self.taken = self.at;
             }
             Err(e) => self.error = Some(cli::reason(&e)),
         }
@@ -77,6 +79,7 @@ impl<T> Load<T> {
             && let Ok(value) = result
         {
             self.value = Some(value);
+            self.taken = Some(data::now());
         }
     }
 
@@ -360,20 +363,21 @@ impl UsagePanel {
             return load.missing("Could not read the stats", READING_STATS.to_string(), cx);
         };
         let now = data::now();
-        let days = stats.days(now);
+        let read = load.taken.unwrap_or(now);
+        let days = stats.days(read);
         let page = div().flex().flex_col().gap(px(14.)).children(stale(load.error.as_ref()));
         if stats.empty() && stats.merged_pull_requests.is_none() {
             return page
                 .child(card().child(ui::note(EMPTY)))
-                .child(heatmap::heatmap(stats, days, now))
+                .child(heatmap::heatmap(stats, days, read))
                 .children(notes(stats.notes(now)))
                 .into_any_element();
         }
         let window = self.shown_window();
         page.child(self.window_row(data::counting(days), cx))
-            .child(stats::hero(stats, window))
+            .child(stats::hero(stats, window, self.shown() == Pick::All))
             .child(tiles::tiles(stats, window, days))
-            .child(chart::chart(stats, now))
+            .child(chart::chart(stats, read))
             .child(
                 div()
                     .flex()
@@ -381,7 +385,7 @@ impl UsagePanel {
                     .items_start()
                     .gap(px(14.))
                     .child(div().flex_1().min_w(px(380.)).child(stats::table(stats)))
-                    .child(heatmap::heatmap(stats, days, now)),
+                    .child(heatmap::heatmap(stats, days, read)),
             )
             .children(notes(stats.notes(now)))
             .into_any_element()

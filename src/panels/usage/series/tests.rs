@@ -94,3 +94,15 @@ fn a_daily_figure_keeps_one_decimal_below_ten() {
 fn a_step_is_placed_along_its_line() {
     assert_eq!([along(0, 4), along(2, 4), along(4, 4), along(9, 4), along(3, 0)], [0., 0.5, 1., 1., 0.]);
 }
+
+#[test]
+fn brief_work_is_not_called_no_work() {
+    assert_eq!(idle_words(0, 30.), "Under a minute busy in the last 24 h");
+    assert_eq!(idle_words(2, 0.), "No agent has worked yet");
+}
+
+#[test]
+fn busy_time_summed_over_machines_is_not_called_clock_time() {
+    assert_eq!(busy_words(true).0, "busy, summed over machines");
+    assert_eq!(busy_words(false).0, "on the clock");
+}

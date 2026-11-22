@@ -46,3 +46,12 @@ fn a_tile_counts_up_to_its_value() {
     assert_eq!([Shape::Count.show(1_284. * 0.5), Shape::Count.show(1_284.)], ["642", "1284"]);
     assert_eq!(Shape::Tokens.show(1_900_000.), "1.9M");
 }
+
+#[test]
+fn an_incomplete_count_is_not_compared_and_its_daily_figure_is_a_lower_bound() {
+    let mut stats = stats();
+    stats.merged_pull_requests = Some(Merged { day: 3, week: 7, total: 287, complete: false, ..Merged::default() });
+    let merged = figures(&stats).pop().expect("four tiles");
+    assert_eq!(merged.sub(0, 30), None);
+    assert_eq!(merged.sub(1, 30).map(|v| v.words), Some("1.0+ a day".into()));
+}

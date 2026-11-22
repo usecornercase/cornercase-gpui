@@ -47,10 +47,11 @@ pub(super) struct Figure {
 impl Figure {
     pub(super) fn sub(&self, window: usize, days: u64) -> Option<Versus> {
         let daily = |over: u64| Versus {
-            words: format!("{} a day", self.shape.daily(series::per_day(self.values[window], over))),
+            words: format!("{}{} a day", self.shape.daily(series::per_day(self.values[window], over)), self.suffix),
             way: Ordering::Equal,
         };
         match window {
+            0 if !self.suffix.is_empty() => None,
             0 => series::versus(self.values[0], self.values[1]),
             1 => Some(daily(7)),
             _ => Some(daily(days)),

@@ -14,8 +14,6 @@ use crate::ui::glass::tint;
 
 const EYEBROWS: [&str; 3] = ["last 24 hours", "last 7 days", "since counting began"];
 const SUBS: [&str; 3] = ["in parallel · last 24 h", "in parallel · last 7 days", "in parallel · all time"];
-const IDLE: [&str; 3] =
-    ["No agent worked in the last 24 h", "No agent worked in the last 7 days", "No agent has worked yet"];
 
 #[derive(Clone, Copy)]
 struct Hero {
@@ -25,16 +23,17 @@ struct Hero {
     most: u64,
     peak: u64,
     window: usize,
+    summed: bool,
 }
 
-pub(super) fn hero(stats: &Stats, window: usize) -> AnyElement {
+pub(super) fn hero(stats: &Stats, window: usize, summed: bool) -> AnyElement {
     let key = WINDOWS[window].0;
     let Some((factor, agent, busy)) = stats.parallel(key) else {
-        return idle_hero(window).into_any_element();
+        return idle_hero(series::idle_words(window, stats.window(key).counts.agent_seconds)).into_any_element();
     };
     let most = stats.window(key).most_at_once;
     let peak = stats.window("total").most_at_once.max(most).max(1);
-    let hero = Hero { factor, agent, busy, most, peak, window };
+    let hero = Hero { factor, agent, busy, most, peak, window, summed };
     hero_card()
         .with_animation(("usage-hero", window), rise(), move |card, t| {
             card.child(gauge(hero.factor, t, SUBS[hero.window])).child(hero.story(t))
@@ -60,7 +59,7 @@ impl Hero {
             .flex_col()
             .gap(px(12.))
             .child(heading(EYEBROWS[self.window]))
-            .child(headline(self.agent, self.busy))
+            .child(headline(self.agent, self.busy, self.summed))
             .child(div().flex().child(gained(self.agent - self.busy)))
             .child(
                 div()
@@ -70,7 +69,7 @@ impl Hero {
                     .pt(px(4.))
                     .child(lane("agent work", data::duration(self.agent), t, colours::brand()))
                     .child(lane(
-                        "wall time busy",
+                        series::busy_words(self.summed).1,
                         data::duration(self.busy),
                         data::ratio(self.busy, self.agent) * t,
                         colours::muted(),
@@ -85,11 +84,11 @@ impl Hero {
     }
 }
 
-fn headline(agent: f64, busy: f64) -> Div {
+fn headline(agent: f64, busy: f64, summed: bool) -> Div {
     let (worked, clock) = (data::duration(agent), data::duration(busy));
     let first = "Your agents did ".len();
     let second = first + worked.len() + " of work in ".len();
-    let text = format!("Your agents did {worked} of work in {clock} on the clock");
+    let text = format!("Your agents did {worked} of work in {clock} {}", series::busy_words(summed).0);
     let lit = HighlightStyle { color: Some(colours::accent().into()), ..HighlightStyle::default() };
     let styled = StyledText::new(text)
         .with_highlights([(first..first + worked.len(), lit), (second..second + clock.len(), lit)]);
@@ -119,14 +118,14 @@ fn lane(label: &'static str, value: String, fraction: f32, colour: Rgba) -> Div 
         .child(div().w(px(76.)).flex_none().flex().justify_end().font_weight(FontWeight::SEMIBOLD).child(value))
 }
 
-fn idle_hero(window: usize) -> Div {
+fn idle_hero(words: &'static str) -> Div {
     card().flex().items_center().gap(px(20.)).child(
         div()
             .flex_1()
             .flex()
             .flex_col()
             .gap(px(4.))
-            .child(div().text_size(px(18.)).text_color(colours::muted()).child(IDLE[window]))
+            .child(div().text_size(px(18.)).text_color(colours::muted()).child(words))
             .child(ui::dim("the parallel factor shows once agents have been busy for a minute")),
     )
 }

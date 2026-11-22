@@ -8,6 +8,10 @@ pub(super) const SHOWN: usize = WEEKS * 7;
 const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const STEPS: [f64; 9] = [1., 2., 5., 10., 20., 50., 100., 200., 500.];
 const DAY: i64 = 86_400;
+const IDLE: [&str; 3] =
+    ["No agent worked in the last 24 h", "No agent worked in the last 7 days", "No agent has worked yet"];
+const BRIEF: [&str; 3] =
+    ["Under a minute busy in the last 24 h", "Under a minute busy in the last 7 days", "Under a minute busy so far"];
 
 impl Stats {
     pub(super) fn seconds_ago(&self, ago: usize) -> f64 {
@@ -137,6 +141,15 @@ pub(super) fn per_day(total: f64, days: u64) -> f64 {
 #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a positive average shown whole")]
 pub(super) fn decimal(n: f64) -> String {
     if n < 10. { format!("{n:.1}") } else { data::count(n.round() as u64) }
+}
+
+pub(super) fn idle_words(window: usize, agent_seconds: f64) -> &'static str {
+    let words = if agent_seconds > 0. { BRIEF } else { IDLE };
+    words[window.min(words.len() - 1)]
+}
+
+pub(super) fn busy_words(summed: bool) -> (&'static str, &'static str) {
+    if summed { ("busy, summed over machines", "busy, summed") } else { ("on the clock", "wall time busy") }
 }
 
 #[cfg(test)]
