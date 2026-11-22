@@ -27,7 +27,7 @@ fn keys(os: Os) -> Vec<String> {
 
 #[test]
 fn every_panel_has_one_place_on_the_rail_or_behind_the_gear() {
-    let rail = column(true);
+    let rail = column(true, false);
     for kind in PanelKind::ALL {
         let places = [rail.contains(&Slot::Panel(kind)), behind_gear(kind)];
         assert_eq!(places.iter().filter(|here| **here).count(), 1, "{kind:?}");

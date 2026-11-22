@@ -1,19 +1,18 @@
 use gpui::{
-    AnyElement, App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, IntoElement,
-    ParentElement as _, Render, ScrollHandle, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
+    App, AppContext as _, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, IntoElement, ParentElement as _,
+    Render, ScrollHandle, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
     prelude::FluentBuilder as _, px,
 };
 
 use self::chat_apps::ChatRow;
 use self::follow::FollowBox;
+use self::more::More;
 use self::secrets::SecretsRow;
 use super::{
     body_height, bot_refusal, cancel_and, close, dialog_starts, fitted, forget_refusal, frame, revealed, show, within,
 };
-use crate::cli::Feature;
 use crate::model::bots::{
-    AgentInfo, BotKey, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open,
-    kept_accounts, new_args,
+    AgentInfo, BotKey, Editing, NotSent, Save, Typed, agents_of, chosen_at_open, kept_accounts, new_args,
 };
 use crate::store::{Store, args};
 use crate::theme::colours;
@@ -22,6 +21,8 @@ use crate::ui::{self, TextField, TextFieldEvent, Tone};
 
 mod chat_apps;
 mod follow;
+mod look;
+mod more;
 mod secrets;
 
 const TITLE: &str = "New bot";
@@ -34,9 +35,8 @@ const FROM_NEXT: &str =
 const READING: &str = "Reading the agents…";
 const NO_AGENT: &str = "No agent here can be a bot yet.";
 const CHOOSE_ACCESS: &str = "Choose its access.";
-const THROUGH: &str = "Through cornercase";
-const FULL_ACCESS: &str = "Full access";
-const FULL_NOTE: &str = "Full access lets it change any file and run anything, unattended.";
+const WIDTH: f32 = 540.;
+const INSIDE: f32 = WIDTH - 46.;
 const ABOUT_HINT: &str = "what it is for (optional)";
 const OWN: &str = "the agent's own";
 
@@ -74,6 +74,8 @@ pub(crate) struct BotForm {
     chat: ChatRow,
     follow: FollowBox,
     secrets: SecretsRow,
+    face: Option<u8>,
+    more: More,
 }
 
 fn field(
@@ -92,23 +94,31 @@ fn field(
     field
 }
 
-fn open_form(mode: Mode, window: &mut Window, cx: &mut App) -> bool {
-    if Store::get(cx).read(cx).session.is_none() {
-        return false;
-    }
+fn open_form(mode: Mode, window: &mut Window, cx: &mut App) -> Option<Entity<BotForm>> {
+    Store::get(cx).read(cx).session.as_ref()?;
     let view = cx.new(|cx| BotForm::new(mode, window, cx));
     let focus = view.read(cx).name.read(cx).focus_handle(cx);
-    show(view.into(), &focus, window, cx);
-    true
+    show(view.clone().into(), &focus, window, cx);
+    Some(view)
 }
 
 pub(crate) fn new_bot(window: &mut Window, cx: &mut App) {
     open_form(Mode::New, window, cx);
 }
 
+pub(crate) fn new_bot_for(name: &'static str, about: &'static str, window: &mut Window, cx: &mut App) {
+    let Some(view) = open_form(Mode::New, window, cx) else { return };
+    let (name_field, about_field) = {
+        let form = view.read(cx);
+        (form.name.clone(), form.about.clone())
+    };
+    name_field.update(cx, |field, cx| field.set_text(name, cx));
+    about_field.update(cx, |field, cx| field.set_text(about, cx));
+}
+
 pub(crate) fn edit_bot(id: &str, window: &mut Window, cx: &mut App) {
     let Some(bot) = Store::get(cx).read(cx).bots.find(id).cloned() else { return };
-    if open_form(Mode::Edit(Box::new(Editing::of(&bot))), window, cx) {
+    if open_form(Mode::Edit(Box::new(Editing::of(&bot))), window, cx).is_some() {
         Store::get(cx).update(cx, |s, _| s.names_bot(&BotKey::here(id)));
     }
 }
@@ -124,20 +134,13 @@ impl BotForm {
         let name = field(&placeholder, plain(), cx, window);
         let model = field(OWN, plain(), cx, window);
         let about = field(ABOUT_HINT, within(&scroller, TextField::prompt), cx, window);
-        let ends = if matches!(mode, Mode::New) { &about } else { &model };
-        ends.update(cx, |last, _| last.set_ends_form(true));
+        model.update(cx, |last, _| last.set_ends_form(true));
         if let Mode::Edit(editing) = &mode {
             name.update(cx, |name, cx| name.set_text(editing.before.name.clone(), cx));
             model.update(cx, |model, cx| model.set_text(own, cx));
         }
-        cx.observe(&Store::get(cx), |this, _, cx| {
-            this.follow_secrets(cx);
-            cx.notify();
-        })
-        .detach();
-        let (chat, follow, secrets) = (ChatRow::new(&mode, cx), FollowBox::new(&mode, cx), SecretsRow::new(cx));
+        Self::follow_store(cx);
         let mut form = Self {
-            mode,
             listing: Listing::Reading,
             chosen: None,
             name,
@@ -148,13 +151,24 @@ impl BotForm {
             accounts: AccountPickers::default().inside(scroller.clone()),
             error: None,
             scroller,
-            chat,
-            follow,
-            secrets,
+            chat: ChatRow::new(&mode, cx),
+            follow: FollowBox::new(&mode, cx),
+            secrets: SecretsRow::new(cx),
+            face: None,
+            more: More::new(&mode, cx),
+            mode,
         };
         form.read_agents(cx);
         form.follow_secrets(cx);
         form
+    }
+
+    fn follow_store(cx: &mut Context<Self>) {
+        cx.observe(&Store::get(cx), |this, _, cx| {
+            this.follow_secrets(cx);
+            cx.notify();
+        })
+        .detach();
     }
 
     fn editing(&self) -> Option<&Editing> {
@@ -279,7 +293,12 @@ impl BotForm {
         let Some(agent) = self.agent().cloned() else { return };
         let typed = self.typed(&agent, cx);
         let dialog = cx.entity_id().as_u64();
+        let face = self.shown_face(cx);
         if let Some(editing) = self.editing() {
+            if self.face.is_some() {
+                let key = BotKey::here(&editing.id);
+                Store::get(cx).update(cx, |s, cx| s.set_face(&key, face, cx));
+            }
             match editing.save(dialog_starts(cx), &agent, &typed) {
                 Save::Waits => {}
                 Save::Closes => close(cx),
@@ -296,7 +315,7 @@ impl BotForm {
         match new_args(&agent, &typed) {
             Ok(command) => {
                 let name = typed.name.trim().to_string();
-                Store::get(cx).update(cx, |s, cx| s.create_bot(command, &name, dialog, cx));
+                Store::get(cx).update(cx, |s, cx| s.create_bot(command, (&name, face), dialog, cx));
             }
             Err(NotSent::Access) => {
                 self.error = Some(CHOOSE_ACCESS);
@@ -310,49 +329,6 @@ impl BotForm {
 impl BotForm {
     fn name_field(&self, window: &Window, cx: &App) -> Div {
         ui::field("Name", ui::boxed(&self.name, window, cx))
-    }
-
-    fn agent_field(&self, cx: &mut Context<Self>) -> Div {
-        let body = match &self.listing {
-            Listing::Reading => ui::loading(READING).into_any_element(),
-            Listing::Failed(words) => div()
-                .flex()
-                .flex_col()
-                .gap(px(6.))
-                .child(ui::error_line(read_failed(words)))
-                .child(
-                    div().flex().child(
-                        ui::button("bot-agents-retry", "Try again")
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.read_agents(cx))),
-                    ),
-                )
-                .into_any_element(),
-            Listing::Read(list) => self.agent_body(list, cx),
-        };
-        ui::field("Agent", body)
-    }
-
-    fn agent_body(&self, list: &[AgentInfo], cx: &mut Context<Self>) -> AnyElement {
-        let Some(editing) = self.editing() else { return self.agent_chips(list, cx) };
-        let label =
-            list.iter().find(|a| a.agent == editing.agent).map_or_else(|| editing.agent.clone(), AgentInfo::label);
-        let chip = ui::resting_chip(("bot-agent", 0_usize), label, true);
-        let chips = ui::chips(vec![chip]);
-        div().flex().flex_col().gap(px(6.)).child(chips).child(ui::dim(KEEPS_AGENT)).into_any_element()
-    }
-
-    fn agent_chips(&self, list: &[AgentInfo], cx: &mut Context<Self>) -> AnyElement {
-        let items = list.iter().enumerate().map(|(at, agent)| {
-            let is = self.chosen == Some(at);
-            if agent.bot {
-                ui::chip(("bot-agent", at), agent.label(), is)
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_agent(at, cx)))
-            } else {
-                ui::resting_chip(("bot-agent", at), agent.label(), false)
-            }
-        });
-        let none = (self.chosen.is_none()).then(|| ui::dim(NO_AGENT));
-        div().flex().flex_col().gap(px(6.)).child(ui::chips(items.collect())).children(none).into_any_element()
     }
 
     fn model_field(&self, agent: &AgentInfo, window: &Window, cx: &mut Context<Self>) -> Div {
@@ -385,59 +361,36 @@ impl BotForm {
         Some(ui::field("Effort", ui::chips(std::iter::once(own).chain(levels).collect())))
     }
 
-    fn access_field(&self, agent: &AgentInfo, cx: &mut Context<Self>) -> Div {
-        let one = |id, label: &str, value: &'static str, cx: &mut Context<Self>| {
-            let is = self.access.as_deref() == Some(value);
-            if agent.offers(value) {
-                ui::segment(id, label.to_string(), is)
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.pick_access(value, cx)))
-            } else {
-                ui::resting_segment(id, label.to_string(), is)
-            }
-        };
-        let pair = ui::segments(vec![
-            one("bot-access-cornercase", THROUGH, CORNERCASE, cx).into_any_element(),
-            one("bot-access-full", FULL_ACCESS, FULL, cx).into_any_element(),
-        ]);
-        let full = div().text_size(px(11.)).text_color(colours::failed()).child(FULL_NOTE);
-        let column = div()
+    fn fields(&self, window: &Window, cx: &mut Context<Self>) -> Div {
+        let column = div().w(px(INSIDE)).flex().flex_col().gap(px(14.)).child(self.hero(cx));
+        let column = column.child(self.name_field(window, cx));
+        let column = column.when(self.editing().is_none(), |d| d.child(self.about_field(window, cx)));
+        let column = column.child(self.agent_field(cx));
+        let Some(agent) = self.agent().cloned() else { return column };
+        let column = column.child(self.access_field(&agent, cx)).child(self.more_head(&agent, cx));
+        if !self.more.open {
+            return column;
+        }
+        column.child(self.more_fields(&agent, window, cx)).children(self.editing().map(|_| ui::dim(FROM_NEXT)))
+    }
+
+    fn more_fields(&self, agent: &AgentInfo, window: &Window, cx: &mut Context<Self>) -> Div {
+        let accounts = self.accounts.fields(std::slice::from_ref(&agent.agent), cx);
+        let about = self.editing().map(|_| ui::field("What it's for", ui::dim(ABOUT_WAITS)));
+        div()
             .flex()
             .flex_col()
-            .gap(px(6.))
-            .child(div().flex().child(pair))
-            .child(ui::dim(agent.through_note()))
-            .child(full)
-            .children(agent.full_only_line().map(ui::dim));
-        ui::field("Access", column)
-    }
-
-    fn about_field(&self, window: &Window, cx: &App) -> Div {
-        match self.mode {
-            Mode::New => {
-                let note = about_note(Store::get(cx).read(cx).server_has(Feature::BotSetup));
-                let column =
-                    div().flex().flex_col().gap(px(6.)).child(ui::prompt_box(&self.about, "create", window, cx));
-                ui::field("What it's for", column.children(note.map(ui::dim)))
-            }
-            Mode::Edit(_) => ui::field("What it's for", ui::dim(ABOUT_WAITS)),
-        }
-    }
-
-    fn fields(&self, window: &Window, cx: &mut Context<Self>) -> Div {
-        let column =
-            div().flex().flex_col().gap(px(12.)).child(self.name_field(window, cx)).child(self.agent_field(cx));
-        let Some(agent) = self.agent().cloned() else { return column };
-        let accounts = self.accounts.fields(std::slice::from_ref(&agent.agent), cx);
-        column
-            .child(self.model_field(&agent, window, cx))
-            .children(self.effort_field(&agent, cx))
+            .gap(px(14.))
+            .pl(px(12.))
+            .border_l_2()
+            .border_color(colours::border())
+            .child(self.model_field(agent, window, cx))
+            .children(self.effort_field(agent, cx))
             .children(accounts)
-            .child(self.access_field(&agent, cx))
             .children(self.follow_field(cx))
             .children(self.chat_field(cx))
             .children(self.secrets_field(cx))
-            .child(self.about_field(window, cx))
-            .children(self.editing().map(|_| ui::dim(FROM_NEXT)))
+            .children(about)
     }
 
     fn submit_button(&self, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -477,6 +430,6 @@ impl Render for BotForm {
             cx.entity_id().as_u64(),
             cx,
         ));
-        frame(self.title(), column, cancel_and(self.submit_button(cx))).w(px(520.))
+        frame(self.title(), column, cancel_and(self.submit_button(cx))).w(px(WIDTH))
     }
 }

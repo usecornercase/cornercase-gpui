@@ -464,7 +464,7 @@ impl Root {
     }
 
     pub(crate) fn takes_input(&self) -> bool {
-        self.frame_shown() && self.side.bot.is_none() && self.machine.as_ref().is_none_or(MachineTab::live)
+        self.frame_shown() && !self.side.bots && self.machine.as_ref().is_none_or(MachineTab::live)
     }
 
     pub(crate) fn input(&mut self, event: Value, cx: &mut Context<Self>) {

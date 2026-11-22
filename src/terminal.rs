@@ -105,7 +105,7 @@ impl Root {
         if !terminal || self.overlay_open(cx) || self.store.read(cx).shows_file_full_screen() {
             return;
         }
-        if self.chat_shown() {
+        if self.bots_shown() {
             Self::scroll_chat(ks, cx);
             cx.stop_propagation();
             return;
@@ -158,7 +158,7 @@ impl Root {
 
     fn open_popup(&self, cx: &mut App) -> Option<Entity<Popup>> {
         Some(Popup::get(&self.focus, cx))
-            .filter(|popup| self.machine.is_none() && !self.chat_shown() && popup.read(cx).is_open())
+            .filter(|popup| self.machine.is_none() && !self.bots_shown() && popup.read(cx).is_open())
     }
 
     pub(crate) fn overlay_open(&self, cx: &App) -> bool {
@@ -196,7 +196,7 @@ impl Root {
         if chord.focus == Focus::Browser && self.browser_command(command, window, cx) {
             return true;
         }
-        if self.chat_shown() && keymap::swallowed_in_chat(command) {
+        if self.bots_shown() && keymap::swallowed_in_chat(command) {
             return true;
         }
         match command {
@@ -367,14 +367,9 @@ impl Root {
     }
 
     pub(crate) fn render_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
-        if self.chat_shown() {
-            return div()
-                .id("terminal")
-                .flex_1()
-                .relative()
-                .overflow_hidden()
-                .child(bot_chat::view(cx))
-                .into_any_element();
+        if self.bots_shown() {
+            let page = if self.chat_shown() { bot_chat::view(cx) } else { bot_chat::lobby(cx).into_any_element() };
+            return div().id("terminal").flex_1().relative().overflow_hidden().child(page).into_any_element();
         }
         if self.metrics.is_none() {
             self.metrics = Some(Metrics::measure(FONT_FAMILY, self.font_size, window));

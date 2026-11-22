@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.147
+
+- **Bots have a place of their own.** A new button at the top of the rail opens your bots, and it is always there, so you can tell the window has bots even before you make one. It counts the answers you have not read, and pressing it again takes you back to where you were.
+- **The page reads like a chat app.** The sidebar lists your bots, each with its own face, the start of its last message, when it came and how many answers you have not read; the chat of the one you pick fills the window, and opening the page shows the bot you looked at last. A bot that is thinking or asks for a secret says so on its row.
+- **With no bot yet**, the page says what a bot is and offers **New bot** and three ideas (a pull request reviewer, a morning news digest, a release watcher) that fill in its form for you.
+- **A friendlier New bot form.** Your bot's face sits at the top and you pick its colour; then come its name, what it is for (with the same three ideas to start from), the agent and its access as two cards. Model, effort, account, following agents and chat apps wait under **More options**, and agents that cannot be a bot are named in one line instead of a row of greyed chips.
+- The Bots section between the projects and the workspaces is gone. Removing a bot now leaves you on the Bots page, and ⇧⌘I with no bot opens it.
+
 ## 0.1.146
 
 - **Usage › Stats opens on how much your agents did at once.** A gauge shows the parallel factor (`3.4×`), beside `Your agents did 9h 47m of work in 2h 51m on the clock`, the time that gained over one agent at a time, and bars for agent work, wall time busy and the most agents at once. The gauge and the numbers count up when the sheet opens.

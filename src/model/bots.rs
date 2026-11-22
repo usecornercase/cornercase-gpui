@@ -17,16 +17,19 @@ pub(crate) use self::card::{
     card_rows, controls, folder_parts, folder_shown, routine_rows, secrets_words, started_rows, started_rows_there,
 };
 pub(crate) use self::chat_apps::{AWAY, CHOICES, Reach, Row, UNPAIRED, note, platforms, reach, reach_tip, row, sent};
+pub(crate) use self::faces::{Faces, face_of_name};
 pub(crate) use self::follow::{AgentRef, FollowRow, by, failed, follow_note, follow_row, follow_sent, showable, words};
 pub(crate) use self::form::{
     AgentInfo, CORNERCASE, Editing, FULL, NotSent, Save, Typed, about_note, agents_of, chosen_at_open, id_of,
-    kept_accounts, new_args, rename_args,
+    kept_accounts, new_args, rename_args, unavailable_line,
 };
 pub(crate) use self::home::{BotKey, Home, event_of, giving_at, label, releases_at};
+pub(crate) use self::lobby::{IDEAS, Lobby, lobby_of};
 pub(crate) use self::manage::{
     Arrival, Closes, Creating, Making, Managing, MenuAsk, create_failed, making, remove_failed, rename_failed,
     save_failed,
 };
+pub(crate) use self::preview::{FACE_COLOURS, Last, Says, face_colour, says};
 pub(crate) use self::runs::{Aimed, Anchor, Runs, aim};
 pub(crate) use self::secrets::{
     Listed, NAME_HINT, NEW_SECRET, REMOVE_SECRET, SAVED_AT_ONCE, SECRET_VALUE, Secret, SecretEnter, SecretsSection,
@@ -43,10 +46,13 @@ pub(crate) use self::told::{Answer, Answers, Told, answer_of, gone, outline_text
 mod asks;
 mod card;
 mod chat_apps;
+mod faces;
 mod follow;
 mod form;
 mod home;
+mod lobby;
 mod manage;
+mod preview;
 mod runs;
 mod secrets;
 mod talk;
@@ -88,6 +94,8 @@ pub(crate) struct Bot {
     pub home: Home,
     #[serde(deserialize_with = "time_or_none")]
     pub created: Option<i64>,
+    #[serde(deserialize_with = "preview::last_or_none")]
+    pub last: Option<Last>,
 }
 
 fn set(value: Option<&String>) -> Option<String> {
@@ -141,6 +149,7 @@ impl Bot {
             && self.secrets == other.secrets
             && self.secrets_unreadable == other.secrets_unreadable
             && self.next == other.next
+            && self.last == other.last
     }
 
     pub(crate) fn thinking(&self) -> bool {
@@ -410,8 +419,7 @@ pub(crate) enum Offer {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum KeyGoes {
     Show(BotKey),
-    Say(String),
-    NoBot,
+    Page,
     Nothing,
 }
 
@@ -426,11 +434,8 @@ pub(crate) fn key_goes(
     (open, last): (Option<&BotKey>, Option<&BotKey>),
 ) -> KeyGoes {
     match (offer, making) {
-        (Offer::Lacks(words), _) | (Offer::Hidden, Some(Making::Here(words) | Making::Server(words))) => {
-            KeyGoes::Say(words.clone())
-        }
         (Offer::Hidden, None) => KeyGoes::Nothing,
-        (Offer::Hidden, Some(Making::Offered)) => KeyGoes::NoBot,
+        (Offer::Lacks(_) | Offer::Hidden, _) => KeyGoes::Page,
         (Offer::Rows, _) => {
             let unread = after_shown(bots, open).find(|bot| bot.unread > 0 && Some(&bot.key()) != open);
             let next = || open.and_then(|_| after_shown(bots, open).next());
@@ -439,10 +444,6 @@ pub(crate) fn key_goes(
             unread.or_else(next).or_else(back).map_or(KeyGoes::Nothing, |bot| KeyGoes::Show(bot.key()))
         }
     }
-}
-
-pub(crate) fn no_bot_words(new_bot_keys: &str) -> String {
-    format!("No bot yet: {new_bot_keys} makes one")
 }
 
 pub(crate) fn keys_go_to_chat(dialog: bool, sheet: bool) -> bool {
@@ -466,6 +467,7 @@ pub(crate) struct Bots {
     pub queue_of: Option<String>,
     pub queue: Vec<Entry>,
     pub home: Home,
+    pub faces: Faces,
     stopping: HashSet<String>,
     again: HashSet<u64>,
     revision: u64,

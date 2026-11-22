@@ -719,25 +719,24 @@ fn a_machines_bot_says_where_it_runs_in_its_facts() {
 }
 
 #[test]
-fn with_no_bot_the_key_says_how_to_make_one() {
+fn with_no_bot_the_key_opens_the_bots_page() {
     let (offer, making) = (Offer::Hidden, Some(Making::Offered));
-    assert_eq!(key_goes((&offer, making.as_ref()), &[], (None, None)), KeyGoes::NoBot);
-    assert_eq!(no_bot_words("⌘E"), "No bot yet: ⌘E makes one");
+    assert_eq!(key_goes((&offer, making.as_ref()), &[], (None, None)), KeyGoes::Page);
 }
 
 #[test]
-fn below_the_gate_the_key_says_the_sections_sentence() {
+fn below_the_gate_the_key_opens_the_page_that_says_what_it_needs() {
     let offer = Offer::Lacks("Showing your bots needs cornercase 0.13.77.".into());
     let list = listed(&[("prs", 1)]);
     let said = key_goes((&offer, Some(&Making::Here("x".into()))), &[&list[0]], (None, None));
-    assert_eq!(said, KeyGoes::Say("Showing your bots needs cornercase 0.13.77.".into()));
+    assert_eq!(said, KeyGoes::Page);
 }
 
 #[test]
-fn on_a_server_without_bots_the_key_says_new_bots_sentence() {
+fn on_a_server_without_bots_the_key_opens_the_page_that_says_what_it_needs() {
     let offer = Offer::Hidden;
     let said = key_goes((&offer, Some(&Making::Server("Making a bot needs 0.13.77.".into()))), &[], (None, None));
-    assert_eq!(said, KeyGoes::Say("Making a bot needs 0.13.77.".into()));
+    assert_eq!(said, KeyGoes::Page);
 }
 
 #[test]

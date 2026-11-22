@@ -4,7 +4,7 @@ use super::entries::{
     Again, Control, Entry, EntryKey, Give, Retry, STEPS_SHOWN, Turn, arrived, asked, entries, folded, givable, held,
     keys, new_conversation_control, retry, row_splices, send_control, spliced, stop_control, turn,
 };
-use super::words::{folded_label, time_label, turn_label};
+use super::words::{folded_label, list_time, time_label, turn_label};
 use super::{Scroll, scroll_distance, scroll_of};
 
 const NOON: i64 = 1_794_744_000;
@@ -20,6 +20,18 @@ fn a_line_of_today_shows_its_time_of_day() {
 fn an_older_line_shows_its_day_and_time() {
     let label = time_label(NOON, NOON + 3 * 86_400);
     assert!(label.len() > 5 && label.ends_with(&time_label(NOON, NOON + 1)), "{label}");
+}
+
+#[test]
+fn the_list_shows_a_line_of_today_by_its_time_of_day() {
+    assert_eq!(list_time(NOON, NOON + 60), time_label(NOON, NOON + 60));
+}
+
+#[test]
+fn the_list_shows_yesterday_a_weekday_then_a_date() {
+    assert_eq!(list_time(NOON, NOON + 86_400), "Yesterday");
+    assert_eq!(list_time(NOON, NOON + 3 * 86_400).len(), 3);
+    assert_eq!(list_time(NOON, NOON + 30 * 86_400).len(), 10);
 }
 
 #[test]

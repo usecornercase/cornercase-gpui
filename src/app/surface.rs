@@ -19,7 +19,7 @@ impl Root {
 
     pub(super) fn resume_surface(&mut self, shows_tab: bool, cx: &mut Context<Self>) {
         if self.machine.is_none()
-            && self.side.bot.is_none()
+            && !self.side.bots
             && let Some(view) = self.own.surface_due(shows_tab)
         {
             self.open_own_surface(view, cx);

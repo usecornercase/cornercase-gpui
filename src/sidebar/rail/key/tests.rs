@@ -14,6 +14,7 @@ struct Inputs {
     menu: bool,
     place: Option<MachinePlace>,
     pointed: Option<PanelKind>,
+    bots: (bool, u64),
 }
 
 impl Inputs {
@@ -25,6 +26,7 @@ impl Inputs {
             menu: self.menu,
             place: self.place.as_ref(),
             pointed: self.pointed,
+            bots: self.bots,
         })
     }
 }
@@ -39,6 +41,8 @@ const CHANGES: &[Change<Inputs>] = &[
         i.place = Some(MachinePlace::at(&seen, &ThereWorkspace::default(), None));
     }),
     ("the panel a tour points at", |i| i.pointed = Some(PanelKind::Changes)),
+    ("the bots page", |i| i.bots.0 = true),
+    ("the bots' list", |i| i.bots.1 += 1),
 ];
 
 #[test]

@@ -457,13 +457,13 @@ fn newer() -> Vec<AgentInfo> {
     agents_of(fixture!("bots/agents-reads.json")).expect("fixture")
 }
 
-const READS_ANYTHING_NOTE: &str = "Through cornercase, it reads anything and writes only in its own folder.";
+const READS_ANYTHING_NOTE: &str = "Reads anything, writes only in its own folder.";
 
 #[test]
 fn an_agent_that_reads_only_its_folder_says_so_under_access() {
     let list = newer();
     for name in ["gemini", "copilot"] {
-        assert_eq!(by(&list, name).through_note(), "Through cornercase, it reads and writes only in its own folder.");
+        assert_eq!(by(&list, name).through_note(), "Reads and writes only in its own folder.");
     }
 }
 
@@ -623,4 +623,26 @@ fn save_sends_no_follow_when_the_server_gave_none() {
     assert_eq!(editing.before.follow, None);
     let ticked = Typed { follow: Some(true), ..now };
     assert_eq!(editing.args(&claude(), &ticked), None);
+}
+
+#[test]
+fn agents_that_cannot_be_a_bot_are_one_line_grouped_by_why() {
+    assert_eq!(
+        unavailable_line(&agents()).as_deref(),
+        Some(
+            "Not installed: Codex · Not yet: Gemini CLI, opencode, Grok Build, Cursor CLI, GitHub Copilot CLI, Vibe CLI"
+        )
+    );
+}
+
+#[test]
+fn every_agent_a_bot_leaves_no_line() {
+    let list: Vec<AgentInfo> = agents().into_iter().filter(|a| a.bot).collect();
+    assert_eq!(unavailable_line(&list), None);
+}
+
+#[test]
+fn an_agent_with_no_reason_cannot_be_a_bot() {
+    let list = vec![AgentInfo { agent: "x".into(), bot: false, ..AgentInfo::default() }];
+    assert_eq!(unavailable_line(&list).as_deref(), Some("Cannot be a bot: x"));
 }

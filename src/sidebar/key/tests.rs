@@ -23,7 +23,7 @@ struct Inputs {
     place: Option<MachinePlace>,
     bots: u64,
     bot: Option<BotKey>,
-    bots_folded: bool,
+    bots_page: bool,
 }
 
 impl Inputs {
@@ -40,7 +40,7 @@ impl Inputs {
             place: self.place.as_ref(),
             bots: self.bots,
             bot: self.bot.as_ref(),
-            bots_folded: self.bots_folded,
+            bots_page: self.bots_page,
         })
     }
 }
@@ -53,7 +53,7 @@ const CHANGES: &[Change<Inputs>] = &[
     ("the bots' revision", |i| i.bots += 1),
     ("the shown bot", |i| i.bot = Some(BotKey::here("prs"))),
     ("the shown bot's machine", |i| i.bot = Some(BotKey::on("vps", "prs"))),
-    ("the fold of the bots", |i| i.bots_folded = true),
+    ("the bots page", |i| i.bots_page = true),
     ("the session", |i| i.session += 1),
     ("the store", |i| i.store += 1),
     ("the hovered row", |i| i.hovered = Some("row-3".into())),
