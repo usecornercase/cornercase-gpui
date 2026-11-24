@@ -2,6 +2,14 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.148
+
+- **Personas for your flows' roles.** A persona says how an agent works (a code reviewer, a careful tester), written once and followed by any role on any agent. **Personas** in the Flows sheet lists yours and those you imported, with where each came from and the flows that follow it, and the files it cannot read in red with why.
+- **Write your own** with New, or change one with Edit: its emoji, name, description and instructions. Leaving a changed form asks first; an edited persona keeps its id, so the flows that follow it keep it.
+- **Import some** from a file, a folder, an address or a GitHub repository such as `msitarzewski/agency-agents`: Check lists them, with the ones that replace yours, and says they are prompt text your agents follow without asking, before Import brings them in. Picking only some of a repository waits on cornercase (usecornercase/cornercase-terminal#939).
+- **Pick one on a role**: the flow editor has a Persona row on every role and on the orchestrator, `none` or one of yours, and names in red a persona you no longer have. The plan, the team's cards and a role's chips show it beside the agent and the model.
+- Removing a persona asks first and names the flows that follow it, which will not start until another one is picked; running flows keep their copy. Personas need cornercase 0.13.117 or newer.
+
 ## 0.1.147
 
 - **Bots have a place of their own.** A new button at the top of the rail opens your bots, and it is always there, so you can tell the window has bots even before you make one. It counts the answers you have not read, and pressing it again takes you back to where you were.

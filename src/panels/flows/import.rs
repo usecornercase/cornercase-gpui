@@ -1,17 +1,16 @@
 use gpui::{
-    AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, IntoElement, ParentElement as _, Render,
+    AppContext as _, ClickEvent, Context, Div, Entity, IntoElement, ParentElement as _, Render,
     StatefulInteractiveElement as _, Styled as _, WeakEntity, Window, div, px,
 };
 
 use super::FlowsPanel;
 use super::actions::{Imported, announce, parse_imported, run_stdin};
 use super::checked::{Checked, parse_checked, preview};
-use super::dialog::{Submit, boxed, buttons, close_dialog, field};
+use super::dialog::{Submit, boxed, buttons, close_dialog, field, show_on, warning};
 use super::model::project_args;
 use super::widgets::error_text;
 use crate::dialogs;
-use crate::store::{self, Store, args};
-use crate::theme::colours;
+use crate::store::{self, args};
 use crate::ui::{self, Icon, TextField};
 
 pub(super) struct ImportFlow {
@@ -43,9 +42,8 @@ impl FlowsPanel {
             checked: None,
             error: None,
         });
-        let focus = view.read(cx).source.read(cx).focus_handle(cx);
-        Store::get(cx).update(cx, |s, cx| s.show_dialog(view.into(), cx));
-        window.focus(&focus);
+        let source = view.read(cx).source.clone();
+        show_on(view.into(), &source, window, cx);
     }
 }
 
@@ -201,7 +199,7 @@ impl ImportFlow {
                     this.unchecked(cx);
                 }),
             ))
-            .child(div().text_size(px(12.)).text_color(colours::waiting()).child(
+            .child(warning(
                 "Every agent of a flow runs without permission prompts: Check shows its roles and what it sets \
                  before anything is imported.",
             ))

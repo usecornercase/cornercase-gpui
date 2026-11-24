@@ -87,6 +87,25 @@ fn an_empty_model_or_effort_is_left_to_the_agent() {
 }
 
 #[test]
+fn a_persona_is_sent_by_its_id_and_left_out_when_none() {
+    let mut role = RoleDraft::from_value(&json!({"name": "reviewer", "agent": "claude", "persona": "old"}));
+    assert_eq!(role.persona, "old");
+    role.persona = " engineering-code-reviewer ".into();
+    assert_eq!(role.to_value(false).expect("role")["persona"], "engineering-code-reviewer");
+    role.persona = String::new();
+    assert!(role.to_value(false).expect("role").get("persona").is_none());
+    assert!(role.to_value(true).expect("lead").get("persona").is_none());
+}
+
+#[test]
+fn the_orchestrator_follows_a_persona_too() {
+    let mut lead = RoleDraft::new("orchestrator", "claude", false);
+    lead.persona = "careful-tester".into();
+    assert_eq!(lead.to_value(true).expect("lead")["persona"], "careful-tester");
+    assert_eq!(lead.spec().persona.as_deref(), Some("careful-tester"));
+}
+
+#[test]
 fn a_role_with_its_own_worktree_says_so() {
     let mut role = RoleDraft::new("coder", "claude", true);
     role.own_worktree = true;

@@ -1,0 +1,11 @@
+{
+  "persona": {
+    "bytes": 58,
+    "description": "",
+    "emoji": "🧪",
+    "id": "careful-tester",
+    "name": "Careful Tester",
+    "path": "/tmp/cc884/personas/careful-tester.md"
+  },
+  "text": "---\nname: \"Careful Tester\"\nemoji: \"🧪\"\n---\n\nTest first.\n"
+}

@@ -1,0 +1,29 @@
+{
+  "broken": [
+    {
+      "error": "it has no front matter: a `---` block that gives its `name`",
+      "path": "/tmp/cc884/personas/broken.md"
+    }
+  ],
+  "dir": "/tmp/cc884/personas",
+  "personas": [
+    {
+      "bytes": 58,
+      "description": "",
+      "emoji": "🧪",
+      "id": "careful-tester",
+      "name": "Careful Tester",
+      "path": "/tmp/cc884/personas/careful-tester.md"
+    },
+    {
+      "bytes": 3154,
+      "color": "purple",
+      "description": "Expert code reviewer who provides constructive, actionable feedback focused on correctness, maintainability, security, and performance — not style preferences.",
+      "emoji": "👁️",
+      "id": "engineering-code-reviewer",
+      "name": "Code Reviewer",
+      "path": "/tmp/cc884/personas/engineering-code-reviewer.md",
+      "source": "msitarzewski/agency-agents/engineering/engineering-code-reviewer.md"
+    }
+  ]
+}

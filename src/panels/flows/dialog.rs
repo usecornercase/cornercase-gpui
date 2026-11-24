@@ -1,9 +1,10 @@
 use gpui::{
-    App, AppContext as _, ClickEvent, Context, Div, Entity, ParentElement as _, ScrollHandle,
-    StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    AnyView, App, AppContext as _, ClickEvent, Context, Div, Entity, Focusable as _, ParentElement as _, ScrollHandle,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 
 use crate::store::Store;
+use crate::theme::colours;
 use crate::ui::{self, Icon, TextField, TextFieldEvent, Tone};
 
 pub(super) use crate::ui::boxed;
@@ -18,6 +19,16 @@ pub(super) trait Submit: Sized + 'static {
 
 pub(super) fn close_dialog(cx: &mut App) {
     Store::get(cx).update(cx, Store::close_dialog);
+}
+
+pub(super) fn show_on(view: AnyView, field: &Entity<TextField>, window: &mut Window, cx: &mut App) {
+    let focus = field.read(cx).focus_handle(cx);
+    Store::get(cx).update(cx, |s, cx| s.show_dialog(view, cx));
+    window.focus(&focus);
+}
+
+pub(super) fn warning(text: &'static str) -> Div {
+    div().text_size(px(12.)).text_color(colours::waiting()).child(text)
 }
 
 pub(super) fn field<T: Submit>(placeholder: &str, cx: &mut Context<T>, window: &mut Window) -> Entity<TextField> {
@@ -84,7 +95,7 @@ fn subscribed<T: Submit>(field: Entity<TextField>, cx: &mut Context<T>, window: 
 
 pub(super) fn buttons<T: Submit>(
     ids: (&'static str, &'static str),
-    (glyph, label): (Icon, &'static str),
+    (glyph, label): (Icon, impl Into<SharedString>),
     busy: Option<&str>,
     cx: &Context<T>,
 ) -> Div {

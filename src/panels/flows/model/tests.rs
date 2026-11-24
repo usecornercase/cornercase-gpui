@@ -406,3 +406,34 @@ fn a_run_whose_orchestrators_agent_exited_says_so_when_it_stopped() {
     let plain = team(vec![member("orchestrator", 7, false, false)]);
     assert_eq!(plain.stopped_line(60), stopped_line(60));
 }
+
+const PERSONAS: &str = crate::test_util::fixture!("flows/personas/flows.json");
+
+#[test]
+fn a_role_shows_the_persona_the_listing_names() {
+    let listing = parse_listing(PERSONAS).expect("the flows");
+    let flow = &listing.flows[0].flow;
+    assert_eq!(flow.orchestrator.persona_shown().as_deref(), Some("🧪 Careful Tester"));
+    assert_eq!(flow.role("reviewer").and_then(RoleSpec::persona_shown).as_deref(), Some("👁️ Code Reviewer"));
+    assert_eq!(flow.role("coder").and_then(RoleSpec::persona_shown), None);
+}
+
+#[test]
+fn a_persona_follows_the_agent_and_model_in_a_role_facts() {
+    let listing = parse_listing(PERSONAS).expect("the flows");
+    let reviewer = listing.flows[0].flow.role("reviewer").cloned().expect("reviewer");
+    assert_eq!(reviewer.agent_facts(), ["claude", "👁️ Code Reviewer"]);
+}
+
+#[test]
+fn a_persona_the_library_lacks_shows_its_id() {
+    let role = RoleSpec { persona: Some("gone-one".into()), ..RoleSpec::default() };
+    assert_eq!(role.persona_shown().as_deref(), Some("gone-one"));
+}
+
+#[test]
+fn a_persona_label_takes_what_the_library_gives() {
+    assert_eq!(persona_label("", ""), None);
+    assert_eq!(persona_label("", "🧪"), Some("🧪".into()));
+    assert_eq!(persona_label("Tester", ""), Some("Tester".into()));
+}

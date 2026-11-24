@@ -89,6 +89,7 @@ impl FlowEditor {
             .child(top)
             .child(Self::agent_row(lead, window, cx))
             .child(ui::dim(TYPED_WAITS))
+            .children(self.persona_row(lead))
             .child(text_control("Prompt", &lead.prompt, window, cx))
             .child(Self::command(Open::Lead, lead, window, cx))
     }
@@ -98,6 +99,10 @@ impl FlowEditor {
             .child(labelled("Agent", &role.agent, window, cx))
             .child(labelled("Model", &role.model, window, cx))
             .child(labelled("Effort", &role.effort, window, cx))
+    }
+
+    fn persona_row(&self, role: &RoleFields) -> Option<Div> {
+        self.inputs.personas.then(|| ui::field("Persona", role.persona.clone()))
     }
 
     fn stage(&self, index: usize, stage: &StageFields, window: &Window, cx: &Context<Self>) -> Div {
@@ -177,6 +182,7 @@ impl FlowEditor {
             .child(Self::role_top(role, &name, colour, window, cx))
             .child(Self::agent_row(role, window, cx))
             .child(ui::dim(TYPED_WAITS))
+            .children(self.persona_row(role))
             .child(text_control("Prompt", &role.prompt, window, cx))
             .child(
                 line()
