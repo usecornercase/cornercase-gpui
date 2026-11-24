@@ -1,0 +1,98 @@
+{
+  "label": "/tmp/cc939/source",
+  "page": "/tmp/cc939/source",
+  "web": false,
+  "check": "personas are prompt text that a flow's agents read and follow without asking for permission: read them first",
+  "skipped": 2,
+  "divisions": [
+    {
+      "key": "design",
+      "label": "design",
+      "icon": null
+    },
+    {
+      "key": "engineering",
+      "label": "Engineering",
+      "icon": "Code"
+    },
+    {
+      "key": "testing",
+      "label": "Testing",
+      "icon": "FlaskConical"
+    }
+  ],
+  "personas": [
+    {
+      "file": "design/designer.md",
+      "division": "design",
+      "id": "designer",
+      "name": "Designer",
+      "description": "",
+      "emoji": "🎨",
+      "color": "",
+      "bytes": 93,
+      "replaced": false,
+      "problem": null
+    },
+    {
+      "file": "engineering/architect.md",
+      "division": "engineering",
+      "id": "architect",
+      "name": "Architect",
+      "description": "Shapes systems.",
+      "emoji": "🏛️",
+      "color": "",
+      "bytes": 137,
+      "replaced": false,
+      "problem": "your persona `lead-designer` is also named `Architect`"
+    },
+    {
+      "file": "engineering/code-reviewer.md",
+      "division": "engineering",
+      "id": "code-reviewer",
+      "name": "Code Reviewer",
+      "description": "Reviews code like a mentor, constructive and specific.",
+      "emoji": "👁️",
+      "color": "purple",
+      "bytes": 199,
+      "replaced": false,
+      "problem": "another persona in the source is also named `Code Reviewer`"
+    },
+    {
+      "file": "engineering/second-reviewer.md",
+      "division": "engineering",
+      "id": "second-reviewer",
+      "name": "Code Reviewer",
+      "description": "Another reviewer with the same name.",
+      "emoji": "",
+      "color": "",
+      "bytes": 151,
+      "replaced": false,
+      "problem": "another persona in the source is also named `Code Reviewer`"
+    },
+    {
+      "file": "testing/careful-tester.md",
+      "division": "testing",
+      "id": "careful-tester",
+      "name": "Careful Tester",
+      "description": "Tests first.",
+      "emoji": "🧪",
+      "color": "",
+      "bytes": 133,
+      "replaced": true,
+      "problem": null
+    },
+    {
+      "file": "testing/tester.md",
+      "division": "testing",
+      "id": "tester",
+      "name": "Tester Two",
+      "description": "",
+      "emoji": "",
+      "color": "",
+      "bytes": 77,
+      "replaced": false,
+      "problem": null
+    }
+  ]
+}

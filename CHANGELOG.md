@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.149
+
+- **Pick which personas to import.** Import's Check now lists every persona of a file, folder, address or repository by its divisions (Engineering, Design… as the source names them), with nothing ticked: tick a division to take all of it, or single personas, and filter by name to find one. Those that replace yours say so, and those that cannot be imported (a name twice in the source, a name one of yours has, a file that is not a persona) say why in red.
+- **Import asks once more** before it brings them in, with what the personas are (prompt text your agents follow without asking), where a web source came from and that nobody reviewed it, and which of yours they replace. Picking personas needs cornercase 0.13.118 or newer.
+
 ## 0.1.148
 
 - **Personas for your flows' roles.** A persona says how an agent works (a code reviewer, a careful tester), written once and followed by any role on any agent. **Personas** in the Flows sheet lists yours and those you imported, with where each came from and the flows that follow it, and the files it cannot read in red with why.

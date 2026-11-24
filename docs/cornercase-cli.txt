@@ -1,4 +1,4 @@
-cornercase 0.13.109: the help of every command and subcommand, in the order of `cornercase --help`.
+cornercase 0.13.118: the help of every command and subcommand, in the order of `cornercase --help`.
 Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
 
 ================================================================ cornercase status
@@ -903,7 +903,7 @@ Examples:
 ================================================================ cornercase focus
 Show a pane, tab, workspace or project in the window
 
-Usage: cornercase focus [OPTIONS] <--pane <ID>|--tab <ID>|--workspace <ID>|--worktree <BRANCH>|--project <ID>>
+Usage: cornercase focus [OPTIONS] <--pane <ID>|--tab <ID>|--workspace <ID>|--worktree <BRANCH>|--project <ID>|--bot <BOT>>
 
 Options:
       --pane <ID>                 A pane
@@ -915,6 +915,7 @@ Options:
       --project <ID>              A project and its workspaces
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --machine <NAME>            Pick one of this machine's workspaces or tabs as the one shown, whose tab the window shows from there: --workspace and --tab are its ids
+      --bot <BOT>                 Show this bot's chat in the window, on the Bots page, as a click on its row does: its id or its name
       --reveal <TEXT>             Also scroll the pane to this text and select it, as Enter on a result of the search does: the text `cornercase search` looked for
       --line <LINE>               The match's line as `cornercase search` printed it (screen matches); without it, the newest place the pane shows the text
       --json                      Print JSON instead of text
@@ -1537,6 +1538,7 @@ Commands:
   default            Choose the flow the start dialog opens on, as set default does in Settings › Flows
   close-when-merged  Close a run's agents once its pull request merges, as flow run --close-when-merged does, or keep them open with --off
   order              Put the flows in your order, as dragging them in Settings › Flows does
+  sync               Send your flows, or one of them, to your machines now, and print what each machine got
   help               Print this message or the help of the given subcommand(s)
 
 Options:
@@ -2098,6 +2100,49 @@ already are in changes nothing.
 Examples:
   cornercase flow order Quick 'Full issue'
   cornercase flow order --clear
+
+================================================================ cornercase flow sync
+Send your flows, or one of them, to your machines now, and print what each machine got
+
+Usage: cornercase flow sync [OPTIONS] [FLOW]
+
+Arguments:
+  [FLOW]  Only this flow of yours [default: every flow of yours]
+
+Options:
+      --machine <NAME>            Only this machine [default: every machine shown here]
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --json                      Print JSON instead of text
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+Sends your flows (the files of flows/ next to config.json, built-ins you edited included), or only
+FLOW, to every machine of Settings › Machines that shows its work here, or only --machine's, and waits
+for their answers. Nothing is sent on its own: run it, or click ` sync all ` or a flow's ` sync ` in
+Settings › Flows, when you want a machine to have what you saved here. A hidden machine, or a computer
+you only open a window on, has no link and gets nothing.
+
+A flow is sent when the machine has none of that name among its own, or an older one: each save stamps
+the flow's file with `changed`, and the last saved wins, by each computer's clock (a time more than 5
+minutes ahead of the receiver's is replaced by its own), so a flow saved there later is left alone
+(`kept`), also when it is saved there while the sync runs. Nothing is deleted there, the built-ins you
+deleted stay deleted only here, and the default flow and the order stay per computer. Nothing asks:
+both ends are yours.
+
+It prints one line per machine; with --json {"machines": [{"machine", "sent", "kept", "same",
+"failed": [{"name", "error"}], "error"}]}: the names of the flows sent and kept, how many were
+already the same, the flows that did not go and why (refused there, too large to share, a time ahead
+that could not be fixed here, two files of yours with one name, a file of yours that cannot be read,
+named by its file name, or a folder of your flows that cannot be read, named by its path), and error
+when the machine could not be reached. It exits with 1 when no machine is shown here, when --machine or
+FLOW names none, and, after printing the answer, when a machine could not be reached or a flow did not
+go. A machine on an older cornercase is sent nothing, and its error says to update it. Each flow's env
+values and args go too; on Linux and macOS each flow file of yours is written readable only by you on
+both ends, and on Windows it is in your user profile.
+
+Examples:
+  cornercase flow sync
+  cornercase flow sync Review --machine vps --json
 
 ================================================================ cornercase contract
 Print what this server offers to scripts: its version, contract, boot, commands and streams
@@ -3938,6 +3983,7 @@ Commands:
   list     List the bots with their state and unread answers
   edit     Change a bot's name, model, effort, account or access, from its next message
   about    Print what a bot is for: the text of its bot.md
+  memory   Print what a bot keeps from one conversation to the next: the text of its memory.md
   remove   Delete a bot, its folder and its queue entries; refused while it answers
   say      Write to a bot; it answers in its chat
   history  Print a bot's chat
@@ -3956,7 +4002,8 @@ A bot is an agent of your own, outside any project: a name, a folder, a memory a
 message you write runs one turn of its agent (one `cornercase bot agents` lists as able to be a bot) in a conversation that continues,
 and the answer lands in the chat. It can see every project and act on them through `cornercase`.
 A bot made with --about sets itself up at once; after that it spends tokens when you write to it and when its
-routines run, and only while the server runs. The window lists bots in its Bots section and draws each one's chat.
+routines run, and only while the server runs. The window lists bots on its Bots page, which Bots › opens
+from the Projects title, and draws each one's chat.
 
 Events: `cornercase events` reports each chat line, the bot starting or finishing a turn, and a
 bot being created, edited or removed. `cornercase status --app` carries the list as `bots`.
@@ -4093,12 +4140,13 @@ Options:
       --follow <ON|OFF>           on: the bot is told when an agent it starts finishes, and answers in its chat; off: it is not; from its next turn [possible values: on, off]
       --chat-apps <WHEN>          away (the default): its answers reach Telegram and Discord only while you are away; always; off [possible values: away, always, off]
       --about <TEXT>              What the bot is for, written to bot.md; an empty one empties it
+      --memory <TEXT>             What the bot keeps from one conversation to the next, written to memory.md; an empty one empties it
       --json                      Print JSON instead of text
   -h, --help                      Print help
 
 Changes what the bot uses from its next message on; a running answer is not changed. An empty
 --model, --effort or --account goes back to the agent's own; --about writes bot.md (`bot about` prints
-it); --follow on|off sets whether the bot is told when an agent it started finishes; --chat-apps
+it); --memory replaces memory.md (`bot memory` prints it) and tells the bot's conversation; --follow on|off sets whether the bot is told when an agent it started finishes; --chat-apps
 away|always|off sets when its answers reach Telegram and Discord, at once. The agent cannot
 change, because another agent cannot continue the conversation: make another bot instead.
 
@@ -4122,6 +4170,27 @@ when you ask. An empty or missing bot.md prints nothing; one that cannot be read
 
 With --json it prints {"bot", "about"}. A program's edit form shows `about`, and sends it with `bot
 edit` only when the person changed it.
+
+================================================================ cornercase bot memory
+Print what a bot keeps from one conversation to the next: the text of its memory.md
+
+Usage: cornercase bot memory [OPTIONS] <BOT>
+
+Arguments:
+  <BOT>  The bot's id or its name
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+Prints what the bot keeps from one conversation to the next: the text of its memory.md. The bot
+writes it itself, so it is read when you ask; `bot edit --memory` and the window's memory dialog
+replace it, and the bot's conversation is told so at its next message. An empty or missing memory.md
+prints nothing; one that cannot be read is an error.
+
+With --json it prints {"bot", "memory"}.
 
 ================================================================ cornercase bot remove
 Delete a bot, its folder and its queue entries; refused while it answers
@@ -4255,8 +4324,9 @@ Options:
 
 A bot's secrets are named values, a password or a token, that cornercase keeps encrypted for that bot
 and that only that bot's own turn reads, with `cornercase bot secret get NAME`. A name takes 1 to 40
-characters of a-z, 0-9, - and _; a value 1 to 8,192 bytes; a bot keeps at most 20. A bot that lacks one
-asks the user for it with `cornercase bot secret ask NAME --about TEXT`.
+characters of a-z, A-Z, 0-9, - and _, one secret however its letters are cased; a value 1 to 8,192
+bytes; a bot keeps at most 20. A bot that lacks one asks the user for it with `cornercase bot secret
+ask NAME --about TEXT`.
 
 ================================================================ cornercase bot secret set
 Save a secret for a bot, reading its value from standard input
@@ -4265,7 +4335,7 @@ Usage: cornercase bot secret set [OPTIONS] <BOT> <NAME>
 
 Arguments:
   <BOT>   The bot's id or its name
-  <NAME>  1 to 40 characters of a-z, 0-9, - and _, such as campus-password
+  <NAME>  1 to 40 characters of a-z, A-Z, 0-9, - and _, such as campus-password or GITHUB_TOKEN
 
 Options:
       --json                      Print JSON instead of text
@@ -4346,7 +4416,7 @@ Ask the user for secrets the bot that runs this lacks; only that bot may
 Usage: cornercase bot secret ask [OPTIONS] --about <TEXT> <NAME>...
 
 Arguments:
-  <NAME>...  1 to 4 names of a-z, 0-9, - and _, such as campus-password
+  <NAME>...  1 to 4 names of a-z, A-Z, 0-9, - and _, such as campus-password
 
 Options:
       --about <TEXT>              Why the bot needs them, in one line of at most 200 characters
@@ -4406,6 +4476,175 @@ Options:
 
 Ends the ask without saving anything; the bot is told at the next message in its chat. A bot cannot run it.
 With --json it prints {"bot", "ask"}.
+
+================================================================ cornercase persona
+Import, list and remove personas: how an agent works, given to a flow's roles
+
+Usage: cornercase persona [OPTIONS] <COMMAND>
+
+Commands:
+  import  Import personas from a file, a folder, an address or a GitHub repository
+  list    List your personas
+  show    Print one of your personas, its front matter and its instructions
+  new     Make a persona of your own from a name and its instructions
+  edit    Change one of your personas: its name, description, emoji or instructions
+  remove  Delete one of your personas; a running flow keeps its own copy
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+A persona is how an agent works, written as Markdown: a front matter (a `---` block) that gives its
+`name`, and often a `description`, an `emoji` and a `color`, then the instructions. A flow's role
+names one with `persona = "ID"`, on any agent: when the run starts, cornercase copies it into the
+run's folder (personas/ID.md) and the role's prompt tells the agent to read and follow it before its
+first work. Yours live in personas/ next to config.json, one ID.md each, the ID taken from the file's name.
+
+Examples:
+  cornercase persona import msitarzewski/agency-agents/engineering/engineering-code-reviewer.md
+  cornercase persona import msitarzewski/agency-agents/engineering
+  cornercase persona import msitarzewski/agency-agents --check
+  cornercase persona import msitarzewski/agency-agents --catalogue
+  cornercase persona import msitarzewski/agency-agents --only engineering-code-reviewer --only testing-reality-checker
+  cornercase persona import ./reviewer.md
+  cornercase persona new --name "Careful Tester" --emoji 🧪 ./tester.md
+  cornercase persona edit careful-tester --description "Tests before it fixes"
+  cornercase persona show careful-tester
+  cornercase persona list
+  cornercase persona remove engineering-code-reviewer
+
+================================================================ cornercase persona import
+Import personas from a file, a folder, an address or a GitHub repository
+
+Usage: cornercase persona import [OPTIONS] <SOURCE>
+
+Arguments:
+  <SOURCE>  A .md file, a folder, -, an https:// address, or OWNER/REPO[/PATH]
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --replace                   Overwrite the personas you already have with their ids
+      --check                     List what would be imported without asking or importing
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --catalogue                 List every persona of SOURCE by division, with why each one cannot be imported; saves nothing
+      --only <ID>                 Import only the persona with this id from SOURCE (repeatable)
+  -y, --yes                       Import without asking, though the personas come from the web
+      --json                      Print JSON instead of text
+  -h, --help                      Print help
+
+SOURCE is a .md file, a folder, - for standard input, an https:// address, or a GitHub repository
+as OWNER/REPO, OWNER/REPO/FOLDER or OWNER/REPO/PATH/FILE.md (read from its default branch, with no
+GitHub token or API call). A folder or a repository imports every persona in it: every .md file
+whose front matter gives a `name`, the others skipped. When the folder or repository holds a
+divisions.json with a `divisions` object, only the folders it names are read.
+
+Each persona keeps its front matter, plus `source:` with where it came from, so importing that
+source again with --replace refreshes it. A persona whose ID or name you already have is refused,
+and with --replace the one with its ID is overwritten.
+
+A persona is prompt text that agents read and follow without asking for permission. From an
+address or a repository it asks `[y/N]` first (without a terminal it refuses unless --yes);
+--check lists what would be imported and saves nothing.
+
+--only ID imports only the persona with that ID (repeat it for more), still all or nothing; an ID
+that SOURCE does not have is an error. --catalogue lists every persona of SOURCE by division, each
+with why it cannot be imported (not a persona, an ID or a name that appears twice in SOURCE, or a
+name one of yours has), and saves nothing; unlike --check it never refuses because of one persona.
+
+With --json it prints {"personas": [{"id", "name", "description", "emoji", "color", "source",
+"bytes", "path", "replaced"}], "check", "saved"}; with --catalogue, {"label", "page", "web",
+"check", "skipped", "divisions": [{"key", "label", "icon"}], "personas": [{"file", "division",
+"id", "name", "description", "emoji", "color", "bytes", "replaced", "problem"}]}.
+
+================================================================ cornercase persona list
+List your personas
+
+Usage: cornercase persona list [OPTIONS]
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase persona show
+Print one of your personas, its front matter and its instructions
+
+Usage: cornercase persona show [OPTIONS] <ID>
+
+Arguments:
+  <ID>  The persona's id, as `persona list` prints it
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase persona new
+Make a persona of your own from a name and its instructions
+
+Usage: cornercase persona new [OPTIONS] --name <NAME> <INSTRUCTIONS>
+
+Arguments:
+  <INSTRUCTIONS>  A Markdown file with the instructions, or - for standard input
+
+Options:
+      --name <NAME>                Its name, as the window and `persona list` show it
+      --remote <DESTINATION>       Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --description <DESCRIPTION>  One line on what it is for
+      --remote-command <COMMAND>   How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --emoji <EMOJI>              An emoji shown before its name
+      --id <ID>                    Its id [default: from the name]
+      --json                       Print JSON instead of text
+  -h, --help                       Print help
+
+INSTRUCTIONS is a Markdown file, or - for standard input, with what the agent should do and how;
+cornercase writes the front matter from --name, --description and --emoji. The persona is yours:
+it has no `source:`. Its ID comes from the name, or from --id. A persona whose ID or name you
+already have is refused.
+
+With --json it prints {"persona": {"id", "name", "description", "emoji", "bytes", "path"}}.
+
+================================================================ cornercase persona edit
+Change one of your personas: its name, description, emoji or instructions
+
+Usage: cornercase persona edit [OPTIONS] <ID>
+
+Arguments:
+  <ID>  The persona's id, as `persona list` prints it
+
+Options:
+      --name <NAME>                A new name
+      --remote <DESTINATION>       Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --description <DESCRIPTION>  A new description, or '' for none
+      --remote-command <COMMAND>   How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+      --emoji <EMOJI>              A new emoji, or '' for none
+      --instructions <FILE>        New instructions, from a Markdown file or - for standard input
+      --json                       Print JSON instead of text
+  -h, --help                       Print help
+
+Only what you pass changes; the ID stays, so the flows that follow the persona keep it. Other keys
+of its front matter (such as `color`) are kept, and `source:` goes: an edited persona is yours, and
+importing its source again with --replace would undo your edit.
+
+With --json it prints {"persona": {"id", "name", "description", "emoji", "bytes", "path"}}.
+
+================================================================ cornercase persona remove
+Delete one of your personas; a running flow keeps its own copy
+
+Usage: cornercase persona remove [OPTIONS] <ID>
+
+Arguments:
+  <ID>  The persona's id, as `persona list` prints it
+
+Options:
+      --json                      Print JSON instead of text
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
 
 ================================================================ cornercase processes
 List what every pane runs with its CPU and memory, as the Processes dialog does, or stop a program

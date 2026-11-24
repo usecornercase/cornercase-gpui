@@ -186,15 +186,6 @@ impl Draft {
     }
 }
 
-pub(crate) fn import_args(source: &str, check: bool, replace: bool) -> Vec<String> {
-    let mut command = args(&["persona", "import", if check { "--check" } else { "--yes" }, "--json"]);
-    if replace || check {
-        command.push("--replace".into());
-    }
-    command.extend(["--".into(), source.trim().to_string()]);
-    command
-}
-
 pub(crate) fn shown_args(id: &str) -> Vec<String> {
     args(&["persona", "show", id, "--json"])
 }
@@ -204,20 +195,6 @@ pub(crate) fn remove_args(id: &str) -> Vec<String> {
 }
 
 pub(crate) const LIST: [&str; 3] = ["persona", "list", "--json"];
-
-impl Preview {
-    pub(crate) fn replaces(&self) -> bool {
-        self.personas.iter().any(|persona| persona.replaced)
-    }
-
-    pub(crate) fn matching(&self, filter: &str) -> Vec<&Persona> {
-        let filter = filter.trim().to_lowercase();
-        let hit = |persona: &&Persona| {
-            [&persona.id, &persona.name, &persona.description].iter().any(|text| text.to_lowercase().contains(&filter))
-        };
-        self.personas.iter().filter(hit).collect()
-    }
-}
 
 pub(crate) fn count(count: usize) -> String {
     if count == 1 { "1 persona".into() } else { format!("{count} personas") }
