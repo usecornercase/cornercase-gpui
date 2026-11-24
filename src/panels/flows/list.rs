@@ -200,6 +200,10 @@ fn toolbar(cx: &Context<FlowsPanel>) -> impl IntoElement + use<> {
             ui::icon_text_button("flows-import", Icon::Download, "Import…", Tone::Plain)
                 .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.open_import(window, cx))),
         )
+        .child(
+            ui::icon_text_button("flows-personas", Icon::Agent, "Personas", Tone::Plain)
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.open_personas(cx))),
+        )
 }
 
 fn back_bar(cx: &Context<FlowsPanel>) -> Div {

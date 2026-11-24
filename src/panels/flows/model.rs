@@ -21,8 +21,18 @@ pub(crate) struct FlowInfo {
     pub flow: FlowSpec,
     pub edited: bool,
     pub default: bool,
+    pub roles: Vec<RoleInfo>,
     #[serde(skip)]
     pub raw: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub(crate) struct RoleInfo {
+    pub role: String,
+    pub persona: Option<String>,
+    pub persona_name: String,
+    pub persona_emoji: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -51,11 +61,14 @@ pub(crate) struct RoleSpec {
     pub agent: String,
     pub model: Option<String>,
     pub effort: Option<String>,
+    pub persona: Option<String>,
     pub args: Vec<String>,
     pub env: serde_json::Map<String, serde_json::Value>,
     pub edits: bool,
     pub worktree: String,
     pub prompt: String,
+    #[serde(skip)]
+    pub persona_label: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
@@ -187,8 +200,47 @@ pub(crate) fn initials(name: &str) -> String {
 
 impl RoleSpec {
     pub(crate) fn agent_facts(&self) -> Vec<String> {
-        [Some(self.agent.clone()), self.model.clone(), self.effort.clone()].into_iter().flatten().collect()
+        [Some(self.agent.clone()), self.model.clone(), self.effort.clone(), self.persona_shown()]
+            .into_iter()
+            .flatten()
+            .collect()
     }
+
+    pub(crate) fn persona_shown(&self) -> Option<String> {
+        let id = self.persona.as_deref().filter(|id| !id.is_empty())?;
+        Some(self.persona_label.clone().unwrap_or_else(|| id.to_string()))
+    }
+}
+
+pub(crate) fn persona_label(name: &str, emoji: &str) -> Option<String> {
+    match (name.is_empty(), emoji.is_empty()) {
+        (true, true) => None,
+        (true, false) => Some(emoji.to_string()),
+        (false, true) => Some(name.to_string()),
+        (false, false) => Some(format!("{emoji} {name}")),
+    }
+}
+
+impl FlowSpec {
+    pub(crate) fn every_role_mut(&mut self) -> impl Iterator<Item = &mut RoleSpec> {
+        std::iter::once(&mut self.orchestrator).chain(&mut self.roles)
+    }
+
+    pub(crate) fn label_personas(&mut self, label: impl Fn(&str) -> Option<String>) {
+        for role in self.every_role_mut() {
+            role.persona_label = role.persona.as_deref().and_then(&label);
+        }
+    }
+}
+
+fn label_from_roles(flow: &mut FlowInfo) {
+    let infos = std::mem::take(&mut flow.roles);
+    for (role, info) in flow.flow.every_role_mut().zip(&infos) {
+        if role.persona.is_some() && role.persona == info.persona {
+            role.persona_label = persona_label(&info.persona_name, &info.persona_emoji);
+        }
+    }
+    flow.roles = infos;
 }
 
 pub(crate) fn parse_listing(text: &str) -> anyhow::Result<Listing> {
@@ -196,6 +248,7 @@ pub(crate) fn parse_listing(text: &str) -> anyhow::Result<Listing> {
     let mut listing: Listing = serde_json::from_value(value.clone())?;
     keep_raw(&mut listing.flows, &value["flows"]);
     keep_raw(&mut listing.hidden, &value["hidden"]);
+    listing.flows.iter_mut().chain(&mut listing.hidden).for_each(label_from_roles);
     Ok(listing)
 }
 

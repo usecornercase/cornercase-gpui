@@ -14,6 +14,7 @@ pub(super) struct RoleDraft {
     pub agent: String,
     pub model: String,
     pub effort: String,
+    pub persona: String,
     pub args: String,
     pub env: String,
     pub prompt: String,
@@ -123,6 +124,7 @@ impl RoleDraft {
             agent: text(value, "agent"),
             model: text(value, "model"),
             effort: text(value, "effort"),
+            persona: text(value, "persona"),
             args: arguments(value),
             env: variables(value),
             prompt: text(value, "prompt"),
@@ -140,6 +142,10 @@ impl RoleDraft {
         map.insert("agent".into(), self.agent.trim().into());
         map.insert("model".into(), optional(&self.model));
         map.insert("effort".into(), optional(&self.effort));
+        match self.persona.trim() {
+            "" => map.remove("persona"),
+            persona => map.insert("persona".into(), persona.into()),
+        };
         map.insert("args".into(), split_words(&self.args).into());
         map.insert("env".into(), self.env_value(lead)?);
         map.insert("prompt".into(), self.prompt.clone().into());
@@ -174,11 +180,13 @@ impl RoleDraft {
             agent: self.agent.trim().into(),
             model: (!model.is_empty()).then(|| model.into()),
             effort: (!effort.is_empty()).then(|| effort.into()),
+            persona: Some(self.persona.trim().to_string()).filter(|persona| !persona.is_empty()),
             args: split_words(&self.args),
             env: pairs.collect(),
             edits: self.edits,
             worktree: if self.own_worktree { "own" } else { "shared" }.into(),
             prompt: self.prompt.clone(),
+            persona_label: None,
         }
     }
 }

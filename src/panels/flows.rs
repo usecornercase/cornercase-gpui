@@ -11,11 +11,13 @@ mod flow_page;
 mod graph;
 mod hero;
 mod import;
+mod library;
 mod list;
 pub(crate) mod merged;
 mod merged_view;
 mod messages;
 pub(crate) mod model;
+mod personas;
 mod run_list;
 mod run_page;
 mod start;
@@ -35,10 +37,11 @@ use gpui::{
 
 use self::diagram::Played;
 pub(crate) use self::dock::build_dock;
+use self::library::Library;
 use self::model::{Files, FlowInfo, Frame, Listing, Message, Run};
 use self::run_list::RunList;
 pub(crate) use self::start::{FlowStart, IssueTask, start_flow};
-use crate::cli::Stream;
+use crate::cli::{Feature, Stream};
 use crate::panels::PanelKind;
 use crate::store::{self, Store, args};
 use crate::ui;
@@ -97,6 +100,8 @@ pub(crate) struct FlowsPanel {
     played: Played,
     run_list: RunList,
     editor: Option<Entity<editor::FlowEditor>>,
+    library: Option<Library>,
+    personas: Option<Entity<personas::PersonasPage>>,
 }
 
 impl FlowsPanel {
@@ -128,9 +133,12 @@ impl FlowsPanel {
             played: Played::default(),
             run_list: RunList::new(),
             editor: None,
+            library: None,
+            personas: None,
         };
         this.follow_runs(cx);
         this.refresh(cx);
+        Self::read_library(cx);
         this.store_changed(&store, cx);
         cx.spawn(async move |this, cx| poll_while_alive(this, cx).await).detach();
         if place == Place::Dock {
@@ -169,6 +177,41 @@ impl FlowsPanel {
         if shown {
             self.refresh(cx);
             self.read_files(cx);
+            Self::read_library(cx);
+        }
+    }
+
+    fn personas_on(cx: &gpui::App) -> bool {
+        Store::get(cx).read(cx).releases().lacks(Feature::FlowPersonas).is_none()
+    }
+
+    fn read_library(cx: &mut Context<Self>) {
+        if !Self::personas_on(cx) {
+            return;
+        }
+        store::run(cx, args(&library::LIST), |this, result, cx| {
+            if let Ok(library) = result.and_then(|out| library::parse_library(&out)) {
+                this.library_read(library, cx);
+            }
+        });
+    }
+
+    fn library_read(&mut self, library: Library, cx: &mut Context<Self>) {
+        if self.library.as_ref() == Some(&library) {
+            return;
+        }
+        if let Some(editor) = &self.editor {
+            editor.update(cx, |editor, cx| editor.follow_library(&library, cx));
+        }
+        self.library = Some(library);
+        self.label_runs();
+        cx.notify();
+    }
+
+    fn label_runs(&mut self) {
+        let library = self.library.as_ref();
+        for run in &mut self.runs {
+            run.flow.label_personas(library::labeller(library));
         }
     }
 
@@ -184,6 +227,7 @@ impl FlowsPanel {
             this.listing_busy = false;
             this.project = project;
             this.apply_listing(result.and_then(|out| model::parse_listing(&out)));
+            this.follow_flows_in_personas(cx);
             cx.notify();
         });
     }
@@ -217,6 +261,7 @@ impl FlowsPanel {
         match model::parse_runs(line) {
             Ok(runs) => {
                 self.runs = runs.runs;
+                self.label_runs();
                 self.runs_error = None;
                 match self.place {
                     Place::Sheet => self.ensure_selection(),
@@ -467,6 +512,9 @@ impl Render for FlowsPanel {
         }
         if let Some(editor) = &self.editor {
             return div().size_full().child(editor.clone());
+        }
+        if let Some(page) = &self.personas {
+            return div().size_full().child(page.clone());
         }
         self.sync_run_list();
         let sheet = div().size_full().relative().flex().child(split::measure(self.sheet.clone()));

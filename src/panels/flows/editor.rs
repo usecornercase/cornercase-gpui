@@ -12,14 +12,18 @@ use super::draft::{
     self, Back, BackDraft, Draft, Place, RoleDraft, Saved, Stage, fresh_role_name, gone_note, has_breaks, neighbour,
     parse_saved, place_of, save_args, seat, swapped,
 };
+use super::library::{self, Library};
 use super::model::{self, FlowInfo, FlowSpec, RoleSpec};
 use crate::ui::{TextField, TextFieldEvent};
 
 mod about;
 mod check;
 mod loops;
+mod persona;
 mod plan;
 mod team;
+
+pub(super) use self::persona::PersonaPicker;
 
 pub(super) use self::check::{Check, Pill, Verdict};
 pub(super) use self::plan::{Layout, PLAN_PAD, layout};
@@ -36,6 +40,7 @@ pub(super) struct RoleFields {
     pub args: Entity<TextField>,
     pub env: Entity<TextField>,
     pub prompt: Entity<TextField>,
+    pub persona: Entity<PersonaPicker>,
     pub edits: bool,
     pub own_worktree: bool,
     pub command_open: bool,
@@ -53,6 +58,7 @@ impl RoleFields {
             args: inputs.wrapped(&role.args, "Added to the agent's command", window, cx),
             env: inputs.wrapped(&role.env, "KEY=value KEY='a value'", window, cx),
             prompt: inputs.lines(&role.prompt, "What this role does", window, cx),
+            persona: persona::picker(id.to_string(), &role.persona, inputs.library.as_ref(), &inputs.scroller, cx),
             edits: role.edits,
             own_worktree: role.own_worktree,
             command_open: !role.args.trim().is_empty() || !role.env.trim().is_empty(),
@@ -66,6 +72,7 @@ impl RoleFields {
             agent: self.agent.read(cx).text(),
             model: self.model.read(cx).text(),
             effort: self.effort.read(cx).text(),
+            persona: self.persona.read(cx).picking.chosen().to_string(),
             args: self.args.read(cx).text(),
             env: self.env.read(cx).text(),
             prompt: self.prompt.read(cx).text(),
@@ -145,6 +152,8 @@ pub(super) struct FlowEditor {
 #[derive(Default)]
 pub(super) struct Inputs {
     pub scroller: ScrollHandle,
+    pub library: Option<Library>,
+    pub personas: bool,
 }
 
 impl Inputs {
@@ -196,7 +205,9 @@ impl FlowsPanel {
         };
         let panel = cx.entity().downgrade();
         let project = self.project;
-        let editor = cx.new(|cx| FlowEditor::new(panel, project, opening, window, cx));
+        let inputs =
+            Inputs { scroller: ScrollHandle::new(), library: self.library.clone(), personas: Self::personas_on(cx) };
+        let editor = cx.new(|cx| FlowEditor::new(panel, (project, inputs), opening, window, cx));
         if flow.is_none() {
             let focus = editor.read(cx).name.read(cx).focus_handle(cx);
             window.focus(&focus);
@@ -233,6 +244,11 @@ fn editing(flow: &FlowInfo) -> Opening {
     Opening { draft: Draft::from_value(&flow.raw), place: place_of(flow), title: format!("Edit {}", flow.name), note }
 }
 
+fn labelled(mut plan: FlowSpec, library: Option<&Library>) -> FlowSpec {
+    plan.label_personas(library::labeller(library));
+    plan
+}
+
 fn seated(
     stages: Vec<Stage<String>>,
     inputs: &Inputs,
@@ -245,13 +261,12 @@ fn seated(
 impl FlowEditor {
     fn new(
         panel: WeakEntity<FlowsPanel>,
-        project: Option<u64>,
+        (project, inputs): (Option<u64>, Inputs),
         opening: Opening,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let Opening { draft, place, title, note } = opening;
-        let inputs = Inputs::default();
         let seating = seat(&draft);
         let opened = seating.note();
         let roles: Vec<RoleFields> =
@@ -274,7 +289,7 @@ impl FlowEditor {
             next_id: roles.len() as u64,
             roles,
             stages,
-            plan: draft.plan().unwrap_or_default(),
+            plan: draft.plan().map(|plan| labelled(plan, inputs.library.as_ref())).unwrap_or_default(),
             board: Board::new(super::BOARD),
             played: Played::default(),
             inputs,
@@ -305,6 +320,17 @@ impl FlowEditor {
         }
     }
 
+    pub(super) fn follow_library(&mut self, library: &Library, cx: &mut Context<Self>) {
+        if self.inputs.library.as_ref() == Some(library) {
+            return;
+        }
+        self.inputs.library = Some(library.clone());
+        for role in std::iter::once(&self.orchestrator).chain(&self.roles) {
+            role.persona.update(cx, |picker, cx| picker.follow(|picking| picking.follow(library), cx));
+        }
+        self.schedule_check(cx);
+    }
+
     pub(super) fn dirty(&self, cx: &App) -> bool {
         self.new || self.draft(cx).to_value() != self.original
     }
@@ -318,7 +344,7 @@ impl FlowEditor {
 
     pub(super) fn schedule_check(&mut self, cx: &mut Context<Self>) {
         if let Some(plan) = self.draft(cx).plan() {
-            self.plan = plan;
+            self.plan = labelled(plan, self.inputs.library.as_ref());
         }
         self.error = None;
         let generation = self.check.changed();

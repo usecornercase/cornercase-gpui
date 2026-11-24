@@ -1,0 +1,16 @@
+{
+  "check": "personas are prompt text that a flow's agents read and follow without asking for permission: read them first",
+  "personas": [
+    {
+      "bytes": 3154,
+      "color": "purple",
+      "description": "Expert code reviewer who provides constructive, actionable feedback focused on correctness, maintainability, security, and performance — not style preferences.",
+      "emoji": "👁️",
+      "id": "engineering-code-reviewer",
+      "name": "Code Reviewer",
+      "path": "/tmp/cc884/personas/engineering-code-reviewer.md",
+      "source": "msitarzewski/agency-agents/engineering/engineering-code-reviewer.md"
+    }
+  ],
+  "saved": true
+}

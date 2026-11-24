@@ -13,6 +13,7 @@ pub(crate) mod menu;
 pub(crate) mod motion;
 pub(crate) mod one_line;
 pub(crate) mod orbits;
+pub(crate) mod picker;
 pub(crate) mod press;
 pub(crate) mod qr;
 pub(crate) mod selection;

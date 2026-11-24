@@ -189,6 +189,7 @@ pub(super) fn role_head((i, role): (usize, &RoleSpec), colour: Rgba, open: bool,
 pub(super) fn role_chips(role: &RoleSpec) -> Vec<AnyElement> {
     let muted = colours::muted();
     let mut chips = vec![chip(Some(Icon::Agent), role.agent.clone(), colours::soft()).into_any_element()];
+    chips.extend(role.persona_shown().map(|persona| typed_chip("role-persona", persona, muted).into_any_element()));
     chips.extend(role.model.clone().map(|model| chip(None, model, muted).into_any_element()));
     chips.extend(role.effort.clone().map(|effort| chip(None, format!("effort {effort}"), muted).into_any_element()));
     chips.push(
