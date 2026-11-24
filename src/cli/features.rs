@@ -18,6 +18,7 @@ pub(crate) enum Feature {
     BotAboutRead,
     BotFollow,
     FlowPersonas,
+    PersonaCatalogue,
 }
 
 impl Feature {
@@ -37,6 +38,7 @@ impl Feature {
             Self::BotAboutRead => Version::new(0, 13, 96),
             Self::BotFollow => Version::new(0, 13, 91),
             Self::FlowPersonas => Version::new(0, 13, 117),
+            Self::PersonaCatalogue => Version::new(0, 13, 118),
         }
     }
 

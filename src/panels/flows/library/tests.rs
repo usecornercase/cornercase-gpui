@@ -3,7 +3,6 @@ use crate::panels::flows::model::parse_listing;
 
 const LIST: &str = crate::test_util::fixture!("flows/personas/list.json");
 const SHOWN: &str = crate::test_util::fixture!("flows/personas/shown.json");
-const CHECK: &str = crate::test_util::fixture!("flows/personas/check.json");
 const FLOWS: &str = crate::test_util::fixture!("flows/personas/flows.json");
 
 fn library() -> Library {
@@ -98,38 +97,6 @@ fn a_draft_needs_a_name_and_instructions() {
     assert_eq!(named.problem(), None);
     assert!(Draft { name: " ".into(), ..named.clone() }.problem().is_some());
     assert!(Draft { body: "\n".into(), ..named }.problem().is_some());
-}
-
-#[test]
-fn a_check_replaces_so_that_it_can_say_which_ones_replace_yours() {
-    assert_eq!(
-        import_args("owner/repo", true, false),
-        ["persona", "import", "--check", "--json", "--replace", "--", "owner/repo"]
-    );
-}
-
-#[test]
-fn an_import_replaces_only_when_one_replaces_yours() {
-    assert_eq!(import_args(" owner/repo ", false, false), ["persona", "import", "--yes", "--json", "--", "owner/repo"]);
-    assert!(import_args("owner/repo", false, true).contains(&"--replace".to_string()));
-}
-
-#[test]
-fn a_check_says_where_it_came_from_and_which_ones_replace_yours() {
-    let preview = parse_preview(CHECK).expect("the check");
-    assert!(preview.check.contains("nobody here reviewed"));
-    assert!(!preview.saved);
-    assert!(preview.replaces());
-    assert_eq!(preview.personas[0].id, "engineering-code-reviewer");
-}
-
-#[test]
-fn a_filter_finds_personas_by_id_name_or_description() {
-    let preview = parse_preview(CHECK).expect("the check");
-    assert_eq!(preview.matching("CONSTRUCTIVE").len(), 1);
-    assert_eq!(preview.matching("reviewer").len(), 1);
-    assert_eq!(preview.matching("designer").len(), 0);
-    assert_eq!(preview.matching("").len(), 1);
 }
 
 #[test]

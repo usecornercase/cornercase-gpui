@@ -1,0 +1,69 @@
+{
+  "label": "msitarzewski/agency-agents",
+  "page": "https://github.com/msitarzewski/agency-agents",
+  "web": true,
+  "check": "from msitarzewski/agency-agents (see https://github.com/msitarzewski/agency-agents), which nobody here reviewed: personas are prompt text that a flow's agents read and follow without asking for permission: read them first",
+  "skipped": 46,
+  "divisions": [
+    {
+      "key": "academic",
+      "label": "Academic",
+      "icon": "GraduationCap"
+    },
+    {
+      "key": "design",
+      "label": "Design",
+      "icon": "PenTool"
+    }
+  ],
+  "personas": [
+    {
+      "file": "academic/academic-anthropologist.md",
+      "division": "academic",
+      "id": "academic-anthropologist",
+      "name": "Anthropologist",
+      "description": "Expert in cultural systems, rituals, kinship, belief systems, and ethnographic method — builds culturally coherent societies that feel lived-in rather than invented",
+      "emoji": "🌍",
+      "color": "#D97706",
+      "bytes": 7951,
+      "replaced": false,
+      "problem": null
+    },
+    {
+      "file": "academic/academic-geographer.md",
+      "division": "academic",
+      "id": "academic-geographer",
+      "name": "Geographer",
+      "description": "Expert in physical and human geography, climate systems, cartography, and spatial analysis — builds geographically coherent worlds where terrain, climate, resources, and settlement patterns make scientific sense",
+      "emoji": "🗺️",
+      "color": "#059669",
+      "bytes": 7809,
+      "replaced": false,
+      "problem": null
+    },
+    {
+      "file": "design/design-brand-guardian.md",
+      "division": "design",
+      "id": "design-brand-guardian",
+      "name": "Brand Guardian",
+      "description": "Expert brand strategist and guardian specializing in brand identity development, consistency maintenance, and strategic brand positioning",
+      "emoji": "🎨",
+      "color": "blue",
+      "bytes": 11710,
+      "replaced": false,
+      "problem": null
+    },
+    {
+      "file": "design/design-image-prompt-engineer.md",
+      "division": "design",
+      "id": "design-image-prompt-engineer",
+      "name": "Image Prompt Engineer",
+      "description": "Expert photography prompt engineer specializing in crafting detailed, evocative prompts for AI image generation. Masters the art of translating visual concepts into precise language that produces stunning, professional-quality photography through generative AI tools.",
+      "emoji": "📷",
+      "color": "amber",
+      "bytes": 11236,
+      "replaced": false,
+      "problem": null
+    }
+  ]
+}
