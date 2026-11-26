@@ -2,6 +2,7 @@ use super::{
     Aim, FOLD_BOOT_SINCE, HAND_OFF_BOOT_SINCE, MachinePlace, MachineSeen, ThereId, ThereProject, ThereWorkspace,
 };
 use crate::cli::{Version, with_boot};
+use crate::model::sections::loudest;
 use crate::model::tree::{self, Item, Node};
 use crate::model::{AgentRow, PaneInfo, Placed, Session, Tab, needs_you, status_rank};
 use crate::store::args;
@@ -50,6 +51,13 @@ enum Listed<'a> {
 }
 
 impl<'a> Listed<'a> {
+    fn status(self) -> Option<&'a str> {
+        match self {
+            Self::Here((_, _, pane)) => pane.status.as_deref(),
+            Self::There(agent) => agent.pane.status.as_deref(),
+        }
+    }
+
     fn item(&self) -> Item<OnServer<'a>> {
         match self {
             Self::Here((_, _, pane)) => {
@@ -249,6 +257,11 @@ impl Session {
         let listed = self.section_listed(order, &leaving);
         let items: Vec<_> = listed.iter().map(Listed::item).collect();
         tree::order(&items).into_iter().map(|node| section_row(&listed, node)).collect()
+    }
+
+    pub(crate) fn section_attention(&self, order: &[u64], leaving: impl Fn(&Aim) -> bool) -> Option<&str> {
+        let listed = self.section_listed(order, &leaving);
+        loudest(listed.into_iter().filter_map(Listed::status).filter(|status| needs_you(status)))
     }
 
     pub(crate) fn there_place(&self, agent: &ThereAgent<'_>) -> String {

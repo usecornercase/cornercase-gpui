@@ -167,6 +167,56 @@ fn a_working_agent_behind_a_fold_says_nothing() {
     assert_eq!(there_row(&rows, "vps", 9).attention(), None);
 }
 
+fn attention_of(session: &Session) -> Option<&str> {
+    session.section_attention(&session.project_order(), |_| false)
+}
+
+fn here_pane(session: &mut Session, pane: u64) -> &mut PaneInfo {
+    let tabs = session.projects.iter_mut().flat_map(|p| &mut p.workspaces).flat_map(|w| &mut w.tabs);
+    tabs.flat_map(|tab| &mut tab.panes).find(|p| p.id == pane).expect("here")
+}
+
+#[test]
+fn the_agents_title_sees_a_waiting_agent_under_a_folded_parent_here() {
+    let mut session = session();
+    here_pane(&mut session, 11).collapsed = true;
+    let child = here_pane(&mut session, 9);
+    child.parent = Some(11);
+    child.status = Some("waiting".into());
+    assert_eq!(attention_of(&session), Some("waiting"));
+}
+
+#[test]
+fn the_agents_title_sees_a_waiting_agent_under_a_folded_parent_on_a_machine() {
+    let mut session = folded(9);
+    there_pane(&mut session, 13).status = Some("waiting".into());
+    assert_eq!(attention_of(&session), Some("waiting"));
+}
+
+#[test]
+fn the_agents_title_marks_the_loudest_of_its_agents() {
+    let mut session = session();
+    here_pane(&mut session, 9).status = Some("done".into());
+    there_pane(&mut session, 18).status = Some("failed".into());
+    assert_eq!(attention_of(&session), Some("failed"));
+}
+
+#[test]
+fn working_agents_give_the_agents_title_no_mark() {
+    let mut session = session();
+    here_pane(&mut session, 9).status = Some("working".into());
+    there_pane(&mut session, 18).status = Some("working".into());
+    assert_eq!(attention_of(&session), None);
+}
+
+#[test]
+fn a_workspace_leaving_there_gives_the_agents_title_no_mark() {
+    let mut session = session();
+    there_pane(&mut session, 13).status = Some("waiting".into());
+    let leaving = |aim: &Aim| aim.workspace == ThereId::heard(7);
+    assert_eq!(session.section_attention(&session.project_order(), leaving), None);
+}
+
 #[test]
 fn the_aim_is_the_opposite_of_what_the_row_draws() {
     let open = session();

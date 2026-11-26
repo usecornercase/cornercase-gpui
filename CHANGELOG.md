@@ -2,6 +2,11 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.150
+
+- **Fold a whole sidebar section.** Click **Projects**, **Workspaces** or **Agents** to put its list away under its title (`▸`), and again to bring it back (`▾`); where sections share a column, the others take its room. A folded title says how many rows it hides (Projects and Workspaces only while counts are on in Settings) and shows a mark when one of them needs you.
+- The fold is kept by cornercase, so every window of that server and cornercase's own window show it, and it survives restarts. It needs cornercase 0.14.1 or newer; with an older one the titles stay as they were.
+
 ## 0.1.149
 
 - **Pick which personas to import.** Import's Check now lists every persona of a file, folder, address or repository by its divisions (Engineering, Design… as the source names them), with nothing ticked: tick a division to take all of it, or single personas, and filter by name to find one. Those that replace yours say so, and those that cannot be imported (a name twice in the source, a name one of yours has, a file that is not a persona) say why in red.

@@ -1,4 +1,4 @@
-cornercase 0.13.118: the help of every command and subcommand, in the order of `cornercase --help`.
+cornercase 0.14.1: the help of every command and subcommand, in the order of `cornercase --help`.
 Made by tools/cornercase-cli.sh, which runs CORNERCASE_BIN, else cornercase on the PATH.
 
 ================================================================ cornercase status
@@ -31,6 +31,8 @@ refuses too (`survey` in the JSON): `cornercase keys --pane N 0` dismisses it.
 is back, it takes no input and `cornercase send` refuses it (`resuming` in the JSON).
 `(role coder)` marks a flow member and the role it plays (`role` in the JSON).
 `(collapsed)` is an agent whose children are hidden in the agents section (`collapsed` in the JSON).
+A last line like `section projects  collapsed` names each sidebar section that is collapsed
+(`collapsed_sections` in the JSON, there only while one is).
 `Opus 5.5 · compacted` is an agent whose conversation was just compacted: its context is empty
 until its next reply and comes back then (`compacted` in the JSON, there only while true).
 The JSON also names the conversation a pane's agent is in (`conversation`, the id `places` gives in
@@ -199,7 +201,7 @@ Options:
       --worktree                  Check the branch out in a git worktree of its own, at a repository's root only
       --fresh                     Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches]
       --no-fresh                  Make a missing branch from the project's HEAD, whatever settings → worktrees → new branches says
-      --machine <NAME>            Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers
+      --machine <NAME>            Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers. `auto` picks this computer or the linked machine with the project and the most free memory, and takes the ids here; it exits 8 when none has room
       --focus                     Also show it in the window, or in the view with --view, which otherwise stay as they are
       --view <ID>                 Act in this view (see `cornercase view`): its tab is the default, and --focus moves the view instead of the window
       --json                      Print JSON instead of text
@@ -444,7 +446,7 @@ Options:
           Start that agent with this account, over the default ones; AGENT= is its own login. Give it once per agent
 
       --machine <NAME>
-          Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers
+          Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers. `auto` picks this computer or the linked machine with the project and the most free memory, and takes the ids here; it exits 8 when none has room
 
       --focus
           Also show it in the window, or in the view with --view, which otherwise stay as they are
@@ -1282,6 +1284,7 @@ Commands:
   show           Show what a started entry's agent did: its last message, branch and pull request; --conversation adds the whole conversation
   pause          Stop a routine from firing until it is resumed
   resume         Let a paused routine fire again, from the next occurrence after now
+  first          Put an entry that waits for room at the head of the line
   clear-started  Remove every started entry and print the number that restore takes to put them back
   restore        Put back what remove or clear-started removed
   help           Print this message or the help of the given subcommand(s)
@@ -1299,9 +1302,11 @@ Usage: cornercase queue add [OPTIONS]
 Options:
       --at <AT>                   Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, in 1w, claude reset or codex reset
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --every <EVERY>             Make a routine that repeats: 30m, 2h, 3d, 2w, 'day 09:00', 'weekday 09:00' or 'monday 09:00'. At least 30 minutes apart; each run gets its own worktree from the up-to-date default branch (for a bot, a new conversation)
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
-      --flow <FLOW>               Run this flow in each run of a routine; the prompt is its task
+      --when <WHEN>               free: wait in line until a machine has the memory it needs (its flow's, else the default in Settings › Machines), then start there; entries start in the order they were added [possible values: free]
+      --machine <NAME>            With --when free: auto for this computer or any linked machine with the project, or one machine's name [default: auto]
+      --every <EVERY>             Make a routine that repeats: 30m, 2h, 3d, 2w, 'day 09:00', 'weekday 09:00' or 'monday 09:00'. At least 30 minutes apart; each run gets its own worktree from the up-to-date default branch (for a bot, a new conversation)
+      --flow <FLOW>               Run this flow, in each run of a routine or once with --when free; the prompt is its task
       --cleanup                   Remove a routine run's workspace when it finishes, if nothing would be lost
       --no-cleanup                Keep a routine run's workspace (the default)
       --agent <AGENT>             Agent name, or auto to use the current default or running agent
@@ -1332,9 +1337,11 @@ Arguments:
 Options:
       --at <AT>                   Local time: 14:30, tomorrow 9:00, 2026-10-08 09:00, in 2h, in 1w, claude reset or codex reset
       --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
-      --every <EVERY>             Make a routine that repeats: 30m, 2h, 3d, 2w, 'day 09:00', 'weekday 09:00' or 'monday 09:00'. At least 30 minutes apart; each run gets its own worktree from the up-to-date default branch (for a bot, a new conversation)
       --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
-      --flow <FLOW>               Run this flow in each run of a routine; the prompt is its task
+      --when <WHEN>               free: wait in line until a machine has the memory it needs (its flow's, else the default in Settings › Machines), then start there; entries start in the order they were added [possible values: free]
+      --machine <NAME>            With --when free: auto for this computer or any linked machine with the project, or one machine's name [default: auto]
+      --every <EVERY>             Make a routine that repeats: 30m, 2h, 3d, 2w, 'day 09:00', 'weekday 09:00' or 'monday 09:00'. At least 30 minutes apart; each run gets its own worktree from the up-to-date default branch (for a bot, a new conversation)
+      --flow <FLOW>               Run this flow, in each run of a routine or once with --when free; the prompt is its task
       --cleanup                   Remove a routine run's workspace when it finishes, if nothing would be lost
       --no-cleanup                Keep a routine run's workspace (the default)
       --agent <AGENT>             Agent name, or auto to use the current default or running agent
@@ -1425,6 +1432,19 @@ Options:
 Let a paused routine fire again, from the next occurrence after now
 
 Usage: cornercase queue resume [OPTIONS] <ID>
+
+Arguments:
+  <ID>  
+
+Options:
+      --remote <DESTINATION>      Run the command against the cornercase of another machine, through ssh: a host from ~/.ssh/config, or user@host (or set CORNERCASE_REMOTE)
+      --remote-command <COMMAND>  How to run cornercase there, as sh reads it, or on a Windows machine its path (~\ for the profile folder) [default: cornercase, also looked for in ~/.local/bin, ~/.cargo/bin and Homebrew's folders]
+  -h, --help                      Print help
+
+================================================================ cornercase queue first
+Put an entry that waits for room at the head of the line
+
+Usage: cornercase queue first [OPTIONS] <ID>
 
 Arguments:
   <ID>  
@@ -1601,7 +1621,7 @@ Options:
       --workspace-name <NAME>     The workspace's name when the issue makes a worktree [default: the issue's key and title]
       --profile <NAME>            Start it with the accounts of this profile; an empty name is each agent's own login [default: the default accounts]
       --account <AGENT=ACCOUNT>   Start that agent with this account, over the default ones; AGENT= is its own login. Give it once per agent
-      --machine <NAME>            Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers
+      --machine <NAME>            Do it on this machine, as `cornercase machines` names it: ids are then that machine's, as `status --json` lists them under machines, and so are its accounts and trackers. `auto` picks this computer or the linked machine with the project and the most free memory, and takes the ids here; it exits 8 when none has room
       --close-when-merged         Close the team's agents, as agents close does, once the run's pull request has merged and none of them has worked for 3 minutes; the workspace's ▶ or agents reopen brings them back
       --free-builds               With --close-when-merged, also free the build folders of the run's worktrees once its agents close, as worktrees free-builds does without --force; the worktrees and their branches stay
       --fresh                     Make a missing branch from the up-to-date default branch, as a routine's run does: fetch the remote first (origin, else the first one) and fail with git's reason if that fails [default: settings → worktrees → new branches]
@@ -2935,9 +2955,9 @@ Examples:
   cornercase --remote vps move-pane --pane 9 --target 3 --place left --boot 4242-1700000000
 
 ================================================================ cornercase collapse
-Collapse a group, project, workspace or agent in the sidebar
+Collapse a group, project, workspace or agent in the sidebar, or a whole sidebar section
 
-Usage: cornercase collapse [OPTIONS] <--group <ID>|--project <ID>|--workspace <ID>|--worktree <BRANCH>|--pane <ID>>
+Usage: cornercase collapse [OPTIONS] <--group <ID>|--project <ID>|--workspace <ID>|--worktree <BRANCH>|--pane <ID>|--section <SECTION>>
 
 Options:
       --group <ID>                A group and its projects
@@ -2947,12 +2967,14 @@ Options:
       --workspace <ID>            A workspace and its tabs
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --pane <ID>                 An agent's pane and the agents it started, in the agents section
+      --section <SECTION>         A whole section of the sidebar: its rows hide under its title [possible values: projects, workspaces, agents]
       --boot <BOOT>               Go on only if the server is still this run of it, the `boot` of `status --json`; else nothing is done or printed and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Sets it, whatever it was: a group shows or hides its projects, a project its workspaces and a
 workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section
-for as long as the agent running there now keeps running (another conversation there starts expanded).
+for as long as the agent running there now keeps running (another conversation there starts expanded);
+a section (--section) hides its whole list in the sidebar of every window, and is kept across restarts.
 Its shells keep running.
 
 --boot BOOT says which run of the server the id is from: `boot` in `status --json`, or in a machine's
@@ -2962,13 +2984,14 @@ unfolded, and the command prints why and exits with 4.
 Examples:
   cornercase collapse --group 12
   cornercase collapse --pane 12
+  cornercase collapse --section agents
   cornercase expand --worktree fix/login
   cornercase --remote vps collapse --pane 9 --boot 4242-1700000000
 
 ================================================================ cornercase expand
-Expand a group, project, workspace or agent in the sidebar
+Expand a group, project, workspace or agent in the sidebar, or a whole sidebar section
 
-Usage: cornercase expand [OPTIONS] <--group <ID>|--project <ID>|--workspace <ID>|--worktree <BRANCH>|--pane <ID>>
+Usage: cornercase expand [OPTIONS] <--group <ID>|--project <ID>|--workspace <ID>|--worktree <BRANCH>|--pane <ID>|--section <SECTION>>
 
 Options:
       --group <ID>                A group and its projects
@@ -2978,12 +3001,14 @@ Options:
       --workspace <ID>            A workspace and its tabs
       --worktree <BRANCH>         The workspace on this branch, looked up in the project this runs in, else the shown one
       --pane <ID>                 An agent's pane and the agents it started, in the agents section
+      --section <SECTION>         A whole section of the sidebar: its rows hide under its title [possible values: projects, workspaces, agents]
       --boot <BOOT>               Go on only if the server is still this run of it, the `boot` of `status --json`; else nothing is done or printed and the exit status is 4 [default: any run]
   -h, --help                      Print help
 
 Sets it, whatever it was: a group shows or hides its projects, a project its workspaces and a
 workspace its tabs; an agent's pane (--pane) hides the agents it started in the agents section
-for as long as the agent running there now keeps running (another conversation there starts expanded).
+for as long as the agent running there now keeps running (another conversation there starts expanded);
+a section (--section) hides its whole list in the sidebar of every window, and is kept across restarts.
 Its shells keep running.
 
 --boot BOOT says which run of the server the id is from: `boot` in `status --json`, or in a machine's
@@ -2993,6 +3018,7 @@ unfolded, and the command prints why and exits with 4.
 Examples:
   cornercase collapse --group 12
   cornercase collapse --pane 12
+  cornercase collapse --section agents
   cornercase expand --worktree fix/login
   cornercase --remote vps collapse --pane 9 --boot 4242-1700000000
 

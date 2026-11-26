@@ -6,9 +6,10 @@ use gpui::{
 };
 
 use super::rows::{Listing, list_text};
-use super::{Arrangement, card, list_end, section_head, sidebar_footer, sidebar_header, tip};
+use super::sections::{AgentsRoom, Room};
+use super::{Arrangement, card, list_end, sidebar_footer, tip};
 use crate::app::{GAP, Root};
-use crate::model::{MachineSeen, Session, Shown, ThereProject};
+use crate::model::{MachineSeen, Section, SectionFolds, Session, Shown, ThereProject};
 use crate::theme::colours;
 use crate::ui::split::{self, Edge, Split};
 use crate::ui::{self, Icon};
@@ -52,25 +53,27 @@ fn rows_column() -> Div {
     list_text(div().flex().flex_col().gap(px(1.)).px(px(10.)))
 }
 
+fn list_box(open: bool) -> Div {
+    let list = div().flex().flex_col();
+    if open { list.flex_1().min_h_0() } else { list.flex_none() }
+}
+
 const DIVIDER_TOP: f32 = 6.;
 
 pub(super) fn divider() -> Div {
     div().h(px(1.)).flex_none().mx(px(12.)).mt(px(DIVIDER_TOP)).bg(colours::border())
 }
 
-fn workspaces_header(project: Option<u64>, cx: &mut Context<Root>) -> Div {
-    section_head(
-        "Workspaces",
-        ui::tool_button("sidebar-new-workspace", Icon::Plus, 24., false)
-            .tooltip(tip("New workspace or flow in this project"))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |this, e: &MouseDownEvent, window, cx| {
-                    cx.stop_propagation();
-                    this.open_new_menu(project, e.position, window, cx);
-                }),
-            ),
-    )
+fn new_workspace_button(project: Option<u64>, cx: &mut Context<Root>) -> Stateful<Div> {
+    ui::tool_button("sidebar-new-workspace", Icon::Plus, 24., false)
+        .tooltip(tip("New workspace or flow in this project"))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(move |this, e: &MouseDownEvent, window, cx| {
+                cx.stop_propagation();
+                this.open_new_menu(project, e.position, window, cx);
+            }),
+        )
 }
 
 impl Root {
@@ -79,61 +82,81 @@ impl Root {
         if self.side.bots {
             return cards.child(self.bots_card(cx));
         }
-        let projects =
-            div().flex_1().min_h_0().flex().flex_col().child(sidebar_header(cx)).child(self.projects_list(cx));
-        let lists = match self.side.look.current.arrangement {
-            Arrangement::Tree => projects,
-            Arrangement::ProjectsOnTop => self.stack(projects, self.workspaces_section(cx), cx),
-            Arrangement::WorkspacesOnTop => self.stack(self.workspaces_section(cx), projects, cx),
-            Arrangement::SideBySide => {
-                let width = px(self.projects_column());
-                let column = card().flex_none().flex_basis(width).w(width).min_h_0().child(projects);
-                return cards.child(column).child(self.main_card(self.workspaces_section(cx), cx));
-            }
-        };
-        cards.child(self.main_card(lists, cx))
+        let look = &self.side.look.current;
+        let arrangement = look.arrangement;
+        let folds = self.section_folds(cx).unwrap_or_default();
+        let room = Room::of(arrangement, folds, look.agents_section);
+        if arrangement == Arrangement::SideBySide {
+            return self.side_by_side(cards, folds, room, cx);
+        }
+        let lists = self.lists(arrangement, folds, room, cx);
+        cards.child(self.main_card(lists, room, cx))
     }
 
-    fn stack(&self, top: Div, bottom: Div, cx: &mut Context<Self>) -> Div {
+    fn side_by_side(&self, cards: Div, folds: SectionFolds, room: Room, cx: &mut Context<Self>) -> Div {
+        let width = px(self.projects_column());
+        let projects = self.projects_section(folds.projects, cx);
+        let column = card().flex_none().flex_basis(width).w(width).min_h_0().child(projects);
+        let workspaces = self.workspaces_section(folds.workspaces, cx);
+        cards.child(column).child(self.main_card(workspaces, room, cx))
+    }
+
+    fn lists(&self, arrangement: Arrangement, folds: SectionFolds, room: Room, cx: &mut Context<Self>) -> Div {
+        let projects = self.projects_section(folds.projects, cx);
+        match arrangement {
+            Arrangement::Tree | Arrangement::SideBySide => projects,
+            Arrangement::ProjectsOnTop => {
+                let workspaces = self.workspaces_section(folds.workspaces, cx);
+                self.stack((projects, folds.projects), (workspaces, folds.workspaces), room.stack_drags, cx)
+            }
+            Arrangement::WorkspacesOnTop => {
+                let workspaces = self.workspaces_section(folds.workspaces, cx);
+                self.stack((workspaces, folds.workspaces), (projects, folds.projects), room.stack_drags, cx)
+            }
+        }
+    }
+
+    fn stack(&self, top: (Div, bool), bottom: (Div, bool), drags: bool, cx: &mut Context<Self>) -> Div {
+        let ((top, top_folded), (bottom, bottom_folded)) = (top, bottom);
         let top = match self.side.sizes.stack.chosen() {
-            Some(height) => top.flex_none().flex_basis(px(height)),
-            None => top,
+            Some(height) if drags => top.flex_none().flex_basis(px(height)),
+            _ => top,
         };
-        let bottom =
-            div().flex_1().min_h_0().relative().flex().flex_col().child(divider()).child(bottom).child(split::handle(
-                "sidebar-stack-split",
-                StackGrip,
-                (Edge::Bottom, DIVIDER_TOP),
-                stack_height,
-                cx,
-            ));
-        div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
+        let bottom = list_box(!bottom_folded).relative().child(divider()).child(bottom);
+        let stack = list_box(!(top_folded && bottom_folded));
+        if !drags {
+            return stack.child(top).child(bottom);
+        }
+        let handle = split::handle("sidebar-stack-split", StackGrip, (Edge::Bottom, DIVIDER_TOP), stack_height, cx);
+        stack
             .on_drag_move(split::follow::<_, StackGrip>(Edge::Bottom, STACK_KEEP, stack_height, cx))
             .child(top)
-            .child(bottom)
+            .child(bottom.child(handle))
     }
 
-    fn main_card(&self, lists: Div, cx: &mut Context<Self>) -> Div {
-        card().min_w_0().min_h_0().child(self.with_agents(lists, cx)).child(sidebar_footer(cx))
+    fn main_card(&self, lists: Div, room: Room, cx: &mut Context<Self>) -> Div {
+        card().min_w_0().min_h_0().child(self.with_agents(lists, room.agents, cx)).child(sidebar_footer(cx))
     }
 
-    fn with_agents(&self, lists: Div, cx: &mut Context<Self>) -> Div {
-        let area = div().flex_1().min_h_0().relative().flex().flex_col().child(lists);
-        let Some(agents) = self.agents_section(cx) else { return area };
+    fn with_agents(&self, lists: Div, room: AgentsRoom, cx: &mut Context<Self>) -> Div {
+        let area = div().flex_1().min_h_0().relative().flex().flex_col();
+        if room == AgentsRoom::Hidden {
+            return area.child(lists);
+        }
+        let Some(agents) = self.agents_section(room == AgentsRoom::Title, cx) else { return area.child(lists) };
+        match room {
+            AgentsRoom::Split => self.split_agents(area.child(lists), agents, cx),
+            AgentsRoom::Title => area.child(list_box(true).child(lists)).child(agents.flex_none()),
+            AgentsRoom::Rest | AgentsRoom::Hidden => area.child(lists).child(agents.flex_1().min_h_0()),
+        }
+    }
+
+    fn split_agents(&self, area: Div, agents: Div, cx: &mut Context<Self>) -> Div {
         let height = self.side.sizes.agents.size();
+        let line = (Edge::Top, height - DIVIDER_TOP);
         area.on_drag_move(split::follow::<_, AgentsGrip>(Edge::Top, LISTS_KEEP, agents_height, cx))
-            .child(agents.h(px(height)))
-            .child(split::handle(
-                "sidebar-agents-split",
-                AgentsGrip,
-                (Edge::Top, height - DIVIDER_TOP),
-                agents_height,
-                cx,
-            ))
+            .child(agents.flex_none().h(px(height)))
+            .child(split::handle("sidebar-agents-split", AgentsGrip, line, agents_height, cx))
     }
 
     pub(super) fn main_card_width(&self) -> f32 {
@@ -168,6 +191,11 @@ impl Root {
         }
     }
 
+    fn projects_section(&self, folded: bool, cx: &mut Context<Self>) -> Div {
+        let list = list_box(!folded).child(self.sidebar_header(cx));
+        list.children((!folded).then(|| self.projects_list(cx)))
+    }
+
     fn projects_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         scroller("sidebar-list").child(self.project_rows(cx)).child(list_end(cx))
     }
@@ -183,17 +211,20 @@ impl Root {
         rows_column().children(rows)
     }
 
-    fn workspaces_section(&self, cx: &mut Context<Self>) -> Div {
-        let listing = self.session.as_ref().map(|s| self.listing(s));
-        let project = listing.and_then(|listing| listing.shown.project);
-        let alone = self.alone_shown().is_some();
-        div()
-            .flex_1()
-            .min_h_0()
-            .flex()
-            .flex_col()
-            .child(if alone { section_head("Workspaces", div()) } else { workspaces_header(project, cx) })
-            .child(scroller("sidebar-workspaces").child(self.workspace_rows(cx)))
+    fn workspaces_section(&self, folded: bool, cx: &mut Context<Self>) -> Div {
+        let section = list_box(!folded).child(self.workspaces_header(cx));
+        section.children((!folded).then(|| scroller("sidebar-workspaces").child(self.workspace_rows(cx))))
+    }
+
+    fn workspaces_header(&self, cx: &mut Context<Self>) -> Div {
+        if let Some((_, there)) = self.alone_shown() {
+            return self.titled(Section::Workspaces, there.tags(), None, cx);
+        }
+        let session = self.session.as_ref();
+        let project = session.and_then(|s| self.listing(s).shown.project);
+        let tags = project.zip(session).map(|(id, s)| s.workspaces_tags(id)).unwrap_or_default();
+        let button = new_workspace_button(project, cx);
+        self.titled(Section::Workspaces, tags, Some(button), cx)
     }
 
     fn alone_shown(&self) -> Option<(&MachineSeen, &ThereProject)> {

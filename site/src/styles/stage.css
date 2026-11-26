@@ -239,6 +239,16 @@
   color: var(--muted);
 }
 
+.w-side__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.w-side__title .icon {
+  color: var(--faint);
+}
+
 .w-group {
   height: 28px;
   margin-top: 8px;
