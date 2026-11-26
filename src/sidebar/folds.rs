@@ -1,4 +1,4 @@
-use crate::model::{Project, Session, Workspace};
+use crate::model::{Project, Section, Session, Workspace};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Fold {
@@ -6,18 +6,20 @@ pub(crate) enum Fold {
     Project(u64),
     Workspace(u64),
     Pane(u64),
+    Section(Section),
 }
 
 impl Fold {
     pub(crate) fn args(self, collapsed: bool) -> Vec<String> {
-        let (flag, id) = match self {
-            Fold::Group(id) => ("--group", id),
-            Fold::Project(id) => ("--project", id),
-            Fold::Workspace(id) => ("--workspace", id),
-            Fold::Pane(id) => ("--pane", id),
+        let (flag, value) = match self {
+            Fold::Group(id) => ("--group", id.to_string()),
+            Fold::Project(id) => ("--project", id.to_string()),
+            Fold::Workspace(id) => ("--workspace", id.to_string()),
+            Fold::Pane(id) => ("--pane", id.to_string()),
+            Fold::Section(section) => ("--section", section.name().to_string()),
         };
         let verb = if collapsed { "collapse" } else { "expand" };
-        super::cmd(&[verb, flag, &id.to_string()])
+        super::cmd(&[verb, flag, &value])
     }
 
     fn flag_in(self, session: &mut Session) -> Option<&mut bool> {
@@ -31,6 +33,7 @@ impl Fold {
                 .flat_map(|t| &mut t.panes)
                 .find(|p| p.id == id)
                 .map(|p| &mut p.collapsed),
+            Fold::Section(section) => Some(session.collapsed_sections.flag(section)),
         }
     }
 }

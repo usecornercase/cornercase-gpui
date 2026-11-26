@@ -17,6 +17,7 @@ mod owner;
 pub(crate) mod place;
 mod pull_request;
 mod reopen;
+mod sections;
 mod shared;
 mod surface;
 mod tree;
@@ -35,6 +36,7 @@ pub(crate) use machines::seen::{
 pub(crate) use owner::Owner;
 pub(crate) use pull_request::{Block, Check, Layer, PullRequest, PullRequestAnswer, Rung, Stack};
 pub(crate) use reopen::Reopen;
+pub(crate) use sections::{Section, SectionFolds, SectionTags};
 pub(crate) use shared::Shared;
 #[cfg(test)]
 pub(crate) use surface::Share;
@@ -55,6 +57,7 @@ pub(crate) struct Session {
     pub home: Option<String>,
     pub machines: Vec<MachineSeen>,
     pub tunnels: Vec<tunnels::TunnelSeen>,
+    pub collapsed_sections: SectionFolds,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]

@@ -15,6 +15,7 @@ mod opening;
 pub(crate) mod order;
 pub(crate) mod rail;
 mod rows;
+mod sections;
 mod tab_rows;
 mod workspace;
 
@@ -30,7 +31,7 @@ use crate::app::{GAP, Root, TITLEBAR_HEIGHT};
 use crate::context_menu::Menu;
 use crate::dialogs;
 use crate::keymap::{Command, with_keys};
-use crate::model::{Aim, MachinePlace};
+use crate::model::{Aim, MachinePlace, Section, Session};
 use crate::platform::Os;
 use crate::store::Store;
 use crate::theme::{colours, radius};
@@ -176,6 +177,12 @@ impl Root {
         Drawn { element, counted: self.parts.counted.take() }
     }
 
+    fn sidebar_header(&self, cx: &mut Context<Self>) -> Div {
+        let tags = self.session.as_ref().map(Session::projects_tags).unwrap_or_default();
+        let button = projects_button(cx);
+        self.titled(Section::Projects, tags, Some(button), cx)
+    }
+
     pub(crate) fn sidebar_extent(&self) -> f32 {
         if self.side.look.current.arrangement == Arrangement::SideBySide {
             self.pair_width.size()
@@ -251,8 +258,12 @@ fn section_head(title: &'static str, button: impl IntoElement) -> Div {
     head_row(20., div(), title, button)
 }
 
+fn title_label(title: impl IntoElement) -> Div {
+    div().text_size(px(11.)).font_weight(FontWeight::SEMIBOLD).text_color(colours::muted()).child(title)
+}
+
 fn head_row(left: f32, lead: impl IntoElement, title: &'static str, button: impl IntoElement) -> Div {
-    let title = div().text_size(px(11.)).font_weight(FontWeight::SEMIBOLD).text_color(colours::muted()).child(title);
+    let title = title_label(title);
     div()
         .flex()
         .flex_none()
@@ -266,20 +277,17 @@ fn head_row(left: f32, lead: impl IntoElement, title: &'static str, button: impl
         .child(button)
 }
 
-fn sidebar_header(cx: &mut Context<Root>) -> Div {
-    section_head(
-        "Projects",
-        ui::tool_button("sidebar-new", Icon::Plus, 24., false)
-            .tooltip(|window, cx| tip(menus::projects_tip(Store::get(cx).read(cx).making().as_ref()))(window, cx))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|this, e: &MouseDownEvent, window, cx| {
-                    cx.stop_propagation();
-                    let making = this.store.read(cx).making();
-                    this.open_menu(e.position, menus::projects_menu(making.as_ref()), window, cx);
-                }),
-            ),
-    )
+fn projects_button(cx: &mut Context<Root>) -> Stateful<Div> {
+    ui::tool_button("sidebar-new", Icon::Plus, 24., false)
+        .tooltip(|window, cx| tip(menus::projects_tip(Store::get(cx).read(cx).making().as_ref()))(window, cx))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|this, e: &MouseDownEvent, window, cx| {
+                cx.stop_propagation();
+                let making = this.store.read(cx).making();
+                this.open_menu(e.position, menus::projects_menu(making.as_ref()), window, cx);
+            }),
+        )
 }
 
 fn list_end(cx: &mut Context<Root>) -> impl IntoElement + use<> {

@@ -35,6 +35,14 @@ fn a_server_has_each_gated_feature_from_the_release_that_brought_it() {
 }
 
 #[test]
+fn a_server_has_section_folds_from_0_14_1() {
+    let on = |patch| Feature::SectionFolds.on(Some(Version::new(0, 14, patch)));
+    assert_eq!(on(0), Has::No(Some(Version::new(0, 14, 0))));
+    assert_eq!(on(1), Has::Yes);
+    assert_eq!(on(2), Has::Yes);
+}
+
+#[test]
 fn a_server_whose_release_cannot_be_read_does_not_have_a_feature() {
     assert_eq!(Feature::MachineTunnels.on(None), Has::No(None));
 }

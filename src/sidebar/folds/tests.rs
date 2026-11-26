@@ -1,5 +1,5 @@
 use super::*;
-use crate::model::{Group, PaneInfo, Project, Tab, Workspace};
+use crate::model::{Group, PaneInfo, Project, Section, Tab, Workspace};
 
 fn session(collapsed: bool) -> Session {
     let pane = PaneInfo { id: 40, collapsed, ..Default::default() };
@@ -84,4 +84,26 @@ fn the_answer_to_an_earlier_click_leaves_the_last_one_pending() {
 fn a_fold_sends_the_command_for_its_kind() {
     assert_eq!(Fold::Group(1).args(true), ["collapse", "--group", "1"]);
     assert_eq!(Fold::Pane(40).args(false), ["expand", "--pane", "40"]);
+}
+
+#[test]
+fn a_section_fold_sends_the_section_by_name() {
+    assert_eq!(Fold::Section(Section::Projects).args(true), ["collapse", "--section", "projects"]);
+    assert_eq!(Fold::Section(Section::Agents).args(false), ["expand", "--section", "agents"]);
+}
+
+#[test]
+fn a_section_fold_shows_at_once_and_survives_a_stale_session() {
+    let fold = Fold::Section(Section::Projects);
+    let mut folds = Folds::default();
+    let mut shown = session(false);
+    folds.set(fold, true, Some(&mut shown));
+    assert!(shown.collapsed_sections.projects);
+    let mut stale = session(false);
+    folds.apply(&mut stale);
+    assert!(stale.collapsed_sections.projects);
+    folds.answered(fold, true, true, None);
+    let mut unfolded_elsewhere = session(false);
+    folds.apply(&mut unfolded_elsewhere);
+    assert!(!unfolded_elsewhere.collapsed_sections.projects);
 }

@@ -49,6 +49,10 @@ pub(super) fn row_group_id(target: Target) -> SharedString {
     SharedString::from(format!("{}-{}", id_prefix(target), target.id()))
 }
 
+pub(super) fn fold_glyph(open: bool) -> &'static str {
+    if open { "▾" } else { "▸" }
+}
+
 pub(super) fn chevron(id: SharedString, open: bool) -> Stateful<Div> {
     div()
         .id(id)
@@ -58,7 +62,7 @@ pub(super) fn chevron(id: SharedString, open: bool) -> Stateful<Div> {
         .text_color(colours::faint())
         .cursor_pointer()
         .hover(|s| s.text_color(colours::text()))
-        .child(if open { "▾" } else { "▸" })
+        .child(fold_glyph(open))
 }
 
 fn button_margin(slot: u8) -> f32 {
@@ -304,7 +308,7 @@ impl Root {
     }
 
     fn group_end(&self, target: Target, count: usize, collapsed: bool, cx: &mut Context<Self>) -> Div {
-        let fold = div().text_size(px(13.)).text_color(colours::faint()).child(if collapsed { "▸" } else { "▾" });
+        let fold = div().text_size(px(13.)).text_color(colours::faint()).child(fold_glyph(!collapsed));
         self.row_end(target, End { gap: 6., buttons: 1, figures: true }, cx)
             .when(collapsed && self.side.look.current.counts, |d| d.child(ui::dim(format!("{count}"))))
             .child(fold)

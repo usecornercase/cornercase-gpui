@@ -324,6 +324,7 @@ const DRAWINGS: &[Drawing] = &[
             "src/sidebar/workspace.rs",
             "src/sidebar/tab_rows.rs",
             "src/sidebar/agents.rs",
+            "src/sidebar/sections.rs",
             "src/sidebar/bots.rs",
             "src/sidebar/machine_rows.rs",
             "src/sidebar/machine_agents.rs",

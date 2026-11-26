@@ -3,10 +3,9 @@ use gpui::{AnyElement, Context, Div, InteractiveElement, ParentElement, Stateful
 use super::arrange::divider;
 use super::machine_agents::ThereListing;
 use super::rows::list_text;
-use super::section_head;
 use super::workspace::AgentPlace;
 use crate::app::Root;
-use crate::model::{AgentRow, SectionRow, Session, Shown};
+use crate::model::{AgentRow, Aim, Section, SectionRow, SectionTags, Session, Shown};
 use crate::ui;
 
 pub(crate) fn places_shown(rows: &[SectionRow<'_>]) -> Vec<bool> {
@@ -27,24 +26,17 @@ fn place(session: &Session, workspace: u64) -> Option<String> {
 }
 
 impl Root {
-    pub(super) fn agents_section(&self, cx: &mut Context<Self>) -> Option<Div> {
-        if !self.side.look.current.agents_section {
-            return None;
-        }
+    pub(super) fn agents_section(&self, folded: bool, cx: &mut Context<Self>) -> Option<Div> {
         let session = self.session.as_ref()?;
+        let order = session.project_order();
         let store = self.store.read(cx);
-        let rows = session.section_agents(&session.project_order(), |aim| store.machine_leaving(aim));
-        let count = ui::dim(rows.len().to_string());
-        let list = self.agent_list(session, &rows, cx);
-        Some(
-            div()
-                .flex_none()
-                .flex()
-                .flex_col()
-                .child(divider())
-                .child(section_head("Agents", count))
-                .child(div().id("sidebar-agents").flex_1().min_h_0().overflow_y_scroll().child(list)),
-        )
+        let leaving = |aim: &Aim| store.machine_leaving(aim);
+        let rows = session.section_agents(&order, leaving);
+        let attention = folded.then(|| session.section_attention(&order, leaving)).flatten();
+        let list = (!folded).then(|| self.agent_list(session, &rows, cx));
+        let title = self.titled(Section::Agents, SectionTags { count: rows.len(), attention }, None, cx);
+        let list = list.map(|list| div().id("sidebar-agents").flex_1().min_h_0().overflow_y_scroll().child(list));
+        Some(div().flex().flex_col().child(divider()).child(title).children(list))
     }
 
     fn agent_list(&self, session: &Session, rows: &[SectionRow<'_>], cx: &mut Context<Self>) -> Div {
