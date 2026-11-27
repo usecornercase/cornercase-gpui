@@ -10,7 +10,7 @@ const LINE: f32 = 22.;
 fn frames() -> [Frame; 4] {
     let controls = WindowControls::default();
     [
-        Frame::default(),
+        Frame::titled(),
         Frame::captioned(controls, false, false),
         Frame::of(Decorations::Client { tiling: Tiling::default() }, controls, false),
         Frame::of(Decorations::Server, controls, false),

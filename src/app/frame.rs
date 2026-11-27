@@ -101,9 +101,14 @@ pub(crate) struct Sides {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "drawn, caption and titled say whose frame it is and are never set together"
+)]
 pub(crate) struct Frame {
     pub(crate) drawn: bool,
     caption: bool,
+    titled: bool,
     tiling: Tiling,
     controls: WindowControls,
     maximised: bool,
@@ -126,6 +131,7 @@ pub(crate) enum Restore {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Press {
+    System,
     Zoom,
     Hold,
     Menu,
@@ -135,7 +141,7 @@ pub(crate) enum Press {
 impl Frame {
     pub(crate) fn read(window: &Window, os: Os) -> Self {
         match os {
-            Os::Mac => Self::default(),
+            Os::Mac => Self::titled(),
             Os::Linux => Self::of(window.window_decorations(), window.window_controls(), window.is_maximized()),
             Os::Windows => Self::captioned(window.window_controls(), window.is_maximized(), window.is_fullscreen()),
         }
@@ -150,6 +156,14 @@ impl Frame {
 
     pub(crate) fn captioned(controls: WindowControls, maximised: bool, full_screen: bool) -> Self {
         Self { caption: !full_screen, controls, maximised, ..Self::default() }
+    }
+
+    pub(crate) fn titled() -> Self {
+        Self { titled: true, ..Self::default() }
+    }
+
+    pub(crate) fn row_listens(self) -> bool {
+        self.drawn || self.titled
     }
 
     pub(crate) fn resize_band(self) -> f32 {
@@ -223,12 +237,14 @@ pub(crate) fn cursor(edge: ResizeEdge) -> CursorStyle {
     }
 }
 
-pub(crate) fn press(button: MouseButton, clicks: usize, claimed: bool, menu: bool) -> Press {
+pub(crate) fn press(frame: Frame, button: MouseButton, clicks: usize, claimed: bool) -> Press {
     match (button, clicks) {
         _ if claimed => Press::Pass,
+        (MouseButton::Left, 2) if frame.titled => Press::System,
+        _ if !frame.drawn => Press::Pass,
         (MouseButton::Left, 2) => Press::Zoom,
         (MouseButton::Left, _) => Press::Hold,
-        (MouseButton::Right, _) if menu => Press::Menu,
+        (MouseButton::Right, _) if frame.controls.window_menu => Press::Menu,
         _ => Press::Pass,
     }
 }
@@ -242,9 +258,10 @@ struct Grip {
 impl Global for Grip {}
 
 impl Grip {
-    fn down(e: &MouseDownEvent, menu: bool, window: &Window, cx: &mut App) {
+    fn down(e: &MouseDownEvent, frame: Frame, window: &Window, cx: &mut App) {
         let grip = cx.default_global::<Grip>();
-        match press(e.button, e.click_count, std::mem::take(&mut grip.claimed), menu) {
+        match press(frame, e.button, e.click_count, std::mem::take(&mut grip.claimed)) {
+            Press::System => window.titlebar_double_click(),
             Press::Zoom => window.zoom_window(),
             Press::Hold => grip.held = true,
             Press::Menu => window.show_window_menu(e.position),
@@ -401,12 +418,14 @@ pub(crate) fn title_row(row: Div, frame: Frame) -> Div {
     if frame.caption {
         return row.occlude().window_control_area(WindowControlArea::Drag);
     }
-    if !frame.drawn {
+    if !frame.row_listens() {
         return row;
     }
-    let menu = frame.controls.window_menu;
-    row.on_any_mouse_down(move |e, window, cx| Grip::down(e, menu, window, cx))
-        .on_mouse_move(Grip::moved)
+    row.on_any_mouse_down(move |e, window, cx| Grip::down(e, frame, window, cx)).when(frame.drawn, moves_on_drag)
+}
+
+fn moves_on_drag(row: Div) -> Div {
+    row.on_mouse_move(Grip::moved)
         .on_mouse_up(MouseButton::Left, |_, _, cx| Grip::let_go(cx))
         .on_mouse_up_out(MouseButton::Left, |_, _, cx| Grip::let_go(cx))
         .on_mouse_down_out(|_, _, cx| Grip::let_go(cx))
@@ -421,7 +440,7 @@ pub(crate) fn claimed(element: Div, frame: Frame, terminal: &FocusHandle) -> Div
             }
         });
     }
-    if !frame.drawn {
+    if !frame.row_listens() {
         return element;
     }
     element.on_any_mouse_down(|_, _, cx| cx.default_global::<Grip>().claimed = true)
