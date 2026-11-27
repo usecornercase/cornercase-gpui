@@ -2,6 +2,10 @@
 
 Every pull request that changes the app adds a section here for its new version. The section becomes the notes of the GitHub Release and shows up in the window's update dialog, so write it for users.
 
+## 0.1.151
+
+- **Double-click the title bar on a Mac.** A double click on the empty part of the window's top row (beside the cornercase name, or between the tabs and the split buttons) now does what System Settings › Desktop & Dock › "Double-click a window's title bar to" says: zoom the window (Fill zooms it too), minimise it, or nothing. A double click on a tab still renames it.
+
 ## 0.1.150
 
 - **Fold a whole sidebar section.** Click **Projects**, **Workspaces** or **Agents** to put its list away under its title (`▸`), and again to bring it back (`▾`); where sections share a column, the others take its room. A folded title says how many rows it hides (Projects and Workspaces only while counts are on in Settings) and shows a mark when one of them needs you.

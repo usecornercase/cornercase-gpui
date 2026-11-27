@@ -118,8 +118,9 @@ fn only_what_the_compositor_can_do_gets_a_button_and_close_always_shows() {
 
 #[test]
 fn a_double_press_on_the_title_row_zooms_and_a_single_one_holds_for_a_move() {
-    assert_eq!(press(MouseButton::Left, 2, false, true), Press::Zoom);
-    assert_eq!(press(MouseButton::Left, 1, false, true), Press::Hold);
+    let frame = client(Tiling::default());
+    assert_eq!(press(frame, MouseButton::Left, 2, false), Press::Zoom);
+    assert_eq!(press(frame, MouseButton::Left, 1, false), Press::Hold);
 }
 
 #[test]
@@ -137,16 +138,64 @@ fn a_drag_without_a_held_press_moves_nothing() {
 
 #[test]
 fn a_right_press_opens_the_window_menu_only_where_there_is_one() {
-    assert_eq!(press(MouseButton::Right, 1, false, true), Press::Menu);
-    assert_eq!(press(MouseButton::Right, 1, false, false), Press::Pass);
-    assert_eq!(press(MouseButton::Middle, 1, false, true), Press::Pass);
+    let menu = client(Tiling::default());
+    let controls = WindowControls { window_menu: false, ..WindowControls::default() };
+    let none = Frame::of(Decorations::Client { tiling: Tiling::default() }, controls, false);
+    assert_eq!(press(menu, MouseButton::Right, 1, false), Press::Menu);
+    assert_eq!(press(none, MouseButton::Right, 1, false), Press::Pass);
+    assert_eq!(press(menu, MouseButton::Middle, 1, false), Press::Pass);
 }
 
 #[test]
 fn a_press_a_tab_or_button_took_does_nothing_to_the_window() {
+    let frame = client(Tiling::default());
     for (button, clicks) in [(MouseButton::Left, 1), (MouseButton::Left, 2), (MouseButton::Right, 1)] {
-        assert_eq!(press(button, clicks, true, true), Press::Pass);
+        assert_eq!(press(frame, button, clicks, true), Press::Pass);
     }
+}
+
+#[test]
+fn a_press_on_a_row_under_the_window_managers_frame_does_nothing() {
+    for (button, clicks) in [(MouseButton::Left, 1), (MouseButton::Left, 2), (MouseButton::Right, 1)] {
+        assert_eq!(press(server(), button, clicks, false), Press::Pass);
+    }
+}
+
+#[test]
+fn a_double_press_on_a_macs_title_row_does_what_the_system_setting_says() {
+    assert_eq!(press(Frame::titled(), MouseButton::Left, 2, false), Press::System);
+}
+
+#[test]
+fn a_single_press_on_a_macs_title_row_leaves_the_move_to_the_system() {
+    assert_eq!(press(Frame::titled(), MouseButton::Left, 1, false), Press::Pass);
+}
+
+#[test]
+fn a_right_press_on_a_macs_title_row_opens_no_window_menu() {
+    assert_eq!(press(Frame::titled(), MouseButton::Right, 1, false), Press::Pass);
+}
+
+#[test]
+fn a_double_press_a_tab_took_on_a_mac_stays_the_tabs() {
+    assert_eq!(press(Frame::titled(), MouseButton::Left, 2, true), Press::Pass);
+}
+
+#[test]
+fn the_title_row_listens_on_a_mac_and_under_the_apps_own_frame_only() {
+    assert!(Frame::titled().row_listens());
+    assert!(client(Tiling::default()).row_listens());
+    assert!(!server().row_listens());
+    assert!(!windows(false, false).row_listens());
+}
+
+#[test]
+fn a_macs_frame_draws_nothing_of_its_own() {
+    let frame = Frame::titled();
+    assert_eq!(frame.buttons(), Vec::<Control>::new());
+    assert_eq!(frame.margins(), super::Sides { top: 0., right: 0., bottom: 0., left: 0. });
+    assert!(frame.resize_band().abs() < f32::EPSILON);
+    assert!((frame.title_end() - super::GAP).abs() < f32::EPSILON);
 }
 
 #[test]
@@ -211,7 +260,7 @@ fn a_linux_window_opened_for_a_margin_the_window_manager_draws_instead_shrinks_b
 fn a_window_with_its_own_frame_or_on_a_mac_keeps_its_size() {
     let opened = outer(Os::Linux, (1280., 800.));
     assert_eq!(fitted(Os::Linux, false, client(Tiling::default()), false, opened), None);
-    assert_eq!(fitted(Os::Mac, false, Frame::default(), false, bounds(1280., 800.).size), None);
+    assert_eq!(fitted(Os::Mac, false, Frame::titled(), false, bounds(1280., 800.).size), None);
 }
 
 #[test]
@@ -338,7 +387,7 @@ fn the_first_window_keeps_its_size_when_no_screen_is_known() {
 
 #[test]
 fn the_title_bar_ends_with_the_title_row_on_every_platform() {
-    let frames = [Frame::default(), windows(false, false), client(Tiling::default()), server()];
+    let frames = [Frame::titled(), windows(false, false), client(Tiling::default()), server()];
     for frame in frames {
         assert!((frame.title_bottom() - crate::app::TITLEBAR_HEIGHT).abs() < f32::EPSILON);
     }
